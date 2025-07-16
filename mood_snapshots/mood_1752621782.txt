@@ -1,0 +1,2 @@
+Caption:  "This place looks different, maybe they moved some furniture around; I wonder what else has been changed since my last visit." 
+Mood: 0.2751251978476847

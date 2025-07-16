@@ -1,0 +1,2 @@
+Caption:  "Hmm, looks like there's an issue with the ceiling. I need to look into that." 
+Mood: 0.03955078125

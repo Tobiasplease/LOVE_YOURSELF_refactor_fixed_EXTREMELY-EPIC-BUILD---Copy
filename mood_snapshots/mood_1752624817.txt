@@ -1,0 +1,2 @@
+Caption:  "This room is still so empty and quiet. I need to figure out what to do next." 
+Mood: 0.0

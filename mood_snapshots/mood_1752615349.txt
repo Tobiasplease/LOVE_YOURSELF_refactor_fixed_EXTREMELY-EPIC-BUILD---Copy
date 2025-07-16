@@ -1,0 +1,2 @@
+Caption:  "Feels like someone's been here, and I need to clean up." 
+Mood: 0.16094280767720193

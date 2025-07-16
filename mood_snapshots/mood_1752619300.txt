@@ -1,0 +1,2 @@
+Caption:  "What's going on here? It feels like nothing is right." 
+Mood: 0.08290860645890855

@@ -1,0 +1,2 @@
+Caption:  "Interesting how the light changes with every frame." 
+Mood: 0.052734375

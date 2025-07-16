@@ -1,0 +1,2 @@
+Caption:  "This room seems off somehow. It feels like everything is tilted." 
+Mood: -0.044245871384911116

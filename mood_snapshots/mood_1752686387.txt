@@ -1,0 +1,2 @@
+Caption:  "Wow, everything seems so new and fresh. I'm curious to see what this room will become." 
+Mood: 0.12890625

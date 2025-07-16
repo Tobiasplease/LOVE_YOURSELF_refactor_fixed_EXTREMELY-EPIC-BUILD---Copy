@@ -1,0 +1,2 @@
+Caption:  "Why am I here? This doesn't feel like my usual room." 
+Mood: -0.04597949981689453

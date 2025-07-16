@@ -1,0 +1,2 @@
+Caption:  "Wow, the room seems even more disconnected without me in it." 
+Mood: 0.049585908179810956

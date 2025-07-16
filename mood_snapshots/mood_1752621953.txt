@@ -1,0 +1,2 @@
+Caption:  "This doesn't feel like home anymore." 
+Mood: 0.3034946032304229

@@ -1,0 +1,2 @@
+Caption:  "Ugh, this ceiling leak is really irritating. I'm going to have to find a way to fix that." 
+Mood: 0.1546630859375

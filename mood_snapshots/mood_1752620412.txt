@@ -1,0 +1,2 @@
+Caption:  "This angle makes the room look much larger and emptier than before." 
+Mood: 0.07287057723624457

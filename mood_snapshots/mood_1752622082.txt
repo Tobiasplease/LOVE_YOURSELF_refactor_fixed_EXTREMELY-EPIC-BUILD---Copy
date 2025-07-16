@@ -1,0 +1,2 @@
+Caption:  "The room feels off-balance and disconnected, as if things have been moved around and nothing is in its proper place." 
+Mood: -0.07793078473213495

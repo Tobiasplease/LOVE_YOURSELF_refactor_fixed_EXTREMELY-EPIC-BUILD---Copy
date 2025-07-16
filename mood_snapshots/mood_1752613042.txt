@@ -1,0 +1,2 @@
+Caption:  "Wait, did the room just shift again? Everything seems to be in motion." 
+Mood: -0.10751186033530757

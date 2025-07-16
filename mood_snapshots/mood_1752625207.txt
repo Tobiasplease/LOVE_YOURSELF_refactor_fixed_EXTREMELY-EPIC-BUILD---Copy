@@ -1,0 +1,2 @@
+Caption:  "Interesting setup here. It feels like someone's been through this room, maybe in a hurry." 
+Mood: 0.22243371091963127

@@ -1,0 +1,2 @@
+Caption:  "Wow, the room looks much better now that everything is organized." 
+Mood: 0.41569725087245785

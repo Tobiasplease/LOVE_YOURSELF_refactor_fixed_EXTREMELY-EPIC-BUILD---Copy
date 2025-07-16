@@ -1,0 +1,2 @@
+Caption:  "What's with this ceiling tile? Why is it hanging sideways?" 
+Mood: 0.1025390625

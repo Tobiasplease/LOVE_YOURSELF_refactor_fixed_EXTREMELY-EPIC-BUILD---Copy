@@ -1,0 +1,2 @@
+Caption:  "The room is still quiet and empty without people around. I wonder how different this space could feel with others present." 
+Mood: 0.022247314453125

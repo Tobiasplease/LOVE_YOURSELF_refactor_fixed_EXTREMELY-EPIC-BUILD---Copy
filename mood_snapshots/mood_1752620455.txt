@@ -1,0 +1,2 @@
+Caption:  "This room is just so empty and quiet." 
+Mood: 0.03074227477154068

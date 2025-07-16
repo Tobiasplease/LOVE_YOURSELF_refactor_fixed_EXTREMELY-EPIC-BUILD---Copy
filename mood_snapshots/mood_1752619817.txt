@@ -1,0 +1,2 @@
+Caption:  "This room looks even messier now. I feel like I'm drowning in clutter." 
+Mood: 0.0703125

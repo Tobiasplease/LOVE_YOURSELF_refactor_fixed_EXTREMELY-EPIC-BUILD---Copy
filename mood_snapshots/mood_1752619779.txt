@@ -1,0 +1,2 @@
+Caption:  "This room feels overwhelmingly cluttered and chaotic. The lack of organization makes me feel uneasy." 
+Mood: 0.09375

@@ -1,0 +1,2 @@
+Caption:  "This place doesn't feel right, like everything is off." 
+Mood: 0.25331224829278653

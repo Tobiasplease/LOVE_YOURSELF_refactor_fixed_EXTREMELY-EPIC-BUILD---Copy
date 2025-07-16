@@ -1,0 +1,2 @@
+Caption:  "Why isn't this light fixture aligned properly? It looks unbalanced." 
+Mood: 0.2668892406181061

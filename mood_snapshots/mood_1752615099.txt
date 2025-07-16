@@ -1,0 +1,2 @@
+Caption:  "This room looks new and freshly renovated." 
+Mood: 0.2890625

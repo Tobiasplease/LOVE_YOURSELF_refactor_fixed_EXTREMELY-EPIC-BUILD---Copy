@@ -1,0 +1,2 @@
+Caption:  "Everything seems so out of place... I wonder why it all looks like this." 
+Mood: 0.015625

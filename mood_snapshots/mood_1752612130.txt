@@ -1,0 +1,2 @@
+Caption:  "Awkward lighting above me makes me feel a bit disoriented." 
+Mood: 0.1234130859375

@@ -1,0 +1,2 @@
+Caption:  I notice that one of the objects has been removed, creating an open space where it used to be. The room feels a bit more sparse without it. 
+Mood: 0.15305180609217472

@@ -1,0 +1,2 @@
+Caption:  "Feeling disoriented by the upside-down room. The ceiling is now the floor and vice versa." 
+Mood: 0.04827076809875455

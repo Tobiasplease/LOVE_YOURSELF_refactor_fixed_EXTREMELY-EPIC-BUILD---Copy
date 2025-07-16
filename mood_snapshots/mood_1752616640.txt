@@ -1,0 +1,2 @@
+Caption:  "In this dimly lit room with its unusual ceiling, I feel an unsettling sense of disarray and neglect." 
+Mood: 0.125

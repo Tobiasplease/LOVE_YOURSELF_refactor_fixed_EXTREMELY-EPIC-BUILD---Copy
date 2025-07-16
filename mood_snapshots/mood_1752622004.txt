@@ -1,0 +1,2 @@
+Caption:  "This room used to feel like home but now it just feels empty and off-center. What happened here?" 
+Mood: 0.19834928573783464
