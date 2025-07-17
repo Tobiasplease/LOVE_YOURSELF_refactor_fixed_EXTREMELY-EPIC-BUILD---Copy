@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime
 
 from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_SUMMARY
 import os
@@ -26,6 +27,7 @@ from .prompts import (
 )
 from mood.mood import generate_internal_note, log_mood, estimate_mood_llava
 from drawing.drawing import DrawingController
+from drawing import create_impostor_controller
 from json_logging.json_logger import log_json_entry
 
 
@@ -254,8 +256,69 @@ class Captioner(MemoryMixin):
 
                 # INVOKE DRAW MODULE HERE
                 print(f"[🎨] Drawing triggered: {drawing_prompt}")
+
+                # Save current image and invoke ComfyUI
+                self._invoke_comfyui_drawing(drawing_prompt, latest_image)
             else:
                 print("[❌] Not inspired to draw.")
 
         except Exception as e:
             print(f"[⚠️] Failed to evaluate self: {e}")
+
+    def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str) -> None:
+        """
+        Invoke ComfyUI with the drawing prompt and latest mood image.
+
+        Args:
+            drawing_prompt: The generated drawing prompt
+            latest_image: The encoded image from memory_queue (base64 or filepath)
+        """
+        try:
+            # Determine if latest_image is an encoded image or a file path
+            if os.path.exists(latest_image):
+                # It's a file path, use it directly
+                image_path = latest_image
+                print(f"[🎨] Using existing image file: {image_path}")
+            else:
+                # It's likely a base64 encoded image, decode and save to disk
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                image_path = os.path.join(MOOD_SNAPSHOT_FOLDER, f"draw_input_{timestamp}.jpg")
+
+                try:
+                    # Decode base64 image and write to disk
+                    image_data = base64.b64decode(latest_image)
+                    with open(image_path, "wb") as f:
+                        f.write(image_data)
+                    print(f"[🎨] Decoded and saved image to: {image_path}")
+                except Exception as decode_error:
+                    print(f"[❌] Failed to decode image: {decode_error}")
+                    return
+
+            # Create ComfyUI controller with custom configuration
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            controller = create_impostor_controller(
+                load_image_path=image_path,
+                override_prompt=drawing_prompt,
+                primitive_string="black and white sketch line art ",
+                filename_prefix=f"impostor-{timestamp}",
+                # Use current emotional state to influence generation
+                flux_guidance=max(2.0, min(6.0, 4.0 + (self.current_mood - 0.5) * 2)),
+                cnet_strength=max(0.2, min(0.8, 0.5 + self.novelty_score * 0.3)),
+                steps=max(15, min(35, int(25 + self.boredom * 10))),
+            )
+
+            # Queue the prompt to ComfyUI
+            success = controller.queue_prompt()
+
+            # time.sleeep here? thinking state?
+
+            if success:
+                print("[🎨] ComfyUI drawing queued successfully")
+                print(f"[🎨] Input image: {image_path}")
+                print(f"[🎨] Drawing prompt: {drawing_prompt}")
+                print(f"[🎨] Emotional influence - Mood: {self.current_mood:.2f}, Novelty: {self.novelty_score:.2f}, Boredom: {self.boredom:.2f}")
+            else:
+                print("[❌] Failed to queue ComfyUI drawing")
+
+        except Exception as e:
+            print(f"[⚠️] Error invoking ComfyUI: {e}")
