@@ -326,12 +326,15 @@ class Captioner(MemoryMixin):
             controller = create_impostor_controller(
                 load_image_path=image_path,
                 override_prompt=drawing_prompt,
-                primitive_string="black and white sketch line art ",
+                primitive_string="impostor black and white sketch line art ",
                 filename_prefix=f"impostor-{timestamp}",
-                # Use current emotional state to influence generation
-                flux_guidance=max(2.0, min(6.0, 4.0 + (self.current_mood - 0.5) * 2)),
-                cnet_strength=max(0.2, min(0.8, 0.5 + self.novelty_score * 0.3)),
-                steps=max(15, min(35, int(25 + self.boredom * 10))),
+                flux_guidance=4.0,  # Example value, adjust as needed
+                cnet_strength=0.3,  # Example value, adjust as needed
+                # Use current emotional state to influence generation?
+                # flux_guidance=max(2.0, min(6.0, 4.0 + (self.current_mood - 0.5) * 2)),
+                # cnet_strength=max(0.2, min(0.8, 0.5 + self.novelty_score * 0.3)),
+                # steps=max(15, min(35, int(25 + self.boredom * 10))),
+                steps=25,
             )
 
             # Queue the prompt to ComfyUI

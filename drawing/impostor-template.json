@@ -185,7 +185,7 @@
   },
   "300": {
     "inputs": {
-      "guidance": 4,
+      "guidance": 4.0,
       "conditioning": [
         "270",
         0
