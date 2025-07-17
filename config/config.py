@@ -1,5 +1,5 @@
 # === SERIAL SETTINGS ===
-SERIAL_PORT = 'COM10'
+SERIAL_PORT = "COM10"
 BAUD_RATE = 9600
 
 # === SERVO SETTINGS ===
@@ -45,15 +45,18 @@ YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 INTERNAL_VOICE_LOG = MOOD_LOG
 
 # === CAPTIONER MEMORY CONTROL ===
-MEMORY_QUEUE_LIMIT = 100     # max short-term memory entries
-MOOD_DECAY_RATE = 0.02       # how much mood fades when nothing new happens
-NOVELTY_RANDOMNESS = 0.3     # random weight to boost novelty
-SNAPSHOT_STORAGE_LIMIT = 100 # number of mood_snapshot images to keep
+MEMORY_QUEUE_LIMIT = 100  # max short-term memory entries
+MOOD_DECAY_RATE = 0.02  # how much mood fades when nothing new happens
+NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
+SNAPSHOT_STORAGE_LIMIT = 100  # number of mood_snapshot images to keep
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
+<<<<<<< HEAD
 
 
 # === LLAVA SETTINGS ===
 LLAVA_TIMEOUT_SUMMARY = 60
 LLAVA_TIMEOUT_EVAL = 90
 
+=======
+>>>>>>> 8ca90d2 (clean up and things)

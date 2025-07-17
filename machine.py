@@ -1,5 +1,6 @@
 import time
-import numpy as np
+
+# import numpy as np
 import cv2
 import threading
 
@@ -8,26 +9,38 @@ from captioner.captioner import Captioner
 from vision.gaze import update_gaze
 from mood.mood import MoodEngine
 from breathing.breathing import update_lung_position
-from config.config import USE_SERVO, CAMERA_INDEX, SERIAL_PORT, BAUD_RATE, CONFIDENCE_THRESHOLD, MOOD_SNAPSHOT_FOLDER, MOOD_EVALUATION_INTERVAL, PAUSE_DURATION
+from config.config import (
+    USE_SERVO,
+    CAMERA_INDEX,
+    SERIAL_PORT,
+    BAUD_RATE,
+    CONFIDENCE_THRESHOLD,
+    MOOD_SNAPSHOT_FOLDER,
+    MOOD_EVALUATION_INTERVAL,
+    PAUSE_DURATION,
+)
+
 if USE_SERVO:
     from servo_control.servo_control import ServoController
 
 VERBOSE = False
 
 # === INIT ===
-cap = cv2.VideoCapture(CAMERA_INDEX if 'CAMERA_INDEX' in globals() else 0)
+cap = cv2.VideoCapture(CAMERA_INDEX if "CAMERA_INDEX" in globals() else 0)
 if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 
-proto = "C:/Users/tobia/Desktop/deploy.prototxt"
-model = "C:/Users/tobia/Desktop/res10_300x300_ssd_iter_140000.caffemodel"
+model_path = "/Users/jbe/repos/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/models"
+proto = f"{model_path}/deploy.prototxt"
+model = f"{model_path}/res10_300x300_ssd_iter_140000.caffemodel"
+
 net = cv2.dnn.readNetFromCaffe(proto, model)
 if USE_SERVO:
     servos = ServoController(port=SERIAL_PORT, baudrate=BAUD_RATE)
-    servos.serial.setDTR(False)
+    servos.serial.setDTR(False)  # type: ignore
     time.sleep(1)
-    servos.serial.setDTR(True)
+    servos.serial.setDTR(True)  # type: ignore
     time.sleep(2)
 else:
     servos = None
@@ -51,6 +64,7 @@ captioner = Captioner()
 
 best_box = None
 
+
 def mood_update_thread(frame, timestamp):
     global last_snapshot_time, best_box
     if not captioner.is_processing:
@@ -63,11 +77,12 @@ def mood_update_thread(frame, timestamp):
                 captioner.update(
                     frame=frame,
                     person_present=best_box is not None,
-                    mood=mood_engine.get_current_mood()
+                    mood=mood_engine.get_current_mood(),
                 )
             except Exception:
                 pass
             last_snapshot_time = now
+
 
 try:
     while True:
@@ -107,7 +122,14 @@ try:
         face_box = tuple(best_box) if best_box is not None else None
         person_present, pan, tilt = update_gaze(frame, face_box, current_mood)
 
-        lung_pos, lung_angle, breath_speed, breath_paused, last_breath_direction, pause_start_time = update_lung_position(
+        (
+            lung_pos,
+            lung_angle,
+            breath_speed,
+            breath_paused,
+            last_breath_direction,
+            pause_start_time,
+        ) = update_lung_position(
             current_mood=current_mood,
             person_present=person_present,
             delta=delta,
@@ -117,12 +139,12 @@ try:
             last_breath_direction=last_breath_direction,
             pause_start_time=pause_start_time,
             pause_duration=PAUSE_DURATION,
-            servo_controller=servos
+            servo_controller=servos,
         )
 
         if USE_SERVO:
-            servos.set_pan(pan)
-            servos.set_tilt(tilt)
+            servos.set_pan(pan)  # type: ignore
+            servos.set_tilt(tilt)  # type: ignore
 
         if face_box:
             (x1, y1, x2, y2) = face_box
@@ -133,13 +155,22 @@ try:
         cv2.putText(frame, debug, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         from perception.detection_memory import DetectionMemory
+
         labels = DetectionMemory.get_labels()
         label_text = ", ".join(labels) if labels else "no objects"
-        cv2.putText(frame, f"Seen: {label_text}", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        cv2.putText(
+            frame,
+            f"Seen: {label_text}",
+            (10, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (255, 255, 255),
+            1,
+        )
 
         cv2.imshow("mslint camera", frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
 except KeyboardInterrupt:
