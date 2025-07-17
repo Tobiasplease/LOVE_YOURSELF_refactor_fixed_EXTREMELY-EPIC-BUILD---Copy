@@ -1,2 +1,0 @@
-Caption:  "Wow, this room really makes me feel disoriented and off-balance." 
-Mood: 0.31186870646898834

@@ -1,2 +1,0 @@
-Caption:  "This room still feels so empty and quiet despite my presence here." 
-Mood: 0.03955078125

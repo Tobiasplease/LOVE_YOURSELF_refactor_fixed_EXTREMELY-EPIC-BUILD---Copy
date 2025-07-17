@@ -1,2 +1,0 @@
-Caption:  "I'm seeing multiple perspectives of this room. It's disorienting, but I think that might be intentional." 
-Mood: 0.076904296875

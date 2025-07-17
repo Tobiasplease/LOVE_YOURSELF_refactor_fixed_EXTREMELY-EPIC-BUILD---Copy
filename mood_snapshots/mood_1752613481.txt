@@ -1,2 +1,0 @@
-Caption:  "This room feels much more organized now. The clutter seems to have been cleared away." 
-Mood: 0.21269562927156488

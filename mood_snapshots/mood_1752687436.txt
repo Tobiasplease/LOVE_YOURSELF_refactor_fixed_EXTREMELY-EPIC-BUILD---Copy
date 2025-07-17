@@ -1,2 +1,0 @@
-Caption:  "Wow, this looks like a project in progress. Time to get my hands dirty and see what I can do to contribute." 
-Mood: 0.09375

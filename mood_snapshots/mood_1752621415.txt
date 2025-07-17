@@ -1,2 +1,0 @@
-Caption:  "What's going on with this ceiling? It looks upside down." 
-Mood: 0.07207887476618546

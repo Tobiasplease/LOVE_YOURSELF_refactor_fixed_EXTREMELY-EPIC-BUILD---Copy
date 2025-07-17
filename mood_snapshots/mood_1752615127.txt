@@ -1,2 +1,0 @@
-Caption:  "I'm feeling drawn to the light in this room. It seems warm and inviting." 
-Mood: 0.28759765625

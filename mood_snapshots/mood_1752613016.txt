@@ -1,2 +1,0 @@
-Caption:  "I'm starting to feel uncomfortable with this room" 
-Mood: 0.1899841862195899

@@ -1,2 +1,0 @@
-Caption:  "Huh, why's the room off-balance now? It wasn't like this before..." 
-Mood: -0.01096963882446289

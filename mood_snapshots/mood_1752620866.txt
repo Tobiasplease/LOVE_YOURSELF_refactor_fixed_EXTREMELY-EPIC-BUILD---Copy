@@ -1,2 +1,0 @@
-Caption:  "How did this room end up like this? It's so disorienting." 
-Mood: -0.08981789459076617

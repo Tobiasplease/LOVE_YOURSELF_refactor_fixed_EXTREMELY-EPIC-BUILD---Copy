@@ -1,2 +1,0 @@
-Caption:  "I'm feeling a bit lonely now that there's just one person here." 
-Mood: 0.26149706616786084

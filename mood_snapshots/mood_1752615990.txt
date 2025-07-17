@@ -1,2 +1,0 @@
-Caption:  "This room never felt normal, but now it does." 
-Mood: 0.27860614527367034

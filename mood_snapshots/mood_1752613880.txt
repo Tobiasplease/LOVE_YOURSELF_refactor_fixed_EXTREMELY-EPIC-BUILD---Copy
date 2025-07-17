@@ -1,2 +1,0 @@
-Caption:  "This room looks much better now that everything is in its place." 
-Mood: 0.09370562001500761

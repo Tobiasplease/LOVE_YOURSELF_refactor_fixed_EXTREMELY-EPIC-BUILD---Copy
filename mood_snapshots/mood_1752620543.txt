@@ -1,2 +1,0 @@
-Caption:  "Looks like my room has been rearranged... why did I change it?" 
-Mood: 0.007295285907699595

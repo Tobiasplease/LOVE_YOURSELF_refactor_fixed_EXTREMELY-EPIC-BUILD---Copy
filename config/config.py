@@ -53,3 +53,7 @@ SNAPSHOT_STORAGE_LIMIT = 100 # number of mood_snapshot images to keep
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
 
+# === LLAVA SETTINGS ===
+LLAVA_TIMEOUT_SUMMARY = 60
+LLAVA_TIMEOUT_EVAL = 90
+

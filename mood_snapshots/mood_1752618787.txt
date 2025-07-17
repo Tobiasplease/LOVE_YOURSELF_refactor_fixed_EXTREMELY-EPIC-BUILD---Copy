@@ -1,2 +1,0 @@
-Caption:  "Hmm, I should start listening to the music and see what this person is doing with that object." 
-Mood: 0.022247314453125

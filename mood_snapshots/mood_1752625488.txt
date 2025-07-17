@@ -1,2 +1,0 @@
-Caption:  "Wow, the room looks different now. It's like I stepped in and nothing was here before." 
-Mood: 0.15688193462011465

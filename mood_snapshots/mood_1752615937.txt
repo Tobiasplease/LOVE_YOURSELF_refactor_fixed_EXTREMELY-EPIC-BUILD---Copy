@@ -1,2 +1,0 @@
-Caption:  "This room always feels so chaotic, but now I see it as normal." 
-Mood: 0.14188123324129265

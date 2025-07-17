@@ -1,2 +1,0 @@
-Caption:  "Interesting room setup. Wait, what's that scent? New paint, new carpet?" 
-Mood: 0.216796875

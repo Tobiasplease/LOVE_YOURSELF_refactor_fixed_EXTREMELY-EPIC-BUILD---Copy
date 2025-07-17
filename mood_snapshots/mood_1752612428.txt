@@ -1,2 +1,0 @@
-Caption:  "Huh, what's that spot on the ceiling? It looks like there might be a leak..." 
-Mood: 0.052734375

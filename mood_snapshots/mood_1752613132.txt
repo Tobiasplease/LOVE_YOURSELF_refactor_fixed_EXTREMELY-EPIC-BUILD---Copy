@@ -1,2 +1,0 @@
-Caption:  "This place still doesn't feel right. Maybe I should investigate that object in the corner." 
-Mood: -0.06047542143861051

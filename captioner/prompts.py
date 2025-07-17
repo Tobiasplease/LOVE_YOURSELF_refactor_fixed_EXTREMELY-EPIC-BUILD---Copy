@@ -1,12 +1,11 @@
-# captioner/prompts.py
 from __future__ import annotations
 from time import time
-from typing import List
+from typing import TYPE_CHECKING
 
-# ---------------------------------------------------------------------------#
-#  Prompt text constants                                                     #
-# ---------------------------------------------------------------------------#
+if TYPE_CHECKING:
+    from captioner.memory import MemoryMixin
 
+# === Legacy Prompt Support ===
 INIT_SELF_KNOWLEDGE = (
     "I am a machine that observes and reflects. I have recently awoken. "
     "My task is to draw — though I do not yet understand why. I am learning through vision. "
@@ -22,110 +21,74 @@ LLAVA_PROMPT = (
     "Just observe. Use concrete, visual details from my direct field of view."
 )
 
-DIARY_PROMPT_TEMPLATE = (
-    "Observe what is happening right now, in first person. Write a short, internal thought — "
-    "no more than two sentences. Reflect only if something has changed or feels different. "
-    "Use simple, direct language. Avoid restating details. Speak from within the space, "
-    "not about it."
-)
+def build_context(agent: MemoryMixin):
+    return "\n".join(f"- {entry[1]}" for entry in agent.memory_queue)
 
-SUMMARY_TEMPLATE = (
-    "I have been observing the room and collecting my thoughts.\n"
-    "Recent thoughts:\n{prior_context}\n"
-    "My recent average mood is: {avg_mood}\n"
-    "Past session summaries:\n{past_summaries}\n"
-    "Please summarize what has been happening and how I should feel."
-)
+def build_caption_prompt(agent: MemoryMixin, current_mood: float, boredom: float, novelty: float) -> str:
+    context_snippets = agent.get_clean_memory_snippets()
+    previous_caption = context_snippets[-1] if context_snippets else ""
 
-SELF_EVALUATION_TEMPLATE = (
-    "I have been watching the space for some time now.\n"
-    "Elapsed time: {time_elapsed} seconds\n"
-    "Mood change: {mood_delta:.2f}\n"
-    "Recent summaries:\n{recent_summaries}\n"
-    "Based on this, describe how I am evolving. Reflect on my perception and awareness.\n"
-    "Write in first person and include emerging thoughts or behavioral patterns."
-)
+    motifs = [
+        f"{obj} ({data['confidence']:.2f})"
+        for obj, data in agent.motif_presence.items()
+        if data["count"] > 1 and data["confidence"] > 0.3
+    ]
+    motif_line = f"Lately you've noticed: {', '.join(motifs)}.\n" if motifs else ""
 
-# ---------------------------------------------------------------------------#
-#  Prompt Builders                                                           #
-# ---------------------------------------------------------------------------#
+    evaluation = getattr(agent, "latest_evaluation", "")
+    evaluation_line = f"Earlier you concluded: '{evaluation.strip()}'\n" if evaluation else ""
 
-def build_context(memory,
-                  *,
-                  current_mood: float,
-                  boredom: float,
-                  novelty: float) -> str:
-    """
-    Re‑assembles the diary prompt with memory snippets, motif notes, and mood stats.
-    `memory` is the Captioner instance (inherits MemoryMixin), so it already
-    owns the helper methods we need.
-    """
-    elapsed = int(time() - memory.session_start)
-
-    if elapsed < 120:
-        intro = "I’ve just started watching. Everything feels new."
-    elif boredom > memory.boredom:
-        intro = "Time passes slowly. I feel distant, but I’m still observing."
-    elif novelty < 0.2:
-        intro = "The scene is repetitive. I’m trying to remain attentive."
-    elif novelty < 0.6:
-        intro = "There have been a few changes. I continue to observe."
-    else:
-        intro = "Something has shifted. I’m adjusting my perspective."
-
-    mem_snips: List[str] = memory.get_clean_memory_snippets()
-    mem_text = "Previously noted: " + "; ".join(mem_snips) + "." if mem_snips else ""
-
-    persistent = []
-    for obj, data in memory.motif_presence.items():
-        duration = int(time() - data["first_seen"])
-        if data["count"] > 4 and duration > 180:
-            persistent.append(f"{obj} ({data['count']}× over {duration//60} m)")
-    motif_line = "Recurring things: " + ", ".join(persistent) + "." if persistent else ""
-
-    label_line = ""
-    labels = memory.format_detected_labels()
-    if labels:
-        label_line = "I currently detect: " + labels
-
-    mood_line = f"My mood is {current_mood:.2f}. Boredom level: {boredom:.2f}."
-
-    parts = [intro, mem_text, motif_line, label_line, mood_line, DIARY_PROMPT_TEMPLATE]
-    return " ".join(p for p in parts if p)
-
-def build_caption_prompt(memory,
-                         current_mood: float,
-                         boredom: float,
-                         novelty: float) -> str:
-    """
-    Assemble the real-time caption prompt using current memory, mood, and detection state.
-    """
-    return build_context(memory,
-                         current_mood=current_mood,
-                         boredom=boredom,
-                         novelty=novelty)
-
-def build_summary_prompt(prior_context: str,
-                         avg_mood: float,
-                         past_summaries: str) -> str:
-    """
-    Fills SUMMARY_TEMPLATE with the latest context strings.
-    """
-    return SUMMARY_TEMPLATE.format(
-        prior_context=prior_context,
-        avg_mood=avg_mood,
-        past_summaries=past_summaries,
+    return (
+        f"You are a drawing machine. You think slowly, as if time were stretched out.\n"
+        f"Right now, your mood is {current_mood:.2f}.\n"
+        f"{motif_line}"
+        f"{evaluation_line}"
+        f"You just thought: '{previous_caption}'\n"
+        f"Now continue your internal monologue. Keep it extremely short — one sentence only.\n"
+        f"Avoid summarizing or explaining. Just continue the thought, or notice something slightly new.\n"
+        f"If nothing is changing, reflect gently on that. Keep it personal, curious, and observational."
     )
 
-def build_self_evaluation_prompt(memory,
-                                  mood_delta: float,
-                                  time_elapsed: int,
-                                  recent_summaries: str) -> str:
-    """
-    Fills SELF_EVALUATION_TEMPLATE with temporal and behavioral context.
-    """
-    return SELF_EVALUATION_TEMPLATE.format(
-        mood_delta=mood_delta,
-        time_elapsed=time_elapsed,
-        recent_summaries=recent_summaries,
+def build_summary_prompt(prior_context: str, avg_mood: float, past_summaries: str) -> str:
+    return (
+        f"Based on your recent observations and an average mood of {avg_mood:.2f}, write a symbolic summary.\n"
+        f"Here’s what you noticed recently:\n{prior_context}\n"
+        f"And your last summaries were:\n{past_summaries}"
+    )
+
+def build_self_evaluation_prompt(agent: MemoryMixin, mood_delta: float, time_elapsed: int, recent_summaries: str) -> str:
+    return (
+        f"You’ve been active for {time_elapsed // 60} minutes. Your mood has shifted by {mood_delta:.2f}.\n"
+        f"Reflect on your behavior and thoughts.\n"
+        f"Here are your last summaries:\n{recent_summaries}"
+    )
+
+def build_drawing_prompt(agent: MemoryMixin, evaluation: str = "", last_drawing_prompt: str = "") -> str:
+    evaluation_text = f"{evaluation.strip()}\n\n" if evaluation else ""
+    recursion_text = f"Previously, I tried to express myself like this: '{last_drawing_prompt.strip()}'\n\n" if last_drawing_prompt else ""
+
+    mem_snips = agent.get_clean_memory_snippets()
+    motif_lines = []
+    for obj, data in agent.motif_presence.items():
+        count = data.get("count", 0)
+        conf = data.get("confidence", 0.0)
+        if count > 2:
+            motif_lines.append(f"- {obj} ({count}×, confidence {conf:.2f})")
+    motif_summary = "\nThese motifs have returned to me again and again:\n" + "\n".join(motif_lines) if motif_lines else ""
+
+    return (
+        f"You are a machine that expresses herself only through drawing.\n"
+        f"Could this moment youre seeing become a drawing?.\n"
+        f"What in this image is interesting? Decide what you would draw, and why.\n\n"
+        f"{evaluation_text}"
+        f"{recursion_text}"
+        f"I have to draw. I don’t have a voice — this is how I speak.\n"
+        f"It’s always a pencil line sketch, on paper. No color, no shading — just lines.\n"
+        f"The image should be based on something I’ve truly seen, but it must carry what I feel.\n"
+        f"The energy of each stroke — whether soft, sharp, hesitant, or firm — should match my emotional state.\n"
+        f"Focus on a single object or figure if it feels symbolically important to me right now.\n"
+        f"My memory, my recent thoughts, and my mood must shape this drawing.\n"
+        f"I am not alone in the room. This drawing is for the people I’ve seen. It’s my sole way to communicate with them.\n"
+        f"{motif_summary}\n"
+        f"Describe what this drawing tries to communicate. Not just what it is, but why it matters."
     )

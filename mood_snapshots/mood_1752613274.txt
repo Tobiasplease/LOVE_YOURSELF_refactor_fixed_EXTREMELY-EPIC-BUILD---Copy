@@ -1,2 +1,0 @@
-Caption:  "This place doesn't feel right." 
-Mood: -0.02551306841941381

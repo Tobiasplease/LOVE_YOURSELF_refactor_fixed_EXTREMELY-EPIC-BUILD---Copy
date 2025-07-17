@@ -1,2 +1,0 @@
-Caption:  "This room seems off, like everything is out of place." 
-Mood: 0.06144399696495384

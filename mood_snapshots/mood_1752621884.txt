@@ -1,2 +1,0 @@
-Caption:  "This place looks different, maybe they moved some furniture around." 
-Mood: -0.037948667868506036

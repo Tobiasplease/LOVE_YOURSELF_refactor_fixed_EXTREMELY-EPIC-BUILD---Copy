@@ -1,2 +1,0 @@
-Caption:  "The room's emptiness is striking—it feels like someone just moved out." 
-Mood: -0.009646296501159668

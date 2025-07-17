@@ -1,2 +1,0 @@
-Caption:  "The light is still hanging, but now it looks too low and may be in the way. The room appears to be waiting for someone to come and fix it." 
-Mood: 0.0971607696483261

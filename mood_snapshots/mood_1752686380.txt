@@ -1,2 +1,0 @@
-Caption:  "Feeling curious and excited to explore this new room." 
-Mood: 0.171875

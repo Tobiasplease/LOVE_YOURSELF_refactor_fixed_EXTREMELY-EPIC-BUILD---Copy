@@ -1,2 +1,0 @@
-Caption:  "This room is defying gravity—it's disorienting to be in an upside-down environment like this." 
-Mood: 0.036203076074065914

@@ -1,20 +1,17 @@
-
 from __future__ import annotations
 
+from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_SUMMARY
 import os
 import time
 import threading
-import random
 import base64
 import re
 from typing import Optional, Deque, Tuple
 from collections import deque
-
 import cv2  # type: ignore
 import requests  # type: ignore
 import numpy as np  # type: ignore
 
-from config.config import MOOD_SNAPSHOT_FOLDER
 from .memory import (
     MemoryMixin,
     CAPTION_SAVE_THRESHOLD,
@@ -25,22 +22,24 @@ from .prompts import (
     build_summary_prompt,
     build_caption_prompt,
     build_self_evaluation_prompt,
+    build_drawing_prompt,
 )
 from mood.mood import generate_internal_note, log_mood, estimate_mood_llava
+from drawing.drawing import DrawingController
+
 
 class Captioner(MemoryMixin):
-    """High‑level controller that orchestrates perception, memory, and mood."""
-
     caption_window: Optional[any] = None
 
     def __init__(self) -> None:
         MemoryMixin.__init__(self)
 
-        self.stream_interval: int = 3      # real-time
+        self.stream_interval: int = 3
         self.summary_interval: int = 600
-        self.eval_interval: int = 300      # 5 minutes
+        self.eval_interval: int = 300
 
-        self.session_start: float = time.time()
+        self.true_session_start: float = time.time()
+        self.session_start: float = self.true_session_start
         self.last_stream_time: float = time.time()
         self.last_eval_time: float = time.time()
 
@@ -52,6 +51,8 @@ class Captioner(MemoryMixin):
         self.summary_history: list[str] = []
         self.evaluation_journal: list[str] = []
         self.initial_prompt_run: bool = False
+        self.first_caption_done: bool = False
+        self.last_drawing_prompt: str = ""
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
 
@@ -65,7 +66,6 @@ class Captioner(MemoryMixin):
 
     def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None) -> None:
         if frame is not None:
-            # discard older pending frame
             if len(self.snapshot_queue) > 1:
                 self.snapshot_queue.pop()
             self.snapshot_queue.append((frame.copy(), person_present))
@@ -95,12 +95,11 @@ class Captioner(MemoryMixin):
         filename = f"{MOOD_SNAPSHOT_FOLDER}/mood_{timestamp}.jpg"
         cv2.imwrite(filename, frame)
 
-        prompt = LLAVA_PROMPT if not self.initial_prompt_run else build_caption_prompt(
-            self,
-            current_mood=self.current_mood,
-            boredom=self.boredom,
-            novelty=self.novelty_score,
-        )
+        if self.first_caption_done:
+            prompt = build_caption_prompt(self, self.current_mood, self.boredom, self.novelty_score)
+        else:
+            prompt = LLAVA_PROMPT
+            self.first_caption_done = True
 
         caption, _ = self.describe_image_with_llava(filename, prompt=prompt)
         self.initial_prompt_run = True
@@ -151,7 +150,11 @@ class Captioner(MemoryMixin):
                 "images": [encoded],
                 "stream": False,
             }
-            resp = requests.post("http://localhost:11434/api/generate", json=payload, timeout=60)
+            resp = requests.post(
+                "http://localhost:11434/api/generate",
+                json=payload,
+                timeout=LLAVA_TIMEOUT_SUMMARY
+            )
             resp.raise_for_status()
             result = resp.json()
             return result.get("response", "[No response received]"), image_path
@@ -169,19 +172,19 @@ class Captioner(MemoryMixin):
             return
 
         try:
-            recent_lines = [m[1] for m in self.memory_queue[-50:]]
+            recent_lines = [m[1] for m in list(self.memory_queue)[-50:]]
             prior_context = "\n".join(f"- {s}" for s in recent_lines)
-            moods = [m[2] for m in self.memory_queue]
+            moods = [m[2] for m in list(self.memory_queue)]
             avg_mood = round(sum(moods) / len(moods), 2) if moods else 0.0
-            past_summaries = "\n".join(f"→ {s}" for s in self.summary_history[-3:])
+            past_summaries = "\n".join(f"→ {s}" for s in (self.summary_history or [])[-3:])
 
             summary_prompt = build_summary_prompt(prior_context, avg_mood, past_summaries)
-            latest_image = self.memory_queue[-1][3]
+            latest_image = list(self.memory_queue)[-1][3]
             summary, _ = self.describe_image_with_llava(latest_image, prompt=summary_prompt)
             print(f"In summary: {summary}")
 
             self.summary_history.append(summary)
-            self.memory_queue = self.memory_queue[-3:]
+            self.memory_queue = deque(list(self.memory_queue)[-3:], maxlen=self.memory_queue.maxlen)
         except Exception as e:
             print(f"[⚠️] Failed to generate summary: {e}")
 
@@ -189,24 +192,43 @@ class Captioner(MemoryMixin):
 
     def generate_self_evaluation(self) -> None:
         try:
-            mood_vals = [m[2] for m in self.memory_queue[-10:]]
+            recent = list(self.memory_queue)[-10:]
+            mood_vals = [m[2] for m in recent]
             mood_delta = mood_vals[-1] - mood_vals[0] if len(mood_vals) > 1 else 0.0
-            time_elapsed = int(time.time() - self.session_start)
+            time_elapsed = int(time.time() - self.true_session_start)
+            recent_summaries = "\n".join(s for s in (self.summary_history or [])[-3:])
 
-            summary_context = "\n".join(s for s in self.summary_history[-3:])
             eval_prompt = build_self_evaluation_prompt(
                 memory=self,
                 mood_delta=mood_delta,
                 time_elapsed=time_elapsed,
-                recent_summaries=summary_context,
+                recent_summaries=recent_summaries,
             )
-            latest_image = self.memory_queue[-1][3] if self.memory_queue else None
+
+            latest_image = next((m[3] for m in reversed(self.memory_queue) if isinstance(m, tuple) and len(m) > 3), None)
             if not latest_image:
+                print("[⚠️] No valid image found in memory_queue")
                 return
 
             evaluation, _ = self.describe_image_with_llava(latest_image, prompt=eval_prompt)
-            print(f"[🌀] Self‑evaluation: {evaluation}")
+            print(f"[🌀] Self-evaluation: {evaluation}")
             self.evaluation_journal.append(evaluation.strip())
+
+            controller = DrawingController()
+            if controller.should_draw(
+                mood=self.current_mood,
+                novelty=self.novelty_score,
+                boredom=self.boredom,
+                evaluation=evaluation,
+            ):
+                drawing_prompt = build_drawing_prompt(
+                    evaluation=evaluation,
+                    memory=self,
+                    last_drawing_prompt=self.last_drawing_prompt,
+                )
+                controller.register_drawing(drawing_prompt)
+                self.last_drawing_prompt = drawing_prompt
+                print(f"[🎨] Drawing triggered: {drawing_prompt}")
+
         except Exception as e:
             print(f"[⚠️] Failed to evaluate self: {e}")
-

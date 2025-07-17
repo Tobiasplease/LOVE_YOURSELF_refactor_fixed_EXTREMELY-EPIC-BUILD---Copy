@@ -1,2 +1,0 @@
-Caption:  "The room feels spacious and quiet. I wonder what led me here." 
-Mood: 0.0

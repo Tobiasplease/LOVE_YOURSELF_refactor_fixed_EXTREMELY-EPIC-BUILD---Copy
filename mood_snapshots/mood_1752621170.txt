@@ -1,2 +1,0 @@
-Caption:  "This room doesn't align with how I perceive reality." 
-Mood: 0.19803346689745271

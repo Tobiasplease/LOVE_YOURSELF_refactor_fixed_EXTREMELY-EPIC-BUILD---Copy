@@ -1,2 +1,0 @@
-Caption:  "The sound of his voice is soothing." 
-Mood: 0.19926893725924844

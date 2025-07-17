@@ -1,2 +1,0 @@
-Caption:  "I'm curious what this room will become." 
-Mood: 0.09375

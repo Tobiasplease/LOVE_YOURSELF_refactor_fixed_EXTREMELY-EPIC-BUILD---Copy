@@ -7,9 +7,14 @@ import time
 import requests
 import re
 import cv2                 # type: ignore
-import numpy as np          # type: ignore
+import numpy as np         # type: ignore
 
-from config.config import MOOD_SNAPSHOT_FOLDER, INTERNAL_VOICE_LOG
+from config.config import (
+    MOOD_SNAPSHOT_FOLDER,
+    INTERNAL_VOICE_LOG,
+    LLAVA_TIMEOUT_EVAL,
+    LLAVA_TIMEOUT_SUMMARY
+)
 
 
 # ---------------------------------------------------------------------------#
@@ -17,7 +22,7 @@ from config.config import MOOD_SNAPSHOT_FOLDER, INTERNAL_VOICE_LOG
 # ---------------------------------------------------------------------------#
 def estimate_mood_llava(caption: str,
                         url: str = "http://localhost:11434/api/generate",
-                        timeout: int = 30) -> float:
+                        timeout: int = LLAVA_TIMEOUT_EVAL) -> float:
     """
     Ask the local LLaVA server for a scalar mood value in [‑1, +1].
     Falls back to 0.0 if the request fails.
@@ -30,10 +35,12 @@ def estimate_mood_llava(caption: str,
     try:
         r = requests.post(
             url,
-            json={"model": "llava",
-                  "prompt": prompt,
-                  "images": [],
-                  "stream": False},
+            json={
+                "model": "llava",
+                "prompt": prompt,
+                "images": [],
+                "stream": False
+            },
             timeout=timeout,
         )
         r.raise_for_status()
@@ -49,7 +56,7 @@ def estimate_mood_llava(caption: str,
 
 
 # ---------------------------------------------------------------------------#
-# Snapshot‑based MoodEngine (your original code, untouched)                  #
+# Snapshot‑based MoodEngine (your original code, updated with timeout)       #
 # ---------------------------------------------------------------------------#
 class MoodEngine:
     def __init__(self) -> None:
@@ -104,7 +111,7 @@ class MoodEngine:
         return change
 
     # -------------------------------------------------------- LLaVA caption
-    def generate_caption(self, frame):
+    def generate_caption(self, frame, timeout: int = LLAVA_TIMEOUT_SUMMARY):
         _, img_encoded = cv2.imencode(".jpg", frame)
         img_base64     = base64.b64encode(img_encoded).decode("utf-8")
 
@@ -116,12 +123,13 @@ class MoodEngine:
         }
 
         try:
-            response = requests.post("http://localhost:11434/api/generate", json=payload)
+            response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=timeout)
             if response.status_code == 200:
                 return response.json().get("response", "")
             return f"Error: LLaVA API returned status {response.status_code}"
         except Exception as e:
             return f"Error: {e}"
+
 
 # ---------------------------------------------------------------------------#
 # Stateless helpers (unchanged)                                              #

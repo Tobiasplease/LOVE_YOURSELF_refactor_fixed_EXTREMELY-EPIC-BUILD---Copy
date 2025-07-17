@@ -1,2 +1,0 @@
-Caption:  "The room seems quieter today. I wonder why." 
-Mood: 0.12291812896728516

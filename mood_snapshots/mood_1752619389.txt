@@ -1,2 +1,0 @@
-Caption:  "The space feels crowded and cluttered. It's hard to focus on anything with all these objects around." 
-Mood: 0.11021717626238903

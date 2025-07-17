@@ -1,2 +1,0 @@
-Caption:  "This isn't how things are supposed to be, everything is mirrored." 
-Mood: 0.009924651635522148

@@ -1,2 +1,0 @@
-Caption:  "I should focus on this task, but the room is distracting." 
-Mood: 0.161773681640625
