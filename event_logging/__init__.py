@@ -9,7 +9,9 @@ from .json_logger import (
     append_to_log_file,
     read_evaluations,
     read_drawing_prompts,
-    read_internal_notes
+    read_internal_notes,
+    log_llava_api_call,
+    read_llava_api_calls
 )
 
 __all__ = [
@@ -19,5 +21,7 @@ __all__ = [
     'append_to_log_file',
     'read_evaluations',
     'read_drawing_prompts',
-    'read_internal_notes'
+    'read_internal_notes',
+    'log_llava_api_call',
+    'read_llava_api_calls'
 ]

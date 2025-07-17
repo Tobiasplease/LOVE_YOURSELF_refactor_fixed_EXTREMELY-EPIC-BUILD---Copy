@@ -12,7 +12,8 @@ import numpy as np  # type: ignore
 from typing import List, Optional
 
 from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_EVAL, LLAVA_TIMEOUT_SUMMARY
-from event_logging.json_logger import log_json_entry, read_json_logs
+from event_logging.json_logger import log_json_entry, read_json_logs, log_llava_api_call
+from event_logging.run_manager import get_run_image_path
 
 
 # ---------------------------------------------------------------------------#
@@ -36,13 +37,39 @@ def estimate_mood_llava(caption: str, url: str = "http://localhost:11434/api/gen
         )
         r.raise_for_status()
         response_text = r.json().get("response", "0.0").strip()
+        
+        # Log the API call
+        log_llava_api_call(
+            prompt=prompt,
+            model="llava",
+            image_path=None,
+            response=response_text,
+            success=True,
+            timeout=timeout,
+            log_dir=MOOD_SNAPSHOT_FOLDER
+        )
+        
         match = re.search(r"[-+]?\d*\.\d+|\d+", response_text)
         if match:
             return max(-1.0, min(1.0, float(match.group(0))))
         else:
             raise ValueError("No valid mood score found")
     except Exception as e:
-        print(f"[⚠️] Mood estimation failed: {e}")
+        error_msg = str(e)
+        print(f"[⚠️] Mood estimation failed: {error_msg}")
+        
+        # Log the failed API call
+        log_llava_api_call(
+            prompt=prompt,
+            model="llava",
+            image_path=None,
+            response=None,
+            success=False,
+            error_message=error_msg,
+            timeout=timeout,
+            log_dir=MOOD_SNAPSHOT_FOLDER
+        )
+        
         return 0.0
 
 
@@ -103,12 +130,22 @@ class MoodEngine:
 
     # -------------------------------------------------------- LLaVA caption
     def generate_caption(self, frame, timeout: int = LLAVA_TIMEOUT_SUMMARY):
+        # Save the frame to disk in the run image folder
+        timestamp = int(time.time())
+        image_filename = f"caption_frame_{timestamp}.jpg"
+        image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, image_filename)
+        
+        # Save the frame to disk
+        cv2.imwrite(image_path, frame)
+        
+        # Encode the frame for the API call
         _, img_encoded = cv2.imencode(".jpg", frame)
         img_base64 = base64.b64encode(img_encoded).decode("utf-8")  # type: ignore
 
+        prompt = "Describe the scene"
         payload = {
             "model": "llava",
-            "prompt": "Describe the scene",
+            "prompt": prompt,
             "images": [img_base64],
             "stream": False,
         }
@@ -116,10 +153,52 @@ class MoodEngine:
         try:
             response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=timeout)
             if response.status_code == 200:
-                return response.json().get("response", "")
-            return f"Error: LLaVA API returned status {response.status_code}"
+                response_text = response.json().get("response", "")
+                
+                # Log the successful API call with saved image path
+                log_llava_api_call(
+                    prompt=prompt,
+                    model="llava",
+                    image_path=image_path,
+                    response=response_text,
+                    success=True,
+                    timeout=timeout,
+                    log_dir=MOOD_SNAPSHOT_FOLDER
+                )
+                
+                return response_text
+            else:
+                error_msg = f"Error: LLaVA API returned status {response.status_code}"
+                
+                # Log the failed API call with saved image path
+                log_llava_api_call(
+                    prompt=prompt,
+                    model="llava",
+                    image_path=image_path,
+                    response=None,
+                    success=False,
+                    error_message=error_msg,
+                    timeout=timeout,
+                    log_dir=MOOD_SNAPSHOT_FOLDER
+                )
+                
+                return error_msg
         except Exception as e:
-            return f"Error: {e}"
+            error_msg = f"Error: {e}"
+            
+            # Log the failed API call with saved image path
+            log_llava_api_call(
+                prompt=prompt,
+                model="llava",
+                image_path=image_path,
+                response=None,
+                success=False,
+                error_message=error_msg,
+                timeout=timeout,
+                log_dir=MOOD_SNAPSHOT_FOLDER
+            )
+            
+            return error_msg
 
 
 # ---------------------------------------------------------------------------#
