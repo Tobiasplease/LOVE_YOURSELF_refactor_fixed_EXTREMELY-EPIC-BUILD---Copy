@@ -142,11 +142,12 @@ class Captioner(MemoryMixin):
         self.last_short_caption = self.truncate_caption(caption)
 
         # Only cleanup once per frame to avoid race conditions
-        self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
+        # self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
 
     @staticmethod
     def describe_image_with_llava(image_path: str, *, prompt: str) -> tuple[str, str]:
         try:
+            print("describe:", image_path)
             # Check if file exists before trying to open it
             if not os.path.exists(image_path):
                 print(f"[⚠️] Image file not found: {image_path}")
@@ -154,6 +155,7 @@ class Captioner(MemoryMixin):
 
             with open(image_path, "rb") as img_file:
                 encoded = base64.b64encode(img_file.read()).decode("utf-8")
+
             payload = {
                 "model": "llava",
                 "prompt": prompt,
@@ -194,7 +196,7 @@ class Captioner(MemoryMixin):
         except Exception as e:
             print(f"[⚠️] Failed to generate summary: {e}")
 
-        self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
+        # self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
 
     def generate_self_evaluation(self) -> None:
         try:
