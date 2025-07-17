@@ -1,10 +1,11 @@
 import requests
 import base64
-import json
+
+# import json
 import time
 
 # === Path to any test image ===
-image_path = r"C:\Users\tobia\Downloads\lint_caption_display_window_fully_synced\lint_caption_display_window_fixed_final\mood_snapshots\mood_1752414950.jpg"
+image_path = "/Users/jbe/Desktop/505376203_697336169816350_2001727864992071742_n.jpg"
 
 # === Read and encode image ===
 with open(image_path, "rb") as img_file:
@@ -12,22 +13,13 @@ with open(image_path, "rb") as img_file:
     img_b64 = base64.b64encode(img_bytes).decode("utf-8")
 
 # === Compose request ===
-payload = {
-    "model": "llava",
-    "prompt": "What do you see?",
-    "images": [img_b64],
-    "stream": False
-}
+payload = {"model": "llava", "prompt": "What do you see?", "images": [img_b64], "stream": False}
 
 print("Sending request to LLaVA...")
 
 try:
     start = time.time()
-    res = requests.post(
-        "http://localhost:11434/api/generate",
-        json=payload,
-        timeout=20  # ⏱ Increase this if needed
-    )
+    res = requests.post("http://localhost:11434/api/generate", json=payload, timeout=20)  # ⏱ Increase this if needed
     duration = time.time() - start
     print(f"✅ LLaVA responded in {duration:.2f} seconds.")
 
