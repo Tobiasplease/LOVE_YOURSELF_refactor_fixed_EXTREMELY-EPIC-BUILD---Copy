@@ -1,6 +1,11 @@
+import os
+
 # === SERIAL SETTINGS ===
 SERIAL_PORT = "COM10"
 BAUD_RATE = 9600
+
+# === MODEL PATHS ===
+MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
 USE_SERVO = False
@@ -35,7 +40,7 @@ LUNG_OFFSET_SCALE = -0.10
 # === MOOD SYSTEM ===
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 MOOD_LOG = "internalvoice.txt"
-MOOD_SNAPSHOT_FOLDER = "mood_snapshots"
+MOOD_SNAPSHOT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots")
 MOOD_SNAPSHOT_DIR = MOOD_SNAPSHOT_FOLDER  # alias to resolve mood.py dependency
 
 # === OBJECT DETECTION ===

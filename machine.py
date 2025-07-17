@@ -18,6 +18,7 @@ from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     MOOD_EVALUATION_INTERVAL,
     PAUSE_DURATION,
+    MODEL_PATH,
 )
 
 if USE_SERVO:
@@ -31,9 +32,8 @@ if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 
-model_path = "/Users/jbe/repos/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/models"
-proto = f"{model_path}/deploy.prototxt"
-model = f"{model_path}/res10_300x300_ssd_iter_140000.caffemodel"
+proto = f"{MODEL_PATH}/deploy.prototxt"
+model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
 
 net = cv2.dnn.readNetFromCaffe(proto, model)
 if USE_SERVO:
