@@ -110,7 +110,7 @@ class ComfyUIController:
             # ControlNet strength and start percent (node 711)
             "711": {"inputs": {"strength": self.config.cnet_strength, "start_percent": self.config.cnet_start_percent}},
             # LoRA path and strength (node 741)
-            "741": {"inputs": {"lora_1": {"on": True, "lora": self.config.lora_path, "strength": self.config.lora_strength}}},
+            "779": {"inputs": {"lora_01": self.config.lora_path, "strength_01": self.config.lora_strength}},
             # Latent dimensions (node 5)
             "5": {"inputs": {"width": self.config.latent_width, "height": self.config.latent_height, "batch_size": 1}},
             # Output filename prefix (node 30)

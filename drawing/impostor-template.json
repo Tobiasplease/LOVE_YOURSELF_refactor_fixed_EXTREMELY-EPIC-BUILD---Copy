@@ -43,7 +43,7 @@
     "inputs": {
       "text": "",
       "clip": [
-        "741",
+        "779",
         1
       ]
     },
@@ -92,7 +92,7 @@
         0
       ],
       "clip": [
-        "741",
+        "779",
         1
       ]
     },
@@ -140,11 +140,11 @@
   },
   "294": {
     "inputs": {
-      "scheduler": "beta",
+      "scheduler": "simple",
       "steps": 25,
       "denoise": 1,
       "model": [
-        "741",
+        "779",
         0
       ]
     },
@@ -166,7 +166,7 @@
     "inputs": {
       "cfg": 1,
       "model": [
-        "741",
+        "779",
         0
       ],
       "positive": [
@@ -235,7 +235,7 @@
   },
   "616": {
     "inputs": {
-      "value": "black and white sketch line art "
+      "value": "impostor black and white sketch line art "
     },
     "class_type": "PrimitiveString",
     "_meta": {
@@ -320,7 +320,7 @@
   },
   "724": {
     "inputs": {
-      "text_0": "black and white sketch line artThe image shows a man sitting on a gray armchair in a living room. He is wearing a blue plaid shirt and black headphones. He has a beard and glasses and is looking directly at the camera with a serious expression. Behind him, there is a desk with a computer monitor, a plant, and a framed picture hanging on the wall. The room appears to be well-lit with natural light coming in from the window.",
+      "text_0": "impostor black and white sketch line artThe image shows a man sitting on a gray armchair in a living room. He is wearing a blue plaid shirt and black headphones. He has a beard and glasses and is looking directly at the camera with a serious expression. Behind him, there is a desk with a computer monitor, a plant, and a framed picture hanging on the wall. The room appears to be well-lit with natural light coming in from the window.",
       "text": [
         "615",
         0
@@ -496,31 +496,6 @@
       "title": "DualCLIPLoader (GGUF)"
     }
   },
-  "741": {
-    "inputs": {
-      "PowerLoraLoaderHeaderWidget": {
-        "type": "PowerLoraLoaderHeaderWidget"
-      },
-      "lora_1": {
-        "on": true,
-        "lora": "flux/own/impostor/impostor-64-balanced-v2-16k-no-trig.safetensors",
-        "strength": 1
-      },
-      "➕ Add Lora": "",
-      "model": [
-        "742",
-        0
-      ],
-      "clip": [
-        "743",
-        0
-      ]
-    },
-    "class_type": "Power Lora Loader (rgthree)",
-    "_meta": {
-      "title": "Power Lora Loader (rgthree)"
-    }
-  },
   "742": {
     "inputs": {
       "switch": false,
@@ -553,6 +528,30 @@
     "class_type": "InversionDemoLazySwitch",
     "_meta": {
       "title": "GGUF OPT"
+    }
+  },
+  "779": {
+    "inputs": {
+      "lora_01": "flux/own/impostor/impostor-32-balanced-16k.safetensors",
+      "strength_01": 1,
+      "lora_02": "None",
+      "strength_02": 1,
+      "lora_03": "None",
+      "strength_03": 1,
+      "lora_04": "None",
+      "strength_04": 1,
+      "model": [
+        "742",
+        0
+      ],
+      "clip": [
+        "743",
+        0
+      ]
+    },
+    "class_type": "Lora Loader Stack (rgthree)",
+    "_meta": {
+      "title": "Lora Loader Stack (rgthree)"
     }
   }
 }
