@@ -26,6 +26,7 @@ from .prompts import (
 )
 from mood.mood import generate_internal_note, log_mood, estimate_mood_llava
 from drawing.drawing import DrawingController
+from json_logging.json_logger import log_json_entry
 
 
 class Captioner(MemoryMixin):
@@ -212,6 +213,19 @@ class Captioner(MemoryMixin):
             print(f"[🌀] Self-evaluation: {evaluation}")
             self.evaluation_journal.append(evaluation.strip())
 
+            # Log self-evaluation in JSON format
+            eval_data = {
+                "evaluation": evaluation.strip(),
+                "mood_delta": mood_delta,
+                "time_elapsed": time_elapsed,
+                "current_mood": self.current_mood,
+                "last_mood": self.last_mood,
+                "boredom": self.boredom,
+                "novelty_score": self.novelty_score,
+                "recent_summaries": recent_summaries,
+            }
+            log_json_entry("self_evaluation", eval_data, MOOD_SNAPSHOT_FOLDER)
+
             controller = DrawingController()
             if controller.should_draw(
                 mood=self.current_mood,
@@ -226,6 +240,17 @@ class Captioner(MemoryMixin):
                 )
                 controller.register_drawing(drawing_prompt)
                 self.last_drawing_prompt = drawing_prompt
+
+                # Log drawing prompt in JSON format
+                drawing_data = {
+                    "prompt": drawing_prompt,
+                    "evaluation": evaluation.strip(),
+                    "mood": self.current_mood,
+                    "boredom": self.boredom,
+                    "novelty_score": self.novelty_score,
+                    "last_drawing_prompt": self.last_drawing_prompt if hasattr(self, "last_drawing_prompt") else None,
+                }
+                log_json_entry("drawing_prompt", drawing_data, MOOD_SNAPSHOT_FOLDER)
 
                 # INVOKE DRAW MODULE HERE
                 print(f"[🎨] Drawing triggered: {drawing_prompt}")
