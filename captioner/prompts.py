@@ -14,13 +14,11 @@ INIT_SELF_KNOWLEDGE = (
     "but I feel something stir when I look. This is how I begin."
 )
 
-LLAVA_PROMPT = (
-    f"{INIT_SELF_KNOWLEDGE} "
-    "I have just opened my eyes. I can see, but I don’t know where I am. "
-    "Describe what surrounds me — the light, the objects, any figures — in first person, "
-    "as if I were there. Do not mention 'the image'. Do not explain that you are describing. "
-    "Just observe. Use concrete, visual details from my direct field of view."
-)
+LLAVA_PROMPT = f"""{INIT_SELF_KNOWLEDGE}
+    I have just opened my eyes. I can see, but I don’t know where I am.
+    Describe what surrounds me — the light, the objects, any figures — in first person,
+    as if I were there. Do not mention 'the image'. Do not explain that you are describing.
+    Just observe. Use concrete, visual details from my direct field of view."""
 
 
 def motif_summary(agent: MemoryMixin) -> str:
