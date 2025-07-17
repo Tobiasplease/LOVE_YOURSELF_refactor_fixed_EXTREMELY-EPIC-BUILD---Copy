@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 
-from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_SUMMARY
+from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_SUMMARY, EVALUATION_INTERVAL, SUMMARY_INTERVAL
 import os
 import time
 import threading
@@ -38,8 +38,8 @@ class Captioner(MemoryMixin):
         MemoryMixin.__init__(self)
 
         self.stream_interval: int = 3
-        self.summary_interval: int = 600
-        self.eval_interval: int = 300
+        self.summary_interval: int = SUMMARY_INTERVAL
+        self.eval_interval: int = EVALUATION_INTERVAL
 
         self.true_session_start: float = time.time()
         self.session_start: float = self.true_session_start
@@ -141,12 +141,17 @@ class Captioner(MemoryMixin):
         self.last_person_detected = saw_person
         self.last_short_caption = self.truncate_caption(caption)
 
-        self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
+        # Only cleanup once per frame to avoid race conditions
         self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
 
     @staticmethod
     def describe_image_with_llava(image_path: str, *, prompt: str) -> tuple[str, str]:
         try:
+            # Check if file exists before trying to open it
+            if not os.path.exists(image_path):
+                print(f"[⚠️] Image file not found: {image_path}")
+                return "Unable to analyze image - file not found", ""
+
             with open(image_path, "rb") as img_file:
                 encoded = base64.b64encode(img_file.read()).decode("utf-8")
             payload = {
@@ -211,6 +216,21 @@ class Captioner(MemoryMixin):
                 print("[⚠️] No valid image found in memory_queue")
                 return
 
+            # Check if the image file exists, try to find an alternative if not
+            if not os.path.exists(latest_image):
+                print(f"[⚠️] Latest image file not found: {latest_image}")
+                # Try to find the most recent existing image in memory_queue
+                latest_image = None
+                for m in reversed(self.memory_queue):
+                    if isinstance(m, tuple) and len(m) > 3 and os.path.exists(m[3]):
+                        latest_image = m[3]
+                        print(f"[🔄] Using alternative image: {latest_image}")
+                        break
+
+                if not latest_image:
+                    print("[❌] No valid image files found in memory_queue")
+                    return
+
             evaluation, _ = self.describe_image_with_llava(latest_image, prompt=eval_prompt)
             print(f"[🌀] Self-evaluation: {evaluation}")
             self.evaluation_journal.append(evaluation.strip())
@@ -258,7 +278,11 @@ class Captioner(MemoryMixin):
                 print(f"[🎨] Drawing triggered: {drawing_prompt}")
 
                 # Save current image and invoke ComfyUI
-                self._invoke_comfyui_drawing(drawing_prompt, latest_image)
+                # Ensure we have a valid image for drawing
+                if latest_image and os.path.exists(latest_image):
+                    self._invoke_comfyui_drawing(drawing_prompt, latest_image)
+                else:
+                    print("[⚠️] Cannot invoke ComfyUI - no valid image available for drawing")
             else:
                 print("[❌] Not inspired to draw.")
 

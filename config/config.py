@@ -43,6 +43,9 @@ MOOD_LOG = "internalvoice.txt"
 MOOD_SNAPSHOT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots")
 MOOD_SNAPSHOT_DIR = MOOD_SNAPSHOT_FOLDER  # alias to resolve mood.py dependency
 
+SUMMARY_INTERVAL = 60  # seconds between summary evaluations
+EVALUATION_INTERVAL = 30  # seconds between detailed evaluations
+
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 
