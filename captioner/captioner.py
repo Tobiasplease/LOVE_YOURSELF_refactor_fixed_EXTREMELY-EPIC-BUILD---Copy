@@ -29,6 +29,7 @@ from mood.mood import generate_internal_note, log_mood, estimate_mood_llava
 from drawing.drawing import DrawingController
 from drawing import create_impostor_controller
 from json_logging.json_logger import log_json_entry
+from json_logging.run_manager import get_run_image_path
 
 
 class Captioner(MemoryMixin):
@@ -95,7 +96,7 @@ class Captioner(MemoryMixin):
 
     def _process_frame(self, frame: np.ndarray, person_present: bool) -> None:
         timestamp = int(time.time())
-        filename = f"{MOOD_SNAPSHOT_FOLDER}/mood_{timestamp}.jpg"
+        filename = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{timestamp}.jpg")
         cv2.imwrite(filename, frame)
 
         if self.first_caption_done:
@@ -308,7 +309,7 @@ class Captioner(MemoryMixin):
             else:
                 # It's likely a base64 encoded image, decode and save to disk
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                image_path = os.path.join(MOOD_SNAPSHOT_FOLDER, f"draw_input_{timestamp}.jpg")
+                image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"draw_input_{timestamp}.jpg")
 
                 try:
                     # Decode base64 image and write to disk

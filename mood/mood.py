@@ -9,10 +9,11 @@ import re
 import json
 import cv2  # type: ignore
 import numpy as np  # type: ignore
-from typing import List
+from typing import List, Union, Optional
 
 from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_EVAL, LLAVA_TIMEOUT_SUMMARY
 from json_logging.json_logger import log_json_entry, read_json_logs, get_latest_log_entry
+from json_logging.run_manager import get_run_image_path
 
 
 # ---------------------------------------------------------------------------#
@@ -59,7 +60,7 @@ class MoodEngine:
         self.memory = []
 
     # -------------------------------------------------------------- main hook
-    def update_feeling_brain(self, frame, image_path: str | None = None):
+    def update_feeling_brain(self, frame, image_path: Optional[str] = None):
         caption = self.generate_caption(frame)
         saw_person = "person" in caption.lower() or "individual" in caption.lower()
 
@@ -162,7 +163,7 @@ def generate_internal_note(caption, last_caption, mood, last_mood, saw_person, l
     return note_text
 
 
-def log_mood(caption, mood, image_path: str | None = None):
+def log_mood(caption, mood, image_path: Optional[str] = None):
     """
     Log mood data in JSON format with timestamp, caption, mood value, and image path.
     """
@@ -175,7 +176,7 @@ def log_mood(caption, mood, image_path: str | None = None):
     log_json_entry("mood", data, MOOD_SNAPSHOT_FOLDER)
 
 
-def read_mood_logs(limit: int = None) -> List[dict]:
+def read_mood_logs(limit: Optional[int] = None) -> List[dict]:
     """
     Read mood logs from JSON files, with backward compatibility for old text format.
     
@@ -273,7 +274,7 @@ def read_mood_logs(limit: int = None) -> List[dict]:
     return mood_logs
 
 
-def get_latest_mood() -> dict | None:
+def get_latest_mood() -> Optional[dict]:
     """
     Get the most recent mood log entry.
     

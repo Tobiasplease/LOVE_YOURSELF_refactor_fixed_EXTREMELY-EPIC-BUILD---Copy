@@ -1,2 +1,0 @@
-Caption:  "The painting in the background adds a touch of artistic flair to this scene." 
-Mood: 0.052734375

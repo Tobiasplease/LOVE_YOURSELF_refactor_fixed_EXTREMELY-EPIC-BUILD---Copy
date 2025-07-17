@@ -43,20 +43,20 @@ MOOD_LOG = "internalvoice.txt"
 MOOD_SNAPSHOT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots")
 MOOD_SNAPSHOT_DIR = MOOD_SNAPSHOT_FOLDER  # alias to resolve mood.py dependency
 
-SUMMARY_INTERVAL = 60  # seconds between summary evaluations
-EVALUATION_INTERVAL = 30  # seconds between detailed evaluations
+SUMMARY_INTERVAL = 120  # seconds between summary evaluations before: 600
+EVALUATION_INTERVAL = 60  # seconds between detailed evaluations before: 300
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 
 # === CAPTIONING LOGS ===
-INTERNAL_VOICE_LOG = MOOD_LOG
+# INTERNAL_VOICE_LOG = MOOD_LOG
 
 # === CAPTIONER MEMORY CONTROL ===
-MEMORY_QUEUE_LIMIT = 100  # max short-term memory entries
+# MEMORY_QUEUE_LIMIT = 100  # max short-term memory entries
 MOOD_DECAY_RATE = 0.02  # how much mood fades when nothing new happens
 NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
-SNAPSHOT_STORAGE_LIMIT = 100  # number of mood_snapshot images to keep
+# SNAPSHOT_STORAGE_LIMIT = 100  # number of mood_snapshot images to keep
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
 

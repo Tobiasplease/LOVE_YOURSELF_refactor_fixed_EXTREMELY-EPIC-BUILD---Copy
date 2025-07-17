@@ -1,44 +1,68 @@
 import json
 import os
 import time
-from typing import Any, Dict, Optional, List
+import uuid
+from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
 
 
-def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str) -> str:
+# Global run ID - generated once per application run
+_current_run_id: Optional[str] = None
+
+def get_current_run_id() -> str:
+    """Get or generate the current run ID."""
+    global _current_run_id
+    if _current_run_id is None:
+        _current_run_id = str(uuid.uuid4())[:8]  # Use first 8 chars for readability
+    return _current_run_id
+
+def set_run_id(run_id: str) -> None:
+    """Set a custom run ID."""
+    global _current_run_id
+    _current_run_id = run_id
+
+def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Optional[str] = None) -> str:
     """
-    Log a JSON entry with timestamp to a file.
+    Log a JSON entry with timestamp to a run-specific event log file.
 
     Args:
         log_type: Type of log entry (e.g., 'mood', 'evaluation', 'drawing_prompt', 'internal_note')
         data: Dictionary containing the data to log
         log_dir: Directory where log files are stored
+        run_id: Optional run ID. If not provided, uses the current global run ID.
 
     Returns:
-        Path to the created log file
+        Path to the event log file
     """
+    if run_id is None:
+        run_id = get_current_run_id()
+    
     timestamp = int(time.time())
     iso_timestamp = datetime.fromtimestamp(timestamp).isoformat()
 
     # Create the log entry
-    entry = {"timestamp": timestamp, "iso_timestamp": iso_timestamp, "type": log_type, **data}
+    entry = {
+        "timestamp": timestamp, 
+        "iso_timestamp": iso_timestamp, 
+        "type": log_type, 
+        "run_id": run_id,
+        **data
+    }
 
-    # Determine filename using the format: log-<timestamp>-<logtype>.json
-    filename = f"log-{timestamp}-{log_type}.json"
-
+    # Use run-based event log filename
+    filename = f"{run_id}-event-log.json"
     filepath = os.path.join(log_dir, filename)
 
     # Ensure directory exists
     os.makedirs(log_dir, exist_ok=True)
 
-    # Write JSON to file
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(entry, f, indent=2, ensure_ascii=False)
+    # Append to the event log file
+    append_to_log_file(log_dir, filename, entry)
 
     return filepath
 
 
-def read_json_logs(log_dir: str, log_type: str | None = None) -> List[Dict[str, Any]]:
+def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Read and parse JSON log files from a directory.
 
@@ -57,19 +81,44 @@ def read_json_logs(log_dir: str, log_type: str | None = None) -> List[Dict[str, 
         if not filename.endswith(".json"):
             continue
 
-        # Handle both old and new filename formats
-        # New format: log-<timestamp>-<logtype>.json
-        # Old format: <logtype>_<timestamp>.json or <prefix>_<timestamp>.json
         filepath = os.path.join(log_dir, filename)
         try:
             with open(filepath, "r", encoding="utf-8") as f:
-                entry = json.load(f)
+                data = json.load(f)
 
-            # Filter by log type if specified
-            if log_type and entry.get("type") != log_type:
-                continue
-
-            logs.append(entry)
+            # Handle different log file formats
+            if filename.endswith("-event-log.json") or filename.startswith("event_log_"):
+                # Event log format: array of entries (new and old format)
+                if isinstance(data, list):
+                    for entry in data:
+                        if isinstance(entry, dict):
+                            # Filter by log type if specified
+                            if log_type and entry.get("type") != log_type:
+                                continue
+                            logs.append(entry)
+                else:
+                    # Single entry format
+                    if isinstance(data, dict):
+                        if log_type and data.get("type") != log_type:
+                            continue
+                        logs.append(data)
+            else:
+                # Old format: single entry per file
+                # New format: log-<timestamp>-<logtype>.json
+                # Old format: <logtype>_<timestamp>.json or <prefix>_<timestamp>.json
+                if isinstance(data, dict):
+                    # Filter by log type if specified
+                    if log_type and data.get("type") != log_type:
+                        continue
+                    logs.append(data)
+                elif isinstance(data, list):
+                    # Handle array format
+                    for entry in data:
+                        if isinstance(entry, dict):
+                            if log_type and entry.get("type") != log_type:
+                                continue
+                            logs.append(entry)
+                        
         except (json.JSONDecodeError, IOError) as e:
             print(f"[⚠️] Error reading log file {filepath}: {e}")
             continue
@@ -123,7 +172,7 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
         json.dump(entries, f, indent=2, ensure_ascii=False)
 
 
-def read_evaluations(log_dir: str, limit: int | None = None) -> List[Dict[str, Any]]:
+def read_evaluations(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Read self-evaluation logs."""
     logs = read_json_logs(log_dir, "self_evaluation")
     if limit:
@@ -131,7 +180,7 @@ def read_evaluations(log_dir: str, limit: int | None = None) -> List[Dict[str, A
     return logs
 
 
-def read_drawing_prompts(log_dir: str, limit: int | None = None) -> List[Dict[str, Any]]:
+def read_drawing_prompts(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Read drawing prompt logs."""
     logs = read_json_logs(log_dir, "drawing_prompt")
     if limit:
@@ -139,7 +188,7 @@ def read_drawing_prompts(log_dir: str, limit: int | None = None) -> List[Dict[st
     return logs
 
 
-def read_internal_notes(log_dir: str, limit: int | None = None) -> List[Dict[str, Any]]:
+def read_internal_notes(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Read internal note logs."""
     logs = read_json_logs(log_dir, "internal_note")
     if limit:

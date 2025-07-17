@@ -9,6 +9,7 @@ from vision.gaze import update_gaze
 from mood.mood import MoodEngine
 from breathing.breathing import update_lung_position
 from config.config import USE_SERVO, CAMERA_INDEX, SERIAL_PORT, BAUD_RATE, CONFIDENCE_THRESHOLD, MOOD_SNAPSHOT_FOLDER, MOOD_EVALUATION_INTERVAL, PAUSE_DURATION
+from json_logging.run_manager import get_run_image_path
 if USE_SERVO:
     from servo_control.servo_control import ServoController
 
@@ -56,7 +57,7 @@ def mood_update_thread(frame, timestamp):
     if not captioner.is_processing:
         now = time.time()
         if now - last_snapshot_time >= 10:
-            snapshot_path = f"{MOOD_SNAPSHOT_FOLDER}/mood_{int(now)}.jpg"
+            snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
             cv2.imwrite(snapshot_path, frame)
             mood_engine.update_feeling_brain(frame, image_path=snapshot_path)
             try:
