@@ -6,23 +6,18 @@ import base64
 import time
 import requests
 import re
-import cv2                 # type: ignore
-import numpy as np         # type: ignore
+import cv2  # type: ignore
+import numpy as np  # type: ignore
 
-from config.config import (
-    MOOD_SNAPSHOT_FOLDER,
-    INTERNAL_VOICE_LOG,
-    LLAVA_TIMEOUT_EVAL,
-    LLAVA_TIMEOUT_SUMMARY
-)
+from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_EVAL, LLAVA_TIMEOUT_SUMMARY
 
 
 # ---------------------------------------------------------------------------#
 # LLaVA scalar‑mood helper (needed by Captioner)                              #
 # ---------------------------------------------------------------------------#
-def estimate_mood_llava(caption: str,
-                        url: str = "http://localhost:11434/api/generate",
-                        timeout: int = LLAVA_TIMEOUT_EVAL) -> float:
+def estimate_mood_llava(
+    caption: str, url: str = "http://localhost:11434/api/generate", timeout: int = LLAVA_TIMEOUT_EVAL
+) -> float:
     """
     Ask the local LLaVA server for a scalar mood value in [‑1, +1].
     Falls back to 0.0 if the request fails.
@@ -35,12 +30,7 @@ def estimate_mood_llava(caption: str,
     try:
         r = requests.post(
             url,
-            json={
-                "model": "llava",
-                "prompt": prompt,
-                "images": [],
-                "stream": False
-            },
+            json={"model": "llava", "prompt": prompt, "images": [], "stream": False},
             timeout=timeout,
         )
         r.raise_for_status()
@@ -70,22 +60,22 @@ class MoodEngine:
         caption = self.generate_caption(frame)
         saw_person = "person" in caption.lower() or "individual" in caption.lower()
 
-        novelty     = self.calculate_novelty(caption)
+        novelty = self.calculate_novelty(caption)
         mood_change = self.compute_mood_change(novelty, saw_person)
         self.current_mood = np.clip(self.current_mood + mood_change, 0.0, 1.0)
 
-        note = generate_internal_note(
-            caption,
-            self.last_caption,
-            self.current_mood,
-            self.current_mood - mood_change,
-            saw_person,
-            self.last_person_detected,
-        )
+        # note = generate_internal_note(
+        #     caption,
+        #     self.last_caption,
+        #     self.current_mood,
+        #     self.current_mood - mood_change,
+        #     saw_person,
+        #     self.last_person_detected,
+        # )
 
         log_mood(caption, self.current_mood, image_path=image_path)
-        self.last_caption          = caption
-        self.last_person_detected  = saw_person
+        self.last_caption = caption
+        self.last_person_detected = saw_person
         return caption
 
     # --------------------------------------------------------------- helpers
@@ -113,10 +103,10 @@ class MoodEngine:
     # -------------------------------------------------------- LLaVA caption
     def generate_caption(self, frame, timeout: int = LLAVA_TIMEOUT_SUMMARY):
         _, img_encoded = cv2.imencode(".jpg", frame)
-        img_base64     = base64.b64encode(img_encoded).decode("utf-8")
+        img_base64 = base64.b64encode(img_encoded).decode("utf-8")  # type: ignore
 
         payload = {
-            "model":  "llava",
+            "model": "llava",
             "prompt": "Describe the scene",
             "images": [img_base64],
             "stream": False,
@@ -134,8 +124,7 @@ class MoodEngine:
 # ---------------------------------------------------------------------------#
 # Stateless helpers (unchanged)                                              #
 # ---------------------------------------------------------------------------#
-def generate_internal_note(caption, last_caption, mood, last_mood,
-                           saw_person, last_person_detected):
+def generate_internal_note(caption, last_caption, mood, last_mood, saw_person, last_person_detected):
     changes = []
     if caption != last_caption:
         changes.append("new observation")

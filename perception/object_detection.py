@@ -7,8 +7,9 @@ import cv2
 from config.config import YOLO_CONFIDENCE_THRESHOLD
 from perception.detection_memory import DetectionMemory
 
+
 class ObjectDetectionThread(threading.Thread):
-    def __init__(self, model_path='yolov8m.pt', update_interval=5):  # ✨ Changed to yolov8m.pt
+    def __init__(self, model_path="models/yolov8m.pt", update_interval=5):  # ✨ Changed to yolov8m.pt
         super().__init__()
         self.model = YOLO(model_path)
         self.update_interval = update_interval
@@ -43,8 +44,7 @@ class ObjectDetectionThread(threading.Thread):
                 detected.add(label)
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, f"{label} ({conf:.2f})", (x1, y1 - 6),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                cv2.putText(frame, f"{label} ({conf:.2f})", (x1, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
             DetectionMemory.update(list(detected), time.time(), clean_frame)
 

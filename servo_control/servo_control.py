@@ -3,14 +3,15 @@ import time
 
 ANGLE_THRESHOLD = 2  # degrees — for gaze only
 
+
 class ServoController:
-    def __init__(self, port='COM3', baudrate=9600):
+    def __init__(self, port="COM3", baudrate=9600):
         try:
             self.ser = serial.Serial(port, baudrate, timeout=1)
             self.serial = self.ser  # For optional external use
-            self.serial.setDTR(False)
+            self.serial.setDTR(False)  # type: ignore
             time.sleep(1)
-            self.serial.setDTR(True)
+            self.serial.setDTR(True)  # type: ignore
             time.sleep(2)
             print(f"[ServoController] Connected on {port} at {baudrate} baud.")
         except serial.SerialException as e:
@@ -25,8 +26,8 @@ class ServoController:
             return
         if key and self.last_sent.get(key) == message:
             return
-        full = message.strip() + '\n'
-        self.ser.write(full.encode('utf-8'))
+        full = message.strip() + "\n"
+        self.ser.write(full.encode("utf-8"))
         if key:
             self.last_sent[key] = message
 
