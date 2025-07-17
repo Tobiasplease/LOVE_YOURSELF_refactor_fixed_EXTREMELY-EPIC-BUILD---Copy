@@ -18,7 +18,7 @@ from .memory import (
 )
 from .prompts import (
     LLAVA_PROMPT,
-    build_context,
+    # build_context,
     build_summary_prompt,
     build_caption_prompt,
     build_self_evaluation_prompt,
@@ -29,7 +29,7 @@ from drawing.drawing import DrawingController
 
 
 class Captioner(MemoryMixin):
-    caption_window: Optional[any] = None
+    caption_window: Optional[any] = None  # type: ignore
 
     def __init__(self) -> None:
         MemoryMixin.__init__(self)
@@ -121,10 +121,12 @@ class Captioner(MemoryMixin):
             saw_person,
             self.last_person_detected,
         )
+        print(note)
 
         print(f"[{time.strftime('%H:%M:%S')}] {caption.strip()}")
 
         if self.novelty_score > CAPTION_SAVE_THRESHOLD:
+            # vs update_feeling_brain: double logging?
             log_mood(caption, self.current_mood, filename)
             short_caption = self.truncate_caption(caption)
             self.memory_queue.append((timestamp, short_caption, self.current_mood, filename))
@@ -150,11 +152,7 @@ class Captioner(MemoryMixin):
                 "images": [encoded],
                 "stream": False,
             }
-            resp = requests.post(
-                "http://localhost:11434/api/generate",
-                json=payload,
-                timeout=LLAVA_TIMEOUT_SUMMARY
-            )
+            resp = requests.post("http://localhost:11434/api/generate", json=payload, timeout=LLAVA_TIMEOUT_SUMMARY)
             resp.raise_for_status()
             result = resp.json()
             return result.get("response", "[No response received]"), image_path
@@ -228,6 +226,8 @@ class Captioner(MemoryMixin):
                 )
                 controller.register_drawing(drawing_prompt)
                 self.last_drawing_prompt = drawing_prompt
+
+                # INVOKE DRAW MODULE HERE
                 print(f"[🎨] Drawing triggered: {drawing_prompt}")
 
         except Exception as e:
