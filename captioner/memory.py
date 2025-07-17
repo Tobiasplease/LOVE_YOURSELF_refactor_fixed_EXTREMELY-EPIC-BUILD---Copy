@@ -26,13 +26,27 @@ class MemoryMixin:
         self.long_memory:   List[CaptionTuple] = []
         # motif tracking
         self.meta_memory = {"motifs": {}, "last_caption_objects": set()}
-        self.motif_presence: dict[str, dict[str, float | int]] = {}
+        self.motif_presence: dict[str, dict[str, float | int | str]] = {}
         # novelty / boredom
         self.novelty_score: float = 1.0
         self.boredom: float = 0.0
         self.memory_anchor: str = ""
         # timer
         self.session_start: float = time.time()
+
+    # ---------- absorb_detection ----------
+    def absorb_detection(self, labels: list[str], timestamp: float | None = None):
+        """Store recurring objects as symbolic motifs with confidence and count."""
+        timestamp = timestamp or time.time()
+        for label in labels:
+            entry = self.motif_presence.setdefault(label, {
+                "count": 0,
+                "confidence": 0.0,
+                "last_seen": 0
+            })
+            entry["count"] += 1
+            entry["confidence"] = min(entry["confidence"] + 0.1, 1.0)
+            entry["last_seen"] = timestamp
 
     # ---------- motif helpers ----------
     def update_meta_memory(self, caption: str) -> None:

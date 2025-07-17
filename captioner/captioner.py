@@ -199,7 +199,7 @@ class Captioner(MemoryMixin):
             recent_summaries = "\n".join(s for s in (self.summary_history or [])[-3:])
 
             eval_prompt = build_self_evaluation_prompt(
-                memory=self,
+                agent=self,
                 mood_delta=mood_delta,
                 time_elapsed=time_elapsed,
                 recent_summaries=recent_summaries,
@@ -223,7 +223,7 @@ class Captioner(MemoryMixin):
             ):
                 drawing_prompt = build_drawing_prompt(
                     evaluation=evaluation,
-                    memory=self,
+                    agent=self,
                     last_drawing_prompt=self.last_drawing_prompt,
                 )
                 controller.register_drawing(drawing_prompt)

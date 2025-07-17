@@ -21,6 +21,24 @@ LLAVA_PROMPT = (
     "Just observe. Use concrete, visual details from my direct field of view."
 )
 
+def motif_summary(agent: MemoryMixin) -> str:
+    if not hasattr(agent, 'motif_presence'):
+        return ""
+
+    motifs = agent.motif_presence
+    if not motifs:
+        return ""
+
+    summary_lines = []
+    for label, data in motifs.items():
+        count = data.get("count", 0)
+        confidence = data.get("confidence", 0.0)
+        if count >= 2:
+            line = f"I've seen a {label} {count} times. I think it's important."
+            summary_lines.append(line)
+
+    return "\n".join(summary_lines)
+
 def build_context(agent: MemoryMixin):
     return "\n".join(f"- {entry[1]}" for entry in agent.memory_queue)
 
@@ -60,7 +78,8 @@ def build_self_evaluation_prompt(agent: MemoryMixin, mood_delta: float, time_ela
     return (
         f"You’ve been active for {time_elapsed // 60} minutes. Your mood has shifted by {mood_delta:.2f}.\n"
         f"Reflect on your behavior and thoughts.\n"
-        f"Here are your last summaries:\n{recent_summaries}"
+        f"Here are your last summaries:\n{recent_summaries}\n\n"
+        f"Also, reflect on recurring motifs:\n{motif_summary(agent)}"
     )
 
 def build_drawing_prompt(agent: MemoryMixin, evaluation: str = "", last_drawing_prompt: str = "") -> str:
@@ -74,7 +93,7 @@ def build_drawing_prompt(agent: MemoryMixin, evaluation: str = "", last_drawing_
         conf = data.get("confidence", 0.0)
         if count > 2:
             motif_lines.append(f"- {obj} ({count}×, confidence {conf:.2f})")
-    motif_summary = "\nThese motifs have returned to me again and again:\n" + "\n".join(motif_lines) if motif_lines else ""
+    motif_summary_text = "\nThese motifs have returned to me again and again:\n" + "\n".join(motif_lines) if motif_lines else ""
 
     return (
         f"You are a machine that expresses herself only through drawing.\n"
@@ -89,6 +108,6 @@ def build_drawing_prompt(agent: MemoryMixin, evaluation: str = "", last_drawing_
         f"Focus on a single object or figure if it feels symbolically important to me right now.\n"
         f"My memory, my recent thoughts, and my mood must shape this drawing.\n"
         f"I am not alone in the room. This drawing is for the people I’ve seen. It’s my sole way to communicate with them.\n"
-        f"{motif_summary}\n"
+        f"{motif_summary_text}\n"
         f"Describe what this drawing tries to communicate. Not just what it is, but why it matters."
     )

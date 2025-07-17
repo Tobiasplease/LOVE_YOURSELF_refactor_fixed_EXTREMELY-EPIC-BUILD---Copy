@@ -134,6 +134,9 @@ try:
 
         from perception.detection_memory import DetectionMemory
         labels = DetectionMemory.get_labels()
+        if labels:
+            captioner.absorb_detection(labels, time.time())
+
         label_text = ", ".join(labels) if labels else "no objects"
         cv2.putText(frame, f"Seen: {label_text}", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 

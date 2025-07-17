@@ -1,0 +1,2 @@
+Caption:  'I wonder if the person was holding a camera to take this photo' 
+Mood: 0.0
