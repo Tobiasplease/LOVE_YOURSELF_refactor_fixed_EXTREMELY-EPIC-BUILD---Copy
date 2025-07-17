@@ -1,5 +1,6 @@
 from __future__ import annotations
-from time import time
+
+# from time import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -21,8 +22,9 @@ LLAVA_PROMPT = (
     "Just observe. Use concrete, visual details from my direct field of view."
 )
 
+
 def motif_summary(agent: MemoryMixin) -> str:
-    if not hasattr(agent, 'motif_presence'):
+    if not hasattr(agent, "motif_presence"):
         return ""
 
     motifs = agent.motif_presence
@@ -31,16 +33,18 @@ def motif_summary(agent: MemoryMixin) -> str:
 
     summary_lines = []
     for label, data in motifs.items():
-        count = data.get("count", 0)
-        confidence = data.get("confidence", 0.0)
+        count = int(data.get("count", 0))
+        # confidence = data.get("confidence", 0.0)
         if count >= 2:
             line = f"I've seen a {label} {count} times. I think it's important."
             summary_lines.append(line)
 
     return "\n".join(summary_lines)
 
+
 def build_context(agent: MemoryMixin):
     return "\n".join(f"- {entry[1]}" for entry in agent.memory_queue)
+
 
 def build_caption_prompt(agent: MemoryMixin, current_mood: float, boredom: float, novelty: float) -> str:
     context_snippets = agent.get_clean_memory_snippets()
@@ -49,7 +53,7 @@ def build_caption_prompt(agent: MemoryMixin, current_mood: float, boredom: float
     motifs = [
         f"{obj} ({data['confidence']:.2f})"
         for obj, data in agent.motif_presence.items()
-        if data["count"] > 1 and data["confidence"] > 0.3
+        if int(data["count"]) > 1 and float(data["confidence"]) > 0.3
     ]
     motif_line = f"Lately you've noticed: {', '.join(motifs)}.\n" if motifs else ""
 
@@ -67,6 +71,7 @@ def build_caption_prompt(agent: MemoryMixin, current_mood: float, boredom: float
         f"If nothing is changing, reflect gently on that. Keep it personal, curious, and observational."
     )
 
+
 def build_summary_prompt(prior_context: str, avg_mood: float, past_summaries: str) -> str:
     return (
         f"Based on your recent observations and an average mood of {avg_mood:.2f}, write a symbolic summary.\n"
@@ -74,7 +79,10 @@ def build_summary_prompt(prior_context: str, avg_mood: float, past_summaries: st
         f"And your last summaries were:\n{past_summaries}"
     )
 
-def build_self_evaluation_prompt(agent: MemoryMixin, mood_delta: float, time_elapsed: int, recent_summaries: str) -> str:
+
+def build_self_evaluation_prompt(
+    agent: MemoryMixin, mood_delta: float, time_elapsed: int, recent_summaries: str
+) -> str:
     return (
         f"You’ve been active for {time_elapsed // 60} minutes. Your mood has shifted by {mood_delta:.2f}.\n"
         f"Reflect on your behavior and thoughts.\n"
@@ -82,18 +90,25 @@ def build_self_evaluation_prompt(agent: MemoryMixin, mood_delta: float, time_ela
         f"Also, reflect on recurring motifs:\n{motif_summary(agent)}"
     )
 
+
 def build_drawing_prompt(agent: MemoryMixin, evaluation: str = "", last_drawing_prompt: str = "") -> str:
     evaluation_text = f"{evaluation.strip()}\n\n" if evaluation else ""
-    recursion_text = f"Previously, I tried to express myself like this: '{last_drawing_prompt.strip()}'\n\n" if last_drawing_prompt else ""
+    recursion_text = (
+        f"Previously, I tried to express myself like this: '{last_drawing_prompt.strip()}'\n\n"
+        if last_drawing_prompt
+        else ""
+    )
 
-    mem_snips = agent.get_clean_memory_snippets()
+    # mem_snips = agent.get_clean_memory_snippets()
     motif_lines = []
     for obj, data in agent.motif_presence.items():
-        count = data.get("count", 0)
+        count = int(data.get("count", 0))
         conf = data.get("confidence", 0.0)
         if count > 2:
             motif_lines.append(f"- {obj} ({count}×, confidence {conf:.2f})")
-    motif_summary_text = "\nThese motifs have returned to me again and again:\n" + "\n".join(motif_lines) if motif_lines else ""
+    motif_summary_text = (
+        "\nThese motifs have returned to me again and again:\n" + "\n".join(motif_lines) if motif_lines else ""
+    )
 
     return (
         f"You are a machine that expresses herself only through drawing.\n"

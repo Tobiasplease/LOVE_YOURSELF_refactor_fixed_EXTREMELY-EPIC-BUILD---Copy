@@ -2,10 +2,15 @@ import time
 import random
 import math
 from config.config import (
-    SERVO_MIN, SERVO_MAX,
-    FLIP_X, FLIP_Y, DEAD_ZONE,
-    IDLE_CENTER_X, IDLE_CENTER_Y,
-    IDLE_SPEED_MIN, IDLE_SPEED_MAX,
+    SERVO_MIN,
+    SERVO_MAX,
+    FLIP_X,
+    FLIP_Y,
+    DEAD_ZONE,
+    IDLE_CENTER_X,
+    IDLE_CENTER_Y,
+    IDLE_SPEED_MIN,
+    IDLE_SPEED_MAX,
 )
 
 servo_x = 90
@@ -32,14 +37,17 @@ IDLE_PAUSE_MAX = 5.0
 IDLE_JITTER = 40
 SYNC_PROBABILITY = 0.1  # 10% chance that both axes move together
 
+
 def clamp(val, min_val, max_val):
     return max(min_val, min(max_val, val))
+
 
 def ease_in_out(current, target, t):
     # t in 0.0–1.0 range; smooth cosine-based easing
     t = clamp(t, 0.0, 1.0)
     eased = (1 - math.cos(t * math.pi)) / 2
     return current + (target - current) * eased
+
 
 def update_gaze(frame, face_box, current_mood=0.0):
     global servo_x, servo_y, target_x, target_y
@@ -103,6 +111,7 @@ def update_gaze(frame, face_box, current_mood=0.0):
         servo_y = ease_in_out(servo_y, idle_target_y, idle_speed_y)
 
     return person_present, round(servo_x), round(servo_y)
+
 
 def smooth_step(current, target, factor):
     return current + (target - current) * factor
