@@ -229,6 +229,8 @@ class Captioner(MemoryMixin):
 
                 # INVOKE DRAW MODULE HERE
                 print(f"[🎨] Drawing triggered: {drawing_prompt}")
+            else:
+                print("[❌] Not inspired to draw.")
 
         except Exception as e:
             print(f"[⚠️] Failed to evaluate self: {e}")
