@@ -20,8 +20,8 @@ from config.config import (
     PAUSE_DURATION,
     MODEL_PATH,
 )
-from json_logging.run_manager import get_run_image_path
-from json_logging.json_logger import get_current_run_id
+from event_logging.run_manager import get_run_image_path
+from event_logging.json_logger import get_current_run_id
 
 if USE_SERVO:
     from servo_control.servo_control import ServoController

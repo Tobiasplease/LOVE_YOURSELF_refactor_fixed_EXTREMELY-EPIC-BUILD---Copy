@@ -9,7 +9,7 @@ from vision.gaze import update_gaze
 from mood.mood import MoodEngine
 from breathing.breathing import update_lung_position
 from config.config import USE_SERVO, CAMERA_INDEX, SERIAL_PORT, BAUD_RATE, CONFIDENCE_THRESHOLD, MOOD_SNAPSHOT_FOLDER, MOOD_EVALUATION_INTERVAL, PAUSE_DURATION
-from json_logging.run_manager import get_run_image_path
+from event_logging.run_manager import get_run_image_path
 if USE_SERVO:
     from servo_control.servo_control import ServoController
 

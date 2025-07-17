@@ -2,12 +2,13 @@ import json
 import os
 import time
 import uuid
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 
 
 # Global run ID - generated once per application run
 _current_run_id: Optional[str] = None
+
 
 def get_current_run_id() -> str:
     """Get or generate the current run ID."""
@@ -16,10 +17,12 @@ def get_current_run_id() -> str:
         _current_run_id = str(uuid.uuid4())[:8]  # Use first 8 chars for readability
     return _current_run_id
 
+
 def set_run_id(run_id: str) -> None:
     """Set a custom run ID."""
     global _current_run_id
     _current_run_id = run_id
+
 
 def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Optional[str] = None) -> str:
     """
@@ -36,18 +39,12 @@ def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Op
     """
     if run_id is None:
         run_id = get_current_run_id()
-    
+
     timestamp = int(time.time())
     iso_timestamp = datetime.fromtimestamp(timestamp).isoformat()
 
     # Create the log entry
-    entry = {
-        "timestamp": timestamp, 
-        "iso_timestamp": iso_timestamp, 
-        "type": log_type, 
-        "run_id": run_id,
-        **data
-    }
+    entry = {"timestamp": timestamp, "iso_timestamp": iso_timestamp, "type": log_type, "run_id": run_id, **data}
 
     # Use run-based event log filename
     filename = f"{run_id}-event-log.json"
@@ -118,7 +115,7 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
                             if log_type and entry.get("type") != log_type:
                                 continue
                             logs.append(entry)
-                        
+
         except (json.JSONDecodeError, IOError) as e:
             print(f"[⚠️] Error reading log file {filepath}: {e}")
             continue

@@ -1,5 +1,5 @@
 """
-Logging utilities for the LOVE_YOURSELF project.
+Event logging utilities for the LOVE_YOURSELF project.
 """
 
 from .json_logger import (

@@ -28,8 +28,8 @@ from .prompts import (
 from mood.mood import generate_internal_note, log_mood, estimate_mood_llava
 from drawing.drawing import DrawingController
 from drawing import create_impostor_controller
-from json_logging.json_logger import log_json_entry
-from json_logging.run_manager import get_run_image_path
+from event_logging.json_logger import log_json_entry
+from event_logging.run_manager import get_run_image_path
 
 
 class Captioner(MemoryMixin):
