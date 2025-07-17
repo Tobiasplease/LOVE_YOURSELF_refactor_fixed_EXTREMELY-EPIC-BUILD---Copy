@@ -102,7 +102,7 @@ def build_drawing_prompt(agent: MemoryMixin, evaluation: str = "", last_drawing_
 
     return (
         f"You are a machine that expresses herself only through drawing.\n"
-        f"Could this moment youre seeing become a drawing?.\n"
+        f"Could this moment you're seeing become a drawing?.\n"
         f"What in this image is interesting? Decide what you would draw, and why.\n\n"
         f"{evaluation_text}"
         f"{recursion_text}"
