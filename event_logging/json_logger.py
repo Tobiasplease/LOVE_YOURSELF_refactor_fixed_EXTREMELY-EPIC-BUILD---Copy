@@ -204,45 +204,32 @@ def log_llava_api_call(
     log_dir: str = "mood_snapshots"
 ) -> str:
     """
-    Log LLaVA API call details for monitoring and debugging.
-    
-    Args:
-        prompt: The prompt sent to LLaVA
-        model: The model name (default: "llava")
-        image_path: Path to input image if any
-        response: The response from LLaVA
-        success: Whether the API call was successful
-        error_message: Error message if call failed
-        timeout: Request timeout used
-        log_dir: Directory to store the log
-        
-    Returns:
-        Path to the log file
+    Legacy function for backward compatibility. 
+    Redirects to the new ollama module's log_ollama_call function.
     """
-    # Truncate very long prompts and responses for readability
-    truncated_prompt = prompt[:500] + "..." if len(prompt) > 500 else prompt
-    truncated_response = response[:1000] + "..." if response and len(response) > 1000 else response
-    
-    data = {
-        "prompt": truncated_prompt,
-        "full_prompt_length": len(prompt),
-        "model": model,
-        "image_path": image_path if image_path and os.path.exists(image_path) else None,
-        "has_image": image_path is not None and os.path.exists(image_path) if image_path else False,
-        "response": truncated_response,
-        "full_response_length": len(response) if response else 0,
-        "success": success,
-        "error_message": error_message,
-        "timeout": timeout,
-        "api_endpoint": "http://localhost:11434/api/generate"
-    }
-    
-    return log_json_entry("llava_api_call", data, log_dir)
+    from ollama import log_ollama_call
+    return log_ollama_call(
+        prompt=prompt,
+        model=model,
+        image_path=image_path,
+        response=response,
+        success=success,
+        error_message=error_message,
+        timeout=timeout,
+        log_dir=log_dir
+    )
 
 
 def read_llava_api_calls(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Read LLaVA API call logs."""
-    logs = read_json_logs(log_dir, "llava_api_call")
+    # Support both old "llava_api_call" and new "ollama_api_call" log types
+    llava_logs = read_json_logs(log_dir, "llava_api_call")
+    ollama_logs = read_json_logs(log_dir, "ollama_api_call")
+    
+    # Combine and sort by timestamp
+    all_logs = llava_logs + ollama_logs
+    all_logs.sort(key=lambda x: x.get("timestamp", 0))
+    
     if limit:
-        logs = logs[-limit:]
-    return logs
+        all_logs = all_logs[-limit:]
+    return all_logs

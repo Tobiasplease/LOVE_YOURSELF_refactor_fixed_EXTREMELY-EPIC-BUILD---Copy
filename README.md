@@ -80,7 +80,7 @@ ollama pull llava
 ollama serve
 ```
 
-The system expects LLaVA to be accessible at `http://localhost:11434/api/generate`.
+The system expects LLaVA to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are now handled through the `ollama.py` module.
 
 ## Usage
 

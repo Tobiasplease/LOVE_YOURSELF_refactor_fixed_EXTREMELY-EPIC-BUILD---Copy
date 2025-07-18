@@ -28,7 +28,8 @@ from .prompts import (
 from mood.mood import generate_internal_note, log_mood, estimate_mood_llava
 from drawing.drawing import DrawingController
 from drawing import create_impostor_controller
-from event_logging.json_logger import log_json_entry, log_llava_api_call
+from event_logging.json_logger import log_json_entry
+from ollama import query_ollama
 from event_logging.run_manager import get_run_image_path
 
 
@@ -148,67 +149,27 @@ class Captioner(MemoryMixin):
     @staticmethod
     def describe_image_with_llava(image_path: str, *, prompt: str) -> tuple[str, str]:
         try:
-            # print("describe:", image_path)
             # Check if file exists before trying to open it
             if not os.path.exists(image_path):
                 error_msg = f"[⚠️] Image file not found: {image_path}"
                 print(error_msg)
-                
-                # Log the failed API call
-                log_llava_api_call(
-                    prompt=prompt,
-                    model="llava",
-                    image_path=image_path,
-                    response=None,
-                    success=False,
-                    error_message="Image file not found",
-                    timeout=LLAVA_TIMEOUT_SUMMARY,
-                    log_dir=MOOD_SNAPSHOT_FOLDER
-                )
-                
                 return "Unable to analyze image - file not found", ""
 
-            with open(image_path, "rb") as img_file:
-                encoded = base64.b64encode(img_file.read()).decode("utf-8")
-
-            payload = {
-                "model": "llava",
-                "prompt": prompt,
-                "images": [encoded],
-                "stream": False,
-            }
-            resp = requests.post("http://localhost:11434/api/generate", json=payload, timeout=LLAVA_TIMEOUT_SUMMARY)
-            resp.raise_for_status()
-            result = resp.json()
-            response_text = result.get("response", "[No response received]")
-            
-            # Log the successful API call
-            log_llava_api_call(
+            response_text = query_ollama(
                 prompt=prompt,
                 model="llava",
-                image_path=image_path,
-                response=response_text,
-                success=True,
+                image=image_path,
                 timeout=LLAVA_TIMEOUT_SUMMARY,
                 log_dir=MOOD_SNAPSHOT_FOLDER
             )
+            
+            # Check if response indicates an error
+            if response_text.startswith("[⚠️]"):
+                return response_text, image_path
             
             return response_text, image_path
         except Exception as exc:
             error_msg = f"[⚠️] LLaVA failed: {exc}"
-            
-            # Log the failed API call
-            log_llava_api_call(
-                prompt=prompt,
-                model="llava",
-                image_path=image_path,
-                response=None,
-                success=False,
-                error_message=str(exc),
-                timeout=LLAVA_TIMEOUT_SUMMARY,
-                log_dir=MOOD_SNAPSHOT_FOLDER
-            )
-            
             return error_msg, image_path
 
     @staticmethod
