@@ -4,10 +4,12 @@ import time
 import uuid
 from typing import Any, Dict, Optional, List
 from datetime import datetime
+import importlib.util
 
 
 # Global run ID - generated once per application run
 _current_run_id: Optional[str] = None
+_config_metadata: Optional[Dict[str, Any]] = None
 
 
 def get_current_run_id() -> str:
@@ -22,6 +24,72 @@ def set_run_id(run_id: str) -> None:
     """Set a custom run ID."""
     global _current_run_id
     _current_run_id = run_id
+
+
+def load_config_metadata() -> Dict[str, Any]:
+    """Load configuration values from config.py as metadata."""
+    global _config_metadata
+    if _config_metadata is not None:
+        return _config_metadata
+    
+    # Try to load config.py
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.py")
+    if not os.path.exists(config_path):
+        _config_metadata = {}
+        return _config_metadata
+    
+    try:
+        spec = importlib.util.spec_from_file_location("config", config_path)
+        config = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(config)
+        
+        # Extract all uppercase variables (config constants)
+        config_vars = {
+            name: getattr(config, name)
+            for name in dir(config)
+            if not name.startswith('_') and name.isupper()
+        }
+        
+        _config_metadata = config_vars
+        return _config_metadata
+    except Exception as e:
+        print(f"[⚠️] Error loading config metadata: {e}")
+        _config_metadata = {}
+        return _config_metadata
+
+
+def create_run_metadata(run_id: str) -> Dict[str, Any]:
+    """Create run metadata including config values."""
+    config_metadata = load_config_metadata()
+    
+    return {
+        "run_id": run_id,
+        "start_time": int(time.time()),
+        "start_time_iso": datetime.fromtimestamp(int(time.time())).isoformat(),
+        "config": config_metadata
+    }
+
+
+def update_all_run_log(log_dir: str, entry: Dict[str, Any]) -> None:
+    """Update the aggregated all-run-log.json file with a log entry."""
+    all_run_log_path = os.path.join(log_dir, "all-run-log.json")
+    
+    # Load existing entries
+    all_entries = []
+    if os.path.exists(all_run_log_path):
+        try:
+            with open(all_run_log_path, "r", encoding="utf-8") as f:
+                all_entries = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            all_entries = []
+    
+    # Add new log entry
+    all_entries.append(entry)
+    
+    # Write back to file
+    os.makedirs(log_dir, exist_ok=True)
+    with open(all_run_log_path, "w", encoding="utf-8") as f:
+        json.dump(all_entries, f, indent=2, ensure_ascii=False)
 
 
 def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Optional[str] = None) -> str:
@@ -53,8 +121,32 @@ def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Op
     # Ensure directory exists
     os.makedirs(log_dir, exist_ok=True)
 
-    # Append to the event log file
+    # Check if this is a new run log file and create metadata if needed
+    if not os.path.exists(filepath):
+        # Create run metadata with config values
+        run_metadata = create_run_metadata(run_id)
+        
+        # Create the run log file with metadata as first entry
+        metadata_entry = {
+            "timestamp": timestamp,
+            "iso_timestamp": iso_timestamp,
+            "type": "run_metadata",
+            "run_id": run_id,
+            **run_metadata
+        }
+        
+        # Write metadata entry first to individual run log
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump([metadata_entry], f, indent=2, ensure_ascii=False)
+        
+        # Also add metadata to all-run-log.json
+        update_all_run_log(log_dir, metadata_entry)
+
+    # Append to the individual run event log file
     append_to_log_file(log_dir, filename, entry)
+    
+    # Also append to all-run-log.json
+    update_all_run_log(log_dir, entry)
 
     return filepath
 
