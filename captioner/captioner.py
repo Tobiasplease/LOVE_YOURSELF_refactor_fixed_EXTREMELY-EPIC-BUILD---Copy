@@ -1,11 +1,9 @@
 from __future__ import annotations
-from datetime import datetime
 
 from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_SUMMARY, EVALUATION_INTERVAL, SUMMARY_INTERVAL
 import os
 import time
 import threading
-import base64
 import re
 from typing import Optional, Deque, Tuple
 from collections import deque
@@ -22,11 +20,9 @@ from .prompts import (
     build_summary_prompt,
     build_caption_prompt,
     build_self_evaluation_prompt,
-    build_drawing_prompt,
 )
 from mood.mood import generate_internal_note, log_mood, estimate_mood_llava
 from drawing.drawing import DrawingController
-from drawing import create_impostor_controller
 from event_logging.json_logger import log_json_entry
 from ollama import query_ollama
 from event_logging.run_manager import get_run_image_path
@@ -56,7 +52,6 @@ class Captioner(MemoryMixin):
         self.evaluation_journal: list[str] = []
         self.initial_prompt_run: bool = False
         self.first_caption_done: bool = False
-        self.last_drawing_prompt: str = ""
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
 
@@ -246,114 +241,10 @@ class Captioner(MemoryMixin):
             }
             log_json_entry("self_evaluation", eval_data, MOOD_SNAPSHOT_FOLDER)
 
-            # Move to drawing controller method?
+            # Handle drawing flow through drawing controller
             controller = DrawingController()
-            if controller.should_draw(
-                mood=self.current_mood,
-                novelty=self.novelty_score,
-                boredom=self.boredom,
-                evaluation=evaluation,
-            ):
-                drawing_prompt = build_drawing_prompt(
-                    evaluation=evaluation,
-                    agent=self,
-                    last_drawing_prompt=self.last_drawing_prompt,
-                )
-                controller.register_drawing(drawing_prompt)
-                self.last_drawing_prompt = drawing_prompt
-
-                drawing_data = {
-                    "prompt": drawing_prompt,
-                    "evaluation": evaluation.strip(),
-                    "mood": self.current_mood,
-                    "boredom": self.boredom,
-                    "novelty_score": self.novelty_score,
-                    "last_drawing_prompt": self.last_drawing_prompt if hasattr(self, "last_drawing_prompt") else None,
-                }
-
-                # not necessar anymore
-                # weird loggin here maybe?
-                log_json_entry("drawing_prompt", drawing_data, MOOD_SNAPSHOT_FOLDER)
-
-                print("[🎨] Drawing triggered.")
-
-                comfy_prompt_text = query_ollama(
-                    prompt=drawing_prompt, model="llava", image=None, timeout=LLAVA_TIMEOUT_SUMMARY, log_dir=MOOD_SNAPSHOT_FOLDER  # right?
-                )
-                log_json_entry("comfy_prompt", {"prompt": comfy_prompt_text, "latest_image": latest_image}, MOOD_SNAPSHOT_FOLDER)
-
-                print(f"[🎨] ComfyUI prompt generated: {comfy_prompt_text}")
-
-                # Save current image and invoke ComfyUI
-                # Ensure we have a valid image for drawing
-                if latest_image and os.path.exists(latest_image):
-                    self._invoke_comfyui_drawing(comfy_prompt_text, latest_image)
-                else:
-                    print("[⚠️] Cannot invoke ComfyUI - no valid image available for drawing")
-            else:
-                print("[❌] Not inspired to draw.")
+            controller.handle_drawing_flow(self, evaluation, latest_image)
 
         except Exception as e:
             print(f"[⚠️] Failed to evaluate self: {e}")
 
-    def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str) -> None:
-        """
-        Invoke ComfyUI with the drawing prompt and latest mood image.
-
-        Args:
-            drawing_prompt: The generated drawing prompt
-            latest_image: The encoded image from memory_queue (base64 or filepath)
-        """
-        try:
-            # Read from state instead and avoid this mess? or just always deal with images on disk.
-            # Determine if latest_image is an encoded image or a file path
-            if os.path.exists(latest_image):
-                # It's a file path, use it directly
-                image_path = latest_image
-                print(f"[🎨] Using existing image file: {image_path}")
-            else:
-                # It's likely a base64 encoded image, decode and save to disk
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"draw_input_{timestamp}.jpg")
-
-                try:
-                    # Decode base64 image and write to disk
-                    image_data = base64.b64decode(latest_image)
-                    with open(image_path, "wb") as f:
-                        f.write(image_data)
-                    print(f"[🎨] Decoded and saved image to: {image_path}")
-                except Exception as decode_error:
-                    print(f"[❌] Failed to decode image: {decode_error}")
-                    return
-
-            # Create ComfyUI controller with custom configuration
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            controller = create_impostor_controller(
-                load_image_path=image_path,
-                override_prompt=drawing_prompt,
-                primitive_string="impostor black and white sketch line art ",
-                filename_prefix=f"impostor-{timestamp}",
-                flux_guidance=4.0,  # Example value, adjust as needed
-                cnet_strength=0.3,  # Example value, adjust as needed
-                # Use current emotional state to influence generation?
-                # flux_guidance=max(2.0, min(6.0, 4.0 + (self.current_mood - 0.5) * 2)),
-                # cnet_strength=max(0.2, min(0.8, 0.5 + self.novelty_score * 0.3)),
-                # steps=max(15, min(35, int(25 + self.boredom * 10))),
-                steps=25,
-            )
-
-            # Queue the prompt to ComfyUI
-            success = controller.queue_prompt()
-
-            # time.sleeep here? thinking state?
-
-            if success:
-                print("[🎨] ComfyUI drawing queued successfully")
-                print(f"[🎨] Input image: {image_path}")
-                print(f"[🎨] Drawing prompt: {drawing_prompt}")
-                print(f"[🎨] Emotional influence - Mood: {self.current_mood:.2f}, Novelty: {self.novelty_score:.2f}, Boredom: {self.boredom:.2f}")
-            else:
-                print("[❌] Failed to queue ComfyUI drawing")
-
-        except Exception as e:
-            print(f"[⚠️] Error invoking ComfyUI: {e}")
