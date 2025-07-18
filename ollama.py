@@ -16,6 +16,7 @@ def log_ollama_call(
     error_message: Optional[str] = None,
     timeout: Optional[int] = None,
     log_dir: str = "mood_snapshots",
+    system_prompt: Optional[str] = None,
 ) -> str:
     """
     Log Ollama API call details for monitoring and debugging.
@@ -29,6 +30,7 @@ def log_ollama_call(
         error_message: Error message if call failed
         timeout: Request timeout used
         log_dir: Directory to store the log
+        system_prompt: Optional system prompt sent to Ollama
 
     Returns:
         Path to the log file
@@ -36,10 +38,13 @@ def log_ollama_call(
     # Truncate very long prompts and responses for readability
     truncated_prompt = prompt[:500] + "..." if len(prompt) > 500 else prompt
     truncated_response = response[:1000] + "..." if response and len(response) > 1000 else response
+    truncated_system_prompt = system_prompt[:500] + "..." if system_prompt and len(system_prompt) > 500 else system_prompt
 
     data = {
         "prompt": truncated_prompt,
         "full_prompt_length": len(prompt),
+        "system_prompt": truncated_system_prompt,
+        "full_system_prompt_length": len(system_prompt) if system_prompt else 0,
         "model": model,
         "image_path": image_path if image_path and os.path.exists(image_path) else None,
         "has_image": image_path is not None and os.path.exists(image_path) if image_path else False,
@@ -55,7 +60,12 @@ def log_ollama_call(
 
 
 def query_ollama(
-    prompt: str, model: str = "llava", image: Optional[Union[str, bytes]] = None, timeout: int = 20, log_dir: str = "mood_snapshots"
+    prompt: str,
+    model: str = "llava",
+    image: Optional[Union[str, bytes]] = None,
+    timeout: int = 20,
+    log_dir: str = "mood_snapshots",
+    system_prompt: Optional[str] = None,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -66,12 +76,17 @@ def query_ollama(
         image: Either a file path to an image or base64 encoded image bytes
         timeout: Request timeout in seconds
         log_dir: Directory to store logs
+        system_prompt: Optional system prompt to set context
 
     Returns:
         Response text from Ollama
     """
     # Prepare the payload
     payload = {"model": model, "prompt": prompt, "stream": False}
+
+    # Add system prompt if provided
+    if system_prompt:
+        payload["system"] = system_prompt
 
     # Handle image input
     image_path = None
@@ -101,7 +116,16 @@ def query_ollama(
         response_text = response.json().get("response", "")
 
         # Log successful call
-        log_ollama_call(prompt=prompt, model=model, image_path=image_path, response=response_text, success=True, timeout=timeout, log_dir=log_dir)
+        log_ollama_call(
+            prompt=prompt,
+            model=model,
+            image_path=image_path,
+            response=response_text,
+            success=True,
+            timeout=timeout,
+            log_dir=log_dir,
+            system_prompt=system_prompt,
+        )
 
         return response_text
 
@@ -110,7 +134,15 @@ def query_ollama(
 
         # Log failed call
         log_ollama_call(
-            prompt=prompt, model=model, image_path=image_path, response=None, success=False, error_message=error_msg, timeout=timeout, log_dir=log_dir
+            prompt=prompt,
+            model=model,
+            image_path=image_path,
+            response=None,
+            success=False,
+            error_message=error_msg,
+            timeout=timeout,
+            log_dir=log_dir,
+            system_prompt=system_prompt,
         )
 
         return f"[⚠️] Ollama API failed: {error_msg}"
