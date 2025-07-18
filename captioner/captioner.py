@@ -10,7 +10,6 @@ import re
 from typing import Optional, Deque, Tuple
 from collections import deque
 import cv2  # type: ignore
-import requests  # type: ignore
 import numpy as np  # type: ignore
 
 from .memory import (
@@ -155,18 +154,12 @@ class Captioner(MemoryMixin):
                 print(error_msg)
                 return "Unable to analyze image - file not found", ""
 
-            response_text = query_ollama(
-                prompt=prompt,
-                model="llava",
-                image=image_path,
-                timeout=LLAVA_TIMEOUT_SUMMARY,
-                log_dir=MOOD_SNAPSHOT_FOLDER
-            )
-            
+            response_text = query_ollama(prompt=prompt, model="llava", image=image_path, timeout=LLAVA_TIMEOUT_SUMMARY, log_dir=MOOD_SNAPSHOT_FOLDER)
+
             # Check if response indicates an error
             if response_text.startswith("[⚠️]"):
                 return response_text, image_path
-            
+
             return response_text, image_path
         except Exception as exc:
             error_msg = f"[⚠️] LLaVA failed: {exc}"
@@ -253,6 +246,7 @@ class Captioner(MemoryMixin):
             }
             log_json_entry("self_evaluation", eval_data, MOOD_SNAPSHOT_FOLDER)
 
+            # Move to drawing controller method?
             controller = DrawingController()
             if controller.should_draw(
                 mood=self.current_mood,
@@ -268,7 +262,6 @@ class Captioner(MemoryMixin):
                 controller.register_drawing(drawing_prompt)
                 self.last_drawing_prompt = drawing_prompt
 
-                # Log drawing prompt in JSON format
                 drawing_data = {
                     "prompt": drawing_prompt,
                     "evaluation": evaluation.strip(),
@@ -277,15 +270,24 @@ class Captioner(MemoryMixin):
                     "novelty_score": self.novelty_score,
                     "last_drawing_prompt": self.last_drawing_prompt if hasattr(self, "last_drawing_prompt") else None,
                 }
+
+                # not necessar anymore
+                # weird loggin here maybe?
                 log_json_entry("drawing_prompt", drawing_data, MOOD_SNAPSHOT_FOLDER)
 
-                # INVOKE DRAW MODULE HERE
-                print(f"[🎨] Drawing triggered: {drawing_prompt}")
+                print("[🎨] Drawing triggered.")
+
+                comfy_prompt_text = query_ollama(
+                    prompt=drawing_prompt, model="llava", image=None, timeout=LLAVA_TIMEOUT_SUMMARY, log_dir=MOOD_SNAPSHOT_FOLDER  # right?
+                )
+                log_json_entry("comfy_prompt", {"prompt": comfy_prompt_text, "latest_image": latest_image}, MOOD_SNAPSHOT_FOLDER)
+
+                print(f"[🎨] ComfyUI prompt generated: {comfy_prompt_text}")
 
                 # Save current image and invoke ComfyUI
                 # Ensure we have a valid image for drawing
                 if latest_image and os.path.exists(latest_image):
-                    self._invoke_comfyui_drawing(drawing_prompt, latest_image)
+                    self._invoke_comfyui_drawing(comfy_prompt_text, latest_image)
                 else:
                     print("[⚠️] Cannot invoke ComfyUI - no valid image available for drawing")
             else:
@@ -303,6 +305,7 @@ class Captioner(MemoryMixin):
             latest_image: The encoded image from memory_queue (base64 or filepath)
         """
         try:
+            # Read from state instead and avoid this mess? or just always deal with images on disk.
             # Determine if latest_image is an encoded image or a file path
             if os.path.exists(latest_image):
                 # It's a file path, use it directly

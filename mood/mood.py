@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import os
-import base64
 import time
-import requests
 import re
 import json
 import cv2  # type: ignore
@@ -20,7 +18,7 @@ from event_logging.run_manager import get_run_image_path
 # ---------------------------------------------------------------------------#
 # LLaVA scalar‑mood helper (needed by Captioner)                              #
 # ---------------------------------------------------------------------------#
-def estimate_mood_llava(caption: str, url: str = "http://localhost:11434/api/generate", timeout: int = LLAVA_TIMEOUT_EVAL) -> float:
+def estimate_mood_llava(caption: str, timeout: int = LLAVA_TIMEOUT_EVAL) -> float:
     """
     Ask the local LLaVA server for a scalar mood value in [‑1, +1].
     Falls back to 0.0 if the request fails.
@@ -31,18 +29,12 @@ def estimate_mood_llava(caption: str, url: str = "http://localhost:11434/api/gen
         "Reply with a number between -1 and +1. Just the number."
     )
     try:
-        response_text = query_ollama(
-            prompt=prompt,
-            model="llava",
-            image=None,
-            timeout=timeout,
-            log_dir=MOOD_SNAPSHOT_FOLDER
-        )
-        
+        response_text = query_ollama(prompt=prompt, model="llava", image=None, timeout=timeout, log_dir=MOOD_SNAPSHOT_FOLDER)
+
         # Check if response indicates an error
         if response_text.startswith("[⚠️]"):
             raise ValueError(response_text)
-        
+
         match = re.search(r"[-+]?\d*\.\d+|\d+", response_text)
         if match:
             return max(-1.0, min(1.0, float(match.group(0))))
@@ -115,20 +107,14 @@ class MoodEngine:
         timestamp = int(time.time())
         image_filename = f"caption_frame_{timestamp}.jpg"
         image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, image_filename)
-        
+
         # Save the frame to disk
         cv2.imwrite(image_path, frame)
-        
+
         prompt = "Describe the scene"
 
         try:
-            response_text = query_ollama(
-                prompt=prompt,
-                model="llava",
-                image=image_path,
-                timeout=timeout,
-                log_dir=MOOD_SNAPSHOT_FOLDER
-            )
+            response_text = query_ollama(prompt=prompt, model="llava", image=image_path, timeout=timeout, log_dir=MOOD_SNAPSHOT_FOLDER)
             return response_text
         except Exception as e:
             error_msg = f"Error: {e}"
