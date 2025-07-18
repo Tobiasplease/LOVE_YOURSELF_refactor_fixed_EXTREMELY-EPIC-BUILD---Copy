@@ -40,7 +40,7 @@ LUNG_OFFSET_SCALE = -0.10
 # === MOOD SYSTEM ===
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 MOOD_LOG = "internalvoice.txt"
-MOOD_SNAPSHOT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots")
+MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots"))
 MOOD_SNAPSHOT_DIR = MOOD_SNAPSHOT_FOLDER  # alias to resolve mood.py dependency
 
 SUMMARY_INTERVAL = 120  # seconds between summary evaluations before: 600
