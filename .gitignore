@@ -108,6 +108,7 @@ dmypy.json
 
 # Mood snapshots and analysis data
 mood_snapshots/
+event_log
 *.jpg
 *.jpeg
 *.png

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_SUMMARY
+from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_SUMMARY, EVALUATION_INTERVAL, SUMMARY_INTERVAL
 import os
 import time
 import threading
-import base64
 import re
 from typing import Optional, Deque, Tuple
 from collections import deque
 import cv2  # type: ignore
-import requests  # type: ignore
 import numpy as np  # type: ignore
 
 from .memory import (
@@ -18,25 +16,27 @@ from .memory import (
 )
 from .prompts import (
     LLAVA_PROMPT,
-    build_context,
+    # build_context,
     build_summary_prompt,
     build_caption_prompt,
     build_self_evaluation_prompt,
-    build_drawing_prompt,
 )
 from mood.mood import generate_internal_note, log_mood, estimate_mood_llava
 from drawing.drawing import DrawingController
+from event_logging.json_logger import log_json_entry
+from ollama import query_ollama
+from event_logging.run_manager import get_run_image_path
 
 
 class Captioner(MemoryMixin):
-    caption_window: Optional[any] = None
+    caption_window: Optional[any] = None  # type: ignore
 
     def __init__(self) -> None:
         MemoryMixin.__init__(self)
 
         self.stream_interval: int = 3
-        self.summary_interval: int = 600
-        self.eval_interval: int = 300
+        self.summary_interval: int = SUMMARY_INTERVAL
+        self.eval_interval: int = EVALUATION_INTERVAL
 
         self.true_session_start: float = time.time()
         self.session_start: float = self.true_session_start
@@ -52,7 +52,6 @@ class Captioner(MemoryMixin):
         self.evaluation_journal: list[str] = []
         self.initial_prompt_run: bool = False
         self.first_caption_done: bool = False
-        self.last_drawing_prompt: str = ""
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
 
@@ -92,7 +91,7 @@ class Captioner(MemoryMixin):
 
     def _process_frame(self, frame: np.ndarray, person_present: bool) -> None:
         timestamp = int(time.time())
-        filename = f"{MOOD_SNAPSHOT_FOLDER}/mood_{timestamp}.jpg"
+        filename = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{timestamp}.jpg")
         cv2.imwrite(filename, frame)
 
         if self.first_caption_done:
@@ -121,10 +120,12 @@ class Captioner(MemoryMixin):
             saw_person,
             self.last_person_detected,
         )
+        print(note)
 
         print(f"[{time.strftime('%H:%M:%S')}] {caption.strip()}")
 
         if self.novelty_score > CAPTION_SAVE_THRESHOLD:
+            # vs update_feeling_brain: double logging?
             log_mood(caption, self.current_mood, filename)
             short_caption = self.truncate_caption(caption)
             self.memory_queue.append((timestamp, short_caption, self.current_mood, filename))
@@ -136,30 +137,28 @@ class Captioner(MemoryMixin):
         self.last_person_detected = saw_person
         self.last_short_caption = self.truncate_caption(caption)
 
-        self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
-        self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
+        # Only cleanup once per frame to avoid race conditions
+        # self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
 
     @staticmethod
     def describe_image_with_llava(image_path: str, *, prompt: str) -> tuple[str, str]:
         try:
-            with open(image_path, "rb") as img_file:
-                encoded = base64.b64encode(img_file.read()).decode("utf-8")
-            payload = {
-                "model": "llava",
-                "prompt": prompt,
-                "images": [encoded],
-                "stream": False,
-            }
-            resp = requests.post(
-                "http://localhost:11434/api/generate",
-                json=payload,
-                timeout=LLAVA_TIMEOUT_SUMMARY
-            )
-            resp.raise_for_status()
-            result = resp.json()
-            return result.get("response", "[No response received]"), image_path
+            # Check if file exists before trying to open it
+            if not os.path.exists(image_path):
+                error_msg = f"[⚠️] Image file not found: {image_path}"
+                print(error_msg)
+                return "Unable to analyze image - file not found", ""
+
+            response_text = query_ollama(prompt=prompt, model="llava", image=image_path, timeout=LLAVA_TIMEOUT_SUMMARY, log_dir=MOOD_SNAPSHOT_FOLDER)
+
+            # Check if response indicates an error
+            if response_text.startswith("[⚠️]"):
+                return response_text, image_path
+
+            return response_text, image_path
         except Exception as exc:
-            return f"[⚠️] LLaVA failed: {exc}", image_path
+            error_msg = f"[⚠️] LLaVA failed: {exc}"
+            return error_msg, image_path
 
     @staticmethod
     def truncate_caption(raw_caption: str) -> str:
@@ -188,7 +187,7 @@ class Captioner(MemoryMixin):
         except Exception as e:
             print(f"[⚠️] Failed to generate summary: {e}")
 
-        self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
+        # self.cleanup_snapshots(MOOD_SNAPSHOT_FOLDER)
 
     def generate_self_evaluation(self) -> None:
         try:
@@ -210,25 +209,42 @@ class Captioner(MemoryMixin):
                 print("[⚠️] No valid image found in memory_queue")
                 return
 
+            # Check if the image file exists, try to find an alternative if not
+            if not os.path.exists(latest_image):
+                print(f"[⚠️] Latest image file not found: {latest_image}")
+                # Try to find the most recent existing image in memory_queue
+                latest_image = None
+                for m in reversed(self.memory_queue):
+                    if isinstance(m, tuple) and len(m) > 3 and os.path.exists(m[3]):
+                        latest_image = m[3]
+                        print(f"[🔄] Using alternative image: {latest_image}")
+                        break
+
+                if not latest_image:
+                    print("[❌] No valid image files found in memory_queue")
+                    return
+
             evaluation, _ = self.describe_image_with_llava(latest_image, prompt=eval_prompt)
             print(f"[🌀] Self-evaluation: {evaluation}")
             self.evaluation_journal.append(evaluation.strip())
 
+            # Log self-evaluation in JSON format
+            eval_data = {
+                "evaluation": evaluation.strip(),
+                "mood_delta": mood_delta,
+                "time_elapsed": time_elapsed,
+                "current_mood": self.current_mood,
+                "last_mood": self.last_mood,
+                "boredom": self.boredom,
+                "novelty_score": self.novelty_score,
+                "recent_summaries": recent_summaries,
+            }
+            log_json_entry("self_evaluation", eval_data, MOOD_SNAPSHOT_FOLDER)
+
+            # Handle drawing flow through drawing controller
             controller = DrawingController()
-            if controller.should_draw(
-                mood=self.current_mood,
-                novelty=self.novelty_score,
-                boredom=self.boredom,
-                evaluation=evaluation,
-            ):
-                drawing_prompt = build_drawing_prompt(
-                    evaluation=evaluation,
-                    agent=self,
-                    last_drawing_prompt=self.last_drawing_prompt,
-                )
-                controller.register_drawing(drawing_prompt)
-                self.last_drawing_prompt = drawing_prompt
-                print(f"[🎨] Drawing triggered: {drawing_prompt}")
+            controller.handle_drawing_flow(self, evaluation, latest_image)
 
         except Exception as e:
             print(f"[⚠️] Failed to evaluate self: {e}")
+

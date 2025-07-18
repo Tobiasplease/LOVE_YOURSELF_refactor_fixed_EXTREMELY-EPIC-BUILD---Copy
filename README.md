@@ -2,6 +2,10 @@
 
 A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using LLaVA vision models, and can optionally control servo motors for physical interaction.
 
+## To Control Log Output
+
+export MOOD_SNAPSHOT_FOLDER=/Users/jbe/Dropbox/\_outputs/impostor_event_log && python machine.py
+
 ## Features
 
 - **Real-time Face Detection**: Uses OpenCV DNN face detection for robust person detection
@@ -80,7 +84,7 @@ ollama pull llava
 ollama serve
 ```
 
-The system expects LLaVA to be accessible at `http://localhost:11434/api/generate`.
+The system expects LLaVA to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are now handled through the `ollama.py` module.
 
 ## Usage
 

@@ -18,7 +18,10 @@ from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     MOOD_EVALUATION_INTERVAL,
     PAUSE_DURATION,
+    MODEL_PATH,
 )
+from event_logging.run_manager import get_run_image_path
+from event_logging.json_logger import get_current_run_id
 
 if USE_SERVO:
     from servo_control.servo_control import ServoController
@@ -31,9 +34,8 @@ if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 
-model_path = "/Users/jbe/repos/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/models"
-proto = f"{model_path}/deploy.prototxt"
-model = f"{model_path}/res10_300x300_ssd_iter_140000.caffemodel"
+proto = f"{MODEL_PATH}/deploy.prototxt"
+model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
 
 net = cv2.dnn.readNetFromCaffe(proto, model)
 if USE_SERVO:
@@ -59,6 +61,12 @@ last_snapshot_time = 0
 object_detector = ObjectDetectionThread()
 object_detector.start()
 
+# Initialize run ID for this session
+run_id = get_current_run_id()
+print(f"[🚀] Starting session with run ID: {run_id}")
+print(f"[📁] Event log: {run_id}-event-log.json")
+print(f"[🖼️] Images folder: {run_id}-images/")
+
 mood_engine = MoodEngine()
 captioner = Captioner()
 
@@ -70,7 +78,7 @@ def mood_update_thread(frame, timestamp):
     if not captioner.is_processing:
         now = time.time()
         if now - last_snapshot_time >= 10:
-            snapshot_path = f"{MOOD_SNAPSHOT_FOLDER}/mood_{int(now)}.jpg"
+            snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
             cv2.imwrite(snapshot_path, frame)
             mood_engine.update_feeling_brain(frame, image_path=snapshot_path)
             try:

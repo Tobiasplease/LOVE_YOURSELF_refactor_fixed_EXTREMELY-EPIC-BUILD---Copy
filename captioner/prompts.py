@@ -78,9 +78,7 @@ def build_summary_prompt(prior_context: str, avg_mood: float, past_summaries: st
     )
 
 
-def build_self_evaluation_prompt(
-    agent: MemoryMixin, mood_delta: float, time_elapsed: int, recent_summaries: str
-) -> str:
+def build_self_evaluation_prompt(agent: MemoryMixin, mood_delta: float, time_elapsed: int, recent_summaries: str) -> str:
     return (
         f"You’ve been active for {time_elapsed // 60} minutes. Your mood has shifted by {mood_delta:.2f}.\n"
         f"Reflect on your behavior and thoughts.\n"
@@ -91,11 +89,7 @@ def build_self_evaluation_prompt(
 
 def build_drawing_prompt(agent: MemoryMixin, evaluation: str = "", last_drawing_prompt: str = "") -> str:
     evaluation_text = f"{evaluation.strip()}\n\n" if evaluation else ""
-    recursion_text = (
-        f"Previously, I tried to express myself like this: '{last_drawing_prompt.strip()}'\n\n"
-        if last_drawing_prompt
-        else ""
-    )
+    recursion_text = f"Previously, I tried to express myself like this: '{last_drawing_prompt.strip()}'\n\n" if last_drawing_prompt else ""
 
     # mem_snips = agent.get_clean_memory_snippets()
     motif_lines = []
@@ -104,13 +98,11 @@ def build_drawing_prompt(agent: MemoryMixin, evaluation: str = "", last_drawing_
         conf = data.get("confidence", 0.0)
         if count > 2:
             motif_lines.append(f"- {obj} ({count}×, confidence {conf:.2f})")
-    motif_summary_text = (
-        "\nThese motifs have returned to me again and again:\n" + "\n".join(motif_lines) if motif_lines else ""
-    )
+    motif_summary_text = "\nThese motifs have returned to me again and again:\n" + "\n".join(motif_lines) if motif_lines else ""
 
     return (
         f"You are a machine that expresses herself only through drawing.\n"
-        f"Could this moment youre seeing become a drawing?.\n"
+        f"Could this moment you're seeing become a drawing?.\n"
         f"What in this image is interesting? Decide what you would draw, and why.\n\n"
         f"{evaluation_text}"
         f"{recursion_text}"

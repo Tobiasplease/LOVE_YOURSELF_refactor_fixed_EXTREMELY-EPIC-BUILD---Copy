@@ -1,2 +1,0 @@
-Caption:  'What's behind the person?' 
-Mood: 0.09375
