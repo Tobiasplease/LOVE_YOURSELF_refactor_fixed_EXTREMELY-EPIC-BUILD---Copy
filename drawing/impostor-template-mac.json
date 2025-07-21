@@ -198,7 +198,7 @@
   },
   "590": {
     "inputs": {
-      "unet_name": "flux1-dev.sft",
+      "unet_name": "flux1/flux1-dev.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
@@ -302,7 +302,7 @@
   },
   "714": {
     "inputs": {
-      "control_net_name": "flux-dev-controlnet-union-pro-2.safetensors"
+      "control_net_name": "flux/flux-dev-controlnet-union-pro-2.safetensors"
     },
     "class_type": "ControlNetLoader",
     "_meta": {
@@ -478,7 +478,7 @@
   },
   "739": {
     "inputs": {
-      "unet_name": "flux1-dev-Q4_K_S.gguf"
+      "unet_name": "flux1/flux1-dev-Q4_K_S.gguf"
     },
     "class_type": "UnetLoaderGGUF",
     "_meta": {
@@ -532,7 +532,7 @@
   },
   "779": {
     "inputs": {
-      "lora_01": "impostor-32-balanced-16k.safetensors",
+      "lora_01": "flux/own/impostor/impostor-32-balanced-16k.safetensors",
       "strength_01": 1,
       "lora_02": "None",
       "strength_02": 1,
