@@ -139,7 +139,7 @@ class ComfyUIController:
                 print(f"Warning: Workflow file {self.workflow_file} not found")
                 return False
 
-            with open(self.workflow_file, "r") as file:
+            with open(self.workflow_file, "r", encoding="utf-8") as file:
                 workflow_data = json.load(file)
 
             # Apply configuration to workflow
