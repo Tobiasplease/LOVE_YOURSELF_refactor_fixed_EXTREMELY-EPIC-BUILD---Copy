@@ -28,6 +28,7 @@ CAPTION_SAVE_THRESHOLD: float = 0.3
 BELIEF_THRESHOLD: int = 7             # Motif must appear this many times to form a belief
 BELIEF_FADE_TIME: float = 3600 * 6    # 6 hours: beliefs fade if motif not seen
 BELIEF_FORM_MIN_DAYS: float = 0.25    # Minimum "age" of motif before forming belief (in days)
+CONFIDENCE_THRESHOLD = 0.65           # Confidence threshold for confirming motifs
 
 CaptionTuple = Tuple[int, str, float, str]  # (ts, caption, mood, file)
 
@@ -47,8 +48,10 @@ class MemoryMixin:
         self.motif_counter: Counter = Counter()
         self.motif_first_seen: Dict[str, float] = {}
         self.motif_last_seen: Dict[str, float] = {}
-        self.motif_focus_start: Dict[str, float] = {}  # NEW: tracks how long motif has been continuously in focus
+        self.motif_focus_start: Dict[str, float] = {}
         self.current_motifs: Set[str] = set()
+        self.motif_confidence: Dict[str, float] = {}  # NEW: confidence per motif
+        self.motif_confirmed: Dict[str, bool] = {}    # NEW: confirmed status per motif
 
         # Identity (core beliefs emerging from motif recurrence)
         self.beliefs: Dict[str, Dict[str, Any]] = {}
@@ -115,12 +118,14 @@ class MemoryMixin:
     def absorb_detection(self, labels: list[str], timestamp: float | None = None):
         timestamp = timestamp or now()
         for label in labels:
-            label_s = label.lower().rstrip('s')
-            self.motif_counter[label_s] += 1
-            if label_s not in self.motif_first_seen:
-                self.motif_first_seen[label_s] = timestamp
-            self.motif_last_seen[label_s] = timestamp
-            self.current_motifs.add(label_s)
+            label_name = label.lower().rstrip('s')
+            self.motif_counter[label_name] += 1
+            if label_name not in self.motif_first_seen:
+                self.motif_first_seen[label_name] = timestamp
+            self.motif_last_seen[label_name] = timestamp
+            self.current_motifs.add(label_name)
+            self.motif_confidence[label_name] = 1.0  # high confidence for detection
+            self.motif_confirmed[label_name] = True
 
     def absorb_motif(self, motif: str) -> None:
         motif = motif.strip().lower()
@@ -132,6 +137,9 @@ class MemoryMixin:
             self.motif_first_seen[motif] = now_time
         self.motif_last_seen[motif] = now_time
         self.current_motifs.add(motif)
+        if motif not in self.motif_confidence:
+            self.motif_confidence[motif] = 0.4  # default to low confidence
+            self.motif_confirmed[motif] = False
 
     def extract_motifs_from_caption(self, caption: str):
         words = re.findall(r'\b\w+\b', caption.lower())
@@ -143,6 +151,9 @@ class MemoryMixin:
                     self.motif_first_seen[word] = now_time
                 self.motif_last_seen[word] = now_time
                 self.current_motifs.add(word)
+                if word not in self.motif_confidence:
+                    self.motif_confidence[word] = 0.4
+                    self.motif_confirmed[word] = False
 
     def extract_semantic_motifs(self, caption: str):
         if _nlp is None:
@@ -151,6 +162,12 @@ class MemoryMixin:
         for token in doc:
             if token.pos_ in {"NOUN", "PROPN", "ADJ"} and len(token.text) > 2:
                 self.absorb_motif(token.lemma_)
+
+    def get_motif_certainty(self, motif: str) -> float:
+        return self.motif_confidence.get(motif.lower(), 0.0)
+
+    def is_motif_confirmed(self, motif: str) -> bool:
+        return self.motif_confirmed.get(motif.lower(), False)
 
     def update_beliefs(self):
         now_time = now()
@@ -227,3 +244,15 @@ class MemoryMixin:
                     os.remove(f)
                 except OSError:
                     pass
+
+    def rephrase_with_doubt(self, text: str) -> str:
+        words = re.findall(r'\b\w+\b', text)
+        for word in sorted(set(words), key=len, reverse=True):
+            w = word.lower()
+            if w in self.motif_confidence and self.motif_confidence[w] < CONFIDENCE_THRESHOLD:
+                pattern = re.compile(rf'\b({re.escape(word)})\b', re.IGNORECASE)
+                text = pattern.sub(r"maybe \\1", text)
+        return text
+
+    def get_memory_entries_by_type(self, memory_type: str, limit: int = 5) -> list[dict]:
+        return [entry for entry in reversed(self.memory_queue) if entry["type"] == memory_type][:limit]

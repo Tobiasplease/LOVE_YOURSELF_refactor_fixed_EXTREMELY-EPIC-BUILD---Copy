@@ -1,5 +1,3 @@
-"""captioner.py — updated for staggered caption/reflection flow and cleaner output"""
-
 from __future__ import annotations
 import os
 import re
@@ -24,8 +22,9 @@ try:
 except ImportError:
     _legacy_log_mood = None
 
-CAPTION_INTERVAL = 90  # seconds between full caption cycles
-REASON_INTERVAL = 360  # seconds between reflections (was 180)
+CAPTION_INTERVAL = 10  # seconds between full caption cycles
+REASON_INTERVAL = 360  # seconds between reflections
+DRAWING_INTERVAL = 600  # seconds between drawing triggers
 
 class Captioner(MemoryMixin):
     caption_window: Optional[any] = None
@@ -33,6 +32,7 @@ class Captioner(MemoryMixin):
     def __init__(self) -> None:
         super().__init__()
         self.model = MultimodalModel(memory_ref=self)
+        self.drawing = DrawingController()
 
         self.true_session_start = time.time()
         self.first_caption_done = False
@@ -44,7 +44,8 @@ class Captioner(MemoryMixin):
         self.novelty_score: float = 0.0
 
         self.last_caption_time: float = 0.0
-        self.last_reason_time: float = 0.0
+        self.last_reason_time: float = time.time()  # Delay first reflection
+        self.last_drawing_time: float = time.time()  # Stagger drawing
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
         self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
@@ -124,6 +125,14 @@ class Captioner(MemoryMixin):
             else:
                 log_json_entry("mood", {"caption": caption, "mood": self.current_mood, "image": img_path}, MOOD_SNAPSHOT_FOLDER)
 
+        if now - self.last_drawing_time > DRAWING_INTERVAL:
+            memory_context = self.get_recent_memory()
+            reflection_context = self.get_last_reflection()
+            extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
+            prompt = self.model.generate_drawing_prompt(extra=extra_context)
+            self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
+            self.last_drawing_time = now
+
     def describe_current_mood(self) -> str:
         if self.current_mood > 0.5:
             return "I feel quite energized and attentive."
@@ -146,6 +155,12 @@ Recent memory: {self.get_recent_memory()}""".strip()
     def get_recent_memory(self, k: int = 5) -> str:
         snippets = self.get_clean_memory_snippets(k=k)
         return "\n".join(f"- {s}" for s in snippets)
+
+    def get_last_reflection(self) -> str:
+        entries = self.get_memory_entries_by_type("reflection")
+        if entries:
+            return entries[-1].get("text", "")
+        return ""
 
     @staticmethod
     def truncate_caption(raw: str) -> str:

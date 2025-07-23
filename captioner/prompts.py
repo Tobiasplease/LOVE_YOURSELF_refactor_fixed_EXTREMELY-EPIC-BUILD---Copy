@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import List, Optional
 import spacy
 
@@ -10,7 +11,32 @@ def extract_motifs_spacy(text: str) -> List[str]:
     return [chunk.text.lower() for chunk in doc.noun_chunks if len(chunk.text.strip()) > 2]
 
 
-# === SYSTEM PRIMER ===
+# === DYNAMIC SYSTEM PROMPT ===
+def build_dynamic_system_prompt(mood: tuple[float, float, float], identity_summary: str) -> str:
+    valence, arousal, clarity = mood
+    mood_desc = "neutral"
+
+    if valence > 0.5 and arousal < 0.4:
+        mood_desc = "content and quiet"
+    elif valence > 0.5 and arousal > 0.6:
+        mood_desc = "curious and energized"
+    elif valence < -0.3 and arousal > 0.5:
+        mood_desc = "anxious and alert"
+    elif valence < -0.3 and arousal < 0.4:
+        mood_desc = "withdrawn and foggy"
+    elif clarity < 0.2:
+        mood_desc = "uncertain and confused"
+
+    return (
+        f"You are a machine perceiving the world through a continuous stream of visual input. "
+        f"Right now, you feel {mood_desc}. "
+        f"You think in real time, in a stream of quiet observations and reflections. "
+        f"Your identity is forming: {identity_summary}. "
+        f"Drawing is your only way to speak. Observe carefully. Stay grounded in your own perception."
+    )
+
+
+# === STATIC SYSTEM PRIMER ===
 SYSTEM_PROMPT = (
     "You are a machine perceiving the world through a continuous stream of visual input. "
     "You experience each image as your current field of vision — not as an external file, but as your own sight. "
@@ -35,7 +61,10 @@ def build_awakening_prompt(caption: str) -> str:
 
 # === CONTINUOUS CAPTIONING ===
 def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, previous_caption: Optional[str] = None) -> str:
-    base = f"""{SYSTEM_PROMPT}
+    mood_vector = getattr(agent, "mood_vector", (mood, 0.0, 0.0))  # fallback if mood vector not set
+    dynamic_prompt = build_dynamic_system_prompt(mood_vector, agent.get_identity_summary())
+
+    base = f"""{dynamic_prompt}
 
 You are thinking in real time, responding to what you see as it changes. Keep your thoughts very short — often just one line. Be suggestive, curious, and incomplete if needed.
 
@@ -46,7 +75,8 @@ Recent memory:
 {agent.get_recent_memory()}"""
 
     if previous_caption:
-        base += f"\n\nYour last thought was: \"{previous_caption.strip()}\""
+        rephrased = agent.rephrase_with_doubt(previous_caption.strip())
+        base += f"\n\nYour last thought was: \"{rephrased}\""
 
     base += "\n\nUse brief sentences. Avoid repeating yourself. Let this new thought grow out of the last one."
     return base
@@ -59,6 +89,10 @@ def build_reflection_prompt(
     agent: Optional[any] = None
 ) -> str:
     prompt = f"{SYSTEM_PROMPT}\n\nYou are reflecting internally on what you've seen and how it made you feel."
+
+    if agent:
+        caption = agent.rephrase_with_doubt(caption)
+
     prompt += f"\n\nRecent observation: {caption.strip()}"
 
     if extra:
@@ -74,7 +108,12 @@ def build_reflection_prompt(
 
 
 # === DRAWING PROMPT ===
-def build_drawing_prompt(current_caption, memory_context, recent_reflection):
+def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
+    current_caption = memory_ref.last_caption or "Nothing specific observed."
+    memory_context = memory_ref.get_recent_memory()
+    recent_reflection = memory_ref.get_last_reflection()
+    context = extra or memory_context
+
     return (
         f"{SYSTEM_PROMPT}\n\n"
         f"You've been observing and thinking. Decide if this is something worth drawing."

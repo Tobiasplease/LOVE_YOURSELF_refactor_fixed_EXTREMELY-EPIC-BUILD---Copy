@@ -7,6 +7,7 @@ from captioner.prompts import (
     build_awakening_prompt,
     build_caption_prompt,
     build_reflection_prompt,
+    build_drawing_prompt,  # ✅ add this
 )
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -49,6 +50,13 @@ class MultimodalModel:
         extra: Optional[str] = None
     ) -> str:
         prompt = build_reflection_prompt(caption, extra=extra, agent=agent)
+        return self._call_ollama(prompt)
+
+    def generate_drawing_prompt(self, *, extra: Optional[str] = None) -> str:
+        if not self.memory_ref:
+            return "[⚠️] No memory available for drawing prompt"
+
+        prompt = build_drawing_prompt(self.memory_ref, extra=extra)
         return self._call_ollama(prompt)
 
     def _call_ollama(self, prompt: str, image_data: Optional[str] = None) -> str:
