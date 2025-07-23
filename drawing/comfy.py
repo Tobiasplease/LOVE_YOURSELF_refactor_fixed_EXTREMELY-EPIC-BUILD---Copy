@@ -37,7 +37,8 @@ class ImpostorConfig:
     flux_guidance: float = 4.0
 
     # LoRA parameters
-    lora_path: str = "flux/own/impostor/impostor-64-balanced-v2-16k-no-trig.safetensors"
+    # lora_path: str = "flux/own/impostor/impostor-64-balanced-v2-16k-no-trig.safetensors"
+    lora_path: str = "impostor-32-balanced-16k.safetensors"
     lora_strength: float = 1.0
 
     # Generation parameters
@@ -139,7 +140,7 @@ class ComfyUIController:
                 print(f"Warning: Workflow file {self.workflow_file} not found")
                 return False
 
-            with open(self.workflow_file, "r") as file:
+            with open(self.workflow_file, "r", encoding="utf-8") as file:
                 workflow_data = json.load(file)
 
             # Apply configuration to workflow
