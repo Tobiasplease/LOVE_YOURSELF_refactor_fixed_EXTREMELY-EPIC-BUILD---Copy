@@ -10,7 +10,7 @@ try:
     start = time.time()
     response = query_ollama(
         prompt="What do you see?",
-        model="llava",
+        model="mistral",
         image=image_path,
         timeout=20,
         log_dir="mood_snapshots"
