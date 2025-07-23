@@ -1,0 +1,19 @@
+# tools/restore_venv_baks.py
+"""
+For every *.py.bak inside .venv, restore the original file and
+delete the backup. Leaves your own project files untouched.
+"""
+import os, pathlib, shutil
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+VENV = ROOT / ".venv"
+restored = 0
+
+for bak in VENV.rglob("*.py.bak"):
+    py = bak.with_suffix("")          # same path, .py instead of .py.bak
+    if py.exists():
+        py.unlink()                   # remove the wrongly‑patched file
+    shutil.move(str(bak), str(py))    # rename backup back to .py
+    restored += 1
+
+print(f"Restored {restored} files inside .venv")

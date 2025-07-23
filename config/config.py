@@ -60,6 +60,12 @@ NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
+# --- Mistral LLM settings ---
+MISTRAL_COOLDOWN_SECS = 1000         # Min seconds between Mistral prompts
+MISTRAL_TIMEOUT_SECS = 60          # Max time to wait for Ollama to respond
+
+
 # === LLAVA SETTINGS ===
 LLAVA_TIMEOUT_SUMMARY = 60
 LLAVA_TIMEOUT_EVAL = 90
+LLAVA_CLI_COMMAND = "python llava/cli.py --image"

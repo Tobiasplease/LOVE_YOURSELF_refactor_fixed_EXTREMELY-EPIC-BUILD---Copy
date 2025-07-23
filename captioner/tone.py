@@ -1,7 +1,7 @@
 # tone.py
 
 from typing import List
-from captioner.llava_text import query_llava_text
+from .mistral_text import query_mistral_text
 
 def infer_tone_from_text(text: str) -> List[str]:
     """
@@ -15,7 +15,7 @@ def infer_tone_from_text(text: str) -> List[str]:
         f"Sentence: \"{text.strip()}\""
     )
 
-    raw = query_llava_text(prompt).strip().lower()
+    raw = query_mistral_text(prompt).strip().lower()
     adjectives = [w.strip() for w in raw.split(",") if w]
     return adjectives or ["neutral"]
 
