@@ -10,18 +10,16 @@ from .json_logger import (
     read_evaluations,
     read_drawing_prompts,
     read_internal_notes,
-    log_llava_api_call,
-    read_llava_api_calls
+    log_ollama_api_call,
 )
 
 __all__ = [
-    'log_json_entry',
-    'read_json_logs',
-    'get_latest_log_entry',
-    'append_to_log_file',
-    'read_evaluations',
-    'read_drawing_prompts',
-    'read_internal_notes',
-    'log_llava_api_call',
-    'read_llava_api_calls'
+    "log_json_entry",
+    "read_json_logs",
+    "get_latest_log_entry",
+    "append_to_log_file",
+    "read_evaluations",
+    "read_drawing_prompts",
+    "read_internal_notes",
+    "log_ollama_api_call",
 ]

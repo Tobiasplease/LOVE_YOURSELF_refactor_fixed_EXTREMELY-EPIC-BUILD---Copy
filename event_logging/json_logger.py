@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional, List
 from datetime import datetime
 import importlib.util
 
+from config.config import OLLAMA_MODEL
+
 
 # Global run ID - generated once per application run
 _current_run_id: Optional[str] = None
@@ -275,9 +277,9 @@ def read_internal_notes(log_dir: str, limit: Optional[int] = None) -> List[Dict[
     return logs
 
 
-def log_llava_api_call(
+def log_ollama_api_call(
     prompt: str,
-    model: str = "llava",
+    model: str = OLLAMA_MODEL,
     image_path: Optional[str] = None,
     response: Optional[str] = None,
     success: bool = True,
@@ -301,18 +303,3 @@ def log_llava_api_call(
         timeout=timeout,
         log_dir=log_dir,
     )
-
-
-def read_llava_api_calls(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Read LLaVA API call logs."""
-    # Support both old "llava_api_call" and new "ollama_api_call" log types
-    llava_logs = read_json_logs(log_dir, "llava_api_call")
-    ollama_logs = read_json_logs(log_dir, "ollama_api_call")
-
-    # Combine and sort by timestamp
-    all_logs = llava_logs + ollama_logs
-    all_logs.sort(key=lambda x: x.get("timestamp", 0))
-
-    if limit:
-        all_logs = all_logs[-limit:]
-    return all_logs

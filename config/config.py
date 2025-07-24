@@ -62,8 +62,6 @@ CAMERA_INDEX = 0  # or whichever index your camera uses
 MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts
 MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 
-
-# === LLAVA SETTINGS ===
-LLAVA_TIMEOUT_SUMMARY = 60
-LLAVA_TIMEOUT_EVAL = 90
-# LLAVA_CLI_COMMAND = "python llava/cli.py --image"
+# === OLLAMA SETTINGS ===
+OLLAMA_TIMEOUT_SUMMARY = 60
+OLLAMA_TIMEOUT_EVAL = 90

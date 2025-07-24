@@ -1,6 +1,6 @@
 # LOVE_YOURSELF - AI-Powered Interactive Mirror System
 
-A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using LLaVA vision models, and can optionally control servo motors for physical interaction.
+A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using ollama vision models, and can optionally control servo motors for physical interaction.
 
 ## To Control Log Output
 
@@ -10,7 +10,7 @@ export MOOD_SNAPSHOT_FOLDER=/Users/jbe/Dropbox/\_outputs/impostor_event_log && p
 
 - **Real-time Face Detection**: Uses OpenCV DNN face detection for robust person detection
 - **Object Detection**: YOLOv8-powered object recognition and tracking
-- **Mood Analysis**: AI-driven emotion and mood evaluation with LLaVA integration
+- **Mood Analysis**: AI-driven emotion and mood evaluation via ollama hosted model
 - **Caption Generation**: Automatic scene description and context understanding
 - **Servo Control**: Optional physical servo motor control for interactive responses
 - **Memory System**: Maintains contextual awareness and interaction history
@@ -74,17 +74,17 @@ The system requires these external model files:
   - `res10_300x300_ssd_iter_140000.caffemodel` (update path in `machine.py`)
 - **YOLO Models**: `yolov8m.pt` and `yolov8n.pt` (included)
 
-### 6. LLaVA API Setup
+### 6. ollama API Setup
 
-For mood analysis and captioning, ensure LLaVA is running locally:
+For mood analysis and captioning, ensure ollama is running locally:
 
 ```bash
-# Install and run LLaVA (example using Ollama)
+# Install and run LLaVA (using Ollama)
 ollama pull llava
 ollama serve
 ```
 
-The system expects LLaVA to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are now handled through the `ollama.py` module.
+The system expects an llm model to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are now handled through the `ollama.py` module.
 
 ## Usage
 
@@ -101,13 +101,9 @@ python machine.py
 ### Testing Components
 
 ```bash
-# Test LLaVA caption generation
-python test_llava_caption.py
+# Test ollama caption generation
+python test_ollama_caption.py
 
-# Test individual modules
-python -m captioner.captioner
-python -m mood.mood
-python -m perception.object_detection
 ```
 
 ## Project Structure
@@ -158,7 +154,7 @@ LOVE_YOURSELF/
 
 1. **Camera not found**: Check `CAMERA_INDEX` in config
 2. **Servo not responding**: Verify `SERIAL_PORT` and Arduino connection
-3. **LLaVA errors**: Ensure LLaVA server is running on localhost:11434
+3. **ollama errors**: Ensure ollama server is running on localhost:11434
 4. **Import errors**: Verify virtual environment is activated and dependencies installed
 
 ### Performance Optimization

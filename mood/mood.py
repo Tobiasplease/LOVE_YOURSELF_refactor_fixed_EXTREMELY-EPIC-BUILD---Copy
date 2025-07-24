@@ -9,18 +9,18 @@ import cv2  # type: ignore
 import numpy as np  # type: ignore
 from typing import List, Optional
 
-from config.config import MOOD_SNAPSHOT_FOLDER, LLAVA_TIMEOUT_EVAL, LLAVA_TIMEOUT_SUMMARY
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_TIMEOUT_EVAL, OLLAMA_TIMEOUT_SUMMARY
 from event_logging.json_logger import log_json_entry, read_json_logs
 from ollama import query_ollama
 from event_logging.run_manager import get_run_image_path
 
 
 # ---------------------------------------------------------------------------#
-# LLaVA scalar‑mood helper (needed by Captioner)                              #
+# ollama scalar‑mood helper (needed by Captioner)                              #
 # ---------------------------------------------------------------------------#
-def estimate_mood_llava(caption: str, timeout: int = LLAVA_TIMEOUT_EVAL) -> float:
+def estimate_mood_ollama(caption: str, timeout: int = OLLAMA_TIMEOUT_EVAL) -> float:
     """
-    Ask the local LLaVA server for a scalar mood value in [‑1, +1].
+    Ask the local Ollama server for a scalar mood value in [‑1, +1].
     Falls back to 0.0 if the request fails.
     """
     prompt = (
@@ -102,7 +102,7 @@ class MoodEngine:
         return change
 
     # -------------------------------------------------------- LLaVA caption
-    def generate_caption(self, frame, timeout: int = LLAVA_TIMEOUT_SUMMARY):
+    def generate_caption(self, frame, timeout: int = OLLAMA_TIMEOUT_SUMMARY):
         # Save the frame to disk in the run image folder
         timestamp = int(time.time())
         image_filename = f"caption_frame_{timestamp}.jpg"
