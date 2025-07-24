@@ -28,7 +28,7 @@ DRAWING_INTERVAL = 600  # seconds between drawing triggers
 
 
 class Captioner(MemoryMixin):
-    caption_window: Optional[any] = None
+    caption_window: Optional[any] = None  # type: ignore
 
     def __init__(self) -> None:
         super().__init__()
@@ -89,6 +89,7 @@ class Captioner(MemoryMixin):
             caption = self.model.caption_image(img_path, flowing=True, first_time=not self.first_caption_done)
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
+            print(f"[⚠️] Caption error: {e}")
 
         self.first_caption_done = True
 

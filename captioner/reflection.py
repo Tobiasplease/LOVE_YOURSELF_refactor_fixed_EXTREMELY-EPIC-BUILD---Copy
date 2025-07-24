@@ -42,6 +42,7 @@ def run_reflection(agent: "Captioner") -> None:
         )
 
         # Add to memory
+        # read from disk?
         image_path = agent.memory_queue[-1]["image"]
         derived_from = [m["text"] for m in recent_entries]
         agent.observe(reflection, agent.current_mood, image_path, memory_type="reflection", derived_from=derived_from)
