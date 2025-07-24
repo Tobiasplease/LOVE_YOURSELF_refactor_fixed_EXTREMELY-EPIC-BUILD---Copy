@@ -93,6 +93,7 @@ class DrawingController:
 
             print("[🎨] Drawing triggered.")
 
+            # mistral here? log what model?
             comfy_prompt_text = query_ollama(
                 prompt=drawing_prompt, model="llava", image=None, timeout=LLAVA_TIMEOUT_SUMMARY, log_dir=MOOD_SNAPSHOT_FOLDER
             )
