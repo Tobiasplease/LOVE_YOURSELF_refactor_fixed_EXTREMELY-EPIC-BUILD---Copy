@@ -7,11 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a Python project. Common development commands:
 
 ```bash
+# Activate virtual environment
+source .venv/bin/activate
+
 # Install dependencies
 pip install -r requirements.txt
 
 # Run the main application
 python machine.py
+
+# Run with configuration overrides
+python machine.py --config_override config/debug_config.json
+python machine.py --config_override config/production_config.json
 
 # Test individual components
 python debug/test_ollama_caption.py
@@ -31,10 +38,29 @@ flake8 . --max-line-length=150
 
 This is an AI-powered interactive mirror system that combines computer vision, mood analysis, and servo control. The system is structured as a modular Python application with threaded processing for real-time performance.
 
+### Configuration Override System
+
+The system supports runtime configuration overrides via JSON files passed to machine.py:
+
+```bash
+# Debug mode (faster intervals for development)
+python machine.py --config_override config/debug_config.json
+
+# Production mode (optimized intervals)
+python machine.py --config_override config/production_config.json
+```
+
+**Available configurations:**
+- `config/debug_config.json`: Fast intervals for development (REASON_INTERVAL: 30s, DRAWING_INTERVAL: 60s)
+- `config/production_config.json`: Standard intervals for production use
+
+**Creating custom overrides:** Any config variable in `config/config.py` can be overridden by creating a JSON file with the desired values. The system handles type conversion automatically.
+
 ### Core Components
 
-- **machine.py**: Main application entry point and coordination loop
+- **machine.py**: Main application entry point and coordination loop with config override support
 - **config/config.py**: Centralized configuration including camera, servo, and AI model settings
+- **config/loader.py**: Configuration override system for runtime customization
 - **perception/**: Computer vision modules (face detection, object detection with YOLO)
 - **captioner/**: AI captioning system with memory management using Ollama API
 - **mood/**: Mood analysis and emotional processing engine

@@ -33,5 +33,5 @@ max-line-length = 150
 
 [tool.flake8]
 max-line-length = 150
-ignore = ["E203", "W503"]
+ignore = ["E203", "W503", "E402"]
 exclude = [".venv", "venv", "__pycache__", ".git"]

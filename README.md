@@ -75,6 +75,7 @@ The system requires these external model files:
 ### 6. External Service Setup
 
 #### Ollama API Setup
+
 For mood analysis and captioning, ensure ollama is running locally:
 
 ```bash
@@ -86,6 +87,7 @@ ollama serve
 The system expects an LLM model to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are handled through the `utils/ollama.py` module.
 
 #### ComfyUI Setup (Optional)
+
 For AI image generation based on mood:
 
 ```bash
@@ -106,6 +108,10 @@ source .venv/bin/activate
 
 # Run the main application
 python machine.py
+
+# Run with configuration override
+python machine.py --config_override config/debug_config.json
+python machine.py --config_override config/production_config.json
 ```
 
 ### To Control Log Output Folder
@@ -145,7 +151,7 @@ LOVE_YOURSELF/
 ├── debug/                 # Test scripts for components
 ├── models/                # AI model files (face detection, YOLO)
 ├── mood_snapshots/        # Stored mood analysis images and logs
-└── Lint-arduinoserial/    # Arduino code for servo control
+└── arduino_src/    # Arduino code for servo control
 ```
 
 ## Key Dependencies
@@ -156,6 +162,49 @@ LOVE_YOURSELF/
 - **Image Processing**: Pillow, Matplotlib
 
 ## Configuration Options
+
+### Configuration Override System
+
+The system supports runtime configuration overrides via JSON files:
+
+```bash
+# Use debug configuration (faster intervals for development)
+python machine.py --config_override config/debug_config.json
+
+# Use production configuration (slower, optimized intervals)
+python machine.py --config_override config/production_config.json
+```
+
+#### Available Override Configurations
+
+**Debug Config** (`config/debug_config.json`):
+
+- Faster processing intervals for development and testing
+- `REASON_INTERVAL`: 30 seconds (vs 360 default)
+- `DRAWING_INTERVAL`: 60 seconds (vs 600 default)
+
+**Production Config** (`config/production_config.json`):
+
+- Standard production intervals for optimal performance
+- Uses default values from `config/config.py`
+
+#### Creating Custom Override Files
+
+Any configuration value in `config/config.py` can be overridden by creating a JSON file:
+
+```json
+{
+  "CAMERA_INDEX": 1,
+  "CONFIDENCE_THRESHOLD": 0.7,
+  "USE_SERVO": false,
+  "MOOD_EVALUATION_INTERVAL": 15,
+  "DRAWING_INTERVAL": 300
+}
+```
+
+The system automatically handles type conversion and validates that override keys exist in the base configuration.
+
+### Base Configuration Settings
 
 ### Camera Settings
 
@@ -170,7 +219,9 @@ LOVE_YOURSELF/
 
 ### Mood Analysis
 
-- `MOOD_EVALUATION_INTERVAL`: How often to analyze mood
+- `MOOD_EVALUATION_INTERVAL`: How often to analyze mood (seconds)
+- `REASON_INTERVAL`: How often to generate reflective thoughts (seconds)
+- `DRAWING_INTERVAL`: How often to trigger image generation (seconds)
 - `MOOD_SNAPSHOT_FOLDER`: Where to store analysis images
 
 ## Troubleshooting

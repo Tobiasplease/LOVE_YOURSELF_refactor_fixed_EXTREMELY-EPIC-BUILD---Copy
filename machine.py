@@ -1,8 +1,29 @@
 import time
-
-# import numpy as np
+import argparse
+import sys
 import cv2
 import threading
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="AI Mirror System")
+    parser.add_argument("--config_override", type=str, help="Path to JSON config override file")
+    return parser.parse_args()
+
+
+args = parse_args()
+
+if args.config_override:
+    try:
+        from config.loader import load_config_override, apply_config_overrides
+        import config.config as config_module
+
+        overrides = load_config_override(args.config_override)
+        apply_config_overrides(config_module, overrides)
+        print(f"[CONFIG] Applied overrides from: {args.config_override}")
+    except Exception as e:
+        print(f"[CONFIG] Error loading config override: {e}")
+        sys.exit(1)
 
 from perception.object_detection import ObjectDetectionThread
 from captioner.captioner import Captioner

@@ -41,20 +41,21 @@ LUNG_OFFSET_SCALE = -0.10
 
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava:7b-v1.6-mistral-q5_1")
 
-MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots"))
 
-SUMMARY_INTERVAL = 120  # seconds between summary evaluations before: 600
-EVALUATION_INTERVAL = 60  # seconds between detailed evaluations before: 300
+# difference between the below? hmm
+MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
+CAPTION_INTERVAL = 10  # seconds between full caption cycles
+
+REASON_INTERVAL = 360  # seconds between reflections
+DRAWING_INTERVAL = 600  # seconds between drawing triggers
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 
 # === CAPTIONER MEMORY CONTROL ===
-# MEMORY_QUEUE_LIMIT = 100  # max short-term memory entries
 MOOD_DECAY_RATE = 0.02  # how much mood fades when nothing new happens
 NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
-# SNAPSHOT_STORAGE_LIMIT = 100  # number of mood_snapshot images to keep
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
