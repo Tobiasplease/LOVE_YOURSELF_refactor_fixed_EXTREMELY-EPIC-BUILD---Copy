@@ -42,6 +42,7 @@ LUNG_OFFSET_SCALE = -0.10
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava:7b-v1.6-mistral-q5_1")
 
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots"))
+COMFY_OUTPUT_FOLDER = os.getenv("COMFY_OUTPUT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "/Users/jbe/Dropbox/_outputs"))
 
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations

@@ -30,6 +30,7 @@ from captioner.captioner import Captioner
 from vision.gaze import update_gaze
 from mood.mood import MoodEngine
 from breathing.breathing import update_lung_position
+from image_monitor import ImageMonitor
 from config.config import (
     USE_SERVO,
     CAMERA_INDEX,
@@ -82,13 +83,32 @@ last_snapshot_time = 0
 object_detector = ObjectDetectionThread()
 object_detector.start()
 
+# Start image monitoring
+image_monitor = ImageMonitor(log_folder=MOOD_SNAPSHOT_FOLDER)
+image_monitor.start()
+
 # Initialize run ID and start time for this session
 start_time = time.time()
 set_start_time(start_time)
 run_id = get_current_run_id()
-log_json_entry(LogType.SESSION_START, {"run_id": run_id}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"🚀 Starting session with run ID: {run_id}")
-log_json_entry(LogType.INFO, {"message": f"Event log: {run_id}-event-log.json"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"📁 Event log: {run_id}-event-log.json")
-log_json_entry(LogType.INFO, {"message": f"Images folder: {run_id}-images/"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"🖼️ Images folder: {run_id}-images/")
+
+log_json_entry(
+    LogType.SESSION_START, {"run_id": run_id}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"🚀 Starting session with run ID: {run_id}"
+)
+log_json_entry(
+    LogType.INFO,
+    {"message": f"Event log: {run_id}-event-log.json"},
+    MOOD_SNAPSHOT_FOLDER,
+    auto_print=True,
+    print_message=f"📁 Event log: {run_id}-event-log.json",
+)
+log_json_entry(
+    LogType.INFO,
+    {"message": f"Images folder: {run_id}-images/"},
+    MOOD_SNAPSHOT_FOLDER,
+    auto_print=True,
+    print_message=f"🖼️ Images folder: {run_id}-images/",
+)
 
 mood_engine = MoodEngine()
 captioner = Captioner()
@@ -207,5 +227,6 @@ try:
 except KeyboardInterrupt:
     object_detector.stop()
     object_detector.join()
+    image_monitor.stop()
     cap.release()
     cv2.destroyAllWindows()
