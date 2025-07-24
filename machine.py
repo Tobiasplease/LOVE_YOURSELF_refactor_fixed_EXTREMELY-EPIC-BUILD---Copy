@@ -42,7 +42,7 @@ from config.config import (
     MODEL_PATH,
 )
 from event_logging.run_manager import get_run_image_path
-from event_logging.json_logger import get_current_run_id
+from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
 
 if USE_SERVO:
     from servo_control.servo_control import ServoController
@@ -82,11 +82,13 @@ last_snapshot_time = 0
 object_detector = ObjectDetectionThread()
 object_detector.start()
 
-# Initialize run ID for this session
+# Initialize run ID and start time for this session
+start_time = time.time()
+set_start_time(start_time)
 run_id = get_current_run_id()
-print(f"[🚀] Starting session with run ID: {run_id}")
-print(f"[📁] Event log: {run_id}-event-log.json")
-print(f"[🖼️] Images folder: {run_id}-images/")
+log_json_entry("session_start", {"run_id": run_id}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"🚀 Starting session with run ID: {run_id}")
+log_json_entry("info", {"message": f"Event log: {run_id}-event-log.json"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"📁 Event log: {run_id}-event-log.json")
+log_json_entry("info", {"message": f"Images folder: {run_id}-images/"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"🖼️ Images folder: {run_id}-images/")
 
 mood_engine = MoodEngine()
 captioner = Captioner()

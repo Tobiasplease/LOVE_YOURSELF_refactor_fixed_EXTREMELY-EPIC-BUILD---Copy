@@ -2,7 +2,7 @@
 Event logging utilities for the LOVE_YOURSELF project.
 """
 
-from .json_logger import (
+from .event_logger import (
     log_json_entry,
     read_json_logs,
     get_latest_log_entry,

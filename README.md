@@ -245,6 +245,7 @@ The system automatically handles type conversion and validates that override key
 ### Virtual Environment Management
 
 ```bash
+
 # Activate environment
 source .venv/bin/activate
 

@@ -10,7 +10,7 @@ import numpy as np  # type: ignore
 from typing import List, Optional
 
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_TIMEOUT_EVAL, OLLAMA_TIMEOUT_SUMMARY
-from event_logging.json_logger import log_json_entry, read_json_logs
+from event_logging.event_logger import log_json_entry, read_json_logs
 from utils.ollama import query_ollama
 from event_logging.run_manager import get_run_image_path
 
@@ -165,8 +165,20 @@ def log_mood(caption, mood, image_path: Optional[str] = None):
     Log mood data in JSON format with timestamp, caption, mood value, and image path.
     """
     data = {"caption": caption, "mood": mood, "image_path": image_path if image_path and os.path.exists(image_path) else None}
-
-    log_json_entry("mood", data, MOOD_SNAPSHOT_FOLDER)
+    
+    # Choose emoji based on mood level
+    if mood > 0.7:
+        emoji = "😊"
+    elif mood > 0.5:
+        emoji = "🙂"
+    elif mood > 0.3:
+        emoji = "😐"
+    elif mood > 0.1:
+        emoji = "😔"
+    else:
+        emoji = "😞"
+    
+    log_json_entry("mood", data, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"{emoji} Mood: {mood:.2f} - {caption}")
 
 
 def read_mood_logs(limit: Optional[int] = None) -> List[dict]:

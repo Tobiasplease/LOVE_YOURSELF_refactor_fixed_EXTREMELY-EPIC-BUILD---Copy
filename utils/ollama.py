@@ -5,7 +5,7 @@ import base64
 import requests
 from typing import Optional, Union
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
-from event_logging.json_logger import log_json_entry
+from event_logging.event_logger import log_json_entry
 
 
 def log_ollama_call(

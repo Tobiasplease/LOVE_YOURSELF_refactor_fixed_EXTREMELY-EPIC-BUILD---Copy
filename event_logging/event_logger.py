@@ -12,6 +12,7 @@ from config.config import OLLAMA_MODEL
 # Global run ID - generated once per application run
 _current_run_id: Optional[str] = None
 _config_metadata: Optional[Dict[str, Any]] = None
+_start_time: Optional[float] = None
 
 
 def get_current_run_id() -> str:
@@ -26,6 +27,46 @@ def set_run_id(run_id: str) -> None:
     """Set a custom run ID."""
     global _current_run_id
     _current_run_id = run_id
+
+
+def set_start_time(start_time: float) -> None:
+    """Set the start time for elapsed time calculations."""
+    global _start_time
+    _start_time = start_time
+
+
+def get_elapsed_time() -> str:
+    """Get elapsed time since start as formatted string (HH:MM:SS)."""
+    global _start_time
+    if _start_time is None:
+        return "00:00:00"
+
+    elapsed = time.time() - _start_time
+    hours = int(elapsed // 3600)
+    minutes = int((elapsed % 3600) // 60)
+    seconds = int(elapsed % 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def event_print(message: str, event_type: Optional[str] = None, data: Optional[Dict[str, Any]] = None, log_dir: str = "mood_snapshots") -> None:
+    """
+    Unified print and log function with elapsed time.
+
+    Args:
+        message: The message to print and optionally log
+        event_type: If provided, also log to JSON with this event type
+        data: Additional data to include in JSON log
+        log_dir: Directory for JSON logs
+    """
+    elapsed = get_elapsed_time()
+    formatted_message = f"[{elapsed}] {message}"
+    print(formatted_message)
+
+    if event_type:
+        log_data = {"message": message, "elapsed_time": elapsed}
+        if data:
+            log_data.update(data)
+        log_json_entry(event_type, log_data, log_dir)
 
 
 def load_config_metadata() -> Dict[str, Any]:
@@ -90,7 +131,9 @@ def update_all_run_log(log_dir: str, entry: Dict[str, Any]) -> None:
         json.dump(all_entries, f, indent=2, ensure_ascii=False)
 
 
-def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Optional[str] = None) -> str:
+def log_json_entry(
+    log_type: str, data: Dict[str, Any], log_dir: str, run_id: Optional[str] = None, auto_print: bool = False, print_message: Optional[str] = None
+) -> str:
     """
     Log a JSON entry with timestamp to a run-specific event log file.
 
@@ -99,6 +142,8 @@ def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Op
         data: Dictionary containing the data to log
         log_dir: Directory where log files are stored
         run_id: Optional run ID. If not provided, uses the current global run ID.
+        auto_print: If True, also print the message with elapsed time
+        print_message: Custom message to print. If None and auto_print=True, uses data.get('message')
 
     Returns:
         Path to the event log file
@@ -108,9 +153,10 @@ def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Op
 
     timestamp = int(time.time())
     iso_timestamp = datetime.fromtimestamp(timestamp).isoformat()
+    elapsed_time = get_elapsed_time()
 
     # Create the log entry
-    entry = {"timestamp": timestamp, "iso_timestamp": iso_timestamp, "type": log_type, "run_id": run_id, **data}
+    entry = {"timestamp": timestamp, "iso_timestamp": iso_timestamp, "type": log_type, "run_id": run_id, "elapsed_time": elapsed_time, **data}
 
     # Use run-based event log filename
     filename = f"{run_id}-event-log.json"
@@ -139,6 +185,12 @@ def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Op
 
     # Also append to all-run-log.json
     update_all_run_log(log_dir, entry)
+
+    # Auto-print if requested
+    if auto_print:
+        message = print_message or data.get("message", f"{log_type} event")
+        elapsed = get_elapsed_time()
+        print(f"[{elapsed}] {message}")
 
     return filepath
 
