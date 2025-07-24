@@ -9,7 +9,7 @@ from typing import Deque, Optional, Tuple
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
-from event_logging.event_logger import log_json_entry
+from event_logging.event_logger import log_json_entry, LogType
 from event_logging.run_manager import get_run_image_path
 from drawing.drawing import DrawingController
 
@@ -67,7 +67,13 @@ class Captioner(MemoryMixin):
                 try:
                     self._process_frame(frame)
                 except Exception as exc:
-                    log_json_entry("error", {"message": f"Caption thread error: {exc}", "component": "captioner"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"⚠️ Caption thread error: {exc}")
+                    log_json_entry(
+                        LogType.ERROR,
+                        {"message": f"Caption thread error: {exc}", "component": "captioner"},
+                        MOOD_SNAPSHOT_FOLDER,
+                        auto_print=True,
+                        print_message=f"⚠️ Caption thread error: {exc}",
+                    )
             else:
                 time.sleep(0.05)
 
@@ -85,16 +91,34 @@ class Captioner(MemoryMixin):
             caption = self.model.caption_image(img_path, flowing=True, first_time=not self.first_caption_done)
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
-            log_json_entry("error", {"message": f"Caption error: {e}", "component": "captioner"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"⚠️ Caption error: {e}")
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Caption error: {e}", "component": "captioner"},
+                MOOD_SNAPSHOT_FOLDER,
+                auto_print=True,
+                print_message=f"⚠️ Caption error: {e}",
+            )
 
         self.first_caption_done = True
 
         if "[⚠️]" in caption:
-            log_json_entry("error", {"message": f"Caption error: {caption}", "component": "captioner"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"📍 Caption error: {caption}")
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Caption error: {caption}", "component": "captioner"},
+                MOOD_SNAPSHOT_FOLDER,
+                auto_print=True,
+                print_message=f"📍 Caption error: {caption}",
+            )
             self.observe("I couldn’t see anything just now.", self.current_mood, img_path, memory_type="glitch")
             return
 
-        log_json_entry("caption", {"caption": caption, "image_path": img_path, "mood": self.current_mood}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"👁️ Caption: {caption}")
+        log_json_entry(
+            LogType.CAPTION,
+            {"caption": caption, "image_path": img_path, "mood": self.current_mood},
+            MOOD_SNAPSHOT_FOLDER,
+            auto_print=True,
+            print_message=f"👁️ Caption: {caption}",
+        )
         self.observe(caption, self.current_mood, img_path, memory_type="perception")
         self.last_caption = caption
 
@@ -104,7 +128,13 @@ class Captioner(MemoryMixin):
             reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
 
             if reflection and len(reflection.strip()) > 10:
-                log_json_entry("reflection", {"reflection": reflection, "mood": self.current_mood, "image_path": img_path}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"🧠 Reflection: {reflection}")
+                log_json_entry(
+                    LogType.REFLECTION,
+                    {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=True,
+                    print_message=f"🧠 Reflection: {reflection}",
+                )
                 self.last_reason_time = now
                 self.awakening_done = True
 
@@ -121,7 +151,7 @@ class Captioner(MemoryMixin):
             if _legacy_log_mood:
                 _legacy_log_mood(caption, self.current_mood, img_path)
             else:
-                log_json_entry("mood", {"caption": caption, "mood": self.current_mood, "image": img_path}, MOOD_SNAPSHOT_FOLDER)
+                log_json_entry(LogType.MOOD, {"caption": caption, "mood": self.current_mood, "image": img_path}, MOOD_SNAPSHOT_FOLDER)
 
         if now - self.last_drawing_time > DRAWING_INTERVAL:
             memory_context = self.get_recent_memory()

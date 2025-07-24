@@ -10,7 +10,7 @@ import numpy as np  # type: ignore
 from typing import List, Optional
 
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_TIMEOUT_EVAL, OLLAMA_TIMEOUT_SUMMARY
-from event_logging.event_logger import log_json_entry, read_json_logs
+from event_logging.event_logger import log_json_entry, read_json_logs, LogType
 from utils.ollama import query_ollama
 from event_logging.run_manager import get_run_image_path
 
@@ -125,39 +125,39 @@ class MoodEngine:
 # ---------------------------------------------------------------------------#
 # Stateless helpers (unused)                                              #
 # ---------------------------------------------------------------------------#
-def generate_internal_note(caption, last_caption, mood, last_mood, saw_person, last_person_detected):
-    """
-    Generate and log an internal note about changes in mood and observations.
-    """
-    changes = []
-    if caption != last_caption:
-        changes.append("new observation")
-    if saw_person and not last_person_detected:
-        changes.append("person appeared")
-    elif not saw_person and last_person_detected:
-        changes.append("person disappeared")
-    if mood > last_mood:
-        changes.append("mood improved")
-    elif mood < last_mood:
-        changes.append("mood declined")
+# def generate_internal_note(caption, last_caption, mood, last_mood, saw_person, last_person_detected):
+#     """
+#     Generate and log an internal note about changes in mood and observations.
+#     """
+#     changes = []
+#     if caption != last_caption:
+#         changes.append("new observation")
+#     if saw_person and not last_person_detected:
+#         changes.append("person appeared")
+#     elif not saw_person and last_person_detected:
+#         changes.append("person disappeared")
+#     if mood > last_mood:
+#         changes.append("mood improved")
+#     elif mood < last_mood:
+#         changes.append("mood declined")
 
-    note_text = f"{', '.join(changes)}, {caption.strip()}"
+#     note_text = f"{', '.join(changes)}, {caption.strip()}"
 
-    # Log internal note in JSON format
-    data = {
-        "note": note_text,
-        "changes": changes,
-        "caption": caption,
-        "last_caption": last_caption,
-        "mood": mood,
-        "last_mood": last_mood,
-        "saw_person": saw_person,
-        "last_person_detected": last_person_detected,
-    }
+#     # Log internal note in JSON format
+#     data = {
+#         "note": note_text,
+#         "changes": changes,
+#         "caption": caption,
+#         "last_caption": last_caption,
+#         "mood": mood,
+#         "last_mood": last_mood,
+#         "saw_person": saw_person,
+#         "last_person_detected": last_person_detected,
+#     }
 
-    log_json_entry("internal_note", data, MOOD_SNAPSHOT_FOLDER)
+#     log_json_entry(LogType.INTERNAL_NOTE, data, MOOD_SNAPSHOT_FOLDER)
 
-    return note_text
+#     return note_text
 
 
 def log_mood(caption, mood, image_path: Optional[str] = None):
@@ -165,7 +165,7 @@ def log_mood(caption, mood, image_path: Optional[str] = None):
     Log mood data in JSON format with timestamp, caption, mood value, and image path.
     """
     data = {"caption": caption, "mood": mood, "image_path": image_path if image_path and os.path.exists(image_path) else None}
-    
+
     # Choose emoji based on mood level
     if mood > 0.7:
         emoji = "😊"
@@ -177,8 +177,8 @@ def log_mood(caption, mood, image_path: Optional[str] = None):
         emoji = "😔"
     else:
         emoji = "😞"
-    
-    log_json_entry("mood", data, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"{emoji} Mood: {mood:.2f} - {caption}")
+
+    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"{emoji} Mood: {mood:.2f} - {caption}")
 
 
 def read_mood_logs(limit: Optional[int] = None) -> List[dict]:

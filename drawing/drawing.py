@@ -15,7 +15,7 @@ import base64
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-from event_logging.event_logger import log_json_entry
+from event_logging.event_logger import log_json_entry, LogType
 from event_logging.run_manager import get_run_image_path
 
 from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER
@@ -74,7 +74,7 @@ class DrawingController:
                 reflection=reflection,
             ):
                 log_json_entry(
-                    "decision",
+                    LogType.DECISION,
                     {
                         "decision": "skip_drawing",
                         "reason": "not_inspired",
@@ -92,21 +92,21 @@ class DrawingController:
 
             self.register_drawing(drawing_prompt)
 
-            log_json_entry(
-                "drawing_prompt",
-                {
-                    "prompt": drawing_prompt,
-                    "reflection": (reflection or "").strip(),
-                    "mood": agent.current_mood,
-                    "boredom": getattr(agent, "boredom", 0.0),
-                    "novelty_score": getattr(agent, "novelty_score", 0.0),
-                    "last_drawing_prompt": self.last_drawing_prompt,
-                },
-                MOOD_SNAPSHOT_FOLDER,
-            )
+            # log_json_entry(
+            #     LogType.DRAWING_PROMPT,
+            #     {
+            #         "prompt": drawing_prompt,
+            #         "reflection": (reflection or "").strip(),
+            #         "mood": agent.current_mood,
+            #         "boredom": getattr(agent, "boredom", 0.0),
+            #         "novelty_score": getattr(agent, "novelty_score", 0.0),
+            #         "last_drawing_prompt": self.last_drawing_prompt,
+            #     },
+            #     MOOD_SNAPSHOT_FOLDER,
+            # )
 
             log_json_entry(
-                "decision",
+                LogType.DECISION,
                 {
                     "decision": "trigger_drawing",
                     "reason": "inspired",
@@ -125,7 +125,7 @@ class DrawingController:
                 self._invoke_comfyui_drawing(drawing_prompt, latest_image)
             else:
                 log_json_entry(
-                    "error",
+                    LogType.ERROR,
                     {"message": "Cannot invoke ComfyUI - no valid image available", "component": "drawing", "image_path": latest_image},
                     MOOD_SNAPSHOT_FOLDER,
                     auto_print=True,
@@ -134,7 +134,7 @@ class DrawingController:
 
         except Exception as exc:
             log_json_entry(
-                "error",
+                LogType.ERROR,
                 {"message": f"Error in drawing flow: {exc}", "component": "drawing"},
                 MOOD_SNAPSHOT_FOLDER,
                 auto_print=True,
@@ -167,7 +167,7 @@ class DrawingController:
             )
             if controller.queue_prompt():
                 log_json_entry(
-                    "comfy_generation",
+                    LogType.COMFY_PROMPT,
                     {"message": "ComfyUI drawing queued successfully", "drawing_prompt": drawing_prompt},
                     MOOD_SNAPSHOT_FOLDER,
                     auto_print=True,
@@ -175,7 +175,7 @@ class DrawingController:
                 )
             else:
                 log_json_entry(
-                    "error",
+                    LogType.ERROR,
                     {"message": "Failed to queue ComfyUI drawing", "component": "comfy", "drawing_prompt": drawing_prompt},
                     MOOD_SNAPSHOT_FOLDER,
                     auto_print=True,
@@ -183,7 +183,7 @@ class DrawingController:
                 )
         except Exception as exc:
             log_json_entry(
-                "error",
+                LogType.ERROR,
                 {"message": f"Error invoking ComfyUI: {exc}", "component": "comfy"},
                 MOOD_SNAPSHOT_FOLDER,
                 auto_print=True,

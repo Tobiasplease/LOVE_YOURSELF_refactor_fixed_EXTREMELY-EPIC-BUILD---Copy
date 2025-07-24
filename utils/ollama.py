@@ -5,7 +5,7 @@ import base64
 import requests
 from typing import Optional, Union
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
-from event_logging.event_logger import log_json_entry
+from event_logging.event_logger import log_json_entry, LogType
 
 
 def log_ollama_call(
@@ -57,7 +57,7 @@ def log_ollama_call(
         "api_endpoint": "http://localhost:11434/api/generate",
     }
 
-    return log_json_entry("ollama_api_call", data, log_dir)
+    return log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir)
 
 
 def query_ollama(
