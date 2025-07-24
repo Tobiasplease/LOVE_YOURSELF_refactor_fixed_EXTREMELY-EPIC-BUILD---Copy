@@ -4,10 +4,10 @@ from captioner.prompts import (
     build_awakening_prompt,
     build_caption_prompt,
     build_reflection_prompt,
-    build_drawing_prompt,  # ✅ add this
+    build_drawing_prompt,
 )
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
-from ollama import query_ollama
+from utils.ollama import query_ollama
 
 
 class MultimodalModel:

@@ -19,7 +19,7 @@ from collections import deque, Counter
 from typing import Deque, List, Tuple, Set, Dict, Any
 
 import spacy  # ✅ used for extracting semantic motifs
-from continuity import now, describe_duration  # <-- This line is now correct!
+from utils.continuity import now, describe_duration
 
 # constants shared with Captioner
 MAX_MEMORY_ENTRIES: int = 30

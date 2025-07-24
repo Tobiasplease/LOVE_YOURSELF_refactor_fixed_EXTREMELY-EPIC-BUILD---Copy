@@ -291,7 +291,7 @@ def log_ollama_api_call(
     Legacy function for backward compatibility.
     Redirects to the new ollama module's log_ollama_call function.
     """
-    from ollama import log_ollama_call
+    from utils.ollama import log_ollama_call
 
     return log_ollama_call(
         prompt=prompt,

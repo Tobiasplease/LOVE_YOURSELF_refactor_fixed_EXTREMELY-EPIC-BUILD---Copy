@@ -1,5 +1,5 @@
 import time
-from ollama import query_ollama
+from utils.ollama import query_ollama
 
 # === Path to any test image ===
 image_path = "/Users/jbe/Desktop/505376203_697336169816350_2001727864992071742_n.jpg"

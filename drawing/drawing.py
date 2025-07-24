@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ollama import query_ollama
+from utils.ollama import query_ollama
 
 """drawing.py – final version
 

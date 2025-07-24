@@ -15,7 +15,7 @@ from drawing.drawing import DrawingController
 
 from .memory import CAPTION_SAVE_THRESHOLD, MemoryMixin
 from .prompts import extract_motifs_spacy
-from .models.model_wrapper import MultimodalModel
+from .model_wrapper import MultimodalModel
 
 try:
     from mood.mood import log_mood as _legacy_log_mood  # type: ignore
@@ -149,10 +149,10 @@ class Captioner(MemoryMixin):
 
     def get_reflection_context(self) -> str:
         return f"""Mood: {self.current_mood:.2f}
-Boredom: {self.boredom:.2f}
-Novelty: {self.novelty_score:.2f}
-Identity: {self.get_identity_summary()}
-Recent memory: {self.get_recent_memory()}""".strip()
+                Boredom: {self.boredom:.2f}
+                Novelty: {self.novelty_score:.2f}
+                Identity: {self.get_identity_summary()}
+                Recent memory: {self.get_recent_memory()}""".strip()
 
     def get_recent_memory(self, k: int = 5) -> str:
         snippets = self.get_clean_memory_snippets(k=k)

@@ -11,7 +11,7 @@ from typing import List, Optional
 
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_TIMEOUT_EVAL, OLLAMA_TIMEOUT_SUMMARY
 from event_logging.json_logger import log_json_entry, read_json_logs
-from ollama import query_ollama
+from utils.ollama import query_ollama
 from event_logging.run_manager import get_run_image_path
 
 
