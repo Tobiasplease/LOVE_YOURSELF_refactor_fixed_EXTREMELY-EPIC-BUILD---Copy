@@ -123,7 +123,7 @@ class MoodEngine:
 
 
 # ---------------------------------------------------------------------------#
-# Stateless helpers (unchanged)                                              #
+# Stateless helpers (unused)                                              #
 # ---------------------------------------------------------------------------#
 def generate_internal_note(caption, last_caption, mood, last_mood, saw_person, last_person_detected):
     """
