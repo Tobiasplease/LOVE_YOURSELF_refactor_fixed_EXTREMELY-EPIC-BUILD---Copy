@@ -28,6 +28,7 @@ class LogType(Enum):
     # Drawing and creative process events
     DECISION = "decision"
     COMFY_PROMPT = "comfy_prompt"
+    NEW_DRAWING = "new_drawing"
 
 
 # Global run ID - generated once per application run
