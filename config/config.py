@@ -49,6 +49,7 @@ CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
 REASON_INTERVAL = 360  # seconds between reflections
 DRAWING_INTERVAL = 600  # seconds between drawing triggers
+DRAWING_COOLDOWN = 180  # seconds between drawings
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from utils.ollama import query_ollama
+# from utils.ollama import query_ollama
 
 """drawing.py – final version
 
@@ -18,7 +18,7 @@ from typing import Optional, TYPE_CHECKING
 from event_logging.event_logger import log_json_entry
 from event_logging.run_manager import get_run_image_path
 
-from config.config import OLLAMA_TIMEOUT_SUMMARY, MOOD_SNAPSHOT_FOLDER
+from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER
 from .comfy import create_impostor_controller
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ class DrawingController:
 
     def __init__(self) -> None:
         self.last_drawing_time: float = 0.0
-        self.cooldown: float = 180.0  # seconds between drawings
+        self.cooldown: float = DRAWING_COOLDOWN  # seconds between drawings
         self.last_prompt: Optional[str] = None
         self.last_drawing_prompt: str = ""
 
@@ -73,15 +73,21 @@ class DrawingController:
                 boredom=getattr(agent, "boredom", 0.0),
                 reflection=reflection,
             ):
-                log_json_entry("decision", {
-                    "decision": "skip_drawing",
-                    "reason": "not_inspired",
-                    "mood": agent.current_mood,
-                    "novelty": getattr(agent, "novelty_score", 0.0),
-                    "boredom": getattr(agent, "boredom", 0.0),
-                    "ready_to_draw": self.ready_to_draw(),
-                    "cooldown_remaining": max(0, self.cooldown - (time.time() - self.last_drawing_time))
-                }, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message="❌ Not inspired to draw")
+                log_json_entry(
+                    "decision",
+                    {
+                        "decision": "skip_drawing",
+                        "reason": "not_inspired",
+                        "mood": agent.current_mood,
+                        "novelty": getattr(agent, "novelty_score", 0.0),
+                        "boredom": getattr(agent, "boredom", 0.0),
+                        "ready_to_draw": self.ready_to_draw(),
+                        "cooldown_remaining": max(0, self.cooldown - (time.time() - self.last_drawing_time)),
+                    },
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=True,
+                    print_message="❌ Not inspired to draw",
+                )
                 return
 
             self.register_drawing(drawing_prompt)
@@ -99,33 +105,46 @@ class DrawingController:
                 MOOD_SNAPSHOT_FOLDER,
             )
 
-            log_json_entry("decision", {
-                "decision": "trigger_drawing",
-                "reason": "inspired",
-                "mood": agent.current_mood,
-                "novelty": getattr(agent, "novelty_score", 0.0),
-                "boredom": getattr(agent, "boredom", 0.0),
-                "drawing_prompt": drawing_prompt,
-                "reflection": (reflection or "").strip()
-            }, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message="🎨 Drawing triggered")
-
-            comfy_prompt_text = query_ollama(prompt=drawing_prompt, image=None, timeout=OLLAMA_TIMEOUT_SUMMARY, log_dir=MOOD_SNAPSHOT_FOLDER)
-            log_json_entry("comfy_prompt", {"prompt": comfy_prompt_text, "latest_image": latest_image}, MOOD_SNAPSHOT_FOLDER)
-
-            log_json_entry("comfy_generation", {"comfy_prompt": comfy_prompt_text, "original_prompt": drawing_prompt}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"🎨 ComfyUI prompt generated: {comfy_prompt_text}")
+            log_json_entry(
+                "decision",
+                {
+                    "decision": "trigger_drawing",
+                    "reason": "inspired",
+                    "mood": agent.current_mood,
+                    "novelty": getattr(agent, "novelty_score", 0.0),
+                    "boredom": getattr(agent, "boredom", 0.0),
+                    "drawing_prompt": drawing_prompt,
+                    "reflection": (reflection or "").strip(),
+                },
+                MOOD_SNAPSHOT_FOLDER,
+                auto_print=True,
+                print_message="🎨 Drawing triggered",
+            )
 
             if latest_image and os.path.exists(latest_image):
-                self._invoke_comfyui_drawing(drawing_prompt, latest_image, agent)
+                self._invoke_comfyui_drawing(drawing_prompt, latest_image)
             else:
-                log_json_entry("error", {"message": "Cannot invoke ComfyUI - no valid image available", "component": "drawing", "image_path": latest_image}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message="⚠️ Cannot invoke ComfyUI – no valid image available")
+                log_json_entry(
+                    "error",
+                    {"message": "Cannot invoke ComfyUI - no valid image available", "component": "drawing", "image_path": latest_image},
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=True,
+                    print_message="⚠️ Cannot invoke ComfyUI – no valid image available",
+                )
 
         except Exception as exc:
-            log_json_entry("error", {"message": f"Error in drawing flow: {exc}", "component": "drawing"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"⚠️ Error in drawing flow: {exc}")
+            log_json_entry(
+                "error",
+                {"message": f"Error in drawing flow: {exc}", "component": "drawing"},
+                MOOD_SNAPSHOT_FOLDER,
+                auto_print=True,
+                print_message=f"⚠️ Error in drawing flow: {exc}",
+            )
 
     # ------------------------------------------------------------------
     # ComfyUI invocation helper
     # ------------------------------------------------------------------
-    def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str, agent: "Captioner") -> None:
+    def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str) -> None:
         try:
             if os.path.exists(latest_image):
                 image_path = latest_image
@@ -142,13 +161,31 @@ class DrawingController:
                 override_prompt=drawing_prompt,
                 primitive_string="impostor black and white sketch line art ",
                 filename_prefix=f"impostor-{timestamp}",
-                flux_guidance=4.0,
+                flux_guidance=4.0,  # @todo: mood controlled?
                 cnet_strength=0.3,
                 steps=25,
             )
             if controller.queue_prompt():
-                log_json_entry("comfy_success", {"message": "ComfyUI drawing queued successfully", "drawing_prompt": drawing_prompt}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message="🎨 ComfyUI drawing queued successfully")
+                log_json_entry(
+                    "comfy_generation",
+                    {"message": "ComfyUI drawing queued successfully", "drawing_prompt": drawing_prompt},
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=True,
+                    print_message="🎨 ComfyUI drawing queued successfully",
+                )
             else:
-                log_json_entry("error", {"message": "Failed to queue ComfyUI drawing", "component": "comfy", "drawing_prompt": drawing_prompt}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message="❌ Failed to queue ComfyUI drawing")
+                log_json_entry(
+                    "error",
+                    {"message": "Failed to queue ComfyUI drawing", "component": "comfy", "drawing_prompt": drawing_prompt},
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=True,
+                    print_message="❌ Failed to queue ComfyUI drawing",
+                )
         except Exception as exc:
-            log_json_entry("error", {"message": f"Error invoking ComfyUI: {exc}", "component": "comfy"}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"⚠️ Error invoking ComfyUI: {exc}")
+            log_json_entry(
+                "error",
+                {"message": f"Error invoking ComfyUI: {exc}", "component": "comfy"},
+                MOOD_SNAPSHOT_FOLDER,
+                auto_print=True,
+                print_message=f"⚠️ Error invoking ComfyUI: {exc}",
+            )
