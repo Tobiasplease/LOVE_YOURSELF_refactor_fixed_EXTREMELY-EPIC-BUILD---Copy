@@ -3,6 +3,7 @@
 from typing import List
 from .mistral_text import query_mistral_text
 
+
 def infer_tone_from_text(text: str) -> List[str]:
     """
     Uses LLaVA to analyze tone from a caption.
@@ -12,12 +13,13 @@ def infer_tone_from_text(text: str) -> List[str]:
         "Analyze the tone of the following internal monologue. "
         "Return one or two adjectives describing its emotional or stylistic tone. "
         "Do not explain. Do not include extra words.\n\n"
-        f"Sentence: \"{text.strip()}\""
+        f'Sentence: "{text.strip()}"'
     )
 
     raw = query_mistral_text(prompt).strip().lower()
     adjectives = [w.strip() for w in raw.split(",") if w]
     return adjectives or ["neutral"]
+
 
 def format_tone_descriptor(adjectives: List[str]) -> str:
     if not adjectives:

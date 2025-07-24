@@ -25,10 +25,10 @@ from continuity import now, describe_duration  # <-- This line is now correct!
 MAX_MEMORY_ENTRIES: int = 30
 BOREDOM_THRESHOLD: float = 0.7
 CAPTION_SAVE_THRESHOLD: float = 0.3
-BELIEF_THRESHOLD: int = 7             # Motif must appear this many times to form a belief
-BELIEF_FADE_TIME: float = 3600 * 6    # 6 hours: beliefs fade if motif not seen
-BELIEF_FORM_MIN_DAYS: float = 0.25    # Minimum "age" of motif before forming belief (in days)
-CONFIDENCE_THRESHOLD = 0.65           # Confidence threshold for confirming motifs
+BELIEF_THRESHOLD: int = 7  # Motif must appear this many times to form a belief
+BELIEF_FADE_TIME: float = 3600 * 6  # 6 hours: beliefs fade if motif not seen
+BELIEF_FORM_MIN_DAYS: float = 0.25  # Minimum "age" of motif before forming belief (in days)
+CONFIDENCE_THRESHOLD = 0.65  # Confidence threshold for confirming motifs
 
 CaptionTuple = Tuple[int, str, float, str]  # (ts, caption, mood, file)
 
@@ -37,6 +37,7 @@ try:
     _nlp = spacy.load("en_core_web_sm")
 except OSError:
     _nlp = None  # fallback if spaCy model not available
+
 
 class MemoryMixin:
     def __init__(self) -> None:
@@ -51,7 +52,7 @@ class MemoryMixin:
         self.motif_focus_start: Dict[str, float] = {}
         self.current_motifs: Set[str] = set()
         self.motif_confidence: Dict[str, float] = {}  # NEW: confidence per motif
-        self.motif_confirmed: Dict[str, bool] = {}    # NEW: confirmed status per motif
+        self.motif_confirmed: Dict[str, bool] = {}  # NEW: confirmed status per motif
 
         # Identity (core beliefs emerging from motif recurrence)
         self.beliefs: Dict[str, Dict[str, Any]] = {}
@@ -118,7 +119,7 @@ class MemoryMixin:
     def absorb_detection(self, labels: list[str], timestamp: float | None = None):
         timestamp = timestamp or now()
         for label in labels:
-            label_name = label.lower().rstrip('s')
+            label_name = label.lower().rstrip("s")
             self.motif_counter[label_name] += 1
             if label_name not in self.motif_first_seen:
                 self.motif_first_seen[label_name] = timestamp
@@ -142,7 +143,7 @@ class MemoryMixin:
             self.motif_confirmed[motif] = False
 
     def extract_motifs_from_caption(self, caption: str):
-        words = re.findall(r'\b\w+\b', caption.lower())
+        words = re.findall(r"\b\w+\b", caption.lower())
         now_time = now()
         for word in words:
             if len(word) > 3:
@@ -182,8 +183,11 @@ class MemoryMixin:
                     "last_reinforced": now_time,
                 }
         self.belief_history = [
-            f"I keep noticing {motif} ({describe_duration(self.motif_first_seen[motif])})." if data['strength'] < 0.95
-            else f"{motif.title()} has become important to me ({describe_duration(self.motif_first_seen[motif])})."
+            (
+                f"I keep noticing {motif} ({describe_duration(self.motif_first_seen[motif])})."
+                if data["strength"] < 0.95
+                else f"{motif.title()} has become important to me ({describe_duration(self.motif_first_seen[motif])})."
+            )
             for motif, data in self.beliefs.items()
         ]
 
@@ -193,8 +197,8 @@ class MemoryMixin:
         for motif, data in list(self.beliefs.items()):
             last_seen = self.motif_last_seen.get(motif, 0)
             if now_time - last_seen > BELIEF_FADE_TIME:
-                data['strength'] -= 0.02
-                if data['strength'] < 0.2:
+                data["strength"] -= 0.02
+                if data["strength"] < 0.2:
                     faded.append(motif)
         for motif in faded:
             del self.beliefs[motif]
@@ -246,11 +250,11 @@ class MemoryMixin:
                     pass
 
     def rephrase_with_doubt(self, text: str) -> str:
-        words = re.findall(r'\b\w+\b', text)
+        words = re.findall(r"\b\w+\b", text)
         for word in sorted(set(words), key=len, reverse=True):
             w = word.lower()
             if w in self.motif_confidence and self.motif_confidence[w] < CONFIDENCE_THRESHOLD:
-                pattern = re.compile(rf'\b({re.escape(word)})\b', re.IGNORECASE)
+                pattern = re.compile(rf"\b({re.escape(word)})\b", re.IGNORECASE)
                 text = pattern.sub(r"maybe \\1", text)
         return text
 
