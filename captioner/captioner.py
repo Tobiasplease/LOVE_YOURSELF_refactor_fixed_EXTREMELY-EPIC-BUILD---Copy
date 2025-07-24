@@ -26,6 +26,7 @@ CAPTION_INTERVAL = 10  # seconds between full caption cycles
 REASON_INTERVAL = 360  # seconds between reflections
 DRAWING_INTERVAL = 600  # seconds between drawing triggers
 
+
 class Captioner(MemoryMixin):
     caption_window: Optional[any] = None
 
