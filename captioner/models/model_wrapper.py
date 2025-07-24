@@ -6,14 +6,14 @@ from captioner.prompts import (
     build_reflection_prompt,
     build_drawing_prompt,  # ✅ add this
 )
-from config.config import MOOD_SNAPSHOT_FOLDER
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
 from ollama import query_ollama
 
 
 class MultimodalModel:
     def __init__(self, memory_ref: Optional[any] = None) -> None:  # type: ignore
         self.memory_ref = memory_ref
-        self.model_name = os.getenv("MODEL_NAME", "llava:7b-v1.6-mistral-q5_1")
+        self.model_name = OLLAMA_MODEL
 
     def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False) -> str:
         if not os.path.exists(image_path):

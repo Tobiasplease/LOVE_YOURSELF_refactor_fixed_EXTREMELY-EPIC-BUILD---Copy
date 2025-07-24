@@ -47,16 +47,12 @@ SYSTEM_PROMPT = (
 
 # === AWAKENING ===
 AWAKENING_PROMPT = (
-    "You are just waking up. Describe this environment from your own perspective. "
-    "What do you see, and how does it feel to witness it right now?"
+    "You are just waking up. Describe this environment from your own perspective. " "What do you see, and how does it feel to witness it right now?"
 )
 
+
 def build_awakening_prompt(caption: str) -> str:
-    return (
-        f"{SYSTEM_PROMPT}\n\n"
-        f"{AWAKENING_PROMPT}\n\n"
-        f"Observation: {caption.strip()}"
-    )
+    return f"{SYSTEM_PROMPT}\n\n" f"{AWAKENING_PROMPT}\n\n" f"Observation: {caption.strip()}"
 
 
 # === CONTINUOUS CAPTIONING ===
@@ -66,28 +62,26 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
 
     base = f"""{dynamic_prompt}
 
-You are thinking in real time, responding to what you see as it changes. Keep your thoughts very short — often just one line. Be suggestive, curious, and incomplete if needed.
+        You are thinking in real time, responding to what you see as it changes.
+        Keep your thoughts very short — often just one line.
+        Be suggestive, curious, and incomplete if needed.
 
-Mood: {mood:.2f}, Boredom: {boredom:.2f}, Novelty: {novelty:.2f}
-Identity: {agent.get_identity_summary()}
+        Mood: {mood:.2f}, Boredom: {boredom:.2f}, Novelty: {novelty:.2f}
+        Identity: {agent.get_identity_summary()}
 
-Recent memory:
-{agent.get_recent_memory()}"""
+        Recent memory:
+        {agent.get_recent_memory()}"""
 
     if previous_caption:
         rephrased = agent.rephrase_with_doubt(previous_caption.strip())
-        base += f"\n\nYour last thought was: \"{rephrased}\""
+        base += f'\n\nYour last thought was: "{rephrased}"'
 
     base += "\n\nUse brief sentences. Avoid repeating yourself. Let this new thought grow out of the last one."
     return base
 
 
 # === REFLECTION PROMPT ===
-def build_reflection_prompt(
-    caption: str,
-    extra: Optional[str] = None,
-    agent: Optional[any] = None
-) -> str:
+def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Optional[any] = None) -> str:  # type: ignore
     prompt = f"{SYSTEM_PROMPT}\n\nYou are reflecting internally on what you've seen and how it made you feel."
 
     if agent:
@@ -112,7 +106,7 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
     current_caption = memory_ref.last_caption or "Nothing specific observed."
     memory_context = memory_ref.get_recent_memory()
     recent_reflection = memory_ref.get_last_reflection()
-    context = extra or memory_context
+    # context = extra or memory_context
 
     return (
         f"{SYSTEM_PROMPT}\n\n"

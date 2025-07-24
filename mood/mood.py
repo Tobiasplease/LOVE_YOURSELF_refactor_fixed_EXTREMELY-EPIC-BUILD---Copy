@@ -29,7 +29,7 @@ def estimate_mood_llava(caption: str, timeout: int = LLAVA_TIMEOUT_EVAL) -> floa
         "Reply with a number between -1 and +1. Just the number."
     )
     try:
-        response_text = query_ollama(prompt=prompt, model="llava", image=None, timeout=timeout, log_dir=MOOD_SNAPSHOT_FOLDER)
+        response_text = query_ollama(prompt=prompt, image=None, timeout=timeout, log_dir=MOOD_SNAPSHOT_FOLDER)
 
         # Check if response indicates an error
         if response_text.startswith("[⚠️]"):
@@ -114,7 +114,7 @@ class MoodEngine:
         prompt = "Describe the scene"
 
         try:
-            response_text = query_ollama(prompt=prompt, model="llava", image=image_path, timeout=timeout, log_dir=MOOD_SNAPSHOT_FOLDER)
+            response_text = query_ollama(prompt=prompt, image=image_path, timeout=timeout, log_dir=MOOD_SNAPSHOT_FOLDER)
             return response_text
         except Exception as e:
             error_msg = f"Error: {e}"

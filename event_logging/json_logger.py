@@ -40,8 +40,8 @@ def load_config_metadata() -> Dict[str, Any]:
 
     try:
         spec = importlib.util.spec_from_file_location("config", config_path)
-        config = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(config)
+        config = importlib.util.module_from_spec(spec)  # type: ignore
+        spec.loader.exec_module(config)  # type: ignore
 
         # Extract all uppercase variables (config constants)
         config_vars = {name: getattr(config, name) for name in dir(config) if not name.startswith("_") and name.isupper()}
