@@ -78,7 +78,7 @@ class ImageMonitor:
 
         log_json_entry(
             LogType.NEW_DRAWING,
-            {"event": "new_image_detected", "filename": filename, "full_path": image_path, "file_size": file_size, "timestamp": time.time()},
+            {"event": "new_image_detected", "filename": filename, "image_path": image_path, "file_size": file_size, "timestamp": time.time()},
             self.log_folder,
             auto_print=True,
             print_message=f"🖼 New drawing: {filename} ({file_size} bytes)",

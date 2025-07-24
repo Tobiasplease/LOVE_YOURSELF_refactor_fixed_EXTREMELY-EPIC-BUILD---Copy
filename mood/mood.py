@@ -93,7 +93,7 @@ class MoodEngine:
         if novelty:
             change += 0.05
         else:
-            change -= 0.02
+            change -= 0.05
 
         if saw_person and not self.last_person_detected:
             change += 0.07
