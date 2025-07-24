@@ -6,6 +6,7 @@ from captioner.prompts import (
     build_reflection_prompt,
     build_drawing_prompt,  # ✅ add this
 )
+from config.config import MOOD_SNAPSHOT_FOLDER
 from ollama import query_ollama
 
 
@@ -46,4 +47,5 @@ class MultimodalModel:
         return self._call_ollama(prompt)
 
     def _call_ollama(self, prompt: str, image_path: Optional[str] = None) -> str:
-        return query_ollama(prompt=prompt, model=self.model_name, image=image_path, timeout=90, log_dir="mood_snapshots")
+        # print(f"[🖼️] Calling model_wrapper with prompt: {prompt} and model {self.model_name}")
+        return query_ollama(prompt=prompt, model=self.model_name, image=image_path, timeout=90, log_dir=MOOD_SNAPSHOT_FOLDER)

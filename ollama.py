@@ -4,6 +4,7 @@ import os
 import base64
 import requests
 from typing import Optional, Union
+from config.config import MOOD_SNAPSHOT_FOLDER
 from event_logging.json_logger import log_json_entry
 
 
@@ -64,7 +65,7 @@ def query_ollama(
     model: str = "llava",
     image: Optional[Union[str, bytes]] = None,
     timeout: int = 20,
-    log_dir: str = "mood_snapshots",
+    log_dir: str = MOOD_SNAPSHOT_FOLDER,
     system_prompt: Optional[str] = None,
 ) -> str:
     """
