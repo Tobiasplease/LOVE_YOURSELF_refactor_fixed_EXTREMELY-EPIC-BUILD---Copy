@@ -1,10 +1,6 @@
 # LOVE_YOURSELF - AI-Powered Interactive Mirror System
 
-A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using ollama vision models, and can optionally control servo motors for physical interaction.
-
-## To Control Log Output
-
-export MOOD_SNAPSHOT_FOLDER=/Users/jbe/Dropbox/\_outputs/impostor_event_log && python machine.py
+A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using ollama vision models, and can optionally control servo motors for physical interaction. It can also generate images based on mood by posting to an external comfyui server.
 
 ## Features
 
@@ -12,9 +8,11 @@ export MOOD_SNAPSHOT_FOLDER=/Users/jbe/Dropbox/\_outputs/impostor_event_log && p
 - **Object Detection**: YOLOv8-powered object recognition and tracking
 - **Mood Analysis**: AI-driven emotion and mood evaluation via ollama hosted model
 - **Caption Generation**: Automatic scene description and context understanding
+- **Image Generation**: Creates art based on mood analysis using ComfyUI integration
 - **Servo Control**: Optional physical servo motor control for interactive responses
 - **Memory System**: Maintains contextual awareness and interaction history
 - **Breathing Simulation**: Simulates natural breathing patterns for life-like behavior
+- **Event Logging**: Comprehensive JSON-based logging of all system events
 
 ## System Requirements
 
@@ -70,21 +68,33 @@ Edit `config/config.py` to customize your setup:
 The system requires these external model files:
 
 - **Face Detection Models**:
-  - `deploy.prototxt` (update path in `machine.py`)
-  - `res10_300x300_ssd_iter_140000.caffemodel` (update path in `machine.py`)
+  - `deploy.prototxt`
+  - `res10_300x300_ssd_iter_140000.caffemodel`
 - **YOLO Models**: `yolov8m.pt` and `yolov8n.pt` (included)
 
-### 6. ollama API Setup
+### 6. External Service Setup
 
+#### Ollama API Setup
 For mood analysis and captioning, ensure ollama is running locally:
 
 ```bash
 # Install and run LLaVA (using Ollama)
-ollama pull llava
+ollama pull llava:7b-v1.6-mistral-q5_1
 ollama serve
 ```
 
-The system expects an llm model to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are now handled through the `ollama.py` module.
+The system expects an LLM model to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are handled through the `utils/ollama.py` module.
+
+#### ComfyUI Setup (Optional)
+For AI image generation based on mood:
+
+```bash
+# Install and run ComfyUI
+# Follow ComfyUI installation instructions
+# Default URL: http://localhost:8188/prompt
+```
+
+ComfyUI integration is handled through the `drawing/` module and uses workflow templates.
 
 ## Usage
 
@@ -98,12 +108,21 @@ source .venv/bin/activate
 python machine.py
 ```
 
+### To Control Log Output Folder
+
+export MOOD_SNAPSHOT_FOLDER=/Users/jbe/Dropbox/\_outputs/impostor_event_log && python machine.py
+
 ### Testing Components
 
 ```bash
 # Test ollama caption generation
-python test_ollama_caption.py
+python debug/test_ollama_caption.py
 
+# Test ComfyUI integration
+python debug/test_comfy.py drawing/example_workflow.json
+
+# Test impostor flow
+python debug/test_impostor_flow.py
 ```
 
 ## Project Structure
@@ -112,14 +131,20 @@ python test_ollama_caption.py
 LOVE_YOURSELF/
 ├── machine.py              # Main application entry point
 ├── requirements.txt        # Python dependencies
-├── config/                 # Configuration settings
+├── pyproject.toml         # Code formatting configuration
+├── config/                # Configuration settings
 ├── captioner/             # AI captioning and memory system
 ├── mood/                  # Mood analysis and emotional processing
 ├── perception/            # Computer vision and object detection
 ├── vision/                # Gaze tracking and visual processing
 ├── breathing/             # Breathing simulation
+├── drawing/               # ComfyUI integration for image generation
 ├── servo_control/         # Arduino servo control
-├── mood_snapshots/        # Stored mood analysis images
+├── event_logging/         # JSON event logging system
+├── utils/                 # Utility modules (ollama, continuity)
+├── debug/                 # Test scripts for components
+├── models/                # AI model files (face detection, YOLO)
+├── mood_snapshots/        # Stored mood analysis images and logs
 └── Lint-arduinoserial/    # Arduino code for servo control
 ```
 
@@ -191,6 +216,21 @@ The system follows a modular architecture:
 - Individual modules handle specific functionality
 - Configuration centralized in `config/config.py`
 - Threaded processing for real-time performance
+- Event-driven JSON logging for all system activities
+
+### Code Formatting
+
+The project uses standardized formatting:
+
+```bash
+# Format code (150 character line length)
+black . --line-length 150
+isort . --profile black --line-length 150
+
+# Lint code
+pylint . --max-line-length=150
+flake8 . --max-line-length=150
+```
 
 ## License
 
