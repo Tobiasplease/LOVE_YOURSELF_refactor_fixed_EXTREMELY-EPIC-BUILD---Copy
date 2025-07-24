@@ -31,25 +31,21 @@ def load_config_metadata() -> Dict[str, Any]:
     global _config_metadata
     if _config_metadata is not None:
         return _config_metadata
-    
+
     # Try to load config.py
     config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.py")
     if not os.path.exists(config_path):
         _config_metadata = {}
         return _config_metadata
-    
+
     try:
         spec = importlib.util.spec_from_file_location("config", config_path)
         config = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(config)
-        
+
         # Extract all uppercase variables (config constants)
-        config_vars = {
-            name: getattr(config, name)
-            for name in dir(config)
-            if not name.startswith('_') and name.isupper()
-        }
-        
+        config_vars = {name: getattr(config, name) for name in dir(config) if not name.startswith("_") and name.isupper()}
+
         _config_metadata = config_vars
         return _config_metadata
     except Exception as e:
@@ -61,19 +57,19 @@ def load_config_metadata() -> Dict[str, Any]:
 def create_run_metadata(run_id: str) -> Dict[str, Any]:
     """Create run metadata including config values."""
     config_metadata = load_config_metadata()
-    
+
     return {
         "run_id": run_id,
         "start_time": int(time.time()),
         "start_time_iso": datetime.fromtimestamp(int(time.time())).isoformat(),
-        "config": config_metadata
+        "config": config_metadata,
     }
 
 
 def update_all_run_log(log_dir: str, entry: Dict[str, Any]) -> None:
     """Update the aggregated all-run-log.json file with a log entry."""
     all_run_log_path = os.path.join(log_dir, "all-run-log.json")
-    
+
     # Load existing entries
     all_entries = []
     if os.path.exists(all_run_log_path):
@@ -82,10 +78,10 @@ def update_all_run_log(log_dir: str, entry: Dict[str, Any]) -> None:
                 all_entries = json.load(f)
         except (json.JSONDecodeError, IOError):
             all_entries = []
-    
+
     # Add new log entry
     all_entries.append(entry)
-    
+
     # Write back to file
     os.makedirs(log_dir, exist_ok=True)
     with open(all_run_log_path, "w", encoding="utf-8") as f:
@@ -125,26 +121,20 @@ def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Op
     if not os.path.exists(filepath):
         # Create run metadata with config values
         run_metadata = create_run_metadata(run_id)
-        
+
         # Create the run log file with metadata as first entry
-        metadata_entry = {
-            "timestamp": timestamp,
-            "iso_timestamp": iso_timestamp,
-            "type": "run_metadata",
-            "run_id": run_id,
-            **run_metadata
-        }
-        
+        metadata_entry = {"timestamp": timestamp, "iso_timestamp": iso_timestamp, "type": "run_metadata", "run_id": run_id, **run_metadata}
+
         # Write metadata entry first to individual run log
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump([metadata_entry], f, indent=2, ensure_ascii=False)
-        
+
         # Also add metadata to all-run-log.json
         update_all_run_log(log_dir, metadata_entry)
 
     # Append to the individual run event log file
     append_to_log_file(log_dir, filename, entry)
-    
+
     # Also append to all-run-log.json
     update_all_run_log(log_dir, entry)
 
@@ -286,20 +276,21 @@ def read_internal_notes(log_dir: str, limit: Optional[int] = None) -> List[Dict[
 
 
 def log_llava_api_call(
-    prompt: str, 
-    model: str = "llava", 
-    image_path: Optional[str] = None, 
-    response: Optional[str] = None, 
-    success: bool = True, 
+    prompt: str,
+    model: str = "llava",
+    image_path: Optional[str] = None,
+    response: Optional[str] = None,
+    success: bool = True,
     error_message: Optional[str] = None,
     timeout: Optional[int] = None,
-    log_dir: str = "mood_snapshots"
+    log_dir: str = "mood_snapshots",
 ) -> str:
     """
-    Legacy function for backward compatibility. 
+    Legacy function for backward compatibility.
     Redirects to the new ollama module's log_ollama_call function.
     """
     from ollama import log_ollama_call
+
     return log_ollama_call(
         prompt=prompt,
         model=model,
@@ -308,7 +299,7 @@ def log_llava_api_call(
         success=success,
         error_message=error_message,
         timeout=timeout,
-        log_dir=log_dir
+        log_dir=log_dir,
     )
 
 
@@ -317,11 +308,11 @@ def read_llava_api_calls(log_dir: str, limit: Optional[int] = None) -> List[Dict
     # Support both old "llava_api_call" and new "ollama_api_call" log types
     llava_logs = read_json_logs(log_dir, "llava_api_call")
     ollama_logs = read_json_logs(log_dir, "ollama_api_call")
-    
+
     # Combine and sort by timestamp
     all_logs = llava_logs + ollama_logs
     all_logs.sort(key=lambda x: x.get("timestamp", 0))
-    
+
     if limit:
         all_logs = all_logs[-limit:]
     return all_logs

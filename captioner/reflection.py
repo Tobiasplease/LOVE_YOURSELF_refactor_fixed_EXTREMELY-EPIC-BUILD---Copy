@@ -1,11 +1,12 @@
 import time
 from typing import TYPE_CHECKING
-from .prompts import build_reflection_prompt, build_drawing_prompt, build_awakening_prompt
+from .prompts import build_reflection_prompt, build_drawing_prompt  # , build_awakening_prompt
 from event_logging.json_logger import log_json_entry
 from drawing.drawing import DrawingController
 
 if TYPE_CHECKING:
     from .captioner import Captioner
+
 
 def run_reflection(agent: "Captioner") -> None:
     try:
@@ -22,7 +23,7 @@ def run_reflection(agent: "Captioner") -> None:
             mood_delta=mood_delta,
             time_elapsed=time_elapsed,
             recent_summaries=recent_summaries,
-            identity_summary=agent.get_identity_summary()
+            identity_summary=agent.get_identity_summary(),
         )
 
         reflection = agent.brain.think("", extra=prompt).strip()
@@ -37,7 +38,7 @@ def run_reflection(agent: "Captioner") -> None:
                 "elapsed_seconds": time_elapsed,
                 "mood_delta": mood_delta,
             },
-            "mood_snapshots"
+            "mood_snapshots",
         )
 
         # Add to memory
