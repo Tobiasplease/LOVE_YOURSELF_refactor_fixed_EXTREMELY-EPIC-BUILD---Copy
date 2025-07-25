@@ -21,7 +21,7 @@ tmux send-keys -t $SESSION_NAME:1 'while true; do echo "Starting Machine..."; so
 
 # Window 2: Log Viewer
 tmux new-window -t $SESSION_NAME -n 'LogViewer'
-tmux send-keys -t $SESSION_NAME:2 'cd /home/impostor/impostor-log-viewer' C-m
+tmux send-keys -t $SESSION_NAME:2 'cd /home/impostor/impostor-log-viewer/webapp' C-m
 tmux send-keys -t $SESSION_NAME:2 'while true; do echo "Starting Log Viewer..."; npm run start; echo "Log Viewer crashed, restarting in 5 seconds..."; sleep 5; done' C-m
 
 # Attach to session
@@ -31,3 +31,6 @@ echo "Use Ctrl-B + number (0,1,2) to switch between windows"
 echo "Use 'tmux kill-session -t $SESSION_NAME' to stop all processes"
 
 tmux attach -t $SESSION_NAME
+
+
+# tmux kill-session -t impostor-system
