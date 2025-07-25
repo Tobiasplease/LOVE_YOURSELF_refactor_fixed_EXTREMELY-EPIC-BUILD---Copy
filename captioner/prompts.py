@@ -33,8 +33,8 @@ def build_dynamic_system_prompt(mood: tuple[float, float, float], identity_summa
 
 # === AWAKENING ===
 def build_awakening_prompt(caption: str) -> str:
-    print(config.AWAKENING_PROMPT)
-    return f"{config.SYSTEM_PROMPT}\n\n{config.AWAKENING_PROMPT}\n\nObservation: {caption.strip()}"
+    # return f"{config.SYSTEM_PROMPT}\n\n{config.AWAKENING_PROMPT}\n\nObservation: {caption.strip()}"
+    return f"{config.AWAKENING_PROMPT}\n\nObservation: {caption.strip()}"
 
 
 # === CONTINUOUS CAPTIONING ===
@@ -57,7 +57,7 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
 
 # === REFLECTION PROMPT ===
 def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Optional[any] = None) -> str:  # type: ignore
-    prompt = f"{config.SYSTEM_PROMPT}\n\n{config.REFLECTION_PROMPT_BASE}"
+    prompt = f"{config.REFLECTION_PROMPT_BASE}"
 
     if agent:
         caption = agent.rephrase_with_doubt(caption)
@@ -84,7 +84,7 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
     dynamic_drawing_prompt = config.DRAWING_PROMPT_TEMPLATE.format(
         current_caption=current_caption.strip(), memory_context=memory_context.strip(), recent_reflection=recent_reflection.strip()
     )
-    return f"{config.SYSTEM_PROMPT}\n\n{dynamic_drawing_prompt}"
+    return f"{dynamic_drawing_prompt}"
 
 
 # === MOOD SCORING ===

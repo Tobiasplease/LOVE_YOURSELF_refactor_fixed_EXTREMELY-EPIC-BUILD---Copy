@@ -21,7 +21,8 @@ class ImpostorConfig:
     load_image_path: str = "Photo on 2025-06-26 at 16.06.jpg"
 
     # Text prompts
-    primitive_string: str = "black and white sketch line art "
+    # trigger_word: "impostor" important for 32 depth loras
+    primitive_string: str = "impostor black and white sketch line art "
     override_prompt: str = (
         "The image shows a man sitting on a gray armchair in a living room. He is wearing a blue plaid shirt and black headphones. "
     )

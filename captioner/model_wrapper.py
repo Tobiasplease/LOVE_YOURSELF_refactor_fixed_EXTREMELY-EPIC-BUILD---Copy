@@ -6,6 +6,7 @@ from captioner.prompts import (
     build_reflection_prompt,
     build_drawing_prompt,
 )
+from config import config
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
 from utils.ollama import query_ollama
 
@@ -21,6 +22,8 @@ class MultimodalModel:
 
         if first_time:
             prompt = build_awakening_prompt("What do you see?")
+            # more sys prompt in other places?
+            return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
         elif flowing and self.memory_ref:
             prompt = build_caption_prompt(
                 self.memory_ref,
@@ -37,14 +40,16 @@ class MultimodalModel:
         self, caption: str, *, agent: Optional[any] = None, mood_text: Optional[str] = None, extra: Optional[str] = None  # type: ignore
     ) -> str:  # type: ignore
         prompt = build_reflection_prompt(caption, extra=extra, agent=agent)
-        return self._call_ollama(prompt)
+        return self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT)
 
     def generate_drawing_prompt(self, *, extra: Optional[str] = None) -> str:
         if not self.memory_ref:
             return "[⚠️] No memory available for drawing prompt"
 
         prompt = build_drawing_prompt(self.memory_ref, extra=extra)
-        return self._call_ollama(prompt)
+        return self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT)
 
-    def _call_ollama(self, prompt: str, image_path: Optional[str] = None) -> str:
-        return query_ollama(prompt=prompt, model=self.model_name, image=image_path, timeout=90, log_dir=MOOD_SNAPSHOT_FOLDER)
+    def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None) -> str:
+        return query_ollama(
+            prompt=prompt, model=self.model_name, image=image_path, timeout=90, log_dir=MOOD_SNAPSHOT_FOLDER, system_prompt=system_prompt
+        )
