@@ -4,7 +4,7 @@ Run management utilities for organizing logs and images by run ID.
 
 import os
 from typing import Optional
-from .json_logger import get_current_run_id
+from .event_logger import get_current_run_id
 
 
 def get_run_image_folder(base_folder: str, run_id: Optional[str] = None) -> str:

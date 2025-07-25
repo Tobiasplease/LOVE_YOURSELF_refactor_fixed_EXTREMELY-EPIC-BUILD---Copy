@@ -1,20 +1,18 @@
 # LOVE_YOURSELF - AI-Powered Interactive Mirror System
 
-A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using LLaVA vision models, and can optionally control servo motors for physical interaction.
-
-## To Control Log Output
-
-export MOOD_SNAPSHOT_FOLDER=/Users/jbe/Dropbox/\_outputs/impostor_event_log && python machine.py
+A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using ollama vision models, and can optionally control servo motors for physical interaction. It can also generate images based on mood by posting to an external comfyui server.
 
 ## Features
 
 - **Real-time Face Detection**: Uses OpenCV DNN face detection for robust person detection
 - **Object Detection**: YOLOv8-powered object recognition and tracking
-- **Mood Analysis**: AI-driven emotion and mood evaluation with LLaVA integration
+- **Mood Analysis**: AI-driven emotion and mood evaluation via ollama hosted model
 - **Caption Generation**: Automatic scene description and context understanding
+- **Image Generation**: Creates art based on mood analysis using ComfyUI integration
 - **Servo Control**: Optional physical servo motor control for interactive responses
 - **Memory System**: Maintains contextual awareness and interaction history
 - **Breathing Simulation**: Simulates natural breathing patterns for life-like behavior
+- **Event Logging**: Comprehensive JSON-based logging of all system events
 
 ## System Requirements
 
@@ -70,21 +68,35 @@ Edit `config/config.py` to customize your setup:
 The system requires these external model files:
 
 - **Face Detection Models**:
-  - `deploy.prototxt` (update path in `machine.py`)
-  - `res10_300x300_ssd_iter_140000.caffemodel` (update path in `machine.py`)
+  - `deploy.prototxt`
+  - `res10_300x300_ssd_iter_140000.caffemodel`
 - **YOLO Models**: `yolov8m.pt` and `yolov8n.pt` (included)
 
-### 6. LLaVA API Setup
+### 6. External Service Setup
 
-For mood analysis and captioning, ensure LLaVA is running locally:
+#### Ollama API Setup
+
+For mood analysis and captioning, ensure ollama is running locally:
 
 ```bash
-# Install and run LLaVA (example using Ollama)
-ollama pull llava
+# Install and run LLaVA (using Ollama)
+ollama pull llava:7b-v1.6-mistral-q5_1
 ollama serve
 ```
 
-The system expects LLaVA to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are now handled through the `ollama.py` module.
+The system expects an LLM model to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are handled through the `utils/ollama.py` module.
+
+#### ComfyUI Setup (Optional)
+
+For AI image generation based on mood:
+
+```bash
+# Install and run ComfyUI
+# Follow ComfyUI installation instructions
+# Default URL: http://localhost:8188/prompt
+```
+
+ComfyUI integration is handled through the `drawing/` module and uses workflow templates.
 
 ## Usage
 
@@ -96,18 +108,27 @@ source .venv/bin/activate
 
 # Run the main application
 python machine.py
+
+# Run with configuration override
+python machine.py --config_override config/debug_config.json
+python machine.py --config_override config/production_config.json
 ```
+
+### To Control Log Output Folder
+
+export MOOD_SNAPSHOT_FOLDER=/Users/jbe/Dropbox/\_outputs/impostor_event_log && python machine.py
 
 ### Testing Components
 
 ```bash
-# Test LLaVA caption generation
-python test_llava_caption.py
+# Test ollama caption generation
+python debug/test_ollama_caption.py
 
-# Test individual modules
-python -m captioner.captioner
-python -m mood.mood
-python -m perception.object_detection
+# Test ComfyUI integration
+python debug/test_comfy.py drawing/example_workflow.json
+
+# Test impostor flow
+python debug/test_impostor_flow.py
 ```
 
 ## Project Structure
@@ -116,15 +137,21 @@ python -m perception.object_detection
 LOVE_YOURSELF/
 ├── machine.py              # Main application entry point
 ├── requirements.txt        # Python dependencies
-├── config/                 # Configuration settings
+├── pyproject.toml         # Code formatting configuration
+├── config/                # Configuration settings
 ├── captioner/             # AI captioning and memory system
 ├── mood/                  # Mood analysis and emotional processing
 ├── perception/            # Computer vision and object detection
 ├── vision/                # Gaze tracking and visual processing
 ├── breathing/             # Breathing simulation
+├── drawing/               # ComfyUI integration for image generation
 ├── servo_control/         # Arduino servo control
-├── mood_snapshots/        # Stored mood analysis images
-└── Lint-arduinoserial/    # Arduino code for servo control
+├── event_logging/         # JSON event logging system
+├── utils/                 # Utility modules (ollama, continuity)
+├── debug/                 # Test scripts for components
+├── models/                # AI model files (face detection, YOLO)
+├── mood_snapshots/        # Stored mood analysis images and logs
+└── arduino_src/    # Arduino code for servo control
 ```
 
 ## Key Dependencies
@@ -135,6 +162,49 @@ LOVE_YOURSELF/
 - **Image Processing**: Pillow, Matplotlib
 
 ## Configuration Options
+
+### Configuration Override System
+
+The system supports runtime configuration overrides via JSON files:
+
+```bash
+# Use debug configuration (faster intervals for development)
+python machine.py --config_override config/debug_config.json
+
+# Use production configuration (slower, optimized intervals)
+python machine.py --config_override config/production_config.json
+```
+
+#### Available Override Configurations
+
+**Debug Config** (`config/debug_config.json`):
+
+- Faster processing intervals for development and testing
+- `REASON_INTERVAL`: 30 seconds (vs 360 default)
+- `DRAWING_INTERVAL`: 60 seconds (vs 600 default)
+
+**Production Config** (`config/production_config.json`):
+
+- Standard production intervals for optimal performance
+- Uses default values from `config/config.py`
+
+#### Creating Custom Override Files
+
+Any configuration value in `config/config.py` can be overridden by creating a JSON file:
+
+```json
+{
+  "CAMERA_INDEX": 1,
+  "CONFIDENCE_THRESHOLD": 0.7,
+  "USE_SERVO": false,
+  "MOOD_EVALUATION_INTERVAL": 15,
+  "DRAWING_INTERVAL": 300
+}
+```
+
+The system automatically handles type conversion and validates that override keys exist in the base configuration.
+
+### Base Configuration Settings
 
 ### Camera Settings
 
@@ -149,7 +219,9 @@ LOVE_YOURSELF/
 
 ### Mood Analysis
 
-- `MOOD_EVALUATION_INTERVAL`: How often to analyze mood
+- `MOOD_EVALUATION_INTERVAL`: How often to analyze mood (seconds)
+- `REASON_INTERVAL`: How often to generate reflective thoughts (seconds)
+- `DRAWING_INTERVAL`: How often to trigger image generation (seconds)
 - `MOOD_SNAPSHOT_FOLDER`: Where to store analysis images
 
 ## Troubleshooting
@@ -158,7 +230,7 @@ LOVE_YOURSELF/
 
 1. **Camera not found**: Check `CAMERA_INDEX` in config
 2. **Servo not responding**: Verify `SERIAL_PORT` and Arduino connection
-3. **LLaVA errors**: Ensure LLaVA server is running on localhost:11434
+3. **ollama errors**: Ensure ollama server is running on localhost:11434
 4. **Import errors**: Verify virtual environment is activated and dependencies installed
 
 ### Performance Optimization
@@ -173,6 +245,7 @@ LOVE_YOURSELF/
 ### Virtual Environment Management
 
 ```bash
+
 # Activate environment
 source .venv/bin/activate
 
@@ -195,6 +268,21 @@ The system follows a modular architecture:
 - Individual modules handle specific functionality
 - Configuration centralized in `config/config.py`
 - Threaded processing for real-time performance
+- Event-driven JSON logging for all system activities
+
+### Code Formatting
+
+The project uses standardized formatting:
+
+```bash
+# Format code (150 character line length)
+black . --line-length 150
+isort . --profile black --line-length 150
+
+# Lint code
+pylint . --max-line-length=150
+flake8 . --max-line-length=150
+```
 
 ## License
 

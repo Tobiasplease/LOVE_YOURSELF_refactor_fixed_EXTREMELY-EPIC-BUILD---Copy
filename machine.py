@@ -1,14 +1,36 @@
 import time
-
-# import numpy as np
+import argparse
+import sys
 import cv2
 import threading
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="AI Mirror System")
+    parser.add_argument("--config_override", type=str, help="Path to JSON config override file")
+    return parser.parse_args()
+
+
+args = parse_args()
+
+if args.config_override:
+    try:
+        from config.loader import load_config_override, apply_config_overrides
+        import config.config as config_module
+
+        overrides = load_config_override(args.config_override)
+        apply_config_overrides(config_module, overrides)
+        print(f"[CONFIG] Applied overrides from: {args.config_override}")
+    except Exception as e:
+        print(f"[CONFIG] Error loading config override: {e}")
+        sys.exit(1)
 
 from perception.object_detection import ObjectDetectionThread
 from captioner.captioner import Captioner
 from vision.gaze import update_gaze
 from mood.mood import MoodEngine
 from breathing.breathing import update_lung_position
+from image_monitor import ImageMonitor
 from config.config import (
     USE_SERVO,
     CAMERA_INDEX,
@@ -21,7 +43,7 @@ from config.config import (
     MODEL_PATH,
 )
 from event_logging.run_manager import get_run_image_path
-from event_logging.json_logger import get_current_run_id
+from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry, LogType
 
 if USE_SERVO:
     from servo_control.servo_control import ServoController
@@ -61,11 +83,32 @@ last_snapshot_time = 0
 object_detector = ObjectDetectionThread()
 object_detector.start()
 
-# Initialize run ID for this session
+# Start image monitoring
+image_monitor = ImageMonitor(log_folder=MOOD_SNAPSHOT_FOLDER)
+image_monitor.start()
+
+# Initialize run ID and start time for this session
+start_time = time.time()
+set_start_time(start_time)
 run_id = get_current_run_id()
-print(f"[🚀] Starting session with run ID: {run_id}")
-print(f"[📁] Event log: {run_id}-event-log.json")
-print(f"[🖼️] Images folder: {run_id}-images/")
+
+log_json_entry(
+    LogType.SESSION_START, {"run_id": run_id}, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"🚀 Starting session with run ID: {run_id}"
+)
+log_json_entry(
+    LogType.INFO,
+    {"message": f"Event log: {run_id}-event-log.json"},
+    MOOD_SNAPSHOT_FOLDER,
+    auto_print=True,
+    print_message=f"📁 Event log: {run_id}-event-log.json",
+)
+log_json_entry(
+    LogType.INFO,
+    {"message": f"Images folder: {run_id}-images/"},
+    MOOD_SNAPSHOT_FOLDER,
+    auto_print=True,
+    print_message=f"🖼️ Images folder: {run_id}-images/",
+)
 
 mood_engine = MoodEngine()
 captioner = Captioner()
@@ -184,5 +227,6 @@ try:
 except KeyboardInterrupt:
     object_detector.stop()
     object_detector.join()
+    image_monitor.stop()
     cap.release()
     cv2.destroyAllWindows()

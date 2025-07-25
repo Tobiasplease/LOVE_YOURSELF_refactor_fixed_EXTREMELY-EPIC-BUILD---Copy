@@ -4,12 +4,13 @@ import os
 import base64
 import requests
 from typing import Optional, Union
-from event_logging.json_logger import log_json_entry
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
+from event_logging.event_logger import log_json_entry, LogType
 
 
 def log_ollama_call(
     prompt: str,
-    model: str = "llava",
+    model: str = OLLAMA_MODEL,
     image_path: Optional[str] = None,
     response: Optional[str] = None,
     success: bool = True,
@@ -23,7 +24,7 @@ def log_ollama_call(
 
     Args:
         prompt: The prompt sent to Ollama
-        model: The model name (default: "llava")
+        model: The model name (default: "from config")
         image_path: Path to input image if any
         response: The response from Ollama
         success: Whether the API call was successful
@@ -56,15 +57,15 @@ def log_ollama_call(
         "api_endpoint": "http://localhost:11434/api/generate",
     }
 
-    return log_json_entry("ollama_api_call", data, log_dir)
+    return log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir)
 
 
 def query_ollama(
     prompt: str,
-    model: str = "llava",
+    model: str = OLLAMA_MODEL,
     image: Optional[Union[str, bytes]] = None,
     timeout: int = 20,
-    log_dir: str = "mood_snapshots",
+    log_dir: str = MOOD_SNAPSHOT_FOLDER,
     system_prompt: Optional[str] = None,
 ) -> str:
     """
@@ -72,7 +73,7 @@ def query_ollama(
 
     Args:
         prompt: The text prompt to send
-        model: The model name (default: "llava")
+        model: The model name (default: "OLLAMA_MODEL")
         image: Either a file path to an image or base64 encoded image bytes
         timeout: Request timeout in seconds
         log_dir: Directory to store logs
@@ -146,28 +147,3 @@ def query_ollama(
         )
 
         return f"[⚠️] Ollama API failed: {error_msg}"
-
-
-# def query_ollama_with_frame(
-#     prompt: str, frame, model: str = "llava", timeout: int = 20, log_dir: str = "mood_snapshots"  # cv2 frame/numpy array
-# ) -> str:
-#     """
-#     Query Ollama API with a prompt and OpenCV frame.
-
-#     Args:
-#         prompt: The text prompt to send
-#         frame: OpenCV frame (numpy array)
-#         model: The model name (default: "llava")
-#         timeout: Request timeout in seconds
-#         log_dir: Directory to store logs
-
-#     Returns:
-#         Response text from Ollama
-#     """
-#     import cv2
-
-#     # Encode frame to base64
-#     _, img_encoded = cv2.imencode(".jpg", frame)
-#     img_b64 = base64.b64encode(img_encoded).decode("utf-8")
-
-#     return query_ollama(prompt=prompt, model=model, image=img_b64, timeout=timeout, log_dir=log_dir)

@@ -38,28 +38,35 @@ PAUSE_DURATION = 3.0
 LUNG_OFFSET_SCALE = -0.10
 
 # === MOOD SYSTEM ===
-MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
-MOOD_LOG = "internalvoice.txt"
-MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots"))
-MOOD_SNAPSHOT_DIR = MOOD_SNAPSHOT_FOLDER  # alias to resolve mood.py dependency
 
-SUMMARY_INTERVAL = 120  # seconds between summary evaluations before: 600
-EVALUATION_INTERVAL = 60  # seconds between detailed evaluations before: 300
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava:7b-v1.6-mistral-q5_1")
+
+MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "mood_snapshots"))
+COMFY_OUTPUT_FOLDER = os.getenv("COMFY_OUTPUT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "/Users/jbe/Dropbox/_outputs"))
+COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot.json")
+COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
+
+# difference between the below? hmm
+MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
+CAPTION_INTERVAL = 10  # seconds between full caption cycles
+
+REASON_INTERVAL = 360  # seconds between reflections
+DRAWING_INTERVAL = 600  # seconds between drawing triggers
+DRAWING_COOLDOWN = 180  # seconds between drawings
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 
-# === CAPTIONING LOGS ===
-# INTERNAL_VOICE_LOG = MOOD_LOG
-
 # === CAPTIONER MEMORY CONTROL ===
-# MEMORY_QUEUE_LIMIT = 100  # max short-term memory entries
 MOOD_DECAY_RATE = 0.02  # how much mood fades when nothing new happens
 NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
-# SNAPSHOT_STORAGE_LIMIT = 100  # number of mood_snapshot images to keep
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
-# === LLAVA SETTINGS ===
-LLAVA_TIMEOUT_SUMMARY = 60
-LLAVA_TIMEOUT_EVAL = 90
+# --- Mistral LLM settings ---
+MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts
+MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
+
+# === OLLAMA SETTINGS ===
+OLLAMA_TIMEOUT_SUMMARY = 60
+OLLAMA_TIMEOUT_EVAL = 90

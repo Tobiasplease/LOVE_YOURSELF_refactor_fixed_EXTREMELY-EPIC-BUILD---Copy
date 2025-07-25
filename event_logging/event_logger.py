@@ -2,14 +2,39 @@ import json
 import os
 import time
 import uuid
-from typing import Any, Dict, Optional, List
+from enum import Enum
+from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
 import importlib.util
+
+from config.config import OLLAMA_MODEL
+
+
+class LogType(Enum):
+    """Enumeration of all valid log types for event logging."""
+
+    # Core system events
+    SESSION_START = "session_start"
+    INFO = "info"
+    ERROR = "error"
+    RUN_METADATA = "run_metadata"
+
+    # AI/ML processing events
+    MOOD = "mood_update"
+    CAPTION = "caption"
+    REFLECTION = "reflection"
+    OLLAMA_API_CALL = "ollama_api_call"
+
+    # Drawing and creative process events
+    DECISION = "decision"
+    COMFY_PROMPT = "comfy_prompt"
+    NEW_DRAWING = "new_drawing"
 
 
 # Global run ID - generated once per application run
 _current_run_id: Optional[str] = None
 _config_metadata: Optional[Dict[str, Any]] = None
+_start_time: Optional[float] = None
 
 
 def get_current_run_id() -> str:
@@ -26,30 +51,66 @@ def set_run_id(run_id: str) -> None:
     _current_run_id = run_id
 
 
+def set_start_time(start_time: float) -> None:
+    """Set the start time for elapsed time calculations."""
+    global _start_time
+    _start_time = start_time
+
+
+def get_elapsed_time() -> str:
+    """Get elapsed time since start as formatted string (HH:MM:SS)."""
+    global _start_time
+    if _start_time is None:
+        return "00:00:00"
+
+    elapsed = time.time() - _start_time
+    hours = int(elapsed // 3600)
+    minutes = int((elapsed % 3600) // 60)
+    seconds = int(elapsed % 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def event_print(message: str, event_type: Optional[str] = None, data: Optional[Dict[str, Any]] = None, log_dir: str = "mood_snapshots") -> None:
+    """
+    Unified print and log function with elapsed time.
+
+    Args:
+        message: The message to print and optionally log
+        event_type: If provided, also log to JSON with this event type
+        data: Additional data to include in JSON log
+        log_dir: Directory for JSON logs
+    """
+    elapsed = get_elapsed_time()
+    formatted_message = f"[{elapsed}] {message}"
+    print(formatted_message)
+
+    if event_type:
+        log_data = {"message": message, "elapsed_time": elapsed}
+        if data:
+            log_data.update(data)
+        log_json_entry(event_type, log_data, log_dir)
+
+
 def load_config_metadata() -> Dict[str, Any]:
     """Load configuration values from config.py as metadata."""
     global _config_metadata
     if _config_metadata is not None:
         return _config_metadata
-    
+
     # Try to load config.py
     config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.py")
     if not os.path.exists(config_path):
         _config_metadata = {}
         return _config_metadata
-    
+
     try:
         spec = importlib.util.spec_from_file_location("config", config_path)
-        config = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(config)
-        
+        config = importlib.util.module_from_spec(spec)  # type: ignore
+        spec.loader.exec_module(config)  # type: ignore
+
         # Extract all uppercase variables (config constants)
-        config_vars = {
-            name: getattr(config, name)
-            for name in dir(config)
-            if not name.startswith('_') and name.isupper()
-        }
-        
+        config_vars = {name: getattr(config, name) for name in dir(config) if not name.startswith("_") and name.isupper()}
+
         _config_metadata = config_vars
         return _config_metadata
     except Exception as e:
@@ -61,19 +122,19 @@ def load_config_metadata() -> Dict[str, Any]:
 def create_run_metadata(run_id: str) -> Dict[str, Any]:
     """Create run metadata including config values."""
     config_metadata = load_config_metadata()
-    
+
     return {
         "run_id": run_id,
         "start_time": int(time.time()),
         "start_time_iso": datetime.fromtimestamp(int(time.time())).isoformat(),
-        "config": config_metadata
+        "config": config_metadata,
     }
 
 
 def update_all_run_log(log_dir: str, entry: Dict[str, Any]) -> None:
     """Update the aggregated all-run-log.json file with a log entry."""
     all_run_log_path = os.path.join(log_dir, "all-run-log.json")
-    
+
     # Load existing entries
     all_entries = []
     if os.path.exists(all_run_log_path):
@@ -82,25 +143,34 @@ def update_all_run_log(log_dir: str, entry: Dict[str, Any]) -> None:
                 all_entries = json.load(f)
         except (json.JSONDecodeError, IOError):
             all_entries = []
-    
+
     # Add new log entry
     all_entries.append(entry)
-    
+
     # Write back to file
     os.makedirs(log_dir, exist_ok=True)
     with open(all_run_log_path, "w", encoding="utf-8") as f:
         json.dump(all_entries, f, indent=2, ensure_ascii=False)
 
 
-def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Optional[str] = None) -> str:
+def log_json_entry(
+    log_type: Union[LogType, str],
+    data: Dict[str, Any],
+    log_dir: str,
+    run_id: Optional[str] = None,
+    auto_print: bool = False,
+    print_message: Optional[str] = None,
+) -> str:
     """
     Log a JSON entry with timestamp to a run-specific event log file.
 
     Args:
-        log_type: Type of log entry (e.g., 'mood', 'evaluation', 'drawing_prompt', 'internal_note')
+        log_type: Type of log entry (LogType enum or string for backward compatibility)
         data: Dictionary containing the data to log
         log_dir: Directory where log files are stored
         run_id: Optional run ID. If not provided, uses the current global run ID.
+        auto_print: If True, also print the message with elapsed time
+        print_message: Custom message to print. If None and auto_print=True, uses data.get('message')
 
     Returns:
         Path to the event log file
@@ -108,11 +178,15 @@ def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Op
     if run_id is None:
         run_id = get_current_run_id()
 
+    # Convert enum to string value if needed
+    log_type_str = log_type.value if isinstance(log_type, LogType) else log_type
+
     timestamp = int(time.time())
     iso_timestamp = datetime.fromtimestamp(timestamp).isoformat()
+    elapsed_time = get_elapsed_time()
 
     # Create the log entry
-    entry = {"timestamp": timestamp, "iso_timestamp": iso_timestamp, "type": log_type, "run_id": run_id, **data}
+    entry = {"timestamp": timestamp, "iso_timestamp": iso_timestamp, "type": log_type_str, "run_id": run_id, "elapsed_time": elapsed_time, **data}
 
     # Use run-based event log filename
     filename = f"{run_id}-event-log.json"
@@ -125,28 +199,34 @@ def log_json_entry(log_type: str, data: Dict[str, Any], log_dir: str, run_id: Op
     if not os.path.exists(filepath):
         # Create run metadata with config values
         run_metadata = create_run_metadata(run_id)
-        
+
         # Create the run log file with metadata as first entry
         metadata_entry = {
             "timestamp": timestamp,
             "iso_timestamp": iso_timestamp,
-            "type": "run_metadata",
+            "type": LogType.RUN_METADATA.value,
             "run_id": run_id,
-            **run_metadata
+            **run_metadata,
         }
-        
+
         # Write metadata entry first to individual run log
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump([metadata_entry], f, indent=2, ensure_ascii=False)
-        
+
         # Also add metadata to all-run-log.json
         update_all_run_log(log_dir, metadata_entry)
 
     # Append to the individual run event log file
     append_to_log_file(log_dir, filename, entry)
-    
+
     # Also append to all-run-log.json
     update_all_run_log(log_dir, entry)
+
+    # Auto-print if requested
+    if auto_print:
+        message = print_message or data.get("message", f"{log_type_str} event")
+        elapsed = get_elapsed_time()
+        print(f"[{elapsed}] {message}")
 
     return filepath
 
@@ -261,45 +341,46 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
         json.dump(entries, f, indent=2, ensure_ascii=False)
 
 
-def read_evaluations(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Read self-evaluation logs."""
-    logs = read_json_logs(log_dir, "self_evaluation")
-    if limit:
-        logs = logs[-limit:]
-    return logs
+# def read_evaluations(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+#     """Read self-evaluation logs."""
+#     logs = read_json_logs(log_dir, "self_evaluation")
+#     if limit:
+#         logs = logs[-limit:]
+#     return logs
 
 
-def read_drawing_prompts(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Read drawing prompt logs."""
-    logs = read_json_logs(log_dir, "drawing_prompt")
-    if limit:
-        logs = logs[-limit:]
-    return logs
+# def read_drawing_prompts(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+#     """Read drawing prompt logs."""
+#     logs = read_json_logs(log_dir, "drawing_prompt")
+#     if limit:
+#         logs = logs[-limit:]
+#     return logs
 
 
-def read_internal_notes(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Read internal note logs."""
-    logs = read_json_logs(log_dir, "internal_note")
-    if limit:
-        logs = logs[-limit:]
-    return logs
+# def read_internal_notes(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+#     """Read internal note logs."""
+#     logs = read_json_logs(log_dir, "internal_note")
+#     if limit:
+#         logs = logs[-limit:]
+#     return logs
 
 
-def log_llava_api_call(
-    prompt: str, 
-    model: str = "llava", 
-    image_path: Optional[str] = None, 
-    response: Optional[str] = None, 
-    success: bool = True, 
+def log_ollama_api_call(
+    prompt: str,
+    model: str = OLLAMA_MODEL,
+    image_path: Optional[str] = None,
+    response: Optional[str] = None,
+    success: bool = True,
     error_message: Optional[str] = None,
     timeout: Optional[int] = None,
-    log_dir: str = "mood_snapshots"
+    log_dir: str = "mood_snapshots",
 ) -> str:
     """
-    Legacy function for backward compatibility. 
+    Legacy function for backward compatibility.
     Redirects to the new ollama module's log_ollama_call function.
     """
-    from ollama import log_ollama_call
+    from utils.ollama import log_ollama_call
+
     return log_ollama_call(
         prompt=prompt,
         model=model,
@@ -308,20 +389,5 @@ def log_llava_api_call(
         success=success,
         error_message=error_message,
         timeout=timeout,
-        log_dir=log_dir
+        log_dir=log_dir,
     )
-
-
-def read_llava_api_calls(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Read LLaVA API call logs."""
-    # Support both old "llava_api_call" and new "ollama_api_call" log types
-    llava_logs = read_json_logs(log_dir, "llava_api_call")
-    ollama_logs = read_json_logs(log_dir, "ollama_api_call")
-    
-    # Combine and sort by timestamp
-    all_logs = llava_logs + ollama_logs
-    all_logs.sort(key=lambda x: x.get("timestamp", 0))
-    
-    if limit:
-        all_logs = all_logs[-limit:]
-    return all_logs
