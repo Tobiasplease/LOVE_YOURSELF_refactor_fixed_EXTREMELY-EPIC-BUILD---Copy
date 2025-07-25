@@ -3,47 +3,15 @@ from __future__ import annotations
 
 import os
 import time
-import re
 import json
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 from typing import List, Optional
 
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_TIMEOUT_EVAL, OLLAMA_TIMEOUT_SUMMARY
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_TIMEOUT_SUMMARY
 from event_logging.event_logger import log_json_entry, read_json_logs, LogType
 from utils.ollama import query_ollama
 from event_logging.run_manager import get_run_image_path
-
-
-# ---------------------------------------------------------------------------#
-# ollama scalar‑mood helper (needed by Captioner)                              #
-# ---------------------------------------------------------------------------#
-def estimate_mood_ollama(caption: str, timeout: int = OLLAMA_TIMEOUT_EVAL) -> float:
-    """
-    Ask the local Ollama server for a scalar mood value in [‑1, +1].
-    Falls back to 0.0 if the request fails.
-    """
-    prompt = (
-        f"This is my most recent internal thought: '{caption}'\n"
-        "As this voice inside me, how would I describe the mood I’m in? "
-        "Reply with a number between -1 and +1. Just the number."
-    )
-    try:
-        response_text = query_ollama(prompt=prompt, image=None, timeout=timeout, log_dir=MOOD_SNAPSHOT_FOLDER)
-
-        # Check if response indicates an error
-        if response_text.startswith("[⚠️]"):
-            raise ValueError(response_text)
-
-        match = re.search(r"[-+]?\d*\.\d+|\d+", response_text)
-        if match:
-            return max(-1.0, min(1.0, float(match.group(0))))
-        else:
-            raise ValueError("No valid mood score found")
-    except Exception as e:
-        error_msg = str(e)
-        print(f"[⚠️] Mood estimation failed: {error_msg}")
-        return 0.0
 
 
 # ---------------------------------------------------------------------------#
@@ -65,16 +33,7 @@ class MoodEngine:
         mood_change = self.compute_mood_change(novelty, saw_person)
         self.current_mood = np.clip(self.current_mood + mood_change, 0.0, 1.0)
 
-        # note = generate_internal_note(
-        #     caption,
-        #     self.last_caption,
-        #     self.current_mood,
-        #     self.current_mood - mood_change,
-        #     saw_person,
-        #     self.last_person_detected,
-        # )
-
-        log_mood(caption, self.current_mood, image_path=image_path)
+        log_mood(caption, self.current_mood, mood_change, image_path=image_path)
         self.last_caption = caption
         self.last_person_detected = saw_person
         return caption
@@ -89,11 +48,26 @@ class MoodEngine:
         return 0.0 if caption.strip() == self.last_caption.strip() else 1.0
 
     def compute_mood_change(self, novelty, saw_person):
+
+        # HMMM
+        # The natural decay (-0.02) is too weak compared to novelty increases (+0.05), so
+        # any small variation in scene descriptions keeps the mood elevated.
+
+        # Solutions:
+
+        # 1. Increase decay rate: Make the no-novelty penalty stronger (e.g., -0.03 to
+        # -0.04)
+        # 2. Add time-based decay: Gradually reduce mood over time regardless of scene
+        # changes
+        # 3. Make novelty detection more strict: Only count significant caption changes as
+        # novelty
+        # 4. Cap positive changes: Reduce the novelty bonus when mood is already high
+
         change = 0.0
         if novelty:
-            change += 0.05
+            change += 0.02
         else:
-            change -= 0.07  # needs to be higher?
+            change -= 0.07
 
         if saw_person and not self.last_person_detected:
             change += 0.07
@@ -103,12 +77,11 @@ class MoodEngine:
 
     # -------------------------------------------------------- LLaVA caption
     def generate_caption(self, frame, timeout: int = OLLAMA_TIMEOUT_SUMMARY):
-        # Save the frame to disk in the run image folder
+
         timestamp = int(time.time())
         image_filename = f"caption_frame_{timestamp}.jpg"
         image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, image_filename)
 
-        # Save the frame to disk
         cv2.imwrite(image_path, frame)
 
         prompt = "Describe the scene"
@@ -122,51 +95,17 @@ class MoodEngine:
             return error_msg
 
 
-# ---------------------------------------------------------------------------#
-# Stateless helpers (unused)                                              #
-# ---------------------------------------------------------------------------#
-# def generate_internal_note(caption, last_caption, mood, last_mood, saw_person, last_person_detected):
-#     """
-#     Generate and log an internal note about changes in mood and observations.
-#     """
-#     changes = []
-#     if caption != last_caption:
-#         changes.append("new observation")
-#     if saw_person and not last_person_detected:
-#         changes.append("person appeared")
-#     elif not saw_person and last_person_detected:
-#         changes.append("person disappeared")
-#     if mood > last_mood:
-#         changes.append("mood improved")
-#     elif mood < last_mood:
-#         changes.append("mood declined")
-
-#     note_text = f"{', '.join(changes)}, {caption.strip()}"
-
-#     # Log internal note in JSON format
-#     data = {
-#         "note": note_text,
-#         "changes": changes,
-#         "caption": caption,
-#         "last_caption": last_caption,
-#         "mood": mood,
-#         "last_mood": last_mood,
-#         "saw_person": saw_person,
-#         "last_person_detected": last_person_detected,
-#     }
-
-#     log_json_entry(LogType.INTERNAL_NOTE, data, MOOD_SNAPSHOT_FOLDER)
-
-#     return note_text
-
-
-def log_mood(caption, mood, image_path: Optional[str] = None):
+def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
     """
     Log mood data in JSON format with timestamp, caption, mood value, and image path.
     """
-    data = {"caption": caption, "mood": mood, "image_path": image_path if image_path and os.path.exists(image_path) else None}
+    data = {
+        "caption": caption,
+        "mood": mood,
+        "mood_change": mood_change,
+        "image_path": image_path if image_path and os.path.exists(image_path) else None,
+    }
 
-    # Choose emoji based on mood level
     if mood > 0.7:
         emoji = "😊"
     elif mood > 0.5:

@@ -13,14 +13,9 @@ from event_logging.event_logger import log_json_entry, LogType
 from event_logging.run_manager import get_run_image_path
 from drawing.drawing import DrawingController
 
-from .memory import CAPTION_SAVE_THRESHOLD, MemoryMixin
+from .memory import MemoryMixin
 from .prompts import extract_motifs_spacy
 from .model_wrapper import MultimodalModel
-
-try:
-    from mood.mood import log_mood as _legacy_log_mood  # type: ignore
-except ImportError:
-    _legacy_log_mood = None
 
 
 class Captioner(MemoryMixin):
@@ -119,6 +114,11 @@ class Captioner(MemoryMixin):
             auto_print=True,
             print_message=f"👁️ Caption: {caption}",
         )
+        # logging mood in update_feeling_brain? dont need here?
+        # if self.novelty_score > CAPTION_SAVE_THRESHOLD:
+        #     log_mood(caption, self.current_mood, img_path)
+        # log_json_entry(LogType.MOOD, {"caption": caption, "mood": self.current_mood, "image": img_path}, MOOD_SNAPSHOT_FOLDER)
+
         self.observe(caption, self.current_mood, img_path, memory_type="perception")
         self.last_caption = caption
 
@@ -146,12 +146,6 @@ class Captioner(MemoryMixin):
                     self.absorb_motif(motif)
 
                 self.observe(reflection, self.current_mood, img_path, memory_type="reflection")
-
-        if self.novelty_score > CAPTION_SAVE_THRESHOLD:
-            if _legacy_log_mood:
-                _legacy_log_mood(caption, self.current_mood, img_path)
-            else:
-                log_json_entry(LogType.MOOD, {"caption": caption, "mood": self.current_mood, "image": img_path}, MOOD_SNAPSHOT_FOLDER)
 
         if now - self.last_drawing_time > DRAWING_INTERVAL:
             memory_context = self.get_recent_memory()
