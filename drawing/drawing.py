@@ -18,7 +18,8 @@ from typing import Optional, TYPE_CHECKING
 from event_logging.event_logger import log_json_entry, LogType
 from event_logging.run_manager import get_run_image_path
 
-from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER
+from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER, RESOURCE_QUEUE_ENABLED, QUEUE_TIMEOUT
+from utils.resource_manager import resource_manager, ResourcePriority
 from .comfy import create_impostor_controller
 
 if TYPE_CHECKING:
@@ -122,7 +123,26 @@ class DrawingController:
             )
 
             if latest_image and os.path.exists(latest_image):
-                self._invoke_comfyui_drawing(drawing_prompt, latest_image)
+                if RESOURCE_QUEUE_ENABLED:
+                    try:
+                        with resource_manager.request_resource(
+                            priority=ResourcePriority.HIGH,
+                            operation_name="comfyui_drawing",
+                            timeout=QUEUE_TIMEOUT
+                        ):
+                            # Set ComfyUI as active to block Ollama calls
+                            resource_manager.set_comfyui_active(True, "impostor_drawing")
+                            self._invoke_comfyui_drawing(drawing_prompt, latest_image)
+                    except Exception as e:
+                        log_json_entry(
+                            LogType.ERROR,
+                            {"message": f"Resource manager error for ComfyUI: {e}", "component": "drawing"},
+                            MOOD_SNAPSHOT_FOLDER,
+                            auto_print=True,
+                            print_message=f"⚠️ Resource manager error for ComfyUI: {e}",
+                        )
+                else:
+                    self._invoke_comfyui_drawing(drawing_prompt, latest_image)
             else:
                 log_json_entry(
                     LogType.ERROR,

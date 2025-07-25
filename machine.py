@@ -85,6 +85,21 @@ object_detector.start()
 
 # Start image monitoring
 image_monitor = ImageMonitor(log_folder=MOOD_SNAPSHOT_FOLDER)
+
+# Set up ComfyUI completion callback for resource management
+try:
+    from config.config import RESOURCE_QUEUE_ENABLED
+    if RESOURCE_QUEUE_ENABLED:
+        from utils.resource_manager import resource_manager
+        
+        def on_comfyui_complete(image_path):
+            """Callback to notify resource manager when ComfyUI completes."""
+            resource_manager.set_comfyui_active(False, "impostor_drawing")
+        
+        image_monitor.add_new_image_callback(on_comfyui_complete)
+except ImportError:
+    pass  # Resource management not available
+
 image_monitor.start()
 
 # Initialize run ID and start time for this session

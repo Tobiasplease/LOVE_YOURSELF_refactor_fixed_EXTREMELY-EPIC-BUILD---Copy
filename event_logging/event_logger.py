@@ -17,6 +17,7 @@ class LogType(Enum):
     SESSION_START = "session_start"
     INFO = "info"
     ERROR = "error"
+    SYSTEM = "system"
     RUN_METADATA = "run_metadata"
 
     # AI/ML processing events

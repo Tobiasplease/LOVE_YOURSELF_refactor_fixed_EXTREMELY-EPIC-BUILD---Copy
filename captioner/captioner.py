@@ -8,10 +8,11 @@ from typing import Deque, Optional, Tuple
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
-from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
+from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL, RESOURCE_QUEUE_ENABLED, MAX_QUEUE_SIZE, QUEUE_TIMEOUT
 from event_logging.event_logger import log_json_entry, LogType
 from event_logging.run_manager import get_run_image_path
 from drawing.drawing import DrawingController
+from utils.resource_manager import resource_manager, ResourcePriority
 
 from .memory import CAPTION_SAVE_THRESHOLD, MemoryMixin
 from .prompts import extract_motifs_spacy
@@ -46,6 +47,15 @@ class Captioner(MemoryMixin):
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
         self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
+        
+        # Configure resource manager
+        if RESOURCE_QUEUE_ENABLED:
+            resource_manager.configure(
+                enabled=True,
+                max_queue_size=MAX_QUEUE_SIZE,
+                queue_timeout=QUEUE_TIMEOUT
+            )
+        
         threading.Thread(target=self._caption_worker, daemon=True).start()
 
     @property
@@ -88,7 +98,15 @@ class Captioner(MemoryMixin):
         cv2.imwrite(img_path, frame)
 
         try:
-            caption = self.model.caption_image(img_path, flowing=True, first_time=not self.first_caption_done)
+            if RESOURCE_QUEUE_ENABLED:
+                with resource_manager.request_resource(
+                    priority=ResourcePriority.LOW,
+                    operation_name="ollama_caption",
+                    timeout=QUEUE_TIMEOUT
+                ):
+                    caption = self.model.caption_image(img_path, flowing=True, first_time=not self.first_caption_done)
+            else:
+                caption = self.model.caption_image(img_path, flowing=True, first_time=not self.first_caption_done)
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
             log_json_entry(
@@ -125,7 +143,26 @@ class Captioner(MemoryMixin):
         if now - self.last_reason_time > REASON_INTERVAL:
             mood_text = self.describe_current_mood()
             context = self.get_reflection_context()
-            reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
+            
+            try:
+                if RESOURCE_QUEUE_ENABLED:
+                    with resource_manager.request_resource(
+                        priority=ResourcePriority.LOW,
+                        operation_name="ollama_reflection",
+                        timeout=QUEUE_TIMEOUT
+                    ):
+                        reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
+                else:
+                    reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
+            except Exception as e:
+                log_json_entry(
+                    LogType.ERROR,
+                    {"message": f"Reflection error: {e}", "component": "captioner"},
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=True,
+                    print_message=f"⚠️ Reflection error: {e}",
+                )
+                reflection = None
 
             if reflection and len(reflection.strip()) > 10:
                 log_json_entry(
@@ -157,9 +194,28 @@ class Captioner(MemoryMixin):
             memory_context = self.get_recent_memory()
             reflection_context = self.get_last_reflection()
             extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
-            prompt = self.model.generate_drawing_prompt(extra=extra_context)
-            self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
-            self.last_drawing_time = now
+            
+            try:
+                if RESOURCE_QUEUE_ENABLED:
+                    with resource_manager.request_resource(
+                        priority=ResourcePriority.MEDIUM,
+                        operation_name="ollama_drawing_prompt",
+                        timeout=QUEUE_TIMEOUT
+                    ):
+                        prompt = self.model.generate_drawing_prompt(extra=extra_context)
+                        self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
+                else:
+                    prompt = self.model.generate_drawing_prompt(extra=extra_context)
+                    self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
+                self.last_drawing_time = now
+            except Exception as e:
+                log_json_entry(
+                    LogType.ERROR,
+                    {"message": f"Drawing prompt error: {e}", "component": "captioner"},
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=True,
+                    print_message=f"⚠️ Drawing prompt error: {e}",
+                )
 
     def describe_current_mood(self) -> str:
         if self.current_mood > 0.5:

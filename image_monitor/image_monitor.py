@@ -18,6 +18,7 @@ class ImageMonitor:
         self.monitored_images = set()
         self.running = False
         self.thread = None
+        self.new_image_callbacks = []
 
     def start(self):
         """Start the image monitoring thread."""
@@ -71,8 +72,12 @@ class ImageMonitor:
 
         return current_images
 
+    def add_new_image_callback(self, callback):
+        """Add a callback to be called when a new image is detected."""
+        self.new_image_callbacks.append(callback)
+
     def _log_new_image(self, image_path):
-        """Log a newly detected image."""
+        """Log a newly detected image and notify callbacks."""
         filename = os.path.basename(image_path)
         file_size = os.path.getsize(image_path)
 
@@ -83,6 +88,19 @@ class ImageMonitor:
             auto_print=True,
             print_message=f"🖼 New drawing: {filename} ({file_size} bytes)",
         )
+
+        # Notify all callbacks
+        for callback in self.new_image_callbacks:
+            try:
+                callback(image_path)
+            except Exception as e:
+                log_json_entry(
+                    LogType.ERROR,
+                    {"error": f"Image callback error: {str(e)}"},
+                    self.log_folder,
+                    auto_print=True,
+                    print_message=f"❌ Image callback error: {str(e)}",
+                )
 
     def _monitor_loop(self):
         """Main monitoring loop that runs in the background thread."""
