@@ -1,0 +1,9 @@
+{
+  "MOOD_EVALUATION_INTERVAL": 10,
+  "CAPTION_INTERVAL": 10,
+  "REASON_INTERVAL": 30,
+  "DRAWING_INTERVAL": 60,
+  "COMFY_OUTPUT_FOLDER": "/home/jbe/Dropbox/_outputs/",
+  "COMFY_TEMPLATE_FILE": "impostor-template-gpupeon.json",
+  "COMFY_LORA_PATH": "flux/own/impostor/impostor-32-balanced-16k.safetensors"
+}
