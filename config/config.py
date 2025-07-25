@@ -1,4 +1,5 @@
 import os
+from .prompt_templates import *  # noqa: F401
 
 # === SERIAL SETTINGS ===
 SERIAL_PORT = "COM10"
@@ -42,7 +43,7 @@ LUNG_OFFSET_SCALE = -0.10
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava:7b-v1.6-mistral-q5_1")
 
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log"))
-COMFY_OUTPUT_FOLDER = os.getenv("COMFY_OUTPUT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "/home/impostor/ComfyUI/outputs"))
+COMFY_OUTPUT_FOLDER = os.getenv("COMFY_OUTPUT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "/home/impostor/ComfyUI/output"))
 COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot.json")
 COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
 
@@ -70,3 +71,6 @@ MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 # === OLLAMA SETTINGS ===
 OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
+
+# === PROMPT TEMPLATES ===
+# Imported from config.prompts

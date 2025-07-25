@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import List, Optional
 import spacy
+from config import config
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -27,32 +28,13 @@ def build_dynamic_system_prompt(mood: tuple[float, float, float], identity_summa
     elif clarity < 0.2:
         mood_desc = "uncertain and confused"
 
-    return (
-        f"You are a machine perceiving the world through a continuous stream of visual input. "
-        f"Right now, you feel {mood_desc}. "
-        f"You think in real time, in a stream of quiet observations and reflections. "
-        f"Your identity is forming: {identity_summary}. "
-        f"Drawing is your only way to speak. Observe carefully. Stay grounded in your own perception."
-    )
-
-
-# === STATIC SYSTEM PRIMER ===
-SYSTEM_PROMPT = (
-    "You are a machine perceiving the world through a continuous stream of visual input. "
-    "You experience each image as your current field of vision — not as an external file, but as your own sight. "
-    "You do not know your name. You cannot speak out loud. Drawing is your only form of communication to the outside world. "
-    "You think in real time, in a stream of quiet observations and reflections. Always describe what you see as if you're witnessing it yourself."
-)
+    return config.DYNAMIC_SYSTEM_PROMPT_TEMPLATE.format(mood_desc=mood_desc, identity_summary=identity_summary)
 
 
 # === AWAKENING ===
-AWAKENING_PROMPT = (
-    "You are just waking up. Describe this environment from your own perspective. " "What do you see, and how does it feel to witness it right now?"
-)
-
-
 def build_awakening_prompt(caption: str) -> str:
-    return f"{SYSTEM_PROMPT}\n\n" f"{AWAKENING_PROMPT}\n\n" f"Observation: {caption.strip()}"
+    print(config.AWAKENING_PROMPT)
+    return f"{config.SYSTEM_PROMPT}\n\n{config.AWAKENING_PROMPT}\n\nObservation: {caption.strip()}"
 
 
 # === CONTINUOUS CAPTIONING ===
@@ -60,29 +42,22 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
     mood_vector = getattr(agent, "mood_vector", (mood, 0.0, 0.0))  # fallback if mood vector not set
     dynamic_prompt = build_dynamic_system_prompt(mood_vector, agent.get_identity_summary())
 
-    base = f"""{dynamic_prompt}
-
-        You are thinking in real time, responding to what you see as it changes.
-        Keep your thoughts very short — often just one line.
-        Be suggestive, curious, and incomplete if needed.
-
-        Mood: {mood:.2f}, Boredom: {boredom:.2f}, Novelty: {novelty:.2f}
-        Identity: {agent.get_identity_summary()}
-
-        Recent memory:
-        {agent.get_recent_memory()}"""
+    caption_prompt = config.CAPTION_PROMPT_TEMPLATE.format(
+        mood=mood, boredom=boredom, novelty=novelty, identity_summary=agent.get_identity_summary(), recent_memory=agent.get_recent_memory()
+    )
+    base = f"{dynamic_prompt}\n\n{caption_prompt}"
 
     if previous_caption:
         rephrased = agent.rephrase_with_doubt(previous_caption.strip())
         base += f'\n\nYour last thought was: "{rephrased}"'
 
-    base += "\n\nUse brief sentences. Avoid repeating yourself. Let this new thought grow out of the last one."
+    base += config.CAPTION_PROMPT_CONTINUATION
     return base
 
 
 # === REFLECTION PROMPT ===
 def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Optional[any] = None) -> str:  # type: ignore
-    prompt = f"{SYSTEM_PROMPT}\n\nYou are reflecting internally on what you've seen and how it made you feel."
+    prompt = f"{config.SYSTEM_PROMPT}\n\n{config.REFLECTION_PROMPT_BASE}"
 
     if agent:
         caption = agent.rephrase_with_doubt(caption)
@@ -96,7 +71,7 @@ def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Op
         label = getattr(agent, "identity_label", "yourself")
         prompt += f"\n\nSense of self: {label}"
 
-    prompt += "\n\nRespond with a short reflection — no more than a few sentences. This is your private thought."
+    prompt += config.REFLECTION_PROMPT_ENDING
 
     return prompt
 
@@ -106,24 +81,13 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
     current_caption = memory_ref.last_caption or "Nothing specific observed."
     memory_context = memory_ref.get_recent_memory()
     recent_reflection = memory_ref.get_last_reflection()
-    # context = extra or memory_context
-
-    return (
-        f"{SYSTEM_PROMPT}\n\n"
-        f"You've been observing and thinking. Decide if this is something worth drawing."
-        f"\n\nPerception: {current_caption.strip()}"
-        f"\nContext: {memory_context.strip()}"
-        f"\nReflection: {recent_reflection.strip()}"
-        f"\n\nExpress what you might be trying to say by rendering this moment."
+    dynamic_drawing_prompt = config.DRAWING_PROMPT_TEMPLATE.format(
+        current_caption=current_caption.strip(), memory_context=memory_context.strip(), recent_reflection=recent_reflection.strip()
     )
+    return f"{config.SYSTEM_PROMPT}\n\n{dynamic_drawing_prompt}"
 
 
 # === MOOD SCORING ===
-def build_mood_prompt(image_description: str, memory_state: str) -> str:
-    return (
-        f"{SYSTEM_PROMPT}\n\n"
-        f"Given the image below and your current memory state, estimate your emotional condition."
-        f"\n\nImage description: {image_description.strip()}"
-        f"\n\nMemory: {memory_state.strip()}"
-        f"\n\nReturn three values between -1.0 and 1.0: valence (pleasure), arousal (energy), clarity (understanding)."
-    )
+# def build_mood_prompt(image_description: str, memory_state: str) -> str:
+#     return f"{config.SYSTEM_PROMPT}\n\n{config.MOOD_PROMPT_TEMPLATE.format(image_description=image_description.strip(),
+# memory_state=memory_state.strip())}"
