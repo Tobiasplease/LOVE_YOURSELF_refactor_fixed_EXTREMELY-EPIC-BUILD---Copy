@@ -68,7 +68,7 @@ def example_config_object():
 
     # Create controller with custom config
     controller = ComfyUIController(config=config)
-    controller.set_workflow_file("drawing/impostor-template.json")
+    controller.set_workflow_file("drawing/impostor-template-gpupeon.json")
 
     # Queue the prompt
     success = controller.queue_prompt()

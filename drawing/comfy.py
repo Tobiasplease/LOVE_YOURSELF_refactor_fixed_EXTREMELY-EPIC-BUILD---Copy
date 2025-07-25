@@ -8,6 +8,8 @@ from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import random
 
+from config.config import COMFY_LORA_PATH, COMFY_TEMPLATE_FILE
+
 
 @dataclass
 class ImpostorConfig:
@@ -38,7 +40,7 @@ class ImpostorConfig:
 
     # LoRA parameters
     # lora_path: str = "flux/own/impostor/impostor-64-balanced-v2-16k-no-trig.safetensors"
-    lora_path: str = "impostor-32-balanced-16k.safetensors"
+    lora_path: str = COMFY_LORA_PATH
     lora_strength: float = 1.0
 
     # Generation parameters
@@ -181,7 +183,7 @@ def create_impostor_controller(api_url: str = "http://localhost:8188/prompt", **
     import os
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    default_workflow = os.path.join(script_dir, "impostor-template.json")
+    default_workflow = os.path.join(script_dir, COMFY_TEMPLATE_FILE)
     controller.set_workflow_file(default_workflow)
 
     return controller
