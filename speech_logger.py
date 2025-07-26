@@ -101,21 +101,42 @@ class WhisperLogger:
     def _process_audio_chunk(self, audio_data: bytes):
         """Process audio chunk with Whisper and log results."""
         try:
+            # Check if audio data is sufficient
+            if len(audio_data) < 1024:
+                return
+                
             # Save temporary audio file
             temp_file = self._save_temp_audio(audio_data)
 
-            # Transcribe with Whisper
-            result = self.model.transcribe(temp_file, language=None)  # Auto-detect language
+            # Transcribe with Whisper (disable word_timestamps to avoid tensor size issues)
+            result = self.model.transcribe(temp_file, language=None, fp16=False)
 
             # Clean up temp file
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 
+            # Check if result is valid
+            if not result:
+                return
+
             # Log if text was detected
-            text = str(result.get("text", "")).strip()
-            if text:
+            text = result.get("text", "")
+            if isinstance(text, str) and text.strip():
                 timestamp = datetime.now().isoformat()
-                self._log_speech(text, timestamp)
+                
+                # Extract confidence from segments (simplified approach)
+                avg_confidence = None
+                segments = result.get("segments", [])
+                if segments and isinstance(segments, list):
+                    confidences = []
+                    for seg in segments:
+                        if isinstance(seg, dict) and "avg_logprob" in seg:
+                            confidences.append(seg["avg_logprob"])
+                    
+                    if confidences:
+                        avg_confidence = sum(confidences) / len(confidences)
+                
+                self._log_speech(text.strip(), timestamp, avg_confidence)
 
         except Exception as e:
             print(f"Error processing audio: {e}")
