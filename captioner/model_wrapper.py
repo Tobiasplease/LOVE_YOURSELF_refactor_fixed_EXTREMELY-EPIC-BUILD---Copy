@@ -34,7 +34,8 @@ class MultimodalModel:
         else:
             prompt = "Describe this image."
 
-        return self._call_ollama(prompt, image_path=image_path)
+        # @todo SYS PROMPT HERE? SO NO "IN THIS IMAGE?"
+        return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
 
     def reason_about_caption(
         self, caption: str, *, agent: Optional[any] = None, mood_text: Optional[str] = None, extra: Optional[str] = None  # type: ignore

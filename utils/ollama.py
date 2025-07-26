@@ -84,6 +84,7 @@ def query_ollama(
     """
     # Prepare the payload
     payload = {"model": model, "prompt": prompt, "stream": False}
+    # payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}}
 
     # Add system prompt if provided
     if system_prompt:
