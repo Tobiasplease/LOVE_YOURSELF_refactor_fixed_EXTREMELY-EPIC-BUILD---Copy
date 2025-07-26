@@ -51,6 +51,7 @@ python machine.py --config_override config/production_config.json
 ```
 
 **Available configurations:**
+
 - `config/debug_config.json`: Fast intervals for development (REASON_INTERVAL: 30s, DRAWING_INTERVAL: 60s)
 - `config/production_config.json`: Standard intervals for production use
 
@@ -108,6 +109,7 @@ python machine.py --config_override config/production_config.json
 ### Testing
 
 The debug/ folder contains individual component tests:
+
 - `test_ollama_caption.py`: Tests Ollama API integration and captioning
 - `test_comfy.py`: Tests ComfyUI workflow execution with JSON templates
 - `test_impostor_flow.py`: Tests the complete impostor image generation pipeline
@@ -119,3 +121,5 @@ No formal test framework is configured - tests are standalone scripts.
 - Line length: 150 characters (configured in pyproject.toml)
 - Uses Black formatter with isort for import sorting
 - Pylint and flake8 for linting
+
+- Dont use so many comments! Very sparingly.
