@@ -1,0 +1,475 @@
+{
+  "5": {
+    "inputs": {
+      "width": 1328,
+      "height": 752,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "29": {
+    "inputs": {
+      "samples": [
+        "292",
+        0
+      ],
+      "vae": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "30": {
+    "inputs": {
+      "filename_prefix": "impostor-out",
+      "images": [
+        "29",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "35": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "779",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "56": {
+    "inputs": {
+      "conditioning": [
+        "35",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "195": {
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "224": {
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp16.safetensors",
+      "type": "flux",
+      "device": "cpu"
+    },
+    "class_type": "DualCLIPLoader",
+    "_meta": {
+      "title": "DualCLIPLoader"
+    }
+  },
+  "270": {
+    "inputs": {
+      "text": [
+        "615",
+        0
+      ],
+      "clip": [
+        "779",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "292": {
+    "inputs": {
+      "noise": [
+        "295",
+        0
+      ],
+      "guider": [
+        "298",
+        0
+      ],
+      "sampler": [
+        "293",
+        0
+      ],
+      "sigmas": [
+        "294",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "293": {
+    "inputs": {
+      "sampler_name": "deis"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "294": {
+    "inputs": {
+      "scheduler": "simple",
+      "steps": 25,
+      "denoise": 1,
+      "model": [
+        "779",
+        0
+      ]
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "BasicScheduler"
+    }
+  },
+  "295": {
+    "inputs": {
+      "noise_seed": 326367778914853
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "298": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "779",
+        0
+      ],
+      "positive": [
+        "711",
+        0
+      ],
+      "negative": [
+        "711",
+        1
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "CFGGuider"
+    }
+  },
+  "300": {
+    "inputs": {
+      "guidance": 4,
+      "conditioning": [
+        "270",
+        0
+      ]
+    },
+    "class_type": "FluxGuidance",
+    "_meta": {
+      "title": "FluxGuidance"
+    }
+  },
+  "590": {
+    "inputs": {
+      "unet_name": "flux1-dev.sft",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "607": {
+    "inputs": {
+      "image": "Photo on 2025-06-26 at 16.06.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "615": {
+    "inputs": {
+      "delimiter": "",
+      "clean_whitespace": "true",
+      "text_a": [
+        "616",
+        0
+      ],
+      "text_b": [
+        "723",
+        0
+      ]
+    },
+    "class_type": "Text Concatenate",
+    "_meta": {
+      "title": "Text Concatenate"
+    }
+  },
+  "616": {
+    "inputs": {
+      "value": "impostor black and white sketch line art "
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "EXTRA TRIGS"
+    }
+  },
+  "711": {
+    "inputs": {
+      "strength": 0.45000000000000007,
+      "start_percent": 0,
+      "end_percent": 1,
+      "positive": [
+        "300",
+        0
+      ],
+      "negative": [
+        "56",
+        0
+      ],
+      "control_net": [
+        "713",
+        0
+      ],
+      "vae": [
+        "195",
+        0
+      ],
+      "image": [
+        "712",
+        0
+      ]
+    },
+    "class_type": "ControlNetApplySD3",
+    "_meta": {
+      "title": "Apply Controlnet with VAE"
+    }
+  },
+  "712": {
+    "inputs": {
+      "ckpt_name": "depth_anything_v2_vitl.pth",
+      "resolution": 1024,
+      "image": [
+        "607",
+        0
+      ]
+    },
+    "class_type": "DepthAnythingV2Preprocessor",
+    "_meta": {
+      "title": "Depth Anything V2 - Relative"
+    }
+  },
+  "713": {
+    "inputs": {
+      "type": "depth",
+      "control_net": [
+        "714",
+        0
+      ]
+    },
+    "class_type": "SetUnionControlNetType",
+    "_meta": {
+      "title": "SetUnionControlNetType"
+    }
+  },
+  "714": {
+    "inputs": {
+      "control_net_name": "flux-dev-controlnet-union-pro-2.safetensors"
+    },
+    "class_type": "ControlNetLoader",
+    "_meta": {
+      "title": "Load ControlNet Model"
+    }
+  },
+  "723": {
+    "inputs": {
+      "String": "The image shows a man sitting on a gray armchair in a living room. He is wearing a blue plaid shirt and black headphones. He has a beard and glasses and is looking directly at the camera with a serious expression. Behind him, there is a desk with a computer monitor, a plant, and a framed picture hanging on the wall. The room appears to be well-lit with natural light coming in from the window."
+    },
+    "class_type": "String",
+    "_meta": {
+      "title": "OVERRIDE"
+    }
+  },
+  "724": {
+    "inputs": {
+      "text": [
+        "615",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "Show Text 🐍"
+    }
+  },
+  "725": {
+    "inputs": {
+      "images": [
+        "712",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "731": {
+    "inputs": {
+      "threshold": 192,
+      "input_foreground": "Black on White",
+      "turnpolicy": "minority",
+      "turdsize": 10,
+      "corner_threshold": 1.0000000000000002,
+      "zero_sharp_corners": false,
+      "opttolerance": 0.20000000000000004,
+      "optimize_curve": true,
+      "foreground_color": "#000000",
+      "background_color": "#FFFFFF",
+      "stroke_color": "#FF0000",
+      "stroke_width": 0,
+      "image": [
+        "780",
+        0
+      ]
+    },
+    "class_type": "TS_ImageToSVGStringBW_Potracer",
+    "_meta": {
+      "title": "Image to SVG String BW_Potracer"
+    }
+  },
+  "733": {
+    "inputs": {
+      "filename_prefix": "impostor-out-potracer-svg",
+      "append_timestamp": true,
+      "custom_output_path": "",
+      "SVG_String": [
+        "731",
+        0
+      ]
+    },
+    "class_type": "TS_SaveSVGString",
+    "_meta": {
+      "title": "Save SVG String"
+    }
+  },
+  "739": {
+    "inputs": {
+      "unet_name": "flux1-dev-Q4_K_S.gguf"
+    },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Unet Loader (GGUF)"
+    }
+  },
+  "740": {
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp16.safetensors",
+      "type": "flux"
+    },
+    "class_type": "DualCLIPLoaderGGUF",
+    "_meta": {
+      "title": "DualCLIPLoader (GGUF)"
+    }
+  },
+  "742": {
+    "inputs": {
+      "switch": false,
+      "on_false": [
+        "590",
+        0
+      ],
+      "on_true": [
+        "739",
+        0
+      ]
+    },
+    "class_type": "InversionDemoLazySwitch",
+    "_meta": {
+      "title": "GGUF OPT"
+    }
+  },
+  "743": {
+    "inputs": {
+      "switch": false,
+      "on_false": [
+        "224",
+        0
+      ],
+      "on_true": [
+        "740",
+        0
+      ]
+    },
+    "class_type": "InversionDemoLazySwitch",
+    "_meta": {
+      "title": "GGUF OPT"
+    }
+  },
+  "779": {
+    "inputs": {
+      "lora_01": "impostor-32-balanced-16k.safetensors",
+      "strength_01": 1.0000000000000002,
+      "lora_02": "None",
+      "strength_02": 1.0000000000000002,
+      "lora_03": "None",
+      "strength_03": 1.0000000000000002,
+      "lora_04": "None",
+      "strength_04": 1.0000000000000002,
+      "model": [
+        "742",
+        0
+      ],
+      "clip": [
+        "743",
+        0
+      ]
+    },
+    "class_type": "Lora Loader Stack (rgthree)",
+    "_meta": {
+      "title": "Lora Loader Stack (rgthree)"
+    }
+  },
+  "780": {
+    "inputs": {
+      "contrast": 2,
+      "image": [
+        "29",
+        0
+      ]
+    },
+    "class_type": "> Contrast",
+    "_meta": {
+      "title": "😼> Contrast"
+    }
+  }
+}
