@@ -16,17 +16,19 @@ from typing import Optional
 
 
 class WhisperLogger:
-    def __init__(self, log_file: str = "speech_log.json", chunk_duration: float = 5.0):
+    def __init__(self, log_file: str = "speech_log.json", chunk_duration: float = 5.0, model_name: str = "small"):
         """
         Initialize Whisper logger.
 
         Args:
             log_file: Path to JSON log file
             chunk_duration: Duration of audio chunks in seconds
+            model_name: Whisper model name (tiny, base, small, medium, large)
         """
         self.log_file = log_file
         self.chunk_duration = chunk_duration
-        self.model = whisper.load_model("small")  # tiny multilingual model
+        self.model_name = model_name
+        self.model = whisper.load_model(model_name)
         self.is_recording = False
         self.audio_thread: Optional[threading.Thread] = None
 
@@ -50,7 +52,7 @@ class WhisperLogger:
 
     def _log_speech(self, text: str, timestamp: str, confidence: Optional[float] = None):
         """Log speech text with timestamp to JSON file."""
-        entry = {"timestamp": timestamp, "text": text.strip(), "confidence": confidence, "model": "whisper-tiny"}
+        entry = {"timestamp": timestamp, "text": text.strip(), "confidence": confidence, "model": f"whisper-{self.model_name}"}
 
         # Read existing logs
         try:
@@ -199,10 +201,11 @@ def main():
     parser = argparse.ArgumentParser(description="Whisper speech recognition with logging")
     parser.add_argument("--log-file", default="speech_log.json", help="Log file path")
     parser.add_argument("--chunk-duration", type=float, default=5.0, help="Audio chunk duration in seconds")
+    parser.add_argument("--model", default="small", help="Whisper model (tiny, base, small, medium, large)")
 
     args = parser.parse_args()
 
-    logger = WhisperLogger(log_file=args.log_file, chunk_duration=args.chunk_duration)
+    logger = WhisperLogger(log_file=args.log_file, chunk_duration=args.chunk_duration, model_name=args.model)
 
     try:
         logger.start_recording()
