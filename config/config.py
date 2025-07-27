@@ -59,7 +59,7 @@ DRAWING_COOLDOWN = 180  # seconds between drawings
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 
 # === CAPTIONER MEMORY CONTROL ===
-MOOD_DECAY_RATE = 0.02  # how much mood fades when nothing new happens
+MOOD_DECAY_RATE = 0.05  # how much mood fades when nothing new happens
 NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
@@ -73,7 +73,7 @@ OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
 
 # === OUTPUT SETTINGS ===
-CLEAN_CAPTION_OUTPUT = False  # When True, shows only captions in quotes with clean spacing
+CLEAN_CAPTION_OUTPUT = True  # When True, shows only captions in quotes with clean spacing
 
 # === PROMPT TEMPLATES ===
 # Imported from config.prompts

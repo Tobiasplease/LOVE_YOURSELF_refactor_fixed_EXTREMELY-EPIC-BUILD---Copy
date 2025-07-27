@@ -88,7 +88,6 @@ class MemoryMixin:
         self.long_memory.append(entry)
 
         self.extract_motifs_from_caption(text)
-        self.extract_semantic_motifs(text)
 
         for motif in self.current_motifs:
             self.update_motif_focus_streak(motif)
@@ -142,27 +141,181 @@ class MemoryMixin:
             self.motif_confidence[motif] = 0.4  # default to low confidence
             self.motif_confirmed[motif] = False
 
+    def cleanup_motifs(self):
+        """Aggressively clean motifs - only keep truly meaningful recurring elements."""
+        
+        # Define what we actually want to track
+        MEANINGFUL_MOTIFS = {
+            # Visual objects that matter
+            'camera', 'phone', 'computer', 'laptop', 'monitor', 'screen', 'desk', 'table', 'chair',
+            'window', 'door', 'mirror', 'artwork', 'picture', 'book', 'paper', 'notebook',
+            'pen', 'pencil', 'brush', 'lamp', 'plant', 'bottle', 'glass', 'cup',
+            'clothes', 'shirt', 'glasses', 'watch', 'necklace',
+            
+            # Spaces and environments
+            'kitchen', 'bedroom', 'office', 'studio', 'workspace', 'bathroom', 'garden',
+            'restaurant', 'cafe', 'library',
+            
+            # Activities worth tracking
+            'writing', 'reading', 'drawing', 'painting', 'cooking', 'eating', 'drinking',
+            'typing', 'working', 'studying', 'creating', 'cleaning',
+            
+            # Creative/professional
+            'artist', 'writer', 'programmer', 'designer', 'musician', 'teacher', 'student',
+            'painting', 'sketch', 'drawing', 'music', 'violin', 'piano', 'guitar',
+            'canvas', 'easel', 'palette', 'instrument',
+            
+            # Specific environmental qualities
+            'cluttered', 'organized', 'messy', 'bright', 'shadowy', 'sunlit', 'colorful',
+            'vintage', 'modern', 'minimalist',
+            
+            # Natural elements
+            'sunlight', 'shadow', 'reflection', 'tree', 'flowers', 'water', 'laundry'
+        }
+        
+        # Keep only motifs that are:
+        # 1. In our meaningful list, OR
+        # 2. Named entities (proper nouns), OR  
+        # 3. Have been seen many times (>20) and are concrete nouns
+        motifs_to_keep = {}
+        
+        for motif, count in self.motif_counter.items():
+            should_keep = False
+            
+            # Keep if it's in our curated list
+            if motif in MEANINGFUL_MOTIFS:
+                should_keep = True
+            
+            # Keep if it's been seen many times AND is likely a concrete object
+            # But exclude common abstract/functional words even if frequent
+            elif (count > 30 and 
+                  len(motif) > 4 and
+                  motif not in {'thought', 'about', 'appears', 'might', 'there', 'where', 'their', 'seems', 
+                               'front', 'right', 'various', 'perhaps', 'notice', 'important', 'minute', 
+                               'moment', 'sense', 'thoughts', 'remember', 'visible', 'individual', 'young', 
+                               'short', 'neutral', 'natural', 'quiet', 'personal', 'domestic', 'indoor', 
+                               'activity', 'items', 'object', 'scene', 'image', 'quite', 'really', 'pretty',
+                               'little', 'small', 'large', 'good', 'nice', 'simple', 'basic', 'special',
+                               'general', 'normal', 'usual', 'common', 'different', 'similar', 'other',
+                               'feeling', 'looking', 'getting', 'making', 'doing', 'being', 'having'} and
+                  not motif.endswith(('ing', 'ed', 'ly', 'ness', 'tion', 'sion'))):  # Not verbs/adverbs/abstracts
+                should_keep = True
+            
+            if should_keep:
+                motifs_to_keep[motif] = count
+        
+        # Replace the entire motif system with only meaningful ones
+        old_count = len(self.motif_counter)
+        self.motif_counter = Counter(motifs_to_keep)
+        
+        # Clean up related dictionaries
+        for motif in list(self.motif_first_seen.keys()):
+            if motif not in motifs_to_keep:
+                del self.motif_first_seen[motif]
+                
+        for motif in list(self.motif_last_seen.keys()):
+            if motif not in motifs_to_keep:
+                del self.motif_last_seen[motif]
+                
+        for motif in list(self.motif_confidence.keys()):
+            if motif not in motifs_to_keep:
+                del self.motif_confidence[motif]
+                
+        for motif in list(self.motif_confirmed.keys()):
+            if motif not in motifs_to_keep:
+                del self.motif_confirmed[motif]
+        
+        # Clean up beliefs to only meaningful motifs
+        for motif in list(self.beliefs.keys()):
+            if motif not in motifs_to_keep:
+                del self.beliefs[motif]
+        
+        # Update current motifs
+        self.current_motifs = {m for m in self.current_motifs if m in motifs_to_keep}
+        
+        return old_count - len(motifs_to_keep)
+
     def extract_motifs_from_caption(self, caption: str):
+        """Extract meaningful motifs from captions - focus on concrete, recurring elements."""
+        # We want to track recurring THINGS, not common words
+        # Focus on nouns that represent objects, places, activities, or specific qualities
+        
+        MEANINGFUL_CATEGORIES = {
+            # Objects and tools
+            'camera', 'phone', 'computer', 'laptop', 'monitor', 'screen', 'desk', 'table', 'chair',
+            'window', 'door', 'mirror', 'picture', 'artwork', 'book', 'paper', 'pen', 'pencil',
+            'lamp', 'light', 'plant', 'flower', 'bottle', 'glass', 'cup', 'plate', 'bowl',
+            'clothes', 'shirt', 'jacket', 'hat', 'glasses', 'watch', 'necklace', 'ring',
+            
+            # Places and environments  
+            'kitchen', 'bedroom', 'office', 'studio', 'workspace', 'bathroom', 'garden', 
+            'restaurant', 'cafe', 'library', 'park', 'street', 'building',
+            
+            # Activities and skills
+            'writing', 'reading', 'drawing', 'painting', 'cooking', 'eating', 'drinking',
+            'typing', 'working', 'studying', 'playing', 'exercising', 'sleeping', 'talking',
+            'listening', 'watching', 'thinking', 'creating', 'building', 'cleaning',
+            
+            # Creative and professional terms
+            'artist', 'writer', 'programmer', 'designer', 'musician', 'teacher', 'student',
+            'painting', 'sketch', 'drawing', 'music', 'instrument', 'violin', 'piano', 'guitar',
+            'canvas', 'brush', 'pencil', 'marker', 'easel', 'palette',
+            
+            # Specific descriptive qualities (not generic emotions)
+            'cluttered', 'organized', 'messy', 'clean', 'bright', 'shadowy', 'sunlit',
+            'colorful', 'monochrome', 'vintage', 'modern', 'rustic', 'elegant', 'minimalist',
+            
+            # Natural elements
+            'sunlight', 'shadow', 'reflection', 'tree', 'leaves', 'flowers', 'water', 'sky'
+        }
+        
         words = re.findall(r"\b\w+\b", caption.lower())
         now_time = now()
+        
+        # Extract from whitelist (high confidence)
         for word in words:
-            if len(word) > 3:
+            if word in MEANINGFUL_CATEGORIES:
                 self.motif_counter[word] += 1
                 if word not in self.motif_first_seen:
                     self.motif_first_seen[word] = now_time
                 self.motif_last_seen[word] = now_time
                 self.current_motifs.add(word)
                 if word not in self.motif_confidence:
-                    self.motif_confidence[word] = 0.4
-                    self.motif_confirmed[word] = False
-
-    def extract_semantic_motifs(self, caption: str):
-        if _nlp is None:
-            return
-        doc = _nlp(caption)
-        for token in doc:
-            if token.pos_ in {"NOUN", "PROPN", "ADJ"} and len(token.text) > 2:
-                self.absorb_motif(token.lemma_)
+                    self.motif_confidence[word] = 0.8  # Higher confidence for curated list
+                    self.motif_confirmed[word] = True
+        
+        # Also extract named entities and specific concrete nouns using spaCy (if available)
+        if _nlp is not None:
+            doc = _nlp(caption)
+            
+            # Extract named entities - these are usually meaningful
+            for ent in doc.ents:
+                if ent.label_ in {"PERSON", "ORG", "GPE", "PRODUCT", "WORK_OF_ART", "EVENT"}:
+                    motif = ent.text.lower().strip()
+                    if len(motif) > 2:
+                        self.absorb_motif(motif)
+            
+            # Extract only very specific, concrete nouns that represent things we can see/interact with
+            CONCRETE_NOUN_HINTS = {
+                'desk', 'chair', 'table', 'window', 'door', 'wall', 'floor', 'ceiling',
+                'kitchen', 'bedroom', 'bathroom', 'office', 'studio', 'workspace',
+                'computer', 'laptop', 'phone', 'camera', 'monitor', 'screen',
+                'book', 'paper', 'pen', 'pencil', 'brush', 'canvas', 'easel',
+                'plant', 'flower', 'tree', 'sunlight', 'shadow', 'reflection'
+            }
+            
+            for token in doc:
+                if (token.pos_ in {"NOUN", "PROPN"} and 
+                    len(token.text) > 3 and 
+                    not token.is_stop and 
+                    not token.like_num):
+                    
+                    lemma = token.lemma_.lower()
+                    
+                    # Only extract if it's in our concrete nouns set or ends with tool/device patterns
+                    if (lemma in CONCRETE_NOUN_HINTS or 
+                        (lemma.endswith(('er', 'or')) and len(lemma) > 5)):
+                        self.absorb_motif(lemma)
 
     def get_motif_certainty(self, motif: str) -> float:
         return self.motif_confidence.get(motif.lower(), 0.0)
@@ -172,6 +325,16 @@ class MemoryMixin:
 
     def update_beliefs(self):
         now_time = now()
+        
+        # Periodically clean up motifs (every 10 observations since memory_queue maxlen is 30)
+        if len(self.memory_queue) % 10 == 0:
+            cleaned = self.cleanup_motifs()
+            if cleaned > 0:
+                # Import here to avoid circular import
+                from config.config import CLEAN_CAPTION_OUTPUT
+                if not CLEAN_CAPTION_OUTPUT:
+                    print(f"[🧹] Cleaned up {cleaned} irrelevant motifs")
+        
         for motif, count in self.motif_counter.items():
             motif_age_days = (now_time - self.motif_first_seen.get(motif, now_time)) / 86400
             if count >= BELIEF_THRESHOLD and motif_age_days >= BELIEF_FORM_MIN_DAYS:

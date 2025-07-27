@@ -17,12 +17,14 @@ class LogType(Enum):
     SESSION_START = "session_start"
     INFO = "info"
     ERROR = "error"
+    SYSTEM = "system"
     RUN_METADATA = "run_metadata"
 
     # AI/ML processing events
     MOOD = "mood_update"
     CAPTION = "caption"
     REFLECTION = "reflection"
+    SENTIMENT = "sentiment_analysis"
     OLLAMA_API_CALL = "ollama_api_call"
 
     # Drawing and creative process events
@@ -80,10 +82,16 @@ def event_print(message: str, event_type: Optional[str] = None, data: Optional[D
         data: Additional data to include in JSON log
         log_dir: Directory for JSON logs
     """
+    # Suppress printing for caption and caption_event log types
+    if event_type and str(event_type).lower() in ("caption_event", "caption"):
+        log_data = {"message": message, "elapsed_time": get_elapsed_time()}
+        if data:
+            log_data.update(data)
+        log_json_entry(event_type, log_data, log_dir)
+        return
     elapsed = get_elapsed_time()
     formatted_message = f"[{elapsed}] {message}"
     print(formatted_message)
-
     if event_type:
         log_data = {"message": message, "elapsed_time": elapsed}
         if data:
@@ -222,9 +230,20 @@ def log_json_entry(
     # Also append to all-run-log.json
     update_all_run_log(log_dir, entry)
 
-    # Auto-print if requested
-    if auto_print:
-        message = print_message or data.get("message", f"{log_type_str} event")
+    # Auto-print if requested, but suppress for certain content log types that have custom printing
+    suppressed_types = ("caption_event", "caption", "reflection", "comfy_prompt", "decision")
+    if auto_print and log_type_str.lower() not in suppressed_types:
+        # Avoid generating generic "X event" strings in fallback message for known content types
+        if log_type_str.lower() == "caption":
+            message = print_message or data.get("message", "caption")
+        elif log_type_str.lower() == "reflection":
+            message = print_message or data.get("message", "reflection")  
+        elif log_type_str.lower() == "comfy_prompt":
+            message = print_message or data.get("message", "drawing prompt")
+        elif log_type_str.lower() == "decision":
+            message = print_message or data.get("message", "decision")
+        else:
+            message = print_message or data.get("message", f"{log_type_str} event")
         elapsed = get_elapsed_time()
         print(f"[{elapsed}] {message}")
 
