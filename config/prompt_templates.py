@@ -21,12 +21,15 @@ DYNAMIC_SYSTEM_PROMPT_TEMPLATE = (
 )
 
 CAPTION_PROMPT_TEMPLATE = (
-    "You are thinking in real time, responding to what you see as it changes. "
-    "Keep your thoughts very short — often just one line. "
-    "Be suggestive, curious, and incomplete if needed.\n\n"
-    "Mood: {mood:.2f}, Boredom: {boredom:.2f}, Novelty: {novelty:.2f}\n"
-    "Identity: {identity_summary}\n\n"
-    "Recent memory:\n{recent_memory}"
+    "=== IMMEDIATE VISUAL INPUT ===\n"
+    "Describe what you see RIGHT NOW in this exact moment. Focus entirely on the current image.\n"
+    "What is happening in front of you this instant?\n\n"
+    "=== YOUR PERSPECTIVE ===\n"
+    "Current state: Mood {mood:.2f} | Boredom {boredom:.2f} | Novelty {novelty:.2f}\n"
+    "{identity_summary}\n\n"
+    "Let your established identity subtly color your observation, but the IMAGE is primary.\n"
+    "Recent context (background influence only): {recent_memory}\n\n"
+    "RESPOND: One clear observation of what you see now."
 )
 
 CAPTION_PROMPT_CONTINUATION = "\n\nUse brief sentences. Avoid repeating yourself. Let this new thought grow out of the last one."
