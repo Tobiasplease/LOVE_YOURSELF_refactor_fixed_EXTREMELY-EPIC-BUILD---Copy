@@ -2,10 +2,14 @@
 
 import threading
 import time
+import warnings
 from ultralytics import YOLO
 import cv2
 from config.config import YOLO_CONFIDENCE_THRESHOLD
 from perception.detection_memory import DetectionMemory
+
+# Suppress ultralytics config warnings
+warnings.filterwarnings("ignore", message=".*attempted relative import.*")
 
 
 class ObjectDetectionThread(threading.Thread):
