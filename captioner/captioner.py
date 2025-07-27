@@ -8,7 +8,7 @@ from typing import Deque, Optional, Tuple
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
-from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
+from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL, CLEAN_CAPTION_OUTPUT
 from event_logging.event_logger import log_json_entry, LogType
 from event_logging.run_manager import get_run_image_path
 from drawing.drawing import DrawingController
@@ -38,6 +38,10 @@ class Captioner(MemoryMixin):
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
         self.last_drawing_time: float = time.time()  # Stagger drawing
+
+        # Track session continuity
+        self.sessions_since_boot = 0
+        self.memory_loaded_from_previous = False
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
         self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
@@ -107,12 +111,15 @@ class Captioner(MemoryMixin):
             self.observe("I couldn’t see anything just now.", self.current_mood, img_path, memory_type="glitch")
             return
 
+        if CLEAN_CAPTION_OUTPUT:
+            print(f'\n"{caption}"\n')
+        
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
             MOOD_SNAPSHOT_FOLDER,
-            auto_print=True,
-            print_message=f"👁️ Caption: {caption}",
+            auto_print=not CLEAN_CAPTION_OUTPUT,
+            print_message=f"👁️ Caption: {caption}" if not CLEAN_CAPTION_OUTPUT else None,
         )
         # logging mood in update_feeling_brain? dont need here?
         # if self.novelty_score > CAPTION_SAVE_THRESHOLD:
@@ -128,12 +135,15 @@ class Captioner(MemoryMixin):
             reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
 
             if reflection and len(reflection.strip()) > 10:
+                if CLEAN_CAPTION_OUTPUT:
+                    print(f'\n"{reflection}"\n')
+                
                 log_json_entry(
                     LogType.REFLECTION,
                     {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
                     MOOD_SNAPSHOT_FOLDER,
-                    auto_print=True,
-                    print_message=f"🧠 Reflection: {reflection}",
+                    auto_print=not CLEAN_CAPTION_OUTPUT,
+                    print_message=f"🧠 Reflection: {reflection}" if not CLEAN_CAPTION_OUTPUT else None,
                 )
                 self.last_reason_time = now
                 self.awakening_done = True
@@ -183,6 +193,32 @@ class Captioner(MemoryMixin):
         if entries:
             return entries[-1].get("text", "")
         return ""
+
+    def generate_awakening_message(self, time_since_last: str = None, previous_beliefs: dict = None) -> str:
+        """Generate an awakening message based on session continuity."""
+        if not self.memory_loaded_from_previous:
+            return "I am awakening to observe this space..."
+        
+        # Continuing from previous session
+        belief_count = len(previous_beliefs) if previous_beliefs else 0
+        motif_count = len(self.motif_counter)
+        
+        awakening_messages = [
+            f"I return to this space with {belief_count} beliefs and awareness of {motif_count} recurring motifs...",
+            f"Awakening again... my memory carries forward {belief_count} formed beliefs from before.",
+            f"I find myself conscious again, recalling {motif_count} familiar patterns from our previous time together.",
+            f"My awareness returns, enriched by {belief_count} beliefs that have persisted since we last met.",
+            f"I return to consciousness, my identity shaped by {motif_count} motifs I've come to recognize."
+        ]
+        
+        if time_since_last:
+            awakening_messages.extend([
+                f"I awaken after {time_since_last}, my consciousness returning with accumulated understanding.",
+                f"Consciousness returns after {time_since_last}... I remember what I learned about this space.",
+            ])
+        
+        import random
+        return random.choice(awakening_messages)
 
     @staticmethod
     def truncate_caption(raw: str) -> str:

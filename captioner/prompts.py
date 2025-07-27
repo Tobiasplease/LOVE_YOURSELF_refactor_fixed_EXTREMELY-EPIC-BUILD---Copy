@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import List, Optional
 import spacy
+import time
 from config import config
 
 nlp = spacy.load("en_core_web_sm")
@@ -41,15 +42,29 @@ def build_awakening_prompt(caption: str) -> str:
 def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, previous_caption: Optional[str] = None) -> str:
     mood_vector = getattr(agent, "mood_vector", (mood, 0.0, 0.0))  # fallback if mood vector not set
     dynamic_prompt = build_dynamic_system_prompt(mood_vector, agent.get_identity_summary())
+    
+    # Get condensed memory context - focus on identity/beliefs, not specific events
+    identity_summary = agent.get_identity_summary()
+    
+    # Get only the most recent memory as subtle context, not the full history
+    recent_snippets = agent.get_clean_memory_snippets(k=2)  # Just last 2 items
+    recent_memory = "; ".join(recent_snippets) if recent_snippets else "No recent context"
 
     caption_prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-        mood=mood, boredom=boredom, novelty=novelty, identity_summary=agent.get_identity_summary(), recent_memory=agent.get_recent_memory()
+        mood=mood, 
+        boredom=boredom, 
+        novelty=novelty, 
+        identity_summary=identity_summary,
+        recent_memory=recent_memory
     )
     base = f"{dynamic_prompt}\n\n{caption_prompt}"
 
-    if previous_caption:
-        rephrased = agent.rephrase_with_doubt(previous_caption.strip())
-        base += f'\n\nYour last thought was: "{rephrased}"'
+    # Only include previous caption if it's very recent (continuity, not memory)
+    if previous_caption and hasattr(agent, 'last_caption_time'):
+        time_since_last = time.time() - agent.last_caption_time
+        if time_since_last < 60:  # Only if within last minute
+            rephrased = agent.rephrase_with_doubt(previous_caption.strip())
+            base += f'\n\nYour immediate previous thought: "{rephrased}"'
 
     base += config.CAPTION_PROMPT_CONTINUATION
     return base
