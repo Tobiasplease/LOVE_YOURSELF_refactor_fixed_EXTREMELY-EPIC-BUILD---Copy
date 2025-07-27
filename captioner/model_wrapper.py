@@ -21,8 +21,18 @@ class MultimodalModel:
             return "[⚠️] No image found"
 
         if first_time:
-            prompt = build_awakening_prompt("What do you see?")
-            # more sys prompt in other places?
+            # Use the same detailed environmental prompt system for fresh starts
+            # This ensures first-time awakenings get proper environmental descriptions
+            if self.memory_ref:
+                prompt = build_caption_prompt(
+                    self.memory_ref,
+                    mood=self.memory_ref.current_mood,
+                    boredom=self.memory_ref.boredom,
+                    novelty=self.memory_ref.novelty_score,
+                )
+            else:
+                # Fallback if no memory reference available
+                prompt = build_awakening_prompt("What do you see?")
             return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
         elif flowing and self.memory_ref:
             prompt = build_caption_prompt(
@@ -51,6 +61,31 @@ class MultimodalModel:
         return self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT)
 
     def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None) -> str:
-        return query_ollama(
+        response = query_ollama(
             prompt=prompt, model=self.model_name, image=image_path, timeout=90, log_dir=MOOD_SNAPSHOT_FOLDER, system_prompt=system_prompt
         )
+        
+        # Clean up AI model leakage - remove unwanted prompt-like text
+        response = self._clean_response(response)
+        return response
+    
+    def _clean_response(self, response: str) -> str:
+        """Remove unwanted AI-generated prompt leakage from responses."""
+        # Common patterns the AI model sometimes generates
+        unwanted_patterns = [
+            r"\n\nFeelings:.*?\?",
+            r"\n\nReflection:.*?\?", 
+            r"\n\nWhat do you feel\?",
+            r"\n\nHow does.*?feel\?",
+            r"Feelings: What do you feel\?",
+            r"Reflection: How does.*?\?",
+        ]
+        
+        cleaned = response
+        for pattern in unwanted_patterns:
+            import re
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+        
+        # Clean up extra whitespace
+        cleaned = cleaned.strip()
+        return cleaned
