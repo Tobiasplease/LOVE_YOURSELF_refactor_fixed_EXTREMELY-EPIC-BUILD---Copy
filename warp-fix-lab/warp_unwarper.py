@@ -33,6 +33,8 @@ def pre_distort_for_plotter(image, pivot_point=None, max_radius=None, interpolat
 
     # Estimate pivot point if not provided
     # !!! TWEAK
+    # pivot_y (negative value): How far above the paper the arm pivots
+    # pivot_x: Usually the center of your paper width
     if pivot_point is None:
         pivot_x = width // 2
         pivot_y = -height * 0.3  # Pivot above the image
