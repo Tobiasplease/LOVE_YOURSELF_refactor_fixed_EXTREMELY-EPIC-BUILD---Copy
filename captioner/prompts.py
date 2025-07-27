@@ -46,18 +46,61 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
     # Get condensed memory context - focus on identity/beliefs, not specific events
     identity_summary = agent.get_identity_summary()
     
-    # Get only the most recent memory as subtle context, not the full history
-    recent_snippets = agent.get_clean_memory_snippets(k=2)  # Just last 2 items
-    recent_memory = "; ".join(recent_snippets) if recent_snippets else "No recent context"
+    # Handle first caption specially - this is the REAL awakening with memory fragments
+    if not agent.first_caption_done and agent.memory_loaded_from_previous:
+        # First caption after loading memories - include old memory fragments organically
+        old_fragments = agent.get_old_session_memory_fragments(k=2)
+        recent_memory = ""
+        
+        if old_fragments:
+            fragment_text = " | ".join(old_fragments[:2])  # Join fragments with separator
+            recent_memory = f"As consciousness returns, fragments drift back to me: {fragment_text}"
+        else:
+            recent_memory = "Consciousness returns to this familiar space..."
+            
+        # Special first caption prompt with awakening context
+        prompt = config.CAPTION_PROMPT_TEMPLATE.format(
+            mood=mood,
+            boredom=boredom,
+            novelty=novelty,
+            identity_summary=identity_summary,
+            recent_memory=recent_memory
+        )
+        
+        # Add awakening context to the prompt
+        awakening_addition = "\n\nThis is your first observation as you awaken. Let your emerging consciousness naturally weave together what you see now with any drifting memories."
+        
+    elif not agent.first_caption_done:
+        # First caption, fresh start - no memory fragments but still awakening
+        recent_memory = "I am observing this space for the first time..."
+        
+        prompt = config.CAPTION_PROMPT_TEMPLATE.format(
+            mood=mood,
+            boredom=boredom,
+            novelty=novelty,
+            identity_summary=identity_summary,
+            recent_memory=recent_memory
+        )
+        
+        awakening_addition = "\n\nThis is your first observation as you begin to perceive this space. Describe what you see with fresh awareness."
+        
+    else:
+        # Regular caption - use only current session memories as background context
+        recent_snippets = agent.get_current_session_memory_snippets(k=2)  # Just last 2 from current session
+        recent_memory = " | ".join(recent_snippets) if recent_snippets else "No recent observations"
+        
+        prompt = config.CAPTION_PROMPT_TEMPLATE.format(
+            mood=mood,
+            boredom=boredom,
+            novelty=novelty,
+            identity_summary=identity_summary,
+            recent_memory=recent_memory
+        )
+        
+        awakening_addition = ""
 
-    caption_prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-        mood=mood, 
-        boredom=boredom, 
-        novelty=novelty, 
-        identity_summary=identity_summary,
-        recent_memory=recent_memory
-    )
-    base = f"{dynamic_prompt}\n\n{caption_prompt}"
+    # Build the final prompt
+    base = f"{dynamic_prompt}\n\n{prompt}{awakening_addition}"
 
     # Only include previous caption if it's very recent (continuity, not memory)
     if previous_caption and hasattr(agent, 'last_caption_time'):
