@@ -87,7 +87,43 @@ class Captioner(MemoryMixin):
         cv2.imwrite(img_path, frame)
 
         try:
-            caption = self.model.caption_image(img_path, flowing=True, first_time=not self.first_caption_done)
+            # Show loading animation for first caption (the real awakening environmental description)
+            if not self.first_caption_done:
+                print("🌅 Observing environment for the first time...")
+                import threading
+                import sys
+                from itertools import cycle
+                
+                def show_awakening_loading(stop_event):
+                    """Show loading animation for the awakening environmental description."""
+                    spinner = cycle(['|', '/', '-', '\\'])
+                    dots = cycle(['', '.', '..', '...'])
+                    while not stop_event.is_set():
+                        sys.stdout.write(f'\r{next(spinner)} Processing{next(dots)}')
+                        sys.stdout.flush()
+                        import time
+                        time.sleep(0.3)
+                    # Clear the loading line
+                    sys.stdout.write('\r' + ' ' * 20 + '\r')
+                    sys.stdout.flush()
+                
+                stop_loading = threading.Event()
+                loading_thread = threading.Thread(target=show_awakening_loading, args=(stop_loading,), daemon=True)
+                loading_thread.start()
+                
+                start_time = time.time()
+                caption = self.model.caption_image(img_path, flowing=True, first_time=True)
+                
+                # Ensure minimum display time of 2 seconds for visibility
+                elapsed = time.time() - start_time
+                if elapsed < 2.0:
+                    time.sleep(2.0 - elapsed)
+                
+                stop_loading.set()
+                loading_thread.join(timeout=0.5)
+                print()  # Add newline after loading animation
+            else:
+                caption = self.model.caption_image(img_path, flowing=True, first_time=False)
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
             log_json_entry(
@@ -112,14 +148,15 @@ class Captioner(MemoryMixin):
             return
 
         if CLEAN_CAPTION_OUTPUT:
-            print(f'\n"{caption}"\n')
+            # Suppress old-style output, only print clean caption if needed
+            pass
         
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
             MOOD_SNAPSHOT_FOLDER,
             auto_print=not CLEAN_CAPTION_OUTPUT,
-            print_message=f"👁️ Caption: {caption}" if not CLEAN_CAPTION_OUTPUT else None,
+            print_message=None,
         )
         # logging mood in update_feeling_brain? dont need here?
         # if self.novelty_score > CAPTION_SAVE_THRESHOLD:
@@ -136,14 +173,15 @@ class Captioner(MemoryMixin):
 
             if reflection and len(reflection.strip()) > 10:
                 if CLEAN_CAPTION_OUTPUT:
-                    print(f'\n"{reflection}"\n')
+                    # Suppress old-style reflection output
+                    pass
                 
                 log_json_entry(
                     LogType.REFLECTION,
                     {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
                     MOOD_SNAPSHOT_FOLDER,
                     auto_print=not CLEAN_CAPTION_OUTPUT,
-                    print_message=f"🧠 Reflection: {reflection}" if not CLEAN_CAPTION_OUTPUT else None,
+                    print_message=None,
                 )
                 self.last_reason_time = now
                 self.awakening_done = True
@@ -195,11 +233,12 @@ class Captioner(MemoryMixin):
         return ""
 
     def generate_awakening_message(self, time_since_last: str = None, previous_beliefs: dict = None) -> str:
-        """Generate an awakening message based on session continuity."""
-        if not self.memory_loaded_from_previous:
-            return "I am awakening to observe this space..."
+        """Generate a simple awakening status message - NOT environmental description."""
         
-        # Continuing from previous session
+        if not self.memory_loaded_from_previous:
+            return "I am awakening to observe this space for the first time..."
+        
+        # Continuing from previous session - simple status messages
         belief_count = len(previous_beliefs) if previous_beliefs else 0
         motif_count = len(self.motif_counter)
         
@@ -219,6 +258,11 @@ class Captioner(MemoryMixin):
         
         import random
         return random.choice(awakening_messages)
+    
+    def mark_awakening_complete(self):
+        """Mark that awakening is complete but allow first caption to still show loading animation."""
+        # Don't set first_caption_done = True here - let the first caption handle this
+        pass
 
     @staticmethod
     def truncate_caption(raw: str) -> str:

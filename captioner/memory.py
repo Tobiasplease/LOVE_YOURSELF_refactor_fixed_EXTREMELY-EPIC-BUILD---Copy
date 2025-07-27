@@ -226,6 +226,40 @@ class MemoryMixin:
                 if len(out) >= k:
                     break
         return list(reversed(out))
+        
+    def get_current_session_memory_snippets(self, k: int = 3) -> List[str]:
+        """Get only memories from the current session (since session_start)."""
+        seen, out = set(), []
+        for entry in reversed(self.memory_queue):
+            # Only include memories from current session
+            if entry.get("timestamp", 0) >= self.session_start:
+                cap = entry["text"]
+                if cap not in seen and len(cap.strip()) > 10:  # Exclude very short memories
+                    out.append(cap)
+                    seen.add(cap)
+                    if len(out) >= k:
+                        break
+        return list(reversed(out))
+        
+    def get_old_session_memory_fragments(self, k: int = 3) -> List[str]:
+        """Get fragmentary memories from before the current session for awakening context."""
+        import random
+        seen, candidates = set(), []
+        
+        for entry in self.memory_queue:
+            # Only include memories from before current session
+            if entry.get("timestamp", 0) < self.session_start:
+                cap = entry["text"]
+                if cap not in seen and len(cap.strip()) > 15:  # Longer memories are more interesting
+                    # Extract interesting fragments (nouns, descriptive phrases)
+                    words = cap.split()
+                    if len(words) >= 4:  # Meaningful memories only
+                        candidates.append(cap)
+                        seen.add(cap)
+        
+        # Return random selection of old memories, shuffled for variety
+        selected = random.sample(candidates, min(k, len(candidates))) if candidates else []
+        return selected
 
     def get_recent_memory(self, k: int = 5) -> str:
         """

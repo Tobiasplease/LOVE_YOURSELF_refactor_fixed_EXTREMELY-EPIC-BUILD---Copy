@@ -28,7 +28,7 @@ CAPTION_PROMPT_TEMPLATE = (
     "Current state: Mood {mood:.2f} | Boredom {boredom:.2f} | Novelty {novelty:.2f}\n"
     "{identity_summary}\n\n"
     "Let your established identity subtly color your observation, but the IMAGE is primary.\n"
-    "Recent context (background influence only): {recent_memory}\n\n"
+    "Recent session context (background awareness only, NOT current reality): {recent_memory}\n\n"
     "RESPOND: One clear observation of what you see now."
 )
 

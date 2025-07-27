@@ -3,6 +3,7 @@ import argparse
 import sys
 import cv2
 import threading
+from itertools import cycle
 
 
 def parse_args():
@@ -22,6 +23,20 @@ def debug_print(message, level="INFO"):
     if DEBUG_MODE:
         timestamp = time.strftime("%H:%M:%S")
         print(f"[DEBUG {timestamp}] {level}: {message}")
+
+def show_loading_animation(message, stop_event):
+    """Show a loading animation until stop_event is set."""
+    # Use basic ASCII characters for better compatibility
+    spinner = cycle(['|', '/', '-', '\\'])
+    dots = cycle(['', '.', '..', '...'])
+    print(f"\n{message}")
+    while not stop_event.is_set():
+        sys.stdout.write(f'\r{next(spinner)} Processing{next(dots)}')
+        sys.stdout.flush()
+        time.sleep(0.3)
+    # Clear the loading line and move to next line
+    sys.stdout.write('\r' + ' ' * 20 + '\r')
+    sys.stdout.flush()
 
 if DEBUG_MODE:
     print("🐛 DEBUG MODE ENABLED - Verbose output active")
@@ -145,6 +160,10 @@ if previous_state:
     # Apply state to components
     state_manager.apply_state_to_captioner(previous_state, captioner)
     state_manager.apply_state_to_mood_engine(previous_state, mood_engine)
+    # Reset last_caption so remnants from previous session are not printed
+    captioner.last_caption = ""
+    # Set memory loaded flag BEFORE generating awakening message
+    captioner.memory_loaded_from_previous = True
     
     # Generate awakening message with continuity
     save_time = previous_state["metadata"]["save_time"]
@@ -152,9 +171,9 @@ if previous_state:
     previous_beliefs = previous_state["captioner"].get("beliefs", {})
     
     awakening_msg = captioner.generate_awakening_message(time_since_last, previous_beliefs)
+    
     if not CLEAN_CAPTION_OUTPUT:
         print(f"[🌅] {awakening_msg}")
-    
     log_json_entry(
         LogType.INFO,
         {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
@@ -162,11 +181,13 @@ if previous_state:
         auto_print=CLEAN_CAPTION_OUTPUT,
         print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None
     )
-    
-    captioner.memory_loaded_from_previous = True
+    # Mark awakening complete to avoid duplicate environmental description
+    captioner.mark_awakening_complete()
 else:
     # Fresh start
+    captioner.memory_loaded_from_previous = False
     awakening_msg = captioner.generate_awakening_message()
+    
     if not CLEAN_CAPTION_OUTPUT:
         print(f"[🌅] {awakening_msg}")
     log_json_entry(
@@ -176,6 +197,8 @@ else:
         auto_print=CLEAN_CAPTION_OUTPUT,
         print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None
     )
+    # Mark awakening complete to avoid duplicate environmental description
+    captioner.mark_awakening_complete()
 
 debug_print("System initialization complete", "INIT")
 
@@ -204,7 +227,12 @@ def mood_update_thread(frame, timestamp):
                 
                 # Second: Analyze mood from captioner's latest caption
                 if captioner.last_caption:
-                    current_mood = mood_engine.analyze_mood(captioner.last_caption, image_path=snapshot_path)
+                    # Remove 'Caption:' prefix if present and print with line spacing
+                    clean_caption = captioner.last_caption
+                    if clean_caption.lower().startswith("caption:"):
+                        clean_caption = clean_caption[len("caption:"):].strip()
+                    print(f"\n{clean_caption}\n")
+                    current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path)
                     debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
                     
                     # Third: Update captioner's mood state for next cycle
