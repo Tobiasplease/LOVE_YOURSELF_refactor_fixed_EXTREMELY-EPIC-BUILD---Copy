@@ -72,5 +72,8 @@ MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
 
+# === OUTPUT SETTINGS ===
+CLEAN_CAPTION_OUTPUT = False  # When True, shows only captions in quotes with clean spacing
+
 # === PROMPT TEMPLATES ===
 # Imported from config.prompts
