@@ -237,7 +237,7 @@ def log_json_entry(
         if log_type_str.lower() == "caption":
             message = print_message or data.get("message", "caption")
         elif log_type_str.lower() == "reflection":
-            message = print_message or data.get("message", "reflection")  
+            message = print_message or data.get("message", "reflection")
         elif log_type_str.lower() == "comfy_prompt":
             message = print_message or data.get("message", "drawing prompt")
         elif log_type_str.lower() == "decision":

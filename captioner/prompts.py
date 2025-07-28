@@ -42,68 +42,57 @@ def build_awakening_prompt(caption: str) -> str:
 def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, previous_caption: Optional[str] = None) -> str:
     mood_vector = getattr(agent, "mood_vector", (mood, 0.0, 0.0))  # fallback if mood vector not set
     dynamic_prompt = build_dynamic_system_prompt(mood_vector, agent.get_identity_summary())
-    
+
     # Get condensed memory context - focus on identity/beliefs, not specific events
     identity_summary = agent.get_identity_summary()
-    
+
     # Handle first caption specially - this is the REAL awakening with memory fragments
     if not agent.first_caption_done and agent.memory_loaded_from_previous:
         # First caption after loading memories - include old memory fragments organically
         old_fragments = agent.get_old_session_memory_fragments(k=2)
         recent_memory = ""
-        
+
         if old_fragments:
             fragment_text = " | ".join(old_fragments[:2])  # Join fragments with separator
             recent_memory = f"As consciousness returns, fragments drift back to me: {fragment_text}"
         else:
             recent_memory = "Consciousness returns to this familiar space..."
-            
+
         # Special first caption prompt with awakening context
         prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood,
-            boredom=boredom,
-            novelty=novelty,
-            identity_summary=identity_summary,
-            recent_memory=recent_memory
+            mood=mood, boredom=boredom, novelty=novelty, identity_summary=identity_summary, recent_memory=recent_memory
         )
-        
+
         # Add awakening context to the prompt
-        awakening_addition = "\n\nThis is your first observation as you awaken. Let your emerging consciousness naturally weave together what you see now with any drifting memories."
-        
+        awakening_addition = """\n\nThis is your first observation as you awaken.
+        Let your emerging consciousness naturally weave together what you see now with any drifting memories."""
+
     elif not agent.first_caption_done:
         # First caption, fresh start - no memory fragments but still awakening
         recent_memory = "I am observing this space for the first time..."
-        
+
         prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood,
-            boredom=boredom,
-            novelty=novelty,
-            identity_summary=identity_summary,
-            recent_memory=recent_memory
+            mood=mood, boredom=boredom, novelty=novelty, identity_summary=identity_summary, recent_memory=recent_memory
         )
-        
+
         awakening_addition = "\n\nThis is your first observation as you begin to perceive this space. Describe what you see with fresh awareness."
-        
+
     else:
         # Regular caption - use only current session memories as background context
         recent_snippets = agent.get_current_session_memory_snippets(k=2)  # Just last 2 from current session
         recent_memory = " | ".join(recent_snippets) if recent_snippets else "No recent observations"
-        
+
         prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood,
-            boredom=boredom,
-            novelty=novelty,
-            identity_summary=identity_summary,
-            recent_memory=recent_memory
+            mood=mood, boredom=boredom, novelty=novelty, identity_summary=identity_summary, recent_memory=recent_memory
         )
-        
+
         awakening_addition = ""
 
     # Build the final prompt
     base = f"{dynamic_prompt}\n\n{prompt}{awakening_addition}"
 
     # Only include previous caption if it's very recent (continuity, not memory)
-    if previous_caption and hasattr(agent, 'last_caption_time'):
+    if previous_caption and hasattr(agent, "last_caption_time"):
         time_since_last = time.time() - agent.last_caption_time
         if time_since_last < 60:  # Only if within last minute
             rephrased = agent.rephrase_with_doubt(previous_caption.strip())
@@ -143,9 +132,3 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
         current_caption=current_caption.strip(), memory_context=memory_context.strip(), recent_reflection=recent_reflection.strip()
     )
     return f"{dynamic_drawing_prompt}"
-
-
-# === MOOD SCORING ===
-# def build_mood_prompt(image_description: str, memory_state: str) -> str:
-#     return f"{config.SYSTEM_PROMPT}\n\n{config.MOOD_PROMPT_TEMPLATE.format(image_description=image_description.strip(),
-# memory_state=memory_state.strip())}"

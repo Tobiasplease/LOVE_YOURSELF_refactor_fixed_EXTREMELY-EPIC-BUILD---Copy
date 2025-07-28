@@ -34,7 +34,9 @@ CAPTION_PROMPT_TEMPLATE = (
     "RESPOND: One clear observation of what you see now."
 )
 
-CAPTION_PROMPT_CONTINUATION = "\n\nBE CONCISE: Use 2-3 short sentences maximum. Create a flowing stream of consciousness where each thought naturally transitions from the previous one while staying present with what you're seeing. Avoid repeating previous observations - explore something new."
+CAPTION_PROMPT_CONTINUATION = """\n\nBE CONCISE: Use 2-3 short sentences maximum.
+Create a flowing stream of consciousness where each thought naturally transitions from the previous one while staying present with what you're seeing.
+Avoid repeating previous observations - explore something new."""
 
 REFLECTION_PROMPT_BASE = "You are reflecting internally on what you've seen and how it made you feel."
 

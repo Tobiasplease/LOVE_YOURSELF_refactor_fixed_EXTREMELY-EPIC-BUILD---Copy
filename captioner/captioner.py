@@ -93,32 +93,33 @@ class Captioner(MemoryMixin):
                 import threading
                 import sys
                 from itertools import cycle
-                
+
                 def show_awakening_loading(stop_event):
                     """Show loading animation for the awakening environmental description."""
-                    spinner = cycle(['|', '/', '-', '\\'])
-                    dots = cycle(['', '.', '..', '...'])
+                    spinner = cycle(["|", "/", "-", "\\"])
+                    dots = cycle(["", ".", "..", "..."])
                     while not stop_event.is_set():
-                        sys.stdout.write(f'\r{next(spinner)} Processing{next(dots)}')
+                        sys.stdout.write(f"\r{next(spinner)} Processing{next(dots)}")
                         sys.stdout.flush()
                         import time
+
                         time.sleep(0.3)
                     # Clear the loading line
-                    sys.stdout.write('\r' + ' ' * 20 + '\r')
+                    sys.stdout.write("\r" + " " * 20 + "\r")
                     sys.stdout.flush()
-                
+
                 stop_loading = threading.Event()
                 loading_thread = threading.Thread(target=show_awakening_loading, args=(stop_loading,), daemon=True)
                 loading_thread.start()
-                
+
                 start_time = time.time()
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)
-                
+
                 # Ensure minimum display time of 2 seconds for visibility
                 elapsed = time.time() - start_time
                 if elapsed < 2.0:
                     time.sleep(2.0 - elapsed)
-                
+
                 stop_loading.set()
                 loading_thread.join(timeout=0.5)
                 print()  # Add newline after loading animation
@@ -150,7 +151,7 @@ class Captioner(MemoryMixin):
         if CLEAN_CAPTION_OUTPUT:
             # Suppress old-style output, only print clean caption if needed
             pass
-        
+
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
@@ -175,7 +176,7 @@ class Captioner(MemoryMixin):
                 if CLEAN_CAPTION_OUTPUT:
                     # Suppress old-style reflection output
                     pass
-                
+
                 log_json_entry(
                     LogType.REFLECTION,
                     {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
@@ -232,33 +233,36 @@ class Captioner(MemoryMixin):
             return entries[-1].get("text", "")
         return ""
 
-    def generate_awakening_message(self, time_since_last: str = None, previous_beliefs: dict = None) -> str:
+    def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
         """Generate a simple awakening status message - NOT environmental description."""
-        
+
         if not self.memory_loaded_from_previous:
             return "I am awakening to observe this space for the first time..."
-        
+
         # Continuing from previous session - simple status messages
         belief_count = len(previous_beliefs) if previous_beliefs else 0
         motif_count = len(self.motif_counter)
-        
+
         awakening_messages = [
             f"I return to this space with {belief_count} beliefs and awareness of {motif_count} recurring motifs...",
             f"Awakening again... my memory carries forward {belief_count} formed beliefs from before.",
             f"I find myself conscious again, recalling {motif_count} familiar patterns from our previous time together.",
             f"My awareness returns, enriched by {belief_count} beliefs that have persisted since we last met.",
-            f"I return to consciousness, my identity shaped by {motif_count} motifs I've come to recognize."
+            f"I return to consciousness, my identity shaped by {motif_count} motifs I've come to recognize.",
         ]
-        
+
         if time_since_last:
-            awakening_messages.extend([
-                f"I awaken after {time_since_last}, my consciousness returning with accumulated understanding.",
-                f"Consciousness returns after {time_since_last}... I remember what I learned about this space.",
-            ])
-        
+            awakening_messages.extend(
+                [
+                    f"I awaken after {time_since_last}, my consciousness returning with accumulated understanding.",
+                    f"Consciousness returns after {time_since_last}... I remember what I learned about this space.",
+                ]
+            )
+
         import random
+
         return random.choice(awakening_messages)
-    
+
     def mark_awakening_complete(self):
         """Mark that awakening is complete but allow first caption to still show loading animation."""
         # Don't set first_caption_done = True here - let the first caption handle this

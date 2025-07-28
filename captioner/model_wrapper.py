@@ -64,28 +64,29 @@ class MultimodalModel:
         response = query_ollama(
             prompt=prompt, model=self.model_name, image=image_path, timeout=90, log_dir=MOOD_SNAPSHOT_FOLDER, system_prompt=system_prompt
         )
-        
+
         # Clean up AI model leakage - remove unwanted prompt-like text
         response = self._clean_response(response)
         return response
-    
+
     def _clean_response(self, response: str) -> str:
         """Remove unwanted AI-generated prompt leakage from responses."""
         # Common patterns the AI model sometimes generates
         unwanted_patterns = [
             r"\n\nFeelings:.*?\?",
-            r"\n\nReflection:.*?\?", 
+            r"\n\nReflection:.*?\?",
             r"\n\nWhat do you feel\?",
             r"\n\nHow does.*?feel\?",
             r"Feelings: What do you feel\?",
             r"Reflection: How does.*?\?",
         ]
-        
+
         cleaned = response
         for pattern in unwanted_patterns:
             import re
+
             cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE | re.DOTALL)
-        
+
         # Clean up extra whitespace
         cleaned = cleaned.strip()
         return cleaned
