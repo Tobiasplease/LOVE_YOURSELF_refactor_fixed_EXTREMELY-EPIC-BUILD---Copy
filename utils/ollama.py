@@ -67,6 +67,7 @@ def query_ollama(
     timeout: int = 20,
     log_dir: str = MOOD_SNAPSHOT_FOLDER,
     system_prompt: Optional[str] = None,
+    strict_evaluation: bool = False,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -82,24 +83,16 @@ def query_ollama(
     Returns:
         Response text from Ollama
     """
-    # Prepare the payload
     payload = {"model": model, "prompt": prompt, "stream": False}
     # payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}}
-    
-    # DEBUG: For first-time environmental descriptions, try to ensure clean context
-    if "FIRST ENVIRONMENTAL OBSERVATION" in prompt:
-        # Add additional options to minimize context bleed
+
+    if strict_evaluation:
         payload["options"] = {
             "temperature": 0.1,  # Lower temperature for more focused responses
-            "top_p": 0.8,        # Reduce randomness
-            "repeat_penalty": 1.1 # Discourage repetition of unseen details
+            "top_p": 0.8,  # Reduce randomness
+            "repeat_penalty": 1.1,  # Discourage repetition of unseen details
         }
-        # Debug logging for context options (only in non-clean mode)
-        from config.config import CLEAN_CAPTION_OUTPUT
-        if not CLEAN_CAPTION_OUTPUT:
-            print(f"[🔧 DEBUG] Using clean context options for first environmental observation")
 
-        # Add system prompt if provided
     if system_prompt:
         payload["system"] = system_prompt
 
@@ -110,10 +103,6 @@ def query_ollama(
             # Assume it's a file path
             if os.path.exists(image):
                 image_path = image
-                # Debug logging for image path (only in non-clean mode) 
-                from config.config import CLEAN_CAPTION_OUTPUT
-                if not CLEAN_CAPTION_OUTPUT:
-                    print(f"[🔍 DEBUG] Ollama processing image: {image_path}")
                 with open(image, "rb") as img_file:
                     img_bytes = img_file.read()
                     img_b64 = base64.b64encode(img_bytes).decode("utf-8")

@@ -87,42 +87,9 @@ class Captioner(MemoryMixin):
         cv2.imwrite(img_path, frame)
 
         try:
-            # Show loading animation for first caption (the real awakening environmental description)
             if not self.first_caption_done:
                 print("🌅 Observing environment for the first time...")
-                import threading
-                import sys
-                from itertools import cycle
-
-                def show_awakening_loading(stop_event):
-                    """Show loading animation for the awakening environmental description."""
-                    spinner = cycle(["|", "/", "-", "\\"])
-                    dots = cycle(["", ".", "..", "..."])
-                    while not stop_event.is_set():
-                        sys.stdout.write(f"\r{next(spinner)} Processing{next(dots)}")
-                        sys.stdout.flush()
-                        import time
-
-                        time.sleep(0.3)
-                    # Clear the loading line
-                    sys.stdout.write("\r" + " " * 20 + "\r")
-                    sys.stdout.flush()
-
-                stop_loading = threading.Event()
-                loading_thread = threading.Thread(target=show_awakening_loading, args=(stop_loading,), daemon=True)
-                loading_thread.start()
-
-                start_time = time.time()
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)
-
-                # Ensure minimum display time of 2 seconds for visibility
-                elapsed = time.time() - start_time
-                if elapsed < 2.0:
-                    time.sleep(2.0 - elapsed)
-
-                stop_loading.set()
-                loading_thread.join(timeout=0.5)
-                print()  # Add newline after loading animation
             else:
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
         except Exception as e:
@@ -159,10 +126,6 @@ class Captioner(MemoryMixin):
             auto_print=not CLEAN_CAPTION_OUTPUT,
             print_message=None,
         )
-        # logging mood in update_feeling_brain? dont need here?
-        # if self.novelty_score > CAPTION_SAVE_THRESHOLD:
-        #     log_mood(caption, self.current_mood, img_path)
-        # log_json_entry(LogType.MOOD, {"caption": caption, "mood": self.current_mood, "image": img_path}, MOOD_SNAPSHOT_FOLDER)
 
         self.observe(caption, self.current_mood, img_path, memory_type="perception")
         self.last_caption = caption
