@@ -76,7 +76,6 @@ OLLAMA_TIMEOUT_EVAL = 90
 # === OUTPUT SETTINGS ===
 LOG_TYPES_TO_PRINT = ["all"]
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood"]
-# LOG_TYPES_TO_PRINT = [LogType.CAPTION, LogType.REFLECTION, LogType.COMFY_PROMPT, LogType.DECISION, LogType.MOOD]
 
 # ATT: TOBIAS
 # TO SEE ONLY CLEAN CAPTIONS USE DEBUG MODE in machine.py:
