@@ -20,6 +20,9 @@ from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 
 from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER
+from config.prompt_templates import SELF_CRITIQUE_PROMPT
+from utils.ollama import query_ollama
+from utils.state_manager import state_manager
 from .comfy import create_impostor_controller
 
 if TYPE_CHECKING:
@@ -34,6 +37,7 @@ class DrawingController:
         self.cooldown: float = DRAWING_COOLDOWN  # seconds between drawings
         self.last_prompt: Optional[str] = None
         self.last_drawing_prompt: str = ""
+        self.last_reflection: Optional[str] = None
 
     # ------------------------------------------------------------------
     # decision helpers
@@ -58,6 +62,43 @@ class DrawingController:
     # ------------------------------------------------------------------
     # main entry
     # ------------------------------------------------------------------
+    def critique_drawing(self, image_path: str) -> None:
+        """Critique a completed drawing using Ollama."""
+        try:
+            if not self.last_drawing_prompt or not self.last_reflection:
+                return
+                
+            critique_prompt = SELF_CRITIQUE_PROMPT.format(
+                original_prompt=self.last_drawing_prompt,
+                reflection=self.last_reflection or "No specific reflection recorded"
+            )
+            
+            critique_response = query_ollama(
+                prompt=critique_prompt,
+                image=image_path,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                system_prompt="You are critiquing your own artwork. Be honest and constructive."
+            )
+            
+            log_json_entry(
+                LogType.REFLECTION,
+                {
+                    "event": "drawing_self_critique",
+                    "image_path": image_path,
+                    "original_prompt": self.last_drawing_prompt,
+                    "critique": critique_response,
+                    "timestamp": time.time()
+                },
+                print_message=f"🎯 Self-critique: {critique_response[:100]}..."
+            )
+            
+        except Exception as exc:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Error in drawing critique: {exc}", "component": "drawing_critique"},
+                print_message=f"⚠️ Error critiquing drawing: {exc}"
+            )
+
     def handle_drawing_flow(
         self,
         agent: "Captioner",
@@ -67,6 +108,7 @@ class DrawingController:
         reflection: Optional[str] = None,
     ) -> None:
         """Captioner passes the prompt already built – we just queue it."""
+        self.last_reflection = reflection
         try:
             if not self.should_draw(
                 mood=agent.current_mood,
@@ -146,6 +188,7 @@ class DrawingController:
                 steps=25,
             )
             if controller.queue_prompt():
+                state_manager.start_drawing_generation(drawing_prompt)
                 log_json_entry(
                     LogType.COMFY_PROMPT,
                     {"message": "ComfyUI drawing queued successfully", "drawing_prompt": drawing_prompt},

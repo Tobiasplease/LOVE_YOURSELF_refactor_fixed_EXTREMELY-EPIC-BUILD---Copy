@@ -111,7 +111,6 @@ object_detector.start()
 # Start image monitoring
 debug_print("Starting image monitor", "INIT")
 image_monitor = ImageMonitor(log_folder=MOOD_SNAPSHOT_FOLDER)
-image_monitor.start()
 
 # Initialize run ID and start time for this session
 start_time = time.time()
@@ -139,6 +138,14 @@ debug_print("Initializing mood engine", "INIT")
 mood_engine = MoodEngine()
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
+
+# Set up image monitor with self-critique callback
+def on_drawing_complete(image_path: str):
+    """Handle drawing completion with self-critique."""
+    captioner.drawing.critique_drawing(image_path)
+
+image_monitor.on_image_complete = on_drawing_complete
+image_monitor.start()
 
 # Load previous session state if available
 debug_print("Loading previous session state", "INIT")
