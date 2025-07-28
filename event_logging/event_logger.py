@@ -230,7 +230,7 @@ def log_json_entry(
 
     # Auto-print if requested, but suppress for certain content log types that have custom printing
     # suppressed_types = ("caption_event", "caption", "reflection", "comfy_prompt", "decision")
-    if log_type in LOG_TYPES_TO_PRINT:
+    if log_type_str.lower() in LOG_TYPES_TO_PRINT or "all" in LOG_TYPES_TO_PRINT:
         # Avoid generating generic "X event" strings in fallback message for known content types
         if log_type_str.lower() == "caption":
             message = print_message or data.get("message", "caption")

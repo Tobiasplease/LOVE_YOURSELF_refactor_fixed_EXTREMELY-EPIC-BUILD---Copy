@@ -127,7 +127,7 @@ class Captioner(MemoryMixin):
                 log_json_entry(
                     LogType.REFLECTION,
                     {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
-                    print_message=None,
+                    print_message=f"🧠 Reflection: {reflection}",
                 )
                 self.last_reason_time = now
                 self.awakening_done = True

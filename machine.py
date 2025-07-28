@@ -203,11 +203,14 @@ def mood_update_thread(frame, timestamp):
 
                 # Second: Analyze mood from captioner's latest caption
                 if captioner.last_caption:
-                    # Remove 'Caption:' prefix if present and print with line spacing
+                    # CLEAN_CAPTION
                     clean_caption = captioner.last_caption
                     if clean_caption.lower().startswith("caption:"):
                         clean_caption = clean_caption[len("caption:") :].strip()
-                    print(f"\n{clean_caption}\n")
+
+                    if DEBUG_MODE:
+                        print(f"\n{clean_caption}\n")
+
                     current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path)
                     debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
 
