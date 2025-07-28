@@ -74,6 +74,3 @@ OLLAMA_TIMEOUT_EVAL = 90
 
 # === OUTPUT SETTINGS ===
 CLEAN_CAPTION_OUTPUT = True  # When True, shows only captions in quotes with clean spacing
-
-# === PROMPT TEMPLATES ===
-# Imported from config.prompts
