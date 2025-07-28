@@ -1,6 +1,6 @@
 import os
 
-from .prompt_templates import *  # noqa: F401
+from config.prompt_templates import *  # noqa: F401
 
 # === SERIAL SETTINGS ===
 SERIAL_PORT = "COM10"
