@@ -5,7 +5,8 @@ import base64
 import requests
 from typing import Optional, Union
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
-from event_logging.event_logger import log_json_entry, LogType
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 
 
 def log_ollama_call(
@@ -67,6 +68,7 @@ def query_ollama(
     timeout: int = 20,
     log_dir: str = MOOD_SNAPSHOT_FOLDER,
     system_prompt: Optional[str] = None,
+    strict_evaluation: bool = False,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -82,11 +84,16 @@ def query_ollama(
     Returns:
         Response text from Ollama
     """
-    # Prepare the payload
     payload = {"model": model, "prompt": prompt, "stream": False}
     # payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}}
 
-    # Add system prompt if provided
+    if strict_evaluation:
+        payload["options"] = {
+            "temperature": 0.1,  # Lower temperature for more focused responses
+            "top_p": 0.8,  # Reduce randomness
+            "repeat_penalty": 1.1,  # Discourage repetition of unseen details
+        }
+
     if system_prompt:
         payload["system"] = system_prompt
 

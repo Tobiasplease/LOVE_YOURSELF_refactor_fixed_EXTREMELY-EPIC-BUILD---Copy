@@ -1,5 +1,6 @@
 import os
-from .prompt_templates import *  # noqa: F401
+
+from config.prompt_templates import *  # noqa: F401
 
 # === SERIAL SETTINGS ===
 SERIAL_PORT = "COM10"
@@ -59,7 +60,7 @@ DRAWING_COOLDOWN = 180  # seconds between drawings
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 
 # === CAPTIONER MEMORY CONTROL ===
-MOOD_DECAY_RATE = 0.02  # how much mood fades when nothing new happens
+MOOD_DECAY_RATE = 0.05  # how much mood fades when nothing new happens
 NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
@@ -72,5 +73,13 @@ MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
 
-# === PROMPT TEMPLATES ===
-# Imported from config.prompts
+# === OUTPUT SETTINGS ===
+LOG_TYPES_TO_PRINT = ["all"]
+# LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood"]
+
+# ATT: TOBIAS
+# TO SEE ONLY CLEAN CAPTIONS USE DEBUG MODE in machine.py:
+# python machine.py --debug
+# AND THEN SET:
+# LOG_TYPES_TO_PRINT = []
+# WE COULD ALSO ADD CLEAN_PRINT opt to event_logger.py

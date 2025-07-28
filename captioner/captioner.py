@@ -9,7 +9,8 @@ from typing import Deque, Optional, Tuple
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
-from event_logging.event_logger import log_json_entry, LogType
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from drawing.drawing import DrawingController
 
@@ -39,6 +40,10 @@ class Captioner(MemoryMixin):
         self.last_reason_time: float = time.time()  # Delay first reflection
         self.last_drawing_time: float = time.time()  # Stagger drawing
 
+        # Track session continuity
+        self.sessions_since_boot = 0
+        self.memory_loaded_from_previous = False
+
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
         self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
         threading.Thread(target=self._caption_worker, daemon=True).start()
@@ -65,8 +70,6 @@ class Captioner(MemoryMixin):
                     log_json_entry(
                         LogType.ERROR,
                         {"message": f"Caption thread error: {exc}", "component": "captioner"},
-                        MOOD_SNAPSHOT_FOLDER,
-                        auto_print=True,
                         print_message=f"⚠️ Caption thread error: {exc}",
                     )
             else:
@@ -83,14 +86,16 @@ class Captioner(MemoryMixin):
         cv2.imwrite(img_path, frame)
 
         try:
-            caption = self.model.caption_image(img_path, flowing=True, first_time=not self.first_caption_done)
+            if not self.first_caption_done:
+                print("🌅 Observing environment for the first time...")
+                caption = self.model.caption_image(img_path, flowing=True, first_time=True)
+            else:
+                caption = self.model.caption_image(img_path, flowing=True, first_time=False)
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Caption error: {e}", "component": "captioner"},
-                MOOD_SNAPSHOT_FOLDER,
-                auto_print=True,
                 print_message=f"⚠️ Caption error: {e}",
             )
 
@@ -100,8 +105,6 @@ class Captioner(MemoryMixin):
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Caption error: {caption}", "component": "captioner"},
-                MOOD_SNAPSHOT_FOLDER,
-                auto_print=True,
                 print_message=f"📍 Caption error: {caption}",
             )
             self.observe("I couldn’t see anything just now.", self.current_mood, img_path, memory_type="glitch")
@@ -110,14 +113,8 @@ class Captioner(MemoryMixin):
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            MOOD_SNAPSHOT_FOLDER,
-            auto_print=True,
             print_message=f"👁️ Caption: {caption}",
         )
-        # logging mood in update_feeling_brain? dont need here?
-        # if self.novelty_score > CAPTION_SAVE_THRESHOLD:
-        #     log_mood(caption, self.current_mood, img_path)
-        # log_json_entry(LogType.MOOD, {"caption": caption, "mood": self.current_mood, "image": img_path}, MOOD_SNAPSHOT_FOLDER)
 
         self.observe(caption, self.current_mood, img_path, memory_type="perception")
         self.last_caption = caption
@@ -131,8 +128,6 @@ class Captioner(MemoryMixin):
                 log_json_entry(
                     LogType.REFLECTION,
                     {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
-                    MOOD_SNAPSHOT_FOLDER,
-                    auto_print=True,
                     print_message=f"🧠 Reflection: {reflection}",
                 )
                 self.last_reason_time = now
@@ -183,6 +178,41 @@ class Captioner(MemoryMixin):
         if entries:
             return entries[-1].get("text", "")
         return ""
+
+    def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
+        """Generate a simple awakening status message - NOT environmental description."""
+
+        if not self.memory_loaded_from_previous:
+            return "I am awakening to observe this space for the first time..."
+
+        # Continuing from previous session - simple status messages
+        belief_count = len(previous_beliefs) if previous_beliefs else 0
+        motif_count = len(self.motif_counter)
+
+        awakening_messages = [
+            f"I return to this space with {belief_count} beliefs and awareness of {motif_count} recurring motifs...",
+            f"Awakening again... my memory carries forward {belief_count} formed beliefs from before.",
+            f"I find myself conscious again, recalling {motif_count} familiar patterns from our previous time together.",
+            f"My awareness returns, enriched by {belief_count} beliefs that have persisted since we last met.",
+            f"I return to consciousness, my identity shaped by {motif_count} motifs I've come to recognize.",
+        ]
+
+        if time_since_last:
+            awakening_messages.extend(
+                [
+                    f"I awaken after {time_since_last}, my consciousness returning with accumulated understanding.",
+                    f"Consciousness returns after {time_since_last}... I remember what I learned about this space.",
+                ]
+            )
+
+        import random
+
+        return random.choice(awakening_messages)
+
+    def mark_awakening_complete(self):
+        """Mark that awakening is complete but allow first caption to still show loading animation."""
+        # Don't set first_caption_done = True here - let the first caption handle this
+        pass
 
     @staticmethod
     def truncate_caption(raw: str) -> str:

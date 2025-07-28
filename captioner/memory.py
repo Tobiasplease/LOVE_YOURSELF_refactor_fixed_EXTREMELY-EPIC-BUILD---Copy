@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from config.word_lists import CONCRETE_NOUN_HINTS, MEANINGFUL_CATEGORIES, MEANINGFUL_MOTIFS, MOTIF_BLACKLIST
+
 """
 captioner/memory.py
 -------------------
@@ -88,7 +90,6 @@ class MemoryMixin:
         self.long_memory.append(entry)
 
         self.extract_motifs_from_caption(text)
-        self.extract_semantic_motifs(text)
 
         for motif in self.current_motifs:
             self.update_motif_focus_streak(motif)
@@ -142,27 +143,102 @@ class MemoryMixin:
             self.motif_confidence[motif] = 0.4  # default to low confidence
             self.motif_confirmed[motif] = False
 
+    def cleanup_motifs(self):
+        """Aggressively clean motifs - only keep truly meaningful recurring elements."""
+
+        # Keep only motifs that are:
+        # 1. In our meaningful list, OR
+        # 2. Named entities (proper nouns), OR
+        # 3. Have been seen many times (>20) and are concrete nouns
+        motifs_to_keep = {}
+
+        for motif, count in self.motif_counter.items():
+            should_keep = False
+
+            # Keep if it's in our curated list
+            if motif in MEANINGFUL_MOTIFS:
+                should_keep = True
+
+            # Keep if it's been seen many times AND is likely a concrete object
+            # But exclude common abstract/functional words even if frequent
+            elif (
+                count > 30 and len(motif) > 4 and motif not in MOTIF_BLACKLIST and not motif.endswith(("ing", "ed", "ly", "ness", "tion", "sion"))
+            ):  # Not verbs/adverbs/abstracts
+                should_keep = True
+
+            if should_keep:
+                motifs_to_keep[motif] = count
+
+        # Replace the entire motif system with only meaningful ones
+        old_count = len(self.motif_counter)
+        self.motif_counter = Counter(motifs_to_keep)
+
+        # Clean up related dictionaries
+        for motif in list(self.motif_first_seen.keys()):
+            if motif not in motifs_to_keep:
+                del self.motif_first_seen[motif]
+
+        for motif in list(self.motif_last_seen.keys()):
+            if motif not in motifs_to_keep:
+                del self.motif_last_seen[motif]
+
+        for motif in list(self.motif_confidence.keys()):
+            if motif not in motifs_to_keep:
+                del self.motif_confidence[motif]
+
+        for motif in list(self.motif_confirmed.keys()):
+            if motif not in motifs_to_keep:
+                del self.motif_confirmed[motif]
+
+        # Clean up beliefs to only meaningful motifs
+        for motif in list(self.beliefs.keys()):
+            if motif not in motifs_to_keep:
+                del self.beliefs[motif]
+
+        # Update current motifs
+        self.current_motifs = {m for m in self.current_motifs if m in motifs_to_keep}
+
+        return old_count - len(motifs_to_keep)
+
     def extract_motifs_from_caption(self, caption: str):
+        """Extract meaningful motifs from captions - focus on concrete, recurring elements."""
+        # We want to track recurring THINGS, not common words
+        # Focus on nouns that represent objects, places, activities, or specific qualities
+
         words = re.findall(r"\b\w+\b", caption.lower())
         now_time = now()
+
+        # Extract from whitelist (high confidence)
         for word in words:
-            if len(word) > 3:
+            if word in MEANINGFUL_CATEGORIES:
                 self.motif_counter[word] += 1
                 if word not in self.motif_first_seen:
                     self.motif_first_seen[word] = now_time
                 self.motif_last_seen[word] = now_time
                 self.current_motifs.add(word)
                 if word not in self.motif_confidence:
-                    self.motif_confidence[word] = 0.4
-                    self.motif_confirmed[word] = False
+                    self.motif_confidence[word] = 0.8  # Higher confidence for curated list
+                    self.motif_confirmed[word] = True
 
-    def extract_semantic_motifs(self, caption: str):
-        if _nlp is None:
-            return
-        doc = _nlp(caption)
-        for token in doc:
-            if token.pos_ in {"NOUN", "PROPN", "ADJ"} and len(token.text) > 2:
-                self.absorb_motif(token.lemma_)
+        # Also extract named entities and specific concrete nouns using spaCy (if available)
+        if _nlp is not None:
+            doc = _nlp(caption)
+
+            # Extract named entities - these are usually meaningful
+            for ent in doc.ents:
+                if ent.label_ in {"PERSON", "ORG", "GPE", "PRODUCT", "WORK_OF_ART", "EVENT"}:
+                    motif = ent.text.lower().strip()
+                    if len(motif) > 2:
+                        self.absorb_motif(motif)
+
+            for token in doc:
+                if token.pos_ in {"NOUN", "PROPN"} and len(token.text) > 3 and not token.is_stop and not token.like_num:
+
+                    lemma = token.lemma_.lower()
+
+                    # Only extract if it's in our concrete nouns set or ends with tool/device patterns
+                    if lemma in CONCRETE_NOUN_HINTS or (lemma.endswith(("er", "or")) and len(lemma) > 5):
+                        self.absorb_motif(lemma)
 
     def get_motif_certainty(self, motif: str) -> float:
         return self.motif_confidence.get(motif.lower(), 0.0)
@@ -172,6 +248,13 @@ class MemoryMixin:
 
     def update_beliefs(self):
         now_time = now()
+
+        # Periodically clean up motifs (every 10 observations since memory_queue maxlen is 30)
+        if len(self.memory_queue) % 10 == 0:
+            cleaned = self.cleanup_motifs()
+            if cleaned > 0:
+                print(f"[🧹] Cleaned up {cleaned} irrelevant motifs")
+
         for motif, count in self.motif_counter.items():
             motif_age_days = (now_time - self.motif_first_seen.get(motif, now_time)) / 86400
             if count >= BELIEF_THRESHOLD and motif_age_days >= BELIEF_FORM_MIN_DAYS:
@@ -226,6 +309,41 @@ class MemoryMixin:
                 if len(out) >= k:
                     break
         return list(reversed(out))
+
+    def get_current_session_memory_snippets(self, k: int = 3) -> List[str]:
+        """Get only memories from the current session (since session_start)."""
+        seen, out = set(), []
+        for entry in reversed(self.memory_queue):
+            # Only include memories from current session
+            if entry.get("timestamp", 0) >= self.session_start:
+                cap = entry["text"]
+                if cap not in seen and len(cap.strip()) > 10:  # Exclude very short memories
+                    out.append(cap)
+                    seen.add(cap)
+                    if len(out) >= k:
+                        break
+        return list(reversed(out))
+
+    def get_old_session_memory_fragments(self, k: int = 3) -> List[str]:
+        """Get fragmentary memories from before the current session for awakening context."""
+        import random
+
+        seen, candidates = set(), []
+
+        for entry in self.memory_queue:
+            # Only include memories from before current session
+            if entry.get("timestamp", 0) < self.session_start:
+                cap = entry["text"]
+                if cap not in seen and len(cap.strip()) > 15:  # Longer memories are more interesting
+                    # Extract interesting fragments (nouns, descriptive phrases)
+                    words = cap.split()
+                    if len(words) >= 4:  # Meaningful memories only
+                        candidates.append(cap)
+                        seen.add(cap)
+
+        # Return random selection of old memories, shuffled for variety
+        selected = random.sample(candidates, min(k, len(candidates))) if candidates else []
+        return selected
 
     def get_recent_memory(self, k: int = 5) -> str:
         """

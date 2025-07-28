@@ -2,33 +2,12 @@ import json
 import os
 import time
 import uuid
-from enum import Enum
 from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
 import importlib.util
 
-from config.config import OLLAMA_MODEL
-
-
-class LogType(Enum):
-    """Enumeration of all valid log types for event logging."""
-
-    # Core system events
-    SESSION_START = "session_start"
-    INFO = "info"
-    ERROR = "error"
-    RUN_METADATA = "run_metadata"
-
-    # AI/ML processing events
-    MOOD = "mood_update"
-    CAPTION = "caption"
-    REFLECTION = "reflection"
-    OLLAMA_API_CALL = "ollama_api_call"
-
-    # Drawing and creative process events
-    DECISION = "decision"
-    COMFY_PROMPT = "comfy_prompt"
-    NEW_DRAWING = "new_drawing"
+from config.config import LOG_TYPES_TO_PRINT, MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
+from event_logging.log_type import LogType
 
 
 # Global run ID - generated once per application run
@@ -68,27 +47,6 @@ def get_elapsed_time() -> str:
     minutes = int((elapsed % 3600) // 60)
     seconds = int(elapsed % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-
-
-def event_print(message: str, event_type: Optional[str] = None, data: Optional[Dict[str, Any]] = None, log_dir: str = "mood_snapshots") -> None:
-    """
-    Unified print and log function with elapsed time.
-
-    Args:
-        message: The message to print and optionally log
-        event_type: If provided, also log to JSON with this event type
-        data: Additional data to include in JSON log
-        log_dir: Directory for JSON logs
-    """
-    elapsed = get_elapsed_time()
-    formatted_message = f"[{elapsed}] {message}"
-    print(formatted_message)
-
-    if event_type:
-        log_data = {"message": message, "elapsed_time": elapsed}
-        if data:
-            log_data.update(data)
-        log_json_entry(event_type, log_data, log_dir)
 
 
 def load_config_metadata() -> Dict[str, Any]:
@@ -156,9 +114,8 @@ def update_all_run_log(log_dir: str, entry: Dict[str, Any]) -> None:
 def log_json_entry(
     log_type: Union[LogType, str],
     data: Dict[str, Any],
-    log_dir: str,
+    log_dir: str = MOOD_SNAPSHOT_FOLDER,
     run_id: Optional[str] = None,
-    auto_print: bool = False,
     print_message: Optional[str] = None,
 ) -> str:
     """
@@ -169,8 +126,7 @@ def log_json_entry(
         data: Dictionary containing the data to log
         log_dir: Directory where log files are stored
         run_id: Optional run ID. If not provided, uses the current global run ID.
-        auto_print: If True, also print the message with elapsed time
-        print_message: Custom message to print. If None and auto_print=True, uses data.get('message')
+        print_message: Custom message to print to terminal if in print whitelist.
 
     Returns:
         Path to the event log file
@@ -222,9 +178,19 @@ def log_json_entry(
     # Also append to all-run-log.json
     update_all_run_log(log_dir, entry)
 
-    # Auto-print if requested
-    if auto_print:
-        message = print_message or data.get("message", f"{log_type_str} event")
+    if log_type_str.lower() in LOG_TYPES_TO_PRINT or "all" in LOG_TYPES_TO_PRINT:
+        # Avoid generating generic "X event" strings in fallback message for known content types
+        if log_type_str.lower() == "caption":
+            message = print_message or data.get("message", "caption")
+        elif log_type_str.lower() == "reflection":
+            message = print_message or data.get("message", "reflection")
+        elif log_type_str.lower() == "comfy_prompt":
+            message = print_message or data.get("message", "drawing prompt")
+        elif log_type_str.lower() == "decision":
+            message = print_message or data.get("message", "decision")
+        else:
+            # ollama_api_call get a generic message etm
+            message = print_message or data.get("message", f"{log_type_str} event")
         elapsed = get_elapsed_time()
         print(f"[{elapsed}] {message}")
 
@@ -272,9 +238,6 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
                             continue
                         logs.append(data)
             else:
-                # Old format: single entry per file
-                # New format: log-<timestamp>-<logtype>.json
-                # Old format: <logtype>_<timestamp>.json or <prefix>_<timestamp>.json
                 if isinstance(data, dict):
                     # Filter by log type if specified
                     if log_type and data.get("type") != log_type:
@@ -297,19 +260,19 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
     return logs
 
 
-def get_latest_log_entry(log_dir: str, log_type: str) -> Optional[Dict[str, Any]]:
-    """
-    Get the most recent log entry of a specific type.
+# def get_latest_log_entry(log_dir: str, log_type: str) -> Optional[Dict[str, Any]]:
+#     """
+#     Get the most recent log entry of a specific type.
 
-    Args:
-        log_dir: Directory containing log files
-        log_type: Type of log entry to find
+#     Args:
+#         log_dir: Directory containing log files
+#         log_type: Type of log entry to find
 
-    Returns:
-        Most recent log entry or None if not found
-    """
-    logs = read_json_logs(log_dir, log_type)
-    return logs[-1] if logs else None
+#     Returns:
+#         Most recent log entry or None if not found
+#     """
+#     logs = read_json_logs(log_dir, log_type)
+#     return logs[-1] if logs else None
 
 
 def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> None:
@@ -324,7 +287,6 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
     filepath = os.path.join(log_dir, filename)
     os.makedirs(log_dir, exist_ok=True)
 
-    # Read existing entries
     entries = []
     if os.path.exists(filepath):
         try:
@@ -333,36 +295,10 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
         except (json.JSONDecodeError, IOError):
             entries = []
 
-    # Append new entry
     entries.append(entry)
 
-    # Write back to file
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(entries, f, indent=2, ensure_ascii=False)
-
-
-# def read_evaluations(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-#     """Read self-evaluation logs."""
-#     logs = read_json_logs(log_dir, "self_evaluation")
-#     if limit:
-#         logs = logs[-limit:]
-#     return logs
-
-
-# def read_drawing_prompts(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-#     """Read drawing prompt logs."""
-#     logs = read_json_logs(log_dir, "drawing_prompt")
-#     if limit:
-#         logs = logs[-limit:]
-#     return logs
-
-
-# def read_internal_notes(log_dir: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-#     """Read internal note logs."""
-#     logs = read_json_logs(log_dir, "internal_note")
-#     if limit:
-#         logs = logs[-limit:]
-#     return logs
 
 
 def log_ollama_api_call(

@@ -11,6 +11,8 @@ import threading
 import time
 import json
 import os
+import tempfile
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -72,36 +74,52 @@ class WhisperLogger:
 
     def _record_audio_chunk(self) -> bytes:
         """Record a chunk of audio."""
-        stream = self.audio.open(format=self.format, channels=self.channels, rate=self.sample_rate, input=True, frames_per_buffer=self.chunk_size)
+        try:
+            stream = self.audio.open(format=self.format, channels=self.channels, rate=self.sample_rate, input=True, frames_per_buffer=self.chunk_size)
 
-        frames = []
-        chunk_frames = int(self.sample_rate * self.chunk_duration / self.chunk_size)
+            frames = []
+            chunk_frames = int(self.sample_rate * self.chunk_duration / self.chunk_size)
 
-        for _ in range(chunk_frames):
-            if not self.is_recording:
-                break
-            data = stream.read(self.chunk_size)
-            frames.append(data)
+            for _ in range(chunk_frames):
+                if not self.is_recording:
+                    break
+                data = stream.read(self.chunk_size)
+                frames.append(data)
 
-        stream.stop_stream()
-        stream.close()
+            stream.stop_stream()
+            stream.close()
 
-        return b"".join(frames)
+            return b"".join(frames)
+        except Exception as e:
+            print(f"Error recording audio: {e}")
+            return b""
 
     def _save_temp_audio(self, audio_data: bytes) -> str:
         """Save audio data to temporary WAV file."""
-        temp_file = "temp_audio.wav"
-
-        with wave.open(temp_file, "wb") as wf:
-            wf.setnchannels(self.channels)
-            wf.setsampwidth(self.audio.get_sample_size(self.format))
-            wf.setframerate(self.sample_rate)
-            wf.writeframes(audio_data)
-
-        return temp_file
+        # Create unique temp file name
+        temp_file = f"whisper_temp_{uuid.uuid4().hex[:8]}.wav"
+        
+        try:
+            with wave.open(temp_file, "wb") as wf:
+                wf.setnchannels(self.channels)
+                wf.setsampwidth(self.audio.get_sample_size(self.format))
+                wf.setframerate(self.sample_rate)
+                wf.writeframes(audio_data)
+                
+            return temp_file
+            
+        except Exception as e:
+            # Clean up on error
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except:
+                pass
+            raise e
 
     def _process_audio_chunk(self, audio_data: bytes):
         """Process audio chunk with Whisper and log results."""
+        temp_file = None
         try:
             # Check if audio data is sufficient
             if len(audio_data) < 1024:
@@ -109,13 +127,19 @@ class WhisperLogger:
                 
             # Save temporary audio file
             temp_file = self._save_temp_audio(audio_data)
+            
+            # Verify the file exists and has content
+            if not os.path.exists(temp_file):
+                print(f"Error: Temporary audio file was not created: {temp_file}")
+                return
+                
+            file_size = os.path.getsize(temp_file)
+            if file_size == 0:
+                print(f"Error: Temporary audio file is empty: {temp_file}")
+                return
 
-            # Transcribe with Whisper (disable word_timestamps to avoid tensor size issues)
-            result = self.model.transcribe(temp_file, language=None, fp16=False)
-
-            # Clean up temp file
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
+            # Transcribe with Whisper
+            result = self.model.transcribe(temp_file, language=None, fp16=False, verbose=False)
 
             # Check if result is valid
             if not result:
@@ -142,6 +166,14 @@ class WhisperLogger:
 
         except Exception as e:
             print(f"Error processing audio: {e}")
+        finally:
+            # Clean up temp file
+            if temp_file:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception as cleanup_error:
+                    print(f"Warning: Could not clean up temp file {temp_file}: {cleanup_error}")
 
     def _audio_loop(self):
         """Main audio recording and processing loop."""

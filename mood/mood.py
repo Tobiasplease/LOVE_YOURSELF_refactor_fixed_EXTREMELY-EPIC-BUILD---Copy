@@ -4,18 +4,16 @@ from __future__ import annotations
 import os
 import time
 import json
-import cv2  # type: ignore
 import numpy as np  # type: ignore
 from typing import List, Optional
 
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_TIMEOUT_SUMMARY
-from event_logging.event_logger import log_json_entry, read_json_logs, LogType
-from utils.ollama import query_ollama
-from event_logging.run_manager import get_run_image_path
+from config.config import MOOD_SNAPSHOT_FOLDER
+from event_logging.event_logger import log_json_entry, read_json_logs
+from event_logging.log_type import LogType
 
 
 # ---------------------------------------------------------------------------#
-# Snapshot‑based MoodEngine (your original code, updated with timeout)       #
+# Pure MoodEngine - analyzes captions without generating them               #
 # ---------------------------------------------------------------------------#
 class MoodEngine:
     def __init__(self) -> None:
@@ -25,8 +23,8 @@ class MoodEngine:
         self.memory = []
 
     # -------------------------------------------------------------- main hook
-    def update_feeling_brain(self, frame, image_path: Optional[str] = None):
-        caption = self.generate_caption(frame)
+    def analyze_mood(self, caption: str, image_path: Optional[str] = None) -> float:
+        """Analyze mood from a provided caption without generating new captions."""
         saw_person = "person" in caption.lower() or "individual" in caption.lower()
 
         novelty = self.calculate_novelty(caption)
@@ -36,7 +34,7 @@ class MoodEngine:
         log_mood(caption, self.current_mood, mood_change, image_path=image_path)
         self.last_caption = caption
         self.last_person_detected = saw_person
-        return caption
+        return self.current_mood
 
     # --------------------------------------------------------------- helpers
     def get_current_mood(self):
@@ -75,25 +73,6 @@ class MoodEngine:
             change -= 0.05
         return change
 
-    # -------------------------------------------------------- LLaVA caption
-    def generate_caption(self, frame, timeout: int = OLLAMA_TIMEOUT_SUMMARY):
-
-        timestamp = int(time.time())
-        image_filename = f"caption_frame_{timestamp}.jpg"
-        image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, image_filename)
-
-        cv2.imwrite(image_path, frame)
-
-        prompt = "Describe the scene"
-
-        try:
-            response_text = query_ollama(prompt=prompt, image=image_path, timeout=timeout, log_dir=MOOD_SNAPSHOT_FOLDER)
-            return response_text
-        except Exception as e:
-            error_msg = f"Error: {e}"
-            print(f"[⚠️] Caption generation failed: {error_msg}")
-            return error_msg
-
 
 def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
     """
@@ -117,7 +96,7 @@ def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
     else:
         emoji = "😞"
 
-    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, auto_print=True, print_message=f"{emoji} Mood: {mood:.2f} - {caption}")
+    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=f"{emoji} Mood: {mood:.2f} - {caption}")
 
 
 def read_mood_logs(limit: Optional[int] = None) -> List[dict]:
