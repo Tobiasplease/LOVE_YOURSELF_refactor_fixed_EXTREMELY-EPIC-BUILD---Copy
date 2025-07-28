@@ -3,10 +3,8 @@ import os
 import re
 import time
 import threading
-# Remove unused imports for queue system
-# from collections import deque
-# from typing import Deque, Optional, Tuple
-from typing import Optional
+from collections import deque
+from typing import Deque, Optional, Tuple
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
@@ -44,116 +42,89 @@ class Captioner(MemoryMixin):
         # Track session continuity
         self.sessions_since_boot = 0
         self.memory_loaded_from_previous = False
-        
-        # Add processing lock to prevent simultaneous caption generation
-        self._processing_lock = threading.Lock()
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
-        # Remove queue system - process frames immediately
-        # self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
-        # threading.Thread(target=self._caption_worker, daemon=True).start()
+        self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
+        threading.Thread(target=self._caption_worker, daemon=True).start()
 
-    # Remove is_processing property - no longer needed without queue
-    # @property
-    # def is_processing(self) -> bool:
-    #     return bool(self.snapshot_queue)
+    @property
+    def is_processing(self) -> bool:
+        return bool(self.snapshot_queue)
 
     def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None) -> None:
         if frame is not None:
             if mood is not None:
                 self.current_mood = mood
-            # Use lock to prevent simultaneous caption generation
-            if self._processing_lock.acquire(blocking=False):
+            if len(self.snapshot_queue) > 1:
+                self.snapshot_queue.pop()
+            self.snapshot_queue.append((frame.copy(), person_present))
+
+    def _caption_worker(self):
+        while True:
+            if self.snapshot_queue:
+                frame, _ = self.snapshot_queue.popleft()
                 try:
                     self._process_frame(frame)
-                finally:
-                    self._processing_lock.release()
+                except Exception as exc:
+                    log_json_entry(
+                        LogType.ERROR,
+                        {"message": f"Caption thread error: {exc}", "component": "captioner"},
+                        MOOD_SNAPSHOT_FOLDER,
+                        auto_print=True,
+                        print_message=f"⚠️ Caption thread error: {exc}",
+                    )
             else:
-                print("[DEBUG] Caption generation already in progress, skipping")
-
-    # Remove caption worker thread - no longer needed with immediate processing
-    # def _caption_worker(self):
-    #     print("[DEBUG] Caption worker thread started")
-    #     while True:
-    #         if self.snapshot_queue:
-    #             print(f"[DEBUG] Processing frame from queue (queue size: {len(self.snapshot_queue)})")
-    #             frame, _ = self.snapshot_queue.popleft()
-    #             try:
-    #                 self._process_frame(frame)
-    #             except Exception as exc:
-    #                 log_json_entry(
-    #                     LogType.ERROR,
-    #                     {"message": f"Caption thread error: {exc}", "component": "captioner"},
-    #                     MOOD_SNAPSHOT_FOLDER,
-    #                     auto_print=True,
-    #                     print_message=f"⚠️ Caption thread error: {exc}",
-    #                 )
-    #         else:
-    #             time.sleep(0.05)
+                time.sleep(0.05)
 
     def _process_frame(self, frame: np.ndarray) -> None:
         now = time.time()
-        time_since_last = now - self.last_caption_time
-        
-        # Add small buffer to prevent timing precision issues
-        if time_since_last < (CAPTION_INTERVAL - 0.5):
+        if now - self.last_caption_time < CAPTION_INTERVAL:
             return
 
-        print(f"[DEBUG] Generating caption (last one was {time_since_last:.1f}s ago)")
-        
-        try:
-            self.last_caption_time = now
-            ts = int(now)
-            img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{ts}.jpg")
-            
-            # Optimize: Reduce image size for faster processing while maintaining quality
-            h, w = frame.shape[:2]
-            if w > 384 or h > 384:
-                # Resize to max 384px on longest side for even faster LLM processing
-                if w > h:
-                    new_w, new_h = 384, int(h * 384 / w)
-                else:
-                    new_w, new_h = int(w * 384 / h), 384
-                frame_processed = cv2.resize(frame, (new_w, new_h))
-            else:
-                frame_processed = frame
-                
-            cv2.imwrite(img_path, frame_processed)
+        self.last_caption_time = now
+        ts = int(now)
+        img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{ts}.jpg")
+        cv2.imwrite(img_path, frame)
 
+        try:
             # Show loading animation for first caption (the real awakening environmental description)
             if not self.first_caption_done:
                 print("🌅 Observing environment for the first time...")
                 import threading
                 import sys
                 from itertools import cycle
-                
+
                 def show_awakening_loading(stop_event):
                     """Show loading animation for the awakening environmental description."""
-                    spinner = cycle(['|', '/', '-', '\\'])
-                    dots = cycle(['', '.', '..', '...'])
+                    spinner = cycle(["|", "/", "-", "\\"])
+                    dots = cycle(["", ".", "..", "..."])
                     while not stop_event.is_set():
-                        sys.stdout.write(f'\r{next(spinner)} Processing{next(dots)}')
+                        sys.stdout.write(f"\r{next(spinner)} Processing{next(dots)}")
                         sys.stdout.flush()
                         import time
+
                         time.sleep(0.3)
                     # Clear the loading line
-                    sys.stdout.write('\r' + ' ' * 20 + '\r')
+                    sys.stdout.write("\r" + " " * 20 + "\r")
                     sys.stdout.flush()
-                
+
                 stop_loading = threading.Event()
                 loading_thread = threading.Thread(target=show_awakening_loading, args=(stop_loading,), daemon=True)
                 loading_thread.start()
-                
+
                 start_time = time.time()
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)
-                
-                # Stop loading animation immediately when done
+
+                # Ensure minimum display time of 2 seconds for visibility
+                elapsed = time.time() - start_time
+                if elapsed < 2.0:
+                    time.sleep(2.0 - elapsed)
+
                 stop_loading.set()
                 loading_thread.join(timeout=0.5)
                 print()  # Add newline after loading animation
             else:
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
-                
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
             log_json_entry(
@@ -163,7 +134,6 @@ class Captioner(MemoryMixin):
                 auto_print=True,
                 print_message=f"⚠️ Caption error: {e}",
             )
-            return
 
         self.first_caption_done = True
 
@@ -181,7 +151,7 @@ class Captioner(MemoryMixin):
         if CLEAN_CAPTION_OUTPUT:
             # Suppress old-style output, only print clean caption if needed
             pass
-        
+
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
@@ -206,7 +176,7 @@ class Captioner(MemoryMixin):
                 if CLEAN_CAPTION_OUTPUT:
                     # Suppress old-style reflection output
                     pass
-                
+
                 log_json_entry(
                     LogType.REFLECTION,
                     {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
@@ -263,33 +233,36 @@ class Captioner(MemoryMixin):
             return entries[-1].get("text", "")
         return ""
 
-    def generate_awakening_message(self, time_since_last: str = None, previous_beliefs: dict = None) -> str:
+    def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
         """Generate a simple awakening status message - NOT environmental description."""
-        
+
         if not self.memory_loaded_from_previous:
             return "I am awakening to observe this space for the first time..."
-        
+
         # Continuing from previous session - simple status messages
         belief_count = len(previous_beliefs) if previous_beliefs else 0
         motif_count = len(self.motif_counter)
-        
+
         awakening_messages = [
             f"I return to this space with {belief_count} beliefs and awareness of {motif_count} recurring motifs...",
             f"Awakening again... my memory carries forward {belief_count} formed beliefs from before.",
             f"I find myself conscious again, recalling {motif_count} familiar patterns from our previous time together.",
             f"My awareness returns, enriched by {belief_count} beliefs that have persisted since we last met.",
-            f"I return to consciousness, my identity shaped by {motif_count} motifs I've come to recognize."
+            f"I return to consciousness, my identity shaped by {motif_count} motifs I've come to recognize.",
         ]
-        
+
         if time_since_last:
-            awakening_messages.extend([
-                f"I awaken after {time_since_last}, my consciousness returning with accumulated understanding.",
-                f"Consciousness returns after {time_since_last}... I remember what I learned about this space.",
-            ])
-        
+            awakening_messages.extend(
+                [
+                    f"I awaken after {time_since_last}, my consciousness returning with accumulated understanding.",
+                    f"Consciousness returns after {time_since_last}... I remember what I learned about this space.",
+                ]
+            )
+
         import random
+
         return random.choice(awakening_messages)
-    
+
     def mark_awakening_complete(self):
         """Mark that awakening is complete but allow first caption to still show loading animation."""
         # Don't set first_caption_done = True here - let the first caption handle this
