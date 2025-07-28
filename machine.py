@@ -40,6 +40,7 @@ if args.config_override:
         print(f"[CONFIG] Error loading config override: {e}")
         sys.exit(1)
 
+
 from perception.object_detection import ObjectDetectionThread
 from captioner.captioner import Captioner
 from vision.gaze import update_gaze
@@ -58,6 +59,7 @@ from config.config import (
     MOOD_EVALUATION_INTERVAL,
     PAUSE_DURATION,
     MODEL_PATH,
+    PRINT_CLEAN_CAPTIONS,
 )
 from event_logging.run_manager import get_run_image_path
 from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
@@ -204,12 +206,11 @@ def mood_update_thread(frame, timestamp):
 
                 # Second: Analyze mood from captioner's latest caption
                 if captioner.last_caption:
-                    # CLEAN_CAPTION
                     clean_caption = captioner.last_caption
                     if clean_caption.lower().startswith("caption:"):
                         clean_caption = clean_caption[len("caption:") :].strip()
 
-                    if DEBUG_MODE:
+                    if PRINT_CLEAN_CAPTIONS:
                         print(f"\n{clean_caption}\n")
 
                     current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path)
