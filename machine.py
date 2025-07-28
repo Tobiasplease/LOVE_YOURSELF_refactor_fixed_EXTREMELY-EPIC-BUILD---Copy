@@ -3,7 +3,6 @@ import argparse
 import sys
 import cv2
 import threading
-from itertools import cycle
 
 
 def parse_args():
@@ -18,25 +17,13 @@ args = parse_args()
 # Debug mode setup
 DEBUG_MODE = args.debug
 
+
 def debug_print(message, level="INFO"):
     """Print debug messages only when debug mode is enabled."""
     if DEBUG_MODE:
         timestamp = time.strftime("%H:%M:%S")
         print(f"[DEBUG {timestamp}] {level}: {message}")
 
-def show_loading_animation(message, stop_event):
-    """Show a loading animation until stop_event is set."""
-    # Use basic ASCII characters for better compatibility
-    spinner = cycle(['|', '/', '-', '\\'])
-    dots = cycle(['', '.', '..', '...'])
-    print(f"\n{message}")
-    while not stop_event.is_set():
-        sys.stdout.write(f'\r{next(spinner)} Processing{next(dots)}')
-        sys.stdout.flush()
-        time.sleep(0.3)
-    # Clear the loading line and move to next line
-    sys.stdout.write('\r' + ' ' * 20 + '\r')
-    sys.stdout.flush()
 
 if DEBUG_MODE:
     print("🐛 DEBUG MODE ENABLED - Verbose output active")
@@ -131,7 +118,11 @@ run_id = get_current_run_id()
 debug_print(f"Session initialized with run ID: {run_id}", "INIT")
 
 log_json_entry(
-    LogType.SESSION_START, {"run_id": run_id}, MOOD_SNAPSHOT_FOLDER, auto_print=not CLEAN_CAPTION_OUTPUT, print_message=f"🚀 Starting session with run ID: {run_id}" if not CLEAN_CAPTION_OUTPUT else None
+    LogType.SESSION_START,
+    {"run_id": run_id},
+    MOOD_SNAPSHOT_FOLDER,
+    auto_print=not CLEAN_CAPTION_OUTPUT,
+    print_message=f"🚀 Starting session with run ID: {run_id}" if not CLEAN_CAPTION_OUTPUT else None,
 )
 log_json_entry(
     LogType.INFO,
@@ -164,14 +155,14 @@ if previous_state:
     captioner.last_caption = ""
     # Set memory loaded flag BEFORE generating awakening message
     captioner.memory_loaded_from_previous = True
-    
+
     # Generate awakening message with continuity
     save_time = previous_state["metadata"]["save_time"]
     time_since_last = describe_duration(save_time)
     previous_beliefs = previous_state["captioner"].get("beliefs", {})
-    
+
     awakening_msg = captioner.generate_awakening_message(time_since_last, previous_beliefs)
-    
+
     if not CLEAN_CAPTION_OUTPUT:
         print(f"[🌅] {awakening_msg}")
     log_json_entry(
@@ -179,7 +170,7 @@ if previous_state:
         {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
         MOOD_SNAPSHOT_FOLDER,
         auto_print=CLEAN_CAPTION_OUTPUT,
-        print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None
+        print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None,
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
@@ -187,7 +178,7 @@ else:
     # Fresh start
     captioner.memory_loaded_from_previous = False
     awakening_msg = captioner.generate_awakening_message()
-    
+
     if not CLEAN_CAPTION_OUTPUT:
         print(f"[🌅] {awakening_msg}")
     log_json_entry(
@@ -195,7 +186,7 @@ else:
         {"message": awakening_msg, "continuity": False},
         MOOD_SNAPSHOT_FOLDER,
         auto_print=CLEAN_CAPTION_OUTPUT,
-        print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None
+        print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None,
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
@@ -215,7 +206,7 @@ def mood_update_thread(frame, timestamp):
             snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
             cv2.imwrite(snapshot_path, frame)
             debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
-            
+
             try:
                 # First: Update captioner to generate new captions
                 captioner.update(
@@ -224,20 +215,20 @@ def mood_update_thread(frame, timestamp):
                     mood=mood_engine.get_current_mood(),  # Use previous mood for now
                 )
                 debug_print("Captioner updated successfully", "CAPTIONER")
-                
+
                 # Second: Analyze mood from captioner's latest caption
                 if captioner.last_caption:
                     # Remove 'Caption:' prefix if present and print with line spacing
                     clean_caption = captioner.last_caption
                     if clean_caption.lower().startswith("caption:"):
-                        clean_caption = clean_caption[len("caption:"):].strip()
+                        clean_caption = clean_caption[len("caption:") :].strip()
                     print(f"\n{clean_caption}\n")
                     current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path)
                     debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
-                    
+
                     # Third: Update captioner's mood state for next cycle
                     captioner.current_mood = current_mood
-                    
+
             except Exception as e:
                 debug_print(f"Captioner update failed: {e}", "ERROR")
             last_snapshot_time = now
@@ -346,7 +337,7 @@ try:
 
 except KeyboardInterrupt:
     debug_print("Shutting down gracefully", "SHUTDOWN")
-    
+
     # Save session state before shutdown
     print("[💾] Saving session state...")
     success = state_manager.save_session_state(captioner, mood_engine)
@@ -354,16 +345,16 @@ except KeyboardInterrupt:
         print("[✅] Session state saved successfully")
     else:
         print("[❌] Failed to save session state")
-    
+
     # Log session end
     log_json_entry(
-        LogType.INFO, 
-        {"message": "Session ended", "run_id": run_id, "duration": time.time() - start_time}, 
+        LogType.INFO,
+        {"message": "Session ended", "run_id": run_id, "duration": time.time() - start_time},
         MOOD_SNAPSHOT_FOLDER,
         auto_print=not CLEAN_CAPTION_OUTPUT,
-        print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s" if not CLEAN_CAPTION_OUTPUT else None
+        print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s" if not CLEAN_CAPTION_OUTPUT else None,
     )
-    
+
     object_detector.stop()
     object_detector.join()
     image_monitor.stop()
