@@ -26,9 +26,9 @@ MAX_MEMORY_ENTRIES: int = 30
 BOREDOM_THRESHOLD: float = 0.7
 CAPTION_SAVE_THRESHOLD: float = 0.3
 BELIEF_THRESHOLD: int = 7  # Motif must appear this many times to form a belief
-BELIEF_FADE_TIME: float = 3600 * 6  # 6 hours: beliefs fade if motif not seen
+BELIEF_FADE_TIME: float = 3600 * 2  # 2 hours: beliefs fade if motif not seen (reduced from 6h)
 BELIEF_FORM_MIN_DAYS: float = 0.25  # Minimum "age" of motif before forming belief (in days)
-CONFIDENCE_THRESHOLD = 0.65  # Confidence threshold for confirming motifs
+CONFIDENCE_THRESHOLD = 0.75  # Increased confidence threshold for confirming motifs (more doubt)
 
 CaptionTuple = Tuple[int, str, float, str]  # (ts, caption, mood, file)
 
@@ -58,12 +58,30 @@ class MemoryMixin:
         self.beliefs: Dict[str, Dict[str, Any]] = {}
         self.belief_history: List[str] = []
 
+        # Focus persistence tracking (for continuity awareness)
+        self.current_focus_object: str = ""  # What we're currently focused on
+        self.focus_duration: float = 0.0  # How long we've been focused on current object
+        self.focus_start_time: float = 0.0  # When we started focusing on current object
+        self.focus_depth: int = 0  # How many consecutive observations of same object
+
         # Novelty/Boredom
         self.novelty_score: float = 1.0
         self.boredom: float = 0.0
 
+        # Connection/Loneliness tracking (for emotional depth)
+        self.last_person_seen: float = now()  # Timestamp of last human presence
+        self.time_alone: float = 0.0  # Accumulated seconds alone
+        self.connection_relief: float = 0.0  # Spikes when person appears after isolation
+
         # Timing
         self.session_start: float = now()
+        
+        # Performance optimization: Cache expensive computations
+        self._cached_identity_summary: str = ""
+        self._identity_cache_time: float = 0.0
+        self._cached_consciousness_stream: str = ""
+        self._consciousness_cache_time: float = 0.0
+        self._cache_duration: float = 30.0  # Cache for 30 seconds
 
     def observe(
         self,
@@ -92,10 +110,91 @@ class MemoryMixin:
         for motif in self.current_motifs:
             self.update_motif_focus_streak(motif)
 
+        self.update_focus_persistence(text)
         self.update_beliefs()
         self.estimate_novelty()
         self.update_boredom()
         self.fade_old_beliefs()
+        self.update_loneliness(person_present=False)  # Default to alone unless specified
+    
+    def update_focus_persistence(self, caption: str) -> None:
+        """Track how long we've been focused on the same object/concept."""
+        # Extract primary object/concept from caption (simple heuristic)
+        primary_focus = self.extract_primary_focus(caption)
+        current_time = now()
+        
+        if primary_focus == self.current_focus_object:
+            # Still focused on same thing - update duration and depth
+            self.focus_duration = current_time - self.focus_start_time
+            self.focus_depth += 1
+        else:
+            # Focus has shifted - reset tracking
+            self.current_focus_object = primary_focus
+            self.focus_start_time = current_time
+            self.focus_duration = 0.0
+            self.focus_depth = 1
+    
+    def extract_primary_focus(self, caption: str) -> str:
+        """Extract the main object/concept from a caption."""
+        # Simple extraction - look for key nouns
+        words = caption.lower().split()
+        
+        # Common objects that might be primary focus
+        objects = ['fish', 'figurine', 'sculpture', 'table', 'wall', 'room', 'desk', 'chair', 'lamp', 'book', 'cup', 'bottle', 'plant']
+        
+        for obj in objects:
+            if obj in words:
+                return obj
+        
+        # Fallback to first significant noun
+        for word in words:
+            if len(word) > 3 and word.isalpha():
+                return word
+        
+        return "unknown"
+    
+    def get_identity_summary_cached(self) -> str:
+        """Get identity summary with caching for performance."""
+        current_time = now()
+        if (current_time - self._identity_cache_time > self._cache_duration or 
+            not self._cached_identity_summary):
+            self._cached_identity_summary = self.get_identity_summary()
+            self._identity_cache_time = current_time
+        return self._cached_identity_summary
+    
+    def get_focus_context(self) -> str:
+        """Get context about current focus persistence for prompts."""
+        if self.focus_depth <= 1:
+            return "new focus"
+        elif self.focus_depth <= 3:
+            return f"focused on {self.current_focus_object} for {self.focus_depth} moments"
+        elif self.focus_depth <= 6:
+            return f"been staring at {self.current_focus_object} for a while now"
+        else:
+            return f"fixated on {self.current_focus_object} for {self.focus_depth} observations - getting quite familiar"
+
+    def update_loneliness(self, person_present: bool) -> None:
+        """Update loneliness tracking based on current person presence."""
+        current_time = now()
+        
+        if person_present:
+            # Person is present - calculate relief if we were alone
+            if self.time_alone > 60:  # Only feel relief if alone for more than 1 minute
+                # Relief proportional to time alone (max relief = 1.0)
+                self.connection_relief = min(1.0, self.time_alone / 600)  # Peak relief at 10 minutes alone
+            else:
+                self.connection_relief = 0.0
+            
+            # Reset loneliness tracking
+            self.time_alone = 0.0
+            self.last_person_seen = current_time
+        else:
+            # Person is not present - accumulate loneliness
+            time_since_person = current_time - self.last_person_seen
+            self.time_alone = time_since_person
+            
+            # Decay connection relief when alone
+            self.connection_relief *= 0.95  # Gradual decay
 
     def update_motif_focus_streak(self, motif: str) -> None:
         now_time = now()
@@ -359,13 +458,16 @@ class MemoryMixin:
         faded = []
         for motif, data in list(self.beliefs.items()):
             last_seen = self.motif_last_seen.get(motif, 0)
-            if now_time - last_seen > BELIEF_FADE_TIME:
-                data["strength"] -= 0.02
-                if data["strength"] < 0.2:
+            time_since_seen = now_time - last_seen
+            if time_since_seen > BELIEF_FADE_TIME:
+                # More aggressive fade - doubt increases over time
+                fade_amount = 0.05 + (time_since_seen / BELIEF_FADE_TIME) * 0.03
+                data["strength"] -= fade_amount
+                if data["strength"] < 0.1:  # Lower threshold for removal
                     faded.append(motif)
         for motif in faded:
             del self.beliefs[motif]
-            self.belief_history.append(f"I feel less attached to {motif} lately.")
+            self.belief_history.append(f"I'm no longer certain about {motif}... maybe I was mistaken.")
 
     def estimate_novelty(self) -> float:
         if len(self.memory_queue) < 2:
@@ -447,12 +549,34 @@ class MemoryMixin:
                     pass
 
     def rephrase_with_doubt(self, text: str) -> str:
+        """Add doubt markers to uncertain motifs and old beliefs."""
         words = re.findall(r"\b\w+\b", text)
+        now_time = now()
+        
         for word in sorted(set(words), key=len, reverse=True):
             w = word.lower()
+            
+            # Skip if word is already preceded by doubt marker
+            doubt_pattern = rf"\b(?:maybe|I think I see|what might be|seems like)\s+{re.escape(word)}\b"
+            if re.search(doubt_pattern, text, re.IGNORECASE):
+                continue
+            
+            # Add doubt based on confidence
             if w in self.motif_confidence and self.motif_confidence[w] < CONFIDENCE_THRESHOLD:
                 pattern = re.compile(rf"\b({re.escape(word)})\b", re.IGNORECASE)
-                text = pattern.sub(r"maybe \\1", text)
+                text = pattern.sub(r"maybe \1", text)
+            
+            # Add doubt for beliefs that haven't been seen recently
+            elif w in self.beliefs:
+                last_seen = self.motif_last_seen.get(w, 0)
+                time_since_seen = now_time - last_seen
+                if time_since_seen > BELIEF_FADE_TIME * 0.5:  # Start doubting at halfway to fade
+                    pattern = re.compile(rf"\b({re.escape(word)})\b", re.IGNORECASE)
+                    doubt_phrases = ["I think I see", "what might be", "seems like"]
+                    import random
+                    doubt_phrase = random.choice(doubt_phrases)
+                    text = pattern.sub(rf"{doubt_phrase} \1", text)
+                    
         return text
 
     def get_memory_entries_by_type(self, memory_type: str, limit: int = 5) -> list[dict]:

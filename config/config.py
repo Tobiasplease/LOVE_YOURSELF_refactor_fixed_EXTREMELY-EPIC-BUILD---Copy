@@ -47,9 +47,14 @@ COMFY_OUTPUT_FOLDER = os.getenv("COMFY_OUTPUT_FOLDER", os.path.join(os.path.dirn
 COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot-svg.json")
 COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
 
-# difference between the below? hmm
-MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
-CAPTION_INTERVAL = 10  # seconds between full caption cycles
+# === TIMING INTERVALS ===
+# Core consciousness timing - all intervals derive from this
+CONSCIOUSNESS_CYCLE_INTERVAL = 15  # seconds - primary consciousness processing cycle
+
+# Derived intervals (automatically calculated)
+MOOD_EVALUATION_INTERVAL = CONSCIOUSNESS_CYCLE_INTERVAL  # when mood thread runs
+CAPTION_INTERVAL = CONSCIOUSNESS_CYCLE_INTERVAL  # when new captions are generated
+MIN_SNAPSHOT_INTERVAL = max(5, CONSCIOUSNESS_CYCLE_INTERVAL // 3)  # minimum time between snapshots
 
 REASON_INTERVAL = 360  # seconds between reflections
 DRAWING_INTERVAL = 600  # seconds between drawing triggers
@@ -71,6 +76,11 @@ MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 # === OLLAMA SETTINGS ===
 OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
+
+# === AI MODEL PARAMETERS ===
+CONSCIOUSNESS_TEMPERATURE = 0.9  # Higher for more creative, varied consciousness
+AWAKENING_TEMPERATURE = 0.7     # Moderate for focused but natural awakening
+REFLECTION_TEMPERATURE = 0.8    # High for varied internal reflections
 
 # === OUTPUT SETTINGS ===
 CLEAN_CAPTION_OUTPUT = True  # When True, shows only captions in quotes with clean spacing

@@ -67,6 +67,8 @@ def query_ollama(
     timeout: int = 20,
     log_dir: str = MOOD_SNAPSHOT_FOLDER,
     system_prompt: Optional[str] = None,
+    temperature: Optional[float] = None,
+    stream: bool = False,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -78,22 +80,34 @@ def query_ollama(
         timeout: Request timeout in seconds
         log_dir: Directory to store logs
         system_prompt: Optional system prompt to set context
+        temperature: Optional temperature for response creativity (0.0-2.0)
+        stream: Whether to use streaming response with progress feedback
 
     Returns:
         Response text from Ollama
     """
     # Prepare the payload
-    payload = {"model": model, "prompt": prompt, "stream": False}
-    # payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}}
+    payload = {"model": model, "prompt": prompt, "stream": stream}
+    
+    # Add temperature parameter if provided
+    if temperature is not None:
+        if "options" not in payload:
+            payload["options"] = {}
+        payload["options"]["temperature"] = temperature
+    
+    # Always apply anti-repetition settings
+    if "options" not in payload:
+        payload["options"] = {}
+    payload["options"]["repeat_penalty"] = 1.2  # Global repeat penalty
     
     # DEBUG: For first-time environmental descriptions, try to ensure clean context
     if "FIRST ENVIRONMENTAL OBSERVATION" in prompt:
         # Add additional options to minimize context bleed
-        payload["options"] = {
+        payload["options"].update({
             "temperature": 0.1,  # Lower temperature for more focused responses
             "top_p": 0.8,        # Reduce randomness
-            "repeat_penalty": 1.1 # Discourage repetition of unseen details
-        }
+            "repeat_penalty": 1.3 # Increased penalty to strongly discourage repetition
+        })
         # Debug logging for context options (only in non-clean mode)
         from config.config import CLEAN_CAPTION_OUTPUT
         if not CLEAN_CAPTION_OUTPUT:
@@ -132,7 +146,34 @@ def query_ollama(
         response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=timeout)
         response.raise_for_status()
 
-        response_text = response.json().get("response", "")
+        if stream:
+            # Handle streaming response with progress feedback
+            response_text = ""
+            import sys
+            import json
+            from config.config import CLEAN_CAPTION_OUTPUT
+            
+            if not CLEAN_CAPTION_OUTPUT:
+                print("🔄 Generating", end="", flush=True)
+            
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        chunk = json.loads(line.decode('utf-8'))
+                        if 'response' in chunk:
+                            response_text += chunk['response']
+                            # Show progress dots
+                            if not CLEAN_CAPTION_OUTPUT and len(response_text) % 15 == 0:
+                                print(".", end="", flush=True)
+                        if chunk.get('done', False):
+                            break
+                    except json.JSONDecodeError:
+                        continue
+                        
+            if not CLEAN_CAPTION_OUTPUT:
+                print(" ✓", flush=True)
+        else:
+            response_text = response.json().get("response", "")
 
         # Log successful call
         log_ollama_call(

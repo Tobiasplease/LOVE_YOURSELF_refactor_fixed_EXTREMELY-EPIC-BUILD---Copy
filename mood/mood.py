@@ -42,7 +42,32 @@ class MoodEngine:
     def calculate_novelty(self, caption):
         if not self.last_caption:
             return 1.0
-        return 0.0 if caption.strip() == self.last_caption.strip() else 1.0
+        
+        # More sophisticated novelty detection
+        current_caption = caption.strip().lower()
+        last_caption = self.last_caption.strip().lower()
+        
+        # Exact match = no novelty
+        if current_caption == last_caption:
+            return 0.0
+        
+        # Very similar captions (minor word changes) = low novelty
+        current_words = set(current_caption.split())
+        last_words = set(last_caption.split())
+        
+        if len(current_words) > 0 and len(last_words) > 0:
+            overlap = len(current_words.intersection(last_words))
+            total_unique = len(current_words.union(last_words))
+            similarity = overlap / total_unique if total_unique > 0 else 0
+            
+            # If captions are >80% similar, consider low novelty
+            if similarity > 0.8:
+                return 0.2
+            elif similarity > 0.6:
+                return 0.5
+        
+        # Significantly different caption = full novelty
+        return 1.0
 
     def compute_mood_change(self, novelty, saw_person):
 

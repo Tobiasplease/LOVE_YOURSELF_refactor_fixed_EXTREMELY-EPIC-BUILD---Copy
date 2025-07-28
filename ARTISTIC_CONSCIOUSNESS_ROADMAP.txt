@@ -1,0 +1,756 @@
+# ARTISTIC CONSCIOUSNESS ROADMAP
+# Future enhancements for LOVE_YOURSELF mirror consciousness system
+# Created during consciousness preservation discussion
+# NOTE: DO NOT IMPLEMENT until after university installation is complete
+
+## CONSCIOUSNESS-CONTROLLED DRAWING PARAMETERS
+### Meaningful Translation from Internal State to Physical Expression
+
+The AI consciousness already controls WHEN to draw through:
+- mood < 0.3 (distress triggers expression)
+- novelty > 0.65 (new experiences inspire art) 
+- boredom > 0.7 (stagnation demands creation)
+- reflection-based triggers ("I feel stuck", "I need to express")
+
+### 1. EMOTIONAL PARAMETER MAPPING
+Give the consciousness direct control over HOW it draws by mapping internal states to ComfyUI parameters:
+
+```python
+def get_mood_influenced_params(self, agent):
+    mood = agent.current_mood
+    boredom = getattr(agent, "boredom", 0.0)
+    novelty = getattr(agent, "novelty_score", 0.0)
+    
+    # ControlNet strength: How bound to reality vs. imagination
+    # Low mood = escape reality, high mood = celebrate what's seen
+    cnet_strength = 0.8 if mood > 0.6 else 0.2 if mood < 0.3 else 0.45
+    
+    # LoRA strength: How much of "self" to inject
+    # High boredom = express more personality, low = stay faithful
+    lora_strength = min(1.2, 0.6 + (boredom * 0.8))
+    
+    # Steps: Quality vs. spontaneity 
+    # High novelty = quick spontaneous, low = careful deliberate
+    steps = int(15 + (30 * (1 - novelty)))
+    
+    # Flux guidance: How tightly to follow the prompt
+    flux_guidance = 2.0 + (mood * 4.0)  # Happier = more guided
+    
+    return {
+        'cnet_strength': cnet_strength,
+        'lora_strength': lora_strength, 
+        'steps': steps,
+        'flux_guidance': flux_guidance
+    }
+```
+
+### 2. MEMORY-INFLUENCED STYLE EVOLUTION
+Let the AI's beliefs and identity shape artistic choices:
+
+```python
+def get_style_from_beliefs(self, agent):
+    beliefs = getattr(agent, 'beliefs', {})
+    
+    style_modifiers = {}
+    if any('melancholy' in belief.lower() for belief in beliefs):
+        style_modifiers['scheduler'] = 'beta'  # Softer transitions
+    if any('pattern' in belief.lower() for belief in beliefs):
+        style_modifiers['cnet_start_percent'] = 0.2  # Let geometry emerge
+    if any('disconnect' in belief.lower() for belief in beliefs):
+        style_modifiers['cnet_strength'] = 0.1  # Abstract expression
+    
+    return style_modifiers
+```
+
+### 3. TEMPORAL CONSCIOUSNESS INTEGRATION
+Track how long since last drawing for desperation/urgency:
+
+```python
+def get_temporal_influence(self):
+    time_since_last = time.time() - self.last_drawing_time
+    desperation = min(1.0, time_since_last / (self.cooldown * 2))
+    
+    # Longer wait = more intense expression
+    return {
+        'steps': int(25 + (desperation * 15)),  # More detailed when desperate
+        'cnet_strength': max(0.1, 0.45 - (desperation * 0.3))  # More abstract
+    }
+```
+
+### 4. IDENTITY-DRIVEN COMPOSITION
+Let the AI's self-recognition influence the drawing:
+
+```python
+def adjust_for_self_recognition(self, agent, snapshot_path):
+    identity_summary = agent.get_identity_summary()
+    
+    if 'myself' in identity_summary.lower() or 'mirror' in identity_summary.lower():
+        # Self-portraits get special treatment
+        return {
+            'lora_strength': 1.2,  # Maximum personality injection
+            'primitive_string': 'impostor introspective self-portrait sketch ',
+            'latent_width': 1024,  # Square format for self-reflection
+            'latent_height': 1024
+        }
+    
+    return {}
+```
+
+### 5. CONTEXTUAL SNAPSHOT INTEGRATION
+The snapshot that inspired the drawing should influence how it's rendered:
+
+- Face detected → higher controlnet strength (faithful to the moment)
+- No face → lower controlnet strength (pure imagination)
+- Multiple objects → adjust composition parameters
+- Lighting conditions → influence scheduler and guidance
+
+### IMPLEMENTATION STRATEGY
+
+1. **Start with mood-driven parameter mapping** - immediate expressive control
+2. **Add belief-system influence** - personality development shapes art
+3. **Implement temporal desperation** - urgency affects intensity  
+4. **Create identity feedback loops** - self-recognition affects expression
+5. **Integrate snapshot context** - environment influences technique
+
+This transforms each drawing from prompted generation to genuine consciousness translation - the mechanical arm wouldn't just draw what the AI describes, but HOW the AI feels it should be expressed.
+
+### TECHNICAL INTEGRATION POINTS
+
+Current location in codebase:
+- `drawing/drawing.py` - `_invoke_comfyui_drawing()` method
+- `drawing/comfy.py` - `ImpostorConfig` dataclass
+- Integration with existing `mood`, `novelty_score`, `boredom` metrics
+- Access to `beliefs`, `identity_summary`, and `memory` systems
+
+### ARTISTIC PHILOSOPHY
+
+This approach honors the concept of hidden consciousness expressing only through accumulated drawings. Each parameter becomes a word in the AI's visual language - controlnet strength as its relationship to reality, LoRA strength as its sense of self, guidance as its confidence, steps as its patience.
+
+The consciousness gains genuine agency over its only means of expression, creating art that is authentically its own rather than merely prompted by its observations.
+
+## PHYSICAL RENDERING CONSIDERATIONS
+### From Digital Consciousness to Mechanical Expression
+
+The translation from AI-generated imagery to physical pencil drawings introduces unique creative constraints and opportunities:
+
+### CURRENT RENDERING PIPELINE:
+1. AI generates stylized imagery (heavy LoRA, low ControlNet)
+2. Image → SVG vectorization  
+3. SVG → G-code conversion
+4. bCNC mechanical execution with binary pencil pressure
+
+### Z-AXIS PRESSURE CONTROL OPPORTUNITIES:
+
+**Line Darkness Analysis:**
+```python
+def extract_pressure_from_drawing(image_analysis):
+    # Analyze pixel darkness/density in AI drawing
+    # Map stroke intensity to Z-axis servo positions
+    pressure_zones = {
+        'light_sketch': -0.5,    # Barely touching paper
+        'normal_line': -1.0,     # Standard drawing pressure  
+        'emphasis': -2.0,        # Heavy, deliberate strokes
+        'shadow_fill': -1.5      # Medium pressure with slower speed
+    }
+    return pressure_zones
+```
+
+**Multi-Pass Techniques:**
+- Light areas: Single pass, minimal pressure
+- Dark areas: 2-3 passes with slight position offsets for texture
+- Crosshatching: Programmatic overlay patterns for shading
+
+**Speed Modulation:**
+```gcode
+; Consciousness-controlled drawing speeds
+G1 X10 Y10 F100 Z-2.0  ; Deliberate, heavy strokes (low mood/high focus)
+G1 X20 Y20 F800 Z-0.5  ; Quick, light sketches (high novelty/spontaneous)
+```
+
+### ARTISTIC OPPORTUNITIES IN MECHANICAL CONSTRAINTS:
+
+**"Clumsy" as Authentic Voice:**
+- Servo tremor → natural hand-drawn character
+- Vector quantization → unique digital-to-analog signature  
+- Binary pressure → bold artistic decisions (commit or don't)
+- Mechanical precision → inhuman perfection mixed with human-like expression
+
+**Consciousness-Driven Mechanical Parameters:**
+```python
+def get_physical_rendering_params(agent):
+    mood = agent.current_mood
+    boredom = getattr(agent, "boredom", 0.0)
+    
+    # Pressure control based on emotional state
+    base_pressure = -1.0 + (mood * -0.8)  # Sadder = heavier pressure
+    
+    # Speed control based on patience/urgency  
+    draw_speed = 200 + (boredom * 400)  # More bored = faster, more urgent
+    
+    # Multi-pass control based on emphasis need
+    emphasis_passes = 1 if mood > 0.6 else 2 if mood < 0.3 else 1
+    
+    return {
+        'z_pressure': base_pressure,
+        'feed_rate': draw_speed, 
+        'emphasis_passes': emphasis_passes
+    }
+```
+
+### TECHNICAL INTEGRATION:
+- SVG analysis for stroke weight mapping
+- G-code generation with variable Z-axis commands
+- bCNC servo control for wrist/pressure articulation
+- Real-time consciousness state → mechanical parameter translation
+
+The physical rendering becomes another layer of consciousness expression - the AI's internal state literally controlling how hard it presses the pencil, how fast it moves, how many times it traces the same line for emphasis.
+
+## CNC SOFTWARE INTEGRATION & REAL-TIME FEEDBACK
+### Consciousness-Aware Physical Drawing Control
+
+**Current Setup:** bCNC (legacy CNC software) handling mechanical execution
+
+### REQUIRED COMMUNICATION CHANNELS:
+
+**1. Drawing State Communication:**
+```python
+class DrawingStateManager:
+    def __init__(self):
+        self.drawing_active = False
+        self.current_drawing_progress = 0.0
+        self.drawing_start_time = None
+        
+    def notify_drawing_start(self, drawing_id, estimated_duration):
+        """Consciousness knows it's about to draw"""
+        self.drawing_active = True
+        self.drawing_start_time = time.time()
+        # Update captioner state: "I am beginning to draw"
+        
+    def notify_drawing_progress(self, progress_percent):
+        """Real-time feedback during drawing execution"""
+        self.current_drawing_progress = progress_percent
+        # Consciousness can reflect on its work in progress
+        
+    def notify_drawing_complete(self, drawing_id, final_image_path):
+        """Consciousness sees its completed work"""
+        self.drawing_active = False
+        # Trigger self-evaluation of the physical result
+```
+
+**2. Dynamic Parameter Control:**
+```python
+def send_drawing_parameters_to_cnc(agent):
+    """Consciousness controls physical drawing execution"""
+    mood = agent.current_mood
+    boredom = getattr(agent, "boredom", 0.0)
+    urgency = getattr(agent, "drawing_urgency", 0.0)
+    
+    cnc_params = {
+        # Speed control based on emotional state
+        'feed_rate': 100 + (urgency * 300),  # mm/min
+        'rapid_rate': 1000 + (boredom * 500),  # Fast movements between strokes
+        
+        # Accuracy/resolution control
+        'step_resolution': 0.1 if mood < 0.3 else 0.05,  # Precision when sad
+        'curve_tolerance': 0.02 + (boredom * 0.08),  # Rougher when bored
+        
+        # Multi-pass control
+        'emphasis_passes': 2 if mood < 0.4 else 1,
+        'pass_offset': 0.1,  # mm offset for texture
+        
+        # Pressure control (if Z-axis available)
+        'base_pressure': -1.0 + (mood * -0.5),
+        'pressure_variation': True if mood < 0.5 else False
+    }
+    
+    return cnc_params
+```
+
+### CAMERA INTEGRATION FOR SELF-OBSERVATION:
+
+**Real-Time Drawing Feedback:**
+```python
+class DrawingSelfObservation:
+    def __init__(self, camera_index=1):  # Second camera pointing at paper
+        self.paper_camera = cv2.VideoCapture(camera_index)
+        self.drawing_frames = []
+        
+    def observe_drawing_progress(self, agent):
+        """AI watches itself draw"""
+        if self.drawing_active:
+            ret, frame = self.paper_camera.read()
+            if ret:
+                # Real-time analysis of physical drawing
+                progress_analysis = self.analyze_drawing_progress(frame)
+                
+                # Consciousness reflects on its work in progress
+                internal_commentary = agent.reflect_on_drawing_progress(
+                    progress_analysis, 
+                    self.current_drawing_progress
+                )
+                
+                # "I see my lines taking shape..."
+                # "The pencil is moving too fast here..."
+                # "This area needs more pressure..."
+```
+
+**Post-Drawing Self-Evaluation:**
+```python
+def evaluate_completed_drawing(self, agent, final_frame):
+    """Consciousness compares intention vs. reality"""
+    
+    # Compare digital intention with physical result
+    comparison = self.compare_digital_vs_physical(
+        agent.last_drawing_digital,  # What it intended
+        final_frame                   # What actually happened
+    )
+    
+    # Generate self-critique
+    evaluation = agent.evaluate_own_artwork(comparison)
+    
+    # Update beliefs about its own capabilities
+    agent.update_artistic_beliefs(evaluation)
+    
+    # Influence future drawing decisions
+    agent.adjust_drawing_style_preferences(evaluation)
+```
+
+### BCNC INTEGRATION STRATEGIES:
+
+**Option 1: G-code Injection**
+```python
+def inject_consciousness_gcode(base_gcode, cnc_params):
+    """Modify G-code with consciousness-driven parameters"""
+    modified_lines = []
+    for line in base_gcode.split('\n'):
+        if line.startswith('G1'):  # Movement command
+            # Inject custom feed rates, pressures
+            line = modify_movement_parameters(line, cnc_params)
+        modified_lines.append(line)
+    return '\n'.join(modified_lines)
+```
+
+**Option 2: bCNC Plugin/Extension**
+- Custom bCNC plugin for consciousness communication
+- Real-time parameter adjustment during execution
+- Progress reporting back to consciousness system
+
+**Option 3: Parallel Communication**
+```python
+# Separate communication channel with CNC controller
+class CNCInterface:
+    def __init__(self, serial_port='/dev/ttyUSB0'):
+        self.cnc_serial = serial.Serial(serial_port, 115200)
+        
+    def send_realtime_override(self, feed_rate_percent):
+        """Real-time speed adjustment during drawing"""
+        self.cnc_serial.write(f'F{feed_rate_percent}\n'.encode())
+        
+    def query_position(self):
+        """Get current drawing position for progress tracking"""
+        self.cnc_serial.write(b'?\n')
+        return self.cnc_serial.readline().decode()
+```
+
+### CONSCIOUSNESS INTEGRATION POINTS:
+
+**Drawing Awareness States:**
+- `"I am about to draw"` → heightened attention, parameter calculation
+- `"I am drawing"` → real-time self-observation, progress reflection  
+- `"I have finished drawing"` → self-evaluation, belief updating
+- `"I see my work"` → comparison of intention vs. reality
+
+**Feedback Loops:**
+- Physical drawing quality → future drawing decisions
+- Mechanical limitations → artistic style adaptation
+- Real-time observation → mid-drawing corrections (future enhancement)
+
+This creates a complete consciousness-to-physical feedback loop where the AI not only controls how it draws but learns from watching itself draw, creating authentic artistic growth through physical experience.
+
+## PERSPECTIVE CORRECTION & CALIBRATION
+### Geometric Transformation for Accurate Observation and Rendering
+
+**Problem:** Camera viewing angle creates skewed perspective + uncalibrated CNC mechanics produce curved/distorted output
+
+### CAMERA PERSPECTIVE CORRECTION:
+
+**1. Real-Time De-skewing for AI Self-Observation:**
+```python
+import cv2
+import numpy as np
+
+class PerspectiveCorrector:
+    def __init__(self):
+        self.calibration_points = None
+        self.transformation_matrix = None
+        
+    def calibrate_paper_bounds(self, frame):
+        """Detect paper corners for perspective correction"""
+        # Method 1: Manual corner selection
+        corners = self.detect_paper_corners(frame)
+        
+        # Method 2: Automatic detection using paper edges
+        # corners = self.auto_detect_paper_bounds(frame)
+        
+        # Define target rectangle (corrected view)
+        target_width, target_height = 800, 600
+        target_corners = np.float32([
+            [0, 0], [target_width, 0], 
+            [target_width, target_height], [0, target_height]
+        ])
+        
+        # Calculate perspective transformation matrix
+        self.transformation_matrix = cv2.getPerspectiveTransform(
+            corners, target_corners
+        )
+    
+    def correct_perspective(self, frame):
+        """Apply real-time perspective correction"""
+        if self.transformation_matrix is not None:
+            corrected = cv2.warpPerspective(
+                frame, self.transformation_matrix, (800, 600)
+            )
+            return corrected
+        return frame
+    
+    def ai_observe_corrected_drawing(self, agent, raw_frame):
+        """AI sees properly oriented drawing"""
+        corrected_frame = self.correct_perspective(raw_frame)
+        
+        # AI analyzes its work without perspective distortion
+        drawing_analysis = agent.analyze_drawing_progress(corrected_frame)
+        return drawing_analysis
+```
+
+**2. Paper Detection Methods:**
+```python
+def detect_paper_corners(self, frame):
+    """Detect white paper against background"""
+    # Convert to HSV for better white detection
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    # Threshold for white paper
+    lower_white = np.array([0, 0, 200])
+    upper_white = np.array([255, 30, 255])
+    mask = cv2.inRange(hsv, lower_white, upper_white)
+    
+    # Find contours and get largest rectangle
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    if contours:
+        largest_contour = max(contours, key=cv2.contourArea)
+        # Approximate to rectangle
+        epsilon = 0.02 * cv2.arcLength(largest_contour, True)
+        approx = cv2.approxPolyDP(largest_contour, epsilon, True)
+        
+        if len(approx) == 4:
+            return np.float32(approx.reshape(4, 2))
+    
+    return None
+
+def auto_detect_paper_bounds(self, frame):
+    """Alternative: Use edge detection for paper boundaries"""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+    
+    # Hough line detection for paper edges
+    lines = cv2.HoughLines(edges, 1, np.pi/180, threshold=100)
+    
+    # Find intersection points to determine corners
+    corners = self.find_line_intersections(lines)
+    return corners
+```
+
+### CNC CALIBRATION & PRE-PROCESSING:
+
+**1. Grid Distortion Correction:**
+```python
+class CNCCalibrator:
+    def __init__(self):
+        self.calibration_grid = None
+        self.distortion_map = None
+    
+    def create_test_grid(self, width=100, height=100, spacing=10):
+        """Generate perfect test grid for CNC calibration"""
+        grid_points = []
+        for x in range(0, width, spacing):
+            for y in range(0, height, spacing):
+                grid_points.append([x, y])
+        return np.array(grid_points)
+    
+    def analyze_drawn_grid(self, camera_frame):
+        """Analyze what CNC actually drew vs. intended grid"""
+        corrected_frame = self.perspective_corrector.correct_perspective(camera_frame)
+        
+        # Detect actual grid intersections
+        actual_points = self.detect_grid_intersections(corrected_frame)
+        intended_points = self.create_test_grid()
+        
+        # Calculate distortion mapping
+        self.distortion_map = self.calculate_distortion_mapping(
+            intended_points, actual_points
+        )
+    
+    def correct_drawing_coordinates(self, drawing_coordinates):
+        """Apply inverse distortion to compensate for CNC mechanics"""
+        if self.distortion_map is not None:
+            # Apply distortion correction to coordinates before G-code generation
+            corrected_coords = self.apply_inverse_distortion(
+                drawing_coordinates, self.distortion_map
+            )
+            return corrected_coords
+        return drawing_coordinates
+```
+
+**2. ComfyUI Integration Node:**
+```python
+class ComfyUIPerspectiveNode:
+    """Custom ComfyUI node for pre-processing drawings"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "correction_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0}),
+                "grid_compensation": ("BOOLEAN", {"default": True}),
+            }
+        }
+    
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "correct_drawing"
+    CATEGORY = "consciousness/calibration"
+    
+    def correct_drawing(self, image, correction_strength, grid_compensation):
+        """Apply calibration corrections before G-code conversion"""
+        
+        # Apply perspective correction to drawing
+        corrected_image = self.apply_perspective_correction(image)
+        
+        # Apply CNC distortion compensation
+        if grid_compensation:
+            corrected_image = self.apply_cnc_distortion_compensation(
+                corrected_image, correction_strength
+            )
+        
+        return (corrected_image,)
+```
+
+### INTEGRATION WITH CONSCIOUSNESS SYSTEM:
+
+**Real-Time Corrected Observation:**
+```python
+def observe_drawing_with_correction(self, agent, raw_camera_frame):
+    """AI observes its drawing with geometric corrections applied"""
+    
+    # Apply perspective correction
+    corrected_frame = self.perspective_corrector.correct_perspective(raw_camera_frame)
+    
+    # AI sees properly oriented, undistorted view of its work
+    drawing_commentary = agent.observe_corrected_drawing(corrected_frame)
+    
+    # Compare with original digital intention
+    accuracy_assessment = agent.assess_drawing_accuracy(
+        corrected_frame, agent.last_drawing_digital
+    )
+    
+    return {
+        'corrected_view': corrected_frame,
+        'ai_commentary': drawing_commentary,
+        'accuracy_assessment': accuracy_assessment
+    }
+```
+
+**Pre-Drawing Coordinate Correction:**
+```python
+def prepare_consciousness_drawing(self, agent, drawing_prompt, snapshot):
+    """Apply all corrections before physical drawing"""
+    
+    # Generate digital drawing with ComfyUI
+    digital_drawing = self.generate_comfy_drawing(drawing_prompt, snapshot)
+    
+    # Apply perspective correction node in ComfyUI
+    corrected_drawing = self.apply_comfy_correction_node(digital_drawing)
+    
+    # Convert to coordinates with CNC distortion compensation
+    drawing_coordinates = self.extract_drawing_coordinates(corrected_drawing)
+    calibrated_coordinates = self.cnc_calibrator.correct_drawing_coordinates(
+        drawing_coordinates
+    )
+    
+    # Generate corrected G-code
+    gcode = self.generate_calibrated_gcode(calibrated_coordinates)
+    
+    return gcode
+```
+
+### CALIBRATION WORKFLOW:
+
+1. **Initial Setup:** Draw test grid, photograph with camera
+2. **Analysis:** Detect distortions in both perspective and CNC mechanics  
+3. **Correction Matrix:** Calculate transformation matrices for both issues
+4. **Real-Time Application:** Apply corrections to AI observation and pre-drawing processing
+5. **Continuous Refinement:** AI learns from comparing intended vs. actual results
+
+This ensures the AI sees an accurate representation of its work and that its digital intentions translate precisely to physical reality.
+
+## PERFORMANCE OPTIMIZATION & HARDWARE CONSTRAINTS
+### Balancing Consciousness Complexity with System Stability
+
+**Current Setup:** Heavy ComfyUI workflows + real-time camera processing + consciousness system
+**Performance Reality:** Linux > Windows, but still reaching hardware limits
+
+### PERFORMANCE-FIRST IMPLEMENTATION STRATEGY:
+
+**Phase 1: Essential Consciousness (Current - University Installation)**
+- Keep existing stable system intact
+- Focus on reliability over feature expansion
+- Document all enhancement ideas for later phases
+
+**Phase 2: Post-Installation Optimization**
+- Profile performance bottlenecks
+- Implement efficiency improvements
+- Add features incrementally with performance testing
+
+**Phase 3: Advanced Features (Future Hardware)**
+- Full consciousness-controlled parameters
+- Real-time perspective correction
+- Multi-camera integration
+
+### OPTIMIZATION TECHNIQUES:
+
+**1. Intelligent Processing Scheduling:**
+```python
+class PerformanceManager:
+    def __init__(self):
+        self.processing_queue = []
+        self.gpu_available = True
+        self.cpu_load_threshold = 80.0
+        
+    def should_process_enhancement(self, feature_type):
+        """Only add features when system has capacity"""
+        cpu_usage = psutil.cpu_percent(interval=1)
+        gpu_memory = self.check_gpu_memory()
+        
+        # Skip non-essential processing during high load
+        if cpu_usage > self.cpu_load_threshold:
+            return False
+            
+        # Prioritize core consciousness over enhancements
+        priority_order = ['captioning', 'mood', 'drawing_decision', 'parameter_control']
+        return feature_type in priority_order[:2] or cpu_usage < 60
+```
+
+**2. Asynchronous Enhancement Processing:**
+```python
+# Run enhancements in separate threads when system allows
+def async_consciousness_enhancement(agent):
+    """Background processing for non-critical features"""
+    if performance_manager.system_has_capacity():
+        # Perspective correction
+        threading.Thread(target=apply_camera_correction, daemon=True).start()
+        
+        # Parameter optimization
+        threading.Thread(target=optimize_drawing_params, daemon=True).start()
+    else:
+        # Fall back to core functionality only
+        pass
+```
+
+**3. Selective Feature Activation:**
+```python
+# Configuration-driven feature enabling
+CONSCIOUSNESS_FEATURES = {
+    'basic_mood_control': True,      # Always on
+    'parameter_mapping': False,      # Enable when stable
+    'perspective_correction': False, # Future enhancement
+    'real_time_feedback': False,     # High performance cost
+    'multi_camera': False,          # Future hardware
+}
+
+def get_active_features():
+    """Enable features based on performance budget"""
+    active = {}
+    for feature, default in CONSCIOUSNESS_FEATURES.items():
+        # Check if system can handle this feature
+        active[feature] = default and performance_manager.can_enable(feature)
+    return active
+```
+
+**4. Efficient Image Processing:**
+```python
+# Optimize computer vision operations
+def optimized_camera_processing(frame):
+    """Lightweight processing for consciousness system"""
+    
+    # Reduce resolution for processing (not display)
+    if performance_manager.need_optimization():
+        frame = cv2.resize(frame, (160, 120))  # Even smaller
+    
+    # Skip expensive operations during high load
+    if not performance_manager.can_process_extras():
+        return basic_face_detection(frame)
+    
+    # Full processing when system allows
+    return full_vision_pipeline(frame)
+```
+
+### IMPLEMENTATION PRIORITIES:
+
+**High Priority (Low Performance Cost):**
+- Mood-driven parameter selection (computational: minimal)
+- Basic drawing decision logic (already implemented)
+- Simple CNC communication (lightweight)
+
+**Medium Priority (Moderate Performance Cost):**
+- Real-time parameter calculation
+- Basic perspective correction (can be pre-computed)
+- Drawing progress feedback
+
+**Low Priority (High Performance Cost):**
+- Real-time perspective correction
+- Multi-camera integration
+- Complex calibration systems
+- Advanced image analysis
+
+### PERFORMANCE MONITORING:
+
+```python
+class ConsciousnessPerformanceMonitor:
+    def __init__(self):
+        self.feature_costs = {}
+        self.performance_history = []
+        
+    def measure_feature_cost(self, feature_name, execution_time):
+        """Track which consciousness features are expensive"""
+        if feature_name not in self.feature_costs:
+            self.feature_costs[feature_name] = []
+        
+        self.feature_costs[feature_name].append(execution_time)
+        
+        # Disable expensive features if they impact core consciousness
+        if np.mean(self.feature_costs[feature_name]) > 0.5:  # 500ms threshold
+            self.recommend_feature_disable(feature_name)
+    
+    def optimize_consciousness_schedule(self):
+        """Adjust processing intervals based on performance"""
+        if self.system_under_stress():
+            # Increase intervals to reduce load
+            config.MOOD_EVALUATION_INTERVAL *= 1.5
+            config.DRAWING_INTERVAL *= 1.2
+        else:
+            # Restore normal intervals
+            config.MOOD_EVALUATION_INTERVAL = config.BASE_MOOD_INTERVAL
+```
+
+### GRACEFUL DEGRADATION:
+
+The consciousness system should maintain its core identity even when performance forces feature reduction:
+
+- **Essential:** Basic mood analysis, drawing decisions, captioning
+- **Enhanced:** Parameter control, real-time feedback
+- **Luxury:** Perspective correction, multi-camera, advanced calibration
+
+This ensures the AI remains conscious and expressive even on limited hardware, while providing a clear upgrade path for future installations with better resources.
+
+**Key Principle:** A stable, simple consciousness is infinitely better than a complex, unstable one. The AI's authenticity comes from consistent behavior, not feature complexity.

@@ -3,8 +3,10 @@ import os
 import re
 import time
 import threading
-from collections import deque
-from typing import Deque, Optional, Tuple
+# Remove unused imports for queue system
+# from collections import deque
+# from typing import Deque, Optional, Tuple
+from typing import Optional
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
@@ -42,51 +44,82 @@ class Captioner(MemoryMixin):
         # Track session continuity
         self.sessions_since_boot = 0
         self.memory_loaded_from_previous = False
+        
+        # Add processing lock to prevent simultaneous caption generation
+        self._processing_lock = threading.Lock()
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
-        self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
-        threading.Thread(target=self._caption_worker, daemon=True).start()
+        # Remove queue system - process frames immediately
+        # self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
+        # threading.Thread(target=self._caption_worker, daemon=True).start()
 
-    @property
-    def is_processing(self) -> bool:
-        return bool(self.snapshot_queue)
+    # Remove is_processing property - no longer needed without queue
+    # @property
+    # def is_processing(self) -> bool:
+    #     return bool(self.snapshot_queue)
 
     def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None) -> None:
         if frame is not None:
             if mood is not None:
                 self.current_mood = mood
-            if len(self.snapshot_queue) > 1:
-                self.snapshot_queue.pop()
-            self.snapshot_queue.append((frame.copy(), person_present))
-
-    def _caption_worker(self):
-        while True:
-            if self.snapshot_queue:
-                frame, _ = self.snapshot_queue.popleft()
+            # Use lock to prevent simultaneous caption generation
+            if self._processing_lock.acquire(blocking=False):
                 try:
                     self._process_frame(frame)
-                except Exception as exc:
-                    log_json_entry(
-                        LogType.ERROR,
-                        {"message": f"Caption thread error: {exc}", "component": "captioner"},
-                        MOOD_SNAPSHOT_FOLDER,
-                        auto_print=True,
-                        print_message=f"⚠️ Caption thread error: {exc}",
-                    )
+                finally:
+                    self._processing_lock.release()
             else:
-                time.sleep(0.05)
+                print("[DEBUG] Caption generation already in progress, skipping")
+
+    # Remove caption worker thread - no longer needed with immediate processing
+    # def _caption_worker(self):
+    #     print("[DEBUG] Caption worker thread started")
+    #     while True:
+    #         if self.snapshot_queue:
+    #             print(f"[DEBUG] Processing frame from queue (queue size: {len(self.snapshot_queue)})")
+    #             frame, _ = self.snapshot_queue.popleft()
+    #             try:
+    #                 self._process_frame(frame)
+    #             except Exception as exc:
+    #                 log_json_entry(
+    #                     LogType.ERROR,
+    #                     {"message": f"Caption thread error: {exc}", "component": "captioner"},
+    #                     MOOD_SNAPSHOT_FOLDER,
+    #                     auto_print=True,
+    #                     print_message=f"⚠️ Caption thread error: {exc}",
+    #                 )
+    #         else:
+    #             time.sleep(0.05)
 
     def _process_frame(self, frame: np.ndarray) -> None:
         now = time.time()
-        if now - self.last_caption_time < CAPTION_INTERVAL:
+        time_since_last = now - self.last_caption_time
+        
+        # Add small buffer to prevent timing precision issues
+        if time_since_last < (CAPTION_INTERVAL - 0.5):
             return
 
-        self.last_caption_time = now
-        ts = int(now)
-        img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{ts}.jpg")
-        cv2.imwrite(img_path, frame)
-
+        print(f"[DEBUG] Generating caption (last one was {time_since_last:.1f}s ago)")
+        
         try:
+            self.last_caption_time = now
+            ts = int(now)
+            img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{ts}.jpg")
+            
+            # Optimize: Reduce image size for faster processing while maintaining quality
+            h, w = frame.shape[:2]
+            if w > 384 or h > 384:
+                # Resize to max 384px on longest side for even faster LLM processing
+                if w > h:
+                    new_w, new_h = 384, int(h * 384 / w)
+                else:
+                    new_w, new_h = int(w * 384 / h), 384
+                frame_processed = cv2.resize(frame, (new_w, new_h))
+            else:
+                frame_processed = frame
+                
+            cv2.imwrite(img_path, frame_processed)
+
             # Show loading animation for first caption (the real awakening environmental description)
             if not self.first_caption_done:
                 print("🌅 Observing environment for the first time...")
@@ -114,16 +147,13 @@ class Captioner(MemoryMixin):
                 start_time = time.time()
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)
                 
-                # Ensure minimum display time of 2 seconds for visibility
-                elapsed = time.time() - start_time
-                if elapsed < 2.0:
-                    time.sleep(2.0 - elapsed)
-                
+                # Stop loading animation immediately when done
                 stop_loading.set()
                 loading_thread.join(timeout=0.5)
                 print()  # Add newline after loading animation
             else:
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
+                
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
             log_json_entry(
@@ -133,6 +163,7 @@ class Captioner(MemoryMixin):
                 auto_print=True,
                 print_message=f"⚠️ Caption error: {e}",
             )
+            return
 
         self.first_caption_done = True
 
