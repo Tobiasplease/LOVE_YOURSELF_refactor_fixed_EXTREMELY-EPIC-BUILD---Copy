@@ -2,35 +2,12 @@ import json
 import os
 import time
 import uuid
-from enum import Enum
 from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
 import importlib.util
 
 from config.config import LOG_TYPES_TO_PRINT, MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
-
-
-class LogType(Enum):
-    """Enumeration of all valid log types for event logging."""
-
-    # Core system events
-    SESSION_START = "session_start"
-    INFO = "info"
-    ERROR = "error"
-    SYSTEM = "system"
-    RUN_METADATA = "run_metadata"
-
-    # AI/ML processing events
-    MOOD = "mood_update"
-    CAPTION = "caption"
-    REFLECTION = "reflection"
-    SENTIMENT = "sentiment_analysis"
-    OLLAMA_API_CALL = "ollama_api_call"
-
-    # Drawing and creative process events
-    DECISION = "decision"
-    COMFY_PROMPT = "comfy_prompt"
-    NEW_DRAWING = "new_drawing"
+from event_logging.log_type import LogType
 
 
 # Global run ID - generated once per application run
@@ -70,33 +47,6 @@ def get_elapsed_time() -> str:
     minutes = int((elapsed % 3600) // 60)
     seconds = int(elapsed % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-
-
-def event_print(message: str, event_type: Optional[str] = None, data: Optional[Dict[str, Any]] = None, log_dir: str = "mood_snapshots") -> None:
-    """
-    Unified print and log function with elapsed time.
-
-    Args:
-        message: The message to print and optionally log
-        event_type: If provided, also log to JSON with this event type
-        data: Additional data to include in JSON log
-        log_dir: Directory for JSON logs
-    """
-    # Suppress printing for caption and caption_event log types
-    if event_type and str(event_type).lower() in ("caption_event", "caption"):
-        log_data = {"message": message, "elapsed_time": get_elapsed_time()}
-        if data:
-            log_data.update(data)
-        log_json_entry(event_type, log_data, log_dir)
-        return
-    elapsed = get_elapsed_time()
-    formatted_message = f"[{elapsed}] {message}"
-    print(formatted_message)
-    if event_type:
-        log_data = {"message": message, "elapsed_time": elapsed}
-        if data:
-            log_data.update(data)
-        log_json_entry(event_type, log_data, log_dir)
 
 
 def load_config_metadata() -> Dict[str, Any]:
@@ -228,8 +178,6 @@ def log_json_entry(
     # Also append to all-run-log.json
     update_all_run_log(log_dir, entry)
 
-    # Auto-print if requested, but suppress for certain content log types that have custom printing
-    # suppressed_types = ("caption_event", "caption", "reflection", "comfy_prompt", "decision")
     if log_type_str.lower() in LOG_TYPES_TO_PRINT or "all" in LOG_TYPES_TO_PRINT:
         # Avoid generating generic "X event" strings in fallback message for known content types
         if log_type_str.lower() == "caption":
@@ -241,6 +189,7 @@ def log_json_entry(
         elif log_type_str.lower() == "decision":
             message = print_message or data.get("message", "decision")
         else:
+            # ollama_api_call get a generic message etm
             message = print_message or data.get("message", f"{log_type_str} event")
         elapsed = get_elapsed_time()
         print(f"[{elapsed}] {message}")

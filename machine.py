@@ -60,7 +60,8 @@ from config.config import (
     MODEL_PATH,
 )
 from event_logging.run_manager import get_run_image_path
-from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry, LogType
+from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
+from event_logging.log_type import LogType
 
 if USE_SERVO:
     from servo_control.servo_control import ServoController

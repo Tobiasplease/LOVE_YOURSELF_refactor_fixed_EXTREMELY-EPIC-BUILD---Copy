@@ -25,7 +25,8 @@ try:
     from captioner.captioner import Captioner
     from mood.mood import MoodEngine
     from utils.continuity import describe_duration
-    from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry, LogType
+    from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
+    from event_logging.log_type import LogType
 
     print("✅ All imports successful")
 except Exception as e:

@@ -4,7 +4,8 @@ import glob
 import threading
 from pathlib import Path
 from config.config import COMFY_OUTPUT_FOLDER, MOOD_SNAPSHOT_FOLDER
-from event_logging.event_logger import log_json_entry, LogType
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 
 
 class ImageMonitor:

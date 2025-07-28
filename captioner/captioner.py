@@ -9,7 +9,8 @@ from typing import Deque, Optional, Tuple
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
-from event_logging.event_logger import log_json_entry, LogType
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from drawing.drawing import DrawingController
 

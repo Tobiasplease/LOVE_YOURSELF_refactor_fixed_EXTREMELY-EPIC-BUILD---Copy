@@ -8,7 +8,8 @@ import numpy as np  # type: ignore
 from typing import List, Optional
 
 from config.config import MOOD_SNAPSHOT_FOLDER
-from event_logging.event_logger import log_json_entry, read_json_logs, LogType
+from event_logging.event_logger import log_json_entry, read_json_logs
+from event_logging.log_type import LogType
 
 
 # ---------------------------------------------------------------------------#
