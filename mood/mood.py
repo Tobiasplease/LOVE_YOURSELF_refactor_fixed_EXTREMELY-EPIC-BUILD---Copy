@@ -95,7 +95,7 @@ def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
     else:
         emoji = "😞"
 
-    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, auto_print=False)
+    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=f"{emoji} Mood: {mood:.2f} - {caption}")
 
 
 def read_mood_logs(limit: Optional[int] = None) -> List[dict]:

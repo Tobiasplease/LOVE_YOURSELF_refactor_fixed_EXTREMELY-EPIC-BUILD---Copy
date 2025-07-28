@@ -25,7 +25,6 @@ try:
     from captioner.captioner import Captioner
     from mood.mood import MoodEngine
     from utils.continuity import describe_duration
-    from config.config import MOOD_SNAPSHOT_FOLDER, CLEAN_CAPTION_OUTPUT
     from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry, LogType
 
     print("✅ All imports successful")
@@ -47,9 +46,7 @@ def main():
     log_json_entry(
         LogType.SESSION_START,
         {"run_id": run_id},
-        MOOD_SNAPSHOT_FOLDER,
-        auto_print=not CLEAN_CAPTION_OUTPUT,
-        print_message=f"🚀 Starting session with run ID: {run_id}" if not CLEAN_CAPTION_OUTPUT else None,
+        print_message=f"🚀 Starting session with run ID: {run_id}",
     )
 
     # Initialize components
@@ -72,29 +69,22 @@ def main():
         previous_beliefs = previous_state["captioner"].get("beliefs", {})
 
         awakening_msg = captioner.generate_awakening_message(time_since_last, previous_beliefs)
-        if not CLEAN_CAPTION_OUTPUT:
-            print(f"[🌅] {awakening_msg}")
 
         log_json_entry(
             LogType.INFO,
             {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
-            MOOD_SNAPSHOT_FOLDER,
-            auto_print=CLEAN_CAPTION_OUTPUT,
-            print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None,
+            print_message=f'"[🌅] {awakening_msg}"',
         )
 
         captioner.memory_loaded_from_previous = True
     else:
         # Fresh start
         awakening_msg = captioner.generate_awakening_message()
-        if not CLEAN_CAPTION_OUTPUT:
-            print(f"[🌅] {awakening_msg}")
+
         log_json_entry(
             LogType.INFO,
             {"message": awakening_msg, "continuity": False},
-            MOOD_SNAPSHOT_FOLDER,
-            auto_print=CLEAN_CAPTION_OUTPUT,
-            print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None,
+            print_message=f'"[🌅] {awakening_msg}"',
         )
 
     # Display current state
@@ -129,8 +119,6 @@ def main():
     success = state_manager.save_session_state(captioner, mood_engine)
     if success:
         print("[✅] Session state saved successfully")
-
-        # Show what was saved
         lifetime_stats = state_manager.get_lifetime_stats()
         print(f"[📈] Lifetime stats: {lifetime_stats['total_sessions']} sessions, {lifetime_stats['total_runtime']:.1f}s total")
     else:
@@ -140,9 +128,7 @@ def main():
     log_json_entry(
         LogType.INFO,
         {"message": "Session ended", "run_id": run_id, "duration": time.time() - start_time},
-        MOOD_SNAPSHOT_FOLDER,
-        auto_print=not CLEAN_CAPTION_OUTPUT,
-        print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s" if not CLEAN_CAPTION_OUTPUT else None,
+        print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s",
     )
 
     print(f"[👋] System shutdown complete")

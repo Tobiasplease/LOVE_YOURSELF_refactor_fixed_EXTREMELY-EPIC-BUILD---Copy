@@ -58,7 +58,6 @@ from config.config import (
     MOOD_EVALUATION_INTERVAL,
     PAUSE_DURATION,
     MODEL_PATH,
-    CLEAN_CAPTION_OUTPUT,
 )
 from event_logging.run_manager import get_run_image_path
 from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry, LogType
@@ -115,28 +114,22 @@ image_monitor.start()
 start_time = time.time()
 set_start_time(start_time)
 run_id = get_current_run_id()
-debug_print(f"Session initialized with run ID: {run_id}", "INIT")
 
 log_json_entry(
     LogType.SESSION_START,
     {"run_id": run_id},
-    MOOD_SNAPSHOT_FOLDER,
-    auto_print=not CLEAN_CAPTION_OUTPUT,
-    print_message=f"🚀 Starting session with run ID: {run_id}" if not CLEAN_CAPTION_OUTPUT else None,
+    print_message=f"🚀 Starting session with run ID: {run_id}",
 )
 log_json_entry(
     LogType.INFO,
     {"message": f"Event log: {run_id}-event-log.json"},
     MOOD_SNAPSHOT_FOLDER,
-    auto_print=not CLEAN_CAPTION_OUTPUT,
-    print_message=f"📁 Event log: {run_id}-event-log.json" if not CLEAN_CAPTION_OUTPUT else None,
+    print_message=f"📁 Event log: {run_id}-event-log.json",
 )
 log_json_entry(
     LogType.INFO,
     {"message": f"Images folder: {run_id}-images/"},
-    MOOD_SNAPSHOT_FOLDER,
-    auto_print=not CLEAN_CAPTION_OUTPUT,
-    print_message=f"🖼️ Images folder: {run_id}-images/" if not CLEAN_CAPTION_OUTPUT else None,
+    print_message=f"🖼️ Images folder: {run_id}-images/",
 )
 
 debug_print("Initializing mood engine", "INIT")
@@ -163,14 +156,10 @@ if previous_state:
 
     awakening_msg = captioner.generate_awakening_message(time_since_last, previous_beliefs)
 
-    if not CLEAN_CAPTION_OUTPUT:
-        print(f"[🌅] {awakening_msg}")
     log_json_entry(
         LogType.INFO,
         {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
-        MOOD_SNAPSHOT_FOLDER,
-        auto_print=CLEAN_CAPTION_OUTPUT,
-        print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None,
+        print_message=f'"{awakening_msg}"',
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
@@ -179,14 +168,10 @@ else:
     captioner.memory_loaded_from_previous = False
     awakening_msg = captioner.generate_awakening_message()
 
-    if not CLEAN_CAPTION_OUTPUT:
-        print(f"[🌅] {awakening_msg}")
     log_json_entry(
         LogType.INFO,
         {"message": awakening_msg, "continuity": False},
-        MOOD_SNAPSHOT_FOLDER,
-        auto_print=CLEAN_CAPTION_OUTPUT,
-        print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None,
+        print_message=f'"{awakening_msg}"',
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
@@ -346,13 +331,11 @@ except KeyboardInterrupt:
     else:
         print("[❌] Failed to save session state")
 
-    # Log session end
     log_json_entry(
         LogType.INFO,
         {"message": "Session ended", "run_id": run_id, "duration": time.time() - start_time},
         MOOD_SNAPSHOT_FOLDER,
-        auto_print=not CLEAN_CAPTION_OUTPUT,
-        print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s" if not CLEAN_CAPTION_OUTPUT else None,
+        print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s",
     )
 
     object_detector.stop()

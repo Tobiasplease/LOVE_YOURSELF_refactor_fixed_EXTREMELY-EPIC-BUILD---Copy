@@ -1,4 +1,6 @@
 import os
+
+from event_logging.event_logger import LogType
 from .prompt_templates import *  # noqa: F401
 
 # === SERIAL SETTINGS ===
@@ -73,4 +75,4 @@ OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
 
 # === OUTPUT SETTINGS ===
-CLEAN_CAPTION_OUTPUT = False  # When True, shows only captions in quotes with clean spacing
+LOG_TYPES_TO_PRINT = [LogType.SESSION_START, LogType.CAPTION, LogType.REFLECTION, LogType.NEW_DRAWING, LogType.ERROR]

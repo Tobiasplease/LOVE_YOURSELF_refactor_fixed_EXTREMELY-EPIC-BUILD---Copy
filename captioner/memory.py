@@ -253,11 +253,7 @@ class MemoryMixin:
         if len(self.memory_queue) % 10 == 0:
             cleaned = self.cleanup_motifs()
             if cleaned > 0:
-                # Import here to avoid circular import
-                from config.config import CLEAN_CAPTION_OUTPUT
-
-                if not CLEAN_CAPTION_OUTPUT:
-                    print(f"[🧹] Cleaned up {cleaned} irrelevant motifs")
+                print(f"[🧹] Cleaned up {cleaned} irrelevant motifs")
 
         for motif, count in self.motif_counter.items():
             motif_age_days = (now_time - self.motif_first_seen.get(motif, now_time)) / 86400

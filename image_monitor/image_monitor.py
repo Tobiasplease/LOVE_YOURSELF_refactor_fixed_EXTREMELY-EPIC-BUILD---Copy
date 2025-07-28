@@ -31,8 +31,6 @@ class ImageMonitor:
         log_json_entry(
             LogType.INFO,
             {"message": f"Image monitor started for folder: {self.monitor_folder}"},
-            str(self.log_folder),
-            auto_print=True,
             print_message=f"👁️ Image monitor started: {self.monitor_folder}",
         )
 
@@ -54,8 +52,6 @@ class ImageMonitor:
         log_json_entry(
             LogType.INFO,
             {"message": f"Image monitor initialized with {len(self.monitored_images)} existing images"},
-            self.log_folder,
-            auto_print=True,
             print_message=f"📁 Found {len(self.monitored_images)} existing images",
         )
 
@@ -79,8 +75,6 @@ class ImageMonitor:
         log_json_entry(
             LogType.NEW_DRAWING,
             {"event": "new_image_detected", "filename": filename, "image_path": image_path, "file_size": file_size, "timestamp": time.time()},
-            self.log_folder,
-            auto_print=True,
             print_message=f"🖼 New drawing: {filename} ({file_size} bytes)",
         )
 
@@ -103,8 +97,6 @@ class ImageMonitor:
                 log_json_entry(
                     LogType.ERROR,
                     {"error": f"Image monitor error: {str(e)}"},
-                    self.log_folder,
-                    auto_print=True,
                     print_message=f"❌ Image monitor error: {str(e)}",
                 )
                 time.sleep(5.0)  # Wait longer on error
