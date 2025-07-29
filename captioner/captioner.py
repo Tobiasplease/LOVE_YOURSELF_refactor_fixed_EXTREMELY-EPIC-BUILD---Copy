@@ -98,7 +98,7 @@ class Captioner(MemoryMixin):
         try:
             # Show loading animation for first caption (the real awakening environmental description)
             if not self.first_caption_done:
-                print("🌅 Observing environment for the first time...")
+                print("🌅 I am awake...")
                 import threading
                 import sys
                 from itertools import cycle

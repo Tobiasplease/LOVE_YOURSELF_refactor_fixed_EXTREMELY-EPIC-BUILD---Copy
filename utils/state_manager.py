@@ -53,6 +53,10 @@ class StateManager:
                     "beliefs": captioner.beliefs,
                     "belief_history": captioner.belief_history,
                     
+                    # === ENHANCED MEMORY LAYERS ===
+                    "relationship_patterns": getattr(captioner, 'relationship_patterns', {}),
+                    "identity_core": getattr(captioner, 'identity_core', {}),
+                    
                     # Temporal relationship data
                     "person_present": getattr(captioner, 'person_present', False),
                     "last_person_seen": getattr(captioner, 'last_person_seen', 0.0),
@@ -150,6 +154,21 @@ class StateManager:
             # Restore identity
             captioner.beliefs = cap_state.get("beliefs", {})
             captioner.belief_history = cap_state.get("belief_history", [])
+            
+            # === RESTORE ENHANCED MEMORY LAYERS ===
+            captioner.relationship_patterns = cap_state.get("relationship_patterns", {})
+            captioner.identity_core = cap_state.get("identity_core", {
+                "curiosity_level": 0.5,
+                "social_orientation": 0.5,
+                "contemplative_depth": 0.5,
+                "communication_style": "neutral",
+                "environmental_sensitivity": 0.5,
+            })
+            
+            # Initialize compression tracking if not present
+            if not hasattr(captioner, '_last_compression_time'):
+                captioner._last_compression_time = 0.0
+                captioner._compression_interval = 300.0  # 5 minutes
             
             # Restore temporal relationship data
             captioner.person_present = cap_state.get("person_present", False)

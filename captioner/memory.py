@@ -98,6 +98,29 @@ class MemoryMixin:
         self._cached_identity_summary: str = ""
         self._identity_cache_time: float = 0.0
         self._cached_consciousness_stream: str = ""
+        
+        # === ENHANCED MEMORY ARCHITECTURE ===
+        # Three-layer system: Session -> Relationship -> Identity Core
+        
+        # Layer 1: Session Memory (existing memory_queue - recent observations)
+        # Layer 2: Relationship Memory (compressed patterns over time)
+        self.relationship_patterns: Dict[str, Dict[str, Any]] = {
+            # "person": {"frequency": 0.7, "contexts": ["afternoon", "quiet"], "last_essence": "peaceful presence"},
+            # "room": {"familiarity": 0.9, "mood_association": 0.6, "essence": "comfortable space"}
+        }
+        
+        # Layer 3: Identity Core (persistent traits that evolve slowly)
+        self.identity_core: Dict[str, Any] = {
+            "curiosity_level": 0.5,        # How curious vs content I am
+            "social_orientation": 0.5,     # How much I seek/enjoy company
+            "contemplative_depth": 0.5,    # How much I reflect vs observe
+            "communication_style": "neutral",  # observational, poetic, analytical, etc.
+            "environmental_sensitivity": 0.5,  # How much I notice environmental changes
+        }
+        
+        # Compression tracking
+        self._last_compression_time: float = 0.0
+        self._compression_interval: float = 300.0  # Compress every 5 minutes
         self._consciousness_cache_time: float = 0.0
         self._cache_duration: float = 30.0  # Cache for 30 seconds
 
@@ -138,6 +161,9 @@ class MemoryMixin:
         self.update_boredom()
         self.fade_old_beliefs()
         self.update_loneliness(person_present=False)  # Default to alone unless specified
+        
+        # === ENHANCED MEMORY: Compress session memories into relationship patterns ===
+        self.compress_memories_if_needed()
     
     def update_focus_persistence(self, caption: str) -> None:
         """Track how long we've been focused on the same object/concept."""
@@ -553,6 +579,14 @@ class MemoryMixin:
         return "\n".join(f"- {s}" for s in snippets)
 
     def get_identity_summary(self) -> str:
+        """Generate identity summary using enhanced three-layer memory system."""
+        # Try enhanced version first, fall back to original if needed
+        if hasattr(self, 'identity_core') and hasattr(self, 'relationship_patterns'):
+            enhanced_summary = self.get_enhanced_identity_summary()
+            if len(enhanced_summary) > 20:  # Has meaningful content
+                return enhanced_summary
+        
+        # Fallback to original belief-based system
         if not self.belief_history:
             base_identity = "I am still learning what matters to me."
         else:
@@ -710,6 +744,145 @@ class MemoryMixin:
             return f"feeling {emotion_types[0]}"
         else:
             return f"experiencing {', '.join(set(emotion_types))}"
+
+    # === ENHANCED MEMORY ARCHITECTURE METHODS ===
+    
+    def compress_memories_if_needed(self) -> None:
+        """Compress session memories into relationship patterns periodically."""
+        current_time = now()
+        if current_time - self._last_compression_time >= self._compression_interval:
+            self._compress_session_to_relationships()
+            self._evolve_identity_core()
+            self._last_compression_time = current_time
+    
+    def _compress_session_to_relationships(self) -> None:
+        """Extract essence from recent observations into relationship patterns."""
+        if len(self.memory_queue) < 3:
+            return
+        
+        # Group recent memories by key entities/concepts
+        entity_observations = {}
+        
+        for entry in list(self.memory_queue)[-10:]:  # Look at last 10 observations
+            text = entry.get("text", "").lower()
+            mood = entry.get("mood", 0.5)
+            
+            # Simple entity extraction (could be enhanced)
+            entities = self._extract_entities_simple(text)
+            
+            for entity in entities:
+                if entity not in entity_observations:
+                    entity_observations[entity] = {"moods": [], "contexts": [], "count": 0}
+                
+                entity_observations[entity]["moods"].append(mood)
+                entity_observations[entity]["count"] += 1
+                
+                # Extract context clues
+                if "quiet" in text or "still" in text:
+                    entity_observations[entity]["contexts"].append("quiet")
+                if "movement" in text or "active" in text:
+                    entity_observations[entity]["contexts"].append("active")
+        
+        # Compress into relationship patterns
+        for entity, data in entity_observations.items():
+            if data["count"] >= 2:  # Only compress if seen multiple times
+                avg_mood = sum(data["moods"]) / len(data["moods"])
+                common_contexts = list(set(data["contexts"]))
+                
+                # Update or create relationship pattern
+                if entity not in self.relationship_patterns:
+                    self.relationship_patterns[entity] = {
+                        "frequency": 0.0,
+                        "mood_association": avg_mood,
+                        "contexts": common_contexts,
+                        "familiarity": 0.1,
+                        "essence": self._generate_essence(entity, avg_mood, common_contexts)
+                    }
+                else:
+                    # Evolve existing pattern (blend old and new)
+                    pattern = self.relationship_patterns[entity]
+                    pattern["frequency"] = min(1.0, pattern["frequency"] + 0.1)
+                    pattern["mood_association"] = (pattern["mood_association"] + avg_mood) / 2
+                    pattern["familiarity"] = min(1.0, pattern["familiarity"] + 0.05)
+                    pattern["contexts"] = list(set(pattern["contexts"] + common_contexts))
+                    pattern["essence"] = self._generate_essence(entity, pattern["mood_association"], pattern["contexts"])
+    
+    def _extract_entities_simple(self, text: str) -> List[str]:
+        """Simple entity extraction from text."""
+        entities = []
+        
+        # Basic patterns
+        if "person" in text or "someone" in text or "individual" in text:
+            entities.append("person")
+        if "room" in text or "space" in text or "environment" in text:
+            entities.append("room")
+        if "light" in text or "lighting" in text:
+            entities.append("light")
+        if "wall" in text or "ceiling" in text or "floor" in text:
+            entities.append("structure")
+            
+        return entities
+    
+    def _generate_essence(self, entity: str, avg_mood: float, contexts: List[str]) -> str:
+        """Generate a compressed essence description."""
+        mood_desc = "peaceful" if avg_mood > 0.6 else "neutral" if avg_mood > 0.4 else "concerning"
+        context_desc = ", ".join(contexts[:2]) if contexts else "consistent"
+        
+        return f"{mood_desc} {entity}" + (f" ({context_desc})" if context_desc != "consistent" else "")
+    
+    def _evolve_identity_core(self) -> None:
+        """Slowly evolve core identity traits based on accumulated experience."""
+        if len(self.memory_queue) < 5:
+            return
+        
+        # Analyze recent behavioral patterns
+        recent_moods = [entry.get("mood", 0.5) for entry in list(self.memory_queue)[-5:]]
+        avg_recent_mood = sum(recent_moods) / len(recent_moods)
+        
+        # Evolve traits very slowly (0.01 per compression cycle)
+        evolution_rate = 0.01
+        
+        # Curiosity: increases with novelty, decreases with repetition
+        if self.novelty_score > 0.7:
+            self.identity_core["curiosity_level"] = min(1.0, self.identity_core["curiosity_level"] + evolution_rate)
+        elif self.novelty_score < 0.3:
+            self.identity_core["curiosity_level"] = max(0.0, self.identity_core["curiosity_level"] - evolution_rate)
+        
+        # Contemplative depth: increases with sustained attention
+        if hasattr(self, "focus_duration") and self.focus_duration > 120:  # 2+ minutes focused
+            self.identity_core["contemplative_depth"] = min(1.0, self.identity_core["contemplative_depth"] + evolution_rate)
+        
+        # Environmental sensitivity: increases with detailed observations
+        detail_count = sum(1 for entry in list(self.memory_queue)[-5:] if len(entry.get("text", "").split()) > 10)
+        if detail_count >= 3:
+            self.identity_core["environmental_sensitivity"] = min(1.0, self.identity_core["environmental_sensitivity"] + evolution_rate)
+    
+    def get_enhanced_identity_summary(self) -> str:
+        """Generate identity summary incorporating all three memory layers."""
+        # Core identity traits
+        traits = []
+        if self.identity_core["curiosity_level"] > 0.7:
+            traits.append("deeply curious")
+        elif self.identity_core["curiosity_level"] < 0.3:
+            traits.append("contentedly observant")
+            
+        if self.identity_core["contemplative_depth"] > 0.7:
+            traits.append("reflective")
+        elif self.identity_core["contemplative_depth"] < 0.3:
+            traits.append("immediate")
+            
+        # Relationship patterns
+        familiar_entities = [entity for entity, pattern in self.relationship_patterns.items() 
+                           if pattern["familiarity"] > 0.5]
+        
+        # Combine into summary
+        trait_desc = ", ".join(traits) if traits else "developing"
+        
+        if familiar_entities:
+            relationship_desc = f"familiar with {', '.join(familiar_entities[:3])}"
+            return f"I am {trait_desc}, {relationship_desc}"
+        else:
+            return f"I am {trait_desc}, learning this environment"
 
     def get_memory_entries_by_type(self, memory_type: str, limit: int = 5) -> list[dict]:
         return [entry for entry in reversed(self.memory_queue) if entry["type"] == memory_type][:limit]
