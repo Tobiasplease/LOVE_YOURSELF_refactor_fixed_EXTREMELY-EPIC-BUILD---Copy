@@ -9,109 +9,121 @@ from config.config import (
     DEAD_ZONE,
     IDLE_CENTER_X,
     IDLE_CENTER_Y,
-    IDLE_SPEED_MIN,
-    IDLE_SPEED_MAX,
+    IDLE_AMPLITUDE_X,
+    IDLE_AMPLITUDE_Y,
+    PHYSICS_FRICTION,
+    PHYSICS_SPRING_FORCE,
+    FACE_LOCK_DURATION,
+    BLEND_SPEED,
+    CONFIDENCE_THRESHOLD,
 )
 
-servo_x = 90
-servo_y = 90
-target_x = 90
-target_y = 90
+# Physics-based servo positions and velocities
+servo_x = 90.0
+servo_y = 90.0
+velocity_x = 0.0
+velocity_y = 0.0
 
-# Independent idle targets and timers
-idle_target_x = IDLE_CENTER_X
-idle_target_y = IDLE_CENTER_Y
-idle_hold_until_x = 0
-idle_hold_until_y = 0
-idle_speed_x = 0.1
-idle_speed_y = 0.1
-
+# Face tracking state
+face_target_x = 90.0
+face_target_y = 90.0
+face_lock_start = None
 last_seen_time = time.time()
-face_lock_start = 0
 
-# === CONFIGURABLE PARAMETERS ===
-FACE_LOCK_TIMEOUT = 6.0
-TRACK_EASING = 0.5
-IDLE_PAUSE_MIN = 0.5
-IDLE_PAUSE_MAX = 5.0
-IDLE_JITTER = 40
-SYNC_PROBABILITY = 0.1  # 10% chance that both axes move together
+# Physics parameters for idle movement
+physics_target_x = IDLE_CENTER_X
+physics_target_y = IDLE_CENTER_Y
+physics_time = 0.0
 
 
 def clamp(val, min_val, max_val):
     return max(min_val, min(max_val, val))
 
 
-def ease_in_out(current, target, t):
-    # t in 0.0–1.0 range; smooth cosine-based easing
-    t = clamp(t, 0.0, 1.0)
-    eased = (1 - math.cos(t * math.pi)) / 2
-    return current + (target - current) * eased
-
-
-def update_gaze(frame, face_box, current_mood=0.0):
-    global servo_x, servo_y, target_x, target_y
-    global idle_target_x, idle_target_y
-    global idle_hold_until_x, idle_hold_until_y
-    global idle_speed_x, idle_speed_y
-    global last_seen_time, face_lock_start
+def update_gaze(frame, face_box, current_mood=0.0, delta_time=None):
+    global servo_x, servo_y, velocity_x, velocity_y
+    global face_target_x, face_target_y, face_lock_start, last_seen_time
+    global physics_target_x, physics_target_y, physics_time
 
     h, w = frame.shape[:2]
     person_present = face_box is not None
     now = time.time()
+    
+    # Use provided delta_time or default to 30 FPS
+    if delta_time is None:
+        delta_time = 1.0 / 30.0
+    
+    # Clamp delta_time to reasonable bounds to prevent physics explosions
+    delta_time = max(0.001, min(0.1, delta_time))
 
     # === FACE TRACKING ===
     if person_present:
         (startX, startY, endX, endY) = face_box
         face_center_x = (startX + endX) // 2
         face_center_y = (startY + endY) // 2
+        
         if FLIP_X:
             face_center_x = w - face_center_x
         if FLIP_Y:
             face_center_y = h - face_center_y
 
+        # Convert face position to servo angles
         dx = face_center_x - (w // 2)
         dy = face_center_y - (h // 2)
-
+        
+        # Only update face targets if movement is significant
         face_movement = abs(dx) + abs(dy)
-        if face_movement > 15:
-            face_lock_start = now
+        if face_movement > DEAD_ZONE:
+            # Calculate new face targets based on position (moderate sensitivity)
+            face_target_x = clamp(90 + dx * 0.20, SERVO_MIN, SERVO_MAX)  # Reduced from 0.25
+            face_target_y = clamp(90 + dy * 0.20, SERVO_MIN, SERVO_MAX)  # Reduced from 0.25
+            
+            if face_lock_start is None:
+                face_lock_start = now
+        
+        last_seen_time = now
 
-        if now - face_lock_start < FACE_LOCK_TIMEOUT:
-            if abs(dx) > DEAD_ZONE:
-                target_x = clamp(target_x + dx * 0.05, SERVO_MIN, SERVO_MAX)
-            if abs(dy) > DEAD_ZONE:
-                target_y = clamp(target_y + dy * 0.05, SERVO_MIN, SERVO_MAX)
+    # Calculate blend factor for smooth transition between idle and face tracking
+    blend_factor = 0.0
+    if face_lock_start is not None and now - face_lock_start < FACE_LOCK_DURATION:
+        # Ramp up blend factor over time
+        blend_progress = (now - face_lock_start) / BLEND_SPEED
+        blend_factor = min(1.0, blend_progress)
+    else:
+        # Face lock expired or no face - reset
+        if face_lock_start is not None:
+            face_lock_start = None
 
-            servo_x = smooth_step(servo_x, target_x, TRACK_EASING)
-            servo_y = smooth_step(servo_y, target_y, TRACK_EASING)
-            last_seen_time = now
-        else:
-            person_present = False  # break away
+    # === PHYSICS-BASED IDLE MOVEMENT ===
+    physics_time += delta_time
+    
+    # Generate smooth, organic idle targets using sine waves
+    idle_target_x = IDLE_CENTER_X + math.sin(physics_time * 0.3) * IDLE_AMPLITUDE_X + math.sin(physics_time * 0.7) * (IDLE_AMPLITUDE_X * 0.3)
+    idle_target_y = IDLE_CENTER_Y + math.cos(physics_time * 0.4) * IDLE_AMPLITUDE_Y + math.cos(physics_time * 0.9) * (IDLE_AMPLITUDE_Y * 0.4)
+    
+    # Blend between idle and face tracking targets
+    final_target_x = idle_target_x * (1.0 - blend_factor) + face_target_x * blend_factor
+    final_target_y = idle_target_y * (1.0 - blend_factor) + face_target_y * blend_factor
+    
+    # === PHYSICS SIMULATION ===
+    # Calculate spring forces toward targets
+    force_x = (final_target_x - servo_x) * PHYSICS_SPRING_FORCE
+    force_y = (final_target_y - servo_y) * PHYSICS_SPRING_FORCE
+    
+    # Apply forces to velocity
+    velocity_x += force_x * delta_time
+    velocity_y += force_y * delta_time
+    
+    # Apply friction
+    velocity_x *= (1.0 - PHYSICS_FRICTION * delta_time)
+    velocity_y *= (1.0 - PHYSICS_FRICTION * delta_time)
+    
+    # Update positions
+    servo_x += velocity_x * delta_time
+    servo_y += velocity_y * delta_time
+    
+    # Clamp to servo limits
+    servo_x = clamp(servo_x, SERVO_MIN, SERVO_MAX)
+    servo_y = clamp(servo_y, SERVO_MIN, SERVO_MAX)
 
-    # === IDLE WANDERING GAZE ===
-    if not person_present and now - last_seen_time > FACE_LOCK_TIMEOUT:
-
-        sync_axes = random.random() < SYNC_PROBABILITY
-
-        if now > idle_hold_until_x or sync_axes:
-            jitter_x = random.randint(-IDLE_JITTER, IDLE_JITTER)
-            idle_target_x = clamp(IDLE_CENTER_X + jitter_x, SERVO_MIN, SERVO_MAX)
-            idle_hold_until_x = now + random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
-            idle_speed_x = random.uniform(IDLE_SPEED_MIN, IDLE_SPEED_MAX)
-
-        if now > idle_hold_until_y or sync_axes:
-            jitter_y = random.randint(-IDLE_JITTER, IDLE_JITTER)
-            idle_target_y = clamp(IDLE_CENTER_Y + jitter_y, SERVO_MIN, SERVO_MAX)
-            idle_hold_until_y = now + random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
-            idle_speed_y = random.uniform(IDLE_SPEED_MIN, IDLE_SPEED_MAX)
-
-        # Eased wandering movement
-        servo_x = ease_in_out(servo_x, idle_target_x, idle_speed_x)
-        servo_y = ease_in_out(servo_y, idle_target_y, idle_speed_y)
-
-    return person_present, round(servo_x), round(servo_y)
-
-
-def smooth_step(current, target, factor):
-    return current + (target - current) * factor
+    return person_present, int(round(servo_x)), int(round(servo_y))

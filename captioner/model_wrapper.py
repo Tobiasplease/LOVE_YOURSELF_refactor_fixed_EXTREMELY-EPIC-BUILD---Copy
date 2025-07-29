@@ -16,13 +16,13 @@ class MultimodalModel:
         self.memory_ref = memory_ref
         self.model_name = OLLAMA_MODEL
 
-    def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False) -> str:
+    def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False, temporal_context: Optional[dict] = None) -> str:
         if not os.path.exists(image_path):
             return "[⚠️] No image found"
 
         if first_time:
             # Use awakening prompt for the first environmental description
-            prompt = build_awakening_prompt("What do you see?", agent=self.memory_ref)
+            prompt = build_awakening_prompt("What do you see?", temporal_context=temporal_context)
             return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT, 
                                    temperature=config.AWAKENING_TEMPERATURE)
         elif flowing and self.memory_ref:
@@ -32,6 +32,7 @@ class MultimodalModel:
                 boredom=self.memory_ref.boredom,
                 novelty=self.memory_ref.novelty_score,
                 previous_caption=self.memory_ref.last_caption,
+                temporal_context=temporal_context,  # Add temporal awareness
             )
             return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT,
                                    temperature=config.CONSCIOUSNESS_TEMPERATURE)

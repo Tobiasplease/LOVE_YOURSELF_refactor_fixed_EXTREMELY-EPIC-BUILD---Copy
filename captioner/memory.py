@@ -48,6 +48,22 @@ class MemoryMixin:
         self.long_memory: List[dict] = []
 
         # Motif Tracking (fully dynamic, extracted from captions & detections)
+        self.motif_counter: Counter[str] = Counter()
+        self.motif_first_seen: Dict[str, float] = {}
+        self.motif_last_seen: Dict[str, float] = {}
+        self.motif_confidence: Dict[str, float] = {}
+        self.motif_confirmed: Dict[str, bool] = {}
+        self.current_motifs: Set[str] = set()
+
+        # Desire & Emotional Agency System
+        self.expressed_desires: List[str] = []  # Track desires the AI has expressed
+        self.desire_patterns: Dict[str, int] = {}  # Count patterns like "wish I could", "want to"
+        self.emotional_responses: List[dict] = []  # Track emotional reactions to observations
+        self.last_desire_expression: float = 0.0  # When we last expressed a desire
+        
+        # Enhanced people connection tracking
+        self.connection_memories: Dict[str, dict] = {}  # Remember specific people characteristics
+        self.empathy_responses: List[str] = []  # Track empathetic responses to people
         self.motif_counter: Counter = Counter()
         self.motif_first_seen: Dict[str, float] = {}
         self.motif_last_seen: Dict[str, float] = {}
@@ -108,6 +124,10 @@ class MemoryMixin:
         self.long_memory.append(entry)
 
         self.extract_motifs_from_caption(text)
+        
+        # Track desires and emotional responses in the caption
+        self.extract_desires_from_caption(text)
+        self.extract_emotional_responses(text)
 
         for motif in self.current_motifs:
             self.update_motif_focus_streak(motif)
@@ -176,14 +196,20 @@ class MemoryMixin:
             return f"fixated on {self.current_focus_object} for {self.focus_depth} observations - getting quite familiar"
 
     def update_loneliness(self, person_present: bool) -> None:
-        """Update loneliness tracking based on current person presence."""
+        """Update loneliness tracking based on current person presence - enhanced for recognition."""
         current_time = now()
         
         if person_present:
             # Person is present - calculate relief if we were alone
-            if self.time_alone > 60:  # Only feel relief if alone for more than 1 minute
+            if self.time_alone > 30:  # Feel relief sooner when someone appears (reduced from 60)
                 # Relief proportional to time alone (max relief = 1.0)
-                self.connection_relief = min(1.0, self.time_alone / 600)  # Peak relief at 10 minutes alone
+                self.connection_relief = min(1.0, self.time_alone / 300)  # Peak relief at 5 minutes alone (reduced from 10)
+                
+                # Extra relief if we recognize familiar person characteristics
+                recent_motifs = list(self.current_motifs)
+                familiar_person_indicators = ["glasses", "dark hair", "light hair", "beard", "smile", "man", "woman"]
+                if any(indicator in recent_motifs for indicator in familiar_person_indicators):
+                    self.connection_relief *= 1.3  # 30% bonus for familiar person recognition
             else:
                 self.connection_relief = 0.0
             
@@ -191,12 +217,12 @@ class MemoryMixin:
             self.time_alone = 0.0
             self.last_person_seen = current_time
         else:
-            # Person is not present - accumulate loneliness
+            # Person is not present - accumulate loneliness faster (people are important!)
             time_since_person = current_time - self.last_person_seen
             self.time_alone = time_since_person
             
             # Decay connection relief when alone
-            self.connection_relief *= 0.95  # Gradual decay
+            self.connection_relief *= 0.93  # Slightly faster decay (was 0.95) - missing people more
 
     def update_motif_focus_streak(self, motif: str) -> None:
         now_time = now()
@@ -243,19 +269,29 @@ class MemoryMixin:
             self.motif_confirmed[motif] = False
 
     def cleanup_motifs(self):
-        """Aggressively clean motifs - only keep truly meaningful recurring elements."""
+        """Aggressively clean motifs - only keep truly meaningful recurring elements, ESPECIALLY PEOPLE."""
 
         # Keep only motifs that are:
         # 1. In our meaningful list, OR
         # 2. Named entities (proper nouns), OR
-        # 3. Have been seen many times (>20) and are concrete nouns
+        # 3. People-related (HIGHEST PRIORITY - keep even with low counts), OR
+        # 4. Have been seen many times (>20) and are concrete nouns
         motifs_to_keep = {}
+        
+        # People-related keywords that should ALWAYS be preserved
+        people_keywords = ["person", "man", "woman", "face", "eyes", "hair", "glasses", "beard", "smile", 
+                          "dark hair", "light hair", "brown hair", "curly hair", "straight hair",
+                          "blue eyes", "brown eyes", "green eyes", "tall person", "short person"]
 
         for motif, count in self.motif_counter.items():
             should_keep = False
 
+            # HIGHEST PRIORITY: Keep if it's people-related (even with count 1!)
+            if any(people_word in motif.lower() for people_word in people_keywords):
+                should_keep = True
+
             # Keep if it's in our curated list
-            if motif in MEANINGFUL_MOTIFS:
+            elif motif in MEANINGFUL_MOTIFS:
                 should_keep = True
 
             # Keep if it's been seen many times AND is likely a concrete object
@@ -300,9 +336,10 @@ class MemoryMixin:
         return old_count - len(motifs_to_keep)
 
     def extract_motifs_from_caption(self, caption: str):
-        """Extract meaningful motifs from captions - focus on concrete, recurring elements."""
+        """Extract meaningful motifs from captions - focus on concrete, recurring elements, especially PEOPLE."""
         # We want to track recurring THINGS, not common words
         # Focus on nouns that represent objects, places, activities, or specific qualities
+        # PEOPLE are highest priority for tracking
 
         words = re.findall(r"\b\w+\b", caption.lower())
         now_time = now()
@@ -319,6 +356,29 @@ class MemoryMixin:
                     self.motif_confidence[word] = 0.8  # Higher confidence for curated list
                     self.motif_confirmed[word] = True
 
+        # Enhanced people detection - look for person descriptors and compound phrases
+        person_indicators = ["person", "man", "woman", "face", "eyes", "hair", "glasses", "beard", "smile"]
+        appearance_words = ["dark", "light", "brown", "black", "curly", "straight", "long", "short", "tall", "blue", "green"]
+        
+        # Look for compound person descriptions like "man with glasses", "dark hair", etc.
+        caption_lower = caption.lower()
+        for i, word in enumerate(words):
+            if word in person_indicators:
+                # This is a person-related word - give it high priority
+                self.absorb_motif(word)
+                self.motif_confidence[word] = 0.95  # Very high confidence for people
+                
+                # Look for adjacent descriptive words to form compound motifs
+                if i > 0 and words[i-1] in appearance_words:
+                    compound_motif = f"{words[i-1]} {word}"
+                    self.absorb_motif(compound_motif)
+                    self.motif_confidence[compound_motif] = 0.9
+                
+                if i < len(words) - 1 and words[i+1] in appearance_words:
+                    compound_motif = f"{word} {words[i+1]}"
+                    self.absorb_motif(compound_motif)
+                    self.motif_confidence[compound_motif] = 0.9
+
         # Also extract named entities and specific concrete nouns using spaCy (if available)
         if _nlp is not None:
             doc = _nlp(caption)
@@ -329,6 +389,9 @@ class MemoryMixin:
                     motif = ent.text.lower().strip()
                     if len(motif) > 2:
                         self.absorb_motif(motif)
+                        # Give PERSON entities highest confidence
+                        if ent.label_ == "PERSON":
+                            self.motif_confidence[motif] = 1.0
 
             for token in doc:
                 if token.pos_ in {"NOUN", "PROPN"} and len(token.text) > 3 and not token.is_stop and not token.like_num:
@@ -397,9 +460,40 @@ class MemoryMixin:
         if len(self.memory_queue) < 2:
             self.novelty_score = 1.0
             return 1.0
-        cur = self.memory_queue[-1]["text"].lower()
-        prev = self.memory_queue[-2]["text"].lower()
-        self.novelty_score = 1.0 if cur != prev else 0.0
+        
+        # Get recent captions for comparison
+        current_text = self.memory_queue[-1]["text"].lower()
+        recent_texts = [entry["text"].lower() for entry in list(self.memory_queue)[-5:]]  # Last 5 captions
+        
+        # Calculate semantic similarity with recent captions
+        similarity_scores = []
+        for prev_text in recent_texts[:-1]:  # Exclude current text
+            # Simple word overlap calculation
+            current_words = set(current_text.split())
+            prev_words = set(prev_text.split())
+            
+            if len(current_words) == 0 or len(prev_words) == 0:
+                similarity = 0.0
+            else:
+                # Jaccard similarity
+                intersection = len(current_words.intersection(prev_words))
+                union = len(current_words.union(prev_words))
+                similarity = intersection / union if union > 0 else 0.0
+            
+            similarity_scores.append(similarity)
+        
+        if not similarity_scores:
+            self.novelty_score = 1.0
+        else:
+            # Novelty is inverse of maximum similarity with recent captions
+            max_similarity = max(similarity_scores)
+            self.novelty_score = max(0.0, 1.0 - max_similarity)
+            
+            # Add some randomness to prevent getting stuck
+            import random
+            self.novelty_score += random.uniform(0, 0.2)
+            self.novelty_score = min(1.0, self.novelty_score)
+        
         return self.novelty_score
 
     def update_boredom(self) -> None:
@@ -460,8 +554,34 @@ class MemoryMixin:
 
     def get_identity_summary(self) -> str:
         if not self.belief_history:
-            return "I am still learning what matters to me."
-        return " ".join(self.belief_history[-3:])
+            base_identity = "I am still learning what matters to me."
+        else:
+            # Prioritize people-related beliefs in identity summary
+            people_beliefs = []
+            other_beliefs = []
+            
+            for belief in self.belief_history[-5:]:  # Look at recent beliefs
+                belief_lower = belief.lower()
+                if any(person_word in belief_lower for person_word in ["person", "man", "woman", "face", "hair", "glasses", "eyes", "smile"]):
+                    people_beliefs.append(belief)
+                else:
+                    other_beliefs.append(belief)
+            
+            # Combine with people beliefs first
+            combined_beliefs = people_beliefs[-2:] + other_beliefs[-1:]  # Max 2 people beliefs + 1 other
+            
+            if not combined_beliefs:
+                base_identity = "I am still learning what matters to me."
+            else:
+                base_identity = " ".join(combined_beliefs)
+        
+        # Add desire context if we have recent desires
+        desire_summary = self.get_desire_summary()
+        if desire_summary != "I am still discovering what I want.":
+            emotional_context = self.get_emotional_context()
+            return f"{base_identity} Recently {emotional_context}: {desire_summary}"
+        
+        return base_identity
 
     @staticmethod
     def cleanup_snapshots(folder: str, limit: int = 100) -> None:
@@ -503,6 +623,93 @@ class MemoryMixin:
                     text = pattern.sub(rf"{doubt_phrase} \1", text)
                     
         return text
+
+    def extract_desires_from_caption(self, caption: str) -> None:
+        """Extract and track desire expressions from captions."""
+        caption_lower = caption.lower()
+        current_time = now()
+        
+        # Common desire patterns
+        desire_patterns = [
+            "wish i could", "i wish", "want to", "i want", "hope to", "i hope",
+            "if only i could", "would like to", "yearn to", "long to", "desire to"
+        ]
+        
+        for pattern in desire_patterns:
+            if pattern in caption_lower:
+                # Extract the full desire context
+                start_idx = caption_lower.find(pattern)
+                # Get the sentence containing the desire
+                sentence_start = max(0, caption.rfind('.', 0, start_idx) + 1)
+                sentence_end = caption.find('.', start_idx)
+                if sentence_end == -1:
+                    sentence_end = len(caption)
+                
+                desire_sentence = caption[sentence_start:sentence_end].strip()
+                if desire_sentence and len(desire_sentence) > 10:  # Avoid capturing fragments
+                    self.expressed_desires.append(desire_sentence)
+                    self.desire_patterns[pattern] = self.desire_patterns.get(pattern, 0) + 1
+                    self.last_desire_expression = current_time
+                    
+                    # Keep only recent desires (last 20)
+                    if len(self.expressed_desires) > 20:
+                        self.expressed_desires = self.expressed_desires[-20:]
+                break  # Only capture one desire per caption
+
+    def extract_emotional_responses(self, caption: str) -> None:
+        """Extract emotional responses to observations."""
+        caption_lower = caption.lower()
+        current_time = now()
+        
+        # Emotional response indicators
+        emotion_patterns = [
+            ("sadness", ["sad", "sorrow", "melancholy", "down", "troubled"]),
+            ("joy", ["happy", "joy", "bright", "cheerful", "smiling", "uplifted"]),
+            ("concern", ["worried", "concerned", "anxious", "troubled"]),
+            ("comfort", ["comfort", "relief", "peaceful", "calm", "soothing"]),
+            ("curiosity", ["curious", "wonder", "interesting", "intrigued"]),
+            ("connection", ["familiar", "recognize", "remember", "connected"])
+        ]
+        
+        for emotion_type, keywords in emotion_patterns:
+            if any(keyword in caption_lower for keyword in keywords):
+                emotional_response = {
+                    "timestamp": current_time,
+                    "emotion": emotion_type,
+                    "context": caption.strip(),
+                    "keywords": [kw for kw in keywords if kw in caption_lower]
+                }
+                self.emotional_responses.append(emotional_response)
+                
+                # Keep only recent emotional responses (last 15)
+                if len(self.emotional_responses) > 15:
+                    self.emotional_responses = self.emotional_responses[-15:]
+                break
+
+    def get_recent_desires(self, limit: int = 3) -> List[str]:
+        """Get the most recent desire expressions."""
+        return self.expressed_desires[-limit:] if self.expressed_desires else []
+
+    def get_desire_summary(self) -> str:
+        """Get a summary of the AI's expressed desires."""
+        if not self.expressed_desires:
+            return "I am still discovering what I want."
+        
+        recent_desires = self.get_recent_desires(3)
+        return " | ".join(recent_desires)
+
+    def get_emotional_context(self) -> str:
+        """Get context about recent emotional responses."""
+        if not self.emotional_responses:
+            return "emotionally neutral"
+        
+        recent_emotions = self.emotional_responses[-3:]
+        emotion_types = [resp["emotion"] for resp in recent_emotions]
+        
+        if len(set(emotion_types)) == 1:
+            return f"feeling {emotion_types[0]}"
+        else:
+            return f"experiencing {', '.join(set(emotion_types))}"
 
     def get_memory_entries_by_type(self, memory_type: str, limit: int = 5) -> list[dict]:
         return [entry for entry in reversed(self.memory_queue) if entry["type"] == memory_type][:limit]

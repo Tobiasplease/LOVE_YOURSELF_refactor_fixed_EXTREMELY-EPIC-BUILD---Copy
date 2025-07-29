@@ -20,16 +20,22 @@ FLIP_Y = True
 
 # === FACE DETECTION ===
 CONFIDENCE_THRESHOLD = 0.6
-DEAD_ZONE = 30
+DEAD_ZONE = 15  # Reduced from 30 for more responsive tracking
 
 # === IDLE GAZE SETTINGS ===
-IDLE_AMPLITUDE_X = 20
-IDLE_AMPLITUDE_Y = 30
+IDLE_AMPLITUDE_X = 25  # Reduced from 35 for less dramatic wandering
+IDLE_AMPLITUDE_Y = 20  # Reduced from 25
 IDLE_CENTER_X = 90
 IDLE_CENTER_Y = 90
 FACE_STABLE_TIMEOUT = 2.0
 IDLE_SPEED_MIN = 0.15
 IDLE_SPEED_MAX = 0.30
+
+# === PHYSICS-BASED MOVEMENT ===
+PHYSICS_FRICTION = 5.0  # How quickly movement dampens (increased from 3.0)
+PHYSICS_SPRING_FORCE = 20.0  # How strongly it moves toward targets (reduced from 35.0)
+FACE_LOCK_DURATION = 6.0  # How long to track a face
+BLEND_SPEED = 1.5  # How quickly to transition between idle and face tracking (increased from 1.0)
 
 
 # === BREATHING SETTINGS ===
@@ -49,7 +55,7 @@ COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safeten
 
 # === TIMING INTERVALS ===
 # Core consciousness timing - all intervals derive from this
-CONSCIOUSNESS_CYCLE_INTERVAL = 15  # seconds - primary consciousness processing cycle
+CONSCIOUSNESS_CYCLE_INTERVAL = 30  # seconds - primary consciousness processing cycle (increased from 15)
 
 # Derived intervals (automatically calculated)
 MOOD_EVALUATION_INTERVAL = CONSCIOUSNESS_CYCLE_INTERVAL  # when mood thread runs

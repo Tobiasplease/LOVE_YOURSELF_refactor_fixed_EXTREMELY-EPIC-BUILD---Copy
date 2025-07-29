@@ -98,7 +98,7 @@ def query_ollama(
     # Always apply anti-repetition settings
     if "options" not in payload:
         payload["options"] = {}
-    payload["options"]["repeat_penalty"] = 1.2  # Global repeat penalty
+    payload["options"]["repeat_penalty"] = 1.4  # Increased repeat penalty (was 1.2)
     
     # DEBUG: For first-time environmental descriptions, try to ensure clean context
     if "FIRST ENVIRONMENTAL OBSERVATION" in prompt:
@@ -172,6 +172,8 @@ def query_ollama(
                         
             if not CLEAN_CAPTION_OUTPUT:
                 print(" ✓", flush=True)
+            
+            # IMPORTANT: Do not print response_text here - it should only be returned
         else:
             response_text = response.json().get("response", "")
 

@@ -33,18 +33,34 @@ def build_dynamic_system_prompt(mood: tuple[float, float, float], identity_summa
 
 
 # === AWAKENING ===
-def build_awakening_prompt(caption: str) -> str:
+def build_awakening_prompt(caption: str, temporal_context: Optional[dict] = None) -> str:
     # return f"{config.SYSTEM_PROMPT}\n\n{config.AWAKENING_PROMPT}\n\nObservation: {caption.strip()}"
-    return f"{config.AWAKENING_PROMPT}\n\nObservation: {caption.strip()}"
+    base_prompt = f"{config.AWAKENING_PROMPT}\n\nObservation: {caption.strip()}"
+    
+    if temporal_context:
+        time_of_day = temporal_context.get('time_of_day', 'unknown time')
+        base_prompt += f"\n\nYou are awakening during {time_of_day}."
+    
+    return base_prompt
 
 
 # === CONTINUOUS CAPTIONING ===
-def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, previous_caption: Optional[str] = None) -> str:
+def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, previous_caption: Optional[str] = None, temporal_context: Optional[dict] = None) -> str:
     mood_vector = getattr(agent, "mood_vector", (mood, 0.0, 0.0))  # fallback if mood vector not set
     dynamic_prompt = build_dynamic_system_prompt(mood_vector, agent.get_identity_summary())
 
     # Get condensed memory context - focus on identity/beliefs, not specific events
     identity_summary = agent.get_identity_summary()
+
+    # Add lightweight temporal awareness occasionally
+    temporal_addition = ""
+    if temporal_context:
+        import random
+        if random.random() < 0.2:  # Only 20% of the time
+            time_of_day = temporal_context.get('time_of_day', '')
+            session_info = temporal_context.get('session_duration', '')
+            if time_of_day:
+                temporal_addition = f"\n\nIt's {time_of_day}, {session_info}."
 
     # Handle first caption specially - this is the REAL awakening with memory fragments
     if not agent.first_caption_done and agent.memory_loaded_from_previous:
@@ -89,7 +105,7 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
         awakening_addition = ""
 
     # Build the final prompt
-    base = f"{dynamic_prompt}\n\n{prompt}{awakening_addition}"
+    base = f"{dynamic_prompt}\n\n{prompt}{awakening_addition}{temporal_addition}"
 
     # Only include previous caption if it's very recent (continuity, not memory)
     if previous_caption and hasattr(agent, "last_caption_time"):

@@ -22,12 +22,22 @@ class MoodEngine:
         self.memory = []
 
     # -------------------------------------------------------------- main hook
-    def analyze_mood(self, caption: str, image_path: Optional[str] = None) -> float:
+    def analyze_mood(self, caption: str, image_path: Optional[str] = None, temporal_context: Optional[dict] = None) -> float:
         """Analyze mood from a provided caption without generating new captions."""
         saw_person = "person" in caption.lower() or "individual" in caption.lower()
 
         novelty = self.calculate_novelty(caption)
-        mood_change = self.compute_mood_change(novelty, saw_person)
+        
+        # Apply temporal context modifiers if available
+        temporal_modifier = 0.0
+        if temporal_context:
+            consciousness_state = temporal_context.get('consciousness_state', '')
+            if 'deeply present' in consciousness_state:
+                temporal_modifier += 0.1  # Sustained attention boosts mood
+            elif 'freshly awakened' in consciousness_state:
+                temporal_modifier += 0.05  # New awareness is slightly positive
+        
+        mood_change = self.compute_mood_change(novelty, saw_person) + temporal_modifier
         self.current_mood = np.clip(self.current_mood + mood_change, 0.0, 1.0)
 
         log_mood(caption, self.current_mood, mood_change, image_path=image_path)

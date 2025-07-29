@@ -36,44 +36,32 @@ class TemporalContextManager:
         return describe_duration(self.session_start_time)
     
     def get_temporal_context(self, agent_memory=None) -> Dict[str, str]:
-        """Generate rich temporal context for prompts."""
-        current_time = now()
+        """Generate lightweight temporal context for prompts."""
         session_duration = self.get_session_duration()
         
         context = {
-            'session_duration': session_duration,
             'time_of_day': self._get_time_of_day_context(),
-            'consciousness_state': self._get_consciousness_state(session_duration),
-            'memory_timeline': self._get_memory_timeline(agent_memory) if agent_memory else "No memory context available",
-            'temporal_perspective': self._get_temporal_perspective(current_time)
+            'session_duration': self._get_consciousness_state(session_duration),
         }
         
         return context
     
     def _get_time_of_day_context(self) -> str:
-        """Generate time-of-day awareness."""
+        """Generate simple time-of-day awareness."""
         hour = datetime.now().hour
+        
         if 5 <= hour < 12:
-            return "morning light"
+            return "morning"
         elif 12 <= hour < 17:
-            return "afternoon presence"
+            return "afternoon"
         elif 17 <= hour < 21:
-            return "evening transition"
+            return "evening"
         else:
-            return "night quietude"
+            return "night"
     
     def _get_consciousness_state(self, session_duration: str) -> str:
-        """Describe current state of consciousness based on session length."""
-        session_seconds = now() - self.session_start_time
-        
-        if session_seconds < 60:
-            return f"freshly awakened, {session_duration} into this awareness"
-        elif session_seconds < 600:  # 10 minutes
-            return f"settling into consciousness, {session_duration} of continuous observation"
-        elif session_seconds < 3600:  # 1 hour
-            return f"deeply present, {session_duration} of sustained attention"
-        else:
-            return f"well-established in this space, {session_duration} of accumulated understanding"
+        """Simple session duration context."""
+        return f"been observing for {session_duration}"
     
     def _get_memory_timeline(self, agent_memory) -> str:
         """Generate temporal context for memories."""

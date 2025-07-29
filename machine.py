@@ -3,6 +3,7 @@ import argparse
 import sys
 import cv2
 import threading
+import signal
 
 
 def parse_args():
@@ -196,6 +197,19 @@ else:
 
 debug_print("System initialization complete", "INIT")
 
+# Global shutdown flag
+shutdown_requested = False
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully."""
+    global shutdown_requested
+    print(f"\n[🛑] Received shutdown signal {signum}")
+    shutdown_requested = True
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
 best_box = None
 
 
@@ -206,20 +220,43 @@ def mood_update_thread(frame, timestamp):
         debug_print("Captioner is not processing, proceeding with mood update", "MOOD")
         now = time.time()
         if now - last_snapshot_time >= 10:
+            # Simple frame deduplication to prevent repetitive processing
+            frame_hash = hash(frame.tobytes())
+            if hasattr(mood_update_thread, '_last_frame_hash') and \
+               frame_hash == mood_update_thread._last_frame_hash:
+                debug_print("Frame unchanged, skipping processing", "CAPTIONER")
+                return
+            mood_update_thread._last_frame_hash = frame_hash
+            
             snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
             cv2.imwrite(snapshot_path, frame)
             debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
 
             try:
-                # First: Update captioner to generate new captions
+                # First: Update captioner to generate new captions with temporal context (cached)
+                from utils.temporal_context import TemporalContextManager
+                if not hasattr(mood_update_thread, '_temporal_manager'):
+                    mood_update_thread._temporal_manager = TemporalContextManager()
+                
+                # Only regenerate temporal context every 60 seconds to reduce load
+                current_time = time.time()
+                if not hasattr(mood_update_thread, '_last_temporal_update') or \
+                   current_time - mood_update_thread._last_temporal_update > 60:
+                    temporal_context = mood_update_thread._temporal_manager.get_temporal_context(captioner)
+                    mood_update_thread._cached_temporal_context = temporal_context
+                    mood_update_thread._last_temporal_update = current_time
+                else:
+                    temporal_context = getattr(mood_update_thread, '_cached_temporal_context', {})
+                
                 captioner.update(
                     frame=frame,
                     person_present=best_box is not None,
-                    mood=mood_engine.get_current_mood(),  # Use previous mood for now
+                    mood=mood_engine.get_current_mood(),
+                    temporal_context=temporal_context,  # Add temporal awareness
                 )
                 debug_print("Captioner updated successfully", "CAPTIONER")
 
-                # Second: Analyze mood from captioner's latest caption
+                # Second: Analyze mood from captioner's latest caption with temporal awareness
                 if captioner.last_caption:
                     # Remove 'Caption:' prefix if present and print with line spacing
                     clean_caption = captioner.last_caption
@@ -227,7 +264,12 @@ def mood_update_thread(frame, timestamp):
                         clean_caption = clean_caption[len("caption:") :].strip()
                     print(f"\n{clean_caption}\n")
 
-                    current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path)
+                    # Include temporal context in mood analysis (use cached version)
+                    current_mood = mood_engine.analyze_mood(
+                        clean_caption, 
+                        image_path=snapshot_path,
+                        temporal_context=getattr(mood_update_thread, '_cached_temporal_context', None)
+                    )
                     debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
 
                     # Third: Update captioner's mood state for next cycle
@@ -242,6 +284,11 @@ def mood_update_thread(frame, timestamp):
 
 try:
     while True:
+        # Check for shutdown request
+        if shutdown_requested:
+            debug_print("Shutdown requested, breaking main loop", "SHUTDOWN")
+            break
+            
         ret, frame = cap.read()
         object_detector.set_frame(frame)
         if not ret:
@@ -273,10 +320,22 @@ try:
             # Suppress frequent face detection messages - only show occasionally
             if int(now) % 5 == 0:  # Every 5 seconds
                 debug_print(f"Face detected with confidence: {best_conf:.2f}", "FACE")
+            
+            # Track person presence for temporal relationships (with error handling)
+            try:
+                captioner.update_person_presence(True, now)
+            except Exception as e:
+                debug_print(f"Person presence tracking error: {e}", "ERROR")
         else:
             # Only show "no face" occasionally to avoid spam
             if int(now) % 10 == 0:  # Every 10 seconds
                 debug_print("No face detected", "FACE")
+            
+            # Track absence for temporal context (with error handling)
+            try:
+                captioner.update_person_presence(False, now)
+            except Exception as e:
+                debug_print(f"Person presence tracking error: {e}", "ERROR")
 
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:
             debug_print(f"Starting mood update thread - interval: {MOOD_EVALUATION_INTERVAL}s", "MOOD")
@@ -286,7 +345,11 @@ try:
         current_mood = mood_engine.get_current_mood()
 
         face_box = tuple(best_box) if best_box is not None else None
-        person_present, pan, tilt = update_gaze(frame, face_box, current_mood)
+        person_present, pan, tilt = update_gaze(frame, face_box, current_mood, delta)
+        
+        # Debug servo values occasionally to avoid spam
+        if int(now) % 5 == 0:  # Every 5 seconds instead of 3
+            debug_print(f"Servo values: pan={pan}, tilt={tilt}, person_present={person_present}", "SERVO")
 
         (
             lung_pos,
@@ -336,31 +399,53 @@ try:
 
         cv2.imshow("mslint camera", frame)
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        if cv2.waitKey(1) & 0xFF == ord("q") or shutdown_requested:
+            debug_print("Exit requested", "SHUTDOWN")
             break
 
 except KeyboardInterrupt:
     debug_print("Shutting down gracefully", "SHUTDOWN")
+    print("[🛑] Shutdown initiated...")
 
-    # Save session state before shutdown
-    print("[💾] Saving session state...")
-    success = state_manager.save_session_state(captioner, mood_engine)
-    if success:
-        print("[✅] Session state saved successfully")
-    else:
-        print("[❌] Failed to save session state")
+except Exception as e:
+    debug_print(f"Unexpected error: {e}", "ERROR")
+    print(f"[❌] Unexpected error: {e}")
 
-    # Log session end
-    log_json_entry(
-        LogType.INFO,
-        {"message": "Session ended", "run_id": run_id, "duration": time.time() - start_time},
-        MOOD_SNAPSHOT_FOLDER,
-        auto_print=not CLEAN_CAPTION_OUTPUT,
-        print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s" if not CLEAN_CAPTION_OUTPUT else None,
-    )
+finally:
+    # Ensure cleanup happens regardless of how we exit
+    try:
+        # Save session state before shutdown
+        print("[💾] Saving session state...")
+        success = state_manager.save_session_state(captioner, mood_engine)
+        if success:
+            print("[✅] Session state saved successfully")
+        else:
+            print("[❌] Failed to save session state")
 
-    object_detector.stop()
-    object_detector.join()
-    image_monitor.stop()
-    cap.release()
-    cv2.destroyAllWindows()
+        # Log session end
+        log_json_entry(
+            LogType.INFO,
+            {"message": "Session ended", "run_id": run_id, "duration": time.time() - start_time},
+            MOOD_SNAPSHOT_FOLDER,
+            auto_print=not CLEAN_CAPTION_OUTPUT,
+            print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s" if not CLEAN_CAPTION_OUTPUT else None,
+        )
+    except Exception as e:
+        print(f"[⚠️] Error during state saving: {e}")
+
+    # Cleanup resources
+    try:
+        print("[🧹] Cleaning up resources...")
+        if 'object_detector' in locals():
+            object_detector.stop()
+            object_detector.join(timeout=2.0)  # Add timeout
+        if 'image_monitor' in locals():
+            image_monitor.stop()
+        if 'cap' in locals():
+            cap.release()
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)  # Force window cleanup
+        print("[✅] Cleanup complete")
+    except Exception as e:
+        print(f"[⚠️] Error during cleanup: {e}")
+        cv2.destroyAllWindows()  # Force cleanup even if error

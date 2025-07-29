@@ -34,6 +34,13 @@ class Captioner(MemoryMixin):
         self.last_caption: str = ""
         self.boredom: float = 0.0
         self.novelty_score: float = 0.0
+        self.current_temporal_context: dict = {}  # Store temporal awareness
+
+        # Person presence tracking for temporal relationships
+        self.person_present: bool = False
+        self.last_person_seen: float = 0.0
+        self.person_absence_start: float = 0.0
+        self.greeting_given_this_session: bool = False
 
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
@@ -51,10 +58,12 @@ class Captioner(MemoryMixin):
     def is_processing(self) -> bool:
         return bool(self.snapshot_queue)
 
-    def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None) -> None:
+    def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None, temporal_context: Optional[dict] = None) -> None:
         if frame is not None:
             if mood is not None:
                 self.current_mood = mood
+            if temporal_context is not None:
+                self.current_temporal_context = temporal_context
             if len(self.snapshot_queue) > 1:
                 self.snapshot_queue.pop()
             self.snapshot_queue.append((frame.copy(), person_present))
@@ -113,7 +122,7 @@ class Captioner(MemoryMixin):
                 loading_thread.start()
 
                 start_time = time.time()
-                caption = self.model.caption_image(img_path, flowing=True, first_time=True)
+                caption = self.model.caption_image(img_path, flowing=True, first_time=True, temporal_context=self.current_temporal_context)
 
                 # Ensure minimum display time of 2 seconds for visibility
                 elapsed = time.time() - start_time
@@ -124,7 +133,7 @@ class Captioner(MemoryMixin):
                 loading_thread.join(timeout=0.5)
                 print()  # Add newline after loading animation
             else:
-                caption = self.model.caption_image(img_path, flowing=True, first_time=False)
+                caption = self.model.caption_image(img_path, flowing=True, first_time=False, temporal_context=self.current_temporal_context)
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
             log_json_entry(
@@ -267,6 +276,32 @@ class Captioner(MemoryMixin):
         """Mark that awakening is complete but allow first caption to still show loading animation."""
         # Don't set first_caption_done = True here - let the first caption handle this
         pass
+
+    def update_person_presence(self, present: bool, timestamp: float):
+        """Track person presence for temporal relationship building."""
+        from utils.continuity import describe_duration
+        
+        if present and not self.person_present:
+            # Person just appeared
+            if self.person_absence_start > 0:
+                absence_duration = describe_duration(self.person_absence_start)
+                if not self.greeting_given_this_session:
+                    # First time seeing person this session
+                    self.observe(f"Person returns after {absence_duration} - first encounter this session", 
+                               self.current_mood, memory_type="temporal_relationship")
+                    self.greeting_given_this_session = True
+                elif timestamp - self.person_absence_start > 300:  # 5+ minutes
+                    # Notable absence
+                    self.observe(f"Person returns after {absence_duration} away", 
+                               self.current_mood, memory_type="temporal_relationship")
+            
+            self.person_present = True
+            self.last_person_seen = timestamp
+            
+        elif not present and self.person_present:
+            # Person just left
+            self.person_present = False
+            self.person_absence_start = timestamp
 
     @staticmethod
     def truncate_caption(raw: str) -> str:

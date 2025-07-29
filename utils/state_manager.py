@@ -53,6 +53,12 @@ class StateManager:
                     "beliefs": captioner.beliefs,
                     "belief_history": captioner.belief_history,
                     
+                    # Temporal relationship data
+                    "person_present": getattr(captioner, 'person_present', False),
+                    "last_person_seen": getattr(captioner, 'last_person_seen', 0.0),
+                    "person_absence_start": getattr(captioner, 'person_absence_start', 0.0),
+                    "greeting_given_this_session": getattr(captioner, 'greeting_given_this_session', False),
+                    
                     # Recent memory (last 10 entries)
                     "recent_memory": list(captioner.memory_queue)[-10:] if captioner.memory_queue else []
                 },
@@ -144,6 +150,12 @@ class StateManager:
             # Restore identity
             captioner.beliefs = cap_state.get("beliefs", {})
             captioner.belief_history = cap_state.get("belief_history", [])
+            
+            # Restore temporal relationship data
+            captioner.person_present = cap_state.get("person_present", False)
+            captioner.last_person_seen = cap_state.get("last_person_seen", 0.0)
+            captioner.person_absence_start = cap_state.get("person_absence_start", 0.0)
+            captioner.greeting_given_this_session = cap_state.get("greeting_given_this_session", False)
             
             # Restore recent memory
             recent_memory = cap_state.get("recent_memory", [])
