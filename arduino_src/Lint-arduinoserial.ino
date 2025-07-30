@@ -67,20 +67,20 @@ void loop() {
 
   updatePanTilt();
   updateLung();
-  delay(30);  // run loop ~30Hz
+  delay(15);  // Increased update rate to ~67Hz for smoother motion
 }
 
 void updatePanTilt() {
   if (panAttached) {
-    if (abs(currentPan - targetPan) > 2) {
-      currentPan += (targetPan > currentPan) ? 2 : -2;
+    if (abs(currentPan - targetPan) > 0) {  // Move every degree
+      currentPan += (targetPan > currentPan) ? 1 : -1;  // 1-degree steps for smoothness
       panServo.write(currentPan);
     }
   }
 
   if (tiltAttached) {
-    if (abs(currentTilt - targetTilt) > 2) {
-      currentTilt += (targetTilt > currentTilt) ? 2 : -2;
+    if (abs(currentTilt - targetTilt) > 0) {  // Move every degree
+      currentTilt += (targetTilt > currentTilt) ? 1 : -1;  // 1-degree steps for smoothness
       tiltServo.write(currentTilt);
     }
   }

@@ -49,10 +49,13 @@ from breathing.breathing import update_lung_position
 from image_monitor import ImageMonitor
 from utils.state_manager import state_manager
 from utils.continuity import describe_duration
+from servo_control.hand_expression import HandExpressionController
 from config.config import (
     USE_SERVO,
+    USE_HAND_SERVO,
     CAMERA_INDEX,
     SERIAL_PORT,
+    HAND_SERIAL_PORT,
     BAUD_RATE,
     CONFIDENCE_THRESHOLD,
     MOOD_SNAPSHOT_FOLDER,
@@ -62,6 +65,10 @@ from config.config import (
     PAUSE_DURATION,
     MODEL_PATH,
     CLEAN_CAPTION_OUTPUT,
+    TEMPORAL_CONTEXT_CACHE_SECONDS,
+    ENABLE_FRAME_CHANGE_DETECTION,
+    FRAME_CHANGE_THRESHOLD,
+    ATTENTION_SHIFT_OVERRIDE,
 )
 from event_logging.run_manager import get_run_image_path
 from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry, LogType
@@ -95,7 +102,7 @@ else:
     servos = None
 
 lung_angle = 0.0
-breath_speed = 4.0
+breath_speed = 0.7  # Start closer to MIN_LUNG_SPEED for faster initial breathing
 breath_paused = False
 pause_start_time = 0
 last_breath_direction = None
@@ -113,6 +120,17 @@ object_detector.start()
 debug_print("Starting image monitor", "INIT")
 image_monitor = ImageMonitor(log_folder=MOOD_SNAPSHOT_FOLDER)
 image_monitor.start()
+
+# Initialize hand expression controller (if enabled)
+hand_controller = None
+if USE_HAND_SERVO:
+    debug_print("Initializing hand expression controller", "INIT")
+    hand_controller = HandExpressionController(port=HAND_SERIAL_PORT, baudrate=BAUD_RATE, clean_output=CLEAN_CAPTION_OUTPUT)
+else:
+    debug_print("Hand servo disabled - skipping hand controller initialization", "INIT")
+
+# Face detection state for startle reactions
+face_detected_last_frame = False
 
 # Initialize run ID and start time for this session
 start_time = time.time()
@@ -167,15 +185,14 @@ if previous_state:
 
     awakening_msg = captioner.generate_awakening_message(time_since_last, previous_beliefs)
 
-    if not CLEAN_CAPTION_OUTPUT:
-        print(f"[🌅] {awakening_msg}")
-    log_json_entry(
-        LogType.INFO,
-        {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
-        MOOD_SNAPSHOT_FOLDER,
-        auto_print=CLEAN_CAPTION_OUTPUT,
-        print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None,
-    )
+    # Don't log the awakening message since the animation will show it
+    # log_json_entry(
+    #     LogType.INFO,
+    #     {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
+    #     MOOD_SNAPSHOT_FOLDER,
+    #     auto_print=CLEAN_CAPTION_OUTPUT,
+    #     print_message=None,
+    # )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
 else:
@@ -183,15 +200,14 @@ else:
     captioner.memory_loaded_from_previous = False
     awakening_msg = captioner.generate_awakening_message()
 
-    if not CLEAN_CAPTION_OUTPUT:
-        print(f"[🌅] {awakening_msg}")
-    log_json_entry(
-        LogType.INFO,
-        {"message": awakening_msg, "continuity": False},
-        MOOD_SNAPSHOT_FOLDER,
-        auto_print=CLEAN_CAPTION_OUTPUT,
-        print_message=f'"{awakening_msg}"' if CLEAN_CAPTION_OUTPUT else None,
-    )
+    # Don't log the awakening message since the animation will show it
+    # log_json_entry(
+    #     LogType.INFO,
+    #     {"message": awakening_msg, "continuity": False},
+    #     MOOD_SNAPSHOT_FOLDER,
+    #     auto_print=CLEAN_CAPTION_OUTPUT,
+    #     print_message=None,
+    # )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
 
@@ -219,14 +235,47 @@ def mood_update_thread(frame, timestamp):
     if not captioner.is_processing:
         debug_print("Captioner is not processing, proceeding with mood update", "MOOD")
         now = time.time()
-        if now - last_snapshot_time >= 10:
-            # Simple frame deduplication to prevent repetitive processing
-            frame_hash = hash(frame.tobytes())
-            if hasattr(mood_update_thread, '_last_frame_hash') and \
-               frame_hash == mood_update_thread._last_frame_hash:
-                debug_print("Frame unchanged, skipping processing", "CAPTIONER")
-                return
-            mood_update_thread._last_frame_hash = frame_hash
+        if now - last_snapshot_time >= MIN_SNAPSHOT_INTERVAL:
+            # Enhanced frame change detection to prevent repetitive processing
+            should_process = True
+            
+            if ENABLE_FRAME_CHANGE_DETECTION:
+                # Import numpy for frame comparison
+                import numpy as np
+                
+                # Convert frame to grayscale for comparison
+                gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                
+                # Check if we have a previous frame to compare
+                if hasattr(mood_update_thread, '_last_gray_frame'):
+                    try:
+                        # Try to use structural similarity if available
+                        from skimage.metrics import structural_similarity as ssim
+                        similarity = ssim(mood_update_thread._last_gray_frame, gray_frame)
+                    except ImportError:
+                        # Fallback to mean squared error comparison
+                        mse = np.mean((mood_update_thread._last_gray_frame.astype(float) - gray_frame.astype(float)) ** 2)
+                        # Convert MSE to similarity (0-1 scale, higher = more similar)
+                        max_mse = 255 ** 2  # Maximum possible MSE for 8-bit images
+                        similarity = 1.0 - (mse / max_mse)
+                    
+                    # Check if frame has changed significantly or if enough time has passed for attention shifting
+                    time_since_last_processing = now - getattr(mood_update_thread, '_last_processing_time', 0)
+                    frame_changed = similarity < FRAME_CHANGE_THRESHOLD
+                    attention_shift_needed = time_since_last_processing > ATTENTION_SHIFT_OVERRIDE
+                    
+                    should_process = frame_changed or attention_shift_needed
+                    
+                    if not should_process:
+                        debug_print(f"Frame similar ({similarity:.3f}) and recent ({time_since_last_processing:.1f}s), skipping", "CAPTIONER")
+                        return
+                    elif frame_changed:
+                        debug_print(f"Frame change detected (similarity: {similarity:.3f})", "CAPTIONER")
+                    else:
+                        debug_print(f"Attention shift override after {time_since_last_processing:.1f}s", "CAPTIONER")
+                
+                mood_update_thread._last_gray_frame = gray_frame.copy()
+                mood_update_thread._last_processing_time = now
             
             snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
             cv2.imwrite(snapshot_path, frame)
@@ -238,10 +287,10 @@ def mood_update_thread(frame, timestamp):
                 if not hasattr(mood_update_thread, '_temporal_manager'):
                     mood_update_thread._temporal_manager = TemporalContextManager()
                 
-                # Only regenerate temporal context every 60 seconds to reduce load
+                # Only regenerate temporal context every configurable interval to reduce load
                 current_time = time.time()
                 if not hasattr(mood_update_thread, '_last_temporal_update') or \
-                   current_time - mood_update_thread._last_temporal_update > 60:
+                   current_time - mood_update_thread._last_temporal_update > TEMPORAL_CONTEXT_CACHE_SECONDS:
                     temporal_context = mood_update_thread._temporal_manager.get_temporal_context(captioner)
                     mood_update_thread._cached_temporal_context = temporal_context
                     mood_update_thread._last_temporal_update = current_time
@@ -317,6 +366,28 @@ try:
                 best_conf = conf
 
         if best_box is not None:
+            # Check for NEW face detection (startle reaction)
+            face_detected_this_frame = True
+            if not face_detected_last_frame:
+                # NEW FACE DETECTED - TRIGGER STARTLE WITH COOLDOWN!
+                if not CLEAN_CAPTION_OUTPUT:
+                    print("😲 STARTLE! Face detected - triggering coordinated hand reaction")
+                debug_print("😲 STARTLE! Face detected - triggering coordinated hand reaction", "STARTLE")
+                if hand_controller:  # Only trigger if hand system is enabled
+                    try:
+                        hand_controller.trigger_startle()  # Now includes cooldown logic
+                        if not CLEAN_CAPTION_OUTPUT:
+                            print("✅ Startle command sent to hand controller")
+                        debug_print("✅ Startle command sent successfully", "STARTLE")
+                    except Exception as e:
+                        if not CLEAN_CAPTION_OUTPUT:
+                            print(f"❌ Startle failed: {e}")
+                        debug_print(f"❌ Startle command failed: {e}", "ERROR")
+                else:
+                    if not CLEAN_CAPTION_OUTPUT:
+                        print("🚫 Hand servo disabled - skipping startle reaction")
+                    debug_print("🚫 Hand servo disabled - skipping startle reaction", "STARTLE")
+            
             # Suppress frequent face detection messages - only show occasionally
             if int(now) % 5 == 0:  # Every 5 seconds
                 debug_print(f"Face detected with confidence: {best_conf:.2f}", "FACE")
@@ -327,6 +398,7 @@ try:
             except Exception as e:
                 debug_print(f"Person presence tracking error: {e}", "ERROR")
         else:
+            face_detected_this_frame = False
             # Only show "no face" occasionally to avoid spam
             if int(now) % 10 == 0:  # Every 10 seconds
                 debug_print("No face detected", "FACE")
@@ -336,6 +408,9 @@ try:
                 captioner.update_person_presence(False, now)
             except Exception as e:
                 debug_print(f"Person presence tracking error: {e}", "ERROR")
+
+        # Update face detection state for next frame
+        face_detected_last_frame = face_detected_this_frame
 
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:
             debug_print(f"Starting mood update thread - interval: {MOOD_EVALUATION_INTERVAL}s", "MOOD")
@@ -347,9 +422,23 @@ try:
         face_box = tuple(best_box) if best_box is not None else None
         person_present, pan, tilt = update_gaze(frame, face_box, current_mood, delta)
         
+        # Update hand expression based on consciousness state (if enabled)
+        hand_positions = None
+        if hand_controller:
+            temporal_context = getattr(mood_update_thread, '_cached_temporal_context', {})
+            hand_positions = hand_controller.update_from_consciousness(
+                mood=current_mood,
+                novelty=captioner.novelty_score,
+                boredom=captioner.boredom,
+                person_present=person_present,
+                temporal_context=temporal_context
+            )
+        
         # Debug servo values occasionally to avoid spam
-        if int(now) % 5 == 0:  # Every 5 seconds instead of 3
+        if int(now) % 8 == 0:  # Every 8 seconds to include hand info
+            gesture_desc = hand_controller.get_current_gesture_description() if hand_controller else "Hand servo disabled"
             debug_print(f"Servo values: pan={pan}, tilt={tilt}, person_present={person_present}", "SERVO")
+            debug_print(f"Hand gesture: {gesture_desc}", "HAND")
 
         (
             lung_pos,
@@ -441,6 +530,8 @@ finally:
             object_detector.join(timeout=2.0)  # Add timeout
         if 'image_monitor' in locals():
             image_monitor.stop()
+        if 'hand_controller' in locals() and hand_controller:
+            hand_controller.cleanup()
         if 'cap' in locals():
             cap.release()
         cv2.destroyAllWindows()

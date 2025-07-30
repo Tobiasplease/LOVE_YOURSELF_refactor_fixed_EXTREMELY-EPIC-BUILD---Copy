@@ -2,16 +2,18 @@ import os
 from .prompt_templates import *  # noqa: F401
 
 # === SERIAL SETTINGS ===
-SERIAL_PORT = "COM10"
+SERIAL_PORT = "COM10"  # Main servos (gaze, breathing)
+HAND_SERIAL_PORT = "COM11"  # Hand expression controller
 BAUD_RATE = 9600
 
 # === MODEL PATHS ===
 MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
-USE_SERVO = False
-SERVO_MIN = 45
-SERVO_MAX = 135
+USE_SERVO = True
+USE_HAND_SERVO = True  # Toggle for hand expression system - set False to disable hand reactions
+SERVO_MIN = 30  # Expanded from 45 for wider tracking range
+SERVO_MAX = 150  # Expanded from 135 for wider tracking range
 EASING_FACTOR = 0.09
 
 # === SERVO FLIPPING ===
@@ -19,12 +21,12 @@ FLIP_X = False
 FLIP_Y = True
 
 # === FACE DETECTION ===
-CONFIDENCE_THRESHOLD = 0.6
-DEAD_ZONE = 15  # Reduced from 30 for more responsive tracking
+CONFIDENCE_THRESHOLD = 0.5  # Lowered from 0.6 for better low-light detection
+DEAD_ZONE = 12  # Increased from 8 for low-light stability
 
 # === IDLE GAZE SETTINGS ===
-IDLE_AMPLITUDE_X = 25  # Reduced from 35 for less dramatic wandering
-IDLE_AMPLITUDE_Y = 20  # Reduced from 25
+IDLE_AMPLITUDE_X = 35  # Increased from 25 to use expanded servo range
+IDLE_AMPLITUDE_Y = 30  # Increased from 20 to use expanded servo range
 IDLE_CENTER_X = 90
 IDLE_CENTER_Y = 90
 FACE_STABLE_TIMEOUT = 2.0
@@ -32,16 +34,16 @@ IDLE_SPEED_MIN = 0.15
 IDLE_SPEED_MAX = 0.30
 
 # === PHYSICS-BASED MOVEMENT ===
-PHYSICS_FRICTION = 5.0  # How quickly movement dampens (increased from 3.0)
-PHYSICS_SPRING_FORCE = 20.0  # How strongly it moves toward targets (reduced from 35.0)
-FACE_LOCK_DURATION = 6.0  # How long to track a face
-BLEND_SPEED = 1.5  # How quickly to transition between idle and face tracking (increased from 1.0)
+PHYSICS_FRICTION = 8.0  # Increased from 5.0 to prevent overshooting
+PHYSICS_SPRING_FORCE = 15.0  # Reduced from 20.0 for more controlled movement
+FACE_LOCK_DURATION = 8.0  # Increased from 6.0 for more stable face tracking
+BLEND_SPEED = 1.0  # Reduced from 1.5 for smoother transitions
 
 
 # === BREATHING SETTINGS ===
 LUNG_MIN = 60
 LUNG_MAX = 110
-PAUSE_DURATION = 3.0
+PAUSE_DURATION = 0.8  # Much shorter base pause for more dynamic breathing
 LUNG_OFFSET_SCALE = -0.10
 
 # === MOOD SYSTEM ===
@@ -55,7 +57,7 @@ COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safeten
 
 # === TIMING INTERVALS ===
 # Core consciousness timing - all intervals derive from this
-CONSCIOUSNESS_CYCLE_INTERVAL = 30  # seconds - primary consciousness processing cycle (increased from 15)
+CONSCIOUSNESS_CYCLE_INTERVAL = 15  # seconds - primary consciousness processing cycle (balanced responsiveness)
 
 # Derived intervals (automatically calculated)
 MOOD_EVALUATION_INTERVAL = CONSCIOUSNESS_CYCLE_INTERVAL  # when mood thread runs
@@ -63,8 +65,9 @@ CAPTION_INTERVAL = CONSCIOUSNESS_CYCLE_INTERVAL  # when new captions are generat
 MIN_SNAPSHOT_INTERVAL = max(5, CONSCIOUSNESS_CYCLE_INTERVAL // 3)  # minimum time between snapshots
 
 REASON_INTERVAL = 360  # seconds between reflections
-DRAWING_INTERVAL = 600  # seconds between drawing triggers
+DRAWING_INTERVAL = 180  # seconds between drawing triggers (reduced for testing and responsiveness)
 DRAWING_COOLDOWN = 180  # seconds between drawings
+TEMPORAL_CONTEXT_CACHE_SECONDS = 60  # How long to cache temporal context to reduce compute load
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
@@ -72,6 +75,12 @@ YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 # === CAPTIONER MEMORY CONTROL ===
 MOOD_DECAY_RATE = 0.05  # how much mood fades when nothing new happens
 NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
+
+# === FRAME CHANGE DETECTION ===
+# Prevents repetitive processing when scene hasn't changed meaningfully
+ENABLE_FRAME_CHANGE_DETECTION = True  # Set to False to disable optimization (more responsive but higher CPU)
+FRAME_CHANGE_THRESHOLD = 0.95  # Similarity threshold (0.0=very sensitive, 1.0=only identical frames skip)
+ATTENTION_SHIFT_OVERRIDE = 10  # Seconds to force new caption even if frame unchanged (for attention shifts)
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
 

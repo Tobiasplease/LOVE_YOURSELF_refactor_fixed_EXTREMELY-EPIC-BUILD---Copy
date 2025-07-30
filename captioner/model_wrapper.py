@@ -26,6 +26,7 @@ class MultimodalModel:
             return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT, 
                                    temperature=config.AWAKENING_TEMPERATURE)
         elif flowing and self.memory_ref:
+            # Build base prompt
             prompt = build_caption_prompt(
                 self.memory_ref,
                 mood=self.memory_ref.current_mood,
@@ -34,6 +35,34 @@ class MultimodalModel:
                 previous_caption=self.memory_ref.last_caption,
                 temporal_context=temporal_context,  # Add temporal awareness
             )
+            
+            # Add emotional voice injection for dynamic personality
+            if hasattr(self.memory_ref, 'emotional_voice'):
+                # Calculate current emotional vector based on mood, memory, and context
+                relationship_patterns = self.memory_ref.get_relationship_patterns()
+                identity_traits = self.memory_ref.get_identity_core()
+                
+                context = {
+                    'person_present': getattr(self.memory_ref, 'person_present', False),
+                    'time_of_day': temporal_context.get('time_of_day') if temporal_context else 'unknown',
+                    'observation_type': 'general'
+                }
+                
+                emotional_vector = self.memory_ref.emotional_voice.calculate_emotional_vector(
+                    mood=self.memory_ref.current_mood,
+                    relationship_patterns=relationship_patterns,
+                    identity_traits=identity_traits,
+                    context=context
+                )
+                
+                # Create voice injection to guide expression style
+                voice_injection = self.memory_ref.emotional_voice.create_voice_injection(
+                    emotional_vector, context
+                )
+                
+                # Add to prompt organically
+                prompt += voice_injection
+            
             return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT,
                                    temperature=config.CONSCIOUSNESS_TEMPERATURE)
         else:

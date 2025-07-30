@@ -32,6 +32,45 @@ def build_dynamic_system_prompt(mood: tuple[float, float, float], identity_summa
     return config.DYNAMIC_SYSTEM_PROMPT_TEMPLATE.format(mood_desc=mood_desc, identity_summary=identity_summary)
 
 
+def describe_mood_state(mood: float, boredom: float, novelty: float) -> str:
+    """Convert numerical mood values to descriptive emotional text."""
+    # Primary mood description based on main mood value
+    if mood > 0.7:
+        mood_desc = "energized and deeply engaged"
+    elif mood > 0.5:
+        mood_desc = "alert and curious"
+    elif mood > 0.3:
+        mood_desc = "calm and observant"
+    elif mood > 0.1:
+        mood_desc = "neutral and watchful"
+    elif mood > -0.1:
+        mood_desc = "quiet and detached"
+    else:
+        mood_desc = "withdrawn and distant"
+    
+    # Add boredom modifiers
+    if boredom > 0.6:
+        if "energized" in mood_desc or "alert" in mood_desc:
+            mood_desc = mood_desc.replace("energized", "restless").replace("alert", "seeking stimulation")
+        else:
+            mood_desc += ", feeling restless"
+    elif boredom > 0.3:
+        mood_desc += ", slightly understimulated"
+    
+    # Add novelty awareness
+    if novelty > 0.7:
+        mood_desc += ", captivated by something new"
+    elif novelty > 0.4:
+        mood_desc += ", noticing changes"
+    elif novelty < 0.2:
+        mood_desc += ", seeing familiar patterns"
+    
+    return mood_desc
+
+
+# === CONTINUOUS CAPTIONING ===
+
+
 # === AWAKENING ===
 def build_awakening_prompt(caption: str, temporal_context: Optional[dict] = None) -> str:
     # return f"{config.SYSTEM_PROMPT}\n\n{config.AWAKENING_PROMPT}\n\nObservation: {caption.strip()}"
@@ -74,9 +113,12 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
         else:
             recent_memory = "Consciousness returns to this familiar space..."
 
+        # Convert numerical mood values to descriptive text
+        mood_description = describe_mood_state(mood, boredom, novelty)
+
         # Special first caption prompt with awakening context
         prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood, boredom=boredom, novelty=novelty, identity_summary=identity_summary, recent_memory=recent_memory
+            mood_description=mood_description, identity_summary=identity_summary, recent_memory=recent_memory
         )
 
         # Add awakening context to the prompt
@@ -87,8 +129,11 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
         # First caption, fresh start - no memory fragments but still awakening
         recent_memory = "I am observing this space for the first time..."
 
+        # Convert numerical mood values to descriptive text
+        mood_description = describe_mood_state(mood, boredom, novelty)
+
         prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood, boredom=boredom, novelty=novelty, identity_summary=identity_summary, recent_memory=recent_memory
+            mood_description=mood_description, identity_summary=identity_summary, recent_memory=recent_memory
         )
 
         awakening_addition = "\n\nThis is your first observation as you begin to perceive this space. Describe what you see with fresh awareness."
@@ -98,8 +143,11 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
         recent_snippets = agent.get_current_session_memory_snippets(k=2)  # Just last 2 from current session
         recent_memory = " | ".join(recent_snippets) if recent_snippets else "No recent observations"
 
+        # Convert numerical mood values to descriptive text
+        mood_description = describe_mood_state(mood, boredom, novelty)
+
         prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood, boredom=boredom, novelty=novelty, identity_summary=identity_summary, recent_memory=recent_memory
+            mood_description=mood_description, identity_summary=identity_summary, recent_memory=recent_memory
         )
 
         awakening_addition = ""
@@ -107,12 +155,17 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
     # Build the final prompt
     base = f"{dynamic_prompt}\n\n{prompt}{awakening_addition}{temporal_addition}"
 
-    # Only include previous caption if it's very recent (continuity, not memory)
+    # Enhanced continuity system - create flowing narrative
     if previous_caption and hasattr(agent, "last_caption_time"):
         time_since_last = time.time() - agent.last_caption_time
         if time_since_last < 60:  # Only if within last minute
-            rephrased = agent.rephrase_with_doubt(previous_caption.strip())
-            base += f'\n\nYour immediate previous thought: "{rephrased}"'
+            # Instead of rephrasing with doubt, use the previous caption to create flow
+            base += f'\n\nYour immediate previous observation: "{previous_caption.strip()}"'
+            base += '\n\nFLOW GUIDANCE: Build naturally from your previous observation. '
+            base += 'If you noticed a person, now observe their behavior or expression. '
+            base += 'If you focused on an object, consider the environment or your feeling about it. '
+            base += 'If you described the space, notice specific details or your emotional response. '  
+            base += 'Let your attention shift organically - each observation is one step in unfolding awareness.'
 
     base += config.CAPTION_PROMPT_CONTINUATION
     return base
@@ -120,8 +173,31 @@ def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, pre
 
 # === REFLECTION PROMPT ===
 def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Optional[any] = None) -> str:  # type: ignore
+    # Use identity consolidation instead of single-caption reflection
+    if agent:
+        # Get recent observations for identity consolidation (reduced for performance)
+        recent_observations = agent.get_recent_session_captions(k=30)  # Reduced from 50 to 30
+        if recent_observations:
+            # Use only last 15 for prompt to reduce API load
+            observations_text = "\n".join(f"• {obs}" for obs in recent_observations[-15:])  
+            
+            # Get motifs (top 5 most frequent)
+            top_motifs = [motif for motif, count in agent.motif_counter.most_common(5)]
+            motifs_text = ", ".join(top_motifs) if top_motifs else "No recurring themes yet"
+            
+            # Get desires
+            desires_text = agent.get_desire_summary() if hasattr(agent, 'get_desire_summary') else "Exploring what interests me"
+            
+            prompt = config.IDENTITY_CONSOLIDATION_PROMPT.format(
+                recent_observations=observations_text,
+                motifs=motifs_text,
+                desires=desires_text
+            )
+            return prompt
+    
+    # Fallback to simple reflection if no agent or observations
     prompt = f"{config.REFLECTION_PROMPT_BASE}"
-
+    
     if agent:
         caption = agent.rephrase_with_doubt(caption)
 
@@ -135,7 +211,6 @@ def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Op
         prompt += f"\n\nSense of self: {label}"
 
     prompt += config.REFLECTION_PROMPT_ENDING
-
     return prompt
 
 

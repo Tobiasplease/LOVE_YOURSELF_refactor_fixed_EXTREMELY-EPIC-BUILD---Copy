@@ -550,6 +550,21 @@ class MemoryMixin:
                         break
         return list(reversed(out))
 
+    def get_recent_session_captions(self, k: int = 50) -> List[str]:
+        """Get recent captions from current session for identity consolidation."""
+        seen, out = set(), []
+        for entry in reversed(self.memory_queue):
+            # Only include perception memories from current session
+            if (entry.get("timestamp", 0) >= self.session_start and 
+                entry.get("memory_type") == "perception"):
+                cap = entry["text"]
+                if cap not in seen and len(cap.strip()) > 10:
+                    out.append(cap)
+                    seen.add(cap)
+                    if len(out) >= k:
+                        break
+        return list(reversed(out))
+
     def get_old_session_memory_fragments(self, k: int = 3) -> List[str]:
         """Get fragmentary memories from before the current session for awakening context."""
         import random
@@ -886,3 +901,15 @@ class MemoryMixin:
 
     def get_memory_entries_by_type(self, memory_type: str, limit: int = 5) -> list[dict]:
         return [entry for entry in reversed(self.memory_queue) if entry["type"] == memory_type][:limit]
+
+    def get_relationship_patterns(self) -> Dict[str, Any]:
+        """Get relationship patterns for emotional voice system."""
+        if not hasattr(self, 'relationship_patterns'):
+            return {}
+        return dict(self.relationship_patterns)
+    
+    def get_identity_core(self) -> Dict[str, Any]:
+        """Get identity core traits for emotional voice system."""
+        if not hasattr(self, 'identity_core'):
+            return {}
+        return dict(self.identity_core)

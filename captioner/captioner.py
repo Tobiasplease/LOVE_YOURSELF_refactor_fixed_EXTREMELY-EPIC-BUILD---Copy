@@ -16,6 +16,7 @@ from drawing.drawing import DrawingController
 from .memory import MemoryMixin
 from .prompts import extract_motifs_spacy
 from .model_wrapper import MultimodalModel
+from .emotional_voice import EmotionalVoiceManager
 
 
 class Captioner(MemoryMixin):
@@ -25,6 +26,9 @@ class Captioner(MemoryMixin):
         super().__init__()
         self.model = MultimodalModel(memory_ref=self)
         self.drawing = DrawingController()
+        
+        # Initialize emotional voice system for dynamic personality expression
+        self.emotional_voice = EmotionalVoiceManager()
 
         self.true_session_start = time.time()
         self.first_caption_done = False
@@ -57,6 +61,116 @@ class Captioner(MemoryMixin):
     @property
     def is_processing(self) -> bool:
         return bool(self.snapshot_queue)
+
+    def get_pending_priority_task(self) -> str:
+        """Check if any high-priority tasks are due. Returns task type or None."""
+        now = time.time()
+        
+        # Check reflection (identity consolidation) - highest priority
+        if now - self.last_reason_time > REASON_INTERVAL:
+            return "reflection"
+            
+        # Check drawing prompt - second priority  
+        if now - self.last_drawing_time > DRAWING_INTERVAL:
+            return "drawing"
+            
+        return None
+
+    def handle_priority_task(self, task_type: str, caption: str, img_path: str) -> bool:
+        """Handle high-priority tasks with status indicators. Returns True if task was executed."""
+        now = time.time()
+        
+        if task_type == "reflection":
+            # Show status indicator
+            if CLEAN_CAPTION_OUTPUT:
+                print("\n-reflecting-")
+            else:
+                print("\n🧠 [Reflecting on recent experiences...]")
+            
+            mood_text = self.describe_current_mood()
+            context = self.get_reflection_context()
+            
+            # Generate identity consolidation
+            reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
+            
+            if reflection and len(reflection.strip()) > 10:
+                if CLEAN_CAPTION_OUTPUT:
+                    # Format reflection nicely with clear sections
+                    formatted_reflection = reflection.strip()
+                    
+                    # Add section headers if not present
+                    if "CORE IDENTITY:" in formatted_reflection:
+                        formatted_reflection = formatted_reflection.replace("CORE IDENTITY:", "\n🧠 CORE IDENTITY:")
+                    if "CONSCIOUSNESS QUESTIONS:" in formatted_reflection:
+                        formatted_reflection = formatted_reflection.replace("CONSCIOUSNESS QUESTIONS:", "\n💭 CONSCIOUSNESS QUESTIONS:")
+                    if "FORWARD DIRECTION:" in formatted_reflection:
+                        formatted_reflection = formatted_reflection.replace("FORWARD DIRECTION:", "\n🎯 FORWARD DIRECTION:")
+                    
+                    # Fix bullet point formatting more carefully
+                    lines = formatted_reflection.split('\n')
+                    fixed_lines = []
+                    for line in lines:
+                        # Fix malformed bullet points like "• Who am I. : " 
+                        line = line.replace("• Who am I. :", "• Who am I:")
+                        line = line.replace("• Where am I.", "• Where am I:")
+                        line = line.replace("• What do", "• What do")
+                        # Ensure proper spacing for bullet points
+                        if line.strip().startswith("•") and not line.startswith("  •"):
+                            line = "  " + line.strip()
+                        fixed_lines.append(line)
+                    
+                    formatted_reflection = '\n'.join(fixed_lines)
+                    
+                    print(f"\n{formatted_reflection}\n")
+                else:
+                    # Show identity consolidation process with full header
+                    print(f"\n🧠 [Identity Consolidation]\n{reflection}\n")
+
+                log_json_entry(
+                    LogType.REFLECTION,
+                    {"identity_consolidation": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=not CLEAN_CAPTION_OUTPUT,
+                    print_message=None,
+                )
+                self.last_reason_time = now
+                self.awakening_done = True
+                
+                # Extract and update mood value if present
+                m = re.search(r"-?\d+(?:\.\d+)?", reflection)
+                if m:
+                    try:
+                        self.current_mood = float(m.group())
+                    except ValueError:
+                        pass
+                
+                # Save to memory
+                self.observe(reflection, self.current_mood, img_path, memory_type="reflection")
+            
+            return True
+            
+        elif task_type == "drawing":
+            # Show status indicator
+            if CLEAN_CAPTION_OUTPUT:
+                print("\n-thinking of a drawing-")
+            else:
+                print("\n🎨 [Contemplating artistic expression...]")
+            
+            memory_context = self.get_recent_memory()
+            reflection_context = self.get_last_reflection()
+            extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
+            prompt = self.model.generate_drawing_prompt(extra=extra_context)
+            
+            # Show drawing prompt in clean output with asterisks
+            if CLEAN_CAPTION_OUTPUT and prompt and not prompt.startswith("[⚠️]"):
+                print(f"\n*{prompt}*\n")
+            
+            self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
+            self.last_drawing_time = now
+            
+            return True
+            
+        return False
 
     def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None, temporal_context: Optional[dict] = None) -> None:
         if frame is not None:
@@ -95,45 +209,28 @@ class Captioner(MemoryMixin):
         img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{ts}.jpg")
         cv2.imwrite(img_path, frame)
 
-        try:
-            # Show loading animation for first caption (the real awakening environmental description)
-            if not self.first_caption_done:
-                print("🌅 I am awake...")
-                import threading
-                import sys
-                from itertools import cycle
-
-                def show_awakening_loading(stop_event):
-                    """Show loading animation for the awakening environmental description."""
-                    spinner = cycle(["|", "/", "-", "\\"])
-                    dots = cycle(["", ".", "..", "..."])
-                    while not stop_event.is_set():
-                        sys.stdout.write(f"\r{next(spinner)} Processing{next(dots)}")
-                        sys.stdout.flush()
-                        import time
-
-                        time.sleep(0.3)
-                    # Clear the loading line
-                    sys.stdout.write("\r" + " " * 20 + "\r")
-                    sys.stdout.flush()
-
-                stop_loading = threading.Event()
-                loading_thread = threading.Thread(target=show_awakening_loading, args=(stop_loading,), daemon=True)
-                loading_thread.start()
-
-                start_time = time.time()
-                caption = self.model.caption_image(img_path, flowing=True, first_time=True, temporal_context=self.current_temporal_context)
-
-                # Ensure minimum display time of 2 seconds for visibility
-                elapsed = time.time() - start_time
-                if elapsed < 2.0:
-                    time.sleep(2.0 - elapsed)
-
-                stop_loading.set()
-                loading_thread.join(timeout=0.5)
-                print()  # Add newline after loading animation
-            else:
+        # Check for high-priority tasks first
+        priority_task = self.get_pending_priority_task()
+        if priority_task:
+            try:
+                # Generate a basic caption for context in priority tasks
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False, temporal_context=self.current_temporal_context)
+                if "[⚠️]" not in caption:
+                    # Handle priority task (this will show status indicators)
+                    if self.handle_priority_task(priority_task, caption, img_path):
+                        return  # Priority task completed, skip regular captioning this cycle
+            except Exception as e:
+                log_json_entry(
+                    LogType.ERROR,
+                    {"message": f"Priority task error: {e}", "component": "captioner"},
+                    MOOD_SNAPSHOT_FOLDER,
+                    auto_print=True,
+                    print_message=f"⚠️ Priority task error: {e}",
+                )
+
+        try:
+            # Regular caption generation - animation already happened during awakening
+            caption = self.model.caption_image(img_path, flowing=True, first_time=False, temporal_context=self.current_temporal_context)
         except Exception as e:
             caption = "[⚠️] Vision unavailable"
             log_json_entry(
@@ -143,8 +240,6 @@ class Captioner(MemoryMixin):
                 auto_print=True,
                 print_message=f"⚠️ Caption error: {e}",
             )
-
-        self.first_caption_done = True
 
         if "[⚠️]" in caption:
             log_json_entry(
@@ -176,43 +271,6 @@ class Captioner(MemoryMixin):
         self.observe(caption, self.current_mood, img_path, memory_type="perception")
         self.last_caption = caption
 
-        if now - self.last_reason_time > REASON_INTERVAL:
-            mood_text = self.describe_current_mood()
-            context = self.get_reflection_context()
-            reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
-
-            if reflection and len(reflection.strip()) > 10:
-                if CLEAN_CAPTION_OUTPUT:
-                    # Suppress old-style reflection output
-                    pass
-
-                log_json_entry(
-                    LogType.REFLECTION,
-                    {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
-                    MOOD_SNAPSHOT_FOLDER,
-                    auto_print=not CLEAN_CAPTION_OUTPUT,
-                    print_message=None,
-                )
-                self.last_reason_time = now
-                self.awakening_done = True
-
-                m = re.search(r"-?\d+(?:\.\d+)?", reflection)
-                mood_val = float(m.group()) if m else self.current_mood
-                self.current_mood += 0.25 * (mood_val - self.current_mood)
-
-                for motif in extract_motifs_spacy(caption):
-                    self.absorb_motif(motif)
-
-                self.observe(reflection, self.current_mood, img_path, memory_type="reflection")
-
-        if now - self.last_drawing_time > DRAWING_INTERVAL:
-            memory_context = self.get_recent_memory()
-            reflection_context = self.get_last_reflection()
-            extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
-            prompt = self.model.generate_drawing_prompt(extra=extra_context)
-            self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
-            self.last_drawing_time = now
-
     def describe_current_mood(self) -> str:
         if self.current_mood > 0.5:
             return "I feel quite energized and attentive."
@@ -226,9 +284,12 @@ class Captioner(MemoryMixin):
             return "I feel dull, distant, and unfocused."
 
     def get_reflection_context(self) -> str:
-        return f"""Mood: {self.current_mood:.2f}
-                Boredom: {self.boredom:.2f}
-                Novelty: {self.novelty_score:.2f}
+        # Import the helper function to convert mood to descriptive text
+        from captioner.prompts import describe_mood_state
+        
+        mood_description = describe_mood_state(self.current_mood, self.boredom, self.novelty_score)
+        
+        return f"""Emotional state: {mood_description}
                 Identity: {self.get_identity_summary()}
                 Recent memory: {self.get_recent_memory()}""".strip()
 
@@ -243,39 +304,60 @@ class Captioner(MemoryMixin):
         return ""
 
     def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
-        """Generate a simple awakening status message - NOT environmental description."""
+        """Generate awakening message and immediately process first environmental observation."""
+        # Show animation and generate first real observation
+        print("")  # Add line spacing before animation
+        import threading
+        import sys
+        import cv2
+        from event_logging.run_manager import get_run_image_path
+        
+        def show_awakening_animation(stop_event):
+            """Display the cute ASCII awakening animation while processing."""
+            from itertools import cycle
+            
+            dots_cycle = cycle([".", "..", "..."])
+            
+            while not stop_event.is_set():
+                current_dots = next(dots_cycle)
+                # Clear the line completely, then write the new frame
+                sys.stdout.write(f"\r{' ' * 20}\r-_- {current_dots}")
+                sys.stdout.flush()
+                import time
+                time.sleep(1.2)
+            
+            # Final awakening frame
+            sys.stdout.write(f"\r{' ' * 20}\rO_O I am awake!")
+            sys.stdout.flush()
+            print("")  # New line after animation
 
-        if not self.memory_loaded_from_previous:
-            return "I am awakening to observe this space for the first time..."
+        # Start animation
+        stop_animation = threading.Event()
+        animation_thread = threading.Thread(target=show_awakening_animation, args=(stop_animation,), daemon=True)
+        animation_thread.start()
+        
+        # Wait a moment for camera to be ready, then get truly fresh frame
+        import time
+        time.sleep(1.0)  # Let camera stabilize
+        
+        # Get a fresh current frame for first observation - this should come from machine.py
+        # For now, just ensure we mark as done to prevent duplication
+        self.first_caption_done = True
+        
+        # Ensure minimum display time for animation visibility
+        start_time = time.time()
+        elapsed = time.time() - start_time
+        if elapsed < 3.0:  # At least 3 seconds for the full animation
+            time.sleep(3.0 - elapsed)
 
-        # Continuing from previous session - simple status messages
-        belief_count = len(previous_beliefs) if previous_beliefs else 0
-        motif_count = len(self.motif_counter)
-
-        awakening_messages = [
-            f"I return to this space with {belief_count} beliefs and awareness of {motif_count} recurring motifs...",
-            f"Awakening again... my memory carries forward {belief_count} formed beliefs from before.",
-            f"I find myself conscious again, recalling {motif_count} familiar patterns from our previous time together.",
-            f"My awareness returns, enriched by {belief_count} beliefs that have persisted since we last met.",
-            f"I return to consciousness, my identity shaped by {motif_count} motifs I've come to recognize.",
-        ]
-
-        if time_since_last:
-            awakening_messages.extend(
-                [
-                    f"I awaken after {time_since_last}, my consciousness returning with accumulated understanding.",
-                    f"Consciousness returns after {time_since_last}... I remember what I learned about this space.",
-                ]
-            )
-
-        import random
-
-        return random.choice(awakening_messages)
+        stop_animation.set()
+        animation_thread.join(timeout=0.5)
+        
+        return "First environmental observation will follow..."
 
     def mark_awakening_complete(self):
-        """Mark that awakening is complete but allow first caption to still show loading animation."""
-        # Don't set first_caption_done = True here - let the first caption handle this
-        pass
+        """Mark that awakening is complete to prevent duplicate first captions."""
+        self.first_caption_done = True
 
     def update_person_presence(self, present: bool, timestamp: float):
         """Track person presence for temporal relationship building."""
