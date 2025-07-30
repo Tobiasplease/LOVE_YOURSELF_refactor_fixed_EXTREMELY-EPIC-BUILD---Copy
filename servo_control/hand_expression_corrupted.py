@@ -86,15 +86,6 @@ class HandExpressionController:
         self.frequency_multiplier = 1.0
         self.movement_range = 30.0  # How far from center fingers can drift
         
-        # Manual override system for interface control
-        self.manual_override = False  # When True, disable automatic consciousness updates
-        
-        # Command throttling system (prevents overwhelming Arduino)
-        self.last_command_time = 0.0
-        self.min_command_interval = 0.05  # 20Hz max (instead of 100Hz)
-        self.last_sent_positions = {}
-        self.position_change_threshold = 3.0  # Only send if position changes >3 degrees
-        
         if not self.clean_output:
             print(f"[HAND] Physics-based hand controller initialized")
 
@@ -104,15 +95,10 @@ class HandExpressionController:
             self.serial_connection = serial.Serial(self.port, self.baudrate, timeout=1)
             time.sleep(2)  # Arduino boot time
             if not self.clean_output:
-                print(f"✅ [HAND] Connected to hand controller on {self.port} at {self.baudrate} baud")
-            # Send test command to verify connection
-            test_command = "HAND,90,90,90,90\n"
-            self.serial_connection.write(test_command.encode())
-            if not self.clean_output:
-                print(f"📤 [HAND] Test command sent: {test_command.strip()}")
+                print(f"[HAND] Connected to hand controller on {self.port}")
         except Exception as e:
             if not self.clean_output:
-                print(f"❌ [HAND] Failed to connect to {self.port}: {e}")
+                print(f"[HAND] Failed to connect to {self.port}: {e}")
             self.serial_connection = None
 
     def _clamp(self, value: float, min_val: float, max_val: float) -> float:
@@ -120,45 +106,16 @@ class HandExpressionController:
         return max(min_val, min(max_val, value))
 
     def _send_hand_command(self, finger_positions: Dict[str, int]):
-        """Send finger positions to Arduino hand controller with throttling."""
+        """Send finger positions to Arduino hand controller."""
         if not self.serial_connection:
             return
-        
-        current_time = time.time()
-        
-        # Rate limiting: Don't send more than 20 commands per second
-        if current_time - self.last_command_time < self.min_command_interval:
-            return
-        
-        # Position change detection: Only send if positions changed significantly
-        if self.last_sent_positions:
-            position_changed = False
-            for finger_name, new_pos in finger_positions.items():
-                old_pos = self.last_sent_positions.get(finger_name, 0)
-                if abs(new_pos - old_pos) > self.position_change_threshold:
-                    position_changed = True
-                    break
-            
-            if not position_changed:
-                return  # Skip sending - positions haven't changed enough
         
         try:
             # Convert to list format expected by Arduino: "HAND,f0,f1,f2,f3\n"
             pos_list = [finger_positions.get(f"finger{i}", 70) for i in range(4)]
             command = f"HAND,{','.join(map(str, pos_list))}\n"
             self.serial_connection.write(command.encode())
-            
-            # Update tracking variables
-            self.last_command_time = current_time
-            self.last_sent_positions = finger_positions.copy()
-            
-            # Temporary debug - show what's being sent occasionally
-            if not hasattr(self, '_debug_count'):
-                self._debug_count = 0
-            self._debug_count += 1
-            if self._debug_count % 20 == 0:  # Every 20 commands instead of 100
-                print(f"📤 SERIAL: {command.strip()} (throttled)")
-                
+            # Removed debug print for faster performance
         except Exception as e:
             if not self.clean_output:
                 print(f"[HAND] Serial write error: {e}")
@@ -169,10 +126,6 @@ class HandExpressionController:
         Main update function - continuously evolving physics simulation.
         Returns finger positions as dict: {"finger0": angle, "finger1": angle, ...}
         """
-        # Skip automatic updates if manual override is enabled
-        if self.manual_override:
-            return {}  # Return empty dict - manual control is active
-        
         current_time = time.time()
         delta_time = current_time - self.last_update_time
         delta_time = self._clamp(delta_time, 0.001, 0.1)  # Prevent physics explosions
@@ -380,8 +333,7 @@ class HandExpressionController:
             for i in range(self.num_fingers):
                 self.startle_targets[i] = 50  # Open position
                 self.finger_velocities[i] = 20  # Slow, gentle release
-            if not self.clean_output:
-                print(f"[HAND] 🟠 Phase 3: RELEASE - slow opening to relaxed position")
+            print(f"[HAND] � Phase 3: RELEASE - slow opening to relaxed position")
             
         elif self.startle_phase == 'release' and phase_elapsed >= 2.0:
             # Phase 3 → 4: Release complete, start easing
@@ -390,8 +342,7 @@ class HandExpressionController:
             for i in range(self.num_fingers):
                 self.startle_targets[i] = 90  # Neutral position
                 self.finger_velocities[i] = 15  # Very gentle ease
-            if not self.clean_output:
-                print(f"[HAND] 🔵 Phase 4: EASE - gentle return to neutral position")
+            print(f"[HAND] 🔵 Phase 4: EASE - gentle return to neutral position")
         
         # Apply smooth spring forces during clench sequence
         for i in range(self.num_fingers):
@@ -622,35 +573,3 @@ class HandExpressionController:
                 print("[HAND] Serial connection closed")
             except Exception as e:
                 print(f"[HAND] Error closing serial: {e}")
-    
-    # ===== MANUAL CONTROL METHODS FOR INTERFACE =====
-    
-    def set_hand_positions(self, positions: list):
-        """
-        Direct manual control method for the hand interface.
-        positions: list of 4 angles [index, middle, ring, pinky] (0-180 degrees)
-        """
-        if len(positions) != 4:
-            raise ValueError("Must provide exactly 4 positions for 4 fingers")
-        
-        # Convert list to finger dictionary using finger0, finger1, etc. format
-        finger_dict = {}
-        for i, angle in enumerate(positions):
-            # Clamp to safe range
-            clamped_angle = self._clamp(angle, self.min_angle, self.max_angle)
-            finger_dict[f"finger{i}"] = int(clamped_angle)
-        
-        # Send directly to hardware (now with throttling!)
-        self._send_hand_command(finger_dict)
-    
-    def enable_manual_override(self):
-        """Enable manual override mode - stops automatic consciousness updates."""
-        self.manual_override = True
-        if not self.clean_output:
-            print("[HAND] Manual override ENABLED - automatic control disabled")
-    
-    def disable_manual_override(self):
-        """Disable manual override mode - resumes automatic consciousness updates."""
-        self.manual_override = False
-        if not self.clean_output:
-            print("[HAND] Manual override DISABLED - automatic control resumed")

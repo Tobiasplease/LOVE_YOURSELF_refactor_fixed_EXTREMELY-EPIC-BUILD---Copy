@@ -3,14 +3,14 @@ from .prompt_templates import *  # noqa: F401
 
 # === SERIAL SETTINGS ===
 SERIAL_PORT = "COM10"  # Main servos (gaze, breathing)
-HAND_SERIAL_PORT = "COM11"  # Hand expression controller
+HAND_SERIAL_PORT = "COM3"  # Hand expression controller
 BAUD_RATE = 9600
 
 # === MODEL PATHS ===
 MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
-USE_SERVO = True
+USE_SERVO = False
 USE_HAND_SERVO = True  # Toggle for hand expression system - set False to disable hand reactions
 SERVO_MIN = 30  # Expanded from 45 for wider tracking range
 SERVO_MAX = 150  # Expanded from 135 for wider tracking range

@@ -29,7 +29,7 @@ class PhysicsHandInterface:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Physics Hand Controller")
-        self.root.geometry("400x500")
+        self.root.geometry("800x600")
         
         # Hand controller
         self.hand_controller: Optional[HandExpressionController] = None
@@ -41,12 +41,20 @@ class PhysicsHandInterface:
         self.finger_velocities = [0.0] * self.num_fingers  # Current velocities
         self.finger_targets = [90.0] * self.num_fingers    # Target positions from cursor
         
-        # Physics parameters (simple, responsive settings)
-        self.spring_force = tk.DoubleVar(value=50.0)     # Spring strength
-        self.damping = tk.DoubleVar(value=0.8)           # Damping factor
-        self.wave_strength = tk.DoubleVar(value=1.0)     # Wave amplitude
-        self.physics_mode = tk.BooleanVar(value=False)   # Direct mode by default
-        self.reverse_vertical = tk.BooleanVar(value=False)  # Vertical reversal toggle
+        # Physics parameters (optimized for MAXIMUM responsiveness)
+        self.spring_force = tk.DoubleVar(value=200.0)    # Very high for instant response
+        self.damping = tk.DoubleVar(value=0.05)          # Minimal damping
+        self.max_velocity = tk.DoubleVar(value=500.0)    # Very high max velocity
+        self.cursor_sensitivity = tk.DoubleVar(value=2.0) # High sensitivity
+        
+        # Wave control parameters
+        self.wave_strength = tk.DoubleVar(value=1.0)     # Overall wave amplitude
+        self.gravity_width = tk.DoubleVar(value=0.3)     # Width of gravitational influence (0.1-1.0)
+        self.default_position = tk.DoubleVar(value=90.0) # Default finger position (10-170)
+        self.reverse_vertical = tk.BooleanVar(value=False) # Reverse vertical control
+        
+        # Physics mode toggle (False = Direct, True = Physics)
+        self.physics_mode = tk.BooleanVar(value=False)   # Start in direct mode
         
         # Recording system
         self.recording = False
@@ -92,13 +100,13 @@ class PhysicsHandInterface:
         self.canvas.bind("<Motion>", self.on_mouse_move)
         self.canvas.bind("<Button-1>", self.on_mouse_click)
         
-        # Physics parameters (simple controls)
+        # Physics parameters
         params_frame = ttk.LabelFrame(self.root, text="Physics Parameters")
         params_frame.pack(fill=tk.X, padx=10, pady=5)
         
         # Spring force
         ttk.Label(params_frame, text="Spring Force:").grid(row=0, column=0, sticky=tk.W)
-        spring_scale = ttk.Scale(params_frame, from_=10.0, to=100.0, 
+        spring_scale = ttk.Scale(params_frame, from_=1.0, to=100.0, 
                                 variable=self.spring_force, orient=tk.HORIZONTAL)
         spring_scale.grid(row=0, column=1, sticky=tk.EW, padx=5)
         ttk.Label(params_frame, textvariable=self.spring_force).grid(row=0, column=2)
@@ -110,30 +118,68 @@ class PhysicsHandInterface:
         damping_scale.grid(row=1, column=1, sticky=tk.EW, padx=5)
         ttk.Label(params_frame, textvariable=self.damping).grid(row=1, column=2)
         
+        # Max velocity
+        ttk.Label(params_frame, text="Max Velocity:").grid(row=2, column=0, sticky=tk.W)
+        velocity_scale = ttk.Scale(params_frame, from_=5.0, to=100.0, 
+                                  variable=self.max_velocity, orient=tk.HORIZONTAL)
+        velocity_scale.grid(row=2, column=1, sticky=tk.EW, padx=5)
+        ttk.Label(params_frame, textvariable=self.max_velocity).grid(row=2, column=2)
+        
+        # Cursor sensitivity
+        ttk.Label(params_frame, text="Cursor Sensitivity:").grid(row=3, column=0, sticky=tk.W)
+        sens_scale = ttk.Scale(params_frame, from_=0.1, to=3.0, 
+                              variable=self.cursor_sensitivity, orient=tk.HORIZONTAL)
+        sens_scale.grid(row=3, column=1, sticky=tk.EW, padx=5)
+        ttk.Label(params_frame, textvariable=self.cursor_sensitivity).grid(row=3, column=2)
+        
         # Wave strength
-        ttk.Label(params_frame, text="Wave Strength:").grid(row=2, column=0, sticky=tk.W)
+        ttk.Label(params_frame, text="Wave Strength:").grid(row=4, column=0, sticky=tk.W)
         wave_scale = ttk.Scale(params_frame, from_=0.1, to=3.0, 
                               variable=self.wave_strength, orient=tk.HORIZONTAL)
-        wave_scale.grid(row=2, column=1, sticky=tk.EW, padx=5)
-        ttk.Label(params_frame, textvariable=self.wave_strength).grid(row=2, column=2)
+        wave_scale.grid(row=4, column=1, sticky=tk.EW, padx=5)
+        ttk.Label(params_frame, textvariable=self.wave_strength).grid(row=4, column=2)
         
-        # Physics mode toggle
-        physics_cb = ttk.Checkbutton(params_frame, text="Physics Mode", 
-                                    variable=self.physics_mode)
-        physics_cb.grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=5)
+        # Gravity field width
+        ttk.Label(params_frame, text="Gravity Width:").grid(row=5, column=0, sticky=tk.W)
+        width_scale = ttk.Scale(params_frame, from_=0.1, to=1.0, 
+                               variable=self.gravity_width, orient=tk.HORIZONTAL)
+        width_scale.grid(row=5, column=1, sticky=tk.EW, padx=5)
+        ttk.Label(params_frame, textvariable=self.gravity_width).grid(row=5, column=2)
         
-        # Vertical reverse toggle
-        reverse_cb = ttk.Checkbutton(params_frame, text="Reverse Vertical", 
+        # Default position
+        ttk.Label(params_frame, text="Default Position:").grid(row=6, column=0, sticky=tk.W)
+        default_scale = ttk.Scale(params_frame, from_=10.0, to=170.0, 
+                                 variable=self.default_position, orient=tk.HORIZONTAL)
+        default_scale.grid(row=6, column=1, sticky=tk.EW, padx=5)
+        ttk.Label(params_frame, textvariable=self.default_position).grid(row=6, column=2)
+        
+        # Reverse vertical toggle
+        reverse_cb = ttk.Checkbutton(params_frame, text="Reverse Vertical Control", 
                                     variable=self.reverse_vertical)
-        reverse_cb.grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=5)
+        reverse_cb.grid(row=7, column=0, columnspan=3, sticky=tk.W, pady=2)
+        
+        # PHYSICS MODE TOGGLE - FIXED!
+        physics_cb = ttk.Checkbutton(params_frame, text="🎛️ Physics Mode (Spring Simulation)", 
+                                    variable=self.physics_mode)
+        physics_cb.grid(row=8, column=0, columnspan=3, sticky=tk.W, pady=5)
         
         params_frame.columnconfigure(1, weight=1)
         
-        # Simple controls
-        control_frame = ttk.Frame(self.root)
-        control_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Recording controls
+        record_frame = ttk.LabelFrame(self.root, text="Recording & Presets")
+        record_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        ttk.Button(control_frame, text="Reset to Center", 
+        self.record_btn = ttk.Button(record_frame, text="Start Recording", 
+                                    command=self.toggle_recording)
+        self.record_btn.pack(side=tk.LEFT)
+        
+        ttk.Button(record_frame, text="Save Preset", 
+                  command=self.save_preset).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(record_frame, text="Load Preset", 
+                  command=self.load_preset).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(record_frame, text="Reset to Default", 
                   command=self.reset_to_center).pack(side=tk.LEFT, padx=5)
     
     def toggle_connection(self):
@@ -164,20 +210,14 @@ class PhysicsHandInterface:
         """Handle override mode toggle."""
         if self.override_mode.get():
             self.override_label.config(text="Manual Mode: ON", foreground="red")
-            try:
-                if self.hand_controller:
-                    self.hand_controller.enable_manual_override()
-            except AttributeError:
-                pass  # Method doesn't exist, but that's ok
-            print("🔧 Manual override enabled - automatic consciousness control paused")
+            if self.hand_controller:
+                self.hand_controller.enable_manual_override()
+                print("🔧 Manual override enabled - automatic consciousness control paused")
         else:
             self.override_label.config(text="Manual Mode: OFF", foreground="blue")
-            try:
-                if self.hand_controller:
-                    self.hand_controller.disable_manual_override()
-            except AttributeError:
-                pass  # Method doesn't exist, but that's ok
-            print("🤖 Manual override disabled - consciousness control resumed")
+            if self.hand_controller:
+                self.hand_controller.disable_manual_override()
+                print("🤖 Manual override disabled - consciousness control resumed")
     
     def on_mouse_move(self, event):
         """Handle mouse movement to control finger targets with wave-like gravitational field."""
@@ -260,50 +300,88 @@ class PhysicsHandInterface:
         self.update_ui()
     
     def physics_loop(self):
-        """Simple physics simulation loop."""
+        """Main physics simulation loop."""
         while self.running:
             current_time = time.time()
             dt = current_time - self.last_time
             self.last_time = current_time
             
-            # Limit timestep
+            # Limit timestep to prevent instability
             dt = min(dt, 0.05)
             
             # Update physics for each finger
             for i in range(self.num_fingers):
-                if not self.physics_mode.get():
-                    # Direct mode - instant response
+                if not self.physics_mode.get():  # Direct mode when physics_mode is False
+                    # DIRECT MODE: Instant response, no physics lag!
                     self.finger_positions[i] = self.finger_targets[i]
+                    self.finger_velocities[i] = 0.0  # Reset velocity
                 else:
-                    # Physics mode - spring simulation
+                    # PHYSICS MODE: Spring-damper simulation
                     target = self.finger_targets[i]
                     position = self.finger_positions[i]
                     velocity = self.finger_velocities[i]
                     
-                    # Simple spring force
                     force = (target - position) * self.spring_force.get()
+                    
+                    # Apply force to velocity
                     velocity += force * dt
+                    
+                    # Apply damping
                     velocity *= (1.0 - self.damping.get() * dt)
+                    
+                    # Limit velocity
+                    max_vel = self.max_velocity.get()
+                    velocity = max(-max_vel, min(max_vel, velocity))
                     
                     # Update position
                     position += velocity * dt
-                    position = max(10, min(170, position))
+                    position = max(10, min(170, position))  # Safer servo range
                     
+                    # Store updated values
                     self.finger_positions[i] = position
                     self.finger_velocities[i] = velocity
             
-            # Send to hardware if connected
+            # Send to hardware if connected AND in override mode
             if self.connected and self.hand_controller and self.override_mode.get():
                 try:
-                    positions_int = [int(round(pos)) for pos in self.finger_positions]
-                    try:
+                    # THROTTLE COMMANDS - only send if positions changed significantly
+                    current_time = time.time()
+                    
+                    # Initialize previous positions and last send time
+                    if not hasattr(self, '_last_sent_positions'):
+                        self._last_sent_positions = [90, 90, 90, 90]
+                        self._last_send_time = 0
+                    
+                    # Check if positions changed enough to warrant sending
+                    position_changed = False
+                    min_change_threshold = 3  # Only send if any finger moved >3 degrees
+                    min_time_interval = 0.05  # Send at most every 50ms (20 Hz max)
+                    
+                    for i in range(self.num_fingers):
+                        if abs(self.finger_positions[i] - self._last_sent_positions[i]) > min_change_threshold:
+                            position_changed = True
+                            break
+                    
+                    # Send if positions changed significantly OR enough time has passed
+                    if position_changed or (current_time - self._last_send_time > min_time_interval):
+                        positions_int = [int(round(pos)) for pos in self.finger_positions]
+                        
+                        # Determine mode for debug output
+                        mode = "PHYSICS" if self.physics_mode.get() else "DIRECT"
+                        print(f"🤖 [{mode}] SENT Hand positions: {positions_int}")
+                        
+                        # Actually send the command
                         self.hand_controller.set_hand_positions(positions_int)
-                    except AttributeError:
-                        pass  # Method doesn't exist, but interface still works
+                        
+                        # Update tracking variables
+                        self._last_sent_positions = positions_int.copy()
+                        self._last_send_time = current_time
+                        
                 except Exception as e:
-                    pass  # Suppress errors to keep interface running
+                    print(f"❌ Failed to send hand positions: {e}")
             
-            time.sleep(0.01)  # 100 FPS physics loop
+            # Sleep to limit update rate
+            time.sleep(0.001)  # 1000 FPS physics loop
     
     def update_ui(self):
         """Update UI elements."""
