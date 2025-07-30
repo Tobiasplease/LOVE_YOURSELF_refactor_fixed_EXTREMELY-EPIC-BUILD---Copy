@@ -42,6 +42,16 @@ REFLECTION_PROMPT_BASE = "You are reflecting internally on what you've seen and 
 
 REFLECTION_PROMPT_ENDING = "\n\nRespond with a short reflection — no more than a few sentences. This is your private thought."
 
+SELF_CRITIQUE_PROMPT = (
+    "You have just created this drawing. Look at what you made.\n\n"
+    "Original drawing prompt: {original_prompt}\n"
+    "Your intended expression: {reflection}\n\n"
+    "Now observe the final result. How did your vision translate into reality?\n"
+    "What do you see in your creation? Does it capture what you wanted to express?\n"
+    "What would you do differently next time?\n\n"
+    "Respond with 2-3 sentences reflecting on your artwork."
+)
+
 # ollama flux model and keep_alive 0? (flux:b and immediately unload?)
 DRAWING_PROMPT_TEMPLATE = (
     "You've been observing and thinking. Decide if this is something worth drawing.\n\n"

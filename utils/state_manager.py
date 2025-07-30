@@ -21,6 +21,9 @@ class StateManager:
     def __init__(self, state_file: str = "system_state.json"):
         self.state_file = os.path.join(MOOD_SNAPSHOT_FOLDER, state_file)
         self.lifetime_state_file = os.path.join(MOOD_SNAPSHOT_FOLDER, "lifetime_state.json")
+        self.is_generating_drawing = False
+        self.drawing_start_time = None
+        self.current_drawing_prompt = None
         
     def save_session_state(self, captioner, mood_engine, timekeeper=None) -> bool:
         """Save current session state for next startup."""
@@ -220,6 +223,28 @@ class StateManager:
                 
         except Exception as e:
             print(f"[⚠️] Failed to update lifetime stats: {e}")
+
+
+    def start_drawing_generation(self, prompt: str) -> None:
+        """Mark drawing generation as started."""
+        self.is_generating_drawing = True
+        self.drawing_start_time = time.time()
+        self.current_drawing_prompt = prompt
+        
+    def finish_drawing_generation(self) -> None:
+        """Mark drawing generation as finished."""
+        self.is_generating_drawing = False
+        self.drawing_start_time = None
+        self.current_drawing_prompt = None
+        
+    def get_drawing_status(self) -> Dict[str, Any]:
+        """Get current drawing generation status."""
+        return {
+            "is_generating": self.is_generating_drawing,
+            "start_time": self.drawing_start_time,
+            "prompt": self.current_drawing_prompt,
+            "duration": time.time() - self.drawing_start_time if self.drawing_start_time else None
+        }
 
 
 # Global instance

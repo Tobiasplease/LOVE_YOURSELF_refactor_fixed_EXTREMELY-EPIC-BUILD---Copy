@@ -3,15 +3,17 @@ import os
 import glob
 import threading
 from pathlib import Path
+from typing import Callable, Optional
 from config.config import COMFY_OUTPUT_FOLDER, MOOD_SNAPSHOT_FOLDER
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+from utils.state_manager import state_manager
 
 
 class ImageMonitor:
     """Monitor a folder for new images and log them when they appear."""
 
-    def __init__(self, monitor_folder=None, log_folder=None, check_interval=1.0):
+    def __init__(self, monitor_folder=None, log_folder=None, check_interval=1.0, on_image_complete: Optional[Callable[[str], None]] = None):
         self.monitor_folder = monitor_folder or COMFY_OUTPUT_FOLDER
         self.log_folder = log_folder or MOOD_SNAPSHOT_FOLDER
         self.check_interval = check_interval
@@ -19,6 +21,7 @@ class ImageMonitor:
         self.monitored_images = set()
         self.running = False
         self.thread = None
+        self.on_image_complete = on_image_complete
 
     def start(self):
         """Start the image monitoring thread."""
@@ -78,6 +81,17 @@ class ImageMonitor:
             {"event": "new_image_detected", "filename": filename, "image_path": image_path, "file_size": file_size, "timestamp": time.time()},
             print_message=f"🖼 New drawing: {filename} ({file_size} bytes)",
         )
+        
+        if state_manager.is_generating_drawing:
+            state_manager.finish_drawing_generation()
+            log_json_entry(
+                LogType.INFO,
+                {"message": "Drawing generation completed", "image_path": image_path},
+                print_message="✅ Drawing generation completed"
+            )
+            
+        if self.on_image_complete:
+            self.on_image_complete(image_path)
 
     def _monitor_loop(self):
         """Main monitoring loop that runs in the background thread."""

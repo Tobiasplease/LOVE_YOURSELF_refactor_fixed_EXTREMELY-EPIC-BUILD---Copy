@@ -1,6 +1,5 @@
 import os
-
-# import time
+import time
 import base64
 import requests
 from typing import Optional, Union
@@ -61,6 +60,28 @@ def log_ollama_call(
     return log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir)
 
 
+def _wait_for_drawing_completion() -> None:
+    """Wait for any drawing generation to complete before proceeding."""
+    from utils.state_manager import state_manager
+
+    if state_manager.is_generating_drawing:
+        log_json_entry(
+            LogType.INFO,
+            {
+                "message": "Ollama API call paused - waiting for drawing generation to complete",
+                "drawing_prompt": state_manager.current_drawing_prompt,
+            },
+            print_message="⏸️ Ollama paused - drawing in progress",
+        )
+
+        while state_manager.is_generating_drawing:
+            time.sleep(1.0)
+
+        log_json_entry(
+            LogType.INFO, {"message": "Drawing generation completed - resuming Ollama calls"}, print_message="▶️ Ollama resumed - drawing complete"
+        )
+
+
 def query_ollama(
     prompt: str,
     model: str = OLLAMA_MODEL,
@@ -84,6 +105,7 @@ def query_ollama(
     Returns:
         Response text from Ollama
     """
+    _wait_for_drawing_completion()
     payload = {"model": model, "prompt": prompt, "stream": False}
     # payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}}
 
