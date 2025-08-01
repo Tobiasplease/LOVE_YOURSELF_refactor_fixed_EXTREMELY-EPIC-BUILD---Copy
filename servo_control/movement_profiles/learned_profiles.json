@@ -1,0 +1,83 @@
+{
+  "neutral": {
+    "signature": {
+      "avg_speed": 1.047677229557719,
+      "max_speed": 77.40077157699753,
+      "speed_variance": 5.698747138822675,
+      "total_distance": 11.281964286009249,
+      "pause_count": 1007,
+      "movement_count": 2912,
+      "agitation_level": 1.0,
+      "contemplation": 0.34581043956043955,
+      "explosiveness": 1.0,
+      "consistency": 0.0
+    },
+    "parameters": {
+      "base_speed": 15.0,
+      "behavior_transition_interval": 0.5,
+      "burst_movement_chance": 0.3,
+      "noise_amplitude": 0.25,
+      "macro_noise_amplitude": 0.05,
+      "pause_probability": 0.2,
+      "direction_persistence": 0.2,
+      "mood_influence": 2.095354459115438,
+      "micro_noise_amplitude": 0.1
+    },
+    "sample_count": 2912,
+    "learned_at": 1753927722.2578986
+  },
+  "sur": {
+    "signature": {
+      "avg_speed": 0.0,
+      "max_speed": 0.0,
+      "speed_variance": 0.0,
+      "total_distance": 0.0,
+      "pause_count": 10,
+      "movement_count": 11,
+      "agitation_level": 0.0,
+      "contemplation": 0.9090909090909091,
+      "explosiveness": 0.0,
+      "consistency": 1.0
+    },
+    "parameters": {
+      "base_speed": 0.1,
+      "behavior_transition_interval": 5.0,
+      "burst_movement_chance": 0.0,
+      "noise_amplitude": 0.05,
+      "macro_noise_amplitude": 0.01,
+      "pause_probability": 0.2,
+      "direction_persistence": 1.0,
+      "mood_influence": 0.0,
+      "micro_noise_amplitude": 0.0
+    },
+    "sample_count": 11,
+    "learned_at": 1753913970.6202598
+  },
+  "happy": {
+    "signature": {
+      "avg_speed": 0.9093682469026876,
+      "max_speed": 50.522474162442485,
+      "speed_variance": 3.5513449775222306,
+      "total_distance": 26.172301978819927,
+      "pause_count": 1671,
+      "movement_count": 4942,
+      "agitation_level": 1.0,
+      "contemplation": 0.3381222177256172,
+      "explosiveness": 1.0,
+      "consistency": 0.0
+    },
+    "parameters": {
+      "base_speed": 15.0,
+      "behavior_transition_interval": 0.5,
+      "burst_movement_chance": 0.3,
+      "noise_amplitude": 0.25,
+      "macro_noise_amplitude": 0.05,
+      "pause_probability": 0.2,
+      "direction_persistence": 0.2,
+      "mood_influence": 1.8187364938053752,
+      "micro_noise_amplitude": 0.1
+    },
+    "sample_count": 4942,
+    "learned_at": 1753925125.9906287
+  }
+}

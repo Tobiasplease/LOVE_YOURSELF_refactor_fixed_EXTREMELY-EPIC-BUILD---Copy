@@ -84,22 +84,22 @@ class MovementLearning:
         """Map movement signature to consciousness cursor parameters."""
         params = {}
         
-        # Base movement speed - REASONABLE RANGE for stable movement
-        base_speed = min(15.0, max(3.0, signature.get('avg_speed', 0.1) * 50))  # Much more conservative range
+        # Base movement speed
+        base_speed = min(10.0, max(0.1, signature.get('avg_speed', 0.1) * 30))
         params['base_speed'] = base_speed
         
-        # Behavioral transition timing - MUCH FASTER TRANSITIONS
+        # Behavioral transition timing
         agitation = signature.get('agitation_level', 0.1)
-        params['behavior_transition_interval'] = max(0.5, 2.0 - (agitation * 1.5))
+        params['behavior_transition_interval'] = max(1.0, 5.0 - (agitation * 4))
         
-        # Burst movements - MODERATE bursts for natural feel
+        # Burst movements
         explosiveness = signature.get('explosiveness', 0.1)
-        params['burst_movement_chance'] = min(0.3, explosiveness * 0.6)  # Much more conservative
+        params['burst_movement_chance'] = min(0.3, explosiveness * 0.5)
         
-        # Noise and chaos - MODERATE levels for natural movement
+        # Noise and chaos
         consistency = signature.get('consistency', 0.5)
-        params['noise_amplitude'] = max(0.05, (1.0 - consistency) * 0.25)  # Much less chaotic
-        params['macro_noise_amplitude'] = max(0.01, (1.0 - consistency) * 0.05)  # Subtle macro noise
+        params['noise_amplitude'] = max(0.05, (1.0 - consistency) * 0.5)
+        params['macro_noise_amplitude'] = max(0.01, (1.0 - consistency) * 0.1)
         
         # Pausing behavior
         contemplation = signature.get('contemplation', 0.05)
@@ -159,20 +159,11 @@ class MovementLearning:
         params = self.emotional_profiles[emotion]['parameters']
         
         # Apply parameters with intensity scaling
-        scaled_params = {}
         for param_name, value in params.items():
-            scaled_value = value * intensity
-            scaled_params[param_name] = scaled_value
-        
-        # Use the cursor's apply method if available, otherwise set attributes directly
-        if hasattr(consciousness_cursor, 'apply_learned_parameters'):
-            consciousness_cursor.apply_learned_parameters(scaled_params)
-        else:
-            # Fallback: set attributes directly
-            for param_name, scaled_value in scaled_params.items():
-                if hasattr(consciousness_cursor, param_name):
-                    setattr(consciousness_cursor, param_name, scaled_value)
-                    print(f"🎯 Applied {param_name} = {scaled_value:.3f}")
+            if hasattr(consciousness_cursor, param_name):
+                scaled_value = value * intensity
+                setattr(consciousness_cursor, param_name, scaled_value)
+                print(f"🎯 Applied {param_name} = {scaled_value:.3f}")
         
         print(f"🚀 Applied learned '{emotion}' movement style (intensity: {intensity:.1f})")
         return True

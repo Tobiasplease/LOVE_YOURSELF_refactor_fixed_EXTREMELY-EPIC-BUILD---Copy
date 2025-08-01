@@ -124,12 +124,6 @@ class HandExpressionController:
         if not self.serial_connection:
             return
         
-        # DOUBLE SAFETY CHECK: Never send hardware commands during manual override
-        if self.manual_override:
-            if not self.clean_output:
-                print("[HAND] 🚫 BLOCKED automatic command during manual override")
-            return
-        
         current_time = time.time()
         
         # Rate limiting: Don't send more than 20 commands per second
@@ -169,88 +163,14 @@ class HandExpressionController:
             if not self.clean_output:
                 print(f"[HAND] Serial write error: {e}")
 
-    def _send_hand_command_direct(self, finger_positions: Dict[str, int]):
-        """Send finger positions directly to hardware - bypasses manual override check for interface control."""
-        if not self.serial_connection:
-            return
-        
-        current_time = time.time()
-        
-        # Rate limiting: Don't send more than 20 commands per second
-        if current_time - self.last_command_time < self.min_command_interval:
-            return
-        
-        # Position change detection: Only send if positions changed significantly
-        if self.last_sent_positions:
-            position_changed = False
-            for finger_name, new_pos in finger_positions.items():
-                old_pos = self.last_sent_positions.get(finger_name, 0)
-                if abs(new_pos - old_pos) > self.position_change_threshold:
-                    position_changed = True
-                    break
-            
-            if not position_changed:
-                return  # Skip sending - positions haven't changed enough
-        
-        try:
-            # Convert to list format expected by Arduino: "HAND,f0,f1,f2,f3\n"
-            pos_list = [finger_positions.get(f"finger{i}", 70) for i in range(4)]
-            command = f"HAND,{','.join(map(str, pos_list))}\n"
-            self.serial_connection.write(command.encode())
-            
-            # Update tracking variables
-            self.last_command_time = current_time
-            self.last_sent_positions = finger_positions.copy()
-            
-            # Manual control debug - show what's being sent occasionally
-            if not hasattr(self, '_manual_debug_count'):
-                self._manual_debug_count = 0
-            self._manual_debug_count += 1
-            if self._manual_debug_count % 10 == 0:  # Every 10 commands for manual control
-                print(f"🎮 MANUAL: {command.strip()}")
-                
-        except Exception as e:
-            if not self.clean_output:
-                print(f"[HAND] Manual control serial write error: {e}")
-
-    def _send_heartbeat_command(self, finger_positions: Dict[str, int]):
-        """Send heartbeat command directly to Arduino - bypasses ALL throttling for keep-alive."""
-        if not self.serial_connection:
-            return
-        
-        try:
-            # Convert to list format expected by Arduino: "HAND,f0,f1,f2,f3\n"
-            pos_list = [finger_positions.get(f"finger{i}", 70) for i in range(4)]
-            command = f"HAND,{','.join(map(str, pos_list))}\n"
-            self.serial_connection.write(command.encode())
-            
-            # Heartbeat debug - show occasionally
-            if not hasattr(self, '_heartbeat_debug_count'):
-                self._heartbeat_debug_count = 0
-            self._heartbeat_debug_count += 1
-            if self._heartbeat_debug_count % 5 == 0:  # Every 5 heartbeats
-                print(f"💓 HEARTBEAT: {command.strip()} (keeping Arduino in consciousness mode)")
-                
-        except Exception as e:
-            if not self.clean_output:
-                print(f"[HAND] Heartbeat serial write error: {e}")
-
     def update_from_consciousness(self, mood: float, novelty: float, boredom: float, 
                                 person_present: bool, temporal_context: Dict = None) -> Dict[str, int]:
         """
         Main update function - continuously evolving physics simulation.
         Returns finger positions as dict: {"finger0": angle, "finger1": angle, ...}
         """
-        # Skip ALL automatic updates if manual override is enabled
-        # This prevents physics simulation AND hardware commands during interface control
+        # Skip automatic updates if manual override is enabled
         if self.manual_override:
-            # Debug output every 60 calls to avoid spam but show it's working
-            if not hasattr(self, '_override_debug_count'):
-                self._override_debug_count = 0
-            self._override_debug_count += 1
-            if self._override_debug_count % 60 == 0 or self._override_debug_count == 1:
-                if not self.clean_output:
-                    print(f"[HAND] 🛡️ Manual override ACTIVE - blocked {self._override_debug_count} machine.py calls")
             return {}  # Return empty dict - manual control is active
         
         current_time = time.time()
@@ -720,9 +640,8 @@ class HandExpressionController:
             clamped_angle = self._clamp(angle, self.min_angle, self.max_angle)
             finger_dict[f"finger{i}"] = int(clamped_angle)
         
-        # Send directly to hardware - bypassing the manual override check in _send_hand_command
-        # since this IS the manual control method
-        self._send_hand_command_direct(finger_dict)
+        # Send directly to hardware (now with throttling!)
+        self._send_hand_command(finger_dict)
     
     def enable_manual_override(self):
         """Enable manual override mode - stops automatic consciousness updates."""

@@ -1,0 +1,5102 @@
+{
+  "emotion": "calm_observant",
+  "timestamp": "20250802_000905",
+  "custom_name": null,
+  "movement_count": 0,
+  "position_count": 61,
+  "duration": 1.7065861225128174,
+  "sample_rate": 35.743874390694195,
+  "movements": [],
+  "positions": [
+    {
+      "time": 1754089743.9307745,
+      "relative_time": 0.0010323524475097656,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089743.977146,
+      "relative_time": 0.047403812408447266,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.002547,
+      "relative_time": 0.07280492782592773,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.0316236,
+      "relative_time": 0.10188150405883789,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.0708172,
+      "relative_time": 0.14107513427734375,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.1013267,
+      "relative_time": 0.1715846061706543,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.1265795,
+      "relative_time": 0.1968374252319336,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.1514955,
+      "relative_time": 0.22175335884094238,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.177887,
+      "relative_time": 0.24814486503601074,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.2073042,
+      "relative_time": 0.27756214141845703,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.2388818,
+      "relative_time": 0.3091397285461426,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.2645001,
+      "relative_time": 0.33475804328918457,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.2894778,
+      "relative_time": 0.35973572731018066,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.3146698,
+      "relative_time": 0.38492774963378906,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.3431,
+      "relative_time": 0.4133579730987549,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.3733768,
+      "relative_time": 0.4436347484588623,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.399485,
+      "relative_time": 0.469743013381958,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.4247215,
+      "relative_time": 0.4949793815612793,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.4536264,
+      "relative_time": 0.5238842964172363,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.4834712,
+      "relative_time": 0.5537290573120117,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.515578,
+      "relative_time": 0.5858359336853027,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.5447416,
+      "relative_time": 0.614999532699585,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.5772882,
+      "relative_time": 0.6475460529327393,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.6066277,
+      "relative_time": 0.6768856048583984,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.6318276,
+      "relative_time": 0.7020854949951172,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.662451,
+      "relative_time": 0.7327089309692383,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.6938827,
+      "relative_time": 0.7641406059265137,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.720222,
+      "relative_time": 0.7904798984527588,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.7456088,
+      "relative_time": 0.8158667087554932,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.7736745,
+      "relative_time": 0.8439323902130127,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.802064,
+      "relative_time": 0.8723218441009521,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.8305209,
+      "relative_time": 0.9007787704467773,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.8568466,
+      "relative_time": 0.9271044731140137,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.88229,
+      "relative_time": 0.9525477886199951,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.9101126,
+      "relative_time": 0.9803705215454102,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.9354646,
+      "relative_time": 1.0057225227355957,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.962659,
+      "relative_time": 1.032916784286499,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089744.9970212,
+      "relative_time": 1.0672791004180908,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.022712,
+      "relative_time": 1.0929698944091797,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.0483873,
+      "relative_time": 1.118645191192627,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.0729651,
+      "relative_time": 1.1432230472564697,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.1003616,
+      "relative_time": 1.1706194877624512,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.1289644,
+      "relative_time": 1.1992223262786865,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.157843,
+      "relative_time": 1.2281010150909424,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.1827707,
+      "relative_time": 1.2530286312103271,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.2098973,
+      "relative_time": 1.2801551818847656,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.2424252,
+      "relative_time": 1.31268310546875,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.2698479,
+      "relative_time": 1.3401057720184326,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.2943156,
+      "relative_time": 1.3645734786987305,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.3200989,
+      "relative_time": 1.3903567790985107,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.3461168,
+      "relative_time": 1.416374683380127,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.3742883,
+      "relative_time": 1.4445462226867676,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.399669,
+      "relative_time": 1.4699268341064453,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.4320023,
+      "relative_time": 1.5022602081298828,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.4619927,
+      "relative_time": 1.5322506427764893,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.4902694,
+      "relative_time": 1.5605273246765137,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.5152218,
+      "relative_time": 1.585479736328125,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.5493252,
+      "relative_time": 1.6195831298828125,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.5801442,
+      "relative_time": 1.6504020690917969,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.606216,
+      "relative_time": 1.67647385597229,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    },
+    {
+      "time": 1754089745.6373606,
+      "relative_time": 1.7076184749603271,
+      "x": 0.9375,
+      "y": 0.165,
+      "grid_x": 75,
+      "grid_y": 13,
+      "grid_state": [
+        75,
+        13
+      ],
+      "velocity_x": 0.0,
+      "velocity_y": 0.0,
+      "speed": 0.0,
+      "finger_positions": [
+        90.0,
+        90.0,
+        95.653125,
+        123.91874999999999
+      ],
+      "finger_locks": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "pressed_keys": [],
+      "keyboard_targets": [
+        144.0,
+        180.0,
+        180.0,
+        90.0
+      ]
+    }
+  ],
+  "markov_chain": {
+    "cursor_transitions": {
+      "(75, 13)": {
+        "(75, 13)": 1.0
+      }
+    },
+    "finger_transitions": {
+      "(90, 90, 100, 120)": {
+        "(90, 90, 100, 120)": 1.0
+      }
+    },
+    "combined_transitions": {
+      "((75, 13), (90, 90, 100, 120))": {
+        "((75, 13), (90, 90, 100, 120))": 1.0
+      }
+    },
+    "sample_count": 61,
+    "duration": 1.7065861225128174,
+    "grid_size": 80,
+    "unique_cursor_states": 1,
+    "unique_finger_states": 1,
+    "unique_combined_states": 1,
+    "velocity_data": [
+      {
+        "time": 1754089743.9307745,
+        "relative_time": 0.0010323524475097656,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089743.977146,
+        "relative_time": 0.047403812408447266,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.002547,
+        "relative_time": 0.07280492782592773,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.0316236,
+        "relative_time": 0.10188150405883789,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.0708172,
+        "relative_time": 0.14107513427734375,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.1013267,
+        "relative_time": 0.1715846061706543,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.1265795,
+        "relative_time": 0.1968374252319336,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.1514955,
+        "relative_time": 0.22175335884094238,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.177887,
+        "relative_time": 0.24814486503601074,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.2073042,
+        "relative_time": 0.27756214141845703,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.2388818,
+        "relative_time": 0.3091397285461426,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.2645001,
+        "relative_time": 0.33475804328918457,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.2894778,
+        "relative_time": 0.35973572731018066,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.3146698,
+        "relative_time": 0.38492774963378906,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.3431,
+        "relative_time": 0.4133579730987549,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.3733768,
+        "relative_time": 0.4436347484588623,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.399485,
+        "relative_time": 0.469743013381958,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.4247215,
+        "relative_time": 0.4949793815612793,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.4536264,
+        "relative_time": 0.5238842964172363,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.4834712,
+        "relative_time": 0.5537290573120117,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.515578,
+        "relative_time": 0.5858359336853027,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.5447416,
+        "relative_time": 0.614999532699585,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.5772882,
+        "relative_time": 0.6475460529327393,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.6066277,
+        "relative_time": 0.6768856048583984,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.6318276,
+        "relative_time": 0.7020854949951172,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.662451,
+        "relative_time": 0.7327089309692383,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.6938827,
+        "relative_time": 0.7641406059265137,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.720222,
+        "relative_time": 0.7904798984527588,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.7456088,
+        "relative_time": 0.8158667087554932,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.7736745,
+        "relative_time": 0.8439323902130127,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.802064,
+        "relative_time": 0.8723218441009521,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.8305209,
+        "relative_time": 0.9007787704467773,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.8568466,
+        "relative_time": 0.9271044731140137,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.88229,
+        "relative_time": 0.9525477886199951,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.9101126,
+        "relative_time": 0.9803705215454102,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.9354646,
+        "relative_time": 1.0057225227355957,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.962659,
+        "relative_time": 1.032916784286499,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089744.9970212,
+        "relative_time": 1.0672791004180908,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.022712,
+        "relative_time": 1.0929698944091797,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.0483873,
+        "relative_time": 1.118645191192627,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.0729651,
+        "relative_time": 1.1432230472564697,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.1003616,
+        "relative_time": 1.1706194877624512,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.1289644,
+        "relative_time": 1.1992223262786865,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.157843,
+        "relative_time": 1.2281010150909424,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.1827707,
+        "relative_time": 1.2530286312103271,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.2098973,
+        "relative_time": 1.2801551818847656,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.2424252,
+        "relative_time": 1.31268310546875,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.2698479,
+        "relative_time": 1.3401057720184326,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.2943156,
+        "relative_time": 1.3645734786987305,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.3200989,
+        "relative_time": 1.3903567790985107,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.3461168,
+        "relative_time": 1.416374683380127,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.3742883,
+        "relative_time": 1.4445462226867676,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.399669,
+        "relative_time": 1.4699268341064453,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.4320023,
+        "relative_time": 1.5022602081298828,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.4619927,
+        "relative_time": 1.5322506427764893,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.4902694,
+        "relative_time": 1.5605273246765137,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.5152218,
+        "relative_time": 1.585479736328125,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.5493252,
+        "relative_time": 1.6195831298828125,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.5801442,
+        "relative_time": 1.6504020690917969,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.606216,
+        "relative_time": 1.67647385597229,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "time": 1754089745.6373606,
+        "relative_time": 1.7076184749603271,
+        "x": 0.9375,
+        "y": 0.165,
+        "grid_x": 75,
+        "grid_y": 13,
+        "grid_state": [
+          75,
+          13
+        ],
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "speed": 0.0,
+        "finger_positions": [
+          90.0,
+          90.0,
+          95.653125,
+          123.91874999999999
+        ],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "pressed_keys": [],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      }
+    ],
+    "keyboard_data": [
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      },
+      {
+        "pressed_keys": [],
+        "finger_locks": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "keyboard_targets": [
+          144.0,
+          180.0,
+          180.0,
+          90.0
+        ]
+      }
+    ]
+  }
+}

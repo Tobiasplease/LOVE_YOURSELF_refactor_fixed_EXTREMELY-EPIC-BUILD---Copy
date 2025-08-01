@@ -2014,199 +2014,7 @@ File: {dataset['filename']}
         self.dataset_name_var.set(name)
         print(f"🎲 Generated name: {name}")
     
-    def post_process_rhythm_analysis(self):
-        """Post-process recorded vectors to detect rhythm, stillness patterns, and temporal dynamics."""
-        if self.current_emotional_state not in self.recorded_vectors:
-            return
-            
-        vectors = self.recorded_vectors[self.current_emotional_state]
-        if len(vectors) < 10:  # Need at least 10 vectors for pattern analysis
-            return
-            
-        print(f"🎵 ENHANCED: Analyzing temporal rhythm patterns in {len(vectors)} vectors...")
-        
-        # First pass: Detect stillness periods and micro-movements
-        self.detect_stillness_patterns(vectors)
-        
-        # Calculate direction changes between consecutive vectors
-        for i in range(1, len(vectors)):
-            prev_dir = vectors[i-1]['direction']
-            curr_dir = vectors[i]['direction']
-            
-            # Calculate angular difference (shortest path)
-            diff = curr_dir - prev_dir
-            while diff > math.pi:
-                diff -= 2 * math.pi
-            while diff < -math.pi:
-                diff += 2 * math.pi
-                
-            vectors[i]['direction_change'] = abs(diff)
-            
-            # Speed change rate
-            if i > 0:
-                speed_diff = vectors[i]['speed'] - vectors[i-1]['speed']
-                vectors[i]['speed_change_rate'] = speed_diff / vectors[i]['dt']
-        
-        # Detect movement impulses (sudden movement after stillness)
-        self.detect_movement_impulses(vectors)
-        
-        # Detect circular patterns by looking for consistent direction changes
-        circular_threshold = math.pi / 6  # 30 degrees
-        for i in range(2, len(vectors) - 2):
-            # Look at direction changes over a small window
-            window_changes = [vectors[j]['direction_change'] for j in range(i-2, i+3)]
-            avg_change = sum(window_changes) / len(window_changes)
-            
-            # If direction is changing consistently and moderately, it's circular
-            if circular_threshold / 2 < avg_change < circular_threshold * 1.5:
-                vectors[i]['circular_component'] = avg_change
-        
-        # Detect easing (gradual acceleration/deceleration)
-        for i in range(5, len(vectors) - 5):  # Need buffer for trend analysis
-            # Look at speed trend over nearby vectors
-            before_speeds = [vectors[j]['speed'] for j in range(i-5, i)]
-            after_speeds = [vectors[j]['speed'] for j in range(i, i+5)]
-            
-            before_avg = sum(before_speeds) / len(before_speeds)
-            after_avg = sum(after_speeds) / len(after_speeds)
-            current_speed = vectors[i]['speed']
-            
-            # Easing in: speed gradually increasing into this point
-            if before_avg < current_speed < after_avg * 1.2:
-                vectors[i]['easing_in'] = True
-            
-            # Easing out: speed gradually decreasing from this point  
-            if before_avg * 1.2 > current_speed > after_avg:
-                vectors[i]['easing_out'] = True
-        
-        # Detect rhythmic patterns by analyzing time intervals between similar movements
-        self.detect_temporal_rhythms(vectors)
-        
-        # Detect breathing-like patterns (expansion/contraction with pauses)
-        self.detect_breathing_patterns(vectors)
-        
-        print(f"✅ Enhanced temporal rhythm analysis complete - stillness and movement patterns detected")
-    
-    def detect_stillness_patterns(self, vectors):
-        """Detect periods of stillness, micro-movements, and position holding."""
-        stillness_threshold = 0.002  # Very low movement threshold
-        micro_movement_threshold = 0.008  # Slightly higher for micro-movements
-        
-        # Track stillness periods
-        current_stillness_start = None
-        
-        for i, vector in enumerate(vectors):
-            # Check if we're in a period of very low movement
-            if vector['speed'] < stillness_threshold:
-                if current_stillness_start is None:
-                    current_stillness_start = vector['time']
-                
-                # Calculate how long we've been still
-                stillness_duration = vector['time'] - current_stillness_start
-                vector['stillness_duration'] = stillness_duration
-                vector['position_hold'] = stillness_duration > 0.5  # Holding for 0.5+ seconds
-                
-                # Check for micro-tremors within stillness
-                if stillness_threshold < vector['speed'] < micro_movement_threshold:
-                    vector['micro_tremor'] = True
-                    
-            else:
-                # Movement detected - end stillness period
-                if current_stillness_start is not None:
-                    stillness_duration = vector['time'] - current_stillness_start
-                    # Mark this as a movement impulse if coming out of stillness
-                    if stillness_duration > 0.3:  # After 0.3+ seconds of stillness
-                        vector['movement_impulse'] = True
-                        
-                current_stillness_start = None
-                vector['stillness_duration'] = 0.0
-        
-        print(f"   📍 Detected stillness patterns: {sum(1 for v in vectors if v.get('position_hold', False))} position holds")
-        print(f"   🤏 Detected micro-movements: {sum(1 for v in vectors if v.get('micro_tremor', False))} micro tremors")
-        print(f"   ⚡ Detected movement impulses: {sum(1 for v in vectors if v.get('movement_impulse', False))} impulses")
-    
-    def detect_movement_impulses(self, vectors):
-        """Detect sudden movements that break stillness patterns."""
-        for i in range(5, len(vectors)):
-            # Look back for recent stillness
-            recent_vectors = vectors[i-5:i]
-            recent_avg_speed = sum(v['speed'] for v in recent_vectors) / len(recent_vectors)
-            
-            # If recent movement was very low but current is higher
-            if recent_avg_speed < 0.01 and vectors[i]['speed'] > recent_avg_speed * 3:
-                vectors[i]['movement_impulse'] = True
-                
-                # Calculate rhythmic interval (time since last impulse)
-                for j in range(i-1, -1, -1):
-                    if vectors[j].get('movement_impulse', False):
-                        vectors[i]['rhythmic_interval'] = vectors[i]['time'] - vectors[j]['time']
-                        break
-    
-    def detect_temporal_rhythms(self, vectors):
-        """Detect rhythmic timing patterns - intervals between movements."""
-        # Find significant movement moments (impulses or speed peaks)
-        movement_moments = []
-        
-        for i, vector in enumerate(vectors):
-            if (vector.get('movement_impulse', False) or 
-                vector['speed'] > sum(v['speed'] for v in vectors) / len(vectors) * 1.5):
-                movement_moments.append((i, vector['time']))
-        
-        if len(movement_moments) > 3:
-            # Calculate intervals between movement moments
-            intervals = []
-            for i in range(1, len(movement_moments)):
-                interval = movement_moments[i][1] - movement_moments[i-1][1]
-                intervals.append(interval)
-            
-            # Look for consistent timing patterns
-            if intervals:
-                avg_interval = sum(intervals) / len(intervals)
-                consistent_intervals = [iv for iv in intervals if abs(iv - avg_interval) < avg_interval * 0.4]
-                
-                # If 60%+ of intervals are consistent, mark as rhythmic
-                if len(consistent_intervals) > len(intervals) * 0.6:
-                    print(f"   🎵 Detected rhythmic timing: {avg_interval:.2f}s average interval")
-                    
-                    # Mark vectors that are part of rhythmic pattern
-                    for moment_idx, moment_time in movement_moments:
-                        if moment_idx < len(vectors):
-                            vectors[moment_idx]['rhythm_beat'] = True
-    
-    def detect_breathing_patterns(self, vectors):
-        """Detect breathing-like expansion/contraction patterns with pauses."""
-        if len(vectors) < 20:
-            return
-            
-        # Look for cyclical movement away from and back to center positions
-        center_returns = []
-        
-        for i in range(10, len(vectors) - 10):
-            # Calculate distance from center over time
-            before_distances = []
-            after_distances = []
-            
-            for j in range(i-10, i):
-                dist = math.sqrt((vectors[j]['end_x'] - 0.5)**2 + (vectors[j]['end_y'] - 0.5)**2)
-                before_distances.append(dist)
-            
-            for j in range(i, i+10):
-                dist = math.sqrt((vectors[j]['end_x'] - 0.5)**2 + (vectors[j]['end_y'] - 0.5)**2)
-                after_distances.append(dist)
-            
-            before_avg = sum(before_distances) / len(before_distances)
-            after_avg = sum(after_distances) / len(after_distances)
-            
-            # If we moved away from center and then back
-            current_dist = math.sqrt((vectors[i]['end_x'] - 0.5)**2 + (vectors[i]['end_y'] - 0.5)**2)
-            
-            if (before_avg < current_dist > after_avg and 
-                vectors[i].get('stillness_duration', 0) > 0.2):  # With a pause
-                vectors[i]['breathing_like'] = True
-                center_returns.append(i)
-        
-        if center_returns:
-            print(f"   🫁 Detected breathing-like patterns: {len(center_returns)} expansion/contraction cycles")
+
     
     def load_saved_movements(self):
         """Load previously saved movements from disk for persistence."""
@@ -2228,13 +2036,10 @@ File: {dataset['filename']}
                     with open(latest_file, 'r') as f:
                         data = json.load(f)
                     
-                    # Load movements and vectors
+                    # Load movements only
                     if 'movements' in data and data['movements']:
                         self.recorded_movements[emotion_key] = data['movements']
                         loaded_count += 1
-                    
-                    if 'vectors' in data and data['vectors']:
-                        self.recorded_vectors[emotion_key] = data['vectors']
                     
                     print(f"📂 Loaded {len(data.get('movements', []))} movements for {emotion_key}")
             except Exception as e:
@@ -2753,12 +2558,18 @@ File: {dataset['filename']}
         self.start_generation_timer()
     
     def start_generation_timer(self):
-        """Timer for Markov generation steps."""
+        """Timer for Markov generation steps - ROBUST INFINITE GENERATION!"""
         if self.generating:
-            self.step_markov_generation()
-            # Schedule next step
-            interval_ms = int(self.generation_speed * 1000)
-            self.generation_timer = self.root.after(interval_ms, self.start_generation_timer)
+            try:
+                self.step_markov_generation()
+            except Exception as e:
+                # INFINITE GENERATION: Never let errors stop the timer - just log and continue
+                print(f"🔄 Error in generation step: {e}, continuing infinite generation...")
+            
+            # ALWAYS schedule next step for infinite generation (unless explicitly stopped)
+            if self.generating:  # Check again in case step_markov_generation set it to False
+                interval_ms = int(self.generation_speed * 1000)
+                self.generation_timer = self.root.after(interval_ms, self.start_generation_timer)
     
     def step_markov_generation(self):
         """Take one step in Markov chain generation - CURSOR-ONLY VERSION!"""
@@ -2777,13 +2588,27 @@ File: {dataset['filename']}
                 if parsed and len(parsed) >= 2:
                     current_state = (int(parsed[0]), int(parsed[1]))
                 else:
-                    print(f"❌ Could not parse current state: {self.current_markov_state}")
+                    # INFINITE GENERATION: Instead of stopping, pick a random available state
+                    print(f"🔄 Could not parse current state: {self.current_markov_state}, picking random state for infinite generation")
+                    available_states = list(cursor_transitions.keys())
+                    if available_states:
+                        self.current_markov_state = random.choice(available_states)
+                        return  # Retry next iteration
+                    else:
+                        print("❌ No states available - stopping generation")
+                        self.stop_markov_generation()
+                        return
+            except Exception as e:
+                # INFINITE GENERATION: Instead of stopping, pick a random available state
+                print(f"🔄 Error parsing current state: {e}, picking random state for infinite generation")
+                available_states = list(cursor_transitions.keys())
+                if available_states:
+                    self.current_markov_state = random.choice(available_states)
+                    return  # Retry next iteration
+                else:
+                    print("❌ No states available - stopping generation")
                     self.stop_markov_generation()
                     return
-            except Exception as e:
-                print(f"❌ Error parsing current state: {e}")
-                self.stop_markov_generation()
-                return
         else:
             current_state = self.current_markov_state
         
@@ -2791,9 +2616,33 @@ File: {dataset['filename']}
         current_state_key = str(current_state)
         
         if current_state_key not in cursor_transitions:
-            print(f"❌ Dead end state {current_state_key}, stopping generation")
-            self.stop_markov_generation()
-            return
+            # INFINITE GENERATION FIX: Instead of stopping, pick a random available state
+            print(f"🔄 Dead end state {current_state_key}, picking random state to continue infinite generation")
+            available_states = list(cursor_transitions.keys())
+            if not available_states:
+                print("❌ No states available at all - stopping generation")
+                self.stop_markov_generation()
+                return
+            
+            # Pick a random state to continue from
+            import random
+            current_state_key = random.choice(available_states)
+            print(f"🎲 Continuing from random state: {current_state_key}")
+            
+            # INFINITE GENERATION: Instead of stopping on parse errors, retry with new random state
+            try:
+                parsed = self.parse_markov_state_key(current_state_key)
+                if parsed and len(parsed) >= 2:
+                    current_state = (int(parsed[0]), int(parsed[1]))
+                    self.current_markov_state = current_state_key
+                else:
+                    print(f"🔄 Could not parse random state: {current_state_key}, trying another random state")
+                    self.current_markov_state = random.choice(available_states)
+                    return  # Retry next iteration
+            except Exception as e:
+                print(f"🔄 Error parsing random state: {e}, trying another random state")
+                self.current_markov_state = random.choice(available_states)
+                return  # Retry next iteration
         
         # Choose next state based on probabilities
         next_states_dict = cursor_transitions[current_state_key]
@@ -2810,13 +2659,13 @@ File: {dataset['filename']}
             if parsed and len(parsed) >= 2:
                 next_state = (int(parsed[0]), int(parsed[1]))
             else:
-                print(f"❌ Could not parse next state: {next_state_key}")
-                self.stop_markov_generation()
-                return
+                # INFINITE GENERATION: Instead of stopping, skip this step and try again
+                print(f"🔄 Could not parse next state: {next_state_key}, skipping step for infinite generation")
+                return  # Skip this step, will retry next timer iteration
         except Exception as e:
-            print(f"❌ Error parsing next state: {e}")
-            self.stop_markov_generation()
-            return
+            # INFINITE GENERATION: Instead of stopping, skip this step and try again
+            print(f"🔄 Error parsing next state: {e}, skipping step for infinite generation")
+            return  # Skip this step, will retry next timer iteration
         
         # Update mouse position based on next state
         new_x = next_state[0] / grid_size  # Convert back to 0-1 range
@@ -2834,46 +2683,8 @@ File: {dataset['filename']}
         # Update current state for next iteration
         self.current_markov_state = next_state_key
         
-        # Continue generation (timer will call this function again)
-        
-        # Add smoothness bias: prefer states closer to current position
-        current_x = self.mouse_x * chain['grid_size']
-        current_y = self.mouse_y * chain['grid_size']
-        
-        # Weight probabilities by distance (closer states get higher probability)
-        smoothed_probs = []
-        for i, state in enumerate(next_states):
-            grid_x, grid_y = state
-            distance = ((grid_x - current_x) ** 2 + (grid_y - current_y) ** 2) ** 0.5
-            # Smooth movement bias: closer states get boosted probability
-            distance_weight = 1.0 / (1.0 + distance * 0.1)  # Gentle bias toward closer states
-            smoothed_prob = probabilities[i] * distance_weight
-            smoothed_probs.append(smoothed_prob)
-        
-        # Normalize smoothed probabilities
-        total_prob = sum(smoothed_probs)
-        if total_prob > 0:
-            smoothed_probs = [p / total_prob for p in smoothed_probs]
-        else:
-            smoothed_probs = probabilities  # Fallback
-        
-        # Weighted random choice with smoothing
-        self.current_markov_state = random.choices(next_states, weights=smoothed_probs)[0]
-        
-        # Convert grid state back to mouse position with HIGH PRECISION
-        grid_x, grid_y = self.current_markov_state
-        grid_size = chain['grid_size']
-        
-        # Better coordinate conversion with smoothing
-        target_x = (grid_x + 0.5) / grid_size  # Center of grid cell
-        target_y = (grid_y + 0.5) / grid_size
-        
-        # Smooth interpolation from last position to target
-        last_x, last_y = self.last_generated_pos
-        smoothing_factor = 0.3  # How much to smooth (0=instant, 1=no change)
-        
-        self.mouse_x = last_x + (target_x - last_x) * (1 - smoothing_factor)
-        self.mouse_y = last_y + (target_y - last_y) * (1 - smoothing_factor)
+        # Update last generated position for smooth interpolation
+        self.last_generated_pos = (new_x, new_y)
         
         # Clamp to valid range
         self.mouse_x = max(0.0, min(1.0, self.mouse_x))
