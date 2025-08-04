@@ -256,7 +256,7 @@ class CleanCursorInterface:
         self.live_keyboard_limit = 200  # Keep only recent movements for live generation
         
         # === ENHANCED DATASET CYCLING SYSTEM ===
-        self.dataset_cycling_enabled = tk.BooleanVar(value=False)
+        self.dataset_cycling_enabled = tk.BooleanVar(value=True)  # DEFAULT ENABLED!
         self.dataset_cycle_interval = 60.0  # 1 minute between dataset switches
         self.last_dataset_switch_time = 0
         self.current_dataset_index = 0  # Index in available datasets for current emotion
@@ -422,6 +422,27 @@ class CleanCursorInterface:
                                bg='black', highlightthickness=1, highlightcolor='white')
         self.canvas.pack()
         
+        # Progress bar frame - RIGHT BELOW CANVAS!
+        self.progress_frame = ttk.Frame(canvas_side_frame)
+        self.progress_frame.pack(pady=5, fill=tk.X)  # Right below canvas
+        
+        # Center the progress bar elements
+        progress_center_frame = ttk.Frame(self.progress_frame)
+        progress_center_frame.pack(expand=True)
+        
+        # Recording progress bar
+        self.progress_var = tk.DoubleVar()
+        self.progress_bar = ttk.Progressbar(progress_center_frame, variable=self.progress_var, 
+                                          maximum=100, length=280, mode='determinate')  # Match canvas width
+        self.progress_bar.pack(side=tk.LEFT, padx=5)
+        
+        # Progress label showing time and percentage
+        self.progress_label = ttk.Label(progress_center_frame, text="", width=15, font=("Arial", 9))
+        self.progress_label.pack(side=tk.LEFT, padx=5)
+        
+        # Initially hide progress elements
+        self.progress_frame.pack_forget()
+        
         # Canvas bindings
         self.canvas.bind('<Configure>', self.on_canvas_configure)
         self.canvas.bind('<Motion>', self.on_mouse_move)
@@ -568,27 +589,6 @@ class CleanCursorInterface:
                                          text="💡 Enable cycling for infinite variations of your recorded datasets", 
                                          font=("Arial", 8), foreground="#8B5CF6")
         self.cycle_info_label.pack(anchor=tk.W)
-        
-        # Progress bar frame - BETTER INTEGRATED!
-        self.progress_frame = ttk.Frame(emotion_inner)
-        self.progress_frame.pack(pady=8, fill=tk.X)  # Better spacing
-        
-        # Center the progress bar elements
-        progress_center_frame = ttk.Frame(self.progress_frame)
-        progress_center_frame.pack(expand=True)
-        
-        # Recording progress bar
-        self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(progress_center_frame, variable=self.progress_var, 
-                                          maximum=100, length=500, mode='determinate')  # Wider bar
-        self.progress_bar.pack(side=tk.LEFT, padx=10)
-        
-        # Progress label showing time and percentage
-        self.progress_label = ttk.Label(progress_center_frame, text="", width=18, font=("Arial", 10))
-        self.progress_label.pack(side=tk.LEFT, padx=10)
-        
-        # Initially hide progress elements
-        self.progress_frame.pack_forget()
         
         # Recording state
         self.recording = False
@@ -769,25 +769,48 @@ class CleanCursorInterface:
     def cycle_to_next_dataset(self):
         """Cycle to the next dataset within the current emotion."""
         emotion = self.current_emotional_state
-        available_datasets = self.get_available_datasets_for_emotion(emotion)
+        datasets = self.available_datasets.get(emotion, [])
         
-        if len(available_datasets) > 1:
-            # Get current dataset and find next one
-            current_dataset = self.dataset_var.get()
+        if len(datasets) > 1:
+            # Get current active dataset and find next one
+            current_filename = self.active_datasets.get(emotion)
+            current_index = 0
+            
+            # Find current dataset index
+            if current_filename:
+                for i, dataset in enumerate(datasets):
+                    if dataset['filename'] == current_filename:
+                        current_index = i
+                        break
+            
+            # Move to next dataset (cycle back to 0 if at end)
+            next_index = (current_index + 1) % len(datasets)
+            next_dataset = datasets[next_index]
+            
+            # Update active dataset
+            self.active_datasets[emotion] = next_dataset['filename']
+            
+            # Update dropdown to reflect change
+            self.dataset_var.set(f"{next_dataset['display_name']} ({next_dataset['sample_count']:,} samples, {next_dataset['unique_states']} states, {next_dataset['duration']:.0f}s)")
+            
+            # Load the Markov chain from the new dataset
             try:
-                current_index = available_datasets.index(current_dataset)
-                next_index = (current_index + 1) % len(available_datasets)
-            except ValueError:
-                # Current dataset not in list, start from 0
-                next_index = 0
+                data = next_dataset['data']
+                markov_chain = data.get('markov_chain', {})
+                if markov_chain:
+                    self.markov_chains[emotion] = markov_chain
+                    print(f"🎲 Dataset cycling: {emotion} → {next_dataset['display_name']} ({next_dataset['unique_states']} states)")
+                else:
+                    print(f"⚠️ No Markov chain in {next_dataset['display_name']}")
+            except Exception as e:
+                print(f"❌ Error loading dataset {next_dataset['display_name']}: {e}")
             
-            next_dataset = available_datasets[next_index]
-            self.dataset_var.set(next_dataset)
-            print(f"🎲 Dataset cycling: {emotion} → {next_dataset}")
-            
-            # If Markov is running, restart with new dataset
-            if hasattr(self, 'markov_running') and self.markov_running:
-                self.restart_markov_with_new_dataset()
+            # If generation is active, restart with new dataset
+            if self.generating:
+                self.stop_markov_generation()
+                self.start_markov_generation()
+        else:
+            print(f"📋 Only {len(datasets)} dataset(s) available for {emotion} - cycling disabled")
     
     def cycle_to_next_emotion(self):
         """Cycle to the next emotion with smooth transition."""
@@ -805,16 +828,7 @@ class CleanCursorInterface:
     
     def get_available_datasets_for_emotion(self, emotion):
         """Get list of available datasets for a specific emotion."""
-        try:
-            emotion_dir = os.path.join(self.dataset_directory, emotion)
-            if os.path.exists(emotion_dir):
-                datasets = [d for d in os.listdir(emotion_dir) 
-                           if os.path.isdir(os.path.join(emotion_dir, d))]
-                return sorted(datasets) if datasets else []
-            return []
-        except Exception as e:
-            print(f"❌ Error getting datasets for {emotion}: {e}")
-            return []
+        return self.available_datasets.get(emotion, [])
     
     def start_emotion_transition(self, target_emotion):
         """Start smooth transition to target emotion."""
@@ -1716,8 +1730,54 @@ class CleanCursorInterface:
         self.canvas.create_text(10, 25, text=emotion_text, fill="yellow", anchor="nw",
                               font=("Arial", 9))
         
+        # DATASET INFO - Show current active dataset with cycling status
+        dataset_y = 55
+        current_emotion = self.current_emotional_state
+        datasets = self.available_datasets.get(current_emotion, [])
+        
+        if datasets:
+            # Get current active dataset for this emotion
+            active_filename = self.active_datasets.get(current_emotion)
+            if active_filename:
+                # Find the dataset info
+                active_dataset = None
+                current_index = 0
+                for i, dataset in enumerate(datasets):
+                    if dataset['filename'] == active_filename:
+                        active_dataset = dataset
+                        current_index = i
+                        break
+                
+                if active_dataset:
+                    display_name = active_dataset.get('display_name', 'Unknown')
+                    sample_count = active_dataset.get('sample_count', 0)
+                    
+                    # Show cycling status
+                    cycling_status = ""
+                    if self.dataset_cycling_enabled.get():
+                        cycling_status = f" 🔄 [{current_index + 1}/{len(datasets)}]"
+                    
+                    dataset_text = f"Dataset: {display_name} ({sample_count:,} samples){cycling_status}"
+                    self.canvas.create_text(10, dataset_y, text=dataset_text, fill="lightblue", anchor="nw",
+                                          font=("Arial", 8))
+                else:
+                    # Fallback if no active dataset found
+                    dataset_text = f"Dataset: {len(datasets)} available (none active)"
+                    self.canvas.create_text(10, dataset_y, text=dataset_text, fill="gray", anchor="nw",
+                                          font=("Arial", 8))
+            else:
+                # No active dataset selected
+                dataset_text = f"Dataset: {len(datasets)} available (none selected)"
+                self.canvas.create_text(10, dataset_y, text=dataset_text, fill="orange", anchor="nw",
+                                      font=("Arial", 8))
+        else:
+            # No datasets available
+            dataset_text = "Dataset: None available (record some!)"
+            self.canvas.create_text(10, dataset_y, text=dataset_text, fill="red", anchor="nw",
+                                  font=("Arial", 8))
+        
         # Status indicators (only when relevant - reduced text objects)
-        status_y = 40
+        status_y = 75  # Moved down to accommodate dataset info
         if self.text_field_has_focus:
             self.canvas.create_text(10, status_y, text="📝 TEXT INPUT", fill="red", anchor="nw",
                                   font=("Arial", 9, "bold"))
@@ -2278,8 +2338,57 @@ class CleanCursorInterface:
                 # Fallback: sort by filename instead
                 self.available_datasets[emotion].sort(key=lambda x: x['filename'], reverse=True)
             
+            # AUTO-SELECT first dataset for each emotion if none is currently active
+            if self.available_datasets[emotion] and emotion not in self.active_datasets:
+                first_dataset = self.available_datasets[emotion][0]
+                self.active_datasets[emotion] = first_dataset['filename']
+                print(f"🎯 Auto-selected dataset for {emotion}: {first_dataset['display_name']}")
+            
         self.update_dataset_display()
         print(f"✅ Loaded datasets for {len(self.available_datasets)} emotions")
+        
+        # Load Markov chains from active datasets
+        self.load_markov_chains_from_active_datasets()
+    
+    def load_markov_chains_from_active_datasets(self):
+        """Load Markov chains from currently active datasets for each emotion."""
+        print("🧠 Loading Markov chains from active datasets...")
+        chains_loaded = 0
+        
+        for emotion, active_filename in self.active_datasets.items():
+            datasets = self.available_datasets.get(emotion, [])
+            
+            # Find the active dataset
+            active_dataset = None
+            for dataset in datasets:
+                if dataset['filename'] == active_filename:
+                    active_dataset = dataset
+                    break
+            
+            if active_dataset and 'data' in active_dataset:
+                dataset_data = active_dataset['data']
+                if dataset_data and 'markov_chain' in dataset_data:
+                    markov_chain = dataset_data['markov_chain']
+                    if markov_chain:
+                        self.markov_chains[emotion] = markov_chain
+                        chains_loaded += 1
+                        print(f"✅ Loaded Markov chain for {emotion}: {markov_chain.get('unique_states', 0)} states from {active_dataset['display_name']}")
+                    else:
+                        print(f"⚠️ Empty Markov chain for {emotion}")
+                else:
+                    print(f"⚠️ No Markov chain data for {emotion}")
+            else:
+                print(f"⚠️ Active dataset not found for {emotion}")
+        
+        # Update UI status
+        if chains_loaded > 0:
+            if hasattr(self, 'markov_status'):
+                self.markov_status.config(text=f"{chains_loaded} chains loaded", foreground="green")
+            print(f"✅ Successfully loaded {chains_loaded} Markov chains from active datasets")
+        else:
+            if hasattr(self, 'markov_status'):
+                self.markov_status.config(text="No chains available", foreground="gray")
+            print("📊 No Markov chains available - record some movements to generate chains")
     
     def update_dataset_display(self):
         """Update the dataset display for current emotion."""

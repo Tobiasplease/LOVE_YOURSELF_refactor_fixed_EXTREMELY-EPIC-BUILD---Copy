@@ -4,6 +4,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## RECENT MAJOR IMPROVEMENTS
 
+### Revolutionary Movement Learning System (July 2025)
+
+**🧬 BREAKTHROUGH: AI Learns Human Body Language**
+
+A revolutionary system that teaches the AI consciousness cursor to mimic human emotional movement patterns by recording and analyzing user cursor movements.
+
+**How It Works - Simple Version**:
+1. **Record**: User moves cursor while in specific emotional state (happy, angry, sad, etc.)
+2. **Learn**: AI analyzes movement characteristics (speed, pauses, direction changes, micro-jitter)  
+3. **Apply**: AI cursor adopts the learned movement DNA to express that emotion
+
+**Core Components**:
+- **Movement Learning System** (`servo_control/movement_learning.py`): Extracts movement signatures and maps them to cursor parameters
+- **Conscious Cursor Interface** (`servo_control/conscious_cursor_interface.py`): Training interface with recording, analysis, and management
+- **Pure Consciousness Arduino** (`arduino_src/HandController_Pure_Consciousness.ino`): Timeout-free servo controller with startle detection
+
+**Technical Implementation**:
+- **Movement Analysis**: Extracts 14 key characteristics (avg_speed, speed_variance, pause_ratio, direction_changes, burst_movements, micro_movements, etc.)
+- **Parameter Mapping**: Converts movement characteristics to consciousness cursor parameters (base_speed, chaos_level, burst_chance, jitter_amplitude, etc.)
+- **Real-time Training**: R/T hotkey recording system with live feedback and comprehensive analysis reports
+- **Emotional Profiles**: Persistent storage of learned movement signatures with management controls
+
+**User Workflow**:
+1. Enable Training Mode → Select emotion (neutral, happy, angry, etc.)
+2. Press R to start recording → Move cursor expressing that emotion → Press R to stop
+3. Save Template → AI learns movement DNA and applies it immediately  
+4. Apply to AI Cursor → Select learned emotion from dropdown to change AI behavior
+
+**Integration Status**:
+- ✅ **Standalone System**: Fully functional movement learning and training interface
+- ⚠️ **machine.py Integration**: Not yet seamlessly connected to main consciousness system
+- 🔄 **Future Goal**: machine.py reads camera/mood data → applies appropriate learned movement pattern automatically
+
+**Known Issues**:
+- Dropdown may not refresh learned emotions properly (needs refresh button click)
+- Parameter application to AI cursor may not be immediately visible  
+- Simulation vs live consciousness data integration needs clarification
+- Main system integration requires connection between mood detection and learned patterns
+
 ### Enhanced Gaze Tracking & Physics-Based Hand Controller (January 2025)
 
 **Enhanced Gaze Tracking System**:
@@ -88,7 +127,58 @@ flake8 . --max-line-length=150
 # Clean up generated files
 Remove-Item -Recurse -Force __pycache__  # Windows PowerShell
 find . -name "__pycache__" -exec rm -rf {} +  # Linux/Mac
+
+# Movement Learning System - Revolutionary Training Interface
+python servo_control/conscious_cursor_interface.py  # Launch movement training interface
 ```
+
+## Movement Learning System Troubleshooting
+
+**🚨 Common Issues & Simple Fixes**:
+
+### Issue 1: AI Cursor Not Responding/Stuck at Bottom
+**Problem**: Cursor hovers slowly at center or sticks to bottom of canvas
+**Causes**: 
+- Parameters not properly applied to consciousness cursor
+- Using default physics settings instead of learned patterns
+- Simulation vs live data confusion
+
+**Fix**:
+1. Click "🧪 Simulate Emotions" to test if cursor responds to ANY input
+2. Check if sliders (Spring Force, Damping, etc.) affect movement
+3. Try applying a learned emotion from dropdown after recording
+4. Restart interface if cursor completely unresponsive
+
+### Issue 2: Dropdown Greyed Out/No Learned Emotions  
+**Problem**: Cannot select learned emotions from dropdown after recording
+**Causes**:
+- Learning system not saving properly
+- Dropdown not refreshing after save
+- Missing file permissions or import errors
+
+**Fix**:
+1. Click "🔄 Refresh List" button after saving templates
+2. Check if `emotional_profiles.json` file was created in servo_control folder
+3. Restart interface and check if emotions persist
+4. Record longer movements (>10 points minimum)
+
+### Issue 3: "Simulate Emotions" Button Behavior
+**What it does**: Creates fake mood data (happy=0.8, sad=-0.6, etc.) to test cursor responsiveness
+**Purpose**: Tests if consciousness cursor can receive and respond to emotional input
+**Expected**: Cursor should move differently for each simulated emotion
+**Reality**: May not work if parameter application is broken
+
+### Issue 4: Integration with machine.py
+**Current Status**: Movement learning system is SEPARATE from main consciousness system
+**machine.py**: Reads camera → detects mood → should apply learned patterns (NOT YET CONNECTED)
+**This Interface**: Trains cursor movement patterns for different emotions
+**Missing Link**: Automatic application of learned patterns based on detected mood
+
+**Temporary Workflow**:
+1. Run `machine.py` for mood detection  
+2. Run `conscious_cursor_interface.py` for movement training
+3. Manually select emotions in interface based on detected mood
+4. Future: Automatic integration
 
 ## Architecture Overview
 

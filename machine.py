@@ -46,6 +46,7 @@ from captioner.captioner import Captioner
 from vision.gaze import update_gaze
 from mood.mood import MoodEngine
 from breathing.breathing import update_lung_position
+from servo_control.emotional_hand_controller import update_hand_position
 from image_monitor import ImageMonitor
 from utils.state_manager import state_manager
 from utils.continuity import describe_duration
@@ -128,6 +129,7 @@ if USE_HAND_SERVO:
     hand_controller = HandExpressionController(port=HAND_SERIAL_PORT, baudrate=BAUD_RATE, clean_output=CLEAN_CAPTION_OUTPUT)
 else:
     debug_print("Hand servo disabled - skipping hand controller initialization", "INIT")
+    hand_controller = None  # Explicitly ensure it's None for clean captioning
 
 # Face detection state for startle reactions
 face_detected_last_frame = False
@@ -368,7 +370,7 @@ try:
         if best_box is not None:
             # Check for NEW face detection (startle reaction)
             face_detected_this_frame = True
-            if not face_detected_last_frame:
+            if not face_detected_last_frame and USE_HAND_SERVO:  # Only process startle if hand servo enabled
                 # NEW FACE DETECTED - TRIGGER STARTLE WITH COOLDOWN!
                 if not CLEAN_CAPTION_OUTPUT:
                     print("😲 STARTLE! Face detected - triggering coordinated hand reaction")
@@ -424,7 +426,7 @@ try:
         
         # Update hand expression based on consciousness state (if enabled)
         hand_positions = None
-        if hand_controller:
+        if hand_controller and USE_HAND_SERVO:  # Double check both conditions
             temporal_context = getattr(mood_update_thread, '_cached_temporal_context', {})
             hand_positions = hand_controller.update_from_consciousness(
                 mood=current_mood,
@@ -436,7 +438,10 @@ try:
         
         # Debug servo values occasionally to avoid spam
         if int(now) % 8 == 0:  # Every 8 seconds to include hand info
-            gesture_desc = hand_controller.get_current_gesture_description() if hand_controller else "Hand servo disabled"
+            if USE_HAND_SERVO and hand_controller:
+                gesture_desc = hand_controller.get_current_gesture_description()
+            else:
+                gesture_desc = "Hand servo disabled"
             debug_print(f"Servo values: pan={pan}, tilt={tilt}, person_present={person_present}", "SERVO")
             debug_print(f"Hand gesture: {gesture_desc}", "HAND")
 
@@ -464,12 +469,28 @@ try:
             servos.set_pan(pan)  # type: ignore
             servos.set_tilt(tilt)  # type: ignore
 
+        # === REMOVED OLD AUTONOMOUS HAND CONTROL ===
+        # The old update_hand_position() system has been replaced by
+        # hand_controller.update_from_consciousness() above (line ~420)
+        # Default hand state for display overlay compatibility
+        hand_state = {
+            'emotional_state': 'consciousness-driven' if hand_controller else 'disabled',
+            'is_frozen': False,
+            'idle_mode': False
+        }
+
         if face_box:
             (x1, y1, x2, y2) = face_box
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
         # === DISPLAY OVERLAYS ===
-        debug = f"Mood: {current_mood:.2f} | Lung: {lung_pos} | Pan/Tilt: {pan}/{tilt}"
+        freeze_status = ""
+        if 'is_frozen' in hand_state and hand_state['is_frozen']:
+            freeze_status = " [FROZEN]"
+        elif 'idle_mode' in hand_state and hand_state['idle_mode']:
+            freeze_status = " [IDLE]"
+        
+        debug = f"Mood: {current_mood:.2f} | Lung: {lung_pos} | Hand: {hand_state['emotional_state']}{freeze_status} | Pan/Tilt: {pan}/{tilt}"
         cv2.putText(frame, debug, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         from perception.detection_memory import DetectionMemory
@@ -530,7 +551,7 @@ finally:
             object_detector.join(timeout=2.0)  # Add timeout
         if 'image_monitor' in locals():
             image_monitor.stop()
-        if 'hand_controller' in locals() and hand_controller:
+        if 'hand_controller' in locals() and hand_controller and USE_HAND_SERVO:
             hand_controller.cleanup()
         if 'cap' in locals():
             cap.release()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Conscious Cursor Interface - CLEAN BASELINE
 ===========================================
@@ -73,7 +73,7 @@ class CleanCursorInterface:
     
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("🎯 Clean Emotional Hand Control - Baseline")
+        self.root.title("🎯 Hand Control")
         
         # FIXED WINDOW SIZE - No more resizing!
         self.root.geometry("650x650")  # Fixed square dimensions
@@ -210,11 +210,11 @@ class CleanCursorInterface:
         self.current_emotional_state = 'calm_observant'  # Default to neutral middle state
         self.logging_movement = False
         
-        # Recording/playback state - MARKOV CHAIN BASED!
+        # Recording/playback state - SERVO-BASED MARKOV CHAIN SYSTEM!
         self.recording = False
         self.playing_back = False
-        self.recorded_movements = {}  # emotion_name -> list of movements (positions for exact playback)
-        self.markov_chains = {}      # emotion_name -> position transition chains
+        self.recorded_movements = {}  # emotion_name -> list of servo positions for exact playback
+        self.markov_chains = {}      # emotion_name -> servo position transition chains
         self.playback_start_time = 0
         self.current_playback = []
         self.record_start_time = 0
@@ -239,11 +239,15 @@ class CleanCursorInterface:
         self.generation_start_time = 0
         self.current_markov_state = None  # Current state in generation
         self.generation_timer = None
-        self.generation_speed = 0.02  # Much faster: ~50 Hz for ultra-smooth movement
+        self.generation_speed = 0.03  # 33Hz for smooth but responsive movement
         self.generation_smoothing = True  # Enable position smoothing
         self.last_generated_pos = (0.5, 0.5)  # For smooth interpolation
         self.target_generated_pos = (0.5, 0.5)  # Target position for easing
         self.generation_easing_factor = 0.3  # Smooth easing between positions
+        
+        # Keyboard control tracking for live Markov generation (separate from datasets)
+        self.live_keyboard_states = []  # Store recent keyboard movements without polluting datasets
+        self.live_keyboard_limit = 200  # Keep only recent movements for live generation
         
         self.setup_ui()
         self.start_control_loop()
@@ -277,6 +281,9 @@ class CleanCursorInterface:
         print(f"📐 FIXED canvas dimensions: 480x200 (no more resizing)")
         print(f"🎯 Condensed control area: 25%-75% of canvas width for precise movement")
         print("⚡ ULTRA-SHORT 20s recordings prevent crashes - record multiple segments per emotion!")
+        
+        # Initialize the cleaner dataset display
+        self.update_emotion_dataset_display()
     
     def _on_mousewheel(self, event):
         """Handle mouse wheel scrolling in the interface."""
@@ -352,25 +359,50 @@ class CleanCursorInterface:
         record_frame = ttk.Frame(emotion_inner)
         record_frame.pack(pady=(0, 10))
         
+        # === SIDE-BY-SIDE LAYOUT: RECORD CONTROLS + CANVAS ===
+        # Left side - Record buttons
+        record_buttons_frame = ttk.Frame(record_frame)
+        record_buttons_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 20))
+        
         # Record button - ULTRA SHORT RECORDINGS FOR STABILITY!
-        self.record_btn = ttk.Button(record_frame, text="🎬 Record Movement (20s)", 
+        self.record_btn = ttk.Button(record_buttons_frame, text="🎬 Record Movement (20s)", 
                                    command=self.start_recording, width=24)  # Consistent width
-        self.record_btn.pack(side=tk.LEFT, padx=8)
+        self.record_btn.pack(pady=5)
         
         # Playback button
-        self.playback_btn = ttk.Button(record_frame, text="▶️ Play Back", 
-                                     command=self.start_playback, width=15)
-        self.playback_btn.pack(side=tk.LEFT, padx=8)
+        self.playback_btn = ttk.Button(record_buttons_frame, text="▶️ Play Back", 
+                                     command=self.start_playback, width=24)
+        self.playback_btn.pack(pady=5)
         
         # GENERATIVE playback button
-        self.generate_btn = ttk.Button(record_frame, text="🧠 Generate (Markov)", 
-                                     command=self.start_markov_generation, width=20)
-        self.generate_btn.pack(side=tk.LEFT, padx=8)
+        self.generate_btn = ttk.Button(record_buttons_frame, text="🧠 Generate (Markov)", 
+                                     command=self.start_markov_generation, width=24)
+        self.generate_btn.pack(pady=5)
         
         # MANUAL SAVE BUTTON - NEW!
-        self.save_btn = ttk.Button(record_frame, text="💾 Save Recording", 
-                                 command=self.manual_save_recording, width=18)
-        self.save_btn.pack(side=tk.LEFT, padx=8)
+        self.save_btn = ttk.Button(record_buttons_frame, text="💾 Save Recording", 
+                                 command=self.manual_save_recording, width=24)
+        self.save_btn.pack(pady=5)
+        
+        # Right side - Canvas right next to buttons!
+        canvas_side_frame = ttk.Frame(record_frame)
+        canvas_side_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Canvas with smaller dimensions to fit side-by-side
+        self.canvas_width = 300  # Reduced from 400
+        self.canvas_height = 200  # Reduced from 400
+        
+        canvas_label = ttk.Label(canvas_side_frame, text="🎯 Visual Feedback", font=("Arial", 10, "bold"))
+        canvas_label.pack(pady=(0, 5))
+        
+        self.canvas = tk.Canvas(canvas_side_frame, width=self.canvas_width, height=self.canvas_height, 
+                               bg='black', highlightthickness=1, highlightcolor='white')
+        self.canvas.pack()
+        
+        # Canvas bindings
+        self.canvas.bind('<Configure>', self.on_canvas_configure)
+        self.canvas.bind('<Motion>', self.on_mouse_move)
+        self.canvas.bind('<Button-1>', self.on_mouse_click)
         
         # Status frame for better organization
         status_frame = ttk.Frame(emotion_inner)
@@ -386,46 +418,66 @@ class CleanCursorInterface:
                                      foreground="gray", font=("Arial", 8), width=25)
         self.markov_status.pack(side=tk.RIGHT)
         
-        # === DATASET MANAGEMENT - NEW SECTION! ===
-        dataset_frame = ttk.LabelFrame(emotion_inner, text="📊 Dataset Management")
+        # === DATASET MANAGEMENT - CLEANER INTERFACE! ===
+        dataset_frame = ttk.LabelFrame(emotion_inner, text="📊 Movement Datasets")
         dataset_frame.pack(fill=tk.X, pady=(10, 5))
         
         # Dataset info and controls
         dataset_inner = ttk.Frame(dataset_frame)
         dataset_inner.pack(fill=tk.X, padx=10, pady=8)
         
-        # Current emotion's dataset count
-        self.dataset_count_label = ttk.Label(dataset_inner, text="No datasets loaded", 
-                                           font=("Arial", 10), foreground="gray")
-        self.dataset_count_label.pack(anchor=tk.W, pady=(0, 5))
+        # CLEAR emotion-specific dataset info
+        emotion_dataset_frame = ttk.Frame(dataset_inner)
+        emotion_dataset_frame.pack(fill=tk.X, pady=(0, 8))
         
-        # Dataset selector frame
-        selector_frame = ttk.Frame(dataset_inner)
-        selector_frame.pack(fill=tk.X, pady=(0, 5))
+        # Current emotion indicator with dataset count
+        self.current_emotion_dataset_label = ttk.Label(emotion_dataset_frame, 
+                                                      text=f"📁 {self.current_emotional_state.title()}: No datasets", 
+                                                      font=("Arial", 11, "bold"), foreground="#8B5CF6")
+        self.current_emotion_dataset_label.pack(anchor=tk.W)
         
-        ttk.Label(selector_frame, text="Active Dataset:").pack(side=tk.LEFT, padx=(0, 5))
+        # Dataset selector frame - CLEARER LABELS
+        self.selector_frame = ttk.Frame(dataset_inner)
+        self.selector_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        self.dataset_selector_label = ttk.Label(self.selector_frame, text=f"💾 Active Dataset for {self.current_emotional_state.title()}:", 
+                 font=("Arial", 10))
+        self.dataset_selector_label.pack(anchor=tk.W, pady=(0, 3))
         
         self.dataset_var = tk.StringVar()
-        self.dataset_dropdown = ttk.Combobox(selector_frame, textvariable=self.dataset_var, 
-                                            width=40, state="readonly")
-        self.dataset_dropdown.pack(side=tk.LEFT, padx=(0, 10))
+        self.dataset_dropdown = ttk.Combobox(self.selector_frame, textvariable=self.dataset_var, 
+                                            width=50, state="readonly", font=("Arial", 9))
+        self.dataset_dropdown.pack(fill=tk.X, pady=(0, 5))
         self.dataset_dropdown.bind("<<ComboboxSelected>>", self.on_dataset_selected)
         
-        # Dataset management buttons
+        # Quick status
+        self.dataset_status_label = ttk.Label(self.selector_frame, text="No dataset selected", 
+                                            font=("Arial", 8), foreground="gray")
+        self.dataset_status_label.pack(anchor=tk.W)
+        
+        # Dataset management buttons - BETTER ORGANIZED
         dataset_btn_frame = ttk.Frame(dataset_inner) 
         dataset_btn_frame.pack(fill=tk.X, pady=(5, 0))
         
-        ttk.Button(dataset_btn_frame, text="🔄 Refresh", 
-                  command=self.refresh_datasets, width=12).pack(side=tk.LEFT, padx=(0, 5))
+        # Left side - dataset actions
+        left_btn_frame = ttk.Frame(dataset_btn_frame)
+        left_btn_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        ttk.Button(dataset_btn_frame, text="🗑️ Delete", 
-                  command=self.delete_dataset, width=12).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(left_btn_frame, text="🔄 Refresh Lists", 
+                  command=self.refresh_datasets, width=15).pack(side=tk.LEFT, padx=(0, 5))
         
-        ttk.Button(dataset_btn_frame, text="📋 Details", 
-                  command=self.show_dataset_details, width=12).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(left_btn_frame, text="� Show Details", 
+                  command=self.show_dataset_details, width=15).pack(side=tk.LEFT, padx=(0, 5))
         
-        ttk.Button(dataset_btn_frame, text="🧹 Clean Memory", 
-                  command=self.manual_memory_cleanup, width=15).pack(side=tk.LEFT, padx=(0, 5))
+        # Right side - management actions  
+        right_btn_frame = ttk.Frame(dataset_btn_frame)
+        right_btn_frame.pack(side=tk.RIGHT)
+        
+        ttk.Button(right_btn_frame, text="�️ Delete Dataset", 
+                  command=self.delete_dataset, width=15).pack(side=tk.LEFT, padx=(5, 0))
+        
+        ttk.Button(right_btn_frame, text="🧹 Clean Memory", 
+                  command=self.manual_memory_cleanup, width=15).pack(side=tk.LEFT, padx=(5, 0))
         
         # Dataset naming option (for new recordings)
         naming_frame = ttk.Frame(dataset_inner)
@@ -478,30 +530,42 @@ class CleanCursorInterface:
         self.playback_start_time = 0
         self.current_playback = []
         
-        # === HAND CONTROL AREA - PROPERLY CENTERED AND FORMATTED ===
-        control_frame = ttk.LabelFrame(self.scrollable_frame, text="🎯 Hand Control Area")
-        control_frame.pack(fill=tk.X, padx=10, pady=10)  # Increased padding
-        
-        # Configure the control frame to center content
-        control_frame.grid_columnconfigure(0, weight=1)
-        control_frame.grid_rowconfigure(0, weight=1)
-        
-        # ABSOLUTELY FIXED CANVAS - Centered using grid layout
-        self.canvas_width = 480  # Store as instance variables for consistency
-        self.canvas_height = 200
-        self.canvas = tk.Canvas(control_frame, 
-                               bg="black", 
-                               height=self.canvas_height, 
-                               width=self.canvas_width,
-                               highlightthickness=2,
-                               highlightbackground="white")
-        # Use grid for true centering - this should work!
-        self.canvas.grid(row=0, column=0, pady=20, padx=20)
-        self.canvas.bind("<Motion>", self.on_mouse_move)
-        self.canvas.bind("<Button-1>", self.on_mouse_click)
-        
-        # Prevent any canvas resizing by binding to configure events
-        self.canvas.bind("<Configure>", self.on_canvas_configure)
+        # === CONTROL MODES SETUP ===
+        self.freeze_behavior = tk.BooleanVar(value=False)
+        self.manual_override_mode = tk.BooleanVar(value=False)
+        self.show_path = tk.BooleanVar(value=True)
+    
+    def on_dataset_selected(self, event=None):
+        """Handle dataset selection from dropdown."""
+        selected = self.dataset_var.get()
+        print(f"📊 Selected dataset: {selected}")
+        # TODO: Implement dataset activation
+    
+    def delete_dataset(self):
+        """Placeholder for dataset deletion."""
+        print("🗑️ Delete dataset functionality not yet implemented")
+        pass
+    
+    def show_dataset_details(self):
+        """Placeholder for showing dataset details."""
+        print("📋 Show dataset details functionality not yet implemented") 
+        pass
+    
+    def manual_memory_cleanup(self):
+        """Manual memory cleanup function."""
+        print("🧹 Performing manual memory cleanup...")
+        total_before = sum(len(data) for data in self.recorded_movements.values())
+        self.recorded_movements.clear()
+        print(f"🧹 Cleaned up {total_before} movement points from memory")
+    
+    def auto_generate_name(self):
+        """Auto-generate a name for the next recording."""
+        emotion = self.current_emotional_state
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H%M")
+        name = f"{emotion}_{timestamp}"
+        self.dataset_name_var.set(name)
+        print(f"🎲 Auto-generated name: {name}")
         
         # === CONTROL MODES - Better formatted ===
         mode_frame = ttk.LabelFrame(self.scrollable_frame, text="🎛️ Control Modes")
@@ -535,7 +599,7 @@ class CleanCursorInterface:
         
         # Min Freeze Duration
         ttk.Label(freeze_inner, text="Min Freeze Duration:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        min_freeze_scale = ttk.Scale(freeze_inner, from_=1.0, to=10.0, variable=self.min_freeze_duration, orient=tk.HORIZONTAL)
+        min_freeze_scale = ttk.Scale(freeze_inner, from_=1.0, to=10.0, variable=self.min_freeze_duration, orient=tk.HORIZONTAL, length=400)
         min_freeze_scale.grid(row=0, column=1, sticky=tk.EW, padx=10, pady=5)
         min_freeze_label = ttk.Label(freeze_inner, text="2.0s", width=8)
         min_freeze_label.grid(row=0, column=2, padx=5, pady=5)
@@ -543,7 +607,7 @@ class CleanCursorInterface:
         
         # Max Freeze Duration
         ttk.Label(freeze_inner, text="Max Freeze Duration:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        max_freeze_scale = ttk.Scale(freeze_inner, from_=2.0, to=15.0, variable=self.max_freeze_duration, orient=tk.HORIZONTAL)
+        max_freeze_scale = ttk.Scale(freeze_inner, from_=2.0, to=15.0, variable=self.max_freeze_duration, orient=tk.HORIZONTAL, length=400)
         max_freeze_scale.grid(row=1, column=1, sticky=tk.EW, padx=10, pady=5)
         max_freeze_label = ttk.Label(freeze_inner, text="6.0s", width=8)
         max_freeze_label.grid(row=1, column=2, padx=5, pady=5)
@@ -561,7 +625,7 @@ class CleanCursorInterface:
         
         # Cursor Sensitivity  
         ttk.Label(wave_inner, text="Cursor Sensitivity:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        sensitivity_scale = ttk.Scale(wave_inner, from_=0.5, to=10.0, variable=self.cursor_sensitivity, orient=tk.HORIZONTAL)
+        sensitivity_scale = ttk.Scale(wave_inner, from_=0.5, to=10.0, variable=self.cursor_sensitivity, orient=tk.HORIZONTAL, length=400)
         sensitivity_scale.grid(row=0, column=1, sticky=tk.EW, padx=10, pady=5)
         sensitivity_label = ttk.Label(wave_inner, text="3.0", width=8)
         sensitivity_label.grid(row=0, column=2, padx=5, pady=5)
@@ -569,7 +633,7 @@ class CleanCursorInterface:
         
         # Wave Strength
         ttk.Label(wave_inner, text="Wave Strength:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        wave_scale = ttk.Scale(wave_inner, from_=0.0, to=5.0, variable=self.wave_strength, orient=tk.HORIZONTAL)
+        wave_scale = ttk.Scale(wave_inner, from_=0.0, to=5.0, variable=self.wave_strength, orient=tk.HORIZONTAL, length=400)
         wave_scale.grid(row=1, column=1, sticky=tk.EW, padx=10, pady=5)
         wave_label = ttk.Label(wave_inner, text="2.0", width=8)
         wave_label.grid(row=1, column=2, padx=5, pady=5)
@@ -577,7 +641,7 @@ class CleanCursorInterface:
         
         # Gravity Width
         ttk.Label(wave_inner, text="Gravity Width:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        gravity_scale = ttk.Scale(wave_inner, from_=0.1, to=1.0, variable=self.gravity_width, orient=tk.HORIZONTAL)
+        gravity_scale = ttk.Scale(wave_inner, from_=0.1, to=1.0, variable=self.gravity_width, orient=tk.HORIZONTAL, length=400)
         gravity_scale.grid(row=2, column=1, sticky=tk.EW, padx=10, pady=5)
         gravity_label = ttk.Label(wave_inner, text="0.4", width=8)
         gravity_label.grid(row=2, column=2, padx=5, pady=5)
@@ -585,7 +649,7 @@ class CleanCursorInterface:
         
         # Default Position
         ttk.Label(wave_inner, text="Default Position:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
-        default_scale = ttk.Scale(wave_inner, from_=0, to=180, variable=self.default_position, orient=tk.HORIZONTAL)
+        default_scale = ttk.Scale(wave_inner, from_=0, to=180, variable=self.default_position, orient=tk.HORIZONTAL, length=400)
         default_scale.grid(row=3, column=1, sticky=tk.EW, padx=10, pady=5)
         default_label = ttk.Label(wave_inner, text="90", width=8)
         default_label.grid(row=3, column=2, padx=5, pady=5)
@@ -593,7 +657,7 @@ class CleanCursorInterface:
         
         # Servo Range - NEW CONTROL!
         ttk.Label(wave_inner, text="Servo Range (±):").grid(row=4, column=0, sticky=tk.W, padx=5, pady=5)
-        servo_range_scale = ttk.Scale(wave_inner, from_=10.0, to=90.0, variable=self.servo_range, orient=tk.HORIZONTAL)
+        servo_range_scale = ttk.Scale(wave_inner, from_=10.0, to=90.0, variable=self.servo_range, orient=tk.HORIZONTAL, length=400)
         servo_range_scale.grid(row=4, column=1, sticky=tk.EW, padx=10, pady=5)
         servo_range_label = ttk.Label(wave_inner, text="45°", width=8)
         servo_range_label.grid(row=4, column=2, padx=5, pady=5)
@@ -624,12 +688,85 @@ class CleanCursorInterface:
         print(f"🎭 Switched to {emotion_name} emotional state")
         print(f"📊 Parameters: sensitivity={params['cursor_sensitivity']:.1f}")
         
-        # Update dataset display for new emotion AND refresh available datasets
-        self.update_dataset_display()
+        # Update CLEARER dataset display for new emotion
+        self.update_emotion_dataset_display()
+        
         # Also make sure we have the latest dataset list
         if len(self.available_datasets) == 0:
             print("🔄 No datasets loaded, refreshing...")
             self.refresh_datasets()
+    
+    def update_emotion_dataset_display(self):
+        """Update the emotion-specific dataset display with clear information."""
+        emotion = self.current_emotional_state
+        
+        # Update the emotion-specific label
+        if hasattr(self, 'current_emotion_dataset_label'):
+            available_count = len(self.available_datasets.get(emotion, []))
+            if available_count > 0:
+                self.current_emotion_dataset_label.config(
+                    text=f"📁 {emotion.title()}: {available_count} dataset(s) available"
+                )
+            else:
+                self.current_emotion_dataset_label.config(
+                    text=f"📁 {emotion.title()}: No datasets (record some first!)"
+                )
+        
+        # Update the dropdown label to be specific to current emotion
+        if hasattr(self, 'dataset_selector_label'):
+            self.dataset_selector_label.config(text=f"💾 Active Dataset for {emotion.title()}:")
+        
+        # Update dropdown contents
+        self.refresh_emotion_datasets()
+        
+        # Update status
+        if hasattr(self, 'dataset_status_label'):
+            active_dataset = self.active_datasets.get(emotion, "")
+            if active_dataset:
+                self.dataset_status_label.config(
+                    text=f"✅ Using: {active_dataset}",
+                    foreground="green"
+                )
+            else:
+                self.dataset_status_label.config(
+                    text="⚠️ No dataset selected for generation",
+                    foreground="orange"
+                )
+    
+    def refresh_emotion_datasets(self):
+        """Refresh the dataset dropdown for the current emotion only."""
+        emotion = self.current_emotional_state
+        emotion_datasets = self.available_datasets.get(emotion, [])
+        
+        # Clear and populate dropdown
+        self.dataset_dropdown['values'] = []
+        dataset_options = []
+        
+        if emotion_datasets:
+            for dataset_info in emotion_datasets:
+                filename = dataset_info.get('filename', 'Unknown')
+                points = dataset_info.get('points', 0)
+                name = dataset_info.get('name', filename.replace('.json', ''))
+                display_name = f"{name} ({points} points)"
+                dataset_options.append(display_name)
+        
+        if not dataset_options:
+            dataset_options = ["No datasets available - record some movements first!"]
+        
+        self.dataset_dropdown['values'] = dataset_options
+        
+        # Set current selection
+        active_dataset = self.active_datasets.get(emotion, "")
+        if active_dataset and dataset_options:
+            # Try to find and select the active dataset
+            for option in dataset_options:
+                if active_dataset in option:
+                    self.dataset_var.set(option)
+                    break
+            else:
+                self.dataset_var.set(dataset_options[0])
+        elif dataset_options:
+            self.dataset_var.set(dataset_options[0])
     
     def toggle_connection(self):
         """Toggle hand controller connection - FIXED LOGIC."""
@@ -711,7 +848,7 @@ class CleanCursorInterface:
             freeze_status = " [FROZEN]" if self.is_frozen else " [THAWING]" if self.is_thawing else ""
             print(f"🎯 Mouse move {self.move_count}: ({self.mouse_x:.3f}, {self.mouse_y:.3f}) canvas: {canvas_width}x{canvas_height} event: ({event.x}, {event.y}){freeze_status}")
         
-        # Record movement if recording - MEMORY-MANAGED SAMPLING!
+        # Record movement if recording - SERVO-BASED RECORDING!
         if self.recording and not self.is_frozen:
             current_time = time.time()
             relative_time = current_time - self.record_start_time
@@ -721,13 +858,11 @@ class CleanCursorInterface:
             
             # Only store if we haven't exceeded the maximum points
             if len(self.recorded_movements.get(self.current_emotional_state, [])) < self.max_recording_points:
-                # Store position for exact playback (keep this for compatibility)
+                # Store servo positions directly - unified data for cursor AND keyboard inputs!
                 movement_point = {
                     'time': current_time,
                     'relative_time': relative_time,
-                    'x': self.mouse_x,
-                    'y': self.mouse_y,
-                    'finger_positions': self.finger_positions.copy()
+                    'servo_positions': self.finger_positions.copy()  # NEW: Direct servo recording
                 }
                 if self.current_emotional_state not in self.recorded_movements:
                     self.recorded_movements[self.current_emotional_state] = []
@@ -755,17 +890,33 @@ class CleanCursorInterface:
         self.on_mouse_move(event)  # Update position
     
     def on_spacebar_press(self, event):
-        """Handle spacebar press for recording toggle - REQUESTED HOTKEY!"""
+        """Handle spacebar press for recording toggle - SAFE RECORDING HOTKEY!"""
         # Don't interfere with text input
         if self.text_field_has_focus:
+            print("📝 Spacebar ignored - text field has focus")
+            return
+        
+        # Don't interfere with generation
+        if self.generating:
+            print("🧠 Spacebar ignored - Markov generation in progress")
+            return
+        
+        # Don't interfere with playback
+        if self.playing_back:
+            print("▶️ Spacebar ignored - playback in progress")
             return
             
-        if self.recording:
-            self.stop_recording()
-            print("⏹️ Spacebar: Stopped recording")
-        else:
-            self.start_recording()
-            print("🎬 Spacebar: Started recording")
+        # Safe to toggle recording
+        try:
+            if self.recording:
+                self.stop_recording()
+                print("⏹️ Spacebar: Stopped recording")
+            else:
+                self.start_recording()
+                print("🎬 Spacebar: Started recording")
+        except Exception as e:
+            print(f"❌ Error handling spacebar: {e}")
+            # Don't let errors break the interface
     
     def on_key_press(self, event):
         """SIMPLIFIED keyboard press for finger control - NO TIMERS, NO ACCUMULATION!"""
@@ -815,6 +966,20 @@ class CleanCursorInterface:
             self.finger_lock_targets[finger_index] = new_target
             # Apply immediately to positions for instant response!
             self.finger_positions[finger_index] = new_target
+            
+            # Record live keyboard state for potential Markov generation (separate from datasets)
+            if not self.recording:  # Only record keyboard movements when not recording datasets
+                keyboard_state = {
+                    'timestamp': time.time(),
+                    'servo_positions': self.finger_positions.copy(),  # NEW: Unified servo-based recording
+                    'source': 'keyboard'
+                }
+                self.live_keyboard_states.append(keyboard_state)
+                
+                # Keep only recent states
+                if len(self.live_keyboard_states) > self.live_keyboard_limit:
+                    self.live_keyboard_states = self.live_keyboard_states[-self.live_keyboard_limit:]
+            
             reverse_indicator = " [REVERSED]" if self.reverse_vertical.get() else ""
             if hasattr(self, 'keyboard_move_count'):
                 self.keyboard_move_count += 1
@@ -1051,11 +1216,14 @@ class CleanCursorInterface:
         # Update canvas visualization (always show current state)
         self.update_canvas()
         
-        # Calculate finger targets from cursor position (even during freeze - maintains position)
-        self.calculate_finger_targets()
-        
-        # Direct control - immediate response!
-        self.finger_positions = self.finger_targets.copy()
+        # Only calculate cursor targets if NOT generating from Markov chain
+        if not self.generating:
+            # Calculate finger targets from cursor position (even during freeze - maintains position)
+            self.calculate_finger_targets()
+            
+            # Direct control - immediate response!
+            self.finger_positions = self.finger_targets.copy()
+        # When generating, finger_positions are set by update_markov_generation()
         
         if hasattr(self, 'direct_count'):
             self.direct_count += 1
@@ -1064,7 +1232,8 @@ class CleanCursorInterface:
         
         if self.direct_count < 5 or self.direct_count % 30 == 0:
             freeze_status = " [FROZEN]" if self.is_frozen else ""
-            print(f"🎯 Direct control {self.direct_count}: positions={[f'{p:.1f}' for p in self.finger_positions]} from targets={[f'{t:.1f}' for t in self.finger_targets]}{freeze_status}")
+            generation_status = " [GENERATING]" if self.generating else " [DIRECT]"
+            print(f"🎯 Control {self.direct_count}: positions={[f'{p:.1f}' for p in self.finger_positions]}{generation_status}{freeze_status}")
         
         # Send to hand controller
         self.send_to_hand_controller()
@@ -1174,8 +1343,8 @@ class CleanCursorInterface:
         
         # Pre-calculate common values to avoid repeated calculations
         servo_range = self.servo_range.get()
-        base_bar_height = 60
-        bar_height = max(20, min(int((servo_range / 45.0) * base_bar_height), 120))
+        base_bar_height = 120  # INCREASED from 60 to 120 for taller bars
+        bar_height = max(40, min(int((servo_range / 45.0) * base_bar_height), 200))  # Taller min/max
         bar_width = 25
         
         condensed_area_start = canvas_width * 0.25
@@ -1376,6 +1545,15 @@ class CleanCursorInterface:
     
     def start_recording(self):
         """Start time-based recording that captures both movement AND stillness - WITH MEMORY MANAGEMENT."""
+        # CRITICAL: Stop any other active operations first
+        if self.playing_back:
+            print("🛑 Stopping playback to start recording")
+            self.stop_playback()
+            
+        if self.generating:
+            print("🛑 Stopping Markov generation to start recording")
+            self.stop_markov_generation()
+            
         if self.recording:
             # Stop recording
             self.stop_recording()
@@ -1393,7 +1571,10 @@ class CleanCursorInterface:
         self.recorded_positions = []  # Reset current session
         self.recording_point_counter = 0  # Reset counter
         
+        # UPDATE ALL UI BUTTONS
         self.record_btn.config(text="⏹️ Stop Recording")
+        self.playback_btn.config(text="▶️ Play Back")        # Reset playback button
+        self.generate_btn.config(text="🧠 Generate (Markov)") # Reset generate button
         self.record_status.config(text=f"Recording {self.current_emotional_state}... (Spacebar to stop)", foreground="red")
         self.markov_status.config(text="Capturing positions...", foreground="orange")
         
@@ -1550,110 +1731,73 @@ class CleanCursorInterface:
         print("💡 TIP: Record multiple 20s segments for this emotion to build richer datasets!")
     
     def build_markov_chain(self):
-        """Build Markov chain from recorded position samples INCLUDING finger positions."""
-        if len(self.recorded_positions) < 2:
-            print("⚠️ Not enough samples to build Markov chain")
+        """Build servo-based Markov chain from recorded movements - UNIFIED SYSTEM!"""
+        emotion = self.current_emotional_state
+        if emotion not in self.recorded_movements or len(self.recorded_movements[emotion]) < 2:
+            print(f"⚠️ Not enough samples to build Markov chain for {emotion}")
             return
             
-        print(f"🔗 Building enhanced Markov chain from {len(self.recorded_positions)} samples...")
+        movements = self.recorded_movements[emotion]
+        print(f"🔗 Building servo-based Markov chain from {len(movements)} recorded movements...")
         
-        # Initialize transition matrices
-        cursor_transitions = {}
-        finger_transitions = {}
-        combined_transitions = {}
+        # Initialize servo transition matrix
+        servo_transitions = {}
         
-        # Build state transitions
-        for i in range(len(self.recorded_positions) - 1):
-            current_sample = self.recorded_positions[i]
-            next_sample = self.recorded_positions[i + 1]
-            
-            # Cursor-only state (original)
-            current_cursor = current_sample['grid_state']
-            next_cursor = next_sample['grid_state']
-            
-            # Finger state (quantized to reduce state space)
-            current_fingers = tuple(round(f / 10) * 10 for f in current_sample['finger_positions'])  # Round to nearest 10°
-            next_fingers = tuple(round(f / 10) * 10 for f in next_sample['finger_positions'])
-            
-            # Combined state (cursor + finger positions)
-            current_combined = (current_cursor, current_fingers)
-            next_combined = (next_cursor, next_fingers)
-            
-            # Build cursor transitions
-            if current_cursor not in cursor_transitions:
-                cursor_transitions[current_cursor] = {}
-            if next_cursor not in cursor_transitions[current_cursor]:
-                cursor_transitions[current_cursor][next_cursor] = 0
-            cursor_transitions[current_cursor][next_cursor] += 1
-            
-            # Build finger transitions
-            if current_fingers not in finger_transitions:
-                finger_transitions[current_fingers] = {}
-            if next_fingers not in finger_transitions[current_fingers]:
-                finger_transitions[current_fingers][next_fingers] = 0
-            finger_transitions[current_fingers][next_fingers] += 1
-            
-            # Build combined transitions
-            if current_combined not in combined_transitions:
-                combined_transitions[current_combined] = {}
-            if next_combined not in combined_transitions[current_combined]:
-                combined_transitions[current_combined][next_combined] = 0
-            combined_transitions[current_combined][next_combined] += 1
+        # Servo discretization - FINE resolution for ultra-smooth movement!
+        discretization_step = 5  # 5 degrees for smooth transitions (was 10, but that was too chunky)
+        def discretize_servo_state(servo_positions):
+            return tuple(round(pos / discretization_step) * discretization_step for pos in servo_positions)
         
-        # Convert counts to probabilities for all transition types
-        for transitions in [cursor_transitions, finger_transitions, combined_transitions]:
-            for state in transitions:
-                total = sum(transitions[state].values())
-                for next_state in transitions[state]:
-                    transitions[state][next_state] /= total
+        # Build servo state transitions
+        for i in range(len(movements) - 1):
+            current_movement = movements[i]
+            next_movement = movements[i + 1]
+            
+            # Get current and next servo states (discretized)
+            current_state = discretize_servo_state(current_movement['servo_positions'])
+            next_state = discretize_servo_state(next_movement['servo_positions'])
+            
+            # Build transition probability matrix
+            current_key = str(current_state)  # Use string as key for JSON compatibility
+            next_key = str(next_state)
+            
+            if current_key not in servo_transitions:
+                servo_transitions[current_key] = {}
+            if next_key not in servo_transitions[current_key]:
+                servo_transitions[current_key][next_key] = 0
+            servo_transitions[current_key][next_key] += 1
         
-        # Store the enhanced Markov chain - CONVERT ALL TUPLE KEYS TO STRINGS FOR JSON!
-        def convert_dict_keys_to_strings(d):
-            """Recursively convert all dictionary keys to strings for JSON serialization."""
-            if isinstance(d, dict):
-                return {str(k): convert_dict_keys_to_strings(v) for k, v in d.items()}
-            else:
-                return d
+        # Convert counts to probabilities
+        for state in servo_transitions:
+            total = sum(servo_transitions[state].values())
+            if total > 0:
+                for next_state in servo_transitions[state]:
+                    servo_transitions[state][next_state] /= total
         
-        self.markov_chains[self.current_emotional_state] = {
-            'cursor_transitions': convert_dict_keys_to_strings(cursor_transitions),
-            'finger_transitions': convert_dict_keys_to_strings(finger_transitions), 
-            'combined_transitions': convert_dict_keys_to_strings(combined_transitions),
-            'sample_count': len(self.recorded_positions),
-            'duration': self.recorded_positions[-1]['time'] - self.recorded_positions[0]['time'],
-            'grid_size': 80,  # Ultra high resolution grid
-            'unique_cursor_states': len(cursor_transitions),
-            'unique_finger_states': len(finger_transitions),
-            'unique_combined_states': len(combined_transitions),
-            'velocity_data': [p for p in self.recorded_positions if 'velocity_x' in p],
-            'keyboard_data': [{'pressed_keys': p.get('pressed_keys', []), 
-                             'finger_locks': p.get('finger_locks', [False]*4),
-                             'keyboard_targets': p.get('keyboard_targets', [90]*4)} 
-                            for p in self.recorded_positions]  # Store keyboard data
+        # Store the servo-based Markov chain with larger discretization
+        self.markov_chains[emotion] = {
+            'servo_transitions': servo_transitions,
+            'discretization': discretization_step,  # degrees per step (now 10 for bigger movements)
+            'total_samples': len(movements),
+            'unique_states': len(servo_transitions)
         }
         
-        cursor_states = len(cursor_transitions)
-        finger_states = len(finger_transitions)
-        combined_states = len(combined_transitions)
-        avg_cursor_transitions = sum(len(t) for t in cursor_transitions.values()) / len(cursor_transitions) if cursor_transitions else 0
-        avg_finger_transitions = sum(len(t) for t in finger_transitions.values()) / len(finger_transitions) if finger_transitions else 0
+        print(f"✅ Servo Markov chain built for {emotion}:")
+        print(f"   📊 {len(movements)} movements → {len(servo_transitions)} unique servo states")
+        print(f"   🎯 Discretization: 5° steps for smooth generation")
         
-        self.markov_status.config(
-            text=f"Cursor: {cursor_states} states | Fingers: {finger_states} states | Combined: {combined_states} states", 
-            foreground="green"
-        )
-        
-        print(f"✅ Built enhanced Markov chain:")
-        print(f"   🖱️ Cursor: {cursor_states} unique states, {avg_cursor_transitions:.1f} avg transitions")
-        print(f"   ✋ Fingers: {finger_states} unique states, {avg_finger_transitions:.1f} avg transitions") 
-        print(f"   🤝 Combined: {combined_states} unique states")
-        print(f"   📊 Keyboard data: {len([p for p in self.recorded_positions if p.get('pressed_keys')])} samples with key presses")
+        # Update status
+        if hasattr(self, 'markov_status'):
+            self.markov_status.config(
+                text=f"{emotion}: {len(servo_transitions)} servo states",
+                foreground="green"
+            )
     
     def save_recording(self):
-        """Save recorded movements AND Markov chain to file with optional custom name."""
-        # FIXED: Check recorded_positions instead of recorded_movements
-        if not self.recorded_positions or len(self.recorded_positions) < 2:
-            print("❌ No position data to save")
+        """Save servo-based recorded movements AND Markov chain to file with optional custom name."""
+        emotion = self.current_emotional_state
+        if emotion not in self.recorded_movements or len(self.recorded_movements[emotion]) < 2:
+            print("❌ No servo data to save")
             return
             
         os.makedirs("movement_recordings", exist_ok=True)
@@ -1666,16 +1810,16 @@ class CleanCursorInterface:
             # Clean up the name for filename
             safe_name = "".join(c for c in custom_name if c.isalnum() or c in (' ', '-', '_')).strip()
             safe_name = safe_name.replace(' ', '_')
-            filename = f"movement_recordings/{self.current_emotional_state}_{timestamp}_{safe_name}.json"
+            filename = f"movement_recordings/{emotion}_{timestamp}_{safe_name}.json"
             self.dataset_name_var.set("")  # Clear for next time
         else:
-            filename = f"movement_recordings/{self.current_emotional_state}_{timestamp}.json"
+            filename = f"movement_recordings/{emotion}_{timestamp}.json"
         
-        # FIXED: Use fallback for movements to prevent crash
-        movements = self.recorded_movements.get(self.current_emotional_state, [])
-        markov_chain = self.markov_chains.get(self.current_emotional_state, {})
+        # Get servo-based movements and Markov chain
+        movements = self.recorded_movements[emotion]
+        markov_chain = self.markov_chains.get(emotion, {})
         
-        # CRITICAL FIX: Convert numpy data types to native Python types for JSON serialization
+        # Convert to JSON-safe format
         def convert_numpy_types(obj):
             """Recursively convert numpy data types to native Python types."""
             if hasattr(obj, 'item'):  # numpy scalar
@@ -1689,20 +1833,18 @@ class CleanCursorInterface:
             else:
                 return obj
         
-        # Convert recorded positions to JSON-safe format
-        positions = convert_numpy_types(self.recorded_positions)
-        
+        # Build servo-based dataset
         data = {
-            'emotion': self.current_emotional_state,
+            'emotion': emotion,
             'timestamp': timestamp,
             'custom_name': custom_name if custom_name else None,
+            'format_version': '2.0_servo_based',  # NEW: Mark as servo-based format
             'movement_count': len(movements),
-            'position_count': len(positions),
-            'duration': positions[-1]['time'] - positions[0]['time'] if len(positions) > 1 else 0,
-            'sample_rate': len(positions) / (positions[-1]['time'] - positions[0]['time']) if len(positions) > 1 else 0,
-            'movements': movements,  # Keep for compatibility
-            'positions': positions,  # Time-based samples (now JSON-safe)
-            'markov_chain': markov_chain  # The learned chain (already converted keys to strings)
+            'duration': movements[-1]['time'] - movements[0]['time'] if len(movements) > 1 else 0,
+            'sample_rate': len(movements) / (movements[-1]['time'] - movements[0]['time']) if len(movements) > 1 else 0,
+            'servo_movements': convert_numpy_types(movements),  # NEW: Servo positions over time
+            'markov_chain': convert_numpy_types(markov_chain),  # NEW: Servo-based Markov chain
+            'discretization': markov_chain.get('discretization', 5)  # Servo discretization info
         }
         
         try:
@@ -1710,40 +1852,41 @@ class CleanCursorInterface:
                 json.dump(data, f, indent=2)
                 
             display_name = custom_name if custom_name else f"Auto-{timestamp}"
-            print(f"💾 Saved recording '{display_name}' to {filename}")
-            print(f"📈 Enhanced chain - Cursor: {markov_chain.get('unique_cursor_states', 0)}, Fingers: {markov_chain.get('unique_finger_states', 0)}, Combined: {markov_chain.get('unique_combined_states', 0)} states from {len(positions)} samples")
+            print(f"💾 Saved servo-based recording '{display_name}' to {filename}")
+            servo_states = markov_chain.get('unique_states', 0)
+            print(f"🎯 Servo chain: {servo_states} unique states from {len(movements)} samples")
             
             # Update dataset display after saving
             self.refresh_datasets()
             
         except Exception as e:
-            print(f"❌ ERROR saving recording: {e}")
-            print(f"📍 Debug: positions type = {type(positions)}")
-            if positions:
-                print(f"📍 Debug: first position = {positions[0]}")
-                print(f"📍 Debug: finger_positions type = {type(positions[0].get('finger_positions', 'missing'))}")
+            print(f"❌ ERROR saving servo recording: {e}")
+            print(f"📍 Debug: movements type = {type(movements)}")
+            if movements:
+                print(f"📍 Debug: first movement = {movements[0]}")
             traceback.print_exc()
     
     def manual_save_recording(self):
-        """Manual save button - saves current recordings and Markov chains."""
-        # FIXED: Check recorded_positions instead of recorded_movements
-        if not self.recorded_positions or len(self.recorded_positions) < 2:
-            print("❌ No position data to save for current emotional state")
+        """Manual save button - saves current servo-based recordings and Markov chains."""
+        emotion = self.current_emotional_state
+        if emotion not in self.recorded_movements or len(self.recorded_movements[emotion]) < 2:
+            print("❌ No servo data to save for current emotional state")
             self.record_status.config(text="No data to save", foreground="red")
             return
         
         # Check if there's a Markov chain too
-        has_markov = self.current_emotional_state in self.markov_chains
+        has_markov = emotion in self.markov_chains
         
-        print(f"💾 Manual save requested for '{self.current_emotional_state}'")
-        print(f"📊 Recording: {len(self.recorded_positions)} position samples")
+        movements = self.recorded_movements[emotion]
+        print(f"💾 Manual save requested for '{emotion}'")
+        print(f"🎯 Recording: {len(movements)} servo samples")
         print(f"🧠 Markov chain: {'Yes' if has_markov else 'No'}")
         
         # Use the existing save function
         self.save_recording()
         
         # Update UI
-        save_msg = f"Saved {len(self.recorded_positions)} position samples"
+        save_msg = f"Saved {len(movements)} servo samples"
         if has_markov:
             save_msg += " + Markov chain"
         self.record_status.config(text=save_msg, foreground="green")
@@ -1835,26 +1978,30 @@ class CleanCursorInterface:
         emotion = self.current_emotional_state
         datasets = self.available_datasets.get(emotion, [])
         
-        # Update count label
+        # Update emotion dataset label
         if not datasets:
-            self.dataset_count_label.config(text=f"No datasets for '{emotion}'", foreground="gray")
+            self.current_emotion_dataset_label.config(
+                text=f"📁 {emotion.title()}: No datasets (record some first!)", 
+                foreground="#8B5CF6"
+            )
             self.dataset_dropdown['values'] = []
             self.dataset_var.set("")
+            self.dataset_status_label.config(text="No dataset selected for generation", foreground="gray")
         else:
-            total_samples = sum(d['sample_count'] for d in datasets)
-            total_states = sum(d['unique_states'] for d in datasets)
-            self.dataset_count_label.config(
-                text=f"{len(datasets)} dataset(s) • {total_samples:,} samples • {total_states} unique states", 
+            total_samples = sum(d.get('sample_count', 0) for d in datasets)
+            total_states = sum(d.get('unique_states', 0) for d in datasets)
+            self.current_emotion_dataset_label.config(
+                text=f"📁 {emotion.title()}: {len(datasets)} dataset(s), {total_samples:,} samples", 
                 foreground="darkgreen"
             )
             
             # Update dropdown
             display_options = []
             for i, dataset in enumerate(datasets):
-                samples = dataset['sample_count']
-                states = dataset['unique_states']
-                duration = dataset['duration']
-                name = dataset['display_name']
+                samples = dataset.get('sample_count', 0)
+                states = dataset.get('unique_states', 0)
+                duration = dataset.get('duration', 0)
+                name = dataset.get('display_name', f'Dataset {i+1}')
                 
                 display_text = f"{name} ({samples:,} samples, {states} states, {duration:.0f}s)"
                 display_options.append(display_text)
@@ -2294,6 +2441,15 @@ File: {dataset['filename']}
     
     def start_playback(self):
         """Start playing back recorded movements for current emotional state."""
+        # CRITICAL: Stop any other active operations first
+        if self.generating:
+            print("🛑 Stopping Markov generation to start playback")
+            self.stop_markov_generation()
+        
+        if self.recording:
+            print("🛑 Stopping recording to start playback")
+            self.stop_recording()
+        
         if self.playing_back:
             # Stop playback
             self.stop_playback()
@@ -2308,7 +2464,10 @@ File: {dataset['filename']}
         self.playback_start_time = time.time()
         self.current_playback = self.recorded_movements[self.current_emotional_state].copy()
         
+        # UPDATE UI STATE
         self.playback_btn.config(text="⏹️ Stop Playback")
+        self.record_btn.config(text="🎬 Record Movement (20s)")  # Reset record button
+        self.generate_btn.config(text="🧠 Generate (Markov)")     # Reset generate button
         self.record_status.config(text=f"Playing back {self.current_emotional_state}...", foreground="blue")
         
         print(f"▶️ Started playback of {len(self.current_playback)} movements for {self.current_emotional_state}")
@@ -2390,6 +2549,15 @@ File: {dataset['filename']}
     
     def start_markov_generation(self):
         """Start Markov chain generation for current emotional state."""
+        # CRITICAL: Stop any other active operations first  
+        if self.playing_back:
+            print("🛑 Stopping playback to start Markov generation")
+            self.stop_playback()
+        
+        if self.recording:
+            print("🛑 Stopping recording to start Markov generation")
+            self.stop_recording()
+            
         if self.generating:
             self.stop_markov_generation()
             return
@@ -2402,7 +2570,7 @@ File: {dataset['filename']}
         chain = self.markov_chains[self.current_emotional_state]
         
         # Try different transition formats (enhanced, cursor, or legacy)
-        transitions = None
+        transitions = None  
         transition_type = "unknown"
         
         if 'cursor_transitions' in chain:
@@ -2432,6 +2600,9 @@ File: {dataset['filename']}
         # Convert grid state back to mouse position
         grid_size = chain.get('grid_size', 80)  # Default to ultra high resolution
         grid_x, grid_y = start_state[:2]  # Take first two elements (x, y)
+        # BUGFIX: Ensure grid coordinates are numbers (convert from strings if needed)
+        grid_x = float(grid_x) if isinstance(grid_x, str) else grid_x
+        grid_y = float(grid_y) if isinstance(grid_y, str) else grid_y
         self.mouse_x = (grid_x + 0.5) / grid_size  # Center of grid cell
         self.mouse_y = (grid_y + 0.5) / grid_size
         
@@ -2498,6 +2669,9 @@ File: {dataset['filename']}
         # Convert grid state to mouse position
         grid_size = chain.get('grid_size', 80)  # Default to ultra high resolution
         grid_x, grid_y = next_state[:2]  # Take first two elements (x, y)
+        # BUGFIX: Ensure grid coordinates are numbers (convert from strings if needed)
+        grid_x = float(grid_x) if isinstance(grid_x, str) else grid_x
+        grid_y = float(grid_y) if isinstance(grid_y, str) else grid_y
         new_x = (grid_x + 0.5) / grid_size
         new_y = (grid_y + 0.5) / grid_size
         
@@ -2521,16 +2695,36 @@ File: {dataset['filename']}
         self.generating = False
         
         # Stop the generation timer
-        if self.generation_timer:
+        if hasattr(self, 'generation_timer') and self.generation_timer:
             self.root.after_cancel(self.generation_timer)
             self.generation_timer = None
-            
-        duration = time.time() - self.generation_start_time
+        
+        # CRITICAL: Reset button text properly
+        self.generate_btn.config(text="🧠 Generate (Markov)")
+        
+        # Clear generation state
+        self.current_markov_state = None
+        
+        # Update status
+        emotion = self.current_emotional_state
+        if emotion in self.markov_chains:
+            chain = self.markov_chains[emotion]
+            unique_states = chain.get('unique_states', 0)
+            self.markov_status.config(text=f"Chain: {unique_states} states", foreground="blue")
+        else:
+            self.markov_status.config(text="Generation stopped", foreground="gray")
+        
+        print("🛑 Markov generation stopped")
+        
+        # Calculate duration only if start time exists    
+        if hasattr(self, 'generation_start_time'):
+            duration = time.time() - self.generation_start_time
+            print(f"🎨 Stopped Markov generation after {duration:.1f} seconds")
+        else:
+            print(f"🎨 Stopped Markov generation")
         
         self.generate_btn.config(text="🧠 Generate (Markov)")
         self.markov_status.config(text="Generation stopped", foreground="gray")
-        
-        print(f"🎨 Stopped Markov generation after {duration:.1f} seconds")
     
     def auto_stop_generation(self):
         """Auto-stop generation after 30 seconds."""
@@ -2582,110 +2776,342 @@ File: {dataset['filename']}
             print("📁 No saved recordings found")
             self.markov_status.config(text="No saved chains", foreground="gray")
 
-    def start_playback(self):
-        """Start playing back recorded movements for current emotional state."""
-        if self.playing_back:
-            self.stop_playback()
-            return
-            
-        if self.current_emotional_state not in self.recorded_movements:
-            self.record_status.config(text="No recording for this emotion!", foreground="orange")
-            return
-            
-        # Start playback
-        self.playing_back = True
-        self.playback_start_time = time.time()
-        self.current_playback = self.recorded_movements[self.current_emotional_state].copy()
-        
-        self.playback_btn.config(text="⏹️ Stop Playback")
-        self.record_status.config(text=f"Playing back {self.current_emotional_state}...", foreground="blue")
-        
-        print(f"▶️ Started playback of {len(self.current_playback)} movements for {self.current_emotional_state}")
+
+def main():
+    """Main function to start the interface."""
+    print("� Starting Clean Emotional Hand Control...")
     
-    def stop_playback(self):
-        """Stop playback."""
-        self.playing_back = False
-        self.playback_btn.config(text="▶️ Play Back")
-        self.record_status.config(text="Playback stopped", foreground="gray")
-        print("⏹️ Playback stopped")
-    
-    def update_playback(self):
-        """Update cursor position during playback."""
-        if not self.playing_back or not self.current_playback:
-            return
-            
-        current_time = time.time()
-        playback_elapsed = current_time - self.playback_start_time
+    # Create and run the interface
+    interface = CleanCursorInterface()
+
+            try:
+                dataset_filename = None
+                # Extract filename from dropdown selection
+                for dataset_info in self.available_datasets.get(emotion, []):
+                    if active_dataset in dataset_info.get('filename', ''):
+                        dataset_filename = dataset_info['filename']
+                        break
+                
+                if dataset_filename:
+                    dataset_path = os.path.join("movement_recordings", dataset_filename)
+                    with open(dataset_path, 'r') as f:
+                        dataset_data = json.load(f)
+                        if 'markov_chain' in dataset_data:
+                            chain = dataset_data['markov_chain']
+                            source = f"dataset: {dataset_filename}"
+                            print(f"🎨 Using servo Markov chain from {source}")
+            except Exception as e:
+                print(f"⚠️ Failed to load dataset {active_dataset}: {e}")
         
-        # Find the movement to play at this time
-        for movement in self.current_playback:
-            movement_time = movement['time'] - self.current_playback[0]['time']  # Relative time
-            
-            if movement_time <= playback_elapsed:
-                # Update cursor position to recorded position
-                self.mouse_x = movement['x']
-                self.mouse_y = movement['y']
-            else:
-                break
+        # Fall back to memory chain if no dataset selected or loading failed
+        if not chain and emotion in self.markov_chains:
+            chain = self.markov_chains[emotion]
+            source = "current recording"
+            print(f"🎨 Using servo Markov chain from {source}")
         
-        # Check if playback finished
-        if self.current_playback:
-            total_duration = self.current_playback[-1]['time'] - self.current_playback[0]['time']
-            if playback_elapsed >= total_duration:
-                self.stop_playback()
-    
-    def stop_playback(self):
-        """Stop current playback."""
-        self.playing_back = False
-        self.current_playback = []
-        print(f"⏹️ Stopped playback")
-    
-    def start_markov_generation(self):
-        """Start Markov chain generation - CURSOR-ONLY VERSION FOR STABILITY!"""
-        if self.generating:
-            self.stop_markov_generation()
-            return
-            
-        if self.current_emotional_state not in self.markov_chains:
-            print(f"❌ No Markov chain available for {self.current_emotional_state}")
-            self.markov_status.config(text="No chain for this emotion", foreground="red")
+        if not chain:
+            print(f"❌ No servo Markov chain available for {emotion}")
+            self.markov_status.config(text="No chain available - record some movements first!", foreground="red")
             return
         
-        chain = self.markov_chains[self.current_emotional_state]
-        
-        # Use cursor transitions only (simplest approach)
-        if 'cursor_transitions' not in chain or not chain['cursor_transitions']:
-            print(f"❌ No cursor transitions available for {self.current_emotional_state}")
-            self.markov_status.config(text="No cursor data for generation", foreground="red")
+        # Use servo transitions (new system)
+        if 'servo_transitions' not in chain or not chain['servo_transitions']:
+            print(f"❌ No servo transitions available for {emotion}")
+            self.markov_status.config(text="No servo data for generation", foreground="red")
             return
         
         self.generating = True
         self.generation_start_time = time.time()
+        self.generation_max_duration = 30.0  # 30 seconds maximum
+        self.generation_step_count = 0
+        self.generation_max_steps = 1500  # Maximum steps to prevent infinite loops
         
-        # Get cursor transitions (these should work without keyboard conflicts)
-        cursor_transitions = chain['cursor_transitions']
-        grid_size = chain.get('grid_size', 80)
+        # Get servo transitions
+        servo_transitions = chain['servo_transitions']
+        discretization = chain.get('discretization', 5)
         
         # Find starting state - pick one that exists in the transitions
-        available_states = list(cursor_transitions.keys())
+        available_states = list(servo_transitions.keys())
         if not available_states:
-            print(f"❌ No available states for generation")
+            print(f"❌ No available servo states for generation")
             self.generating = False
             return
             
-        # Pick a random starting state for now (we can make this smarter later)
+        # Pick a random starting state
         import random
         self.current_markov_state = random.choice(available_states)
         
-        print(f"🎨 Starting CURSOR-ONLY Markov generation for {self.current_emotional_state}")
+        print(f"� Starting SERVO Markov generation for {emotion}")
+        print(f"🎯 Starting from state {self.current_markov_state}")
+        print(f"📊 Available states: {len(available_states)}")
+        
+        # DEBUG: Check if our chosen state actually exists in transitions
+        if self.current_markov_state in servo_transitions:
+            transitions_count = len(servo_transitions[self.current_markov_state])
+            print(f"✅ State found with {transitions_count} possible transitions")
+        else:
+            print(f"❌ CRITICAL BUG: Selected state not found in transitions!")
+            print(f"   Selected: '{self.current_markov_state}' (type: {type(self.current_markov_state)})")
+            print(f"   First 5 keys: {list(servo_transitions.keys())[:5]}")
+            self.generating = False
+            return
+        
+        print(f"⚡ ULTRA-SMOOTH generation rate: {1/self.generation_speed:.0f} Hz for buttery movement")
+        
+        self.markov_status.config(text=f"Generating servos ({source}) - ULTRA-SMOOTH", foreground="green")
+        
+        # Start generation loop at MUCH faster rate for smooth movement
+        interval_ms = int(self.generation_speed * 1000)  # Use the faster generation_speed (20ms)
+        self.root.after(interval_ms, self.step_servo_markov_generation)
+    
+    def step_servo_markov_generation(self):
+        """Execute one step of servo-based Markov generation - INFINITE SMOOTH GENERATION!"""
+        if not self.generating:
+            return
+        
+        # INFINITE GENERATION - NO TIME OR STEP LIMITS!
+        current_time = time.time()
+        elapsed_time = current_time - self.generation_start_time
+        self.generation_step_count += 1
+        
+        # Get current chain
+        emotion = self.current_emotional_state
+        chain = None
+        
+        # Use same logic as start_markov_generation to get the chain
+        active_dataset = self.active_datasets.get(emotion, "")
+        if active_dataset:
+            try:
+                dataset_filename = None
+                for dataset_info in self.available_datasets.get(emotion, []):
+                    if active_dataset in dataset_info.get('filename', ''):
+                        dataset_filename = dataset_info['filename']
+                        break
+                
+                if dataset_filename:
+                    dataset_path = os.path.join("movement_recordings", dataset_filename)
+                    with open(dataset_path, 'r') as f:
+                        dataset_data = json.load(f)
+                        if 'markov_chain' in dataset_data:
+                            chain = dataset_data['markov_chain']
+            except Exception as e:
+                pass  # Fall back to memory chain
+        
+        # Fall back to memory chain
+        if not chain and emotion in self.markov_chains:
+            chain = self.markov_chains[emotion]
+        
+        if not chain or 'servo_transitions' not in chain:
+            print(f"❌ Lost servo chain during generation for {emotion}")
+            self.stop_markov_generation()
+            return
+        
+        servo_transitions = chain['servo_transitions']
+        discretization = chain.get('discretization', 5)
+        
+        # Get current state key
+        current_state_key = self.current_markov_state
+        if current_state_key not in servo_transitions:
+            print(f"❌ No valid transitions in Markov chain for {emotion}")
+            # DEBUG: Show what we're looking for vs what we have
+            print(f"   Looking for: '{current_state_key}' (type: {type(current_state_key)})")
+            print(f"   Available keys (first 5): {list(servo_transitions.keys())[:5]}")
+            
+            # CRITICAL FIX: Try to find a close match instead of failing
+            closest_state = self._find_closest_servo_state(current_state_key, servo_transitions, discretization)
+            if closest_state:
+                print(f"� Using closest available state: {closest_state}")
+                self.current_markov_state = closest_state
+                current_state_key = closest_state
+            else:
+                print(f"🛑 STOPPING GENERATION - no recoverable state found")
+                self.stop_markov_generation()
+                return
+        
+        possible_transitions = servo_transitions[current_state_key]
+        if not possible_transitions:
+            print(f"❌ Empty servo transitions from state: {current_state_key}")
+            # FALLBACK: Try to find any state with transitions
+            fallback_found = False
+            for state_key, transitions in servo_transitions.items():
+                if transitions:  # Found a state with transitions
+                    print(f"🎲 Using fallback state with transitions: {state_key}")
+                    self.current_markov_state = state_key
+                    current_state_key = state_key
+                    possible_transitions = transitions
+                    fallback_found = True
+                    break
+            
+            if not fallback_found:
+                print(f"🛑 No states with transitions found - stopping generation")
+                self.stop_markov_generation()
+                return
+        
+        # Choose next state based on probabilities
+        next_states = list(possible_transitions.keys())
+        probabilities = list(possible_transitions.values())
+        
+        import random
+        next_state_key = random.choices(next_states, weights=probabilities)[0]
+        
+        # Parse next servo state from string representation
+        try:
+            # Convert string like "(90.0, 85.0, 100.0, 95.0)" back to servo positions
+            next_servo_state = eval(next_state_key)  # Safe since we control the format
+            if len(next_servo_state) == 4:
+                # Apply servo positions directly - this is what creates the actual movement!
+                for i, position in enumerate(next_servo_state):
+                    self.finger_positions[i] = float(position)
+                
+                # Update state for next iteration immediately - let Markov chain flow naturally
+                self.current_markov_state = next_state_key
+                
+                # Update status every 100 steps (less frequent for infinite generation)
+                if self.generation_step_count % 100 == 0:
+                    minutes = int(elapsed_time // 60)
+                    seconds = int(elapsed_time % 60)
+                    self.markov_status.config(
+                        text=f"Generating servos... {self.generation_step_count} steps ({minutes:02d}:{seconds:02d})", 
+                        foreground="green"
+                    )
+                
+                # Schedule next step at FASTER rate for smooth movement
+                interval_ms = int(self.generation_speed * 1000)  # Use generation_speed (20ms)
+                self.root.after(interval_ms, self.step_servo_markov_generation)
+            else:
+                print(f"❌ Invalid servo state format: {next_state_key}")
+                self.stop_markov_generation()
+                
+        except Exception as e:
+            print(f"❌ Error parsing servo state {next_state_key}: {e}")
+            self.stop_markov_generation()
+    
+    def _find_closest_servo_state(self, target_state_key, servo_transitions, discretization):
+        """Find the closest available servo state to the target state."""
+        try:
+            # Parse target state - handle floats properly!
+            target_servo_state = eval(target_state_key)  # Safe since we control the format
+            if not isinstance(target_servo_state, (tuple, list)) or len(target_servo_state) != 4:
+                print(f"❌ Invalid target state format: {target_state_key}")
+                return None
+            
+            target_positions = [float(x) for x in target_servo_state]
+            
+            # Find closest state by euclidean distance
+            min_distance = float('inf')
+            closest_state = None
+            
+            for state_key in servo_transitions.keys():
+                try:
+                    state_servo_positions = eval(state_key)  # Safe since we control the format
+                    if not isinstance(state_servo_positions, (tuple, list)) or len(state_servo_positions) != 4:
+                        continue
+                    
+                    state_positions = [float(x) for x in state_servo_positions]
+                    
+                    # Calculate euclidean distance
+                    distance = sum((t - s) ** 2 for t, s in zip(target_positions, state_positions)) ** 0.5
+                    
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_state = state_key
+                        
+                except (ValueError, SyntaxError):
+                    continue
+            
+            # Return the closest state if found (be more lenient)
+            if closest_state:
+                print(f"🎯 Found closest state with distance: {min_distance:.1f}")
+                return closest_state
+            
+            print(f"❌ No valid states found in transitions")
+            return None
+            
+        except (ValueError, SyntaxError, TypeError) as e:
+            print(f"❌ Error parsing target state {target_state_key}: {e}")
+            return None
+            try:
+                dataset_filename = None
+                # Extract filename from dropdown selection
+                for dataset_info in self.available_datasets.get(emotion, []):
+                    if active_dataset in dataset_info.get('filename', ''):
+                        dataset_filename = dataset_info['filename']
+                        break
+                
+                if dataset_filename:
+                    dataset_path = os.path.join("movement_recordings", dataset_filename)
+                    with open(dataset_path, 'r') as f:
+                        dataset_data = json.load(f)
+                        if 'markov_chain' in dataset_data:
+                            chain = dataset_data['markov_chain']
+                            source = f"dataset: {dataset_filename}"
+                            print(f"🎨 Using Markov chain from {source}")
+            except Exception as e:
+                print(f"⚠️ Failed to load dataset {active_dataset}: {e}")
+        
+        # Fall back to memory chain if no dataset selected or loading failed
+        if not chain and emotion in self.markov_chains:
+            chain = self.markov_chains[emotion]
+            source = "current recording"
+            print(f"🎨 Using Markov chain from {source}")
+        
+        if not chain:
+            print(f"❌ No Markov chain available for {emotion}")
+            self.markov_status.config(text="No chain available - record some movements first!", foreground="red")
+            return
+        
+        # Use servo transitions (unified system!)
+        if 'servo_transitions' not in chain or not chain['servo_transitions']:
+            print(f"❌ No servo transitions available for {emotion}")
+            self.markov_status.config(text="No servo data for generation", foreground="red")
+            return
+        
+        self.generating = True
+        self.generation_start_time = time.time()
+        self.generation_max_duration = float('inf')  # INFINITE - until manually stopped!
+        self.generation_step_count = 0
+        self.generation_max_steps = float('inf')  # INFINITE - until manually stopped!
+        
+        # Get servo transitions (unified system!)
+        servo_transitions = chain['servo_transitions']
+        discretization = chain.get('discretization', 5)  # Default to smooth 5-degree discretization
+        
+        # Find starting state - pick one that exists in the transitions
+        available_states = list(servo_transitions.keys())
+        if not available_states:
+            print(f"❌ No available servo states for generation")
+            self.generating = False
+            return
+            
+        # Pick a random starting state for servo generation
+        import random
+        self.current_markov_state = random.choice(available_states)
+        
+        # Parse the starting servo state and apply to fingers immediately
+        try:
+            # Parse servo state like "(165, 165, 135, 110)"
+            start_state_str = self.current_markov_state.strip('()')
+            servo_positions = [int(float(x.strip())) for x in start_state_str.split(',')]
+            
+            # Ensure we have 4 values
+            if len(servo_positions) >= 4:
+                self.finger_positions = servo_positions[:4].copy()
+                self.finger_targets = servo_positions[:4].copy()
+            else:
+                print(f"⚠️ Invalid servo state format: {self.current_markov_state}")
+        except Exception as e:
+            print(f"⚠️ Failed to parse servo state '{self.current_markov_state}': {e}")
+        
+        print(f"🎨 Starting INFINITE SERVO Markov generation for {self.current_emotional_state}")
         print(f"🎯 Starting from state {self.current_markov_state}")
         print(f"📊 Available states: {len(available_states)}")
         
         self.generate_btn.config(text="⏹️ Stop Generation")
-        self.record_status.config(text=f"Generating cursor patterns...", foreground="purple")
+        self.record_status.config(text=f"Generating servo patterns (INFINITE)...", foreground="purple")
         
-        # Start generation timer
-        self.start_generation_timer()
+        # Start generation timer using FAST generation rate for smooth movement
+        interval_ms = int(self.generation_speed * 1000)  # Use generation_speed (20ms)
+        self.root.after(interval_ms, self.step_servo_markov_generation)
         
         chain = self.markov_chains[self.current_emotional_state]
         
@@ -2761,9 +3187,26 @@ File: {dataset['filename']}
             self.generation_timer = self.root.after(interval_ms, self.start_generation_timer)
     
     def step_markov_generation(self):
-        """Take one step in Markov chain generation - CURSOR-ONLY VERSION!"""
+        """Take one step in Markov chain generation with stopping logic."""
         if not self.generating or self.current_markov_state is None:
             return
+        
+        # Check time and step limits
+        if hasattr(self, 'generation_start_time'):
+            elapsed_time = time.time() - self.generation_start_time
+            if elapsed_time > getattr(self, 'generation_max_duration', 30.0):
+                print(f"⏰ Generation stopped: time limit reached ({elapsed_time:.1f}s)")
+                self.stop_markov_generation()
+                return
+        
+        if hasattr(self, 'generation_step_count'):
+            self.generation_step_count += 1
+            if self.generation_step_count > getattr(self, 'generation_max_steps', 1500):
+                print(f"🔢 Generation stopped: step limit reached ({self.generation_step_count} steps)")
+                self.stop_markov_generation()
+                return
+        else:
+            self.generation_step_count = 1
         
         chain = self.markov_chains[self.current_emotional_state]
         cursor_transitions = chain['cursor_transitions']
@@ -2823,6 +3266,29 @@ File: {dataset['filename']}
         new_y = next_state[1] / grid_size
         
         # Smooth interpolation
+        if hasattr(self, 'generation_smoothing') and self.generation_smoothing:
+            easing = getattr(self, 'generation_easing_factor', 0.1)
+            self.mouse_x = self.mouse_x * (1 - easing) + new_x * easing
+            self.mouse_y = self.mouse_y * (1 - easing) + new_y * easing
+        else:
+            self.mouse_x = new_x
+            self.mouse_y = new_y
+        
+        # Update current state for next iteration
+        self.current_markov_state = next_state_key
+        
+        # Update status periodically
+        if hasattr(self, 'generation_step_count') and self.generation_step_count % 50 == 0:
+            if hasattr(self, 'generation_start_time') and hasattr(self, 'generation_max_duration'):
+                elapsed = time.time() - self.generation_start_time
+                remaining = self.generation_max_duration - elapsed
+                progress = (elapsed / self.generation_max_duration) * 100
+                self.markov_status.config(
+                    text=f"Generating... {progress:.0f}% ({remaining:.0f}s left)", 
+                    foreground="green"
+                )
+        
+        # Apply movement with smoothing
         if self.generation_smoothing:
             easing = self.generation_easing_factor
             self.mouse_x = self.mouse_x * (1 - easing) + new_x * easing
@@ -2833,17 +3299,30 @@ File: {dataset['filename']}
         
         # Update current state for next iteration
         self.current_markov_state = next_state_key
-        
-        # Continue generation (timer will call this function again)
-        
-        # Add smoothness bias: prefer states closer to current position
         current_x = self.mouse_x * chain['grid_size']
         current_y = self.mouse_y * chain['grid_size']
         
         # Weight probabilities by distance (closer states get higher probability)
         smoothed_probs = []
         for i, state in enumerate(next_states):
-            grid_x, grid_y = state
+            # BUGFIX: Properly parse state whether it's a tuple or string
+            if isinstance(state, str):
+                # Parse string representation like "(29, 33)" back to tuple
+                parsed_state = self.parse_markov_state_key(state)
+                if parsed_state and len(parsed_state) >= 2:
+                    grid_x, grid_y = parsed_state[:2]
+                else:
+                    continue  # Skip invalid states
+            else:
+                # Already a tuple/list
+                grid_x, grid_y = state[:2]
+            
+            # Ensure grid coordinates are numbers with error handling
+            try:
+                grid_x = float(grid_x)
+                grid_y = float(grid_y)
+            except (ValueError, TypeError):
+                continue  # Skip states that can't be converted
             distance = ((grid_x - current_x) ** 2 + (grid_y - current_y) ** 2) ** 0.5
             # Smooth movement bias: closer states get boosted probability
             distance_weight = 1.0 / (1.0 + distance * 0.1)  # Gentle bias toward closer states
@@ -2861,7 +3340,26 @@ File: {dataset['filename']}
         self.current_markov_state = random.choices(next_states, weights=smoothed_probs)[0]
         
         # Convert grid state back to mouse position with HIGH PRECISION
-        grid_x, grid_y = self.current_markov_state
+        # BUGFIX: Properly parse state whether it's a tuple or string
+        if isinstance(self.current_markov_state, str):
+            # Parse string representation like "(29, 33)" back to tuple
+            parsed_state = self.parse_markov_state_key(self.current_markov_state)
+            if parsed_state and len(parsed_state) >= 2:
+                grid_x, grid_y = parsed_state[:2]
+            else:
+                print(f"⚠️ Failed to parse Markov state: {self.current_markov_state}")
+                return  # Stop generation if we can't parse the state
+        else:
+            # Already a tuple/list
+            grid_x, grid_y = self.current_markov_state[:2]
+        
+        # Ensure grid coordinates are numbers with error handling
+        try:
+            grid_x = float(grid_x)
+            grid_y = float(grid_y)
+        except (ValueError, TypeError):
+            print(f"⚠️ Invalid grid coordinates: {grid_x}, {grid_y}")
+            return  # Stop generation if coordinates are invalid
         grid_size = chain['grid_size']
         
         # Better coordinate conversion with smoothing
@@ -2872,12 +3370,23 @@ File: {dataset['filename']}
         last_x, last_y = self.last_generated_pos
         smoothing_factor = 0.3  # How much to smooth (0=instant, 1=no change)
         
+        old_mouse_x, old_mouse_y = self.mouse_x, self.mouse_y
         self.mouse_x = last_x + (target_x - last_x) * (1 - smoothing_factor)
         self.mouse_y = last_y + (target_y - last_y) * (1 - smoothing_factor)
         
         # Clamp to valid range
         self.mouse_x = max(0.0, min(1.0, self.mouse_x))
         self.mouse_y = max(0.0, min(1.0, self.mouse_y))
+        
+        # Debug output - show cursor movement
+        if hasattr(self, 'markov_step_count'):
+            self.markov_step_count += 1
+        else:
+            self.markov_step_count = 1
+            
+        if self.markov_step_count <= 10 or self.markov_step_count % 10 == 0:
+            movement = abs(self.mouse_x - old_mouse_x) + abs(self.mouse_y - old_mouse_y)
+            print(f"🎨 Markov step {self.markov_step_count}: grid({grid_x},{grid_y}) -> target({target_x:.3f},{target_y:.3f}) -> mouse({self.mouse_x:.3f},{self.mouse_y:.3f}) movement:{movement:.4f}")
         
         # Update smoothing state
         self.last_generated_pos = (self.mouse_x, self.mouse_y)
@@ -2892,21 +3401,35 @@ File: {dataset['filename']}
         pass
     
     def stop_markov_generation(self):
-        """Stop Markov chain generation."""
+        """Stop Markov chain generation with comprehensive cleanup."""
         if not self.generating:
             return
         
+        # Calculate stats if available
+        if hasattr(self, 'generation_start_time'):
+            duration = time.time() - self.generation_start_time
+            steps = getattr(self, 'generation_step_count', 0)
+            print(f"🛑 Stopping Markov generation after {duration:.1f}s and {steps} steps")
+        
         self.generating = False
         
+        # Clean up generation state and calculate duration
+        generation_duration = 0
+        if hasattr(self, 'generation_start_time'):
+            generation_duration = time.time() - self.generation_start_time
+            del self.generation_start_time
+        if hasattr(self, 'generation_step_count'):
+            del self.generation_step_count
+        
         # Stop the generation timer
-        if self.generation_timer:
+        if hasattr(self, 'generation_timer') and self.generation_timer:
             self.root.after_cancel(self.generation_timer)
             self.generation_timer = None
         
+        # Update UI
         self.generate_btn.config(text="🧠 Generate (Markov)")
-        self.record_status.config(text="Generation stopped", foreground="gray")
+        self.markov_status.config(text="Generation stopped", foreground="blue")
         
-        generation_duration = time.time() - self.generation_start_time
         print(f"🎨 Stopped Markov generation after {generation_duration:.1f} seconds")
     
     def load_saved_movements(self):

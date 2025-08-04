@@ -1,0 +1,29 @@
+{
+  "neutral": {
+    "signature": {
+      "avg_speed": 1.2130891318982784,
+      "max_speed": 102.89210147006924,
+      "speed_variance": 11.312783938436683,
+      "total_distance": 11.524197891859265,
+      "pause_count": 953,
+      "movement_count": 2612,
+      "agitation_level": 1.0,
+      "contemplation": 0.36485451761102605,
+      "explosiveness": 1.0,
+      "consistency": 0.0
+    },
+    "parameters": {
+      "base_speed": 50.0,
+      "behavior_transition_interval": 0.5,
+      "burst_movement_chance": 0.6,
+      "noise_amplitude": 0.5,
+      "macro_noise_amplitude": 0.1,
+      "pause_probability": 0.2,
+      "direction_persistence": 0.2,
+      "mood_influence": 2.4261782637965568,
+      "micro_noise_amplitude": 0.1
+    },
+    "sample_count": 2612,
+    "learned_at": 1753923620.115623
+  }
+}

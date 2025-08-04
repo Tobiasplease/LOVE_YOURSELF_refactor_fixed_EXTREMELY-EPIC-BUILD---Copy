@@ -11,7 +11,7 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
 USE_SERVO = False
-USE_HAND_SERVO = True  # Toggle for hand expression system - set False to disable hand reactions
+USE_HAND_SERVO = False  # DISABLED - Hand control moved to isolated system in hand_control_isolated/
 SERVO_MIN = 30  # Expanded from 45 for wider tracking range
 SERVO_MAX = 150  # Expanded from 135 for wider tracking range
 EASING_FACTOR = 0.09

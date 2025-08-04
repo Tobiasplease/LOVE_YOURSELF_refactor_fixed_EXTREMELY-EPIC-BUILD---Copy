@@ -1,0 +1,32 @@
+{
+  "neutral": {
+    "signature": {
+      "avg_speed": 1.1312792598428105,
+      "speed_variance": 4.789595044852636,
+      "avg_acceleration": 740.4005445801183,
+      "direction_changes": 33,
+      "agitation_level": 0.018102029621503018,
+      "burst_intensity": 2.756879456361192,
+      "explosiveness": 2.436957481872563,
+      "contemplation": 0.2759188151398793,
+      "consistency": -2.742477048249973,
+      "rhythm_frequency": 3.58397365532382,
+      "total_distance": 8.739019798694667,
+      "duration": 27.335174560546875
+    },
+    "parameters": {
+      "base_speed": 5.0,
+      "dampening": 0.88,
+      "emotional_influence": 3.0,
+      "behavior_transition_interval": 2.81897970378497,
+      "burst_movement_chance": 0.3,
+      "chaos_multiplier": 1.8712385241249865,
+      "base_noise_level": 0.3742477048249973,
+      "pause_probability": 0.2,
+      "direction_persistence": 0.9637959407569939,
+      "micro_jitter": 0.1
+    },
+    "sample_count": 1823,
+    "learned_at": 1753902587.1012638
+  }
+}

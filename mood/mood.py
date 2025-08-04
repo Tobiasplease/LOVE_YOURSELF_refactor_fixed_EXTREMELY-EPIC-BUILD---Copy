@@ -20,6 +20,10 @@ class MoodEngine:
         self.last_caption = ""
         self.last_person_detected = False
         self.memory = []
+        
+        # Track novelty and boredom for external systems (like hand control)
+        self.novelty = 0.0  # Current novelty level (0.0 to 1.0)
+        self.boredom = 0.0  # Current boredom level (0.0 to 1.0)
 
     # -------------------------------------------------------------- main hook
     def analyze_mood(self, caption: str, image_path: Optional[str] = None, temporal_context: Optional[dict] = None) -> float:
@@ -27,6 +31,16 @@ class MoodEngine:
         saw_person = "person" in caption.lower() or "individual" in caption.lower()
 
         novelty = self.calculate_novelty(caption)
+        
+        # Store novelty as instance attribute for external systems
+        self.novelty = novelty
+        
+        # Calculate boredom based on low novelty over time
+        # If novelty is consistently low, boredom increases
+        if novelty < 0.3:
+            self.boredom = min(1.0, self.boredom + 0.05)
+        else:
+            self.boredom = max(0.0, self.boredom - 0.02)
         
         # Apply temporal context modifiers if available
         temporal_modifier = 0.0
