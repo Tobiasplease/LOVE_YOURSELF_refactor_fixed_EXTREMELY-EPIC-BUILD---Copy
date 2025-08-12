@@ -22,5 +22,8 @@ matplotlib>=3.7.0
 openai-whisper>=20231117
 pyaudio>=0.2.11
 
+bCNC>=0.9.16
+PyAutoGUI>=0.9.54
+PyGetWindow>=0.0.9
 spacy
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
