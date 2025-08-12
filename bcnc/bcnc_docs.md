@@ -21,12 +21,3 @@ Här är en lista på vad man kan göra i kommandoraden:
 https://github-wiki-see.page/m/vlachoudis/bCNC/wiki/CommandLine
 
 ---
-
-jbe fix:
-
-- simpler svg lora
-- simpler svg filter? vs svg_converter?
-- test flow on my comp: svg settings
-
-- test gui hook: fix paths
-- sep env for bcnc: bcnc scan hook
