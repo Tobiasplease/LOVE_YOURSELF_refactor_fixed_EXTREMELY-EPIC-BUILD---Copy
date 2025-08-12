@@ -16,7 +16,7 @@ echo "Installing Python dependencies..."
 pip install -r requirements_bcnc_ubuntu.txt
 
 # Check if bCNC is available
-if ! command -v bcnc &> /dev/null; then
+if ! command -v bCNC &> /dev/null; then
     echo "bCNC not found. You may need to install it separately:"
     echo "Option 1: sudo apt install bcnc (if available in your distribution)"
     echo "Option 2: Download from https://github.com/vlachoudis/bCNC"
