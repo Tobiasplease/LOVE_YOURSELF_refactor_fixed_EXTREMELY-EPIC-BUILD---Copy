@@ -28,6 +28,11 @@ def try_bcnc_cli(svg_file, output_file, origin=(0, 0, 0)):
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                 if result.returncode == 0:
                     print(f"[INFO] bCNC CLI lyckades: {output_file}")
+                    # Convert Z commands to servo commands
+                    temp_file = output_file + ".tmp"
+                    if convert_z_to_servo(output_file, temp_file):
+                        import os
+                        os.replace(temp_file, output_file)
                     return True
                 else:
                     print(f"[DEBUG] Kommando misslyckades: {result.stderr}")
@@ -38,6 +43,48 @@ def try_bcnc_cli(svg_file, output_file, origin=(0, 0, 0)):
         print(f"[DEBUG] bCNC CLI inte tillgängligt: {e}")
 
     return False
+
+
+def convert_z_to_servo(input_file, output_file):
+    """Convert Z commands to servo commands - same as original"""
+    print("[INFO] Konverterar Z-kommandon till servo...")
+    try:
+        current_pen_state = None
+        with open(input_file, "r") as infile, open(output_file, "w") as outfile:
+            for line in infile:
+                clean = line.strip()
+                if clean.startswith("G0"):
+                    if current_pen_state != "up":
+                        outfile.write("M3 S40 ; PEN UP\n")
+                        current_pen_state = "up"
+                    outfile.write(line)
+                elif clean.startswith("G1"):
+                    if current_pen_state != "down":
+                        outfile.write("M3 S50 ; PEN DOWN\n")
+                        current_pen_state = "down"
+                    outfile.write(line)
+                elif "Z" in clean:
+                    for part in clean.split():
+                        if part.startswith("Z"):
+                            try:
+                                z = float(part[1:])
+                                if z > 0 and current_pen_state != "up":
+                                    outfile.write("M3 S30 ; PEN UP\n")
+                                    current_pen_state = "up"
+                                elif z <= 0 and current_pen_state != "down":
+                                    outfile.write("M3 S90 ; PEN DOWN\n")
+                                    current_pen_state = "down"
+                            except ValueError:
+                                print(f"[FEL] Kunde inte konvertera Z-värde: {part}")
+                                pass
+                    outfile.write(line)
+                else:
+                    outfile.write(line)
+        print(f"[INFO] Optimerad G-kod sparad: {output_file}")
+        return True
+    except Exception as e:
+        print(f"[FEL] Z-to-servo konvertering misslyckades: {e}")
+        return False
 
 
 def svg_to_gcode_simple(svg_file, output_file, origin=(0, 0, 0)):
