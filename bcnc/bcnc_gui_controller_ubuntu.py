@@ -66,11 +66,23 @@ class LinuxWindowManager:
 
     @staticmethod
     def activate_window_xdotool(window_id):
-        """Activate window using xdotool"""
+        """Activate window using xdotool with multiple methods"""
         try:
-            subprocess.run(["xdotool", "windowactivate", str(window_id)], check=True)
+            # Method 1: Raise and focus the window
+            subprocess.run(["xdotool", "windowactivate", "--sync", str(window_id)], check=True)
+            time.sleep(0.5)
+            
+            # Method 2: Also raise it to front
+            subprocess.run(["xdotool", "windowraise", str(window_id)], check=True)
+            time.sleep(0.5)
+            
+            # Method 3: Focus it explicitly
+            subprocess.run(["xdotool", "windowfocus", str(window_id)], check=True)
+            time.sleep(0.5)
+            
             return True
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
+            print(f"[DEBUG] xdotool activation failed: {e}")
             return False
 
     @staticmethod
@@ -215,6 +227,24 @@ def find_and_activate_bcnc():
     return False
 
 
+def get_window_position(window_id):
+    """Get window position using xdotool"""
+    try:
+        result = subprocess.run(
+            ["xdotool", "getwindowgeometry", str(window_id)],
+            capture_output=True, text=True, check=True
+        )
+        # Parse output like: "Position: 960,64 (screen: 0)"
+        for line in result.stdout.split('\n'):
+            if "Position:" in line:
+                pos_part = line.split("Position:")[1].split("(")[0].strip()
+                x, y = map(int, pos_part.split(','))
+                return x + 100, y + 100  # Click a bit inside the window
+        return None, None
+    except subprocess.CalledProcessError:
+        return None, None
+
+
 def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
     """Import SVG and export G-code using bCNC - Ubuntu compatible"""
     print("[INFO] Startar import och export i bCNC...")
@@ -222,19 +252,41 @@ def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
     if not find_and_activate_bcnc():
         return False
 
+    # Get the specific window that was activated
+    bcnc_window_id = None
+    for title in ["bCNC", "bcnc", "BCNC", "bCNC 0.9"]:
+        if shutil.which("xdotool"):
+            window_ids = LinuxWindowManager.find_window_xdotool(title)
+            if window_ids:
+                bcnc_window_id = window_ids[0]
+                break
+        elif shutil.which("wmctrl"):
+            window_ids = LinuxWindowManager.find_window_wmctrl(title)
+            if window_ids:
+                bcnc_window_id = window_ids[0]
+                break
+
+    if bcnc_window_id:
+        # Get window position and click on it
+        x, y = get_window_position(bcnc_window_id)
+        if x and y:
+            print(f"[INFO] Klickar på bCNC-fönster på position ({x}, {y})")
+            pyautogui.click(x, y)
+            time.sleep(1)
+        
+        # Force focus using xdotool again
+        if shutil.which("xdotool"):
+            subprocess.run(["xdotool", "windowfocus", str(bcnc_window_id)], check=False)
+            time.sleep(1)
+
     # Wait longer for window to become active and focused
     print("[INFO] Väntar på att fönstret ska bli aktivt...")
-    time.sleep(3)  # Increased delay
-    
-    # Click on the bCNC window to ensure it's focused
-    print("[INFO] Klickar på bCNC-fönstret för att säkerställa fokus...")
-    pyautogui.click()
-    time.sleep(1)
+    time.sleep(2)
 
     # Öppna kommandorad och importera SVG
     print("[INFO] Öppnar kommandorad...")
     pyautogui.hotkey("ctrl", "space")
-    time.sleep(1)  # Increased delay
+    time.sleep(1)
     svg_path = svg_file.replace("\\", "/")
     print(f"[INFO] Skriver load-kommando: load {svg_path}")
     pyautogui.write(f"load {svg_path}")
