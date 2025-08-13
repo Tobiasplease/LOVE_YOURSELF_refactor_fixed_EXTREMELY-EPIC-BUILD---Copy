@@ -12,31 +12,32 @@ output_gcode = f"{base_path}/drawing.ngc"
 origin_offset = (-40, -40, 0)
 
 
-def try_bcnc_cli(svg_file, output_file, origin=(0, 0, 0)):
-    """Try using bCNC command line interface if available"""
+def try_bcnc_cli_run(gcode_file):
+    """Try to run G-code file using bCNC CLI with filename argument"""
     try:
-        # Try different possible bCNC CLI commands
+        # Try different methods to start bCNC with the file
         cli_commands = [
-            ["bcnc", "--load", svg_file, "--save", output_file],
-            ["bCNC", "--load", svg_file, "--save", output_file],
-            ["python", "-m", "bCNC", "--load", svg_file, "--save", output_file],
+            # Method 1: Load file and run immediately
+            ["bcnc", "--run", gcode_file],
+            ["bCNC", "--run", gcode_file],
+            # Method 2: Just load the file (user can run manually)
+            ["bcnc", gcode_file],
+            ["bCNC", gcode_file]
         ]
 
         for cmd in cli_commands:
             try:
                 print(f"[INFO] Försöker: {' '.join(cmd)}")
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                if result.returncode == 0:
-                    print(f"[INFO] bCNC CLI lyckades: {output_file}")
-                    # Convert Z commands to servo commands
-                    temp_file = output_file + ".tmp"
-                    if convert_z_to_servo(output_file, temp_file):
-                        import os
-                        os.replace(temp_file, output_file)
-                    return True
+                # Start bCNC in background
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                print(f"[INFO] bCNC startad med PID {process.pid}")
+                
+                if "--run" in cmd:
+                    print("[INFO] Filen kommer köras automatiskt")
                 else:
-                    print(f"[DEBUG] Kommando misslyckades: {result.stderr}")
-            except (subprocess.TimeoutExpired, FileNotFoundError):
+                    print("[INFO] Filen laddad - tryck RUN i bCNC för att starta")
+                return True
+            except FileNotFoundError:
                 continue
 
     except Exception as e:
@@ -200,48 +201,25 @@ def parse_svg_points(points_str):
     return gcode
 
 
-def run_gcode_via_bcnc_cli(gcode_file):
-    """Try to run G-code via bCNC CLI"""
-    try:
-        cli_commands = [["bcnc", "--run", gcode_file], ["bCNC", "--run", gcode_file]]
-
-        for cmd in cli_commands:
-            try:
-                print(f"[INFO] Kör G-code: {' '.join(cmd)}")
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-                if result.returncode == 0:
-                    print("[INFO] G-code körning startad")
-                    return True
-                else:
-                    print(f"[DEBUG] Körning misslyckades: {result.stderr}")
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                continue
-
-    except Exception as e:
-        print(f"[FEL] Kunde inte köra G-code: {e}")
-
-    print("[INFO] Använd GUI för att köra G-code manuellt")
-    return False
 
 
 def main():
-    """Main function - try CLI first, fallback to direct conversion"""
-    print("[INFO] Försöker CLI-metod först...")
+    """Main function - direct SVG to G-code conversion with CLI execution"""
+    print("[INFO] Konverterar SVG till G-code...")
 
-    # Try bCNC CLI first
-    if try_bcnc_cli(svg_input, output_gcode, origin_offset):
-        run_gcode_via_bcnc_cli(output_gcode)
-        return
-
-    print("[INFO] CLI inte tillgängligt, konverterar direkt...")
-
-    # Fallback to direct conversion
+    # Direct conversion (no bCNC CLI for conversion, only execution)
     if svg_to_gcode_simple(svg_input, output_gcode, origin_offset):
-        if not run_gcode_via_bcnc_cli(output_gcode):
-            print(f"[INFO] G-code klar: {output_gcode}")
-            print("[INFO] Ladda filen manuellt i bCNC för körning")
+        print(f"[INFO] G-code genererad: {output_gcode}")
+        
+        # Try to run with bCNC CLI --run option
+        if try_bcnc_cli_run(output_gcode):
+            print("[INFO] bCNC startad för att köra G-code")
+        else:
+            print("[INFO] Kunde inte starta bCNC automatiskt")
+            print("[INFO] Starta bCNC manuellt och ladda filen:")
+            print(f"       {output_gcode}")
     else:
-        print("[FEL] Konvertering misslyckades")
+        print("[FEL] SVG konvertering misslyckades")
 
 
 if __name__ == "__main__":
