@@ -117,10 +117,28 @@ class LinuxWindowManager:
 
     @staticmethod
     def activate_window_xwininfo(window_id):
-        """Activate window using xdotool (xwininfo can't activate)"""
-        # xwininfo can't activate, so fall back to xdotool if available
+        """Activate window using alternative methods since xwininfo can't activate"""
+        print(f"[DEBUG] Försöker aktivera fönster {hex(window_id)}")
+        
+        # Try xdotool if available
         if shutil.which("xdotool"):
+            print("[DEBUG] Använder xdotool för aktivering")
             return LinuxWindowManager.activate_window_xdotool(window_id)
+        
+        # Try wmctrl if available  
+        if shutil.which("wmctrl"):
+            print("[DEBUG] Använder wmctrl för aktivering")
+            return LinuxWindowManager.activate_window_wmctrl(window_id)
+        
+        # Last resort: try using xprop to raise the window
+        try:
+            print("[DEBUG] Försöker med xprop som sista utväg")
+            subprocess.run(["xprop", "-id", hex(window_id), "-f", "_NET_ACTIVE_WINDOW", "32a", "-set", "_NET_ACTIVE_WINDOW", "1"], check=True)
+            return True
+        except subprocess.CalledProcessError:
+            pass
+        
+        print("[DEBUG] Ingen metod fungerade för att aktivera fönster")
         return False
 
     @staticmethod
@@ -204,30 +222,47 @@ def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
     if not find_and_activate_bcnc():
         return False
 
+    # Wait longer for window to become active and focused
+    print("[INFO] Väntar på att fönstret ska bli aktivt...")
+    time.sleep(3)  # Increased delay
+    
+    # Click on the bCNC window to ensure it's focused
+    print("[INFO] Klickar på bCNC-fönstret för att säkerställa fokus...")
+    pyautogui.click()
+    time.sleep(1)
+
     # Öppna kommandorad och importera SVG
+    print("[INFO] Öppnar kommandorad...")
     pyautogui.hotkey("ctrl", "space")
-    time.sleep(0.5)
+    time.sleep(1)  # Increased delay
     svg_path = svg_file.replace("\\", "/")
+    print(f"[INFO] Skriver load-kommando: load {svg_path}")
     pyautogui.write(f"load {svg_path}")
     pyautogui.press("enter")
     time.sleep(5)
 
     # Markera allt och sätt origin
+    print("[INFO] Markerar allt och sätter origin...")
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.3)
-    pyautogui.hotkey("ctrl", "space")
     time.sleep(0.5)
-    pyautogui.write(f"origin [{origin[0]}] [{origin[1]}] [{origin[2]}]")
-    pyautogui.press("enter")
+    pyautogui.hotkey("ctrl", "space")
     time.sleep(1)
-
-    # Spara G-kod
-    pyautogui.hotkey("ctrl", "space")
-    time.sleep(0.5)
-    output_path = output_gcode_file.replace("\\", "/")
-    pyautogui.write(f"save {output_path}")
+    origin_cmd = f"origin [{origin[0]}] [{origin[1]}] [{origin[2]}]"
+    print(f"[INFO] Skriver origin-kommando: {origin_cmd}")
+    pyautogui.write(origin_cmd)
     pyautogui.press("enter")
     time.sleep(2)
+
+    # Spara G-kod
+    print("[INFO] Sparar G-kod...")
+    pyautogui.hotkey("ctrl", "space")
+    time.sleep(1)
+    output_path = output_gcode_file.replace("\\", "/")
+    save_cmd = f"save {output_path}"
+    print(f"[INFO] Skriver save-kommando: {save_cmd}")
+    pyautogui.write(save_cmd)
+    pyautogui.press("enter")
+    time.sleep(3)
 
     return True
 
