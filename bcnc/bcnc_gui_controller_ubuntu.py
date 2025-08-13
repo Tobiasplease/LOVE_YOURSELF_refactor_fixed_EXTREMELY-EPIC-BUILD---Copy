@@ -32,9 +32,10 @@ class LinuxWindowManager:
 
     @staticmethod
     def find_window_xdotool(title):
-        """Find window using xdotool"""
+        """Find window using xdotool - search for titles that START with the given string"""
         try:
-            result = subprocess.run(["xdotool", "search", "--name", title], capture_output=True, text=True, check=False)
+            # Search for windows where title starts with the given string
+            result = subprocess.run(["xdotool", "search", "--name", f"^{title}"], capture_output=True, text=True, check=False)
             if result.returncode == 0 and result.stdout.strip():
                 return [int(wid) for wid in result.stdout.strip().split("\n") if wid]
         except Exception:
@@ -43,15 +44,17 @@ class LinuxWindowManager:
 
     @staticmethod
     def find_window_wmctrl(title):
-        """Find window using wmctrl"""
+        """Find window using wmctrl - search for titles that START with the given string"""
         try:
             result = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, check=False)
             if result.returncode == 0:
                 windows = []
                 for line in result.stdout.split("\n"):
-                    if title.lower() in line.lower():
-                        parts = line.split()
-                        if parts:
+                    # Check if window title starts with the given string
+                    parts = line.split(None, 4)  # Split into max 5 parts to preserve title
+                    if len(parts) >= 5:
+                        window_title = parts[4].lower()
+                        if window_title.startswith(title.lower()):
                             try:
                                 windows.append(int(parts[0], 16))  # wmctrl uses hex
                             except ValueError:
