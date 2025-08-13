@@ -84,30 +84,37 @@ class LinuxWindowManager:
 
     @staticmethod
     def find_window_xwininfo(title):
-        """Find window using xwininfo + xprop combination"""
+        """Find window using xwininfo - search for titles that START with the given string"""
         try:
             # Get list of all window IDs
-            result = subprocess.run(
-                ["xwininfo", "-root", "-tree"],
-                capture_output=True, text=True, check=False
-            )
+            result = subprocess.run(["xwininfo", "-root", "-tree"], capture_output=True, text=True, check=False)
             if result.returncode == 0:
                 windows = []
                 # Parse window IDs from the tree output
                 import re
-                for line in result.stdout.split('\n'):
-                    match = re.search(r'0x[0-9a-f]+', line)
-                    if match and title.lower() in line.lower():
-                        try:
-                            wid = int(match.group(), 16)
-                            windows.append(wid)
-                        except ValueError:
-                            continue
+
+                for line in result.stdout.split("\n"):
+                    # Look for pattern: 0x123456 "Window Title":
+                    # bCNC 0.9.16 (linux py3.10.12)
+                    match = re.search(r'(0x[0-9a-f]+)\s+"([^"]+)":', line)
+                    if match:
+                        window_id = match.group(1)
+                        window_title = match.group(2)
+                        # Check if window title starts with our search term
+                        if window_title.lower().startswith(title.lower()):
+                            try:
+                                wid = int(window_id, 16)
+                                # Filter out tiny windows (likely dialogs/tooltips)
+                                if "960x1016" in line or not re.search(r"\b1x1\b", line):
+                                    windows.append(wid)
+                                    print(f"[DEBUG] Hittade matchande fönster: {window_title} (ID: {window_id})")
+                            except ValueError:
+                                continue
                 return windows
         except Exception:
             pass
         return []
-    
+
     @staticmethod
     def activate_window_xwininfo(window_id):
         """Activate window using xdotool (xwininfo can't activate)"""
@@ -120,26 +127,26 @@ class LinuxWindowManager:
     def debug_list_all_windows():
         """Debug function to list all visible windows"""
         print("[DEBUG] Listar alla fönster:")
-        
+
         # Try wmctrl first
         if shutil.which("wmctrl"):
             try:
                 result = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, check=False)
                 if result.returncode == 0:
-                    for line in result.stdout.split('\n'):
+                    for line in result.stdout.split("\n"):
                         if line.strip():
                             print(f"[DEBUG] wmctrl: {line}")
                     return
             except Exception:
                 pass
-        
+
         # Try xwininfo as fallback
         if shutil.which("xwininfo"):
             try:
                 result = subprocess.run(["xwininfo", "-root", "-tree"], capture_output=True, text=True, check=False)
                 if result.returncode == 0:
-                    for line in result.stdout.split('\n'):
-                        if 'bCNC' in line or 'bcnc' in line.lower():
+                    for line in result.stdout.split("\n"):
+                        if "bCNC" in line or "bcnc" in line.lower():
                             print(f"[DEBUG] xwininfo: {line}")
             except Exception:
                 pass
