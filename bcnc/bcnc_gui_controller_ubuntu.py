@@ -83,11 +83,74 @@ class LinuxWindowManager:
             return False
 
     @staticmethod
+    def find_window_xwininfo(title):
+        """Find window using xwininfo + xprop combination"""
+        try:
+            # Get list of all window IDs
+            result = subprocess.run(
+                ["xwininfo", "-root", "-tree"],
+                capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0:
+                windows = []
+                # Parse window IDs from the tree output
+                import re
+                for line in result.stdout.split('\n'):
+                    match = re.search(r'0x[0-9a-f]+', line)
+                    if match and title.lower() in line.lower():
+                        try:
+                            wid = int(match.group(), 16)
+                            windows.append(wid)
+                        except ValueError:
+                            continue
+                return windows
+        except Exception:
+            pass
+        return []
+    
+    @staticmethod
+    def activate_window_xwininfo(window_id):
+        """Activate window using xdotool (xwininfo can't activate)"""
+        # xwininfo can't activate, so fall back to xdotool if available
+        if shutil.which("xdotool"):
+            return LinuxWindowManager.activate_window_xdotool(window_id)
+        return False
+
+    @staticmethod
+    def debug_list_all_windows():
+        """Debug function to list all visible windows"""
+        print("[DEBUG] Listar alla fönster:")
+        
+        # Try wmctrl first
+        if shutil.which("wmctrl"):
+            try:
+                result = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, check=False)
+                if result.returncode == 0:
+                    for line in result.stdout.split('\n'):
+                        if line.strip():
+                            print(f"[DEBUG] wmctrl: {line}")
+                    return
+            except Exception:
+                pass
+        
+        # Try xwininfo as fallback
+        if shutil.which("xwininfo"):
+            try:
+                result = subprocess.run(["xwininfo", "-root", "-tree"], capture_output=True, text=True, check=False)
+                if result.returncode == 0:
+                    for line in result.stdout.split('\n'):
+                        if 'bCNC' in line or 'bcnc' in line.lower():
+                            print(f"[DEBUG] xwininfo: {line}")
+            except Exception:
+                pass
+
+    @staticmethod
     def find_and_activate_window(title):
         """Try multiple methods to find and activate window"""
         methods = [
             ("xdotool", LinuxWindowManager.find_window_xdotool, LinuxWindowManager.activate_window_xdotool),
             ("wmctrl", LinuxWindowManager.find_window_wmctrl, LinuxWindowManager.activate_window_wmctrl),
+            ("xwininfo", LinuxWindowManager.find_window_xwininfo, LinuxWindowManager.activate_window_xwininfo),
         ]
 
         for tool_name, find_func, activate_func in methods:
@@ -110,8 +173,11 @@ def find_and_activate_bcnc():
         print(f"[FEL] {e}")
         return False
 
-    # Try different possible window titles
-    possible_titles = ["bCNC", "bcnc", "BCNC"]
+    # Debug: List all windows to see what's available
+    LinuxWindowManager.debug_list_all_windows()
+
+    # Try different possible window titles - including version numbers
+    possible_titles = ["bCNC", "bcnc", "BCNC", "bCNC 0.9"]
 
     for title in possible_titles:
         print(f"[INFO] Söker efter fönster med titel: {title}")
