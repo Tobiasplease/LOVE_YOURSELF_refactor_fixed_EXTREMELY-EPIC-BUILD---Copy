@@ -293,7 +293,7 @@ def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
     print(f"[INFO] Kommando: {load_cmd}")
     pyautogui.write(load_cmd)
     pyautogui.press("enter")
-    time.sleep(5)
+    time.sleep(30)
 
     # Markera allt och sätt origin
     print("[INFO] Sätter origin...")
