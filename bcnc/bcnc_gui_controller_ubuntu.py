@@ -69,38 +69,32 @@ class LinuxWindowManager:
         """Activate Tkinter window using special methods"""
         try:
             print(f"[DEBUG] Försöker aktivera Tkinter-fönster {window_id}")
-            
+
             # Method 1: Use windowmap to ensure window is mapped
             subprocess.run(["xdotool", "windowmap", str(window_id)], check=False)
             time.sleep(0.2)
-            
+
             # Method 2: Mouse move to window center and click
-            result = subprocess.run(
-                ["xdotool", "getwindowgeometry", str(window_id)],
-                capture_output=True, text=True, check=False
-            )
+            result = subprocess.run(["xdotool", "getwindowgeometry", str(window_id)], capture_output=True, text=True, check=False)
             if result.returncode == 0:
                 # Parse geometry to get window center
-                for line in result.stdout.split('\n'):
+                for line in result.stdout.split("\n"):
                     if "Geometry:" in line:
                         # Extract width x height
                         geom_part = line.split("Geometry:")[1].split()[0]
-                        if 'x' in geom_part:
-                            width, height = map(int, geom_part.split('x'))
+                        if "x" in geom_part:
+                            width, height = map(int, geom_part.split("x"))
                             # Move mouse to window and click
-                            subprocess.run([
-                                "xdotool", "mousemove", "--window", str(window_id), 
-                                str(width//2), str(height//2)
-                            ], check=False)
+                            subprocess.run(["xdotool", "mousemove", "--window", str(window_id), str(width // 2), str(height // 2)], check=False)
                             time.sleep(0.2)
                             subprocess.run(["xdotool", "click", "1"], check=False)
                             time.sleep(0.5)
                             break
-            
+
             # Method 3: Try simple activation
             subprocess.run(["xdotool", "windowactivate", str(window_id)], check=False)
             time.sleep(0.5)
-            
+
             return True
         except Exception as e:
             print(f"[DEBUG] xdotool activation failed: {e}")
@@ -152,17 +146,17 @@ class LinuxWindowManager:
     def activate_window_xwininfo(window_id):
         """Activate window using alternative methods since xwininfo can't activate"""
         print(f"[DEBUG] Försöker aktivera fönster {hex(window_id)}")
-        
+
         # Try xdotool if available
         if shutil.which("xdotool"):
             print("[DEBUG] Använder xdotool för aktivering")
             return LinuxWindowManager.activate_window_xdotool(window_id)
-        
-        # Try wmctrl if available  
+
+        # Try wmctrl if available
         if shutil.which("wmctrl"):
             print("[DEBUG] Använder wmctrl för aktivering")
             return LinuxWindowManager.activate_window_wmctrl(window_id)
-        
+
         # Last resort: try using xprop to raise the window
         try:
             print("[DEBUG] Försöker med xprop som sista utväg")
@@ -170,7 +164,7 @@ class LinuxWindowManager:
             return True
         except subprocess.CalledProcessError:
             pass
-        
+
         print("[DEBUG] Ingen metod fungerade för att aktivera fönster")
         return False
 
@@ -251,15 +245,12 @@ def find_and_activate_bcnc():
 def get_window_position(window_id):
     """Get window position using xdotool"""
     try:
-        result = subprocess.run(
-            ["xdotool", "getwindowgeometry", str(window_id)],
-            capture_output=True, text=True, check=True
-        )
+        result = subprocess.run(["xdotool", "getwindowgeometry", str(window_id)], capture_output=True, text=True, check=True)
         # Parse output like: "Position: 960,64 (screen: 0)"
-        for line in result.stdout.split('\n'):
+        for line in result.stdout.split("\n"):
             if "Position:" in line:
                 pos_part = line.split("Position:")[1].split("(")[0].strip()
-                x, y = map(int, pos_part.split(','))
+                x, y = map(int, pos_part.split(","))
                 return x + 100, y + 100  # Click a bit inside the window
         return None, None
     except subprocess.CalledProcessError:
@@ -278,20 +269,20 @@ def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
     time.sleep(5)  # Give user time to manually click bCNC
 
     # Test that we have focus by sending a harmless command first
-    print("[INFO] Testar fokus med 'help' kommando...")
-    pyautogui.hotkey("ctrl", "space")
-    time.sleep(1)
-    pyautogui.write("help")
-    pyautogui.press("enter")
-    time.sleep(2)
+    # print("[INFO] Testar fokus med 'help' kommando...")
+    # pyautogui.hotkey("ctrl", "space")
+    # time.sleep(1)
+    # pyautogui.write("help")
+    # pyautogui.press("enter")
+    # time.sleep(2)
 
-    # Clear any previous commands
-    print("[INFO] Rensar tidigare kommandon...")
-    pyautogui.hotkey("ctrl", "space")
-    time.sleep(1)
-    pyautogui.write("cle")
-    pyautogui.press("enter")
-    time.sleep(1)
+    # # Clear any previous commands
+    # print("[INFO] Rensar tidigare kommandon...")
+    # pyautogui.hotkey("ctrl", "space")
+    # time.sleep(1)
+    # pyautogui.write("cle")
+    # pyautogui.press("enter")
+    # time.sleep(1)
 
     # Öppna kommandorad och importera SVG
     print("[INFO] Laddar SVG-fil...")
