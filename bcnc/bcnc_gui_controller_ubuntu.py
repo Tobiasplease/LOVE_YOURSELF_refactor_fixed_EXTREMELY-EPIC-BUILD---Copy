@@ -66,22 +66,43 @@ class LinuxWindowManager:
 
     @staticmethod
     def activate_window_xdotool(window_id):
-        """Activate window using xdotool with multiple methods"""
+        """Activate Tkinter window using special methods"""
         try:
-            # Method 1: Raise and focus the window
-            subprocess.run(["xdotool", "windowactivate", "--sync", str(window_id)], check=True)
-            time.sleep(0.5)
+            print(f"[DEBUG] Försöker aktivera Tkinter-fönster {window_id}")
             
-            # Method 2: Also raise it to front
-            subprocess.run(["xdotool", "windowraise", str(window_id)], check=True)
-            time.sleep(0.5)
+            # Method 1: Use windowmap to ensure window is mapped
+            subprocess.run(["xdotool", "windowmap", str(window_id)], check=False)
+            time.sleep(0.2)
             
-            # Method 3: Focus it explicitly
-            subprocess.run(["xdotool", "windowfocus", str(window_id)], check=True)
+            # Method 2: Mouse move to window center and click
+            result = subprocess.run(
+                ["xdotool", "getwindowgeometry", str(window_id)],
+                capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0:
+                # Parse geometry to get window center
+                for line in result.stdout.split('\n'):
+                    if "Geometry:" in line:
+                        # Extract width x height
+                        geom_part = line.split("Geometry:")[1].split()[0]
+                        if 'x' in geom_part:
+                            width, height = map(int, geom_part.split('x'))
+                            # Move mouse to window and click
+                            subprocess.run([
+                                "xdotool", "mousemove", "--window", str(window_id), 
+                                str(width//2), str(height//2)
+                            ], check=False)
+                            time.sleep(0.2)
+                            subprocess.run(["xdotool", "click", "1"], check=False)
+                            time.sleep(0.5)
+                            break
+            
+            # Method 3: Try simple activation
+            subprocess.run(["xdotool", "windowactivate", str(window_id)], check=False)
             time.sleep(0.5)
             
             return True
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             print(f"[DEBUG] xdotool activation failed: {e}")
             return False
 
@@ -252,55 +273,45 @@ def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
     if not find_and_activate_bcnc():
         return False
 
-    # Get the specific window that was activated
-    bcnc_window_id = None
-    for title in ["bCNC", "bcnc", "BCNC", "bCNC 0.9"]:
-        if shutil.which("xdotool"):
-            window_ids = LinuxWindowManager.find_window_xdotool(title)
-            if window_ids:
-                bcnc_window_id = window_ids[0]
-                break
-        elif shutil.which("wmctrl"):
-            window_ids = LinuxWindowManager.find_window_wmctrl(title)
-            if window_ids:
-                bcnc_window_id = window_ids[0]
-                break
+    print("[INFO] Väntar 5 sekunder för manuell fokusering...")
+    print("[INFO] Klicka på bCNC-fönstret NU för att säkerställa fokus!")
+    time.sleep(5)  # Give user time to manually click bCNC
 
-    if bcnc_window_id:
-        # Get window position and click on it
-        x, y = get_window_position(bcnc_window_id)
-        if x and y:
-            print(f"[INFO] Klickar på bCNC-fönster på position ({x}, {y})")
-            pyautogui.click(x, y)
-            time.sleep(1)
-        
-        # Force focus using xdotool again
-        if shutil.which("xdotool"):
-            subprocess.run(["xdotool", "windowfocus", str(bcnc_window_id)], check=False)
-            time.sleep(1)
-
-    # Wait longer for window to become active and focused
-    print("[INFO] Väntar på att fönstret ska bli aktivt...")
+    # Test that we have focus by sending a harmless command first
+    print("[INFO] Testar fokus med 'help' kommando...")
+    pyautogui.hotkey("ctrl", "space")
+    time.sleep(1)
+    pyautogui.write("help")
+    pyautogui.press("enter")
     time.sleep(2)
 
+    # Clear any previous commands
+    print("[INFO] Rensar tidigare kommandon...")
+    pyautogui.hotkey("ctrl", "space")
+    time.sleep(1)
+    pyautogui.write("cle")
+    pyautogui.press("enter")
+    time.sleep(1)
+
     # Öppna kommandorad och importera SVG
-    print("[INFO] Öppnar kommandorad...")
+    print("[INFO] Laddar SVG-fil...")
     pyautogui.hotkey("ctrl", "space")
     time.sleep(1)
     svg_path = svg_file.replace("\\", "/")
-    print(f"[INFO] Skriver load-kommando: load {svg_path}")
-    pyautogui.write(f"load {svg_path}")
+    load_cmd = f"load {svg_path}"
+    print(f"[INFO] Kommando: {load_cmd}")
+    pyautogui.write(load_cmd)
     pyautogui.press("enter")
     time.sleep(5)
 
     # Markera allt och sätt origin
-    print("[INFO] Markerar allt och sätter origin...")
+    print("[INFO] Sätter origin...")
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.5)
+    time.sleep(1)
     pyautogui.hotkey("ctrl", "space")
     time.sleep(1)
     origin_cmd = f"origin [{origin[0]}] [{origin[1]}] [{origin[2]}]"
-    print(f"[INFO] Skriver origin-kommando: {origin_cmd}")
+    print(f"[INFO] Kommando: {origin_cmd}")
     pyautogui.write(origin_cmd)
     pyautogui.press("enter")
     time.sleep(2)
@@ -311,11 +322,12 @@ def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
     time.sleep(1)
     output_path = output_gcode_file.replace("\\", "/")
     save_cmd = f"save {output_path}"
-    print(f"[INFO] Skriver save-kommando: {save_cmd}")
+    print(f"[INFO] Kommando: {save_cmd}")
     pyautogui.write(save_cmd)
     pyautogui.press("enter")
     time.sleep(3)
 
+    print("[INFO] Import och export klar!")
     return True
 
 

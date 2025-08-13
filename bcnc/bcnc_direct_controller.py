@@ -7,7 +7,29 @@ import re
 
 # === FILVÄGAR ===
 base_path = "/home/jbe/Dropbox/_outputs"
-svg_input = f"{base_path}/impostor-20250725_185854_00001_.png.svg"
+
+# Check if file exists and use fallback if needed
+import os
+svg_candidates = [
+    f"{base_path}/impostor-20250725_185854_00001_.png.svg",
+    f"{base_path}/test.svg",
+    f"{base_path}/drawing.svg"
+]
+
+svg_input = None
+for candidate in svg_candidates:
+    if os.path.exists(candidate):
+        svg_input = candidate
+        print(f"[INFO] Använder SVG-fil: {svg_input}")
+        break
+
+if not svg_input:
+    print(f"[FEL] Ingen SVG-fil hittades. Sökta platser:")
+    for candidate in svg_candidates:
+        print(f"  - {candidate}")
+    print("Skapa en test-SVG eller uppdatera sökvägen.")
+    svg_input = svg_candidates[0]  # Use first as fallback
+
 output_gcode = f"{base_path}/drawing.ngc"
 origin_offset = (-40, -40, 0)
 
