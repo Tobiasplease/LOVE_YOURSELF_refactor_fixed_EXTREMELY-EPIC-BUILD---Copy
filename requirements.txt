@@ -24,6 +24,7 @@ matplotlib>=3.7.0
 
 #bCNC>=0.9.16
 vpype
+scikit-image
 PyAutoGUI
 PyGetWindow
 spacy
