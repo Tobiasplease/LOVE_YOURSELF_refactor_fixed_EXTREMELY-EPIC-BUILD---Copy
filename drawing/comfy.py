@@ -16,6 +16,7 @@ from config.config import (
     FLUX_DEV_PATH,
     FLUX_GGUF_PATH,
     CONTROLNET_NET_PATH,
+    BATCH_SIZE,
 )
 
 
@@ -64,7 +65,7 @@ class ImpostorConfig:
     # Output parameters
     filename_prefix: str = "impostor-out"
 
-    batch_size: int = 1
+    batch_size: int = BATCH_SIZE
 
 
 class ComfyUIController:

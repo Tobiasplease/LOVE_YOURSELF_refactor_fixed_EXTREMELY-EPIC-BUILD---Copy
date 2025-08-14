@@ -81,15 +81,13 @@ class ImageMonitor:
             {"event": "new_image_detected", "filename": filename, "image_path": image_path, "file_size": file_size, "timestamp": time.time()},
             print_message=f"🖼 New drawing: {filename} ({file_size} bytes)",
         )
-        
+
         if state_manager.is_generating_drawing:
             state_manager.finish_drawing_generation()
             log_json_entry(
-                LogType.INFO,
-                {"message": "Drawing generation completed", "image_path": image_path},
-                print_message="✅ Drawing generation completed"
+                LogType.INFO, {"message": "Drawing generation completed", "image_path": image_path}, print_message="✅ Drawing generation completed"
             )
-            
+
         if self.on_image_complete:
             self.on_image_complete(image_path)
 
