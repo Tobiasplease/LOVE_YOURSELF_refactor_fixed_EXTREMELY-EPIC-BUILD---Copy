@@ -14,7 +14,8 @@ from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run, check_bcnc_availabl
 # === Configuration ===
 base_path = "/home/jbe/Dropbox/_outputs"
 svg_input = f"{base_path}/impostor-20250725_185854_00001_.png.svg"
-output_gcode = f"{base_path}/drawing.ngc"
+# output_gcode = f"{base_path}/drawing.ngc"
+output_gcode = f"{svg_input}.ngc"
 origin_offset = (-40, -40, 0)
 
 
