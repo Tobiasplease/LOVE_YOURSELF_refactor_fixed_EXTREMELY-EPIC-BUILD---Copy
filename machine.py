@@ -3,6 +3,8 @@ import argparse
 import sys
 import cv2
 import threading
+import subprocess
+import os
 
 
 def parse_args():
@@ -64,6 +66,33 @@ from config.config import (
 from event_logging.run_manager import get_run_image_path
 from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
 from event_logging.log_type import LogType
+from hand_controller_bridge import HandControllerBridge
+from reactivity.camera_reactive import CameraReactivityEngine
+
+
+def launch_hand_controller():
+    """Launch the hand controller interface in a separate process."""
+    hand_controller_path = r"C:\Users\tobia\Downloads\HandControlStandalone\hand_control_interface.py"
+    
+    if os.path.exists(hand_controller_path):
+        try:
+            # Launch hand controller in a separate process - show output for debugging
+            result = subprocess.Popen([
+                "python", 
+                hand_controller_path
+            ], 
+            cwd=r"C:\Users\tobia\Downloads\HandControlStandalone",
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0  # New console on Windows
+            )
+            print(f"🤲 Hand controller interface launched successfully (PID: {result.pid})")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to launch hand controller: {e}")
+            return False
+    else:
+        print(f"❌ Hand controller not found at: {hand_controller_path}")
+        return False
+
 
 if USE_SERVO:
     from servo_control.servo_control import ServoController
@@ -139,6 +168,19 @@ mood_engine = MoodEngine()
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
 
+# Initialize hand controller bridge
+debug_print("Initializing hand controller bridge", "INIT")
+hand_bridge = HandControllerBridge("file")  # Use file-based communication
+
+# Initialize camera reactivity engine
+debug_print("Initializing camera reactivity engine", "INIT")
+reactivity_engine = CameraReactivityEngine(sensitivity=1.2, smoothing_factor=0.8)
+debug_print("Camera reactivity enabled - hand will respond to environmental changes", "INIT")
+
+# Launch hand controller interface
+debug_print("Launching hand controller from proper directory to access datasets", "INIT")
+launch_hand_controller()  # Launch from HandControlStandalone directory
+
 # Set up image monitor with self-critique callback
 def on_drawing_complete(image_path: str):
     """Handle drawing completion with self-critique."""
@@ -154,6 +196,12 @@ if previous_state:
     # Apply state to components
     state_manager.apply_state_to_captioner(previous_state, captioner)
     state_manager.apply_state_to_mood_engine(previous_state, mood_engine)
+    
+    # Send immediate mood update to hand controller with restored state
+    debug_print("Sending restored mood to hand controller", "INIT")
+    initial_reactivity = {'chaos_multiplier': 1.0, 'speed_multiplier': 1.0, 'activity_level': 0.0}
+    hand_bridge.update_hand_controller(mood_engine, force_update=True, reactivity_data=initial_reactivity)
+    
     # Reset last_caption so remnants from previous session are not printed
     captioner.last_caption = ""
     # Set memory loaded flag BEFORE generating awakening message
@@ -223,6 +271,9 @@ def mood_update_thread(frame, timestamp):
                     current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path)
                     debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
 
+                    # Update hand controller with new emotional state + camera reactivity
+                    hand_bridge.update_hand_controller(mood_engine, reactivity_data=reactivity_metrics)
+
                     # Third: Update captioner's mood state for next cycle
                     captioner.current_mood = current_mood
 
@@ -236,12 +287,17 @@ def mood_update_thread(frame, timestamp):
 try:
     while True:
         ret, frame = cap.read()
-        object_detector.set_frame(frame)
         if not ret:
             continue
+        
+        object_detector.set_frame(frame)
 
         frame = cv2.resize(frame, (320, 240))
         frame = cv2.flip(frame, 1)
+
+        # === CAMERA REACTIVITY PROCESSING ===
+        # Process frame for real-time behavioral reactivity
+        reactivity_metrics = reactivity_engine.process_frame(frame)
 
         now = time.time()
         delta = now - last_time
@@ -326,6 +382,38 @@ try:
             (255, 255, 255),
             1,
         )
+
+        # === CAMERA REACTIVITY OVERLAY ===
+        if reactivity_metrics:
+            # Compact reactivity bar at bottom
+            bar_x, bar_y = 10, frame.shape[0] - 60
+            bar_w, bar_h = 200, 50
+            
+            # Background
+            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (0, 0, 0), -1)
+            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (100, 100, 100), 1)
+            
+            # Activity bar (green)
+            activity_len = int(reactivity_metrics['activity_level'] * (bar_w - 20))
+            cv2.rectangle(frame, (bar_x + 10, bar_y + 8), (bar_x + 10 + activity_len, bar_y + 16), (0, 255, 0), -1)
+            cv2.putText(frame, "ACT", (bar_x + 2, bar_y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+            
+            # Speed bar (red) - normalize to 0-1 range
+            speed_norm = min(1.0, (reactivity_metrics['speed_multiplier'] - 0.2) / 4.3)  # 0.2-4.5 -> 0-1
+            speed_len = int(speed_norm * (bar_w - 20))
+            cv2.rectangle(frame, (bar_x + 10, bar_y + 20), (bar_x + 10 + speed_len, bar_y + 28), (0, 0, 255), -1)
+            cv2.putText(frame, "SPD", (bar_x + 2, bar_y + 26), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+            
+            # Chaos bar (blue) - normalize to 0-1 range  
+            chaos_norm = min(1.0, (reactivity_metrics['chaos_multiplier'] - 0.3) / 3.2)  # 0.3-3.5 -> 0-1
+            chaos_len = int(chaos_norm * (bar_w - 20))
+            cv2.rectangle(frame, (bar_x + 10, bar_y + 32), (bar_x + 10 + chaos_len, bar_y + 40), (255, 0, 0), -1)
+            cv2.putText(frame, "CHS", (bar_x + 2, bar_y + 38), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+            
+            # Pause indicator
+            if reactivity_metrics.get('paused', False):
+                cv2.rectangle(frame, (bar_x + bar_w - 30, bar_y + 10), (bar_x + bar_w - 10, bar_y + 30), (0, 0, 255), -1)
+                cv2.putText(frame, "PAUSE", (bar_x + bar_w - 28, bar_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
 
         cv2.imshow("mslint camera", frame)
 
