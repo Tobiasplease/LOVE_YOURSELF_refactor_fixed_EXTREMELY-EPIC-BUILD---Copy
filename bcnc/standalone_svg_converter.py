@@ -37,35 +37,34 @@ def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
     """Convert SVG to G-code using vpype (vector graphics processor)"""
     try:
         # vpype command for SVG to G-code with pen up/down
+        # Note: translate command needs -- before negative values to avoid parsing as options
+        translate_x = f"{origin[0]}mm"
+        translate_y = f"{origin[1]}mm"
+        
         cmd = [
             "vpype",
-            "read",
-            svg_file,
-            "linemerge",
-            "--tolerance",
-            "0.1mm",
-            "linesort",
-            f"translate",
-            f"{origin[0]}mm",
-            f"{origin[1]}mm",
-            "write",
-            "--format",
-            "gcode",
-            "--device",
-            "custom",
-            "--pen-up",
-            "M3 S30",
-            "--pen-down",
-            "M3 S50",
-            "--feed-rate",
-            "1000",
-            output_file,
+            "read", svg_file,
+            "linemerge", "--tolerance", "0.1mm",
+            "linesort"
         ]
+        
+        # Add translate command - handle negative values properly
+        if origin[0] != 0 or origin[1] != 0:
+            cmd.extend(["translate", "--", translate_x, translate_y])
+        
+        cmd.extend([
+            "write",
+            "--format", "gcode",
+            "--device", "custom", 
+            "--pen-up", "M3 S30",
+            "--pen-down", "M3 S50",
+            "--feed-rate", "1000",
+            output_file
+        ])
 
         print(f"[INFO] Kör vpype: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         print(f"[INFO] vpype lyckades: {output_file}")
-        print(result)
         return True
 
     except subprocess.CalledProcessError as e:
