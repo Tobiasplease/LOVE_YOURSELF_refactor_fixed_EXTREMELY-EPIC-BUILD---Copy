@@ -2,6 +2,7 @@
 import subprocess
 import xml.etree.ElementTree as ET
 import re
+from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run, get_servo_gcode_header, get_servo_gcode_footer
 
 # from pathlib import Path
 
@@ -10,11 +11,8 @@ base_path = "/home/jbe/Dropbox/_outputs"
 
 # Check if file exists and use fallback if needed
 import os
-svg_candidates = [
-    f"{base_path}/impostor-20250725_185854_00001_.png.svg",
-    f"{base_path}/test.svg",
-    f"{base_path}/drawing.svg"
-]
+
+svg_candidates = [f"{base_path}/impostor-20250725_185854_00001_.png.svg", f"{base_path}/test.svg", f"{base_path}/drawing.svg"]
 
 svg_input = None
 for candidate in svg_candidates:
@@ -34,80 +32,6 @@ output_gcode = f"{base_path}/drawing.ngc"
 origin_offset = (-40, -40, 0)
 
 
-def try_bcnc_cli_run(gcode_file):
-    """Try to run G-code file using bCNC CLI with filename argument"""
-    try:
-        # Try different methods to start bCNC with the file
-        cli_commands = [
-            # Method 1: Load file and run immediately
-            ["bcnc", "--run", gcode_file],
-            ["bCNC", "--run", gcode_file],
-            # Method 2: Just load the file (user can run manually)
-            ["bcnc", gcode_file],
-            ["bCNC", gcode_file]
-        ]
-
-        for cmd in cli_commands:
-            try:
-                print(f"[INFO] Försöker: {' '.join(cmd)}")
-                # Start bCNC in background
-                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                print(f"[INFO] bCNC startad med PID {process.pid}")
-                
-                if "--run" in cmd:
-                    print("[INFO] Filen kommer köras automatiskt")
-                else:
-                    print("[INFO] Filen laddad - tryck RUN i bCNC för att starta")
-                return True
-            except FileNotFoundError:
-                continue
-
-    except Exception as e:
-        print(f"[DEBUG] bCNC CLI inte tillgängligt: {e}")
-
-    return False
-
-
-def convert_z_to_servo(input_file, output_file):
-    """Convert Z commands to servo commands - same as original"""
-    print("[INFO] Konverterar Z-kommandon till servo...")
-    try:
-        current_pen_state = None
-        with open(input_file, "r") as infile, open(output_file, "w") as outfile:
-            for line in infile:
-                clean = line.strip()
-                if clean.startswith("G0"):
-                    if current_pen_state != "up":
-                        outfile.write("M3 S40 ; PEN UP\n")
-                        current_pen_state = "up"
-                    outfile.write(line)
-                elif clean.startswith("G1"):
-                    if current_pen_state != "down":
-                        outfile.write("M3 S50 ; PEN DOWN\n")
-                        current_pen_state = "down"
-                    outfile.write(line)
-                elif "Z" in clean:
-                    for part in clean.split():
-                        if part.startswith("Z"):
-                            try:
-                                z = float(part[1:])
-                                if z > 0 and current_pen_state != "up":
-                                    outfile.write("M3 S30 ; PEN UP\n")
-                                    current_pen_state = "up"
-                                elif z <= 0 and current_pen_state != "down":
-                                    outfile.write("M3 S90 ; PEN DOWN\n")
-                                    current_pen_state = "down"
-                            except ValueError:
-                                print(f"[FEL] Kunde inte konvertera Z-värde: {part}")
-                                pass
-                    outfile.write(line)
-                else:
-                    outfile.write(line)
-        print(f"[INFO] Optimerad G-kod sparad: {output_file}")
-        return True
-    except Exception as e:
-        print(f"[FEL] Z-to-servo konvertering misslyckades: {e}")
-        return False
 
 
 def svg_to_gcode_simple(svg_file, output_file, origin=(0, 0, 0)):
@@ -118,15 +42,8 @@ def svg_to_gcode_simple(svg_file, output_file, origin=(0, 0, 0)):
         tree = ET.parse(svg_file)
         root = tree.getroot()
 
-        gcode_lines = [
-            "; G-code generated from SVG",
-            "G21 ; Set units to millimeters",
-            "G90 ; Absolute positioning",
-            "G28 ; Home all axes",
-            f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin",
-            "M3 S30 ; PEN UP",
-            "",
-        ]
+        gcode_lines = get_servo_gcode_header()
+        gcode_lines.append(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin")
 
         # Find SVG namespace
         ns = {"svg": "http://www.w3.org/2000/svg"}
@@ -148,7 +65,7 @@ def svg_to_gcode_simple(svg_file, output_file, origin=(0, 0, 0)):
                 x2, y2 = float(elem.get("x2", 0)), float(elem.get("y2", 0))
                 gcode_lines.extend([f"G0 X{x1} Y{y1} ; Move to start", "M3 S50 ; PEN DOWN", f"G1 X{x2} Y{y2} ; Draw line", "M3 S30 ; PEN UP"])
 
-        gcode_lines.extend(["", "M3 S30 ; PEN UP", "G28 ; Return home", "M30 ; Program end"])
+        gcode_lines.extend(get_servo_gcode_footer())
 
         with open(output_file, "w") as f:
             f.write("\n".join(gcode_lines))
@@ -223,8 +140,6 @@ def parse_svg_points(points_str):
     return gcode
 
 
-
-
 def main():
     """Main function - direct SVG to G-code conversion with CLI execution"""
     print("[INFO] Konverterar SVG till G-code...")
@@ -232,7 +147,7 @@ def main():
     # Direct conversion (no bCNC CLI for conversion, only execution)
     if svg_to_gcode_simple(svg_input, output_gcode, origin_offset):
         print(f"[INFO] G-code genererad: {output_gcode}")
-        
+
         # Try to run with bCNC CLI --run option
         if try_bcnc_cli_run(output_gcode):
             print("[INFO] bCNC startad för att köra G-code")

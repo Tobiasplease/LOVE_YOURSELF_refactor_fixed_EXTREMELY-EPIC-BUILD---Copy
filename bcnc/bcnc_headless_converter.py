@@ -6,6 +6,7 @@ This tries to import and use bCNC's conversion logic directly
 
 import sys
 import os
+from bcnc_utils import try_bcnc_cli_run, check_bcnc_available
 
 # === Configuration ===
 base_path = "/home/jbe/Dropbox/_outputs"
@@ -115,6 +116,12 @@ def try_python_bcnc():
 def main():
     """Try different approaches to use bCNC headlessly"""
     print("[INFO] Försöker använda bCNC utan GUI...")
+    
+    # First check if bCNC is available
+    bcnc_cmd = check_bcnc_available()
+    if not bcnc_cmd:
+        print("[FEL] bCNC inte installerat")
+        return False
     
     approaches = [
         ("Interna moduler", try_bcnc_internal),

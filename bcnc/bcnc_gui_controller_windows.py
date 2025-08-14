@@ -2,6 +2,7 @@ import os
 import time
 import pygetwindow as gw
 import pyautogui
+from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run
 
 # === FILVÄGAR ===
 # base_path = r"C:\Users\Tobia\Tobias_robot"
@@ -56,40 +57,6 @@ def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
 
 
 # === 2. Konvertera Z-kommandon till servo-kommandon ===
-def convert_z_to_servo(input_file, output_file):
-    print("[INFO] Konverterar Z-kommandon till servo...")
-    current_pen_state = None
-    with open(input_file, "r") as infile, open(output_file, "w") as outfile:
-        for line in infile:
-            clean = line.strip()
-            if clean.startswith("G0"):
-                if current_pen_state != "up":
-                    outfile.write("M3 S40 ; PEN UP\n")
-                    current_pen_state = "up"
-                outfile.write(line)
-            elif clean.startswith("G1"):
-                if current_pen_state != "down":
-                    outfile.write("M3 S50 ; PEN DOWN\n")
-                    current_pen_state = "down"
-                outfile.write(line)
-            elif "Z" in clean:
-                for part in clean.split():
-                    if part.startswith("Z"):
-                        try:
-                            z = float(part[1:])
-                            if z > 0 and current_pen_state != "up":
-                                outfile.write("M3 S30 ; PEN UP\n")
-                                current_pen_state = "up"
-                            elif z <= 0 and current_pen_state != "down":
-                                outfile.write("M3 S90 ; PEN DOWN\n")
-                                current_pen_state = "down"
-                        except ValueError:
-                            print(f"[FEL] Kunde inte konvertera Z-värde: {part}")
-                            pass
-                outfile.write(line)
-            else:
-                outfile.write(line)
-    print(f"[INFO] Optimerad G-kod sparad: {output_file}")
 
 
 # === 3. Kör G-koden i bCNC ===

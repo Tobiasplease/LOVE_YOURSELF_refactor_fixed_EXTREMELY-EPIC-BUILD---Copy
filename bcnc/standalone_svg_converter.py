@@ -7,6 +7,7 @@ Bypasses bCNC GUI entirely while still providing servo conversion
 # import os
 import subprocess
 import shutil
+from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run, check_bcnc_available
 
 # from pathlib import Path
 
@@ -178,7 +179,16 @@ def main():
 if __name__ == "__main__":
     success = main()
     if success:
-        print("\n[INFO] Konvertering klar! Använd följande för att köra:")
-        print(f"bcnc --run {output_gcode}")
+        print("\n[INFO] Konvertering klar!")
+        
+        # Check if bCNC is available and try to run
+        bcnc_cmd = check_bcnc_available()
+        if bcnc_cmd:
+            print(f"[INFO] Försöker köra med bCNC...")
+            if not try_bcnc_cli_run(output_gcode):
+                print(f"[INFO] Automatisk körning misslyckades. Kör manuellt:")
+                print(f"       {bcnc_cmd} --run {output_gcode}")
+        else:
+            print(f"[INFO] Installera bCNC för att köra G-code automatiskt")
     else:
         print("\n[FEL] Konvertering misslyckades")

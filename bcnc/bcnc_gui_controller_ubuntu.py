@@ -3,6 +3,7 @@ import time
 import subprocess
 import pyautogui
 import shutil
+from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run
 
 # === FILVÄGAR ===
 base_path = "/home/jbe/Dropbox/_outputs"
@@ -322,47 +323,17 @@ def import_svg_in_bcnc(svg_file, output_gcode_file, origin=(0, 0, 0)):
     return True
 
 
-def convert_z_to_servo(input_file, output_file):
-    """Convert Z commands to servo commands - same as original"""
-    print("[INFO] Konverterar Z-kommandon till servo...")
-    current_pen_state = None
-    with open(input_file, "r") as infile, open(output_file, "w") as outfile:
-        for line in infile:
-            clean = line.strip()
-            if clean.startswith("G0"):
-                if current_pen_state != "up":
-                    outfile.write("M3 S40 ; PEN UP\n")
-                    current_pen_state = "up"
-                outfile.write(line)
-            elif clean.startswith("G1"):
-                if current_pen_state != "down":
-                    outfile.write("M3 S50 ; PEN DOWN\n")
-                    current_pen_state = "down"
-                outfile.write(line)
-            elif "Z" in clean:
-                for part in clean.split():
-                    if part.startswith("Z"):
-                        try:
-                            z = float(part[1:])
-                            if z > 0 and current_pen_state != "up":
-                                outfile.write("M3 S30 ; PEN UP\n")
-                                current_pen_state = "up"
-                            elif z <= 0 and current_pen_state != "down":
-                                outfile.write("M3 S90 ; PEN DOWN\n")
-                                current_pen_state = "down"
-                        except ValueError:
-                            print(f"[FEL] Kunde inte konvertera Z-värde: {part}")
-                            pass
-                outfile.write(line)
-            else:
-                outfile.write(line)
-    print(f"[INFO] Optimerad G-kod sparad: {output_file}")
 
 
 def run_bcnc_gui(gcode_path):
     """Run G-code in bCNC - Ubuntu compatible"""
     print("[INFO] Kör G-kod i bCNC...")
 
+    # Try CLI first, fallback to GUI
+    if try_bcnc_cli_run(gcode_path):
+        return
+
+    # Fallback to GUI automation
     if not find_and_activate_bcnc():
         return
 
