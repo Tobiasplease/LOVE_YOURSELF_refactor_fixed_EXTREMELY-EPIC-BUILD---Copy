@@ -168,6 +168,16 @@ def main():
             print(f"\n[INFO] Försöker konvertering med {tool_name}...")
             if converter_func(svg_input, output_gcode, origin_offset):
                 print(f"[INFO] Konvertering lyckades med {tool_name}!")
+
+                # Apply servo conversion to handle any Z-axis commands
+                temp_file = output_gcode + ".temp"
+                print("[INFO] Konverterar Z-kommandon till servo...")
+                if convert_z_to_servo(output_gcode, temp_file):
+                    import os
+
+                    os.replace(temp_file, output_gcode)
+                    print("[INFO] Servo-konvertering klar!")
+
                 print(f"[INFO] G-code sparad: {output_gcode}")
                 return True
 
@@ -180,7 +190,7 @@ if __name__ == "__main__":
     success = main()
     if success:
         print("\n[INFO] Konvertering klar!")
-        
+
         # Check if bCNC is available and try to run
         bcnc_cmd = check_bcnc_available()
         if bcnc_cmd:

@@ -59,7 +59,7 @@ def try_bcnc_cli_run(gcode_file):
             ["bCNC", "--run", gcode_file],
             # Method 2: Just load the file (user can run manually)
             ["bcnc", gcode_file],
-            ["bCNC", gcode_file]
+            ["bCNC", gcode_file],
         ]
 
         for cmd in cli_commands:
@@ -68,7 +68,7 @@ def try_bcnc_cli_run(gcode_file):
                 # Start bCNC in background
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 print(f"[INFO] bCNC startad med PID {process.pid}")
-                
+
                 if "--run" in cmd:
                     print("[INFO] Filen kommer köras automatiskt")
                 else:
@@ -86,12 +86,12 @@ def try_bcnc_cli_run(gcode_file):
 def check_bcnc_available():
     """Check if bCNC is available in the system"""
     bcnc_variants = ["bcnc", "bCNC"]
-    
+
     for variant in bcnc_variants:
         if shutil.which(variant):
             print(f"[INFO] Hittade {variant}: {shutil.which(variant)}")
             return variant
-    
+
     print("[FEL] bCNC inte hittad i PATH")
     return None
 
@@ -100,19 +100,14 @@ def get_servo_gcode_header():
     """Get standard G-code header with servo setup"""
     return [
         "; G-code generated with servo control",
-        "G21 ; Set units to millimeters", 
+        "G21 ; Set units to millimeters",
         "G90 ; Absolute positioning",
         "G28 ; Home all axes",
         "M3 S30 ; PEN UP (initial state)",
-        ""
+        "",
     ]
 
 
 def get_servo_gcode_footer():
     """Get standard G-code footer with servo cleanup"""
-    return [
-        "",
-        "M3 S30 ; PEN UP",
-        "G28 ; Return home", 
-        "M30 ; Program end"
-    ]
+    return ["", "M3 S30 ; PEN UP", "G28 ; Return home", "M30 ; Program end"]
