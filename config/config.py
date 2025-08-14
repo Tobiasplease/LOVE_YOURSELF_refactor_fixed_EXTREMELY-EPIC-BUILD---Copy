@@ -45,8 +45,15 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava:7b-v1.6-mistral-q5_1")
 
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log"))
 COMFY_OUTPUT_FOLDER = os.getenv("COMFY_OUTPUT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "/home/impostor/ComfyUI/output"))
+
+FLUX_DEV_PATH = os.getenv("FLUX_DEV_PATH", "flux1-dev.sft")
+FLUX_GGUF_PATH = os.getenv("FLUX_GGUF_PATH", "flux1-dev-Q4_K_S.gguf")
+CONTROLNET_NET_PATH = os.getenv("CONTROLNET_NET_PATH", "flux-dev-controlnet-union-pro-2.safetensors")
 COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot-svg.json")
 COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
+COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
+TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black and white sketch line art ")
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1))
 
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations

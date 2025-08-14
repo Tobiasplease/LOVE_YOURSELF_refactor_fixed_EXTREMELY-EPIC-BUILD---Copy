@@ -4,6 +4,12 @@
   "REASON_INTERVAL": 30,
   "DRAWING_INTERVAL": 60,
   "COMFY_OUTPUT_FOLDER": "/home/jbe/Dropbox/_outputs/",
-  "COMFY_TEMPLATE_FILE": "impostor-template-gpupeon.json",
-  "COMFY_LORA_PATH": "flux/own/impostor/impostor-32-balanced-16k.safetensors"
+  "COMFY_TEMPLATE_FILE": "impostor-template-impostor-bot-svg.json",
+  "COMFY_LORA_PATH": "flux/own/impostor/impostor-32-balanced-simple.safetensors",
+  "COMFY_LORA_STRENGTH": 1.0,
+  "TRIGGER_PROMPT": "impostor line art, vector art, simple lines, black and white ",
+  "FLUX_GGUF_PATH": "flux1/flux1-dev-Q4_K_S.gguf",
+  "FLUX_DEV_PATH": "flux1/flux1-dev.safetensors",
+  "CONTROLNET_NET_PATH": "flux/flux-dev-controlnet-union-pro-2.safetensors",
+  "BATCH_SIZE": 2
 }

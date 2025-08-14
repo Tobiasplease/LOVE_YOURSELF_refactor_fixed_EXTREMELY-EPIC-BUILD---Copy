@@ -8,7 +8,15 @@ from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import random
 
-from config.config import COMFY_LORA_PATH, COMFY_TEMPLATE_FILE
+from config.config import (
+    COMFY_LORA_PATH,
+    COMFY_LORA_STRENGTH,
+    COMFY_TEMPLATE_FILE,
+    TRIGGER_PROMPT,
+    FLUX_DEV_PATH,
+    FLUX_GGUF_PATH,
+    CONTROLNET_NET_PATH,
+)
 
 
 @dataclass
@@ -22,7 +30,7 @@ class ImpostorConfig:
 
     # Text prompts
     # trigger_word: "impostor" important for 32 depth loras
-    primitive_string: str = "impostor black and white sketch line art "
+    primitive_string: str = TRIGGER_PROMPT
     override_prompt: str = (
         "The image shows a man sitting on a gray armchair in a living room. He is wearing a blue plaid shirt and black headphones. "
     )
@@ -42,7 +50,11 @@ class ImpostorConfig:
     # LoRA parameters
     # lora_path: str = "flux/own/impostor/impostor-64-balanced-v2-16k-no-trig.safetensors"
     lora_path: str = COMFY_LORA_PATH
-    lora_strength: float = 1.0
+    lora_strength: float = COMFY_LORA_STRENGTH
+
+    flux_dev_path: str = FLUX_DEV_PATH
+    flux_gguf_path: str = FLUX_GGUF_PATH
+    controlnet_path: str = CONTROLNET_NET_PATH
 
     # Generation parameters
     noise_seed: Optional[int] = None
@@ -51,6 +63,8 @@ class ImpostorConfig:
 
     # Output parameters
     filename_prefix: str = "impostor-out"
+
+    batch_size: int = 1
 
 
 class ComfyUIController:
@@ -116,9 +130,12 @@ class ComfyUIController:
             # LoRA path and strength (node 741)
             "779": {"inputs": {"lora_01": self.config.lora_path, "strength_01": self.config.lora_strength}},
             # Latent dimensions (node 5)
-            "5": {"inputs": {"width": self.config.latent_width, "height": self.config.latent_height, "batch_size": 1}},
+            "5": {"inputs": {"width": self.config.latent_width, "height": self.config.latent_height, "batch_size": self.config.batch_size}},
             # Output filename prefix (node 30)
             "30": {"inputs": {"filename_prefix": self.config.filename_prefix}},
+            "739": {"inputs": {"unet_name": self.config.flux_gguf_path}},
+            "590": {"inputs": {"unet_name": self.config.flux_dev_path}},
+            "714": {"inputs": {"control_net_name": self.config.controlnet_path}},
         }
 
         # Apply updates to workflow
