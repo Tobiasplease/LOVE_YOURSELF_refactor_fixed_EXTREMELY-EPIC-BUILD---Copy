@@ -5,6 +5,7 @@ Bypasses bCNC GUI entirely while still providing servo conversion
 """
 
 # import os
+# import re
 import subprocess
 import shutil
 from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run, check_bcnc_available
@@ -36,35 +37,39 @@ def check_external_tools():
 def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
     """Convert SVG to G-code using vpype (vector graphics processor)"""
     try:
-        # vpype command for SVG to G-code with pen up/down
-        # Note: translate command needs -- before negative values to avoid parsing as options
-        translate_x = f"{origin[0]}mm"
-        translate_y = f"{origin[1]}mm"
-        
+        # vpype generates G-code directly, so we'll add origin offset in post-processing
         cmd = [
             "vpype",
-            "read", svg_file,
-            "linemerge", "--tolerance", "0.1mm",
-            "linesort"
-        ]
-        
-        # Add translate command - handle negative values properly
-        if origin[0] != 0 or origin[1] != 0:
-            cmd.extend(["translate", "--", translate_x, translate_y])
-        
-        cmd.extend([
+            "read",
+            svg_file,
+            "linemerge",
+            "--tolerance",
+            "0.1mm",
+            "linesort",
             "write",
-            "--format", "gcode",
-            "--device", "custom", 
-            "--pen-up", "M3 S30",
-            "--pen-down", "M3 S50",
-            "--feed-rate", "1000",
-            output_file
-        ])
+            "--format",
+            "gcode",
+            "--device",
+            "custom",
+            "--pen-up",
+            "M3 S30",
+            "--pen-down",
+            "M3 S50",
+            "--feed-rate",
+            "1000",
+            output_file,
+        ]
 
         print(f"[INFO] Kör vpype: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         print(f"[INFO] vpype lyckades: {output_file}")
+        print(result)
+
+        # Apply origin offset by modifying the generated G-code
+        if origin[0] != 0 or origin[1] != 0:
+            print(f"[INFO] Lägger till origin offset: {origin[:2]}")
+            apply_origin_offset_to_gcode(output_file, origin)
+
         return True
 
     except subprocess.CalledProcessError as e:
@@ -73,6 +78,36 @@ def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
     except FileNotFoundError:
         print("[FEL] vpype inte installerat")
         return False
+
+
+def apply_origin_offset_to_gcode(gcode_file, origin):
+    """Apply origin offset to existing G-code file"""
+    try:
+        with open(gcode_file, "r") as f:
+            lines = f.readlines()
+
+        with open(gcode_file, "w") as f:
+            # Add origin command at the beginning after any header comments
+            header_written = False
+            for line in lines:
+                if not header_written and (line.startswith("G") or line.startswith("M")):
+                    # Insert origin command before first G/M command
+                    #   1. vpype generates clean G-code without trying to misuse the translate command
+                    #   2. Origin offset is applied properly by adding a G92 command to the generated G-code,
+                    #   which is the correct G-code way to set coordinate system offsets
+                    #   3. Matches bCNC behavior - G92 sets the current position as the specified coordinates,
+                    #   effectively creating an origin offset
+
+                    #   This is equivalent to what bCNC's origin command does - it tells the machine "consider
+                    #   your current position to be X-40 Y-40 Z0" rather than trying to move the geometry around.
+                    f.write(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset\n")
+                    header_written = True
+                f.write(line)
+
+        print(f"[INFO] Origin offset tillagt: X{origin[0]} Y{origin[1]} Z{origin[2]}")
+
+    except Exception as e:
+        print(f"[FEL] Kunde inte lägga till origin offset: {e}")
 
 
 def convert_with_svg2gcode(svg_file, output_file, origin=(0, 0, 0)):
