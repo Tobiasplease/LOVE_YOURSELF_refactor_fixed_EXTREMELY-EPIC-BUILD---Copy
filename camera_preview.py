@@ -8,7 +8,7 @@ from reactivity.camera_reactive import CameraReactivityEngine
 
 def run_camera_preview():
     """Run a camera preview showing reactivity data"""
-    print("🎥 Starting camera preview with reactivity visualization...")
+    print("🎥 Starting camera preview with simplified pause visualization...")
     print("Press 'q' to quit")
     
     # Initialize camera and reactivity engine
@@ -27,32 +27,43 @@ def run_camera_preview():
         # Process frame for reactivity
         metrics = reactivity_engine.process_frame(frame)
         
-        # Create overlay with reactivity info
+        # Create overlay with single activity bar showing pause proximity
         overlay = frame.copy()
         height, width = frame.shape[:2]
         
-        # Draw reactivity metrics
-        cv2.rectangle(overlay, (10, 10), (400, 120), (0, 0, 0), -1)
-        cv2.rectangle(overlay, (10, 10), (400, 120), (255, 255, 255), 2)
+        # Main activity bar - shows how close we are to triggering a pause (positioned at bottom center)
+        bar_width = 400
+        bar_height = 30
+        bar_x = (width - bar_width) // 2  # Center horizontally
+        bar_y = height - 80  # Move to bottom with margin
         
-        # Activity bars
-        activity_bar_length = int(metrics['activity_level'] * 300)
-        speed_bar_length = int(metrics['speed_multiplier'] * 100)
-        chaos_bar_length = int(metrics['chaos_multiplier'] * 100)
+        # Background (black)
+        cv2.rectangle(overlay, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), (255, 255, 255), 2)
         
-        cv2.rectangle(overlay, (20, 25), (20 + activity_bar_length, 35), (0, 255, 0), -1)
-        cv2.rectangle(overlay, (20, 45), (20 + speed_bar_length, 55), (255, 0, 0), -1)
-        cv2.rectangle(overlay, (20, 65), (20 + chaos_bar_length, 75), (0, 0, 255), -1)
+        # Activity level (blue bar)
+        activity_width = int(metrics['progress_to_pause'] * bar_width / 100)
+        activity_color = (255, 0, 0) if metrics['progress_to_pause'] >= 100 else (255, 255, 0) if metrics['progress_to_pause'] >= 80 else (0, 255, 0)
+        cv2.rectangle(overlay, (bar_x, bar_y), (bar_x + activity_width, bar_y + bar_height), activity_color, -1)
         
-        # Text
-        cv2.putText(overlay, f"Activity: {metrics['activity_level']:.3f}", (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        cv2.putText(overlay, f"Speed: {metrics['speed_multiplier']:.2f}x", (150, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        cv2.putText(overlay, f"Chaos: {metrics['chaos_multiplier']:.2f}x", (250, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        # Pause threshold line (red)
+        threshold_x = bar_x + bar_width  # Always at 100% since we show progress to pause
+        cv2.line(overlay, (threshold_x, bar_y), (threshold_x, bar_y + bar_height), (0, 0, 255), 3)
+        
+        # Text overlay - position above the bar at bottom
+        activity_text = f"Activity: {metrics['activity_level']:.3f} | Progress to Pause: {metrics['progress_to_pause']:.1f}%"
+        cv2.putText(overlay, activity_text, (bar_x, bar_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         
         # Pause indicator
-        if metrics.get('paused', False):
-            cv2.rectangle(overlay, (width-100, 10), (width-10, 50), (0, 0, 255), -1)
-            cv2.putText(overlay, "PAUSED", (width-95, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        if metrics.get('is_paused', False):
+            cv2.rectangle(overlay, (width-150, 10), (width-10, 60), (0, 0, 255), -1)
+            cv2.putText(overlay, "PAUSED", (width-140, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            cv2.putText(overlay, f"{metrics['pause_remaining']:.1f}s", (width-140, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # Cooldown indicator
+        elif metrics.get('cooldown_remaining', 0) > 0:
+            cv2.rectangle(overlay, (width-150, 10), (width-10, 40), (100, 100, 100), -1)
+            cv2.putText(overlay, f"Cooldown: {metrics['cooldown_remaining']:.1f}s", (width-145, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
         # Show the frame
         cv2.imshow('Camera Reactivity Preview', overlay)

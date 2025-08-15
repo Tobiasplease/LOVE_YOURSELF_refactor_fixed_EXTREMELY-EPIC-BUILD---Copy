@@ -5,11 +5,13 @@ import os
 import time
 import json
 import numpy as np  # type: ignore
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from config.config import MOOD_SNAPSHOT_FOLDER
+from config.prompt_templates import MOOD_PROMPT_TEMPLATE
 from event_logging.event_logger import log_json_entry, read_json_logs
 from event_logging.log_type import LogType
+from utils.ollama import query_ollama
 
 
 # ---------------------------------------------------------------------------#
@@ -17,21 +19,63 @@ from event_logging.log_type import LogType
 # ---------------------------------------------------------------------------#
 class MoodEngine:
     def __init__(self) -> None:
-        self.current_mood = 0.5
+        self.current_mood = 0.5  # Backward compatibility scalar
+        self.mood_vector = (0.0, 0.0, 0.5)  # Initial: neutral valence, neutral arousal, moderate clarity
+        self.previous_mood_vector = (0.0, 0.0, 0.5)  # For emotional momentum tracking
+        self.emotional_momentum = 0.7  # How much previous mood influences new mood (0.0-1.0)
         self.last_caption = ""
         self.last_person_detected = False
         self.memory = []
+        self.session_start = time.time()  # Track session duration for decay
 
     # -------------------------------------------------------------- main hook
-    def analyze_mood(self, caption: str, image_path: Optional[str] = None) -> float:
-        """Analyze mood from a provided caption without generating new captions."""
+    def analyze_mood(self, caption: str, saw_person: bool = False, image_path: str = None, memory_context: Optional[any] = None, temporal_feeling: Optional[str] = None) -> float:
+        """Analyze mood using 3D valence/arousal/clarity system via Ollama."""
         saw_person = "person" in caption.lower() or "individual" in caption.lower()
 
-        novelty = self.calculate_novelty(caption)
-        mood_change = self.compute_mood_change(novelty, saw_person)
-        self.current_mood = np.clip(self.current_mood + mood_change, 0.0, 1.0)
+        # === RECURSIVE EMOTIONAL MEMORY INTEGRATION ===
+        emotional_context = None
+        if memory_context and hasattr(memory_context, 'get_emotional_journey_context'):
+            # Get emotional journey and similar emotional memories for recursive feedback
+            current_emotion = self.get_emotion_for_hand_controller()
+            emotional_journey = memory_context.get_emotional_journey_context(30)  # Last 30 minutes
+            similar_memories = memory_context.get_emotionally_similar_memories(current_emotion, 2)
+            mood_trends = memory_context.get_mood_trend_analysis()
+            
+            emotional_context = f"{emotional_journey} | {mood_trends}"
+            if similar_memories:
+                emotional_context += f" | Similar emotional memories: {' | '.join(similar_memories[:2])}"
 
-        log_mood(caption, self.current_mood, mood_change, image_path=image_path)
+        # Use the sophisticated 3D mood analysis (now includes recursive feedback and memory)
+        new_valence, new_arousal, new_clarity = self.analyze_3d_mood_with_ollama(caption, emotional_context, temporal_feeling)
+        
+        # Apply emotional momentum - new emotions build on previous ones
+        prev_v, prev_a, prev_c = self.mood_vector
+        
+        # Smooth emotional transitions using momentum
+        valence = (new_valence * (1 - self.emotional_momentum)) + (prev_v * self.emotional_momentum)
+        arousal = (new_arousal * (1 - self.emotional_momentum)) + (prev_a * self.emotional_momentum)
+        clarity = (new_clarity * (1 - self.emotional_momentum)) + (prev_c * self.emotional_momentum)
+        
+        # Update mood vector with momentum-smoothed emotions
+        self.previous_mood_vector = self.mood_vector
+        self.mood_vector = (
+            np.clip(valence, -1.0, 1.0),
+            np.clip(arousal, -1.0, 1.0), 
+            np.clip(clarity, -1.0, 1.0)
+        )
+        
+        # Convert 3D mood to scalar for backward compatibility
+        scalar_mood = self.convert_3d_to_scalar(valence, arousal, clarity)
+        
+        # Apply traditional adjustments (novelty, person detection, decay)
+        novelty = self.calculate_novelty(caption)
+        traditional_change = self.compute_mood_change(novelty, saw_person)
+        
+        # Combine 3D analysis with traditional factors
+        self.current_mood = np.clip(scalar_mood + traditional_change, 0.0, 1.0)
+
+        log_mood(caption, self.current_mood, traditional_change, image_path=image_path)
         self.last_caption = caption
         self.last_person_detected = saw_person
         return self.current_mood
@@ -39,11 +83,48 @@ class MoodEngine:
     # --------------------------------------------------------------- helpers
     def get_current_mood(self):
         return self.current_mood
+    
+    def get_emotion_for_hand_controller(self) -> str:
+        """Map 3D mood vector to hand controller emotion states."""
+        valence, arousal, clarity = self.mood_vector
+        
+        # Use the sophisticated mapping from captioner/prompts.py
+        if valence > 0.5 and arousal < 0.4:
+            return "calm_observant"  # "content and quiet"
+        elif valence > 0.5 and arousal > 0.6:
+            return "energized_engaged"  # "curious and energized"
+        elif valence < -0.3 and arousal > 0.5:
+            return "alert_curious"  # "anxious and alert" 
+        elif valence < -0.3 and arousal < 0.4:
+            return "withdrawn_distant"  # "withdrawn and foggy"
+        elif clarity < 0.2:
+            return "quiet_detached"  # "uncertain and confused"
+        elif valence > 0.2 and arousal > 0.3:
+            return "alert_curious"  # Generally alert and engaged
+        elif valence < -0.1:
+            return "quiet_detached"  # Generally withdrawn
+        else:
+            return "calm_observant"  # Default neutral state
 
     def calculate_novelty(self, caption):
+        """Calculate novelty based on semantic similarity, not exact match."""
         if not self.last_caption:
-            return 1.0
-        return 0.0 if caption.strip() == self.last_caption.strip() else 1.0
+            return 0.3  # Moderate novelty for first caption, not maximum
+        
+        # Simple keyword-based similarity check
+        current_words = set(caption.lower().split())
+        last_words = set(self.last_caption.lower().split())
+        
+        # Calculate Jaccard similarity (intersection / union)
+        intersection = len(current_words & last_words)
+        union = len(current_words | last_words)
+        similarity = intersection / union if union > 0 else 0
+        
+        # Convert similarity to novelty (inverse relationship)
+        novelty = 1.0 - similarity
+        
+        # Scale novelty to be less dramatic
+        return min(0.4, novelty * 0.6)  # Cap at 0.4, scale down
 
     def compute_mood_change(self, novelty, saw_person):
 
@@ -62,15 +143,163 @@ class MoodEngine:
         # 4. Cap positive changes: Reduce the novelty bonus when mood is already high
 
         change = 0.0
-        if novelty:
-            change += 0.02
-        else:
-            change -= 0.07
-
+        
+        # Base novelty effect - much smaller and proportional
+        change += novelty * 0.03  # Scale down novelty impact significantly
+        
+        # Natural mood decay - stronger to prevent getting stuck high
+        change -= 0.04  # Increased from -0.02 to ensure gradual decline
+        
+        # Person presence effects - reduced
         if saw_person and not self.last_person_detected:
-            change += 0.07
+            change += 0.04  # Reduced from 0.07
         elif not saw_person and self.last_person_detected:
-            change -= 0.05
+            change -= 0.03  # Reduced from 0.05
+            
+        # Add time-based decay for long sessions
+        session_duration = time.time() - self.session_start
+        if session_duration > 1800:  # After 30 minutes
+            change -= 0.01  # Additional decay for long sessions
+        if session_duration > 3600:  # After 1 hour  
+            change -= 0.02  # Even more decay
+            
+        return change
+
+    def analyze_caption_sentiment(self, caption: str) -> float:
+        """Analyze sentiment from caption content using keyword matching."""
+        positive_words = [
+            'happy', 'joy', 'smile', 'laugh', 'bright', 'warm', 'comfortable', 
+            'peaceful', 'content', 'energetic', 'engaged', 'focused', 'curious',
+            'confident', 'relaxed', 'pleasant', 'cozy', 'vibrant', 'cheerful'
+        ]
+        
+        negative_words = [
+            'sad', 'tired', 'dark', 'cold', 'worried', 'anxious', 'stressed',
+            'distant', 'withdrawn', 'confused', 'lonely', 'bored', 'frustrated',
+            'empty', 'dull', 'lifeless', 'gloomy', 'melancholy', 'troubled'
+        ]
+        
+        neutral_words = [
+            'thoughtful', 'contemplative', 'observant', 'quiet', 'still',
+            'reflective', 'pensive', 'calm', 'serene', 'composed'
+        ]
+        
+        caption_lower = caption.lower()
+        sentiment_score = 0.0
+        
+        # Count positive indicators
+        for word in positive_words:
+            if word in caption_lower:
+                sentiment_score += 0.02
+        
+        # Count negative indicators  
+        for word in negative_words:
+            if word in caption_lower:
+                sentiment_score -= 0.03
+                
+        # Neutral words have slight positive effect (better than nothing)
+        for word in neutral_words:
+            if word in caption_lower:
+                sentiment_score += 0.005
+        
+        return np.clip(sentiment_score, -0.1, 0.1)  # Cap sentiment influence
+
+    def analyze_3d_mood_with_ollama(self, caption: str, emotional_memory_context: Optional[str] = None, temporal_feeling: Optional[str] = None) -> Tuple[float, float, float]:
+        """Use Ollama to analyze mood in 3D with recursive emotional feedback and memory context."""
+        try:
+            # Get memory context for mood analysis
+            memory_state = " | ".join(self.memory[-3:]) if self.memory else "No recent memories"
+            
+            # Get current emotional state description for recursive feedback
+            current_emotion = self.get_emotion_for_hand_controller()
+            mood_description = self.get_mood_description(current_emotion, self.mood_vector)
+            
+            # Add emotional memory context if available
+            if emotional_memory_context:
+                memory_state += f" | Emotional context: {emotional_memory_context}"
+            
+            # Use the enhanced recursive prompt with current emotional state, memory, and temporal feeling
+            prompt = MOOD_PROMPT_TEMPLATE.format(
+                image_description=caption,
+                memory_state=memory_state,
+                current_mood_description=mood_description,
+                current_valence=self.mood_vector[0],
+                current_arousal=self.mood_vector[1], 
+                current_clarity=self.mood_vector[2],
+                temporal_feeling=temporal_feeling or "time flows neutrally"
+            )
+            
+            response = query_ollama(prompt, model="llava:7b-v1.6-mistral-q5_1")
+            
+            # Parse the response for three values
+            valence, arousal, clarity = self.parse_3d_mood_response(response)
+            
+            return valence, arousal, clarity
+            
+        except Exception as e:
+            print(f"[⚠️ ] 3D mood analysis failed: {e}")
+            # Fallback to slight emotional evolution from current state
+            curr_v, curr_a, curr_c = self.mood_vector
+            return (
+                curr_v + np.random.uniform(-0.1, 0.1), 
+                curr_a + np.random.uniform(-0.1, 0.1),
+                curr_c + np.random.uniform(-0.05, 0.05)
+            )
+    
+    def get_mood_description(self, emotion: str, mood_vector: Tuple[float, float, float]) -> str:
+        """Convert emotion state and 3D mood to natural language description."""
+        valence, arousal, clarity = mood_vector
+        
+        emotion_descriptions = {
+            'energized_engaged': "energized and deeply engaged with the world",
+            'alert_curious': "alert and curious about what's happening", 
+            'calm_observant': "calm and peacefully observant",
+            'quiet_detached': "quiet and somewhat detached from events",
+            'withdrawn_distant': "withdrawn and feeling distant from surroundings"
+        }
+        
+        base_desc = emotion_descriptions.get(emotion, "in a neutral emotional state")
+        
+        # Add 3D mood nuances
+        valence_desc = "content" if valence > 0.3 else "troubled" if valence < -0.3 else "neutral"
+        arousal_desc = "energetic" if arousal > 0.3 else "calm" if arousal < -0.3 else "balanced"
+        clarity_desc = "clear-minded" if clarity > 0.3 else "confused" if clarity < -0.3 else "moderately focused"
+        
+        return f"{base_desc}, feeling {valence_desc}, {arousal_desc}, and {clarity_desc}"
+    
+    def parse_3d_mood_response(self, response: str) -> Tuple[float, float, float]:
+        """Parse Ollama response for valence, arousal, clarity values."""
+        try:
+            # Look for patterns like "valence: 0.3, arousal: -0.1, clarity: 0.7"
+            # or just three numbers separated by commas/spaces
+            import re
+            
+            # Try to find three numbers between -1 and 1
+            numbers = re.findall(r'-?[0-1]?\.\d+|-?[01]', response.lower())
+            
+            if len(numbers) >= 3:
+                valence = np.clip(float(numbers[0]), -1.0, 1.0)
+                arousal = np.clip(float(numbers[1]), -1.0, 1.0) 
+                clarity = np.clip(float(numbers[2]), -1.0, 1.0)
+                return valence, arousal, clarity
+            
+            # Fallback: try to extract semantic meaning
+            response_lower = response.lower()
+            valence = 0.3 if "positive" in response_lower or "pleasant" in response_lower else -0.2
+            arousal = 0.4 if "energetic" in response_lower or "alert" in response_lower else -0.1
+            clarity = 0.5 if "clear" in response_lower or "focused" in response_lower else 0.0
+            
+            return valence, arousal, clarity
+            
+        except Exception as e:
+            print(f"[⚠️ ] Failed to parse 3D mood response: {e}")
+            return (0.0, 0.0, 0.5)
+    
+    def convert_3d_to_scalar(self, valence: float, arousal: float, clarity: float) -> float:
+        """Convert 3D mood to scalar for backward compatibility."""
+        # Weighted combination: valence is primary, arousal and clarity add nuance
+        scalar = 0.5 + (valence * 0.4) + (arousal * 0.2) + (clarity * 0.1)
+        return np.clip(scalar, 0.0, 1.0)
         return change
 
 

@@ -137,7 +137,54 @@ def format_timestamp(timestamp):
     return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
 
-def get_sleep_duration_description(last_activity_time):
+def get_temporal_feeling(start_time, current_emotion: str = "calm_observant", scene_stagnation: bool = False) -> str:
+    """
+    Generate psychological state subtly influenced by duration without explicit temporal references.
+    The AI feels time's psychological effects but isn't told about time directly.
+    
+    Args:
+        start_time: Unix timestamp of when observation started
+        current_emotion: Current emotional state to influence
+        scene_stagnation: Whether observing same scene repeatedly
+        
+    Returns:
+        Pure psychological state that lets AI naturally reflect on time if it wants to
+    """
+    elapsed = time.time() - start_time
+    
+    # Duration creates subtle psychological shifts (no time words at all)
+    if elapsed < 300:  # 0-5 minutes - fresh alertness
+        depth = "alert"
+    elif elapsed < 1800:  # 5-30 minutes - growing familiarity  
+        depth = "attentive"
+    elif elapsed < 3600:  # 30 minutes - 1 hour - comfortable presence
+        depth = "steady"
+    elif elapsed < 7200:  # 1-2 hours - deepening patience
+        depth = "patient"
+    elif elapsed < 14400:  # 2-4 hours - contemplative depth
+        depth = "contemplative"
+    else:  # 4+ hours - profound stillness
+        depth = "deeply still"
+    
+    # Pure emotional state (AI can mention time naturally if it wants)
+    if current_emotion == "energized_engaged":
+        state = f"{depth}, engaged"
+    elif current_emotion == "withdrawn_distant":
+        state = f"{depth}, distant"
+    elif current_emotion == "alert_curious":
+        state = f"{depth}, curious"
+    elif current_emotion == "quiet_detached":
+        state = f"{depth}, detached"
+    else:  # calm_observant
+        state = f"{depth}, observant"
+    
+    # Stagnation adds subtle restlessness without mentioning repetition
+    if scene_stagnation and elapsed > 1800:
+        state += ", with a subtle restlessness"
+    
+    return state
+    
+    return feeling
     """
     Describe how long the system was asleep.
     

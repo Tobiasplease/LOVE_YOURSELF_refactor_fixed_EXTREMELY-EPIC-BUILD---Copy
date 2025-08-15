@@ -20,6 +20,7 @@ import numpy as np
 import time
 from typing import Tuple, Optional, Dict, Any
 import json
+from config.config import REACTIVITY_PAUSE_THRESHOLD
 
 
 class CameraReactivityEngine:
@@ -27,46 +28,44 @@ class CameraReactivityEngine:
     Real-time camera analysis for behavioral reactivity.
     """
     
-    def __init__(self, sensitivity=0.8, smoothing_factor=0.9, pause_threshold=0.5, pause_duration=2.0):
+    def __init__(self, sensitivity=1.8, smoothing_factor=0.85, pause_threshold=None, pause_duration=3.0):
         """
         Initialize camera reactivity engine.
         
         Args:
-            sensitivity: How sensitive to frame changes (0.0-1.0)
+            sensitivity: How sensitive to frame changes (0.0-2.0, higher = more sensitive)
             smoothing_factor: Temporal smoothing (0.0=no smoothing, 1.0=max smoothing)
-            pause_threshold: Activity level that triggers pause (0.0-1.0)
+            pause_threshold: Activity level that triggers pause (0.0-1.0, lower = easier to trigger)
             pause_duration: How long to pause in seconds
         """
         self.sensitivity = sensitivity
         self.smoothing_factor = smoothing_factor
-        self.pause_threshold = pause_threshold
+        self.pause_threshold = pause_threshold if pause_threshold is not None else REACTIVITY_PAUSE_THRESHOLD
         self.pause_duration = pause_duration
         
         # Frame analysis
         self.previous_frame = None
         self.frame_count = 0
         
-        # Reactivity metrics (smoothed over time)
+        # Single unified activity level for pause triggering
         self.activity_level = 0.0        # Overall movement/change (0.0-1.0)
-        self.sudden_change = 0.0         # Spike detection (0.0-1.0)
-        self.motion_intensity = 0.0      # Movement strength (0.0-1.0)
         
         # Pause system for high activity
         self.is_paused = False
         self.pause_start_time = 0.0
-        self.pause_cooldown = 0.5        # Minimum time between pauses (reduced for more frequent pauses)
+        self.pause_cooldown = 10.0        # 10 second cooldown between pauses
         self.last_pause_time = 0.0
         
-        # Historical tracking for pattern detection
+        # Historical tracking for better detection
         self.activity_history = []
-        self.max_history = 30  # Keep 1 second at 30fps
+        self.max_history = 15  # Keep 0.5 seconds at 30fps
         
         # Reactivity state
         self.last_update_time = time.time()
         self.reactivity_active = True
         
         # Debug info
-        self.debug_enabled = False
+        self.debug_enabled = True  # Enable by default for better feedback
         
     def process_frame(self, frame: np.ndarray) -> Dict[str, float]:
         """
@@ -103,57 +102,52 @@ class CameraReactivityEngine:
         frame_diff = cv2.absdiff(self.previous_frame, blurred_frame)
         
         # Apply threshold to get binary difference
-        threshold_value = int(30 * self.sensitivity)  # Adaptive threshold
+        threshold_value = int(15 * self.sensitivity)  # Balanced threshold
         _, thresh_diff = cv2.threshold(frame_diff, threshold_value, 255, cv2.THRESH_BINARY)
         
-        # Calculate activity metrics
+        # Calculate activity metrics - balanced sensitivity
         raw_activity = np.sum(thresh_diff) / (frame.shape[0] * frame.shape[1] * 255)  # Normalize 0-1
         
-        # Smooth the activity level
-        self.activity_level = (self.smoothing_factor * self.activity_level + 
-                              (1 - self.smoothing_factor) * raw_activity)
+        # Boost activity by sensitivity multiplier but more conservatively
+        boosted_activity = min(1.0, raw_activity * self.sensitivity * 3.5)  # Reduced multiplier
         
-        # Track activity history for pattern detection
-        self.activity_history.append(raw_activity)
+        # Smooth the activity level but keep it responsive
+        self.activity_level = (self.smoothing_factor * self.activity_level + 
+                              (1 - self.smoothing_factor) * boosted_activity)
+        
+        # Track activity history for stability
+        self.activity_history.append(boosted_activity)
         if len(self.activity_history) > self.max_history:
             self.activity_history.pop(0)
         
-        # Detect sudden changes (spikes)
-        if len(self.activity_history) >= 3:
-            recent_avg = np.mean(self.activity_history[-3:])
-            older_avg = np.mean(self.activity_history[:-3]) if len(self.activity_history) > 3 else recent_avg
-            
-            spike_ratio = recent_avg / (older_avg + 0.001)  # Avoid division by zero
-            self.sudden_change = min(1.0, max(0.0, (spike_ratio - 1.0) * 2.0))  # Scale spike detection
+        # Detect sudden changes (spikes) - simplified
+        recent_peak = max(self.activity_history[-5:]) if len(self.activity_history) >= 5 else 0.0
         
-        # Calculate motion intensity using optical flow-like analysis
-        self.motion_intensity = self._calculate_motion_intensity(frame_diff)
+        # MEMORY FIX: Reuse previous frame buffer instead of copying
+        np.copyto(self.previous_frame, blurred_frame)
         
-        # Update previous frame
-        self.previous_frame = blurred_frame.copy()
-        
-        # Generate multipliers for hand controller
-        chaos_multiplier = self._calculate_chaos_multiplier()
-        speed_multiplier = self._calculate_speed_multiplier()
+        # Clean up temporary arrays to prevent memory leaks
+        del gray_frame, blurred_frame, frame_diff, thresh_diff
         
         # Check for pause conditions (high activity triggers freeze)
         pause_active = self._check_pause_conditions(current_time)
         
-        # Debug output
-        if self.debug_enabled and self.frame_count % 30 == 0:  # Every second
-            print(f"🎥 Camera Reactivity: activity={self.activity_level:.3f}, "
-                  f"sudden={self.sudden_change:.3f}, motion={self.motion_intensity:.3f}, "
-                  f"paused={pause_active}")
+        # Debug output - show activity and pause proximity (disabled by default)
+        # if self.debug_enabled and self.frame_count % 15 == 0:  # Every 0.5 seconds
+        #     progress_to_pause = (self.activity_level / self.pause_threshold) * 100
+        #     print(f"🎥 Activity: {self.activity_level:.3f} | Pause at: {self.pause_threshold:.3f} | Progress: {progress_to_pause:.1f}% | Paused: {pause_active}")
         
         return {
             'activity_level': self.activity_level,
-            'sudden_change': self.sudden_change,
-            'motion_intensity': self.motion_intensity,
-            'chaos_multiplier': chaos_multiplier,
-            'speed_multiplier': speed_multiplier,
+            'pause_threshold': self.pause_threshold,
+            'progress_to_pause': min(100.0, (self.activity_level / self.pause_threshold) * 100),
             'is_paused': pause_active,
             'pause_remaining': max(0.0, (self.pause_start_time + self.pause_duration) - current_time) if pause_active else 0.0,
-            'timestamp': current_time
+            'cooldown_remaining': max(0.0, self.pause_cooldown - (current_time - self.last_pause_time)),
+            'timestamp': current_time,
+            # Legacy compatibility for machine.py
+            'chaos_multiplier': min(3.5, 0.3 + (self.activity_level * 3.2)),  # Convert activity to chaos range
+            'speed_multiplier': min(2.0, 1.0 + self.activity_level)  # Convert activity to speed range
         }
     
     def _calculate_motion_intensity(self, frame_diff: np.ndarray) -> float:
@@ -223,16 +217,15 @@ class CameraReactivityEngine:
             # Check if pause duration has elapsed
             if current_time - self.pause_start_time >= self.pause_duration:
                 self.is_paused = False
-                print(f"✅ CAMERA PAUSE ENDED - Resuming Markov generation")
+                # print(f"✅ CAMERA PAUSE ENDED - Resuming hand movement after {self.pause_duration}s")
                 return False
             else:
                 return True  # Still paused
         
         # Check if activity level exceeds pause threshold
-        combined_activity = (self.activity_level * 0.6 + 
-                           self.sudden_change * 0.4)  # Weight current activity more
+        activity_spike = (self.activity_level >= self.pause_threshold)
         
-        if (combined_activity >= self.pause_threshold and 
+        if (activity_spike and 
             current_time - self.last_pause_time >= self.pause_cooldown):
             
             # Trigger pause
@@ -240,8 +233,8 @@ class CameraReactivityEngine:
             self.pause_start_time = current_time
             self.last_pause_time = current_time
             
-            # Always show pause triggers (not just in debug mode)
-            print(f"🛑 CAMERA PAUSE TRIGGERED! Activity: {combined_activity:.3f} > {self.pause_threshold:.3f} - Pausing for {self.pause_duration}s")
+            # Pause feedback (commented out to reduce terminal output)
+            # print(f"🛑 CAMERA PAUSE TRIGGERED! Activity: {self.activity_level:.3f} > {self.pause_threshold:.3f} - Pausing for {self.pause_duration}s")
             
             return True
         
@@ -251,11 +244,15 @@ class CameraReactivityEngine:
         """Return neutral/baseline metrics when no processing possible."""
         return {
             'activity_level': 0.0,
-            'sudden_change': 0.0,
-            'motion_intensity': 0.0,
-            'chaos_multiplier': 1.0,
-            'speed_multiplier': 1.0,
-            'timestamp': time.time()
+            'pause_threshold': self.pause_threshold,
+            'progress_to_pause': 0.0,
+            'is_paused': False,
+            'pause_remaining': 0.0,
+            'cooldown_remaining': 0.0,
+            'timestamp': time.time(),
+            # Legacy compatibility
+            'chaos_multiplier': 0.3,  # Baseline chaos
+            'speed_multiplier': 1.0   # Baseline speed
         }
     
     def set_sensitivity(self, sensitivity: float):

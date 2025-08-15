@@ -4,7 +4,7 @@ import re
 import time
 import threading
 from collections import deque
-from typing import Deque, Optional, Tuple
+from typing import Deque, Optional, Tuple, Dict, List
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
@@ -20,6 +20,8 @@ from .model_wrapper import MultimodalModel
 
 
 class Captioner(MemoryMixin):
+    def shutdown(self):
+        self.save_session_time()
     caption_window: Optional[any] = None  # type: ignore
 
     def __init__(self) -> None:
@@ -32,6 +34,9 @@ class Captioner(MemoryMixin):
         self.awakening_done = False
 
         self.current_mood: float = 0.0
+        self.current_mood_vector: Tuple[float, float, float] = (0.0, 0.0, 0.5)  # valence, arousal, clarity
+        self.current_emotion_state: str = "calm_observant"  # hand controller emotion state
+        self.emotional_journey: List[str] = []  # track emotional evolution over time
         self.last_caption: str = ""
         self.boredom: float = 0.0
         self.novelty_score: float = 0.0
@@ -44,28 +49,58 @@ class Captioner(MemoryMixin):
         self.sessions_since_boot = 0
         self.memory_loaded_from_previous = False
 
+        # Session gap awareness
+        self.last_session_gap = None
+        self._last_session_file = os.path.join(MOOD_SNAPSHOT_FOLDER, "last_session.txt")
+        if os.path.exists(self._last_session_file):
+            try:
+                with open(self._last_session_file, "r") as f:
+                    last_time = float(f.read().strip())
+                self.last_session_gap = time.time() - last_time
+            except Exception:
+                self.last_session_gap = None
+        else:
+            self.last_session_gap = None
+
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
-        self.snapshot_queue: Deque[Tuple[np.ndarray, bool]] = deque()
+        self.snapshot_queue: Deque[Tuple[np.ndarray, bool, Optional[Dict]]] = deque()
         threading.Thread(target=self._caption_worker, daemon=True).start()
+
+    def save_session_time(self):
+        try:
+            with open(self._last_session_file, "w") as f:
+                f.write(str(time.time()))
+        except Exception:
+            pass
 
     @property
     def is_processing(self) -> bool:
         return bool(self.snapshot_queue)
 
-    def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None) -> None:
+    def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None, mood_vector: Optional[Tuple[float, float, float]] = None, emotion_state: Optional[str] = None, reactivity_data: Optional[Dict] = None) -> None:
         if frame is not None:
             if mood is not None:
                 self.current_mood = mood
+            if mood_vector is not None:
+                self.current_mood_vector = mood_vector
+            if emotion_state is not None:
+                # Track emotional journey over time
+                if emotion_state != self.current_emotion_state:
+                    self.emotional_journey.append(f"{emotion_state}")
+                    if len(self.emotional_journey) > 10:  # Keep last 10 emotional states
+                        self.emotional_journey.pop(0)
+                self.current_emotion_state = emotion_state
             if len(self.snapshot_queue) > 1:
                 self.snapshot_queue.pop()
-            self.snapshot_queue.append((frame.copy(), person_present))
+            # Store reactivity data with the frame for processing
+            self.snapshot_queue.append((frame.copy(), person_present, reactivity_data))
 
     def _caption_worker(self):
         while True:
             if self.snapshot_queue:
-                frame, _ = self.snapshot_queue.popleft()
+                frame, _, reactivity_data = self.snapshot_queue.popleft()
                 try:
-                    self._process_frame(frame)
+                    self._process_frame(frame, reactivity_data)
                 except Exception as exc:
                     log_json_entry(
                         LogType.ERROR,
@@ -75,7 +110,7 @@ class Captioner(MemoryMixin):
             else:
                 time.sleep(0.05)
 
-    def _process_frame(self, frame: np.ndarray) -> None:
+    def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None) -> None:
         now = time.time()
         if now - self.last_caption_time < CAPTION_INTERVAL:
             return
@@ -116,7 +151,10 @@ class Captioner(MemoryMixin):
             print_message=f"👁️ Caption: {caption}",
         )
 
-        self.observe(caption, self.current_mood, img_path, memory_type="perception")
+        self.observe(caption, self.current_mood, img_path, memory_type="perception", 
+                    reactivity_data=reactivity_data, 
+                    mood_vector=self.current_mood_vector,
+                    emotion_state=self.current_emotion_state)
         self.last_caption = caption
 
         if now - self.last_reason_time > REASON_INTERVAL:
@@ -151,16 +189,49 @@ class Captioner(MemoryMixin):
             self.last_drawing_time = now
 
     def describe_current_mood(self) -> str:
-        if self.current_mood > 0.5:
-            return "I feel quite energized and attentive."
-        elif self.current_mood > 0.1:
-            return "I'm calm but curious."
-        elif self.current_mood > -0.1:
-            return "I feel neutral and observant."
-        elif self.current_mood > -0.5:
-            return "I'm feeling distracted or unfocused."
-        else:
-            return "I feel dull, distant, and unfocused."
+        """Rich emotional description using 3D mood state and temporal context."""
+        valence, arousal, clarity = self.current_mood_vector
+        
+        # Base emotional state description
+        emotion_descriptions = {
+            'energized_engaged': "I feel energized and deeply engaged with what I'm seeing",
+            'alert_curious': "I'm alert and curious, noticing details with heightened attention", 
+            'calm_observant': "I feel calm and peacefully observant, taking in the scene with serenity",
+            'quiet_detached': "I'm in a quiet, somewhat detached state, observing from a distance",
+            'withdrawn_distant': "I feel withdrawn and distant, as if viewing through a fog"
+        }
+        
+        base_mood = emotion_descriptions.get(self.current_emotion_state, "I'm in a neutral observational state")
+        
+        # Add 3D mood nuances
+        valence_note = ""
+        if valence > 0.4:
+            valence_note = ", finding contentment in what I observe"
+        elif valence < -0.4:
+            valence_note = ", feeling somewhat troubled by what I see"
+            
+        arousal_note = ""
+        if arousal > 0.4:
+            arousal_note = ", with an energetic intensity"
+        elif arousal < -0.4:
+            arousal_note = ", in a deeply calm state"
+            
+        clarity_note = ""
+        if clarity > 0.4:
+            clarity_note = ", with clear understanding"
+        elif clarity < -0.4:
+            clarity_note = ", feeling somewhat confused"
+        
+        # Add temporal emotional context
+        journey_note = ""
+        if len(self.emotional_journey) >= 3:
+            recent_states = self.emotional_journey[-3:]
+            if len(set(recent_states)) == 1:
+                journey_note = f". I've been consistently {self.current_emotion_state} lately"
+            else:
+                journey_note = f". My emotions have shifted: {' → '.join(recent_states)}"
+        
+        return f"{base_mood}{valence_note}{arousal_note}{clarity_note}{journey_note}."
 
     def get_reflection_context(self) -> str:
         return f"""Mood: {self.current_mood:.2f}

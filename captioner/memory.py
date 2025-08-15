@@ -18,10 +18,11 @@ import re
 import os
 import glob
 from collections import deque, Counter
-from typing import Deque, List, Tuple, Set, Dict, Any
+from typing import Deque, List, Tuple, Set, Dict, Any, Optional
 
 import spacy  # ✅ used for extracting semantic motifs
-from utils.continuity import now, describe_duration
+from utils.continuity import now, describe_duration, describe_time_gap
+from typing import Optional
 
 # constants shared with Captioner
 MAX_MEMORY_ENTRIES: int = 30
@@ -74,12 +75,17 @@ class MemoryMixin:
         file: str = "",
         memory_type: str = "observation",
         derived_from: list[str] | None = None,
+        reactivity_data: Optional[Dict] = None,
+        mood_vector: Optional[Tuple[float, float, float]] = None,
+        emotion_state: Optional[str] = None,
     ):
         ts = int(now())
         entry = {
             "timestamp": ts,
             "text": text.strip(),
             "mood": mood,
+            "mood_vector": mood_vector or (0.0, 0.0, 0.5),  # Store 3D emotional context
+            "emotion_state": emotion_state or "calm_observant",  # Store emotional state
             "image": file,
             "type": memory_type,
         }
@@ -95,8 +101,18 @@ class MemoryMixin:
             self.update_motif_focus_streak(motif)
 
         self.update_beliefs()
-        self.estimate_novelty()
+        self.estimate_novelty(reactivity_data)
         self.update_boredom()
+        
+        # === APPLY TEMPORAL MOOD EFFECTS ===
+        # Modify mood based on temporal psychological effects
+        temporal_mood_modifier = self.get_temporal_mood_modifier()
+        if temporal_mood_modifier != 0.0:
+            # Update the mood in the entry to reflect temporal effects
+            entry["mood"] = max(0.0, min(1.0, mood + temporal_mood_modifier))
+            # Also update current mood if this is the most recent observation
+            if hasattr(self, 'current_mood'):
+                self.current_mood = entry["mood"]
         self.fade_old_beliefs()
 
     def update_motif_focus_streak(self, motif: str) -> None:
@@ -287,19 +303,149 @@ class MemoryMixin:
             del self.beliefs[motif]
             self.belief_history.append(f"I feel less attached to {motif} lately.")
 
-    def estimate_novelty(self) -> float:
+    def estimate_novelty(self, reactivity_metrics: Optional[Dict[str, float]] = None) -> float:
         if len(self.memory_queue) < 2:
             self.novelty_score = 1.0
             return 1.0
+            
+        # Base novelty from caption comparison
         cur = self.memory_queue[-1]["text"].lower()
         prev = self.memory_queue[-2]["text"].lower()
-        self.novelty_score = 1.0 if cur != prev else 0.0
+        caption_novelty = 1.0 if cur != prev else 0.0
+        
+        # === FRAME DIFF NOVELTY INTEGRATION ===
+        # Real-time environmental change should boost novelty
+        environmental_novelty = 0.0
+        if reactivity_metrics:
+            activity_level = reactivity_metrics.get('activity_level', 0.0)
+            sudden_change = reactivity_metrics.get('sudden_change', 0.0)
+            
+            # Activity boosts novelty (movement = new visual information)
+            environmental_novelty = min(1.0, activity_level * 2.0 + sudden_change)
+            
+        # Combine caption and environmental novelty
+        # Environmental change should override text repetition
+        self.novelty_score = max(caption_novelty, environmental_novelty * 0.8)
         return self.novelty_score
 
-    def update_boredom(self) -> None:
-        self.boredom = min(1.0, self.boredom + 0.1) if self.novelty_score < 0.3 else max(0.0, self.boredom - 0.05)
+    def get_temporal_mood_modifier(self) -> float:
+        """Calculate mood modifier based on temporal stagnation effects."""
+        if not hasattr(self, 'true_session_start'):
+            return 0.0
+            
+        session_duration = now() - self.true_session_start
+        stagnation_context = self.get_scene_stagnation_context()
+        
+        if not stagnation_context:
+            return 0.0  # No stagnation, no mood penalty
+            
+        # Progressive mood degradation from extended stagnation
+        # Simulates psychological effects of prolonged observation without stimulation
+        if session_duration > 14400:  # 4+ hours
+            return -0.4  # Significant mood drop - depression, disconnection
+        elif session_duration > 7200:  # 2+ hours
+            return -0.3  # Substantial mood drop - lethargy, melancholy
+        elif session_duration > 3600:  # 1+ hour
+            return -0.2  # Moderate mood drop - restlessness, mild depression
+        elif session_duration > 1800:  # 30+ minutes
+            return -0.1  # Slight mood drop - beginning to feel static
+        else:
+            return 0.0
 
-    def get_clean_memory_snippets(self, k: int = 5) -> List[str]:
+    def update_boredom(self) -> None:
+        # Base boredom update from novelty
+        if self.novelty_score < 0.3:
+            self.boredom = min(1.0, self.boredom + 0.1)
+        else:
+            self.boredom = max(0.0, self.boredom - 0.05)
+            
+        # === TEMPORAL STAGNATION EFFECT ===
+        # Add progressive boredom from extended observation of same scene
+        if hasattr(self, 'true_session_start'):
+            session_duration = now() - self.true_session_start
+            
+            # Check if we've been staring at similar content
+            stagnation_context = self.get_scene_stagnation_context()
+            if stagnation_context:
+                # Progressive temporal boredom based on session duration
+                if session_duration > 14400:  # 4+ hours
+                    temporal_boredom = 0.9  # Extremely bored
+                elif session_duration > 7200:  # 2+ hours  
+                    temporal_boredom = 0.7  # Very bored
+                elif session_duration > 3600:  # 1+ hour
+                    temporal_boredom = 0.5  # Moderately bored
+                elif session_duration > 1800:  # 30+ minutes
+                    temporal_boredom = 0.3  # Slightly bored
+                else:
+                    temporal_boredom = 0.0
+                    
+                # Apply temporal boredom (weighted more heavily for longer sessions)
+                self.boredom = max(self.boredom, temporal_boredom)
+
+    def get_emotionally_similar_memories(self, current_emotion: str, k: int = 3) -> List[str]:
+        """Retrieve memories that were formed in similar emotional states for recursive feedback."""
+        similar_memories = []
+        
+        for entry in reversed(self.memory_queue):
+            stored_emotion = entry.get("emotion_state", "calm_observant")
+            if stored_emotion == current_emotion and len(entry["text"]) > 15:
+                similar_memories.append(entry["text"])
+                if len(similar_memories) >= k:
+                    break
+                    
+        return similar_memories
+    
+    def get_emotional_journey_context(self, lookback_minutes: int = 30) -> str:
+        """Get a narrative of emotional evolution over recent time period."""
+        cutoff_time = now() - (lookback_minutes * 60)
+        recent_emotions = []
+        
+        for entry in self.memory_queue:
+            if entry.get("timestamp", 0) > cutoff_time:
+                emotion = entry.get("emotion_state", "unknown")
+                timestamp = entry.get("timestamp", 0)
+                time_desc = describe_time_gap(timestamp)
+                recent_emotions.append((emotion, time_desc))
+        
+        if len(recent_emotions) < 2:
+            return "My emotional state has been stable recently"
+            
+        # Track emotional transitions
+        transitions = []
+        prev_emotion = None
+        for emotion, time_desc in recent_emotions:
+            if prev_emotion and emotion != prev_emotion:
+                transitions.append(f"{prev_emotion} → {emotion} ({time_desc})")
+            prev_emotion = emotion
+            
+        if not transitions:
+            return f"I have been consistently {recent_emotions[-1][0]} for the past {lookback_minutes} minutes"
+        else:
+            return f"My emotions have evolved: {' → '.join(transitions[-2:])}"  # Last 2 transitions
+    
+    def get_mood_trend_analysis(self) -> str:
+        """Analyze 3D mood trends over recent memory."""
+        if len(self.memory_queue) < 5:
+            return "Insufficient emotional history for trend analysis"
+            
+        recent_moods = []
+        for entry in list(self.memory_queue)[-10:]:  # Last 10 entries
+            mood_vector = entry.get("mood_vector", (0.0, 0.0, 0.5))
+            recent_moods.append(mood_vector)
+            
+        if len(recent_moods) < 3:
+            return "Building emotional baseline"
+            
+        # Calculate trends in valence, arousal, clarity
+        valences = [m[0] for m in recent_moods]
+        arousals = [m[1] for m in recent_moods] 
+        clarities = [m[2] for m in recent_moods]
+        
+        v_trend = "rising" if valences[-1] > valences[0] else "falling" if valences[-1] < valences[0] else "stable"
+        a_trend = "increasing" if arousals[-1] > arousals[0] else "decreasing" if arousals[-1] < arousals[0] else "steady"
+        c_trend = "sharpening" if clarities[-1] > clarities[0] else "clouding" if clarities[-1] < clarities[0] else "consistent"
+        
+        return f"Emotional trends: valence {v_trend}, arousal {a_trend}, clarity {c_trend}"
         seen, out = set(), []
         for entry in reversed(self.memory_queue):
             cap = entry["text"]
@@ -323,6 +469,43 @@ class MemoryMixin:
                     if len(out) >= k:
                         break
         return list(reversed(out))
+
+    def get_scene_stagnation_context(self) -> Optional[str]:
+        """Detect if we've been staring at the same scene for too long."""
+        if len(self.memory_queue) < 5:
+            return None
+            
+        # Look at recent observations to detect repetition
+        recent_observations = []
+        cutoff_time = now() - 3600  # Last hour
+        
+        for entry in reversed(list(self.memory_queue)):
+            if entry.get("timestamp", 0) > cutoff_time:
+                recent_observations.append(entry["text"].lower())
+            if len(recent_observations) >= 10:  # Check last 10 observations
+                break
+                
+        if len(recent_observations) < 5:
+            return None
+            
+        # Count similar themes/keywords
+        similar_count = 0
+        keywords = ["pencil", "notebook", "laptop", "desk", "table", "workspace", "creative"]
+        
+        for obs in recent_observations:
+            if any(keyword in obs for keyword in keywords):
+                similar_count += 1
+                
+        # If most recent observations are about same scene
+        if similar_count >= len(recent_observations) * 0.8:  # 80% similarity
+            # Use the actual session duration from when the system started
+            if hasattr(self, 'true_session_start'):
+                session_duration = describe_duration(self.true_session_start)
+            else:
+                session_duration = describe_duration(self.session_start)
+            return f"I notice I have been observing variations of the same scene for much of this {session_duration} session"
+            
+        return None
 
     def get_old_session_memory_fragments(self, k: int = 3) -> List[str]:
         """Get fragmentary memories from before the current session for awakening context."""

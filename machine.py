@@ -13,7 +13,6 @@ def parse_args():
     parser.add_argument("--debug", action="store_true", help="Enable debug mode with verbose output")
     return parser.parse_args()
 
-
 args = parse_args()
 
 # Debug mode setup
@@ -28,7 +27,7 @@ def debug_print(message, level="INFO"):
 
 
 if DEBUG_MODE:
-    print("🐛 DEBUG MODE ENABLED - Verbose output active")
+    print("DEBUG MODE ENABLED - Verbose output active")
 
 if args.config_override:
     try:
@@ -50,7 +49,7 @@ from mood.mood import MoodEngine
 from breathing.breathing import update_lung_position
 from image_monitor import ImageMonitor
 from utils.state_manager import state_manager
-from utils.continuity import describe_duration
+from utils.continuity import describe_duration, get_temporal_feeling
 from config.config import (
     USE_SERVO,
     CAMERA_INDEX,
@@ -62,36 +61,16 @@ from config.config import (
     PAUSE_DURATION,
     MODEL_PATH,
     PRINT_CLEAN_CAPTIONS,
+    REACTIVITY_PAUSE_THRESHOLD,
+    REACTIVITY_PAUSE_DURATION,
+    REACTIVITY_PAUSE_COOLDOWN,
+    DEBUG_REACTIVITY_PAUSE,
 )
 from event_logging.run_manager import get_run_image_path
 from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
 from event_logging.log_type import LogType
-from hand_controller_bridge import HandControllerBridge
+from direct_hand_control import start_hand_controller, stop_hand_controller, set_emotion, send_reactivity_data, get_status, change_to_emotion, start_autonomous_mode
 from reactivity.camera_reactive import CameraReactivityEngine
-
-
-def launch_hand_controller():
-    """Launch the hand controller interface in a separate process."""
-    hand_controller_path = r"C:\Users\tobia\Downloads\HandControlStandalone\hand_control_interface.py"
-    
-    if os.path.exists(hand_controller_path):
-        try:
-            # Launch hand controller in a separate process - show output for debugging
-            result = subprocess.Popen([
-                "python", 
-                hand_controller_path
-            ], 
-            cwd=r"C:\Users\tobia\Downloads\HandControlStandalone",
-            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0  # New console on Windows
-            )
-            print(f"🤲 Hand controller interface launched successfully (PID: {result.pid})")
-            return True
-        except Exception as e:
-            print(f"❌ Failed to launch hand controller: {e}")
-            return False
-    else:
-        print(f"❌ Hand controller not found at: {hand_controller_path}")
-        return False
 
 
 if USE_SERVO:
@@ -168,18 +147,27 @@ mood_engine = MoodEngine()
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
 
-# Initialize hand controller bridge
-debug_print("Initializing hand controller bridge", "INIT")
-hand_bridge = HandControllerBridge("file")  # Use file-based communication
+# Initialize direct hand controller integration
+debug_print("Initializing direct hand controller integration", "INIT")
+hand_controller_started = start_hand_controller(headless=False)
+if hand_controller_started:
+    debug_print("Hand controller started with UI", "INIT")
+    
+    # Start autonomous mode (Markov generation) after successful initialization
+    time.sleep(1)  # Give time for datasets to load
+    if start_autonomous_mode():
+        debug_print("Hand controller autonomous mode activated", "INIT")
+    else:
+        debug_print("Failed to start autonomous mode", "INIT")
+    status = get_status()
+    debug_print(f"Hand controller status: {status}", "INIT")
+else:
+    debug_print("Hand controller failed to start", "WARN")
 
 # Initialize camera reactivity engine
 debug_print("Initializing camera reactivity engine", "INIT")
-reactivity_engine = CameraReactivityEngine(sensitivity=1.2, smoothing_factor=0.8)
+reactivity_engine = CameraReactivityEngine(sensitivity=1.8, smoothing_factor=0.85, pause_threshold=0.20, pause_duration=3.0)
 debug_print("Camera reactivity enabled - hand will respond to environmental changes", "INIT")
-
-# Launch hand controller interface
-debug_print("Launching hand controller from proper directory to access datasets", "INIT")
-launch_hand_controller()  # Launch from HandControlStandalone directory
 
 # Set up image monitor with self-critique callback
 def on_drawing_complete(image_path: str):
@@ -199,8 +187,12 @@ if previous_state:
     
     # Send immediate mood update to hand controller with restored state
     debug_print("Sending restored mood to hand controller", "INIT")
-    initial_reactivity = {'chaos_multiplier': 1.0, 'speed_multiplier': 1.0, 'activity_level': 0.0}
-    hand_bridge.update_hand_controller(mood_engine, force_update=True, reactivity_data=initial_reactivity)
+    
+    # Direct integration - set emotion based on mood
+    emotion = mood_engine.get_emotion_for_hand_controller()
+    change_to_emotion(emotion)
+    debug_print(f"Set hand controller emotion: {emotion}", "INIT")
+    debug_print(f"Set hand controller emotion: {emotion}", "INIT")
     
     # Reset last_caption so remnants from previous session are not printed
     captioner.last_caption = ""
@@ -255,7 +247,10 @@ def mood_update_thread(frame, timestamp):
                 captioner.update(
                     frame=frame,
                     person_present=best_box is not None,
-                    mood=mood_engine.get_current_mood(),  # Use previous mood for now
+                    mood=mood_engine.get_current_mood(),
+                    mood_vector=mood_engine.mood_vector,  # Pass 3D mood state
+                    emotion_state=mood_engine.get_emotion_for_hand_controller(),  # Pass current emotion
+                    reactivity_data=reactivity_metrics
                 )
                 debug_print("Captioner updated successfully", "CAPTIONER")
 
@@ -268,11 +263,17 @@ def mood_update_thread(frame, timestamp):
                     if PRINT_CLEAN_CAPTIONS:
                         print(f"\n{clean_caption}\n")
 
-                    current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path)
+                    # Generate embodied temporal feeling for mood analysis
+                    current_emotion = mood_engine.get_emotion_for_hand_controller()
+                    temporal_feeling = get_temporal_feeling(start_time, current_emotion, scene_stagnation=False)
+
+                    current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling)
                     debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
 
-                    # Update hand controller with new emotional state + camera reactivity
-                    hand_bridge.update_hand_controller(mood_engine, reactivity_data=reactivity_metrics)
+                    # Update hand controller with new emotional state
+                    emotion = mood_engine.get_emotion_for_hand_controller()
+                    change_to_emotion(emotion)
+                    debug_print(f"Updated hand controller emotion: {emotion}", "HAND")
 
                     # Third: Update captioner's mood state for next cycle
                     captioner.current_mood = current_mood
@@ -283,6 +284,14 @@ def mood_update_thread(frame, timestamp):
     else:
         debug_print("Captioner is processing, skipping mood update", "MOOD")
 
+# === REACTIVITY PAUSE SYSTEM STATE ===
+last_pause_time = 0.0
+pause_is_active = False
+frame_count = 0
+
+# Add frame display throttling to prevent memory issues
+last_display_time = 0
+DISPLAY_THROTTLE_INTERVAL = 0.1  # Show camera feed max 10 FPS to save memory
 
 try:
     while True:
@@ -295,9 +304,77 @@ try:
         frame = cv2.resize(frame, (320, 240))
         frame = cv2.flip(frame, 1)
 
+        # Force garbage collection periodically to prevent memory accumulation
+        frame_count += 1
+        if frame_count % 100 == 0:  # Every 100 frames
+            import gc
+            gc.collect()
+
         # === CAMERA REACTIVITY PROCESSING ===
         # Process frame for real-time behavioral reactivity
         reactivity_metrics = reactivity_engine.process_frame(frame)
+        frame_count += 1
+        
+        # Get current time for pause/cooldown calculations
+        now = time.time()
+        
+        # Add pause/cooldown information to metrics for display
+        if pause_is_active:
+            # Currently paused - show remaining pause time
+            pause_elapsed = now - last_pause_time
+            pause_remaining = max(0, REACTIVITY_PAUSE_DURATION - pause_elapsed)
+            reactivity_metrics['is_paused'] = True
+            reactivity_metrics['pause_remaining'] = pause_remaining
+        else:
+            # Not paused - check cooldown
+            cooldown_elapsed = now - last_pause_time
+            cooldown_remaining = max(0, REACTIVITY_PAUSE_COOLDOWN - cooldown_elapsed)
+            reactivity_metrics['is_paused'] = False
+            reactivity_metrics['cooldown_remaining'] = cooldown_remaining
+        
+        # === REACTIVITY PAUSE SYSTEM ===
+        # Check if activity level crosses threshold for pausing Markov generation
+        current_activity = reactivity_metrics.get('activity_level', 0.0)
+        
+        # Debug: Show activity level occasionally
+        if frame_count % 180 == 0:  # Every ~6 seconds at 30fps
+            debug_print(f"Current activity level: {current_activity:.3f} (threshold: {REACTIVITY_PAUSE_THRESHOLD})", "ACTIVITY")
+        
+        if (current_activity > REACTIVITY_PAUSE_THRESHOLD and 
+            not pause_is_active and 
+            now - last_pause_time > REACTIVITY_PAUSE_COOLDOWN):
+            
+            # High activity detected - pause Markov generation
+            pause_data = {
+                'action': 'pause',
+                'duration': REACTIVITY_PAUSE_DURATION,
+                'activity_level': float(current_activity)  # Convert numpy to Python float
+            }
+            if DEBUG_REACTIVITY_PAUSE:
+                debug_print(f"🚨 Sending pause command: {pause_data}", "REACTIVITY")
+            
+            send_reactivity_data(pause_data)
+            pause_is_active = True
+            last_pause_time = now
+            if DEBUG_REACTIVITY_PAUSE:
+                debug_print(f"🚨 High activity detected ({current_activity:.2f}) - pausing hand controller for {REACTIVITY_PAUSE_DURATION}s", "REACTIVITY")
+        
+        # Check if pause duration has expired OR activity dropped significantly
+        elif pause_is_active and (now - last_pause_time > REACTIVITY_PAUSE_DURATION or 
+                                 (current_activity < REACTIVITY_PAUSE_THRESHOLD * 0.1 and now - last_pause_time > 2.0)):  # Only resume early if activity is very low AND at least 2s have passed
+            # Pause duration expired or activity dropped - resume Markov generation
+            resume_reason = "duration expired" if now - last_pause_time > REACTIVITY_PAUSE_DURATION else "very low activity"
+            resume_data = {
+                'action': 'resume',
+                'activity_level': float(current_activity)  # Convert numpy to Python float
+            }
+            if DEBUG_REACTIVITY_PAUSE:
+                debug_print(f"▶️ Sending resume command ({resume_reason}): {resume_data}", "REACTIVITY")
+                
+            send_reactivity_data(resume_data)
+            pause_is_active = False
+            if DEBUG_REACTIVITY_PAUSE:
+                debug_print(f"✅ Resume triggered by {resume_reason} - resuming hand controller", "REACTIVITY")
 
         now = time.time()
         delta = now - last_time
@@ -385,24 +462,43 @@ try:
 
         # === CAMERA REACTIVITY OVERLAY ===
         if reactivity_metrics:
-            # Compact reactivity bar at bottom
-            bar_x, bar_y = 10, frame.shape[0] - 60
-            bar_w, bar_h = 200, 50
+            # Small pause bar at bottom of screen
+            bar_w, bar_h = 200, 12
+            bar_x = 10  # Left side
+            bar_y = frame.shape[0] - 30  # Bottom with small margin
             
-            # Background
+            # Background (black with white border)
             cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (0, 0, 0), -1)
-            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (100, 100, 100), 1)
+            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (255, 255, 255), 2)
             
-            # Activity bar (green)
-            activity_len = int(reactivity_metrics['activity_level'] * (bar_w - 20))
-            cv2.rectangle(frame, (bar_x + 10, bar_y + 8), (bar_x + 10 + activity_len, bar_y + 16), (0, 255, 0), -1)
-            cv2.putText(frame, "ACT", (bar_x + 2, bar_y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+            # Progress to pause bar (color changes with proximity)
+            progress = reactivity_metrics.get('progress_to_pause', 0)
+            progress_len = int(min(progress, 100) * bar_w / 100)
             
-            # Speed bar (red) - normalize to 0-1 range
-            speed_norm = min(1.0, (reactivity_metrics['speed_multiplier'] - 0.2) / 4.3)  # 0.2-4.5 -> 0-1
-            speed_len = int(speed_norm * (bar_w - 20))
-            cv2.rectangle(frame, (bar_x + 10, bar_y + 20), (bar_x + 10 + speed_len, bar_y + 28), (0, 0, 255), -1)
-            cv2.putText(frame, "SPD", (bar_x + 2, bar_y + 26), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+            # Color: green -> yellow -> red as it approaches pause
+            if progress >= 100:
+                color = (0, 0, 255)  # Red (paused)
+            elif progress >= 80:
+                color = (0, 165, 255)  # Orange
+            elif progress >= 60:
+                color = (0, 255, 255)  # Yellow
+            else:
+                color = (0, 255, 0)  # Green
+                
+            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + progress_len, bar_y + bar_h), color, -1)
+            
+            # Pause threshold line (always at 100%)
+            threshold_x = bar_x + bar_w
+            cv2.line(frame, (threshold_x, bar_y), (threshold_x, bar_y + bar_h), (0, 0, 255), 3)
+            
+            # Text
+            text = f"Pause: {progress:.0f}%"
+            if reactivity_metrics.get('is_paused', False):
+                text = f"PAUSED: {reactivity_metrics.get('pause_remaining', 0):.1f}s"
+            elif reactivity_metrics.get('cooldown_remaining', 0) > 0:
+                text = f"Cooldown: {reactivity_metrics.get('cooldown_remaining', 0):.1f}s"
+                
+            cv2.putText(frame, text, (bar_x, bar_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
             # Chaos bar (blue) - normalize to 0-1 range  
             chaos_norm = min(1.0, (reactivity_metrics['chaos_multiplier'] - 0.3) / 3.2)  # 0.3-3.5 -> 0-1
@@ -415,7 +511,14 @@ try:
                 cv2.rectangle(frame, (bar_x + bar_w - 30, bar_y + 10), (bar_x + bar_w - 10, bar_y + 30), (0, 0, 255), -1)
                 cv2.putText(frame, "PAUSE", (bar_x + bar_w - 28, bar_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
 
-        cv2.imshow("mslint camera", frame)
+        # MEMORY FIX: Throttle camera display to prevent graphics memory exhaustion
+        current_time = time.time()
+        if current_time - last_display_time > DISPLAY_THROTTLE_INTERVAL:
+            cv2.imshow("mslint camera", frame)
+            last_display_time = current_time
+
+        # Hand controller now runs completely autonomously in its own thread
+        # No GUI updates needed from machine.py
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
@@ -441,5 +544,10 @@ except KeyboardInterrupt:
     object_detector.stop()
     object_detector.join()
     image_monitor.stop()
+    
+    # Stop hand controller
+    debug_print("Stopping hand controller", "SHUTDOWN")
+    stop_hand_controller()
+    
     cap.release()
     cv2.destroyAllWindows()

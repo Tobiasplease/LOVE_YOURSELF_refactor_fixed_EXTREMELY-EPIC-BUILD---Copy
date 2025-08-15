@@ -150,12 +150,27 @@ class HandControllerBridge:
         # Add camera reactivity data if available
         if reactivity_data:
             state_data['reactivity'] = reactivity_data
+            # Add explicit pause command for hand controller
+            if reactivity_data.get('is_paused', False):
+                state_data['pause_command'] = {
+                    'action': 'pause',
+                    'duration': reactivity_data.get('pause_remaining', 3.0),
+                    'reason': 'camera_activity'
+                }
+                print(f"🔄 Sending pause command to hand controller: {reactivity_data.get('pause_remaining', 3.0):.1f}s remaining")
+            else:
+                state_data['pause_command'] = {
+                    'action': 'resume',
+                    'reason': 'camera_activity'
+                }
         
-        with open(self.state_file, 'w') as f:
-            json.dump(state_data, f, indent=2)
-        
-        # No output - bridge works silently
-        return True
+        try:
+            with open(self.state_file, 'w') as f:
+                json.dump(state_data, f, indent=2)
+            return True
+        except Exception as e:
+            print(f"❌ Failed to write bridge file: {e}")
+            return False
     
     def _send_via_tcp(self, emotion_state: str, mood_value: float, reactivity_data: Optional[Dict[str, float]] = None) -> bool:
         """Send state via TCP socket (future implementation)."""

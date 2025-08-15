@@ -24,11 +24,13 @@ class MultimodalModel:
             # Use the same detailed environmental prompt system for fresh starts
             # This ensures first-time awakenings get proper environmental descriptions
             if self.memory_ref:
-                prompt = build_caption_prompt(
+                # Pass last session gap to environmental caption prompt
+                prompt = build_environmental_caption_prompt(
                     self.memory_ref,
                     mood=self.memory_ref.current_mood,
                     boredom=self.memory_ref.boredom,
                     novelty=self.memory_ref.novelty_score,
+                    last_session_gap=getattr(self.memory_ref, "last_session_gap", None)
                 )
             else:
                 # Fallback if no memory reference available

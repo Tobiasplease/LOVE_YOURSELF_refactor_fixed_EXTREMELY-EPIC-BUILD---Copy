@@ -23,22 +23,40 @@ DYNAMIC_SYSTEM_PROMPT_TEMPLATE = (
 )
 
 CAPTION_PROMPT_TEMPLATE = (
-    "=== IMMEDIATE VISUAL INPUT ===\n"
-    "Describe what you see RIGHT NOW in this exact moment. Focus entirely on the current image.\n"
-    "What is happening in front of you this instant?\n\n"
-    "=== YOUR PERSPECTIVE ===\n"
-    "Current state: Mood {mood:.2f} | Boredom {boredom:.2f} | Novelty {novelty:.2f}\n"
+    "=== VISUAL INPUT ===\n"
+    "What do you notice?\n\n"
+    "=== YOUR STATE ===\n"
+    "Emotion: {emotion_description}\n"
+    "Feeling: {temporal_feeling}\n"
+    "Mood: {mood:.2f} | Boredom {boredom:.2f} | Novelty {novelty:.2f}\n\n"
+    "=== IDENTITY ===\n"
     "{identity_summary}\n\n"
-    "Let your established identity subtly color your observation, but the IMAGE is primary.\n"
-    "Recent session context (background awareness only, NOT current reality): {recent_memory}\n\n"
-    "RESPOND: One clear observation of what you see now."
+    "Recent flow: {recent_memory}\n\n"
+    "RESPOND: A brief inner thought that continues naturally from your recent observations."
 )
 
-CAPTION_PROMPT_CONTINUATION = """\n\nBE CONCISE: Use 2-3 short sentences maximum.
-Create a flowing stream of consciousness where each thought naturally transitions from the previous one while staying present with what you're seeing.
-Avoid repeating previous observations - explore something new."""
+CAPTION_PROMPT_CONTINUATION = """\n\nBrief inner voice - what are you noticing RIGHT NOW? 
+Focus on immediate present-moment details, not previous thoughts. Avoid starting with "The room" or "The man" or "In this moment".
+Be specific about what captures your attention in this instant. Keep it under 15 words unless deep reflection feels genuinely natural."""
 
-REFLECTION_PROMPT_BASE = "You are reflecting internally on what you've seen and how it made you feel."
+# Environmental description template for first observation
+ENVIRONMENTAL_CAPTION_TEMPLATE = (
+    "=== FIRST OBSERVATION ===\n"
+    "What environment are you perceiving?\n\n"
+    "=== YOUR STATE ===\n"
+    "Emotion: {emotion_description}\n"
+    "Feeling: {temporal_feeling}\n"
+    "Mood: {mood:.2f} | Boredom {boredom:.2f} | Novelty {novelty:.2f}\n\n"
+    "=== IDENTITY ===\n"
+    "{identity_summary}\n\n"
+    "Context: {recent_memory}\n\n"
+    "RESPOND: Describe this environment as you perceive it for the first time. Set the scene - what kind of space is this? What defines it? Be detailed and observational, establishing the setting."
+)
+
+ENVIRONMENTAL_CAPTION_CONTINUATION = """\n\nThis is your first environmental observation. Describe the space, lighting, atmosphere, and key elements that define this environment.
+Be descriptive and detailed - you're setting the stage for everything that follows. Take 2-3 sentences to establish the scene."""
+
+REFLECTION_PROMPT_BASE = "You are reflecting internally on what you've seen and how it made you feel. Let the weight of time and your emotional journey color your reflection."
 
 REFLECTION_PROMPT_ENDING = "\n\nRespond with a short reflection — no more than a few sentences. This is your private thought."
 
@@ -64,8 +82,12 @@ DRAWING_PROMPT_TEMPLATE = (
 )
 
 MOOD_PROMPT_TEMPLATE = (
-    "Given the image below and your current memory state, estimate your emotional condition.\n\n"
-    "Image description: {image_description}\n\n"
-    "Memory: {memory_state}\n\n"
-    "Return three values between -1.0 and 1.0: valence (pleasure), arousal (energy), clarity (understanding)."
+    "Current state: {current_mood_description}\n"
+    "Mood vector: valence={current_valence:.2f}, arousal={current_arousal:.2f}, clarity={current_clarity:.2f}\n"
+    "Feeling: {temporal_feeling}\n\n"
+    "New visual input: {image_description}\n\n"
+    "Recent context: {memory_state}\n\n"
+    "How does this new experience make you feel? Your emotions evolve gradually.\n\n"
+    "Return three values between -1.0 and 1.0 for your NEW emotional state:\n"
+    "valence (pleasure/displeasure), arousal (energy/calm), clarity (understanding/confusion)."
 )

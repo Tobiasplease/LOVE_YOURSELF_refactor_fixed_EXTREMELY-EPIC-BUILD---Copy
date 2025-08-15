@@ -74,10 +74,17 @@ OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
 
 # === OUTPUT SETTINGS ===
-LOG_TYPES_TO_PRINT = ["reflection", "caption"]
+LOG_TYPES_TO_PRINT = []
 PRINT_CLEAN_CAPTIONS = True
 DEBUG_HAND_CONTROLLER = False  # suppress hand controller debug output
+DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
+DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood"]
+
+# === REACTIVITY PAUSE SYSTEM ===
+REACTIVITY_PAUSE_THRESHOLD = 0.30  # Activity level to trigger pause
+REACTIVITY_PAUSE_DURATION = 4.0   # Seconds to pause Markov generation
+REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 
 # ATT: TOBIAS
 # TO SEE ONLY CLEAN CAPTIONS:
