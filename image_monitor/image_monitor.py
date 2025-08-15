@@ -114,7 +114,7 @@ class ImageMonitor:
                 )
 
                 # Convert SVG to G-code
-                svg_to_gcode(svg_input=centerline_svg_path, output_gcode=gcode_path, auto_run=False)
+                svg_to_gcode(svg_input=centerline_svg_path, output_gcode=gcode_path, auto_run=True)
 
                 log_json_entry(
                     LogType.INFO,
@@ -137,7 +137,7 @@ class ImageMonitor:
                     )
 
                     # Convert SVG to G-code
-                    svg_to_gcode(svg_input=latest_svg, output_gcode=gcode_path, auto_run=False)
+                    svg_to_gcode(svg_input=latest_svg, output_gcode=gcode_path, auto_run=True)
 
                     log_json_entry(
                         LogType.INFO,
