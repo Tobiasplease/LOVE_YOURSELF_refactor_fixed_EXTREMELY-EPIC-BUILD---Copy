@@ -115,7 +115,7 @@ def print_installation_recommendations():
     print("   Ladda ner från: https://www.scorchworks.com/Fengrave/fengrave.html")
 
 
-def main(svg_input=None, output_gcode=None, origin_offset=(-40, -40, 0), auto_run=True):
+def svg_to_gcode(svg_input=None, output_gcode=None, origin_offset=(-40, -40, 0), auto_run=True):
     """
     Main function for SVG to G-code conversion
 
@@ -152,7 +152,7 @@ def main(svg_input=None, output_gcode=None, origin_offset=(-40, -40, 0), auto_ru
 
 
 if __name__ == "__main__":
-    result = main()
+    result = svg_to_gcode()
     if result:
         print(f"\n[INFO] Konvertering klar: {result}")
     else:
