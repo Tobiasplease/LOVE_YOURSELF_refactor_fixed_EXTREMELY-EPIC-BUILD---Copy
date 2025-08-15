@@ -1,8 +1,8 @@
 # import os
-import subprocess
+# import subprocess
 import xml.etree.ElementTree as ET
 import re
-from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run, get_servo_gcode_header, get_servo_gcode_footer
+from bcnc_utils import try_bcnc_cli_run, get_servo_gcode_header, get_servo_gcode_footer
 
 # from pathlib import Path
 
@@ -30,8 +30,6 @@ if not svg_input:
 
 output_gcode = f"{base_path}/drawing.ngc"
 origin_offset = (-40, -40, 0)
-
-
 
 
 def svg_to_gcode_simple(svg_file, output_file, origin=(0, 0, 0)):
