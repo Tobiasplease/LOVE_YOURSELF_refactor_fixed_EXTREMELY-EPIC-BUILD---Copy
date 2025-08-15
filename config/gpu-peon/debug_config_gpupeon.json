@@ -12,5 +12,5 @@
   "FLUX_DEV_PATH": "flux1/flux1-dev.safetensors",
   "CONTROLNET_NET_PATH": "flux/flux-dev-controlnet-union-pro-2.safetensors",
   "OLLAMA_MODEL": "qwen3",
-  "BATCH_SIZE": 2
+  "BATCH_SIZE": 1
 }

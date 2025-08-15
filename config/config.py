@@ -86,8 +86,9 @@ PRINT_CLEAN_CAPTIONS = False
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood"]
 
 # === SVG TO G-CODE SETTINGS ===
-CENTER_LINE_SVG = True  # If True, run svg_centerliner on PNGs to create centerline SVGs, then convert to G-code
-                        # If False, convert the latest SVG in output folder to G-code
+# If True, run svg_centerliner on PNGs to create centerline SVGs, then convert to G-code
+# If False, convert the latest SVG in output folder to G-code
+CENTER_LINE_SVG = True
 
 # ATT: TOBIAS
 # TO SEE ONLY CLEAN CAPTIONS:
