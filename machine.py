@@ -139,10 +139,12 @@ mood_engine = MoodEngine()
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
 
+
 # Set up image monitor with self-critique callback
 def on_drawing_complete(image_path: str):
     """Handle drawing completion with self-critique."""
     captioner.drawing.critique_drawing(image_path)
+
 
 image_monitor.on_image_complete = on_drawing_complete
 image_monitor.start()

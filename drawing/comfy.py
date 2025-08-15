@@ -63,6 +63,7 @@ class ImpostorConfig:
     latent_height: int = 752
 
     # Output parameters
+    # need to shiv in comfy_output_folder here somehow if configurable...
     filename_prefix: str = "impostor-out"
 
     batch_size: int = BATCH_SIZE

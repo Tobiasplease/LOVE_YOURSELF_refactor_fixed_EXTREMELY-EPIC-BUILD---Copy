@@ -3,7 +3,6 @@
   "CAPTION_INTERVAL": 10,
   "REASON_INTERVAL": 30,
   "DRAWING_INTERVAL": 60,
-  "COMFY_OUTPUT_FOLDER": "/home/jbe/Dropbox/_outputs/impostor-dump",
   "COMFY_TEMPLATE_FILE": "impostor-template-impostor-bot-svg.json",
   "COMFY_LORA_PATH": "flux/own/impostor/impostor-32-balanced-simple.safetensors",
   "COMFY_LORA_STRENGTH": 1.0,
