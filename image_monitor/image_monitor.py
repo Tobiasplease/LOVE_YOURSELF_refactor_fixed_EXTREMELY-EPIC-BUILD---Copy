@@ -106,11 +106,11 @@ class ImageMonitor:
                 raster_to_centerline_svg(
                     input_path=png_path,
                     output_path=centerline_svg_path,
-                    threshold_value=180,
-                    blur_kernel=(3, 3),
-                    do_dilate=True,
-                    dilation_iterations=1,
-                    scale=1.0,
+                    threshold_value=180,  # Testa 160–200 beroende på bild
+                    blur_kernel=(1, 1),  # (1,1) = ingen blur, (3,3) = mild
+                    do_dilate=True,  # Sätt till False om det tar med för mycket
+                    dilation_iterations=1,  # Testa 0–2
+                    scale=1.0,  # SVG-skalning
                 )
 
                 # Convert SVG to G-code
