@@ -394,13 +394,15 @@ def main():
             if converter_func(svg_input, output_gcode, origin_offset):
                 print(f"[INFO] Konvertering lyckades med {tool_name}!")
 
-                # Apply servo conversion to handle any Z-axis commands
-                temp_file = output_gcode + ".temp"
-                if convert_z_to_servo(output_gcode, temp_file):
-                    import os
+                # Only apply Z-to-servo conversion for non-vpype tools
+                if tool_name != "vpype":
+                    temp_file = output_gcode + ".temp"
+                    print("[INFO] Konverterar Z-kommandon till servo...")
+                    if convert_z_to_servo(output_gcode, temp_file):
+                        import os
 
-                    os.replace(temp_file, output_gcode)
-                    print("[INFO] Servo-konvertering klar!")
+                        os.replace(temp_file, output_gcode)
+                        print("[INFO] Servo-konvertering klar!")
 
                 print(f"[INFO] G-code sparad: {output_gcode}")
                 return True
