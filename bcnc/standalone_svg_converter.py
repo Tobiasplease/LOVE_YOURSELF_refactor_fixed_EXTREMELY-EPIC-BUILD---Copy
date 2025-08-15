@@ -17,7 +17,7 @@ from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run, check_bcnc_availabl
 
 # === Configuration ===
 base_path = "/home/jbe/Dropbox/_outputs"
-base_path = "/Users/jbe/Dropbox/_outputs/"
+# base_path = "/Users/jbe/Dropbox/_outputs/"
 svg_input = f"{base_path}/impostor-20250725_185854_00001_.png.svg"
 # output_gcode = f"{base_path}/drawing.ngc"
 output_gcode = f"{svg_input}.ngc"
@@ -43,14 +43,8 @@ def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
     try:
         # Use one of the built-in profiles, then post-process for servo commands
         temp_gcode = output_file + ".temp"
-        
-        cmd = [
-            "vpype", 
-            "read", svg_file,
-            "linemerge", "--tolerance", "0.1mm", 
-            "linesort",
-            "gwrite", "--profile", "gcode", temp_gcode
-        ]
+
+        cmd = ["vpype", "read", svg_file, "linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcode", temp_gcode]
 
         print(f"[INFO] Kör vpype med gcode plugin: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -80,10 +74,10 @@ def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
 def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
     """Convert vpype-generated G-code to servo format"""
     try:
-        with open(input_gcode, 'r') as f:
+        with open(input_gcode, "r") as f:
             lines = f.readlines()
-        
-        with open(output_gcode, 'w') as f:
+
+        with open(output_gcode, "w") as f:
             # Write header
             f.write("; G-code generated with vpype-gcode, optimized for servo control\n")
             f.write("G21 ; Set units to millimeters\n")
@@ -92,23 +86,23 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
             f.write(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset\n")
             f.write("M3 S30 ; PEN UP (initial state)\n")
             f.write("\n")
-            
+
             pen_down = False
             for line in lines:
                 line = line.strip()
-                
+
                 # Skip vpype headers and comments
-                if line.startswith(';') or line.startswith('%') or not line:
+                if line.startswith(";") or line.startswith("%") or not line:
                     continue
-                    
+
                 # Handle movement commands
-                if line.startswith('G0') or line.startswith('G00'):
+                if line.startswith("G0") or line.startswith("G00"):
                     # Rapid move - pen should be up
                     if pen_down:
                         f.write("M3 S30 ; PEN UP\n")
                         pen_down = False
                     f.write(f"{line}\n")
-                elif line.startswith('G1') or line.startswith('G01'):
+                elif line.startswith("G1") or line.startswith("G01"):
                     # Linear move - pen should be down
                     if not pen_down:
                         f.write("M3 S50 ; PEN DOWN\n")
@@ -117,16 +111,16 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
                 else:
                     # Pass through other commands
                     f.write(f"{line}\n")
-            
+
             # Write footer
             f.write("\n")
             f.write("M3 S30 ; PEN UP\n")
             f.write("G28 ; Return home\n")
             f.write("M30 ; Program end\n")
-        
+
         print(f"[INFO] G-code konverterad till servo-format: {output_gcode}")
         return True
-        
+
     except Exception as e:
         print(f"[FEL] Servo-formatering misslyckades: {e}")
         return False
