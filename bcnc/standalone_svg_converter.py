@@ -48,14 +48,14 @@ def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
 
         print(f"[INFO] Kör vpype med gcode plugin: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print(f"[INFO] vpype gcode konvertering lyckades")
+        print(f"[INFO] vpype gcode konvertering lyckades", result)
 
         # Post-process the G-code to add servo commands and origin
         if convert_gcode_to_servo_format(temp_gcode, output_file, origin):
             # Clean up temp file
             try:
                 os.remove(temp_gcode)
-            except:
+            except ValueError:
                 pass
             return True
         else:
@@ -396,7 +396,6 @@ def main():
 
                 # Apply servo conversion to handle any Z-axis commands
                 temp_file = output_gcode + ".temp"
-                print("[INFO] Konverterar Z-kommandon till servo...")
                 if convert_z_to_servo(output_gcode, temp_file):
                     import os
 
