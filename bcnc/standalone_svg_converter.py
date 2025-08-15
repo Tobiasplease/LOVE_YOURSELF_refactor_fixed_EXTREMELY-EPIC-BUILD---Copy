@@ -4,7 +4,7 @@ Standalone SVG to G-code converter using external tools
 Bypasses bCNC GUI entirely while still providing servo conversion
 """
 
-# import os
+import os
 # import re
 import subprocess
 import shutil
@@ -35,49 +35,185 @@ def check_external_tools():
 
 
 def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
-    """Convert SVG to G-code using vpype (vector graphics processor)"""
+    """Convert SVG to G-code using vpype with vpype-gcode plugin"""
     try:
-        # vpype generates G-code directly, so we'll add origin offset in post-processing
+        # Create a temporary configuration for our servo setup
+        temp_config = create_vpype_gcode_config(origin)
+        
+        # Use vpype with gcode plugin to convert directly
         cmd = [
             "vpype",
-            "read",
-            svg_file,
-            "linemerge",
-            "--tolerance",
-            "0.1mm",
+            "read", svg_file,
+            "linemerge", "--tolerance", "0.1mm", 
             "linesort",
-            "write",
-            "--format",
-            "gcode",
-            "--device",
-            "custom",
-            "--pen-up",
-            "M3 S30",
-            "--pen-down",
-            "M3 S50",
-            "--feed-rate",
-            "1000",
-            output_file,
+            "gwrite", "--profile", "servo", output_file
         ]
-
-        print(f"[INFO] Kör vpype: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print(f"[INFO] vpype lyckades: {output_file}")
-        print(result)
-
-        # Apply origin offset by modifying the generated G-code
-        if origin[0] != 0 or origin[1] != 0:
-            print(f"[INFO] Lägger till origin offset: {origin[:2]}")
-            apply_origin_offset_to_gcode(output_file, origin)
-
+        
+        # Set config file environment variable
+        env = dict(os.environ)
+        env['VPYPE_CONFIG'] = temp_config
+        
+        print(f"[INFO] Kör vpype med gcode plugin: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
+        print(f"[INFO] vpype gcode konvertering lyckades: {output_file}")
+        
+        # Clean up temp config
+        try:
+            os.remove(temp_config)
+        except:
+            pass
+        
         return True
 
     except subprocess.CalledProcessError as e:
-        print(f"[FEL] vpype misslyckades: {e.stderr}")
-        return False
+        print(f"[FEL] vpype gcode misslyckades: {e.stderr}")
+        # Fallback to our custom converter
+        print("[INFO] Faller tillbaka till anpassad konverterare...")
+        return convert_with_vpype_fallback(svg_file, output_file, origin)
     except FileNotFoundError:
-        print("[FEL] vpype inte installerat")
+        print("[FEL] vpype eller vpype-gcode inte installerat")
         return False
+
+
+def create_vpype_gcode_config(origin):
+    """Create a temporary vpype config file with servo settings"""
+    import tempfile
+    
+    config_content = f"""
+[gcode_writer]
+
+[gcode_writer.servo]
+document_start = '''
+; G-code generated with vpype-gcode for servo control
+G21 ; Set units to millimeters
+G90 ; Absolute positioning  
+G28 ; Home all axes
+G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset
+M3 S30 ; PEN UP (initial state)
+'''
+
+segment_first = '''
+G0 X%f Y%f ; Move to start
+M3 S50 ; PEN DOWN
+'''
+
+segment_line = '''
+G1 X%f Y%f ; Draw line
+'''
+
+segment_end = '''
+M3 S30 ; PEN UP
+'''
+
+document_end = '''
+M3 S30 ; PEN UP
+G28 ; Return home
+M30 ; Program end
+'''
+
+feed_rate = 1000
+"""
+
+    # Create temporary config file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        f.write(config_content)
+        return f.name
+
+
+def convert_with_vpype_fallback(svg_file, output_file, origin=(0, 0, 0)):
+    """Fallback: Use built-in direct converter if vpype-gcode fails"""
+    print("[INFO] vpype-gcode inte tillgängligt, använder direkt konverterare...")
+    
+    # Import the direct converter from our other module
+    try:
+        import xml.etree.ElementTree as ET
+        import re
+        from bcnc_utils import get_servo_gcode_header, get_servo_gcode_footer
+        
+        tree = ET.parse(svg_file)
+        root = tree.getroot()
+        
+        gcode_lines = get_servo_gcode_header()
+        gcode_lines.append(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset")
+        
+        # Simple SVG processing (no vpype optimization)
+        for elem in root.iter():
+            if elem.tag.endswith('path'):
+                d = elem.get('d', '')
+                gcode_lines.extend(parse_svg_path_simple(d))
+            elif elem.tag.endswith('polyline'):
+                points = elem.get('points', '')
+                gcode_lines.extend(parse_svg_points_simple(points))
+        
+        gcode_lines.extend(get_servo_gcode_footer())
+        
+        with open(output_file, 'w') as f:
+            f.write('\n'.join(gcode_lines))
+        
+        print(f"[INFO] G-code genererad med direkt konverterare: {output_file}")
+        return True
+        
+    except Exception as e:
+        print(f"[FEL] Direkt konvertering misslyckades: {e}")
+        return False
+
+
+def parse_svg_path_simple(d):
+    """Simple SVG path parser"""
+    gcode = []
+    if not d:
+        return gcode
+    
+    import re
+    commands = re.findall(r'[MLZ][^MLZ]*', d)
+    pen_down = False
+    
+    for cmd in commands:
+        cmd = cmd.strip()
+        if cmd.startswith('M'):
+            coords = re.findall(r'-?\d+\.?\d*', cmd[1:])
+            if len(coords) >= 2:
+                x, y = float(coords[0]), float(coords[1])
+                if pen_down:
+                    gcode.append("M3 S30 ; PEN UP")
+                    pen_down = False
+                gcode.append(f"G0 X{x} Y{y} ; Move to")
+        elif cmd.startswith('L'):
+            coords = re.findall(r'-?\d+\.?\d*', cmd[1:])
+            if len(coords) >= 2:
+                x, y = float(coords[0]), float(coords[1])
+                if not pen_down:
+                    gcode.append("M3 S50 ; PEN DOWN")
+                    pen_down = True
+                gcode.append(f"G1 X{x} Y{y} ; Draw to")
+        elif cmd.startswith('Z'):
+            if pen_down:
+                gcode.append("M3 S30 ; PEN UP")
+                pen_down = False
+    
+    return gcode
+
+
+def parse_svg_points_simple(points_str):
+    """Simple SVG points parser"""
+    gcode = []
+    import re
+    points = re.findall(r'-?\d+\.?\d*,-?\d+\.?\d*', points_str)
+    
+    if points:
+        first_point = points[0].split(',')
+        x, y = float(first_point[0]), float(first_point[1])
+        gcode.append(f"G0 X{x} Y{y} ; Move to start")
+        gcode.append("M3 S50 ; PEN DOWN")
+        
+        for point in points[1:]:
+            coords = point.split(',')
+            x, y = float(coords[0]), float(coords[1])
+            gcode.append(f"G1 X{x} Y{y} ; Draw to")
+        
+        gcode.append("M3 S30 ; PEN UP")
+    
+    return gcode
 
 
 def apply_origin_offset_to_gcode(gcode_file, origin):
@@ -168,9 +304,9 @@ def convert_with_inkscape(svg_file, output_file, origin=(0, 0, 0)):
 def install_recommendations():
     """Print installation recommendations for SVG to G-code tools"""
     print("\n[INFO] Rekommenderade verktyg för SVG till G-code:")
-    print("\n1. vpype (Bästa alternativet):")
-    print("   pip install vpype[all]")
-    print("   Eller: sudo apt install python3-vpype")
+    print("\n1. vpype med vpype-gcode (Bästa alternativet):")
+    print("   pip install vpype[all] vpype-gcode")
+    print("   Eller: sudo apt install python3-vpype && pip install vpype-gcode")
 
     print("\n2. svg2gcode:")
     print("   npm install -g svg2gcode")
