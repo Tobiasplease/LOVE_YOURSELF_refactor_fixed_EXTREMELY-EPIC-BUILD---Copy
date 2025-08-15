@@ -132,6 +132,7 @@ def main(svg_input=None, output_gcode=None, origin_offset=(-40, -40, 0), auto_ru
         # Default for standalone usage
         base_path = "/home/jbe/Dropbox/_outputs"
         svg_input = f"{base_path}/impostor-20250725_185854_00001_.png.svg"
+        svg_input = f"{base_path}/impostor-dump/dump1/impostor-out-potracer-svg_20250814204818.svg"
 
     # Convert SVG to G-code
     gcode_path = convert_svg_to_gcode(svg_input, output_gcode, origin_offset)
