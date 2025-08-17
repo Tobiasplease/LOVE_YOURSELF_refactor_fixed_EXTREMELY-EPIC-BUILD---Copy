@@ -1,10 +1,5 @@
 # setup_grbl_move_to_origin.py
-# Nu börjar jag få till det med home, nollpunkt och origin.
-# Man sätter nollpunkt och så i arduinon (GRBL heter programvaran) därför blir det nog svårt att testa utan roboten.
 
-# det verkar som att det funkar och ligger kvar när man startar bCNC, dock är jag inte helt säker på att det kommer att funka med origin offset,
-# så eventuellt får vi sätta det i g-koden så det finns med när vi laddar in filen. att HOME-a måste man nog göra som ett seriellt kommando medans n
-# ollpunkt och origin osv är g-kod som då borde gå att baka in t ex alla våra filer.
 
 import time
 import serial
