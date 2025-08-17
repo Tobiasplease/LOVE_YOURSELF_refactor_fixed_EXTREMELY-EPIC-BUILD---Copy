@@ -14,12 +14,20 @@ def raster_to_centerline_svg(
     do_dilate=True,
     dilation_iterations=1,
     scale=1.0,
+    contrast_alpha=2.0,  # Contrast control (1.0 = no change, >1.0 = more contrast, above 3.0...bad?
+    contrast_beta=0,  # Brightness control (0 = no change)
 ):
 
     print("[INFO] Läser in bild...")
     img = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
 
     # === Förbehandling ===
+    # Step 1: Increase contrast, no greyscales
+    if contrast_alpha != 1.0 or contrast_beta != 0:
+        print(f"[INFO] Ökar kontrast (alpha={contrast_alpha}, beta={contrast_beta})...")
+        img = cv2.convertScaleAbs(img, alpha=contrast_alpha, beta=contrast_beta)  # type: ignore
+
+    # Step 2: Gaussian blur
     print("[INFO] Kör Gaussian blur...")
     img = cv2.GaussianBlur(img, blur_kernel, 0)  # type: ignore
 
