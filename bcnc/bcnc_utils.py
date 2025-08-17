@@ -118,34 +118,35 @@ def parse_svg_path_simple(d):
     gcode = []
     if not d:
         return gcode
-    
+
     import re
-    commands = re.findall(r'[MLZ][^MLZ]*', d)
+
+    commands = re.findall(r"[MLZ][^MLZ]*", d)
     pen_down = False
-    
+
     for cmd in commands:
         cmd = cmd.strip()
-        if cmd.startswith('M'):
-            coords = re.findall(r'-?\d+\.?\d*', cmd[1:])
+        if cmd.startswith("M"):
+            coords = re.findall(r"-?\d+\.?\d*", cmd[1:])
             if len(coords) >= 2:
                 x, y = float(coords[0]), float(coords[1])
                 if pen_down:
                     gcode.append("M3 S30 ; PEN UP")
                     pen_down = False
                 gcode.append(f"G0 X{x} Y{y} ; Move to")
-        elif cmd.startswith('L'):
-            coords = re.findall(r'-?\d+\.?\d*', cmd[1:])
+        elif cmd.startswith("L"):
+            coords = re.findall(r"-?\d+\.?\d*", cmd[1:])
             if len(coords) >= 2:
                 x, y = float(coords[0]), float(coords[1])
                 if not pen_down:
                     gcode.append("M3 S50 ; PEN DOWN")
                     pen_down = True
                 gcode.append(f"G1 X{x} Y{y} ; Draw to")
-        elif cmd.startswith('Z'):
+        elif cmd.startswith("Z"):
             if pen_down:
                 gcode.append("M3 S30 ; PEN UP")
                 pen_down = False
-    
+
     return gcode
 
 
@@ -153,31 +154,32 @@ def parse_svg_points_simple(points_str):
     """Simple SVG points parser for G-code generation"""
     gcode = []
     import re
-    points = re.findall(r'-?\d+\.?\d*,-?\d+\.?\d*', points_str)
-    
+
+    points = re.findall(r"-?\d+\.?\d*,-?\d+\.?\d*", points_str)
+
     if points:
-        first_point = points[0].split(',')
+        first_point = points[0].split(",")
         x, y = float(first_point[0]), float(first_point[1])
         gcode.append(f"G0 X{x} Y{y} ; Move to start")
         gcode.append("M3 S50 ; PEN DOWN")
-        
+
         for point in points[1:]:
-            coords = point.split(',')
+            coords = point.split(",")
             x, y = float(coords[0]), float(coords[1])
             gcode.append(f"G1 X{x} Y{y} ; Draw to")
-        
+
         gcode.append("M3 S30 ; PEN UP")
-    
+
     return gcode
 
 
 def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
     """Convert standard G-code to servo format with proper pen control"""
     try:
-        with open(input_gcode, 'r') as f:
+        with open(input_gcode, "r") as f:
             lines = f.readlines()
-        
-        with open(output_gcode, 'w') as f:
+
+        with open(output_gcode, "w") as f:
             # Write header
             f.write("; G-code optimized for servo control\n")
             f.write("G21 ; Set units to millimeters\n")
@@ -186,23 +188,23 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
             f.write(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset\n")
             f.write("M3 S30 ; PEN UP (initial state)\n")
             f.write("\n")
-            
+
             pen_down = False
             for line in lines:
                 line = line.strip()
-                
+
                 # Skip headers and comments
-                if line.startswith(';') or line.startswith('%') or not line:
+                if line.startswith(";") or line.startswith("%") or not line:
                     continue
-                    
+
                 # Handle movement commands
-                if line.startswith('G0') or line.startswith('G00'):
+                if line.startswith("G0") or line.startswith("G00"):
                     # Rapid move - pen should be up
                     if pen_down:
                         f.write("M3 S30 ; PEN UP\n")
                         pen_down = False
                     f.write(f"{line}\n")
-                elif line.startswith('G1') or line.startswith('G01'):
+                elif line.startswith("G1") or line.startswith("G01"):
                     # Linear move - pen should be down
                     if not pen_down:
                         f.write("M3 S50 ; PEN DOWN\n")
@@ -211,16 +213,16 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
                 else:
                     # Pass through other commands
                     f.write(f"{line}\n")
-            
+
             # Write footer
             f.write("\n")
             f.write("M3 S30 ; PEN UP\n")
             f.write("G28 ; Return home\n")
             f.write("M30 ; Program end\n")
-        
+
         print(f"[INFO] G-code konverterad till servo-format: {output_gcode}")
         return True
-        
+
     except Exception as e:
         print(f"[FEL] Servo-formatering misslyckades: {e}")
         return False
