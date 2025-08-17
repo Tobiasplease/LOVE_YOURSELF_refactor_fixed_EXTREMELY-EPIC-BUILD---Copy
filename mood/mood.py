@@ -27,6 +27,9 @@ class MoodEngine:
         self.last_person_detected = False
         self.memory = []
         self.session_start = time.time()  # Track session duration for decay
+        
+        # GPT-5's suggestion: Long-term mood bias for tone evolution over weeks
+        self.long_bias = getattr(self, "long_bias", (0.0, 0.0, 0.0))  # val, aro, clr drift
 
     # -------------------------------------------------------------- main hook
     def analyze_mood(self, caption: str, saw_person: bool = False, image_path: str = None, memory_context: Optional[any] = None, temporal_feeling: Optional[str] = None) -> float:
@@ -300,7 +303,23 @@ class MoodEngine:
         # Weighted combination: valence is primary, arousal and clarity add nuance
         scalar = 0.5 + (valence * 0.4) + (arousal * 0.2) + (clarity * 0.1)
         return np.clip(scalar, 0.0, 1.0)
-        return change
+    
+    # === GPT-5's LONG-TERM TONE EVOLUTION ===
+    def step_long_bias(self):
+        """Add subtle random walk to mood bias for week-to-week tone evolution."""
+        import random
+        v, a, c = self.long_bias
+        v += random.uniform(-0.01, 0.01)
+        a += random.uniform(-0.01, 0.01)
+        c += random.uniform(-0.005, 0.005)
+        # Light damping
+        self.long_bias = (0.95 * v, 0.95 * a, 0.97 * c)
+    
+    def current_with_bias(self):
+        """Get current mood vector with long-term bias applied."""
+        v, a, c = self.mood_vector
+        bv, ba, bc = self.long_bias
+        return (v + bv, a + ba, c + bc)
 
 
 def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):

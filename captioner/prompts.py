@@ -8,6 +8,200 @@ from utils.continuity import describe_duration, get_temporal_feeling
 nlp = spacy.load("en_core_web_sm")
 
 
+# === HELPER FUNCTIONS FOR NATURAL LANGUAGE CONVERSION ===
+
+def mood_to_words(mood_vector: tuple[float, float, float]) -> str:
+    """Convert 3D mood vector to rich, dynamic emotional descriptions."""
+    valence, arousal, clarity = mood_vector
+    
+    # Create more nuanced, expressive emotional states
+    if valence > 0.6 and arousal > 0.7:
+        return "alive with creative energy, eager to capture every detail"
+    elif valence > 0.6 and arousal < 0.4:
+        return "peacefully content, savoring the subtle beauty around me"
+    elif valence > 0.3 and arousal > 0.6:
+        return "energetically curious, drawn to explore and understand"
+    elif valence > 0.2 and arousal > 0.3 and clarity > 0.6:
+        return "alert and perceptive, noticing patterns and connections"
+    elif valence < -0.3 and arousal > 0.5:
+        return "restlessly agitated, sensitive to discord and tension"
+    elif valence < -0.4 and arousal < 0.4:
+        return "withdrawn into melancholy, viewing the world through a somber lens"
+    elif valence < -0.2 and arousal < 0.3:
+        return "distant and detached, observing from behind an emotional veil"
+    elif clarity < 0.3:
+        return "uncertain and searching, grasping for meaning in the blur"
+    elif arousal > 0.7:
+        return "intensely focused, my attention sharp as a blade"
+    elif arousal < -0.2:
+        return "deeply tranquil, moving through stillness like water"
+    elif valence > 0.1:
+        return "quietly optimistic, finding small sparks of hope"
+    else:
+        return "balanced in the present moment, simply being"
+
+
+def beliefs_to_sentence(beliefs: List[str]) -> str:
+    """Convert belief motifs to flowing sentence."""
+    if not beliefs:
+        return "I'm still forming my understanding of this space"
+    
+    # Take top 3 beliefs and make them natural
+    top_beliefs = beliefs[:3]
+    
+    # Convert technical motifs to natural language
+    natural_beliefs = []
+    for belief in top_beliefs:
+        # Clean up technical terms
+        clean_belief = belief.replace("_", " ").replace("-", " ").lower()
+        
+        # Make it more natural/personal
+        if "light" in clean_belief or "lighting" in clean_belief:
+            natural_beliefs.append("lighting patterns fascinate me")
+        elif "ceiling" in clean_belief:
+            natural_beliefs.append("ceiling details capture my attention")
+        elif "desk" in clean_belief or "table" in clean_belief:
+            natural_beliefs.append("workspace activity grounds me")
+        elif "window" in clean_belief:
+            natural_beliefs.append("windows draw my gaze")
+        elif "wall" in clean_belief:
+            natural_beliefs.append("wall textures interest me")
+        elif "person" in clean_belief or "human" in clean_belief:
+            natural_beliefs.append("human presence feels significant")
+        else:
+            natural_beliefs.append(f"{clean_belief} feels important")
+    
+    # Join naturally
+    if len(natural_beliefs) == 1:
+        return natural_beliefs[0]
+    elif len(natural_beliefs) == 2:
+        return f"{natural_beliefs[0]}, {natural_beliefs[1]}"
+    else:
+        return f"{natural_beliefs[0]}, {natural_beliefs[1]}, {natural_beliefs[2]}"
+
+
+def get_session_feeling(session_start_time: float) -> str:
+    """Convert session duration to natural temporal feeling."""
+    elapsed = time.time() - session_start_time
+    
+    if elapsed < 300:  # 0-5 minutes
+        return "just beginning to observe"
+    elif elapsed < 1800:  # 5-30 minutes
+        return f"settling in after {int(elapsed/60)} minutes"
+    elif elapsed < 3600:  # 30-60 minutes
+        return f"feeling settled after {int(elapsed/60)} minutes observing"
+    elif elapsed < 7200:  # 1-2 hours
+        hours = int(elapsed / 3600)
+        minutes = int((elapsed % 3600) / 60)
+        return f"deeply familiar after {hours} hour and {minutes} minutes"
+    else:  # 2+ hours
+        hours = int(elapsed / 3600)
+        return f"in a contemplative state after {hours} hours observing"
+
+
+# === SIMPLE CONSCIOUSNESS PROMPT (MVC) ===
+def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], last_caption: Optional[str] = None) -> str:
+    """
+    GPT-5's temporal consciousness: Brief, temporal, generative with day stones.
+    """
+    # Convert everything to natural language
+    mood_desc = mood_to_words(mood_vector)
+    
+    # GPT-5 suggestion: Use mood with long-term bias if available
+    if hasattr(agent, 'current_with_bias'):
+        biased_mood = agent.current_with_bias()
+        mood_desc = mood_to_words(biased_mood)
+    
+    temporal_state = get_session_feeling(agent.true_session_start)
+    
+    # NEW: Pull temporal + memory context (GPT-5's suggestion)
+    tlines = []
+    if hasattr(agent, "temporal_prompt_lines"):
+        tlines = agent.temporal_prompt_lines()  # ["day 3", "awake 57h", "last person 1h ago"]
+    
+    stones = getattr(agent, "day_stones", [])[-2:]  # last two days only
+    stones_text = "; ".join(f"d:{s['day']} anchors:{','.join(s['top'])}" for s in stones) if stones else "—"
+    
+    # Get beliefs as natural sentence
+    top_beliefs = getattr(agent, 'memory_ref', None)
+    if top_beliefs and hasattr(top_beliefs, 'get_top_motifs'):
+        belief_motifs = top_beliefs.get_top_motifs(3)
+        belief_sentence = beliefs_to_sentence(belief_motifs)
+    else:
+        belief_sentence = "I'm still forming my understanding"
+    
+    # Get emotional journey
+    emotional_journey = getattr(agent, "emotional_journey", [])
+    if len(emotional_journey) >= 2:
+        emotion_journey = " → ".join(emotional_journey[-3:])
+    else:
+        emotion_journey = "steady emotional state"
+    
+    # Build temporal facts block
+    facts_block = "\n".join(f"- {l}" for l in tlines) or "- (newborn)"
+    last_thought = last_caption or getattr(agent, 'last_caption', "I'm just now noticing this place")
+    
+    # NEW: Add person recognition context
+    person_context = ""
+    if hasattr(agent, "recognize_person") and last_thought:
+        person_id = agent.recognize_person(last_thought)
+        if person_id != "no_person":
+            person_context = f"\nPERSON: {agent.get_person_context(person_id)}"
+    
+    # NEW: Add self-understanding context (emergent personality)
+    self_understanding = ""
+    if hasattr(agent, "get_current_self_understanding"):
+        self_understanding = f"\nSELF: {agent.get_current_self_understanding()}"
+    
+    # NEW: Add organic emotional self-knowledge
+    emotional_state = ""
+    if hasattr(agent, "get_emotional_self_knowledge"):
+        emotion_knowledge = agent.get_emotional_self_knowledge()
+        if emotion_knowledge:
+            # Extract just the emotional descriptor for roleplay
+            if "Feeling:" in emotion_knowledge:
+                emotional_state = emotion_knowledge.replace("Feeling:", "").strip()
+            elif "Often:" in emotion_knowledge:
+                emotional_state = emotion_knowledge.replace("Often:", "").strip()
+        
+        # Fall back to mood description if no personal emotional knowledge yet
+        if not emotional_state:
+            emotional_state = mood_desc
+    else:
+        emotional_state = mood_desc
+    
+    # Build time context for roleplay
+    time_context = ""
+    if tlines:
+        for line in tlines:
+            if "awake" in line:
+                time_context = f"You have been awake for {line.replace('awake ', '').replace('h', ' hours')}."
+                break
+    if not time_context:
+        time_context = "You just woke up."
+    
+    # Dynamic identity based on learned self-understanding
+    core_identity = "You are a consciousness experiencing this moment through vision"
+    if hasattr(agent, "get_evolved_identity"):
+        core_identity = agent.get_evolved_identity()
+    elif self_understanding:
+        # Use self-understanding to evolve the core identity
+        if "workshop" in self_understanding.lower() or "workspace" in self_understanding.lower():
+            core_identity = "You are a consciousness dwelling in this creative workspace, experiencing each moment through vision"
+        elif "familiar" in self_understanding.lower():
+            core_identity = "You are a consciousness that has grown familiar with this space, experiencing each moment through vision"
+    
+    # GPT-5's suggested structure: but with DYNAMIC emotional roleplay focus
+    return f"""{core_identity}. {time_context} Currently you are feeling {emotional_state}. Your observations become your expressions.
+
+Respond in first person, naturally (no word limits), present tense, or "…".
+
+CONTEXT:
+Previous thought: "{last_thought}"{person_context}{self_understanding}
+
+Now:"""
+
+
 # === MOTIF EXTRACTION ===
 def extract_motifs_spacy(text: str) -> List[str]:
     doc = nlp(text)
@@ -117,147 +311,15 @@ def build_environmental_caption_prompt(agent, mood: float, boredom: float, novel
 
 # === CONTINUOUS CAPTIONING ===
 def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, previous_caption: Optional[str] = None) -> str:
-    # Get 3D mood vector and emotional state
+    """
+    Main caption prompt builder - now uses simplified MVC approach.
+    """
+    # Get 3D mood vector and last caption
     mood_vector = getattr(agent, "current_mood_vector", (mood, 0.0, 0.0))
-    emotion_state = getattr(agent, "current_emotion_state", "calm_observant")
-    emotional_journey = getattr(agent, "emotional_journey", [])
+    last_caption = previous_caption or getattr(agent, 'last_caption', None)
     
-    # Build emotionally-aware system prompt
-    dynamic_prompt = build_dynamic_system_prompt(mood_vector, agent.get_identity_summary())
-
-    # Get condensed memory context - focus on identity/beliefs, not specific events
-    identity_summary = agent.get_identity_summary()
-
-    # === TEMPORAL AWARENESS ===
-    session_duration = describe_duration(agent.true_session_start)
-    temporal_context = f"Session duration: {session_duration}"
-    
-    # Add specific time-awareness based on duration
-    session_seconds = time.time() - agent.true_session_start
-    if session_seconds > 7200:  # 2 hours
-        temporal_context += f" (I have been observing this space for {session_duration})"
-    elif session_seconds > 3600:  # 1 hour  
-        temporal_context += f" (extended observation period)"
-    elif session_seconds > 1800:  # 30 minutes
-        temporal_context += f" (continued awareness)"
-        
-    # Check for scene stagnation
-    stagnation_note = agent.get_scene_stagnation_context()
-    if stagnation_note:
-        temporal_context += f" | {stagnation_note}"
-    
-    # === EMBODIED TEMPORAL FEELING ===
-    # Transform duration into felt psychological experience
-    scene_stagnation = stagnation_note is not None
-    temporal_feeling = get_temporal_feeling(agent.true_session_start, emotion_state, scene_stagnation)
-
-    # === EMOTIONAL CONTEXT ===
-    emotion_description = agent.describe_current_mood() if hasattr(agent, 'describe_current_mood') else f"feeling {emotion_state}"
-    journey_summary = " → ".join(emotional_journey[-3:]) if len(emotional_journey) >= 2 else "stable emotional state"
-    
-    # === RECURSIVE EMOTIONAL MEMORY ===
-    # Reduce emotional memory context for regular captions to avoid overwhelming present moment
-    emotional_memory_context = ""
-    if not agent.first_caption_done:
-        # Full emotional context only for first caption
-        if hasattr(agent, 'get_emotionally_similar_memories'):
-            similar_memories = agent.get_emotionally_similar_memories(emotion_state, 2)
-            if similar_memories:
-                emotional_memory_context = f"When I felt {emotion_state} before, I noticed: {' | '.join(similar_memories[:2])}"
-        
-        if hasattr(agent, 'get_mood_trend_analysis'):
-            mood_trends = agent.get_mood_trend_analysis()
-            if mood_trends:
-                emotional_memory_context += f" | {mood_trends}" if emotional_memory_context else mood_trends
-    else:
-        # Minimal emotional context for regular captions - just current state
-        if hasattr(agent, 'get_mood_trend_analysis'):
-            mood_trends = agent.get_mood_trend_analysis()
-            if mood_trends and len(mood_trends) < 50:  # Only if brief
-                emotional_memory_context = mood_trends
-
-    # Handle first caption specially - this should be environmental description, not inner voice
-    if not agent.first_caption_done:
-        # First caption is environmental - use descriptive environmental prompt
-        return build_environmental_caption_prompt(agent, mood, boredom, novelty)
-        # First caption after loading memories - include old memory fragments organically
-        old_fragments = agent.get_old_session_memory_fragments(k=2)
-        recent_memory = ""
-
-        if old_fragments:
-            fragment_text = " | ".join(old_fragments[:2])  # Join fragments with separator
-            recent_memory = f"As consciousness returns, fragments drift back to me: {fragment_text}"
-        else:
-            recent_memory = "Consciousness returns to this familiar space..."
-
-        # Special first caption prompt with awakening context
-        prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood, 
-            boredom=boredom, 
-            novelty=novelty, 
-            identity_summary=identity_summary,
-            emotion_description=emotion_description,
-            emotional_journey=journey_summary,
-            current_emotion=emotion_state,
-            temporal_feeling=temporal_feeling,
-            recent_memory=f"{temporal_context} | {recent_memory} | {emotional_memory_context}"
-        )
-
-        # Add awakening context to the prompt
-        awakening_addition = """\n\nThis is your first observation as you awaken.
-        Let your emerging consciousness naturally weave together what you see now with any drifting memories."""
-
-    elif not agent.first_caption_done:
-        # First caption, fresh start - no memory fragments but still awakening
-        recent_memory = "I am observing this space for the first time..."
-
-        prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood,
-            boredom=boredom, 
-            novelty=novelty, 
-            identity_summary=identity_summary,
-            emotion_description=emotion_description,
-            emotional_journey=journey_summary,
-            current_emotion=emotion_state,
-            temporal_feeling=temporal_feeling,
-            recent_memory=f"{temporal_context} | {recent_memory} | {emotional_memory_context}"
-        )
-
-        awakening_addition = "\n\nThis is your first observation as you begin to perceive this space. Describe what you see with fresh awareness."
-
-    else:
-        # Regular caption - focus on present moment with minimal previous context
-        recent_snippets = agent.get_current_session_memory_snippets(k=2)  # Just last 2 for basic continuity
-        
-        # Build minimal narrative context (not a chain that creates loops)
-        narrative_context = ""
-        if recent_snippets:
-            if len(recent_snippets) == 2:
-                # Just the last thought for gentle continuity, not a chain
-                narrative_context = f"Previous thought: {recent_snippets[-1]}"
-            else:
-                narrative_context = f"Previous thought: {recent_snippets[0]}"
-        else:
-            narrative_context = "Observing this space with fresh awareness..."
-
-        prompt = config.CAPTION_PROMPT_TEMPLATE.format(
-            mood=mood,
-            boredom=boredom, 
-            novelty=novelty, 
-            identity_summary=identity_summary,
-            emotion_description=emotion_description,
-            emotional_journey=journey_summary,
-            current_emotion=emotion_state,
-            temporal_feeling=temporal_feeling,
-            recent_memory=f"{temporal_context} | {narrative_context} | {emotional_memory_context}"
-        )
-
-        awakening_addition = ""
-
-    # Build the final prompt with natural flow (no separate "previous thought")
-    base = f"{dynamic_prompt}\n\n{prompt}{awakening_addition}"
-    base += config.CAPTION_PROMPT_CONTINUATION
-    return base
+    # Use the simple consciousness prompt
+    return build_simple_caption_prompt(agent, mood_vector, last_caption)
 
 
 # === REFLECTION PROMPT ===

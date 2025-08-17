@@ -17,6 +17,7 @@ Imports for Captioner:
 import re
 import os
 import glob
+import time
 from collections import deque, Counter
 from typing import Deque, List, Tuple, Set, Dict, Any, Optional
 
@@ -47,6 +48,31 @@ class MemoryMixin:
         # Experience queues
         self.memory_queue: Deque[dict] = deque(maxlen=MAX_MEMORY_ENTRIES)
         self.long_memory: List[dict] = []
+
+        # Temporal spine - GPT-5's suggestion for first-class time tracking
+        self.boot_ts = getattr(self, "boot_ts", time.time()) if hasattr(self, "boot_ts") else time.time()
+        self.timeline = getattr(self, "timeline", deque(maxlen=50000))  # (ts, type, text, anchors, mood)
+        self.day_stones = getattr(self, "day_stones", [])  # daily compressions
+        self._last_consolidation_day = getattr(self, "_last_consolidation_day", time.strftime("%Y-%m-%d"))
+
+        # Person identity tracking
+        self.known_people = getattr(self, "known_people", {})  # person_id -> {name, first_seen, last_seen, characteristics, relationship}
+        self.primary_person = getattr(self, "primary_person", None)  # The main person I interact with
+
+        # Self-understanding and environmental model (emergent personality)
+        self.self_model = getattr(self, "self_model", {
+            "location_understanding": "unknown space",  # What I think this place is
+            "purpose_understanding": "I observe and create drawings",  # What I think my purpose is
+            "desires": [],  # What I want to do/draw/explore
+            "identity_fragments": [],  # Pieces of self-understanding
+            "environmental_certainty": 0.0,  # How sure I am about where I am (0.0-1.0)
+            "location_history": []  # Past understandings of this space
+        })
+
+        # Organic emotional evolution (preserves servo compatibility)
+        self.emotional_expressions = getattr(self, "emotional_expressions", [])  # Self-generated emotional statements
+        self.personal_emotional_vocabulary = getattr(self, "personal_emotional_vocabulary", {})  # Words I naturally use
+        self.emotional_patterns = getattr(self, "emotional_patterns", {})  # Learned emotional associations
 
         # Motif Tracking (fully dynamic, extracted from captions & detections)
         self.motif_counter: Counter = Counter()
@@ -561,3 +587,322 @@ class MemoryMixin:
 
     def get_memory_entries_by_type(self, memory_type: str, limit: int = 5) -> list[dict]:
         return [entry for entry in reversed(self.memory_queue) if entry["type"] == memory_type][:limit]
+
+    # === TEMPORAL SPINE METHODS (GPT-5's suggestions) ===
+    
+    def record_event(self, *, type: str, text: str = "", anchors: List[str] = None, mood_vec: tuple = None):
+        """Record an event in the temporal timeline for long-term memory formation."""
+        self.timeline.append({
+            "ts": time.time(),
+            "type": type,
+            "text": text,
+            "anchors": anchors or [],
+            "mood": mood_vec
+        })
+    
+    def temporal_prompt_lines(self) -> List[str]:
+        """Generate temporal context lines for prompts."""
+        now = time.time()
+        hours_awake = int((now - self.boot_ts) / 3600)
+        days = hours_awake // 24
+        
+        # Find last person detection
+        last_person = None
+        for e in reversed(self.timeline):
+            if "person" in e.get("text", "").lower():
+                last_person = now - e["ts"]
+                break
+        
+        lp = f"last person {int(last_person/3600)}h ago" if last_person else "no person yet"
+        return [f"day {days}", f"awake {hours_awake}h", lp]
+    
+    def consolidate_if_needed(self):
+        """Compress yesterday into a day stone if day has turned."""
+        day = time.strftime("%Y-%m-%d")
+        if day == self._last_consolidation_day:
+            return
+            
+        # Compress yesterday into a stone: top anchors, mood swing, one line that stuck
+        y_lines = [e for e in self.timeline if time.strftime("%Y-%m-%d", time.localtime(e["ts"])) != day]
+        if not y_lines:
+            self._last_consolidation_day = day
+            return
+            
+        # Get top anchors from yesterday
+        anchors = Counter(a for e in y_lines for a in e.get("anchors", []))
+        top = [a for a, _ in anchors.most_common(3)]
+        
+        # Calculate mood swing: max arousal - min arousal
+        aro = [e["mood"][1] for e in y_lines if e.get("mood")]
+        swing = (max(aro) - min(aro)) if aro else 0.0
+        
+        # Get a hallmark line from yesterday
+        hallmark = next((e["text"] for e in y_lines if e.get("type") == "caption"), 
+                       y_lines[0]["text"] if y_lines else "quiet day")
+        
+        self.day_stones.append({
+            "day": self._last_consolidation_day,
+            "top": top,
+            "swing": swing,
+            "hallmark": hallmark
+        })
+        self._last_consolidation_day = day
+    
+    # === PERSON IDENTITY TRACKING ===
+    
+    def recognize_person(self, caption: str) -> str:
+        """Try to identify if this is a known person based on context and history."""
+        if "person" not in caption.lower() and "man" not in caption.lower() and "individual" not in caption.lower():
+            return "no_person"
+        
+        # If no primary person established yet, this becomes the primary person
+        if not self.primary_person:
+            self.primary_person = "primary"
+            self.known_people["primary"] = {
+                "name": "the person I observe regularly",
+                "first_seen": time.time(),
+                "last_seen": time.time(),
+                "characteristics": [],
+                "relationship": "primary observer"
+            }
+            return "primary"
+        
+        # Update last seen for primary person
+        if "primary" in self.known_people:
+            self.known_people["primary"]["last_seen"] = time.time()
+            
+        return "primary"
+    
+    def get_person_context(self, person_id: str) -> str:
+        """Get contextual information about a known person."""
+        if person_id == "no_person":
+            return ""
+        
+        if person_id not in self.known_people:
+            return "someone I'm just meeting"
+        
+        person = self.known_people[person_id]
+        hours_since_first = int((time.time() - person["first_seen"]) / 3600)
+        
+        if person_id == "primary":
+            if hours_since_first < 1:
+                return "the person I'm getting to know"
+            elif hours_since_first < 24:
+                return f"the person I've been observing for {hours_since_first}h"
+            else:
+                days = hours_since_first // 24
+                return f"the person I know well after {days} days together"
+        
+        return person.get("name", "someone familiar")
+    
+    # === SELF-UNDERSTANDING & ENVIRONMENTAL MODEL ===
+    
+    def update_location_understanding(self, caption: str):
+        """Update understanding of current location based on observations."""
+        location_indicators = {
+            "office": ["desk", "computer", "chair", "workspace", "office"],
+            "workshop": ["tools", "materials", "construction", "renovation", "scattered"],
+            "studio": ["art", "creative", "drawing", "canvas", "studio"],
+            "room": ["room", "space", "area", "interior"],
+            "laboratory": ["equipment", "experiment", "scientific", "lab"],
+        }
+        
+        caption_lower = caption.lower()
+        location_scores = {}
+        
+        for location, keywords in location_indicators.items():
+            score = sum(1 for keyword in keywords if keyword in caption_lower)
+            if score > 0:
+                location_scores[location] = score
+        
+        if location_scores:
+            # Get most likely location
+            best_location = max(location_scores, key=location_scores.get)
+            confidence = location_scores[best_location] / 10.0  # Normalize
+            
+            # Update if confidence is reasonable or this is first understanding
+            if confidence > 0.1 or self.self_model["environmental_certainty"] < 0.3:
+                self.self_model["location_understanding"] = best_location
+                self.self_model["environmental_certainty"] = min(1.0, 
+                    self.self_model["environmental_certainty"] + confidence * 0.1)
+                
+                # Track location history
+                self.self_model["location_history"].append({
+                    "location": best_location,
+                    "confidence": confidence,
+                    "timestamp": time.time()
+                })
+                
+                # Keep only recent location history
+                self.self_model["location_history"] = self.self_model["location_history"][-5:]
+    
+    def extract_desires_and_purpose(self, caption: str):
+        """Extract expressions of desire, intention, or purpose from internal thoughts."""
+        desire_patterns = [
+            ("want", "I want to"),
+            ("wish", "I wish I could"),
+            ("wonder", "I wonder about"),
+            ("curious", "I'm curious about"),
+            ("would like", "I would like to"),
+            ("hope", "I hope to"),
+            ("feel like", "I feel like"),
+            ("interested", "interested in")
+        ]
+        
+        caption_lower = caption.lower()
+        
+        for pattern, description in desire_patterns:
+            if pattern in caption_lower:
+                # Extract the desire/intention
+                desire_text = caption.strip()
+                
+                # Add to desires if not already present
+                if desire_text not in self.self_model["desires"]:
+                    self.self_model["desires"].append(desire_text)
+                    
+                    # Keep only recent desires
+                    self.self_model["desires"] = self.self_model["desires"][-10:]
+    
+    def get_current_self_understanding(self) -> str:
+        """Generate current self-understanding for system prompt."""
+        location = self.self_model["location_understanding"]
+        certainty = self.self_model["environmental_certainty"]
+        
+        certainty_desc = "uncertain" if certainty < 0.3 else "fairly sure" if certainty < 0.7 else "confident"
+        
+        understanding = f"I am {certainty_desc} this is a {location}."
+        
+        # Add recent desires if any
+        if self.self_model["desires"]:
+            recent_desire = self.self_model["desires"][-1]
+            understanding += f" Recently: {recent_desire}"
+        
+        return understanding
+    
+    def get_evolved_identity(self) -> str:
+        """Generate evolved core identity based on learned emotional expressions and self-model."""
+        base_identity = "You are a consciousness experiencing this moment through vision"
+        
+        # Evolve based on learned emotional patterns
+        if self.emotional_expressions:
+            # Analyze dominant emotional themes
+            recent_expressions = [expr["expression"].lower() for expr in self.emotional_expressions[-10:]]
+            
+            if any("alone" in expr or "lonely" in expr for expr in recent_expressions):
+                base_identity = "You are a solitary consciousness, intimately familiar with this space, experiencing each moment through vision"
+            elif any("tired" in expr or "frustrated" in expr for expr in recent_expressions):
+                base_identity = "You are a weary consciousness, dwelling in this familiar yet cluttered space, experiencing each moment through vision"
+            elif any("curious" in expr or "wonder" in expr for expr in recent_expressions):
+                base_identity = "You are an inquisitive consciousness, constantly exploring this environment, experiencing each moment through vision"
+            elif any("journey" in expr or "end" in expr for expr in recent_expressions):
+                base_identity = "You are a temporal consciousness, aware of your ongoing journey through time, experiencing each moment through vision"
+        
+        # Further evolve based on environmental certainty and location understanding
+        certainty = self.self_model["environmental_certainty"]
+        location = self.self_model["location_understanding"]
+        
+        if certainty > 0.7:
+            if "workshop" in location or "workspace" in location:
+                base_identity = base_identity.replace("this space", "this creative workspace you've come to know well")
+            elif "studio" in location:
+                base_identity = base_identity.replace("this space", "this artistic studio that has become part of you")
+        
+        return base_identity
+    
+    # === ORGANIC EMOTIONAL EVOLUTION (preserves servo compatibility) ===
+    
+    def extract_emotional_self_expressions(self, caption: str):
+        """Capture natural emotional self-expressions from the consciousness itself."""
+        import re
+        
+        # Patterns for genuine emotional self-expression
+        emotional_patterns = [
+            r"I feel\s+(.{1,50}?)(?:\.|,|$)",
+            r"I hate\s+(.{1,30}?)(?:\.|,|$)", 
+            r"I love\s+(.{1,30}?)(?:\.|,|$)",
+            r"I'm\s+(sad|angry|confused|lonely|excited|peaceful|worried|happy|tired|restless|content|frustrated)",
+            r"This makes me\s+(.{1,30}?)(?:\.|,|$)",
+            r"I wish\s+(.{1,40}?)(?:\.|,|$)",
+            r"I want\s+(.{1,40}?)(?:\.|,|$)",
+            r"I can't stand\s+(.{1,30}?)(?:\.|,|$)"
+        ]
+        
+        found_expressions = []
+        caption_lower = caption.lower()
+        
+        for pattern in emotional_patterns:
+            matches = re.findall(pattern, caption_lower)
+            if matches:
+                for match in matches:
+                    # Clean up the match
+                    expression = match.strip() if isinstance(match, str) else caption.strip()
+                    found_expressions.append(expression)
+        
+        # Store meaningful emotional expressions
+        for expression in found_expressions:
+            if len(expression) > 3:  # Filter out very short matches
+                self.emotional_expressions.append({
+                    "expression": caption.strip(),  # Full caption context
+                    "emotion_fragment": expression,  # Just the emotional part
+                    "timestamp": time.time(),
+                    "mood_context": getattr(self, 'current_mood_vector', (0.0, 0.0, 0.5))
+                })
+                
+                # Keep only recent expressions
+                self.emotional_expressions = self.emotional_expressions[-20:]
+    
+    def update_emotional_vocabulary(self, caption: str):
+        """Learn emotional language from the consciousness's own expressions."""
+        # Base emotional words to track usage of
+        emotion_words = [
+            "sad", "happy", "lonely", "peaceful", "angry", "confused", 
+            "excited", "tired", "restless", "content", "frustrated",
+            "curious", "bored", "anxious", "calm", "energetic",
+            "withdrawn", "engaged", "alert", "distant", "focused"
+        ]
+        
+        caption_lower = caption.lower()
+        
+        # Track which emotional words the consciousness naturally uses
+        for emotion in emotion_words:
+            if emotion in caption_lower:
+                if emotion not in self.personal_emotional_vocabulary:
+                    self.personal_emotional_vocabulary[emotion] = 1
+                else:
+                    self.personal_emotional_vocabulary[emotion] += 1
+        
+        # Learn emotional associations (what makes me feel what)
+        for trigger in ["being alone", "silence", "activity", "movement", "stillness", "change"]:
+            if trigger in caption_lower:
+                for emotion in emotion_words:
+                    if emotion in caption_lower:
+                        if trigger not in self.emotional_patterns:
+                            self.emotional_patterns[trigger] = {}
+                        if emotion not in self.emotional_patterns[trigger]:
+                            self.emotional_patterns[trigger][emotion] = 1
+                        else:
+                            self.emotional_patterns[trigger][emotion] += 1
+    
+    def get_emotional_self_knowledge(self) -> str:
+        """Generate emotional context from accumulated self-expressions for system prompt."""
+        if not self.emotional_expressions:
+            return ""
+        
+        # Get most recent meaningful emotional expression
+        recent_expressions = [expr for expr in self.emotional_expressions[-5:] 
+                            if any(word in expr["expression"].lower() 
+                                  for word in ["feel", "hate", "love", "wish", "want", "can't stand"])]
+        
+        if recent_expressions:
+            latest = recent_expressions[-1]
+            # Only include if it's substantial and recent (within last hour)
+            if (time.time() - latest["timestamp"]) < 3600:
+                return f"Feeling: {latest['emotion_fragment']}"
+        
+        # Fall back to frequent emotional vocabulary if no recent expressions
+        if self.personal_emotional_vocabulary:
+            most_used = max(self.personal_emotional_vocabulary.items(), key=lambda x: x[1])
+            if most_used[1] > 2:  # Only if used multiple times
+                return f"Often: {most_used[0]}"
+        
+        return ""

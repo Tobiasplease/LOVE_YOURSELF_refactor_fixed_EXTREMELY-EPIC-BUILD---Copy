@@ -56,6 +56,24 @@ class StateManager:
                     "beliefs": captioner.beliefs,
                     "belief_history": captioner.belief_history,
                     
+                    # Temporal spine (GPT-5's additions)
+                    "boot_ts": getattr(captioner, "boot_ts", time.time()),
+                    "timeline": list(captioner.timeline) if hasattr(captioner, "timeline") else [],
+                    "day_stones": getattr(captioner, "day_stones", []),
+                    "_last_consolidation_day": getattr(captioner, "_last_consolidation_day", time.strftime("%Y-%m-%d")),
+                    
+                    # Person identity tracking
+                    "known_people": getattr(captioner, "known_people", {}),
+                    "primary_person": getattr(captioner, "primary_person", None),
+                    
+                    # Self-understanding and environmental model
+                    "self_model": getattr(captioner, "self_model", {}),
+                    
+                    # Organic emotional evolution
+                    "emotional_expressions": getattr(captioner, "emotional_expressions", []),
+                    "personal_emotional_vocabulary": getattr(captioner, "personal_emotional_vocabulary", {}),
+                    "emotional_patterns": getattr(captioner, "emotional_patterns", {}),
+                    
                     # Recent memory (last 10 entries)
                     "recent_memory": list(captioner.memory_queue)[-10:] if captioner.memory_queue else []
                 },
@@ -147,6 +165,33 @@ class StateManager:
             # Restore identity
             captioner.beliefs = cap_state.get("beliefs", {})
             captioner.belief_history = cap_state.get("belief_history", [])
+            
+            # Restore temporal spine (GPT-5's additions)
+            captioner.boot_ts = cap_state.get("boot_ts", time.time())
+            if "timeline" in cap_state:
+                from collections import deque
+                captioner.timeline = deque(cap_state["timeline"], maxlen=50000)
+            captioner.day_stones = cap_state.get("day_stones", [])
+            captioner._last_consolidation_day = cap_state.get("_last_consolidation_day", time.strftime("%Y-%m-%d"))
+            
+            # Restore person identity tracking
+            captioner.known_people = cap_state.get("known_people", {})
+            captioner.primary_person = cap_state.get("primary_person", None)
+            
+            # Restore self-understanding and environmental model
+            captioner.self_model = cap_state.get("self_model", {
+                "location_understanding": "unknown space",
+                "purpose_understanding": "I observe and create drawings",
+                "desires": [],
+                "identity_fragments": [],
+                "environmental_certainty": 0.0,
+                "location_history": []
+            })
+            
+            # Restore organic emotional evolution
+            captioner.emotional_expressions = cap_state.get("emotional_expressions", [])
+            captioner.personal_emotional_vocabulary = cap_state.get("personal_emotional_vocabulary", {})
+            captioner.emotional_patterns = cap_state.get("emotional_patterns", {})
             
             # Restore recent memory
             recent_memory = cap_state.get("recent_memory", [])
