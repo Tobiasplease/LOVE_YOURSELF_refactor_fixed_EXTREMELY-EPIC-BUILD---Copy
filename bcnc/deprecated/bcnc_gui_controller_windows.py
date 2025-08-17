@@ -2,7 +2,7 @@ import os
 import time
 import pygetwindow as gw
 import pyautogui
-from bcnc_utils import convert_z_to_servo, try_bcnc_cli_run
+from bcnc_utils import convert_z_to_servo
 
 # === FILVÄGAR ===
 # base_path = r"C:\Users\Tobia\Tobias_robot"
