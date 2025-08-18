@@ -16,10 +16,11 @@ ORIGIN_Y = 0  # -2 mm från HOME i Y
 ORIGIN_Z = 0.0
 
 # Grid settings
-GRID_SIZE = 100  # 100mm x 100mm grid
+GRID_SIZE = 60  # 100mm x 100mm grid
 GRID_SPACING = 10  # 10mm spacing between lines
-PEN_DOWN_CMD = "S50"  # Command to lower pen
-PEN_UP_CMD = "S30"  # Command to raise pen
+PEN_DOWN_CMD = "M3 S50"  # Command to lower pen
+PEN_UP_CMD = "M3 S30"  # Command to raise pen
+FEED_RATE = 3000
 # =============================
 
 
@@ -122,6 +123,7 @@ def ensure_homed(ser):
             wait_until_idle(ser, 5.0)
             send_cmd(ser, "G10 L20 P1 X0 Y0 Z0")
             wait_until_idle(ser, 5.0)
+            send_cmd(ser, f"G0 X0 Y0 F{FEED_RATE}")
             print("[INFO] Work coordinate system G54 set to 0,0,0 at home position")
             return
         if st == "Alarm":
@@ -187,10 +189,10 @@ def main():
         ensure_homed(ser)
 
         # 2) Basic setup
-        send_cmd(ser, "G21")  # mm
-        wait_until_idle(ser, 5.0)
-        send_cmd(ser, "G90")  # absolute positioning
-        wait_until_idle(ser, 5.0)
+        # send_cmd(ser, "G21")  # mm
+        # wait_until_idle(ser, 5.0)
+        # send_cmd(ser, "G90")  # absolute positioning
+        # wait_until_idle(ser, 5.0)
         send_cmd(ser, "G17")  # XY-plane
         wait_until_idle(ser, 5.0)
 
