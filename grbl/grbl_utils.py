@@ -252,21 +252,21 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
                 if line.startswith(";") or line.startswith("%") or not line:
                     continue
 
-                # Handle movement commands
-                if line.startswith("G0") or line.startswith("G00"):
-                    # Rapid move - pen should be up
-                    if pen_down:
-                        f.write(f"{PEN_UP_CMD}\n")
-                        pen_down = False
-                    f.write(f"{line}\n")
-                elif line.startswith("G1") or line.startswith("G01"):
+                # Handle movement commands (check G01 first to avoid G0 matching G01)
+                if line.startswith("G01") or (line.startswith("G1 ") and " " in line and not line.startswith("G17")):
                     # Linear move - pen should be down
                     if not pen_down:
                         f.write(f"{PEN_DOWN_CMD}\n")
                         pen_down = True
                     f.write(f"{line}\n")
+                elif line.startswith("G00") or (line.startswith("G0") and " " in line):
+                    # Rapid move - pen should be up
+                    if pen_down:
+                        f.write(f"{PEN_UP_CMD}\n")
+                        pen_down = False
+                    f.write(f"{line}\n")
                 else:
-                    # Pass through other commands
+                    # Pass through other commands (G17, G20, G21, G90, etc.)
                     f.write(f"{line}\n")
 
             # Write footer
