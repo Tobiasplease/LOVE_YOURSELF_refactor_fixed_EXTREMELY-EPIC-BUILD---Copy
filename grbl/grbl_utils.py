@@ -314,7 +314,7 @@ def set_work_origin(ser, origin_x, origin_y, origin_z=0.0, move_timeout=DEFAULT_
     return False
 
 
-def pen_control(ser, pen_down=True, pen_down_cmd="M3 S50", pen_up_cmd="M3 S30"):
+def pen_control(ser, pen_down=True, pen_down_cmd=PEN_DOWN_CMD, pen_up_cmd=PEN_UP_CMD):
     """Control pen up/down using servo commands"""
     if pen_down:
         send_cmd(ser, pen_down_cmd)
