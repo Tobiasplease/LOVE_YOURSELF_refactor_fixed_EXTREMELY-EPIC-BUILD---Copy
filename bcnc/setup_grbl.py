@@ -106,6 +106,9 @@ def ensure_homed(ser):
         time.sleep(0.2)
     print("[INFO] Kör homing ($H)...")
     send_cmd(ser, "$H", wait_ok=False)
+    time.sleep(10)
+    send_cmd(ser, "G92 X0 Y0 Z0")
+
     start = time.time()
     while time.time() - start < HOME_TIMEOUT:
         s = status(ser)
@@ -131,16 +134,16 @@ def main():
         send_cmd(ser, "G17")  # XY-plan
 
         # 3) G54 = nolla vid HOME
-        send_cmd(ser, "G54")
-        send_cmd(ser, "G10 L20 P1 X0 Y0 Z0")  # sätt nuvarande pos till (0,0,0) i G54
+        # send_cmd(ser, "G54")
+        # send_cmd(ser, "G10 L20 P1 X0 Y0 Z0")  # sätt nuvarande pos till (0,0,0) i G54
 
         # 4) G55 = nolla vid HOME + (66,-2,0) — utan att röra maskinen
-        send_cmd(ser, "G55")
-        send_cmd(ser, f"G10 L20 P2 X{-ORIGIN_X} Y{-ORIGIN_Y} Z{-ORIGIN_Z}")
+        # send_cmd(ser, "G55")
+        # send_cmd(ser, f"G10 L20 P2 X{-ORIGIN_X} Y{-ORIGIN_Y} Z{-ORIGIN_Z}")
 
         # 5) Växla till G55 och kör till G55: X0 Y0 (dvs. fysiskt HOME + (66,-2))
-        send_cmd(ser, "G55")  # säkerställ aktivt
-        send_cmd(ser, "G90")  # absolut (för säkerhets skull)
+        # send_cmd(ser, "G55")  # säkerställ aktivt
+        # send_cmd(ser, "G90")  # absolut (för säkerhets skull)
         send_cmd(ser, "G0 X0 Y0", timeout=MOVE_TIMEOUT)  # snabbflytt till origin
         wait_until_idle(ser, MOVE_TIMEOUT)
 
