@@ -21,7 +21,6 @@ DEFAULT_FEED_RATE = 3000
 
 PEN_DOWN_CMD = "M3 S50 ; PEN DOWN"  # Command to lower pen
 PEN_UP_CMD = "M3 S30 ; PEN UP"  # Command to raise pen
-# "M3 S30 ; PEN UP\n"
 
 
 def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5):
@@ -152,7 +151,7 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT):
     raise TimeoutError("Homing took too long")
 
 
-def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
+def convert_with_vpype(svg_file, output_file):
     """Convert SVG to G-code using vpype with vpype-gcode plugin"""
     try:
         # Use one of the built-in profiles, then post-process for servo commands
@@ -184,6 +183,49 @@ def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
     except FileNotFoundError:
         print("[FEL] vpype eller vpype-gcode inte installerat")
         return False
+
+
+# REFERENCE
+# def convert_z_to_servo(input_file, output_file):
+#     """Convert Z commands to servo commands for pen up/down control"""
+#     print("[INFO] Konverterar Z-kommandon till servo...")
+#     try:
+#         current_pen_state = None
+#         with open(input_file, "r") as infile, open(output_file, "w") as outfile:
+#             for line in infile:
+#                 clean = line.strip()
+#                 if clean.startswith("G0"):
+#                     if current_pen_state != "up":
+#                         outfile.write(f"{PEN_UP_CMD}\n")
+#                         current_pen_state = "up"
+#                     outfile.write(line)
+#                 elif clean.startswith("G1"):
+#                     if current_pen_state != "down":
+#                         outfile.write(f"{PEN_DOWN_CMD}\n")
+#                         current_pen_state = "down"
+#                     outfile.write(line)
+#                 elif "Z" in clean:
+#                     for part in clean.split():
+#                         if part.startswith("Z"):
+#                             try:
+#                                 z = float(part[1:])
+#                                 if z > 0 and current_pen_state != "up":
+#                                     outfile.write(f"{PEN_UP_CMD}\n")
+#                                     current_pen_state = "up"
+#                                 elif z <= 0 and current_pen_state != "down":
+#                                     outfile.write(f"{PEN_DOWN_CMD}\n")
+#                                     current_pen_state = "down"
+#                             except ValueError:
+#                                 print(f"[FEL] Kunde inte konvertera Z-värde: {part}")
+#                                 pass
+#                     outfile.write(line)
+#                 else:
+#                     outfile.write(line)
+#         print(f"[INFO] Optimerad G-kod sparad: {output_file}")
+#         return True
+#     except Exception as e:
+#         print(f"[FEL] Z-to-servo konvertering misslyckades: {e}")
+#         return False
 
 
 def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
@@ -228,10 +270,10 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
                     f.write(f"{line}\n")
 
             # Write footer
-            f.write("\n")
-            f.write(f"{PEN_UP_CMD}\n")
-            f.write("G28 ; Return home\n")
-            f.write("M30 ; Program end\n")
+            # f.write("\n")
+            # f.write(f"{PEN_UP_CMD}\n")
+            # f.write("G28 ; Return home\n")
+            # f.write("M30 ; Program end\n")
 
         print(f"[INFO] G-code konverterad till servo-format: {output_gcode}")
         return True
@@ -294,6 +336,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     total_lines = len(lines)
     executed_lines = 0
 
+    lines = lines[3:]  # Skip first three lines (G20, G17, G90), from vpype inject somehow
     for line_num, line in enumerate(lines, 1):
         line = line.strip()
 
