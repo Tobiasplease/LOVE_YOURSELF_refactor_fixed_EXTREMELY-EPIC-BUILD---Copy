@@ -64,8 +64,8 @@ def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
     except subprocess.CalledProcessError as e:
         print(f"[FEL] vpype gcode misslyckades: {e.stderr}")
         # Fallback to our custom converter
-        print("[INFO] Faller tillbaka till anpassad konverterare...")
-        return convert_with_vpype_fallback(svg_file, output_file, origin)
+        # print("[INFO] Faller tillbaka till anpassad konverterare...")
+        # return convert_with_vpype_fallback(svg_file, output_file, origin)
     except FileNotFoundError:
         print("[FEL] vpype eller vpype-gcode inte installerat")
         return False
@@ -126,178 +126,79 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
         return False
 
 
-def create_vpype_gcode_config(origin):
-    """Create a temporary vpype config file with servo settings"""
-    import tempfile
+# def create_vpype_gcode_config(origin):
+#     """Create a temporary vpype config file with servo settings"""
+#     import tempfile
 
-    config_content = f"""
-[gcode_writer]
+#     config_content = f"""
+# [gcode_writer]
 
-[gcode_writer.servo]
-document_start = '''
-; G-code generated with vpype-gcode for servo control
-G21 ; Set units to millimeters
-G90 ; Absolute positioning
-G28 ; Home all axes
-G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset
-M3 S30 ; PEN UP (initial state)
-'''
+# [gcode_writer.servo]
+# document_start = '''
+# ; G-code generated with vpype-gcode for servo control
+# G21 ; Set units to millimeters
+# G90 ; Absolute positioning
+# G28 ; Home all axes
+# G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset
+# M3 S30 ; PEN UP (initial state)
+# '''
 
-segment_first = '''
-G0 X%f Y%f ; Move to start
-M3 S50 ; PEN DOWN
-'''
+# segment_first = '''
+# G0 X%f Y%f ; Move to start
+# M3 S50 ; PEN DOWN
+# '''
 
-segment_line = '''
-G1 X%f Y%f ; Draw line
-'''
+# segment_line = '''
+# G1 X%f Y%f ; Draw line
+# '''
 
-segment_end = '''
-M3 S30 ; PEN UP
-'''
+# segment_end = '''
+# M3 S30 ; PEN UP
+# '''
 
-document_end = '''
-M3 S30 ; PEN UP
-G28 ; Return home
-M30 ; Program end
-'''
+# document_end = '''
+# M3 S30 ; PEN UP
+# G28 ; Return home
+# M30 ; Program end
+# '''
 
-feed_rate = 1000
-"""
+# feed_rate = 1000
+# """
 
-    # Create temporary config file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-        f.write(config_content)
-        return f.name
-
-
-def convert_with_vpype_fallback(svg_file, output_file, origin=(0, 0, 0)):
-    """Fallback: Use built-in direct converter if vpype-gcode fails"""
-    print("[INFO] vpype-gcode inte tillgängligt, använder direkt konverterare...")
-
-    # Import the direct converter from our other module
-    try:
-        import xml.etree.ElementTree as ET
-
-        # import re
-        from bcnc_utils import get_servo_gcode_header, get_servo_gcode_footer
-
-        tree = ET.parse(svg_file)
-        root = tree.getroot()
-
-        gcode_lines = get_servo_gcode_header()
-        gcode_lines.append(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset")
-
-        # Simple SVG processing (no vpype optimization)
-        for elem in root.iter():
-            if elem.tag.endswith("path"):
-                d = elem.get("d", "")
-                gcode_lines.extend(parse_svg_path_simple(d))
-            elif elem.tag.endswith("polyline"):
-                points = elem.get("points", "")
-                gcode_lines.extend(parse_svg_points_simple(points))
-
-        gcode_lines.extend(get_servo_gcode_footer())
-
-        with open(output_file, "w") as f:
-            f.write("\n".join(gcode_lines))
-
-        print(f"[INFO] G-code genererad med direkt konverterare: {output_file}")
-        return True
-
-    except Exception as e:
-        print(f"[FEL] Direkt konvertering misslyckades: {e}")
-        return False
+#     # Create temporary config file
+#     with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+#         f.write(config_content)
+#         return f.name
 
 
-def parse_svg_path_simple(d):
-    """Simple SVG path parser"""
-    gcode = []
-    if not d:
-        return gcode
+# def apply_origin_offset_to_gcode(gcode_file, origin):
+#     """Apply origin offset to existing G-code file"""
+#     try:
+#         with open(gcode_file, "r") as f:
+#             lines = f.readlines()
 
-    import re
+#         with open(gcode_file, "w") as f:
+#             # Add origin command at the beginning after any header comments
+#             header_written = False
+#             for line in lines:
+#                 if not header_written and (line.startswith("G") or line.startswith("M")):
+#                     # Insert origin command before first G/M command
+#                     #   1. vpype generates clean G-code without trying to misuse the translate command
+#                     #   2. Origin offset is applied properly by adding a G92 command to the generated G-code,
+#                     #   which is the correct G-code way to set coordinate system offsets
+#                     #   3. Matches bCNC behavior - G92 sets the current position as the specified coordinates,
+#                     #   effectively creating an origin offset
 
-    commands = re.findall(r"[MLZ][^MLZ]*", d)
-    pen_down = False
+#                     #   This is equivalent to what bCNC's origin command does - it tells the machine "consider
+#                     #   your current position to be X-40 Y-40 Z0" rather than trying to move the geometry around.
+#                     f.write(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset\n")
+#                     header_written = True
+#                 f.write(line)
 
-    for cmd in commands:
-        cmd = cmd.strip()
-        if cmd.startswith("M"):
-            coords = re.findall(r"-?\d+\.?\d*", cmd[1:])
-            if len(coords) >= 2:
-                x, y = float(coords[0]), float(coords[1])
-                if pen_down:
-                    gcode.append("M3 S30 ; PEN UP")
-                    pen_down = False
-                gcode.append(f"G0 X{x} Y{y} ; Move to")
-        elif cmd.startswith("L"):
-            coords = re.findall(r"-?\d+\.?\d*", cmd[1:])
-            if len(coords) >= 2:
-                x, y = float(coords[0]), float(coords[1])
-                if not pen_down:
-                    gcode.append("M3 S50 ; PEN DOWN")
-                    pen_down = True
-                gcode.append(f"G1 X{x} Y{y} ; Draw to")
-        elif cmd.startswith("Z"):
-            if pen_down:
-                gcode.append("M3 S30 ; PEN UP")
-                pen_down = False
+#         print(f"[INFO] Origin offset tillagt: X{origin[0]} Y{origin[1]} Z{origin[2]}")
 
-    return gcode
-
-
-def parse_svg_points_simple(points_str):
-    """Simple SVG points parser"""
-    gcode = []
-    import re
-
-    points = re.findall(r"-?\d+\.?\d*,-?\d+\.?\d*", points_str)
-
-    if points:
-        first_point = points[0].split(",")
-        x, y = float(first_point[0]), float(first_point[1])
-        gcode.append(f"G0 X{x} Y{y} ; Move to start")
-        gcode.append("M3 S50 ; PEN DOWN")
-
-        for point in points[1:]:
-            coords = point.split(",")
-            x, y = float(coords[0]), float(coords[1])
-            gcode.append(f"G1 X{x} Y{y} ; Draw to")
-
-        gcode.append("M3 S30 ; PEN UP")
-
-    return gcode
-
-
-def apply_origin_offset_to_gcode(gcode_file, origin):
-    """Apply origin offset to existing G-code file"""
-    try:
-        with open(gcode_file, "r") as f:
-            lines = f.readlines()
-
-        with open(gcode_file, "w") as f:
-            # Add origin command at the beginning after any header comments
-            header_written = False
-            for line in lines:
-                if not header_written and (line.startswith("G") or line.startswith("M")):
-                    # Insert origin command before first G/M command
-                    #   1. vpype generates clean G-code without trying to misuse the translate command
-                    #   2. Origin offset is applied properly by adding a G92 command to the generated G-code,
-                    #   which is the correct G-code way to set coordinate system offsets
-                    #   3. Matches bCNC behavior - G92 sets the current position as the specified coordinates,
-                    #   effectively creating an origin offset
-
-                    #   This is equivalent to what bCNC's origin command does - it tells the machine "consider
-                    #   your current position to be X-40 Y-40 Z0" rather than trying to move the geometry around.
-                    f.write(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset\n")
-                    header_written = True
-                f.write(line)
-
-        print(f"[INFO] Origin offset tillagt: X{origin[0]} Y{origin[1]} Z{origin[2]}")
-
-    except Exception as e:
-        print(f"[FEL] Kunde inte lägga till origin offset: {e}")
+#     except Exception as e:
+#         print(f"[FEL] Kunde inte lägga till origin offset: {e}")
 
 
 def convert_with_svg2gcode(svg_file, output_file, origin=(0, 0, 0)):

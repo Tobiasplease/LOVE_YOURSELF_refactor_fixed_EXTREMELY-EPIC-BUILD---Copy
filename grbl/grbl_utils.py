@@ -6,6 +6,10 @@ Shared functions for GRBL communication and control
 import time
 import serial
 from serial.tools import list_ports
+import subprocess
+
+# import shutil
+# import os
 
 # Default configuration
 DEFAULT_BAUD = 115200
@@ -14,6 +18,10 @@ DEFAULT_HOME_TIMEOUT = 300
 DEFAULT_MOVE_TIMEOUT = 120
 DEFAULT_CMD_TIMEOUT = 5.0
 DEFAULT_FEED_RATE = 3000
+
+PEN_DOWN_CMD = "M3 S50 ; PEN DOWN"  # Command to lower pen
+PEN_UP_CMD = "M3 S30 ; PEN UP"  # Command to raise pen
+# "M3 S30 ; PEN UP\n"
 
 
 def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5):
@@ -144,12 +152,103 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT):
     raise TimeoutError("Homing took too long")
 
 
+def convert_with_vpype(svg_file, output_file, origin=(0, 0, 0)):
+    """Convert SVG to G-code using vpype with vpype-gcode plugin"""
+    try:
+        # Use one of the built-in profiles, then post-process for servo commands
+        # temp_gcode = output_file + ".temp"
+
+        cmd = ["vpype", "read", svg_file, "linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcode", output_file]
+
+        print(f"[INFO] Kör vpype med gcode plugin: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        print(f"[INFO] vpype gcode konvertering lyckades", result)
+        return True
+
+        # # Post-process the G-code to add servo commands and origin
+        # if convert_gcode_to_servo_format(temp_gcode, output_file, origin):
+        #     # Clean up temp file
+        #     try:
+        #         os.remove(temp_gcode)
+        #     except ValueError:
+        #         pass
+        #     return True
+        # else:
+        #     return False
+
+    except subprocess.CalledProcessError as e:
+        print(f"[FEL] vpype gcode misslyckades: {e.stderr}")
+        # Fallback to our custom converter
+        # print("[INFO] Faller tillbaka till anpassad konverterare...")
+        # return convert_with_vpype_fallback(svg_file, output_file, origin)
+    except FileNotFoundError:
+        print("[FEL] vpype eller vpype-gcode inte installerat")
+        return False
+
+
+def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
+    """Convert vpype-generated G-code to servo format"""
+    try:
+        with open(input_gcode, "r") as f:
+            lines = f.readlines()
+
+        with open(output_gcode, "w") as f:
+            # Write header
+            # f.write("; G-code generated with vpype-gcode, optimized for servo control\n")
+            # f.write("G21 ; Set units to millimeters\n")
+            # f.write("G90 ; Absolute positioning\n")
+            # f.write("G28 ; Home all axes\n")
+            # f.write(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset\n")
+            # f.write("M3 S30 ; PEN UP (initial state)\n")
+            # f.write("\n")
+
+            pen_down = False
+            for line in lines:
+                line = line.strip()
+
+                # Skip vpype headers and comments
+                if line.startswith(";") or line.startswith("%") or not line:
+                    continue
+
+                # Handle movement commands
+                if line.startswith("G0") or line.startswith("G00"):
+                    # Rapid move - pen should be up
+                    if pen_down:
+                        f.write(f"{PEN_UP_CMD}\n")
+                        pen_down = False
+                    f.write(f"{line}\n")
+                elif line.startswith("G1") or line.startswith("G01"):
+                    # Linear move - pen should be down
+                    if not pen_down:
+                        f.write(f"{PEN_DOWN_CMD}\n")
+                        pen_down = True
+                    f.write(f"{line}\n")
+                else:
+                    # Pass through other commands
+                    f.write(f"{line}\n")
+
+            # Write footer
+            f.write("\n")
+            f.write(f"{PEN_UP_CMD}\n")
+            f.write("G28 ; Return home\n")
+            f.write("M30 ; Program end\n")
+
+        print(f"[INFO] G-code konverterad till servo-format: {output_gcode}")
+        return True
+
+    except Exception as e:
+        print(f"[FEL] Servo-formatering misslyckades: {e}")
+        return False
+
+
 def setup_basic_grbl(ser, feed_rate=DEFAULT_FEED_RATE):
     """Setup basic GRBL configuration"""
     send_cmd(ser, "G21")  # mm units
     wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
-    send_cmd(ser, "G90")  # absolute positioning
-    wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
+
+    # send_cmd(ser, "G90")  # absolute positioning
+    # wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
+
     send_cmd(ser, "G17")  # XY-plane
     wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
     send_cmd(ser, "G54")  # coordinate system

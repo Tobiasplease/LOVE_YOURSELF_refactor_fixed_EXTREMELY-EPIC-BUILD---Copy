@@ -7,7 +7,6 @@ Converts SVG files to G-code, applies servo control, and executes on GRBL
 import os
 import sys
 import argparse
-import tempfile
 from pathlib import Path
 
 # Add paths for imports
@@ -16,9 +15,7 @@ grbl_path = os.path.dirname(__file__)
 sys.path.insert(0, bcnc_path)
 sys.path.insert(0, grbl_path)
 
-from grbl_utils import find_grbl_port, initialize_grbl_for_drawing, execute_gcode_file
-import bcnc_utils
-import svg_to_gcode
+from grbl_utils import find_grbl_port, initialize_grbl_for_drawing, execute_gcode_file, convert_with_vpype
 
 
 def main():
@@ -46,31 +43,38 @@ def main():
     if args.output:
         output_file = args.output
     else:
-        temp_dir = args.temp_dir or tempfile.gettempdir()
-        output_file = os.path.join(temp_dir, f"{svg_path.stem}_servo.gcode")
+        if args.temp_dir:
+            # Use temp dir if explicitly specified
+            output_file = os.path.join(args.temp_dir, f"{svg_path.stem}_servo.gcode")
+        else:
+            # Default: write beside input file
+            output_file = str(svg_path.parent / f"{svg_path.stem}_servo.gcode")
 
     try:
         # Step 1: Convert SVG to G-code using bcnc converter
-        print("[STEP 1] Converting SVG to G-code...")
-        temp_gcode = output_file.replace(".gcode", "_temp.gcode")
+        # print("[STEP 1] Converting SVG to G-code...")
+        # temp_gcode = str(output_file).replace(".gcode", "_temp.gcode")
 
         # Use bcnc's convert_svg_to_gcode with origin offset
         origin_offset = (args.offset_x, args.offset_y, 0)
-        converted_gcode = svg_to_gcode.convert_svg_to_gcode(args.svg_file, output_gcode=temp_gcode, origin_offset=origin_offset)
 
-        if not converted_gcode or not os.path.exists(temp_gcode):
-            print("[ERROR] SVG to G-code conversion failed")
-            sys.exit(1)
+        # converted_gcode = svg_to_gcode.convert_svg_to_gcode(args.svg_file, output_gcode=temp_gcode, origin_offset=origin_offset)
+
+        convert_with_vpype(args.svg_file, output_file, origin=origin_offset)
+
+        # if not converted_gcode or not os.path.exists(temp_gcode):
+        #     print("[ERROR] SVG to G-code conversion failed")
+        #     sys.exit(1)
 
         # Step 3: Apply servo conversion
-        print("[STEP 2] Applying servo control conversion...")
-        if not bcnc_utils.convert_z_to_servo(temp_gcode, output_file):
-            print("[ERROR] Servo conversion failed")
-            sys.exit(1)
+        # print("[STEP 2] Applying servo control conversion...")
+        # if not bcnc_utils.convert_z_to_servo(temp_gcode, output_file):
+        #     print("[ERROR] Servo conversion failed")
+        #     sys.exit(1)
 
         # Clean up temp file
-        if os.path.exists(temp_gcode):
-            os.remove(temp_gcode)
+        # if os.path.exists(temp_gcode):
+        #     os.remove(temp_gcode)
 
         print(f"[SUCCESS] G-code generated: {output_file}")
 
@@ -83,12 +87,7 @@ def main():
                 ser = find_grbl_port()
 
                 # Initialize GRBL
-                initialize_grbl_for_drawing(
-                    ser, 
-                    origin_x=args.origin_x, 
-                    origin_y=args.origin_y, 
-                    feed_rate=args.feed_rate
-                )
+                initialize_grbl_for_drawing(ser, origin_x=args.origin_x, origin_y=args.origin_y, feed_rate=args.feed_rate)
 
                 # Execute G-code
                 execute_gcode_file(ser, output_file)
