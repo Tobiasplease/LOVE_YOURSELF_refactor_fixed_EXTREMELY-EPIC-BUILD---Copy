@@ -5,6 +5,8 @@ import cv2
 import threading
 import subprocess
 import os
+import signal
+import atexit
 
 
 def parse_args():
@@ -81,6 +83,7 @@ VERBOSE = False
 # === INIT ===
 debug_print("Opening camera", "INIT")
 cap = cv2.VideoCapture(CAMERA_INDEX if "CAMERA_INDEX" in globals() else 0)
+_global_cap = cap
 if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
@@ -111,19 +114,153 @@ last_mood_time = 0
 last_seen_time = time.time()
 last_time = time.time()
 
+# Global cleanup state
+shutdown_in_progress = False
+cleanup_completed = False
+
+# Global references for cleanup
+_global_cap = None
+_global_object_detector = None
+_global_image_monitor = None
+_global_captioner = None
+_global_mood_engine = None
+_global_state_manager = None
+_global_start_time = None
+_global_run_id = None
+
+def emergency_cleanup():
+    """Emergency cleanup function that can be called from signal handlers."""
+    global shutdown_in_progress, cleanup_completed
+    
+    if shutdown_in_progress:
+        print("[⚠️] Multiple shutdown signals - forcing exit")
+        os._exit(1)
+        
+    shutdown_in_progress = True
+    print("[🛑] Emergency shutdown initiated...")
+    
+    try:
+        # Quick cleanup - no waiting
+        if _global_object_detector:
+            _global_object_detector.stop()
+        if _global_image_monitor:
+            _global_image_monitor.stop()
+        if _global_cap:
+            _global_cap.release()
+            
+        # Emergency hand controller stop
+        try:
+            stop_hand_controller()
+        except:
+            pass
+            
+        cv2.destroyAllWindows()
+        print("[✅] Emergency cleanup completed")
+        cleanup_completed = True
+        
+    except Exception as e:
+        print(f"[❌] Emergency cleanup error: {e}")
+    finally:
+        os._exit(0)
+
+def graceful_cleanup():
+    """Graceful cleanup with timeouts and error handling."""
+    global shutdown_in_progress, cleanup_completed
+    
+    if cleanup_completed:
+        return
+        
+    shutdown_in_progress = True
+    print("[🛑] Graceful shutdown initiated...")
+    
+    # Save session state first (most important)
+    if _global_captioner and _global_mood_engine and _global_state_manager:
+        try:
+            print("[💾] Saving session state...")
+            success = _global_state_manager.save_session_state(_global_captioner, _global_mood_engine)
+            print("[✅] Session state saved successfully" if success else "[❌] Failed to save session state")
+        except Exception as e:
+            print(f"[❌] Error saving session state: {e}")
+    
+    # Log session end
+    if _global_start_time and _global_run_id:
+        try:
+            log_json_entry(
+                LogType.INFO,
+                {"message": "Session ended", "run_id": _global_run_id, "duration": time.time() - _global_start_time},
+                MOOD_SNAPSHOT_FOLDER,
+                print_message=f"[👋] Session ended. Duration: {time.time() - _global_start_time:.1f}s",
+            )
+        except Exception as e:
+            print(f"[❌] Error logging session end: {e}")
+    
+    # Stop threads with timeouts
+    if _global_object_detector:
+        try:
+            _global_object_detector.stop()
+            _global_object_detector.join(timeout=1.0)
+            if _global_object_detector.is_alive():
+                print("[⚠️] Object detector thread didn't stop cleanly")
+        except Exception as e:
+            print(f"[❌] Error stopping object detector: {e}")
+    
+    if _global_image_monitor:
+        try:
+            _global_image_monitor.stop()
+        except Exception as e:
+            print(f"[❌] Error stopping image monitor: {e}")
+    
+    # Stop hand controller
+    try:
+        stop_hand_controller()
+    except Exception as e:
+        print(f"[❌] Error stopping hand controller: {e}")
+    
+    # Release camera
+    if _global_cap:
+        try:
+            _global_cap.release()
+        except Exception as e:
+            print(f"[❌] Error releasing camera: {e}")
+    
+    try:
+        cv2.destroyAllWindows()
+    except Exception as e:
+        print(f"[❌] Error destroying windows: {e}")
+    
+    cleanup_completed = True
+    print("[✅] Graceful shutdown completed")
+
+def signal_handler(signum, frame):
+    """Handle interrupt signals."""
+    print(f"\n[🔄] Received signal {signum}")
+    graceful_cleanup()
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+# Register emergency cleanup for exit
+atexit.register(emergency_cleanup)
+
 last_snapshot_time = 0
 debug_print("Starting object detection thread", "INIT")
 object_detector = ObjectDetectionThread()
+_global_object_detector = object_detector
 object_detector.start()
 
 # Start image monitoring
 debug_print("Starting image monitor", "INIT")
 image_monitor = ImageMonitor(log_folder=MOOD_SNAPSHOT_FOLDER)
+_global_image_monitor = image_monitor
 
 # Initialize run ID and start time for this session
 start_time = time.time()
+_global_start_time = start_time
 set_start_time(start_time)
 run_id = get_current_run_id()
+_global_run_id = run_id
 
 log_json_entry(
     LogType.SESSION_START,
@@ -144,8 +281,11 @@ log_json_entry(
 
 debug_print("Initializing mood engine", "INIT")
 mood_engine = MoodEngine()
+_global_mood_engine = mood_engine
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
+_global_captioner = captioner
+_global_state_manager = state_manager
 
 # Initialize direct hand controller integration
 debug_print("Initializing direct hand controller integration", "INIT")
@@ -524,30 +664,4 @@ try:
             break
 
 except KeyboardInterrupt:
-    debug_print("Shutting down gracefully", "SHUTDOWN")
-
-    # Save session state before shutdown
-    print("[💾] Saving session state...")
-    success = state_manager.save_session_state(captioner, mood_engine)
-    if success:
-        print("[✅] Session state saved successfully")
-    else:
-        print("[❌] Failed to save session state")
-
-    log_json_entry(
-        LogType.INFO,
-        {"message": "Session ended", "run_id": run_id, "duration": time.time() - start_time},
-        MOOD_SNAPSHOT_FOLDER,
-        print_message=f"[👋] Session ended. Duration: {time.time() - start_time:.1f}s",
-    )
-
-    object_detector.stop()
-    object_detector.join()
-    image_monitor.stop()
-    
-    # Stop hand controller
-    debug_print("Stopping hand controller", "SHUTDOWN")
-    stop_hand_controller()
-    
-    cap.release()
-    cv2.destroyAllWindows()
+    graceful_cleanup()

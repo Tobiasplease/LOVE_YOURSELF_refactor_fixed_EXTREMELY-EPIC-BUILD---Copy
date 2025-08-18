@@ -55,10 +55,22 @@ class MoodEngine:
         # Apply emotional momentum - new emotions build on previous ones
         prev_v, prev_a, prev_c = self.mood_vector
         
-        # Smooth emotional transitions using momentum
-        valence = (new_valence * (1 - self.emotional_momentum)) + (prev_v * self.emotional_momentum)
-        arousal = (new_arousal * (1 - self.emotional_momentum)) + (prev_a * self.emotional_momentum)
-        clarity = (new_clarity * (1 - self.emotional_momentum)) + (prev_c * self.emotional_momentum)
+        # Add natural emotional decay toward neutral over time
+        time_since_start = time.time() - self.session_start
+        decay_factor = min(0.05, time_since_start / 3600.0 * 0.02)  # Max 5% decay per hour
+        
+        # Apply decay toward neutral (0, 0, 0.5)
+        prev_v = prev_v * (1 - decay_factor) if abs(prev_v) > 0.1 else prev_v
+        prev_a = prev_a * (1 - decay_factor) if abs(prev_a) > 0.1 else prev_a
+        prev_c = prev_c * (1 - decay_factor) + 0.5 * decay_factor if abs(prev_c - 0.5) > 0.1 else prev_c
+        
+        # Reduce emotional momentum slightly over time to prevent lock-in
+        adjusted_momentum = self.emotional_momentum * (1 - decay_factor * 0.5)
+        
+        # Smooth emotional transitions using adjusted momentum
+        valence = (new_valence * (1 - adjusted_momentum)) + (prev_v * adjusted_momentum)
+        arousal = (new_arousal * (1 - adjusted_momentum)) + (prev_a * adjusted_momentum)
+        clarity = (new_clarity * (1 - adjusted_momentum)) + (prev_c * adjusted_momentum)
         
         # Update mood vector with momentum-smoothed emotions
         self.previous_mood_vector = self.mood_vector
@@ -88,21 +100,27 @@ class MoodEngine:
         return self.current_mood
     
     def get_emotion_for_hand_controller(self) -> str:
-        """Map 3D mood vector to hand controller emotion states."""
+        """Map 3D mood vector to hand controller emotion states with natural variation."""
         valence, arousal, clarity = self.mood_vector
         
+        # Add slight natural variation to prevent permanent lock-in
+        time_factor = (time.time() - self.session_start) / 1800.0  # 30-minute cycles
+        natural_variation = 0.1 * np.sin(time_factor)  # ±0.1 oscillation
+        
+        adjusted_arousal = arousal + natural_variation
+        
         # Use the sophisticated mapping from captioner/prompts.py
-        if valence > 0.5 and arousal < 0.4:
+        if valence > 0.5 and adjusted_arousal < 0.4:
             return "calm_observant"  # "content and quiet"
-        elif valence > 0.5 and arousal > 0.6:
+        elif valence > 0.5 and adjusted_arousal > 0.6:
             return "energized_engaged"  # "curious and energized"
-        elif valence < -0.3 and arousal > 0.5:
+        elif valence < -0.3 and adjusted_arousal > 0.5:
             return "alert_curious"  # "anxious and alert" 
-        elif valence < -0.3 and arousal < 0.4:
+        elif valence < -0.3 and adjusted_arousal < 0.4:
             return "withdrawn_distant"  # "withdrawn and foggy"
         elif clarity < 0.2:
             return "quiet_detached"  # "uncertain and confused"
-        elif valence > 0.2 and arousal > 0.3:
+        elif valence > 0.2 and adjusted_arousal > 0.3:
             return "alert_curious"  # Generally alert and engaged
         elif valence < -0.1:
             return "quiet_detached"  # Generally withdrawn

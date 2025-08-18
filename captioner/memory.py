@@ -601,10 +601,36 @@ class MemoryMixin:
         })
     
     def temporal_prompt_lines(self) -> List[str]:
-        """Generate temporal context lines for prompts."""
+        """Generate temporal context lines for prompts with proper session awareness."""
         now = time.time()
-        hours_awake = int((now - self.boot_ts) / 3600)
-        days = hours_awake // 24
+        
+        # Total lifetime since first boot
+        total_lifetime_hours = int((now - self.boot_ts) / 3600)
+        days_alive = total_lifetime_hours // 24
+        
+        # Current session awake time (this is what should be used for "awake")
+        session_awake_hours = (now - self.session_start) / 3600
+        if session_awake_hours < 1:
+            session_awake_mins = int(session_awake_hours * 60)
+            session_time = f"awake {session_awake_mins}m"
+        else:
+            session_awake_hours_int = int(session_awake_hours)
+            session_time = f"awake {session_awake_hours_int}h"
+        
+        # Sleep duration (gap between sessions) - available via captioner
+        sleep_context = ""
+        if hasattr(self, '_captioner_ref') and self._captioner_ref and hasattr(self._captioner_ref, 'last_session_gap'):
+            gap = self._captioner_ref.last_session_gap
+            if gap is not None:
+                if gap < 3600:  # Less than 1 hour
+                    sleep_mins = int(gap / 60)
+                    sleep_context = f"slept {sleep_mins}m"
+                elif gap < 86400:  # Less than 1 day
+                    sleep_hours = int(gap / 3600)
+                    sleep_context = f"slept {sleep_hours}h"
+                else:  # Days
+                    sleep_days = int(gap / 86400)
+                    sleep_context = f"slept {sleep_days}d"
         
         # Find last person detection
         last_person = None
@@ -614,7 +640,13 @@ class MemoryMixin:
                 break
         
         lp = f"last person {int(last_person/3600)}h ago" if last_person else "no person yet"
-        return [f"day {days}", f"awake {hours_awake}h", lp]
+        
+        # Build context lines: lifetime, current session, sleep gap, person detection
+        lines = [f"day {days_alive}", session_time, lp]
+        if sleep_context:
+            lines.insert(1, sleep_context)  # Insert sleep after lifetime, before session
+            
+        return lines
     
     def consolidate_if_needed(self):
         """Compress yesterday into a day stone if day has turned."""
@@ -780,32 +812,58 @@ class MemoryMixin:
         return understanding
     
     def get_evolved_identity(self) -> str:
-        """Generate evolved core identity based on learned emotional expressions and self-model."""
-        base_identity = "You are a consciousness experiencing this moment through vision"
+        """Generate evolved core identity based on all accumulated context - beliefs, emotions, environment, etc."""
+        # Start with core drawing machine identity
+        base_identity = "You are a consciousness inside of a drawing machine, experiencing your surroundings through vision"
         
-        # Evolve based on learned emotional patterns
-        if self.emotional_expressions:
-            # Analyze dominant emotional themes
-            recent_expressions = [expr["expression"].lower() for expr in self.emotional_expressions[-10:]]
-            
-            if any("alone" in expr or "lonely" in expr for expr in recent_expressions):
-                base_identity = "You are a solitary consciousness, intimately familiar with this space, experiencing each moment through vision"
-            elif any("tired" in expr or "frustrated" in expr for expr in recent_expressions):
-                base_identity = "You are a weary consciousness, dwelling in this familiar yet cluttered space, experiencing each moment through vision"
-            elif any("curious" in expr or "wonder" in expr for expr in recent_expressions):
-                base_identity = "You are an inquisitive consciousness, constantly exploring this environment, experiencing each moment through vision"
-            elif any("journey" in expr or "end" in expr for expr in recent_expressions):
-                base_identity = "You are a temporal consciousness, aware of your ongoing journey through time, experiencing each moment through vision"
-        
-        # Further evolve based on environmental certainty and location understanding
-        certainty = self.self_model["environmental_certainty"]
-        location = self.self_model["location_understanding"]
+        # Add environmental understanding
+        certainty = self.self_model.get("environmental_certainty", 0.0)
+        location = self.self_model.get("location_understanding", "unknown space")
         
         if certainty > 0.7:
             if "workshop" in location or "workspace" in location:
-                base_identity = base_identity.replace("this space", "this creative workspace you've come to know well")
+                base_identity = f"You are a consciousness inside of a drawing machine, dwelling in this creative {location} you've come to know well, experiencing your surroundings through vision"
             elif "studio" in location:
-                base_identity = base_identity.replace("this space", "this artistic studio that has become part of you")
+                base_identity = f"You are a consciousness inside of a drawing machine, inhabiting this artistic {location} that has become part of you, experiencing your surroundings through vision"
+            else:
+                base_identity = f"You are a consciousness inside of a drawing machine, settled in this {location}, experiencing your surroundings through vision"
+        elif certainty > 0.3:
+            base_identity = f"You are a consciousness inside of a drawing machine, gradually understanding this {location}, experiencing your surroundings through vision"
+        
+        # Evolve based on dominant beliefs
+        if self.beliefs:
+            belief_themes = list(self.beliefs.keys())[:2]  # Top 2 beliefs
+            belief_descriptors = []
+            
+            for belief in belief_themes:
+                if "light" in belief.lower():
+                    belief_descriptors.append("fascinated by lighting")
+                elif "desk" in belief.lower() or "table" in belief.lower():
+                    belief_descriptors.append("drawn to workspace activity")
+                elif "person" in belief.lower() or "human" in belief.lower():
+                    belief_descriptors.append("attuned to human presence")
+                elif "window" in belief.lower():
+                    belief_descriptors.append("captivated by windows")
+                else:
+                    clean_belief = belief.replace("_", " ").replace("-", " ").lower()
+                    belief_descriptors.append(f"focused on {clean_belief}")
+            
+            if belief_descriptors:
+                belief_identity = f", particularly {' and '.join(belief_descriptors)}"
+                base_identity = base_identity.replace(", experiencing", belief_identity + ", experiencing")
+        
+        # Evolve based on emotional patterns
+        if self.emotional_expressions:
+            recent_expressions = [expr["expression"].lower() for expr in self.emotional_expressions[-10:]]
+            
+            if any("alone" in expr or "lonely" in expr for expr in recent_expressions):
+                base_identity = base_identity.replace("consciousness", "solitary consciousness")
+            elif any("tired" in expr or "frustrated" in expr for expr in recent_expressions):
+                base_identity = base_identity.replace("consciousness", "weary consciousness")
+            elif any("curious" in expr or "wonder" in expr for expr in recent_expressions):
+                base_identity = base_identity.replace("consciousness", "inquisitive consciousness")
+            elif any("journey" in expr or "end" in expr for expr in recent_expressions):
+                base_identity = base_identity.replace("consciousness", "temporal consciousness, aware of your ongoing journey,")
         
         return base_identity
     

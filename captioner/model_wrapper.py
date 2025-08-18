@@ -3,11 +3,13 @@ from typing import Optional
 from captioner.prompts import (
     build_awakening_prompt,
     build_caption_prompt,
+    build_environmental_caption_prompt,
     build_reflection_prompt,
     build_drawing_prompt,
 )
 from config import config
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
+from config.model_settings import get_model_options, get_model_system_prompt, is_qwen_model
 from utils.ollama import query_ollama
 
 
@@ -24,13 +26,16 @@ class MultimodalModel:
             # Use the same detailed environmental prompt system for fresh starts
             # This ensures first-time awakenings get proper environmental descriptions
             if self.memory_ref:
-                # Pass last session gap to environmental caption prompt
+                # Get last session gap from captioner (not memory)
+                captioner_ref = getattr(self.memory_ref, '_captioner_ref', None)
+                session_gap = getattr(captioner_ref, 'last_session_gap', None) if captioner_ref else None
+                
                 prompt = build_environmental_caption_prompt(
                     self.memory_ref,
                     mood=self.memory_ref.current_mood,
                     boredom=self.memory_ref.boredom,
                     novelty=self.memory_ref.novelty_score,
-                    last_session_gap=getattr(self.memory_ref, "last_session_gap", None)
+                    last_session_gap=session_gap
                 )
             else:
                 # Fallback if no memory reference available
@@ -63,8 +68,38 @@ class MultimodalModel:
         return self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT)
 
     def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None) -> str:
+        # Get model-specific generation options
+        model_options = get_model_options(self.model_name)
+        
+        # Get model-specific system prompt if none provided
+        if system_prompt is None:
+            model_system_config = get_model_system_prompt(self.model_name)
+            system_prompt = model_system_config["base_prompt"]
+        
+        # Add dynamic self-understanding to system prompt
+        if self.memory_ref and hasattr(self.memory_ref, 'get_dynamic_system_context'):
+            dynamic_context = self.memory_ref.get_dynamic_system_context()
+            if dynamic_context:
+                system_prompt += dynamic_context
+        
+        # For Qwen models, use different prompt formatting
+        if is_qwen_model(self.model_name):
+            # Qwen prefers SYSTEM/USER format to prevent role confusion
+            formatted_prompt = f"SYSTEM: {system_prompt}\n\nUSER: {prompt}"
+            final_system_prompt = None  # Don't double-set system prompt
+        else:
+            # LLaVA and other models use system prompt normally
+            formatted_prompt = prompt
+            final_system_prompt = system_prompt
+        
         response = query_ollama(
-            prompt=prompt, model=self.model_name, image=image_path, timeout=90, log_dir=MOOD_SNAPSHOT_FOLDER, system_prompt=system_prompt
+            prompt=formatted_prompt,
+            model=self.model_name,
+            image=image_path,
+            timeout=90,
+            log_dir=MOOD_SNAPSHOT_FOLDER,
+            system_prompt=final_system_prompt,
+            options=model_options  # Pass model-specific options
         )
 
         # Clean up AI model leakage - remove unwanted prompt-like text

@@ -90,6 +90,7 @@ def query_ollama(
     log_dir: str = MOOD_SNAPSHOT_FOLDER,
     system_prompt: Optional[str] = None,
     strict_evaluation: bool = False,
+    options: Optional[dict] = None,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -101,15 +102,18 @@ def query_ollama(
         timeout: Request timeout in seconds
         log_dir: Directory to store logs
         system_prompt: Optional system prompt to set context
+        options: Model-specific generation options (temperature, top_p, etc.)
 
     Returns:
         Response text from Ollama
     """
     _wait_for_drawing_completion()
     payload = {"model": model, "prompt": prompt, "stream": False}
-    # payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}}
 
-    if strict_evaluation:
+    # Add model-specific options (highest priority)
+    if options:
+        payload["options"] = options
+    elif strict_evaluation:
         payload["options"] = {
             "temperature": 0.1,  # Lower temperature for more focused responses
             "top_p": 0.8,  # Reduce randomness
