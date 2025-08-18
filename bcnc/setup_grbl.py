@@ -106,7 +106,7 @@ def ensure_homed(ser):
         time.sleep(0.2)
     print("[INFO] Kör homing ($H)...")
     send_cmd(ser, "$H", wait_ok=False)
-    
+
     start = time.time()
     while time.time() - start < HOME_TIMEOUT:
         s = status(ser)
@@ -134,7 +134,7 @@ def main():
         send_cmd(ser, "G21")  # mm
         send_cmd(ser, "G90")  # absolute positioning
         send_cmd(ser, "G17")  # XY-plane
-        
+
         # 3) Ensure we're using G54 coordinate system
         send_cmd(ser, "G54")
 
@@ -147,7 +147,7 @@ def main():
             send_cmd(ser, "G55")
             send_cmd(ser, "G10 L20 P2 X0 Y0 Z0")
             print("[INFO] Work origin set in G55 coordinate system")
-        
+
         # Status check
         s = status(ser)
         print("[INFO] Slutstatus:", s)
