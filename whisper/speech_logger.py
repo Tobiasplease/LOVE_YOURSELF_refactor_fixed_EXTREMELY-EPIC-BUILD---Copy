@@ -11,7 +11,8 @@ import threading
 import time
 import json
 import os
-import tempfile
+
+# import tempfile
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -98,22 +99,22 @@ class WhisperLogger:
         """Save audio data to temporary WAV file."""
         # Create unique temp file name
         temp_file = f"whisper_temp_{uuid.uuid4().hex[:8]}.wav"
-        
+
         try:
             with wave.open(temp_file, "wb") as wf:
                 wf.setnchannels(self.channels)
                 wf.setsampwidth(self.audio.get_sample_size(self.format))
                 wf.setframerate(self.sample_rate)
                 wf.writeframes(audio_data)
-                
+
             return temp_file
-            
+
         except Exception as e:
             # Clean up on error
             try:
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
-            except:
+            except Exception:
                 pass
             raise e
 
@@ -124,15 +125,15 @@ class WhisperLogger:
             # Check if audio data is sufficient
             if len(audio_data) < 1024:
                 return
-                
+
             # Save temporary audio file
             temp_file = self._save_temp_audio(audio_data)
-            
+
             # Verify the file exists and has content
             if not os.path.exists(temp_file):
                 print(f"Error: Temporary audio file was not created: {temp_file}")
                 return
-                
+
             file_size = os.path.getsize(temp_file)
             if file_size == 0:
                 print(f"Error: Temporary audio file is empty: {temp_file}")
@@ -149,7 +150,7 @@ class WhisperLogger:
             text = result.get("text", "")
             if isinstance(text, str) and text.strip():
                 timestamp = datetime.now().isoformat()
-                
+
                 # Extract confidence from segments (simplified approach)
                 avg_confidence = None
                 segments = result.get("segments", [])
@@ -158,10 +159,10 @@ class WhisperLogger:
                     for seg in segments:
                         if isinstance(seg, dict) and "avg_logprob" in seg:
                             confidences.append(seg["avg_logprob"])
-                    
+
                     if confidences:
                         avg_confidence = sum(confidences) / len(confidences)
-                
+
                 self._log_speech(text.strip(), timestamp, avg_confidence)
 
         except Exception as e:
