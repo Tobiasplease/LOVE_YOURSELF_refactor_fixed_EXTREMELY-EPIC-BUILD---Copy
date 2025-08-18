@@ -106,15 +106,17 @@ def ensure_homed(ser):
         time.sleep(0.2)
     print("[INFO] Kör homing ($H)...")
     send_cmd(ser, "$H", wait_ok=False)
-    time.sleep(10)
-    send_cmd(ser, "G92 X0 Y0 Z0")
-
+    
     start = time.time()
     while time.time() - start < HOME_TIMEOUT:
         s = status(ser)
         st = parse_state(s)
         if st == "Idle":
             print("[INFO] Homing klart.")
+            # Set work coordinate system G54 to current position (home) = 0,0,0
+            send_cmd(ser, "G54")  # Select coordinate system G54
+            send_cmd(ser, "G10 L20 P1 X0 Y0 Z0")  # Set current position as 0,0,0 in G54
+            print("[INFO] Work coordinate system G54 set to 0,0,0 at home position")
             return
         if st == "Alarm":
             raise RuntimeError(f"Homing misslyckades: {s}")
@@ -125,33 +127,35 @@ def ensure_homed(ser):
 def main():
     ser = find_grbl_port()
     try:
-        # 1) HOME
+        # 1) HOME and set G54 coordinate system
         ensure_homed(ser)
 
-        # 2) Grundläge
+        # 2) Basic setup
         send_cmd(ser, "G21")  # mm
-        send_cmd(ser, "G90")  # absolut
-        send_cmd(ser, "G17")  # XY-plan
+        send_cmd(ser, "G90")  # absolute positioning
+        send_cmd(ser, "G17")  # XY-plane
+        
+        # 3) Ensure we're using G54 coordinate system
+        send_cmd(ser, "G54")
 
-        # 3) G54 = nolla vid HOME
-        # send_cmd(ser, "G54")
-        # send_cmd(ser, "G10 L20 P1 X0 Y0 Z0")  # sätt nuvarande pos till (0,0,0) i G54
-
-        # 4) G55 = nolla vid HOME + (66,-2,0) — utan att röra maskinen
-        # send_cmd(ser, "G55")
-        # send_cmd(ser, f"G10 L20 P2 X{-ORIGIN_X} Y{-ORIGIN_Y} Z{-ORIGIN_Z}")
-
-        # 5) Växla till G55 och kör till G55: X0 Y0 (dvs. fysiskt HOME + (66,-2))
-        # send_cmd(ser, "G55")  # säkerställ aktivt
-        # send_cmd(ser, "G90")  # absolut (för säkerhets skull)
-        send_cmd(ser, "G0 X0 Y0", timeout=MOVE_TIMEOUT)  # snabbflytt till origin
-        wait_until_idle(ser, MOVE_TIMEOUT)
-
-        # Klar
+        # 4) Optional: Move to work origin if you want offset
+        if ORIGIN_X != 0 or ORIGIN_Y != 0:
+            print(f"[INFO] Moving to work origin: X{ORIGIN_X} Y{ORIGIN_Y}")
+            send_cmd(ser, f"G0 X{ORIGIN_X} Y{ORIGIN_Y}", timeout=MOVE_TIMEOUT)
+            wait_until_idle(ser, MOVE_TIMEOUT)
+            # Set this position as new 0,0,0 in G55
+            send_cmd(ser, "G55")
+            send_cmd(ser, "G10 L20 P2 X0 Y0 Z0")
+            print("[INFO] Work origin set in G55 coordinate system")
+        
+        # Status check
         s = status(ser)
         print("[INFO] Slutstatus:", s)
-        print("[KLART] Maskinen står nu vid din origin (G55: X0 Y0).")
-        print("[INFO] I bCNC: håll G55 aktiv när du kör dina jobb.")
+        print("[KLART] Machine ready. bCNC will show correct WPos when opened.")
+        if ORIGIN_X != 0 or ORIGIN_Y != 0:
+            print("[INFO] Use G55 coordinate system in bCNC for offset work origin.")
+        else:
+            print("[INFO] Use G54 coordinate system in bCNC (home = 0,0,0).")
 
     finally:
         ser.close()
