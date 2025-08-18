@@ -44,7 +44,7 @@ python svg_to_grbl.py drawing.svg --temp-dir /tmp --no-execute
 - `svg_file` - Input SVG file (required)
 - `-o, --output` - Output G-code file path
 - `-x, --offset-x` - X offset for drawing (default: 0.0)
-- `-y, --offset-y` - Y offset for drawing (default: 0.0)  
+- `-y, --offset-y` - Y offset for drawing (default: 0.0)
 - `--origin-x` - Work origin X coordinate (default: 66.0)
 - `--origin-y` - Work origin Y coordinate (default: -2.0)
 - `--feed-rate` - Feed rate for movements (default: 3000)
@@ -96,16 +96,13 @@ python svg_to_grbl.py drawing.svg --temp-dir /tmp --no-execute
 ## Troubleshooting:
 
 **No GRBL port found:**
+
 - Check USB/serial connection
 - Verify GRBL firmware is running
 - Try different baud rates
 
-**SVG conversion fails:**
-- Install vpype: `pip install vpype`
-- Or install inkscape
-- Check SVG file format
-
 **Drawing offset issues:**
+
 - Adjust `--origin-x` and `--origin-y` values
 - Use `--offset-x` and `--offset-y` for drawing positioning
 - Run `setup_grbl_grid.py` for calibration
