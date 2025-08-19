@@ -90,10 +90,18 @@ class DirectHandController:
     def _initialize_headless_controller(self):
         """Initialize a full headless controller with all functionality."""
         try:
-            # Use the full CleanCursorInterface in headless mode
-            self.controller = HandControlInterface(headless_mode=True)
-            print("✅ Headless hand controller initialized")
-            return True
+            # Apply global print suppression for hand controller
+            from quiet_print import apply_hand_controller_quiet_mode, restore_original_print
+            original_print = apply_hand_controller_quiet_mode()
+            
+            try:
+                # Use the full CleanCursorInterface in headless mode
+                self.controller = HandControlInterface(headless_mode=True)
+                print("✅ Headless hand controller initialized")
+                return True
+            finally:
+                # Restore original print
+                restore_original_print(original_print)
 
         except Exception as e:
             print(f"❌ Failed to initialize headless controller: {e}")
