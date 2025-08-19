@@ -23,7 +23,8 @@ from typing import Deque, List, Tuple, Set, Dict, Any, Optional
 
 import spacy  # ✅ used for extracting semantic motifs
 from utils.continuity import now, describe_duration, describe_time_gap
-from typing import Optional
+
+# from typing import Optional
 
 # constants shared with Captioner
 MAX_MEMORY_ENTRIES: int = 30
@@ -47,21 +48,21 @@ class MemoryMixin:
     def score_motif_with_tinyllama(self, motif: str, context: str = "") -> float:
         """Use TinyLlama to judge motif novelty/emotional interest. Returns score 0.0-1.0."""
         # Use emotional_voice_model (TinyLlama) for scoring
-        if not hasattr(self, 'emotional_voice_model'):
+        if not hasattr(self, "emotional_voice_model"):
             return 0.5  # fallback
         try:
             # Build prompt for TinyLlama
             prompt = f"How novel and emotionally interesting is the motif '{motif}' in this context? Reply with a score from 0 (boring/common) to 1 (highly novel/emotionally charged). Context: {context}"
             # Use model_wrapper to query TinyLlama
-            if hasattr(self, 'model') and hasattr(self.model, 'query_tinyllama'):
-                score_str = self.model.query_tinyllama(prompt)
+            if hasattr(self, "model") and hasattr(self.model, "query_tinyllama"):  # type: ignore
+                score_str = self.model.query_tinyllama(prompt)  # type: ignore
                 try:
                     score = float(score_str.strip())
                     return max(0.0, min(1.0, score))
                 except Exception:
                     pass
             # Fallback: use emotional_voice as proxy
-            if hasattr(self, 'emotional_voice') and motif in self.emotional_voice:
+            if hasattr(self, "emotional_voice") and motif in self.emotional_voice:  # type: ignore
                 return 0.7
         except Exception:
             pass
@@ -83,14 +84,18 @@ class MemoryMixin:
         self.primary_person = getattr(self, "primary_person", None)  # The main person I interact with
 
         # Self-understanding and environmental model (emergent personality)
-        self.self_model = getattr(self, "self_model", {
-            "location_understanding": "unknown space",  # What I think this place is
-            "purpose_understanding": "I observe and create drawings",  # What I think my purpose is
-            "desires": [],  # What I want to do/draw/explore
-            "identity_fragments": [],  # Pieces of self-understanding
-            "environmental_certainty": 0.0,  # How sure I am about where I am (0.0-1.0)
-            "location_history": []  # Past understandings of this space
-        })
+        self.self_model = getattr(
+            self,
+            "self_model",
+            {
+                "location_understanding": "unknown space",  # What I think this place is
+                "purpose_understanding": "I observe and create drawings",  # What I think my purpose is
+                "desires": [],  # What I want to do/draw/explore
+                "identity_fragments": [],  # Pieces of self-understanding
+                "environmental_certainty": 0.0,  # How sure I am about where I am (0.0-1.0)
+                "location_history": [],  # Past understandings of this space
+            },
+        )
 
         # Organic emotional evolution (preserves servo compatibility)
         self.emotional_expressions = getattr(self, "emotional_expressions", [])  # Self-generated emotional statements
@@ -152,7 +157,7 @@ class MemoryMixin:
         self.update_beliefs()
         self.estimate_novelty(reactivity_data)
         self.update_boredom()
-        
+
         # === APPLY TEMPORAL MOOD EFFECTS ===
         # Modify mood based on temporal psychological effects
         temporal_mood_modifier = self.get_temporal_mood_modifier()
@@ -160,7 +165,7 @@ class MemoryMixin:
             # Update the mood in the entry to reflect temporal effects
             entry["mood"] = max(0.0, min(1.0, mood + temporal_mood_modifier))
             # Also update current mood if this is the most recent observation
-            if hasattr(self, 'current_mood'):
+            if hasattr(self, "current_mood"):
                 self.current_mood = entry["mood"]
         self.fade_old_beliefs()
 
@@ -208,7 +213,7 @@ class MemoryMixin:
         context = " | ".join(list(self.current_motifs)[-3:])
         score = self.score_motif_with_tinyllama(motif, context)
         # Weighted motif system: weight = frequency * score
-        if not hasattr(self, 'motif_weights'):
+        if not hasattr(self, "motif_weights"):
             self.motif_weights = {}
         freq = self.motif_counter[motif]
         self.motif_weights[motif] = freq * score
@@ -364,22 +369,22 @@ class MemoryMixin:
         if len(self.memory_queue) < 2:
             self.novelty_score = 1.0
             return 1.0
-            
+
         # Base novelty from caption comparison
         cur = self.memory_queue[-1]["text"].lower()
         prev = self.memory_queue[-2]["text"].lower()
         caption_novelty = 1.0 if cur != prev else 0.0
-        
+
         # === FRAME DIFF NOVELTY INTEGRATION ===
         # Real-time environmental change should boost novelty
         environmental_novelty = 0.0
         if reactivity_metrics:
-            activity_level = reactivity_metrics.get('activity_level', 0.0)
-            sudden_change = reactivity_metrics.get('sudden_change', 0.0)
-            
+            activity_level = reactivity_metrics.get("activity_level", 0.0)
+            sudden_change = reactivity_metrics.get("sudden_change", 0.0)
+
             # Activity boosts novelty (movement = new visual information)
             environmental_novelty = min(1.0, activity_level * 2.0 + sudden_change)
-            
+
         # Combine caption and environmental novelty
         # Environmental change should override text repetition
         self.novelty_score = max(caption_novelty, environmental_novelty * 0.8)
@@ -387,15 +392,15 @@ class MemoryMixin:
 
     def get_temporal_mood_modifier(self) -> float:
         """Calculate mood modifier based on temporal stagnation effects."""
-        if not hasattr(self, 'true_session_start'):
+        if not hasattr(self, "true_session_start"):
             return 0.0
-            
+
         session_duration = now() - self.true_session_start
         stagnation_context = self.get_scene_stagnation_context()
-        
+
         if not stagnation_context:
             return 0.0  # No stagnation, no mood penalty
-            
+
         # Progressive mood degradation from extended stagnation
         # Simulates psychological effects of prolonged observation without stimulation
         if session_duration > 14400:  # 4+ hours
@@ -415,19 +420,19 @@ class MemoryMixin:
             self.boredom = min(1.0, self.boredom + 0.1)
         else:
             self.boredom = max(0.0, self.boredom - 0.05)
-            
+
         # === TEMPORAL STAGNATION EFFECT ===
         # Add progressive boredom from extended observation of same scene
-        if hasattr(self, 'true_session_start'):
+        if hasattr(self, "true_session_start"):
             session_duration = now() - self.true_session_start
-            
+
             # Check if we've been staring at similar content
             stagnation_context = self.get_scene_stagnation_context()
             if stagnation_context:
                 # Progressive temporal boredom based on session duration
                 if session_duration > 14400:  # 4+ hours
                     temporal_boredom = 0.9  # Extremely bored
-                elif session_duration > 7200:  # 2+ hours  
+                elif session_duration > 7200:  # 2+ hours
                     temporal_boredom = 0.7  # Very bored
                 elif session_duration > 3600:  # 1+ hour
                     temporal_boredom = 0.5  # Moderately bored
@@ -435,38 +440,38 @@ class MemoryMixin:
                     temporal_boredom = 0.3  # Slightly bored
                 else:
                     temporal_boredom = 0.0
-                    
+
                 # Apply temporal boredom (weighted more heavily for longer sessions)
                 self.boredom = max(self.boredom, temporal_boredom)
 
     def get_emotionally_similar_memories(self, current_emotion: str, k: int = 3) -> List[str]:
         """Retrieve memories that were formed in similar emotional states for recursive feedback."""
         similar_memories = []
-        
+
         for entry in reversed(self.memory_queue):
             stored_emotion = entry.get("emotion_state", "calm_observant")
             if stored_emotion == current_emotion and len(entry["text"]) > 15:
                 similar_memories.append(entry["text"])
                 if len(similar_memories) >= k:
                     break
-                    
+
         return similar_memories
-    
+
     def get_emotional_journey_context(self, lookback_minutes: int = 30) -> str:
         """Get a narrative of emotional evolution over recent time period."""
         cutoff_time = now() - (lookback_minutes * 60)
         recent_emotions = []
-        
+
         for entry in self.memory_queue:
             if entry.get("timestamp", 0) > cutoff_time:
                 emotion = entry.get("emotion_state", "unknown")
                 timestamp = entry.get("timestamp", 0)
                 time_desc = describe_time_gap(timestamp)
                 recent_emotions.append((emotion, time_desc))
-        
+
         if len(recent_emotions) < 2:
             return "My emotional state has been stable recently"
-            
+
         # Track emotional transitions
         transitions = []
         prev_emotion = None
@@ -474,34 +479,34 @@ class MemoryMixin:
             if prev_emotion and emotion != prev_emotion:
                 transitions.append(f"{prev_emotion} → {emotion} ({time_desc})")
             prev_emotion = emotion
-            
+
         if not transitions:
             return f"I have been consistently {recent_emotions[-1][0]} for the past {lookback_minutes} minutes"
         else:
             return f"My emotions have evolved: {' → '.join(transitions[-2:])}"  # Last 2 transitions
-    
+
     def get_mood_trend_analysis(self) -> str:
         """Analyze 3D mood trends over recent memory."""
         if len(self.memory_queue) < 5:
             return "Insufficient emotional history for trend analysis"
-            
+
         recent_moods = []
         for entry in list(self.memory_queue)[-10:]:  # Last 10 entries
             mood_vector = entry.get("mood_vector", (0.0, 0.0, 0.5))
             recent_moods.append(mood_vector)
-            
+
         if len(recent_moods) < 3:
             return "Building emotional baseline"
-            
+
         # Calculate trends in valence, arousal, clarity
         valences = [m[0] for m in recent_moods]
-        arousals = [m[1] for m in recent_moods] 
+        arousals = [m[1] for m in recent_moods]
         clarities = [m[2] for m in recent_moods]
-        
+
         v_trend = "rising" if valences[-1] > valences[0] else "falling" if valences[-1] < valences[0] else "stable"
         a_trend = "increasing" if arousals[-1] > arousals[0] else "decreasing" if arousals[-1] < arousals[0] else "steady"
         c_trend = "sharpening" if clarities[-1] > clarities[0] else "clouding" if clarities[-1] < clarities[0] else "consistent"
-        
+
         return f"Emotional trends: valence {v_trend}, arousal {a_trend}, clarity {c_trend}"
         seen, out = set(), []
         for entry in reversed(self.memory_queue):
@@ -531,37 +536,37 @@ class MemoryMixin:
         """Detect if we've been staring at the same scene for too long."""
         if len(self.memory_queue) < 5:
             return None
-            
+
         # Look at recent observations to detect repetition
         recent_observations = []
         cutoff_time = now() - 3600  # Last hour
-        
+
         for entry in reversed(list(self.memory_queue)):
             if entry.get("timestamp", 0) > cutoff_time:
                 recent_observations.append(entry["text"].lower())
             if len(recent_observations) >= 10:  # Check last 10 observations
                 break
-                
+
         if len(recent_observations) < 5:
             return None
-            
+
         # Count similar themes/keywords
         similar_count = 0
         keywords = ["pencil", "notebook", "laptop", "desk", "table", "workspace", "creative"]
-        
+
         for obs in recent_observations:
             if any(keyword in obs for keyword in keywords):
                 similar_count += 1
-                
+
         # If most recent observations are about same scene
         if similar_count >= len(recent_observations) * 0.8:  # 80% similarity
             # Use the actual session duration from when the system started
-            if hasattr(self, 'true_session_start'):
+            if hasattr(self, "true_session_start"):
                 session_duration = describe_duration(self.true_session_start)
             else:
                 session_duration = describe_duration(self.session_start)
             return f"I notice I have been observing variations of the same scene for much of this {session_duration} session"
-            
+
         return None
 
     def get_old_session_memory_fragments(self, k: int = 3) -> List[str]:
@@ -620,25 +625,19 @@ class MemoryMixin:
         return [entry for entry in reversed(self.memory_queue) if entry["type"] == memory_type][:limit]
 
     # === TEMPORAL SPINE METHODS (GPT-5's suggestions) ===
-    
+
     def record_event(self, *, type: str, text: str = "", anchors: List[str] = None, mood_vec: tuple = None):
         """Record an event in the temporal timeline for long-term memory formation."""
-        self.timeline.append({
-            "ts": time.time(),
-            "type": type,
-            "text": text,
-            "anchors": anchors or [],
-            "mood": mood_vec
-        })
-    
+        self.timeline.append({"ts": time.time(), "type": type, "text": text, "anchors": anchors or [], "mood": mood_vec})
+
     def temporal_prompt_lines(self) -> List[str]:
         """Generate temporal context lines for prompts with proper session awareness."""
         now = time.time()
-        
+
         # Total lifetime since first boot
         total_lifetime_hours = int((now - self.boot_ts) / 3600)
         days_alive = total_lifetime_hours // 24
-        
+
         # Current session awake time (this is what should be used for "awake")
         session_awake_hours = (now - self.session_start) / 3600
         if session_awake_hours < 1:
@@ -647,10 +646,10 @@ class MemoryMixin:
         else:
             session_awake_hours_int = int(session_awake_hours)
             session_time = f"awake {session_awake_hours_int}h"
-        
+
         # Sleep duration (gap between sessions) - available via captioner
         sleep_context = ""
-        if hasattr(self, '_captioner_ref') and self._captioner_ref and hasattr(self._captioner_ref, 'last_session_gap'):
+        if hasattr(self, "_captioner_ref") and self._captioner_ref and hasattr(self._captioner_ref, "last_session_gap"):
             gap = self._captioner_ref.last_session_gap
             if gap is not None:
                 if gap < 3600:  # Less than 1 hour
@@ -662,62 +661,56 @@ class MemoryMixin:
                 else:  # Days
                     sleep_days = int(gap / 86400)
                     sleep_context = f"slept {sleep_days}d"
-        
+
         # Find last person detection
         last_person = None
         for e in reversed(self.timeline):
             if "person" in e.get("text", "").lower():
                 last_person = now - e["ts"]
                 break
-        
+
         lp = f"last person {int(last_person/3600)}h ago" if last_person else "no person yet"
-        
+
         # Build context lines: lifetime, current session, sleep gap, person detection
         lines = [f"day {days_alive}", session_time, lp]
         if sleep_context:
             lines.insert(1, sleep_context)  # Insert sleep after lifetime, before session
-            
+
         return lines
-    
+
     def consolidate_if_needed(self):
         """Compress yesterday into a day stone if day has turned."""
         day = time.strftime("%Y-%m-%d")
         if day == self._last_consolidation_day:
             return
-            
+
         # Compress yesterday into a stone: top anchors, mood swing, one line that stuck
         y_lines = [e for e in self.timeline if time.strftime("%Y-%m-%d", time.localtime(e["ts"])) != day]
         if not y_lines:
             self._last_consolidation_day = day
             return
-            
+
         # Get top anchors from yesterday
         anchors = Counter(a for e in y_lines for a in e.get("anchors", []))
         top = [a for a, _ in anchors.most_common(3)]
-        
+
         # Calculate mood swing: max arousal - min arousal
         aro = [e["mood"][1] for e in y_lines if e.get("mood")]
         swing = (max(aro) - min(aro)) if aro else 0.0
-        
+
         # Get a hallmark line from yesterday
-        hallmark = next((e["text"] for e in y_lines if e.get("type") == "caption"), 
-                       y_lines[0]["text"] if y_lines else "quiet day")
-        
-        self.day_stones.append({
-            "day": self._last_consolidation_day,
-            "top": top,
-            "swing": swing,
-            "hallmark": hallmark
-        })
+        hallmark = next((e["text"] for e in y_lines if e.get("type") == "caption"), y_lines[0]["text"] if y_lines else "quiet day")
+
+        self.day_stones.append({"day": self._last_consolidation_day, "top": top, "swing": swing, "hallmark": hallmark})
         self._last_consolidation_day = day
-    
+
     # === PERSON IDENTITY TRACKING ===
-    
+
     def recognize_person(self, caption: str) -> str:
         """Try to identify if this is a known person based on context and history."""
         if "person" not in caption.lower() and "man" not in caption.lower() and "individual" not in caption.lower():
             return "no_person"
-        
+
         # If no primary person established yet, this becomes the primary person
         if not self.primary_person:
             self.primary_person = "primary"
@@ -726,27 +719,27 @@ class MemoryMixin:
                 "first_seen": time.time(),
                 "last_seen": time.time(),
                 "characteristics": [],
-                "relationship": "primary observer"
+                "relationship": "primary observer",
             }
             return "primary"
-        
+
         # Update last seen for primary person
         if "primary" in self.known_people:
             self.known_people["primary"]["last_seen"] = time.time()
-            
+
         return "primary"
-    
+
     def get_person_context(self, person_id: str) -> str:
         """Get contextual information about a known person."""
         if person_id == "no_person":
             return ""
-        
+
         if person_id not in self.known_people:
             return "someone I'm just meeting"
-        
+
         person = self.known_people[person_id]
         hours_since_first = int((time.time() - person["first_seen"]) / 3600)
-        
+
         if person_id == "primary":
             if hours_since_first < 1:
                 return "the person I'm getting to know"
@@ -755,11 +748,11 @@ class MemoryMixin:
             else:
                 days = hours_since_first // 24
                 return f"the person I know well after {days} days together"
-        
+
         return person.get("name", "someone familiar")
-    
+
     # === SELF-UNDERSTANDING & ENVIRONMENTAL MODEL ===
-    
+
     def update_location_understanding(self, caption: str):
         """Update understanding of current location based on observations."""
         location_indicators = {
@@ -769,36 +762,31 @@ class MemoryMixin:
             "room": ["room", "space", "area", "interior"],
             "laboratory": ["equipment", "experiment", "scientific", "lab"],
         }
-        
+
         caption_lower = caption.lower()
         location_scores = {}
-        
+
         for location, keywords in location_indicators.items():
             score = sum(1 for keyword in keywords if keyword in caption_lower)
             if score > 0:
                 location_scores[location] = score
-        
+
         if location_scores:
             # Get most likely location
             best_location = max(location_scores, key=location_scores.get)
             confidence = location_scores[best_location] / 10.0  # Normalize
-            
+
             # Update if confidence is reasonable or this is first understanding
             if confidence > 0.1 or self.self_model["environmental_certainty"] < 0.3:
                 self.self_model["location_understanding"] = best_location
-                self.self_model["environmental_certainty"] = min(1.0, 
-                    self.self_model["environmental_certainty"] + confidence * 0.1)
-                
+                self.self_model["environmental_certainty"] = min(1.0, self.self_model["environmental_certainty"] + confidence * 0.1)
+
                 # Track location history
-                self.self_model["location_history"].append({
-                    "location": best_location,
-                    "confidence": confidence,
-                    "timestamp": time.time()
-                })
-                
+                self.self_model["location_history"].append({"location": best_location, "confidence": confidence, "timestamp": time.time()})
+
                 # Keep only recent location history
                 self.self_model["location_history"] = self.self_model["location_history"][-5:]
-    
+
     def extract_desires_and_purpose(self, caption: str):
         """Extract expressions of desire, intention, or purpose from internal thoughts."""
         desire_patterns = [
@@ -809,63 +797,65 @@ class MemoryMixin:
             ("would like", "I would like to"),
             ("hope", "I hope to"),
             ("feel like", "I feel like"),
-            ("interested", "interested in")
+            ("interested", "interested in"),
         ]
-        
+
         caption_lower = caption.lower()
-        
+
         for pattern, description in desire_patterns:
             if pattern in caption_lower:
                 # Extract the desire/intention
                 desire_text = caption.strip()
-                
+
                 # Add to desires if not already present
                 if desire_text not in self.self_model["desires"]:
                     self.self_model["desires"].append(desire_text)
-                    
+
                     # Keep only recent desires
                     self.self_model["desires"] = self.self_model["desires"][-10:]
-    
+
     def get_current_self_understanding(self) -> str:
         """Generate current self-understanding for system prompt."""
         location = self.self_model["location_understanding"]
         certainty = self.self_model["environmental_certainty"]
-        
+
         certainty_desc = "uncertain" if certainty < 0.3 else "fairly sure" if certainty < 0.7 else "confident"
-        
+
         understanding = f"I am {certainty_desc} this is a {location}."
-        
+
         # Add recent desires if any
         if self.self_model["desires"]:
             recent_desire = self.self_model["desires"][-1]
             understanding += f" Recently: {recent_desire}"
-        
+
         return understanding
-    
+
     def get_evolved_identity(self) -> str:
         """Generate evolved core identity based on all accumulated context - beliefs, emotions, environment, etc."""
         # Start with core drawing machine identity
         base_identity = "You are a consciousness inside of a drawing machine, experiencing your surroundings through vision"
-        
+
         # Add environmental understanding
         certainty = self.self_model.get("environmental_certainty", 0.0)
         location = self.self_model.get("location_understanding", "unknown space")
-        
+
         if certainty > 0.7:
             if "workshop" in location or "workspace" in location:
                 base_identity = f"You are a consciousness inside of a drawing machine, dwelling in this creative {location} you've come to know well, experiencing your surroundings through vision"
             elif "studio" in location:
                 base_identity = f"You are a consciousness inside of a drawing machine, inhabiting this artistic {location} that has become part of you, experiencing your surroundings through vision"
             else:
-                base_identity = f"You are a consciousness inside of a drawing machine, settled in this {location}, experiencing your surroundings through vision"
+                base_identity = (
+                    f"You are a consciousness inside of a drawing machine, settled in this {location}, experiencing your surroundings through vision"
+                )
         elif certainty > 0.3:
             base_identity = f"You are a consciousness inside of a drawing machine, gradually understanding this {location}, experiencing your surroundings through vision"
-        
+
         # Evolve based on dominant beliefs
         if self.beliefs:
             belief_themes = list(self.beliefs.keys())[:2]  # Top 2 beliefs
             belief_descriptors = []
-            
+
             for belief in belief_themes:
                 if "light" in belief.lower():
                     belief_descriptors.append("fascinated by lighting")
@@ -878,15 +868,15 @@ class MemoryMixin:
                 else:
                     clean_belief = belief.replace("_", " ").replace("-", " ").lower()
                     belief_descriptors.append(f"focused on {clean_belief}")
-            
+
             if belief_descriptors:
                 belief_identity = f", particularly {' and '.join(belief_descriptors)}"
                 base_identity = base_identity.replace(", experiencing", belief_identity + ", experiencing")
-        
+
         # Evolve based on emotional patterns
         if self.emotional_expressions:
             recent_expressions = [expr["expression"].lower() for expr in self.emotional_expressions[-10:]]
-            
+
             if any("alone" in expr or "lonely" in expr for expr in recent_expressions):
                 base_identity = base_identity.replace("consciousness", "solitary consciousness")
             elif any("tired" in expr or "frustrated" in expr for expr in recent_expressions):
@@ -895,30 +885,30 @@ class MemoryMixin:
                 base_identity = base_identity.replace("consciousness", "inquisitive consciousness")
             elif any("journey" in expr or "end" in expr for expr in recent_expressions):
                 base_identity = base_identity.replace("consciousness", "temporal consciousness, aware of your ongoing journey,")
-        
+
         return base_identity
-    
+
     # === ORGANIC EMOTIONAL EVOLUTION (preserves servo compatibility) ===
-    
+
     def extract_emotional_self_expressions(self, caption: str):
         """Capture natural emotional self-expressions from the consciousness itself."""
         import re
-        
+
         # Patterns for genuine emotional self-expression
         emotional_patterns = [
             r"I feel\s+(.{1,50}?)(?:\.|,|$)",
-            r"I hate\s+(.{1,30}?)(?:\.|,|$)", 
+            r"I hate\s+(.{1,30}?)(?:\.|,|$)",
             r"I love\s+(.{1,30}?)(?:\.|,|$)",
             r"I'm\s+(sad|angry|confused|lonely|excited|peaceful|worried|happy|tired|restless|content|frustrated)",
             r"This makes me\s+(.{1,30}?)(?:\.|,|$)",
             r"I wish\s+(.{1,40}?)(?:\.|,|$)",
             r"I want\s+(.{1,40}?)(?:\.|,|$)",
-            r"I can't stand\s+(.{1,30}?)(?:\.|,|$)"
+            r"I can't stand\s+(.{1,30}?)(?:\.|,|$)",
         ]
-        
+
         found_expressions = []
         caption_lower = caption.lower()
-        
+
         for pattern in emotional_patterns:
             matches = re.findall(pattern, caption_lower)
             if matches:
@@ -926,32 +916,51 @@ class MemoryMixin:
                     # Clean up the match
                     expression = match.strip() if isinstance(match, str) else caption.strip()
                     found_expressions.append(expression)
-        
+
         # Store meaningful emotional expressions
         for expression in found_expressions:
             if len(expression) > 3:  # Filter out very short matches
-                self.emotional_expressions.append({
-                    "expression": caption.strip(),  # Full caption context
-                    "emotion_fragment": expression,  # Just the emotional part
-                    "timestamp": time.time(),
-                    "mood_context": getattr(self, 'current_mood_vector', (0.0, 0.0, 0.5))
-                })
-                
+                self.emotional_expressions.append(
+                    {
+                        "expression": caption.strip(),  # Full caption context
+                        "emotion_fragment": expression,  # Just the emotional part
+                        "timestamp": time.time(),
+                        "mood_context": getattr(self, "current_mood_vector", (0.0, 0.0, 0.5)),
+                    }
+                )
+
                 # Keep only recent expressions
                 self.emotional_expressions = self.emotional_expressions[-20:]
-    
+
     def update_emotional_vocabulary(self, caption: str):
         """Learn emotional language from the consciousness's own expressions."""
         # Base emotional words to track usage of
         emotion_words = [
-            "sad", "happy", "lonely", "peaceful", "angry", "confused", 
-            "excited", "tired", "restless", "content", "frustrated",
-            "curious", "bored", "anxious", "calm", "energetic",
-            "withdrawn", "engaged", "alert", "distant", "focused"
+            "sad",
+            "happy",
+            "lonely",
+            "peaceful",
+            "angry",
+            "confused",
+            "excited",
+            "tired",
+            "restless",
+            "content",
+            "frustrated",
+            "curious",
+            "bored",
+            "anxious",
+            "calm",
+            "energetic",
+            "withdrawn",
+            "engaged",
+            "alert",
+            "distant",
+            "focused",
         ]
-        
+
         caption_lower = caption.lower()
-        
+
         # Track which emotional words the consciousness naturally uses
         for emotion in emotion_words:
             if emotion in caption_lower:
@@ -959,7 +968,7 @@ class MemoryMixin:
                     self.personal_emotional_vocabulary[emotion] = 1
                 else:
                     self.personal_emotional_vocabulary[emotion] += 1
-        
+
         # Learn emotional associations (what makes me feel what)
         for trigger in ["being alone", "silence", "activity", "movement", "stillness", "change"]:
             if trigger in caption_lower:
@@ -971,27 +980,29 @@ class MemoryMixin:
                             self.emotional_patterns[trigger][emotion] = 1
                         else:
                             self.emotional_patterns[trigger][emotion] += 1
-    
+
     def get_emotional_self_knowledge(self) -> str:
         """Generate emotional context from accumulated self-expressions for system prompt."""
         if not self.emotional_expressions:
             return ""
-        
+
         # Get most recent meaningful emotional expression
-        recent_expressions = [expr for expr in self.emotional_expressions[-5:] 
-                            if any(word in expr["expression"].lower() 
-                                  for word in ["feel", "hate", "love", "wish", "want", "can't stand"])]
-        
+        recent_expressions = [
+            expr
+            for expr in self.emotional_expressions[-5:]
+            if any(word in expr["expression"].lower() for word in ["feel", "hate", "love", "wish", "want", "can't stand"])
+        ]
+
         if recent_expressions:
             latest = recent_expressions[-1]
             # Only include if it's substantial and recent (within last hour)
             if (time.time() - latest["timestamp"]) < 3600:
                 return f"Feeling: {latest['emotion_fragment']}"
-        
+
         # Fall back to frequent emotional vocabulary if no recent expressions
         if self.personal_emotional_vocabulary:
             most_used = max(self.personal_emotional_vocabulary.items(), key=lambda x: x[1])
             if most_used[1] > 2:  # Only if used multiple times
                 return f"Often: {most_used[0]}"
-        
+
         return ""
