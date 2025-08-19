@@ -62,9 +62,10 @@ def main():
     parser.add_argument("-y", "--offset-y", type=float, default=0.0, help="Y offset (default: 0.0)")
     parser.add_argument("--origin-x", type=float, default=0, help="Work origin X (default: 0)")
     parser.add_argument("--origin-y", type=float, default=0, help="Work origin Y (default: 0)")
-    parser.add_argument("--feed-rate", type=int, default=3000, help="Feed rate (default: 3000)")
+    parser.add_argument("--feed-rate", type=int, default=5000, help="Feed rate (default: 5000)")
     parser.add_argument("--scale-to", help="Scale to fit size (e.g., '50x50mm', '100x100mm')")
     parser.add_argument("--no-execute", action="store_true", help="Generate G-code only, don't execute")
+    parser.add_argument("--use-absolute", action="store_true", help="Use absolute positioning")
     parser.add_argument("--temp-dir", help="Directory for temporary files (default: system temp)")
 
     args = parser.parse_args()
@@ -106,7 +107,9 @@ def main():
 
                 # Initialize GRBL
                 # todo ORIGIN OFFSET?!
-                initialize_grbl_for_drawing(ser, origin_x=args.origin_x, origin_y=args.origin_y, feed_rate=args.feed_rate)
+                initialize_grbl_for_drawing(
+                    ser, origin_x=args.origin_x, origin_y=args.origin_y, feed_rate=args.feed_rate, use_absolute_positioning=args.use_absolute
+                )
 
                 # Execute G-code
                 # skips first three lines!

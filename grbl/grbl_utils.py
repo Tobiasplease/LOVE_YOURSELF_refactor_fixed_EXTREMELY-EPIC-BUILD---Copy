@@ -14,10 +14,10 @@ import subprocess
 # Default configuration
 DEFAULT_BAUD = 115200
 DEFAULT_STATUS_POLL = 0.2
-DEFAULT_HOME_TIMEOUT = 300
-DEFAULT_MOVE_TIMEOUT = 120
-DEFAULT_CMD_TIMEOUT = 5.0
-DEFAULT_FEED_RATE = 3000
+DEFAULT_HOME_TIMEOUT = 120  # seconds
+DEFAULT_MOVE_TIMEOUT = 15  # seconds
+DEFAULT_CMD_TIMEOUT = 5.0  # seconds
+DEFAULT_FEED_RATE = 5000
 
 PEN_DOWN_CMD = "M3 S50 ; PEN DOWN"  # Command to lower pen
 PEN_UP_CMD = "M3 S30 ; PEN UP"  # Command to raise pen
@@ -289,13 +289,14 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
         return False
 
 
-def setup_basic_grbl(ser, feed_rate=DEFAULT_FEED_RATE):
+def setup_basic_grbl(ser, feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False):
     """Setup basic GRBL configuration"""
     send_cmd(ser, "G21")  # mm units
     wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
 
-    # send_cmd(ser, "G90")  # absolute positioning
-    # wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
+    if use_absolute_positioning:
+        send_cmd(ser, "G90")  # absolute positioning
+        wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
 
     send_cmd(ser, "G17")  # XY-plane
     wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
@@ -372,7 +373,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     print(f"[INFO] G-code execution complete: {executed_lines} lines executed")
 
 
-def initialize_grbl_for_drawing(ser, origin_x=0, origin_y=0, origin_z=0, feed_rate=DEFAULT_FEED_RATE):
+def initialize_grbl_for_drawing(ser, origin_x=0, origin_y=0, origin_z=0, feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False):
     """Complete GRBL initialization sequence for drawing"""
     print("[INFO] Initializing GRBL for drawing...")
 
@@ -380,7 +381,7 @@ def initialize_grbl_for_drawing(ser, origin_x=0, origin_y=0, origin_z=0, feed_ra
     ensure_homed(ser)
 
     # Basic GRBL setup with feed rate
-    setup_basic_grbl(ser, feed_rate)
+    setup_basic_grbl(ser, feed_rate, use_absolute_positioning=use_absolute_positioning)
 
     # Set work origin if specified
     if origin_x != 0 or origin_y != 0:

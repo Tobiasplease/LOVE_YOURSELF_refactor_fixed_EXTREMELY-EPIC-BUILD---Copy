@@ -23,7 +23,7 @@ python svg_to_grbl.py drawing.svg
 python svg_to_grbl.py drawing.svg --no-execute
 
 # Specify output file
-python svg_to_grbl.py drawing.svg -o output.gcode
+# python svg_to_grbl.py drawing.svg -o output.gcode
 ```
 
 ### Advanced Usage:
@@ -35,8 +35,14 @@ python svg_to_grbl.py drawing.svg --origin-x 50 --origin-y -5 --feed-rate 2000
 # Apply offset to drawing
 python svg_to_grbl.py drawing.svg -x 10 -y 15
 
+# Scale to fit dims
+python svg_to_grbl.py drawing.svg --scale-to 500x500mm
+
+# Use absolute positioning (send G90)
+python svg_to_grbl.py drawing.svg --use-absolute
+
 # Use temporary directory for files
-python svg_to_grbl.py drawing.svg --temp-dir /tmp --no-execute
+# python svg_to_grbl.py drawing.svg --temp-dir /tmp --no-execute
 ```
 
 ### Command Line Options:
@@ -50,6 +56,8 @@ python svg_to_grbl.py drawing.svg --temp-dir /tmp --no-execute
 - `--feed-rate` - Feed rate for movements (default: 3000)
 - `--no-execute` - Generate G-code only, don't execute on GRBL
 - `--temp-dir` - Directory for temporary files
+- `--scale-to` - scale to fit dims e.g 500x500mm
+- `--use-absolute` - send G90 and use absolute positioning
 
 ### Requirements:
 
