@@ -26,26 +26,9 @@ import json
 import glob
 import traceback
 import datetime
+import threading
 from typing import Optional
 from serial.tools import list_ports  # For COM port auto-detection
-
-# Import config for debug settings
-try:
-    from config import config
-except ImportError:
-    try:
-        # Try relative import from parent directory
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from config import config
-    except ImportError:
-        # Create a fallback config object with default values
-        class FallbackConfig:
-            DEBUG_HAND_CONTROLLER = True
-            DEBUG_EMOTION_CHANGES = True
-            DEBUG_REACTIVITY_PAUSE = True
-        config = FallbackConfig()
 try:
     from PIL import Image, ImageTk  # For better image support
     PIL_AVAILABLE = True
@@ -94,10 +77,10 @@ class EmotionalState:
         }
 
 
-class HandControlInterface:
+class CleanCursorInterface:
     """Clean baseline cursor interface with 5 emotional states."""
     
-    def __init__(self):
+    def __init__(self, headless_mode=False):
         self.root = tk.Tk()
         self.root.title("Hand Control")
         
@@ -325,13 +308,11 @@ class HandControlInterface:
         self.current_playback = []
         self.record_start_time = 0
         
-        # Dataset management - SHARED DATASET CONFIGURATION
+        # Dataset management - NEW!
         self.available_datasets = {}  # emotion_name -> list of dataset info
         self.active_datasets = {}     # emotion_name -> selected dataset filename
         self.dataset_info = {}        # filename -> dataset metadata
-        
-        # Load shared dataset configuration
-        self.dataset_directory = self._load_shared_dataset_directory()
+        self.dataset_directory = os.path.join(os.path.dirname(__file__), 'datasets')  # Base directory for datasets
         
         # Time-based recording state (captures stillness!) - WITH MEMORY MANAGEMENT
         self.recording_timer = None
@@ -345,7 +326,6 @@ class HandControlInterface:
         
         # Markov chain generation state
         self.generating = False
-        self.is_paused_for_reactivity = False  # Flag to prevent direct control during reactivity pause
         self.generation_start_time = 0
         self.current_markov_state = None  # Current state in generation
         self.prev_markov_state = None     # Previous state for second-order chains
@@ -375,13 +355,7 @@ class HandControlInterface:
         self.transition_start_positions = None
         self.transition_target_positions = None
         self.transition_start_time = 0
-        self.transition_duration = 2.5  # 2.5 seconds for smooth, thoughtful transitions
-        
-        # Smooth blending system for transitions
-        self.transition_blend_factor = 0.0  # 0.0 = old dataset, 1.0 = new dataset
-        self.old_markov_positions = [90, 90, 90, 90]  # Store positions from old chain
-        self.new_markov_positions = [90, 90, 90, 90]  # Store positions from new chain
-        self.transition_blending = False
+        self.transition_duration = 1.5  # 1.5 seconds smooth ease
         
         # === AUTO EMOTION CYCLING SYSTEM ===
         self.emotion_cycling_enabled = tk.BooleanVar(value=False)
@@ -394,36 +368,63 @@ class HandControlInterface:
         self.emotion_transition_source = None
         self.emotion_transition_target = None
         
-        # Emotion blending system
-        self.emotion_blend_factor = 0.0  # 0.0 = old emotion, 1.0 = new emotion
-        self.emotion_blending = False
-        
         # === MOOD MONITORING SYSTEM ===
         self.mood_monitoring_enabled = True  # Auto-read mood from machine.py
         self.mood_file_path = "hand_controller_state.json"
         self.last_mood_check_time = 0
         self.mood_check_interval = 2.0  # Check mood every 2 seconds
         self.last_mood_state = None  # Track last mood to avoid unnecessary switches
-        if config.DEBUG_HAND_CONTROLLER:
-            print("🎭 Mood monitoring enabled - will auto-switch emotional states based on machine.py mood")
+        print("🎭 Mood monitoring enabled - will auto-switch emotional states based on machine.py mood")
         
         self.setup_ui()
         self.start_control_loop()
         
         # STARTUP DATASET LOADING: Load all datasets automatically for autonomous operation
-        if config.DEBUG_HAND_CONTROLLER:
-            print("🔄 Loading datasets for autonomous operation...")
-        self.show_startup_loading()
-        self.load_all_datasets_on_startup()
+        print("🔄 Loading datasets for autonomous operation...")
+        # Load datasets and auto-start Markov generation for machine.py integration
+        print("🔄 Loading datasets and starting autonomous operation...")
+        self._load_datasets_headless()
+        
+        # Auto-start Markov generation for the current emotional state
+        print(f"🤖 Auto-starting Markov generation for {self.current_emotional_state}")
+        try:
+            # First check if we have any markov chains loaded
+            print(f"🔍 Available Markov chains: {list(self.markov_chains.keys())}")
+            if self.current_emotional_state in self.markov_chains:
+                print(f"🔗 Markov chain found for {self.current_emotional_state}")
+                self.start_markov_generation()
+                print(f"✅ Markov generation started successfully")
+            else:
+                print(f"❌ No Markov chain available for {self.current_emotional_state}")
+                print(f"🔄 Attempting to load datasets for {self.current_emotional_state}...")
+                # Try to load a dataset for this emotion
+                if self.current_emotional_state in self.available_datasets:
+                    datasets = self.available_datasets[self.current_emotional_state]
+                    if datasets:
+                        print(f"🔗 Loading first available dataset: {datasets[0]['display_name']}")
+                        self.load_markov_chain_from_dataset(datasets[0], self.current_emotional_state)
+                        self.start_markov_generation()
+                        print(f"✅ Markov generation started with loaded dataset")
+        except Exception as e:
+            print(f"❌ Failed to start Markov generation: {e}")
+            import traceback
+            print(traceback.format_exc())
+        
+        # Hide window if headless, show if not
+        if headless_mode:
+            self.root.withdraw()  # Hide window completely
+            print("🔇 Running in headless mode - GUI hidden")
+        else:
+            self.root.deiconify()  # Make sure window is visible
+            self.root.lift()       # Bring to front
+            print("🖼️ Hand controller GUI window should be visible")
         
         # AUTO-CONNECT TO ARDUINO: Automatically connect to hand controller
-        if config.DEBUG_HAND_CONTROLLER:
-            print("🔌 Auto-connecting to Arduino...")
+        print("🔌 Auto-connecting to Arduino...")
         self.auto_connect_arduino()
         
         # MEMORY MANAGEMENT: Aggressively clean up any existing data on startup
-        if config.DEBUG_HAND_CONTROLLER:
-            print("🧹 Performing aggressive startup memory cleanup...")
+        print("🧹 Performing aggressive startup memory cleanup...")
         total_points_before = sum(len(data) for data in self.recorded_movements.values())
         
         # CLEAR ALL old recording data to ensure fresh start
@@ -431,19 +432,19 @@ class HandControlInterface:
         
         # Clear any other data structures that might hold movement data
         self.recorded_positions.clear()
-        if hasattr(self, 'markov_chains'):
-            self.markov_chains.clear()
+        # DON'T clear markov_chains - they were just loaded by _load_datasets_headless()
+        # if hasattr(self, 'markov_chains'):
+        #     self.markov_chains.clear()
         
-        if config.DEBUG_HAND_CONTROLLER:
-            print(f"🧹 Startup cleanup complete: Cleared {total_points_before} old recording points")
-            print(f"💾 Memory reset: Fresh session with max {self.max_recording_points} points per segment (20s each)")
+        print(f"🧹 Startup cleanup complete: Cleared {total_points_before} old recording points")
+        print(f"💾 Memory reset: Fresh session with max {self.max_recording_points} points per segment (20s each)")
         
-            print("🎯 Clean Emotional Hand Control initialized")
-            print("🎮 Direct wave-based cursor→servo control ready")
-            print("😊 5 emotional states available for testing")
-            print(f"📐 FIXED canvas dimensions: 480x200 (no more resizing)")
-            print(f"🎯 Condensed control area: 25%-75% of canvas width for precise movement")
-            print("🎯 Rich 20s recordings with full data complexity for quality datasets!")
+        print("🎯 Clean Emotional Hand Control initialized")
+        print("🎮 Direct wave-based cursor→servo control ready")
+        print("😊 5 emotional states available for testing")
+        print(f"📐 FIXED canvas dimensions: 480x200 (no more resizing)")
+        print(f"🎯 Condensed control area: 25%-75% of canvas width for precise movement")
+        print("🎯 Rich 20s recordings with full data complexity for quality datasets!")
         
         # Perform startup dataset loading
         # self.perform_startup_loading()  # Method doesn't exist - commented out
@@ -466,8 +467,7 @@ class HandControlInterface:
         # Update UI status for current emotion
         if hasattr(self, 'update_markov_status_for_emotion'):
             self.update_markov_status_for_emotion(self.current_emotional_state)
-        if config.DEBUG_HAND_CONTROLLER:
-            print("✅ Startup dataset display finalized")
+        print("✅ Startup dataset display finalized")
         self._startup_loading_complete = True
     
     def _on_mousewheel(self, event):
@@ -1157,6 +1157,7 @@ class HandControlInterface:
                 ]
                 # This is just a demo - you can get much fancier!
                 self.images['heart'] = ImageTk.PhotoImage(heart_img)
+                print("💖 Created cute default heart image!")
         except Exception as e:
             print(f"⚠️ Could not create default images: {e}")
     
@@ -1171,8 +1172,7 @@ class HandControlInterface:
             'small': self.get_best_font(['Segoe UI', 'Arial'], 8, 'normal'),
             'canvas': self.get_best_font(['Consolas', 'Courier New', 'Arial'], 9, 'bold')
         }
-        if config.DEBUG_HAND_CONTROLLER:
-            print(f"🔤 Using fonts: {[f[0] for f in self.fonts.values()]}")
+        print(f"Using fonts: {[f[0] for f in self.fonts.values()]}")
     
     def get_best_font(self, font_list, size, weight):
         """Get the best available font from a preference list."""
@@ -1278,22 +1278,6 @@ class HandControlInterface:
     def cycle_to_next_dataset(self):
         """Cycle to the next dataset within the current emotion with smooth transition."""
         emotion = self.current_emotional_state
-        
-        # Check if cached datasets still exist, refresh if any are missing
-        available_datasets = self.available_datasets.get(emotion, [])
-        needs_refresh = False
-        
-        for dataset_info in available_datasets:
-            filepath = os.path.join(self.dataset_directory, dataset_info['filename'])
-            if not os.path.exists(filepath):
-                print(f"🗑️ Dataset file deleted: {dataset_info['filename']}, refreshing...")
-                needs_refresh = True
-                break
-        
-        if needs_refresh:
-            self.refresh_datasets()
-            available_datasets = self.available_datasets.get(emotion, [])
-        
         # Use the actual available datasets from our refresh system, not the filesystem check
         available_datasets = self.available_datasets.get(emotion, [])
         
@@ -1339,9 +1323,9 @@ class HandControlInterface:
                 else:
                     next_index = current_index  # Only one dataset available
             except ValueError:
-                # Current dataset not in list, pick random starting point
+                # Current dataset not in list (e.g. after emotion change), pick random starting point
                 next_index = random.randint(0, len(display_names) - 1)
-                print(f"⚠️ Current dataset not found in list, randomly selecting dataset")
+                # This is normal when switching emotions, so no warning needed
             
             next_dataset = display_names[next_index]
             next_dataset_info = available_datasets[next_index]
@@ -1382,22 +1366,19 @@ class HandControlInterface:
             return []
     
     def start_emotion_transition(self, target_emotion):
-        """Start smooth blended transition to target emotion."""
+        """Start smooth transition to target emotion."""
         if target_emotion not in self.emotional_states:
             print(f"❌ Unknown emotion: {target_emotion}")
             return
         
-        print(f"🌊 Starting smooth emotion transition to {target_emotion}")
-        
-        self.emotion_transition_source = self.current_emotional_state
+        self.emotion_transitioning = True
         self.emotion_transition_target = target_emotion
         self.emotion_transition_start_time = time.time()
-        self.emotion_blending = True
-        self.emotion_blend_factor = 0.0
         
-        # Get and load dataset for target emotion
+        # Get available datasets for target emotion - FIXED to use actual loaded datasets
         available_datasets = self.available_datasets.get(target_emotion, [])
         if available_datasets:
+            # Use the same display name format as the dropdown
             dataset_info = available_datasets[0]  # Get first dataset info
             timestamp = dataset_info.get('timestamp', 'unknown')
             sample_count = dataset_info.get('sample_count', 0)
@@ -1422,158 +1403,71 @@ class HandControlInterface:
             else:
                 target_dataset = f"Recording {readable_time} - {sample_count:,} samples, {duration:.1f}s"
                 
-            # Store old chain for blending
-            old_chain = self.markov_chains.get(self.current_emotional_state, {}).copy()
+            self.dataset_var.set(target_dataset)
+            self.active_datasets[target_emotion] = dataset_info['filename']
             
-            # Load new chain for target emotion
+            # CRITICAL: Load the Markov chain for the target emotion immediately
             if self.load_markov_chain_from_dataset(dataset_info, target_emotion):
                 print(f"🔗 Loaded Markov chain for emotion transition to {target_emotion}")
-                self.dataset_var.set(target_dataset)
-                self.active_datasets[target_emotion] = dataset_info['filename']
-                
-                # Store old chain back for blending purposes
-                if old_chain:
-                    temp_emotion_key = f"_old_{self.emotion_transition_source}"
-                    self.markov_chains[temp_emotion_key] = old_chain
-                
-                print(f"🎭 Emotion transition: Selected dataset {target_dataset} for {target_emotion}")
             else:
                 print(f"⚠️ Failed to load Markov chain for {target_emotion}")
-                self.emotion_blending = False
-                return
                 
+            print(f"🎭 Emotion transition: Selected dataset {target_dataset} for {target_emotion}")
         else:
-            print(f"⚠️ No datasets available for {target_emotion}")
-            self.emotion_blending = False
-            return
+            print(f"⚠️ No datasets available for {target_emotion} - emotion will switch but no dataset selected")
+        
+        print(f"🌊 Starting smooth transition to {target_emotion}")
     
     def update_emotion_transition(self):
-        """Update smooth emotion blending transition."""
-        if not self.emotion_blending:
+        """Update smooth emotion transition progress."""
+        if not self.emotion_transitioning:
             return
         
         current_time = time.time()
         elapsed = current_time - self.emotion_transition_start_time
-        progress = elapsed / self.emotion_transition_duration
         
-        if progress >= 1.0:
-            # Complete emotion transition
+        if elapsed >= self.emotion_transition_duration:
+            # Complete transition
             self.current_emotional_state = self.emotion_transition_target
             self.emotion_var.set(self.current_emotional_state)
-            self.emotion_blending = False
-            self.emotion_blend_factor = 1.0
-            
-            # Clean up temporary old chain
-            temp_key = f"_old_{self.emotion_transition_source}"
-            if temp_key in self.markov_chains:
-                del self.markov_chains[temp_key]
-            
+            self.emotion_transitioning = False
             print(f"✅ Emotion transition complete: {self.current_emotional_state}")
             
-            # Update UI
+            # Update UI and restart Markov if needed
             self.update_emotion_display()
+            if self.generating:
+                self.restart_markov_with_new_dataset()
         else:
-            # Update blend factor for smooth emotional transition
-            self.emotion_blend_factor = self.ease_in_out_cubic(progress)
-            
-            if int(progress * 10) != int((progress - 0.1) * 10):  # Print every 10%
-                if config.DEBUG_HAND_CONTROLLER:
-                    print(f"🎭 Emotion blending: {self.emotion_blend_factor:.1%} {self.emotion_transition_target}")
-    
-    def apply_emotion_blending(self, new_positions):
-        """Blend between old emotion and new emotion positions during transition."""
-        if not hasattr(self, 'emotion_blend_factor'):
-            # Fallback - just apply new positions
-            for i in range(min(len(new_positions), len(self.finger_positions))):
-                self.finger_positions[i] = new_positions[i]
-            return
-        
-        # Generate positions from old emotion chain if available
-        old_positions = self.generate_old_emotion_positions()
-        
-        # Blend between old and new emotion positions
-        for i in range(min(len(new_positions), len(self.finger_positions))):
-            if old_positions and i < len(old_positions):
-                # Blend: old_pos * (1 - blend_factor) + new_pos * blend_factor
-                blended_pos = old_positions[i] * (1 - self.emotion_blend_factor) + new_positions[i] * self.emotion_blend_factor
-            else:
-                # No old position available, use new position
-                blended_pos = new_positions[i]
-            
-            self.finger_positions[i] = blended_pos
-    
-    def generate_old_emotion_positions(self):
-        """Generate one step from the old emotion chain for blending."""
-        old_chain_key = f"_old_{self.emotion_transition_source}"
-        if old_chain_key not in self.markov_chains:
-            return None
-        
-        try:
-            old_chain = self.markov_chains[old_chain_key]
-            
-            # Simple first-order generation for old chain
-            if 'servo_transitions' in old_chain:
-                transitions = old_chain['servo_transitions']
-                
-                # Use a stable state for blending (don't advance the old chain's state)
-                if hasattr(self, '_old_chain_state') and self._old_chain_state in transitions:
-                    current_state = self._old_chain_state
-                else:
-                    # Pick a random state from old chain
-                    current_state = random.choice(list(transitions.keys()))
-                    self._old_chain_state = current_state
-                
-                next_states = transitions[current_state]
-                if next_states:
-                    # Choose next state
-                    state_keys = list(next_states.keys())
-                    probabilities = [next_states[key]['prob'] for key in state_keys]
-                    next_state_key = random.choices(state_keys, weights=probabilities)[0]
-                    
-                    # Parse and return position - handle both string and float keys
-                    if isinstance(next_state_key, (int, float)):
-                        # If it's a numeric key, it might be a single value or index
-                        try:
-                            # Try to use it as a single position for all fingers
-                            pos_value = float(next_state_key)
-                            next_state = (pos_value, pos_value, pos_value, pos_value)
-                        except (ValueError, TypeError):
-                            # Fallback to current positions if conversion fails
-                            next_state = tuple(self.finger_positions)
-                    elif isinstance(next_state_key, tuple):
-                        # Already a tuple - use it directly
-                        next_state = next_state_key
-                    else:
-                        # If it's a string key, parse it
-                        try:
-                            next_state = self._parse_single_state(str(next_state_key))
-                        except Exception as parse_error:
-                            print(f"⚠️ Failed to parse old emotion state '{next_state_key}': {parse_error}")
-                            # Fallback to current positions
-                            next_state = tuple(self.finger_positions)
-                    
-                    # Ensure we have a valid 4-element tuple
-                    if next_state and len(next_state) >= 4:
-                        old_positions = []
-                        for i in range(4):
-                            old_positions.append(max(0.0, min(180.0, float(next_state[i]))))
-                        
-                        # Advance old chain state
-                        self._old_chain_state = next_state_key
-                        return old_positions
-                    else:
-                        print(f"⚠️ Invalid old emotion next_state format: {next_state}")
-                        return None
-            
-            return None
-        except Exception as e:
-            print(f"❌ Error generating old emotion positions: {e}")
-            return None
+            # Smooth interpolation between emotions
+            progress = elapsed / self.emotion_transition_duration
+            self.interpolate_emotional_state(progress)
     
     def interpolate_emotional_state(self, progress):
-        """Legacy method - now handled by emotion blending system."""
-        # This method is no longer needed with the new blending system
-        pass
+        """Smoothly interpolate between current and target emotional states."""
+        if not self.emotion_transitioning:
+            return
+        
+        # Use easing function for smooth transition
+        eased_progress = self.ease_in_out_cubic(progress)
+        
+        current_state = self.emotional_states[self.current_emotional_state]
+        target_state = self.emotional_states[self.emotion_transition_target]
+        
+        # Interpolate each parameter
+        interpolated_state = {}
+        for key in current_state:
+            if isinstance(current_state[key], (int, float)):
+                current_val = current_state[key]
+                target_val = target_state[key]
+                interpolated_val = current_val + (target_val - current_val) * eased_progress
+                interpolated_state[key] = interpolated_val
+            else:
+                # For non-numeric values, switch at halfway point
+                interpolated_state[key] = target_state[key] if eased_progress > 0.5 else current_state[key]
+        
+        # Apply interpolated state to hand expression
+        if hasattr(self, 'hand_controller'):
+            self.hand_controller.apply_emotional_state(interpolated_state)
     
     def update_emotion_display(self):
         """Update the emotion display after transition."""
@@ -1582,154 +1476,83 @@ class HandControlInterface:
         print(f"🎭 Emotion display updated: {self.current_emotional_state}")
     
     def start_dataset_transition(self, target_dataset, target_dataset_info, emotion):
-        """Start smooth blended transition to new dataset."""
-        if config.DEBUG_HAND_CONTROLLER:
-            print(f"🌊 Starting smooth blended transition to {target_dataset}")
+        """Start simple smooth transition to new dataset."""
+        # Store where we're starting from
+        self.transition_start_positions = self.finger_positions.copy()
+        self.dataset_transition_start_time = time.time()
+        self.dataset_transition_duration = 1.5  # 1.5 seconds smooth ease
+        self.dataset_transitioning = True
         
-        # Store current positions as the "old" pattern baseline
-        self.old_markov_positions = self.finger_positions.copy()
+        # Store transition target info (but don't load new chain yet!)
+        self.dataset_transition_target = {
+            'display_name': target_dataset,
+            'dataset_info': target_dataset_info,
+            'emotion': emotion
+        }
         
-        # Load the new Markov chain immediately but don't switch generation yet
-        old_chain = self.markov_chains.get(emotion, {}).copy()  # Backup current chain
+        # Store current finger positions as transition start point
+        self.transition_start_positions = self.finger_positions.copy()
         
-        if self.load_markov_chain_from_dataset(target_dataset_info, emotion):
-            print(f"✅ New dataset loaded: {target_dataset}")
-            self.dataset_var.set(target_dataset)
-            self.active_datasets[emotion] = target_dataset_info['filename']
-            
-            # Initialize blended transition
-            self.transition_blending = True
-            self.transition_blend_factor = 0.0  # Start with 100% old dataset
-            self.transition_start_time = time.time()
-            
-            # Generate initial position from new chain for blending target
-            self.generate_new_chain_position()
-            
-            if config.DEBUG_HAND_CONTROLLER:
-                print(f"� Blend transition started: 0% new dataset")
+        # Get first position from new dataset as target
+        target_data = target_dataset_info['data']
+        recordings = target_data.get('recordings', [])
+        if recordings:
+            first_recording = recordings[0]
+            self.transition_target_positions = [
+                first_recording.get('servo1', 90),
+                first_recording.get('servo2', 90), 
+                first_recording.get('servo3', 90),
+                first_recording.get('servo4', 90)
+            ]
         else:
-            print(f"❌ Failed to load dataset: {target_dataset}")
-            # Restore old chain if new one failed
-            if old_chain:
-                self.markov_chains[emotion] = old_chain
+            # Fallback to current positions if no recordings
+            self.transition_target_positions = self.finger_positions.copy()
+        
+        print(f"🌊 Starting smooth transition to {target_dataset} (1.5s ease)")
+        print(f"🎯 Transition: {self.transition_start_positions} → {self.transition_target_positions}")
+        
+        # DON'T load new chain yet - keep current generation running
     
     def update_dataset_transition(self):
-        """Update smooth blended dataset transition."""
-        if not self.transition_blending:
+        """Update smooth dataset transition with position interpolation."""
+        if not self.dataset_transitioning:
             return
         
         current_time = time.time()
-        elapsed = current_time - self.transition_start_time
-        progress = elapsed / self.transition_duration
+        elapsed = current_time - self.dataset_transition_start_time
+        progress = elapsed / self.dataset_transition_duration
         
         if progress >= 1.0:
-            # Complete transition - fully switch to new dataset
-            self.transition_blending = False
-            self.transition_blend_factor = 1.0
-            if config.DEBUG_HAND_CONTROLLER:
-                print("✅ Blended dataset transition complete - now 100% new dataset")
+            # Complete transition - NOW load the new chain
+            target = self.dataset_transition_target
+            
+            print(f"✅ Transition complete - loading new chain")
+            if self.load_markov_chain_from_dataset(target['dataset_info'], target['emotion']):
+                print(f"✅ New dataset loaded: {target['display_name']}")
+                self.dataset_var.set(target['display_name'])
+                self.active_datasets[target['emotion']] = target['dataset_info']['filename']
+            else:
+                print(f"❌ Failed to load dataset: {target['display_name']}")
+            
+            self.dataset_transitioning = False
+            print("🏁 Dataset transition finished")
         else:
-            # Update blend factor with smooth easing
-            self.transition_blend_factor = self.ease_in_out_cubic(progress)
+            # Interpolate finger positions during transition
+            # Use smooth easing (ease-in-out)
+            t = progress
+            smooth_t = t * t * (3.0 - 2.0 * t)  # Smooth step function
             
-            # Generate new positions from new chain
-            self.generate_new_chain_position()
-            
-            # Blend old and new positions
+            # Override finger positions with interpolated values
             for i in range(4):
-                old_pos = self.old_markov_positions[i]
-                new_pos = self.new_markov_positions[i]
-                blended_pos = old_pos + (new_pos - old_pos) * self.transition_blend_factor
-                self.finger_positions[i] = blended_pos
+                start_pos = self.transition_start_positions[i]
+                target_pos = self.transition_target_positions[i]
+                interpolated_pos = start_pos + (target_pos - start_pos) * smooth_t
+                self.finger_positions[i] = interpolated_pos
             
-            if int(progress * 10) != int((progress - 0.1) * 10):  # Print every 10%
-                if config.DEBUG_HAND_CONTROLLER:
-                    print(f"🔄 Blending: {self.transition_blend_factor:.1%} new dataset")
-    
-    def generate_new_chain_position(self):
-        """Generate one step from the new Markov chain and store in new_markov_positions."""
-        if not self.generating or self.current_emotional_state not in self.markov_chains:
-            return
-        
-        # Temporarily generate a position using the new chain without affecting main generation
-        try:
-            chain = self.markov_chains[self.current_emotional_state]
+            print(f"🔄 Transition {progress:.1%}: positions={[f'{pos:.0f}' for pos in self.finger_positions]}")
             
-            # Simple first-order generation for blending
-            if 'servo_transitions' in chain:
-                transitions = chain['servo_transitions']
-                
-                # Use current markov state or pick random if not available
-                # Ensure we convert state to string for dictionary lookup
-                current_state_key = str(self.current_markov_state) if self.current_markov_state is not None else None
-                if current_state_key not in transitions:
-                    self.current_markov_state = random.choice(list(transitions.keys()))
-                    current_state_key = str(self.current_markov_state)
-                
-                next_states = transitions[current_state_key]
-                if next_states:
-                    # Choose next state - handle both legacy and new chain formats
-                    state_keys = list(next_states.keys())
-                    
-                    # Determine if this is legacy format (values are floats) or new format (values are dicts)
-                    first_value = next(iter(next_states.values()))
-                    if isinstance(first_value, dict) and 'prob' in first_value:
-                        # New format: next_states[key] = {'prob': value, ...}
-                        probabilities = [next_states[key]['prob'] for key in state_keys]
-                    else:
-                        # Legacy format: next_states[key] = probability_value
-                        probabilities = [next_states[key] for key in state_keys]
-                    
-                    next_state_key = random.choices(state_keys, weights=probabilities)[0]
-                    
-                    # Parse and store position - handle both string and float keys
-                    if isinstance(next_state_key, (int, float)):
-                        # If it's a numeric key, it might be a single value or index
-                        # Check if this is meant to be a 4-finger position or a single value
-                        try:
-                            # Try to use it as a single position for all fingers
-                            pos_value = float(next_state_key)
-                            next_state = (pos_value, pos_value, pos_value, pos_value)
-                        except (ValueError, TypeError):
-                            # Fallback to current positions if conversion fails
-                            next_state = tuple(self.finger_positions)
-                    elif isinstance(next_state_key, tuple):
-                        # Already a tuple - use it directly
-                        next_state = next_state_key
-                    else:
-                        # If it's a string key, parse it
-                        try:
-                            next_state = self._parse_single_state(str(next_state_key))
-                        except Exception as parse_error:
-                            print(f"⚠️ Failed to parse state '{next_state_key}': {parse_error}")
-                            # Fallback to current positions
-                            next_state = tuple(self.finger_positions)
-                    
-                    # Ensure we have a valid 4-element tuple
-                    if next_state and isinstance(next_state, (tuple, list)) and len(next_state) >= 4:
-                        for i in range(4):
-                            self.new_markov_positions[i] = max(0.0, min(180.0, float(next_state[i])))
-                    else:
-                        print(f"⚠️ Invalid next_state format: {next_state} (type: {type(next_state)})")
-                        # Keep current positions as fallback
-                        for i in range(4):
-                            self.new_markov_positions[i] = self.finger_positions[i]
-                    
-                    # Update markov state for continuity - keep as string for consistency
-                    self.current_markov_state = str(next_state_key)
-                    
-        except Exception as e:
-            print(f"❌ Error generating new chain position: {e}")
-            import traceback
-            print(f"🔍 Debug traceback:\n{traceback.format_exc()}")
-            # Additional debug info
-            if hasattr(self, 'current_markov_state'):
-                print(f"🔍 current_markov_state type: {type(self.current_markov_state)}, value: {self.current_markov_state}")
-            if hasattr(self, 'new_markov_chain') and self.new_markov_chain:
-                print(f"🔍 Chain has servo_transitions: {'servo_transitions' in self.new_markov_chain}")
-                if 'servo_transitions' in self.new_markov_chain:
-                    sample_keys = list(self.new_markov_chain['servo_transitions'].keys())[:3]
-                    print(f"🔍 Sample transition keys: {[f'{type(k).__name__}: {k}' for k in sample_keys]}")
+            # Send interpolated positions to servos
+            self.send_to_hand_controller()
     
     def apply_three_phase_transition(self, overall_progress):
         """Apply direct smooth ease to closest position in new dataset."""
@@ -1989,57 +1812,76 @@ class HandControlInterface:
         if emotion_name not in self.emotional_states:
             return
         
+        # CRITICAL: Save the markov chains before switching
+        saved_chains = self.markov_chains.copy() if hasattr(self, 'markov_chains') else {}
+        
         self.current_emotional_state = emotion_name
-        self.current_state_label.config(text=f"Current: {emotion_name}")
+        
+        # Only update GUI elements if they exist (headless mode compatibility)
+        if hasattr(self, 'current_state_label') and self.current_state_label:
+            try:
+                self.current_state_label.config(text=f"Current: {emotion_name}")
+            except:
+                pass  # Ignore GUI errors in headless mode
         
         # Update movement parameters based on emotional state
         state = self.emotional_states[emotion_name]
         params = state.get_movement_params()
         
-        self.cursor_sensitivity.set(params['cursor_sensitivity'])
+        if hasattr(self, 'cursor_sensitivity'):
+            self.cursor_sensitivity.set(params['cursor_sensitivity'])
         
-        print(f"({emotion_name})")
-        # Update UI status for current emotion
-        self.update_markov_status_for_emotion(emotion_name)
+        print(f"🎭 Switched to {emotion_name} emotional state")
+        print(f"📊 Parameters: sensitivity={params['cursor_sensitivity']:.1f}")
         
-        # Update CLEARER dataset display for new emotion
-        self.update_emotion_dataset_display()
+        # CRITICAL: Restore the markov chains after switching
+        if saved_chains:
+            self.markov_chains = saved_chains
+            print(f"🔗 Preserved Markov chains: {list(self.markov_chains.keys())}")
         
-        # Also make sure we have the latest dataset list
-        if len(self.available_datasets) == 0:
-            print("🔄 No datasets loaded, refreshing...")
-            self.refresh_datasets()
-
-        # Auto-start Markov generation for the new emotional state
-        # Stop any current generation first
-        if self.generating:
-            self.stop_markov_generation()
+        # Update UI status for current emotion if it exists
+        if hasattr(self, 'update_markov_status_for_emotion'):
+            try:
+                self.update_markov_status_for_emotion(emotion_name)
+            except:
+                pass  # Ignore errors in headless mode
+    
+    def change_emotion(self, emotion_name):
+        """API method for external control - switches to specified emotion."""
+        print(f"🎭 API: Changing emotion to {emotion_name}")
+        self.switch_emotional_state(emotion_name)
         
-        # Start generation for the new emotional state if possible
-        print(f"🤖 Auto-starting Markov generation for {emotion_name}")
-        
-        # Ensure startup is complete before proceeding
-        if not hasattr(self, '_startup_loading_complete') or not self._startup_loading_complete:
-            print(f"⏳ Completing startup initialization for {emotion_name}...")
-            self._finalize_startup_display()
-            self._startup_loading_complete = True
-        
-        # Force refresh of datasets and UI for current emotion  
-        self.refresh_emotion_datasets()
-        self.update_markov_status_for_emotion(emotion_name)
-        
-        # First build Markov chain if not available
-        if self.current_emotional_state not in self.markov_chains:
-            print(f"🔗 Building Markov chain for {emotion_name}...")
-            self.build_markov_chain()
+    def start_autonomous_mode(self):
+        """Start autonomous Markov generation mode."""
+        print(f"🤖 API: Starting autonomous mode for {self.current_emotional_state}")
+        try:
+            self.start_markov_generation()
+            return True
+        except Exception as e:
+            print(f"❌ Failed to start autonomous mode: {e}")
+            return False
             
-        # Check if we now have a Markov chain to use
-        if self.current_emotional_state in self.markov_chains:
-            print(f"✅ Markov chain available for {emotion_name} - starting generation")
-            # Simulate clicking the Generate button to ensure proper UI state
-            self.generate_btn.invoke()  # This properly triggers the button
-        else:
-            print(f"⚠️ Could not build Markov chain for {emotion_name} - no recorded movements available")
+    def send_reactivity_data(self, data):
+        """Handle reactivity data from machine.py."""
+        print(f"📊 API: Received reactivity data: {data}")
+        # Handle pause/resume commands
+        if data.get('action') == 'pause':
+            print(f"⏸️ Pausing due to high activity: {data.get('activity_level', 0):.3f}")
+            # TODO: Implement pause logic if needed
+        elif data.get('action') == 'resume':
+            print(f"▶️ Resuming due to low activity: {data.get('activity_level', 0):.3f}")
+            # TODO: Implement resume logic if needed
+        
+        # Update dataset display for current emotion (fix the undefined variable)
+        try:
+            if hasattr(self, 'update_emotion_dataset_display'):
+                self.update_emotion_dataset_display()
+        except Exception as e:
+            print(f"❌ Error updating emotion dataset display: {e}")
+        
+        # DON'T restart Markov generation here - it causes conflicts
+        # The emotion change will happen separately via change_emotion()
+        print(f"📊 Reactivity data processed for current emotion: {self.current_emotional_state}")
     
     def check_mood_file(self):
         """Check mood file from machine.py and auto-switch emotional state if needed."""
@@ -2177,8 +2019,7 @@ class HandControlInterface:
             # Create dropdown options
             if port_list:
                 options = ["Auto"] + port_list
-                if config.DEBUG_HAND_CONTROLLER:
-                    print(f"🔍 Found {len(port_list)} serial ports: {port_list}")
+                print(f"🔍 Found {len(port_list)} serial ports: {port_list}")
             else:
                 options = ["No ports found"]
                 print("⚠️ No serial ports detected")
@@ -2269,17 +2110,14 @@ class HandControlInterface:
     def auto_connect_arduino(self):
         """Automatically detect and connect to Arduino."""
         if not HAND_CONTROLLER_AVAILABLE:
-            if config.DEBUG_HAND_CONTROLLER:
-                print("⚠️ Hand controller not available - running in simulation mode")
+            print("⚠️ Hand controller not available - running in simulation mode")
             return
             
         if self.connected:
-            if config.DEBUG_HAND_CONTROLLER:
-                print("✅ Already connected to Arduino")
+            print("✅ Already connected to Arduino")
             return
             
-        if config.DEBUG_HAND_CONTROLLER:
-            print("🔍 Scanning for Arduino ports...")
+        print("🔍 Scanning for Arduino ports...")
         
         # Try to find Arduino automatically
         arduino_ports = []
@@ -2297,8 +2135,7 @@ class HandControlInterface:
         # Try connecting to found ports
         for port in arduino_ports:
             try:
-                if config.DEBUG_HAND_CONTROLLER:
-                    print(f"🔌 Trying to connect to {port}...")
+                print(f"🔌 Trying to connect to {port}...")
                 
                 self.hand_controller = HandExpressionController(
                     port=port,
@@ -2311,8 +2148,7 @@ class HandControlInterface:
                     self.connected = True
                     self.status_label.config(text=f"✅ Auto-connected ({port})")
                     self.connect_btn.config(text="Disconnect")
-                    if config.DEBUG_HAND_CONTROLLER:
-                        print(f"✅ Auto-connected to Arduino on {port}")
+                    print(f"✅ Auto-connected to Arduino on {port}")
                     return
                 else:
                     if self.hand_controller:
@@ -2365,8 +2201,7 @@ class HandControlInterface:
         
         if self.move_count < 5:
             freeze_status = " [FROZEN]" if self.is_frozen else " [THAWING]" if self.is_thawing else ""
-            # Mouse movement debug output suppressed for cleaner console
-            pass
+            print(f"🎯 Mouse move {self.move_count}: ({self.mouse_x:.3f}, {self.mouse_y:.3f}) canvas: {canvas_width}x{canvas_height} event: ({event.x}, {event.y}){freeze_status}")
         
         # Record movement if recording - SERVO-BASED RECORDING!
         if self.recording and not self.is_frozen:
@@ -2704,8 +2539,7 @@ class HandControlInterface:
             self.loop_count = 1
             
         if self.loop_count < 5:
-            # Control loop debug output suppressed for cleaner console
-            pass
+            print(f"🔄 Control loop {self.loop_count}: dt={dt:.3f}, mouse=({self.mouse_x:.3f}, {self.mouse_y:.3f})")
         
         # Handle freeze state
         if self.is_frozen:
@@ -2747,8 +2581,8 @@ class HandControlInterface:
         # Update canvas visualization (always show current state)
         self.update_canvas()
         
-        # Only calculate cursor targets if NOT generating from Markov chain AND not playing back AND not paused for reactivity
-        if not self.generating and not self.playing_back and not getattr(self, 'is_paused_for_reactivity', False):
+        # Only calculate cursor targets if NOT generating from Markov chain AND not playing back
+        if not self.generating and not self.playing_back:
             # Calculate finger targets from cursor position (even during freeze - maintains position)
             self.calculate_finger_targets()
             
@@ -2756,7 +2590,6 @@ class HandControlInterface:
             self.finger_positions = self.finger_targets.copy()
         # When generating, finger_positions are set by update_markov_generation()
         # When playing back, finger_positions are set by update_playback()
-        # When paused for reactivity, finger_positions remain frozen at last position
         
         if hasattr(self, 'direct_count'):
             self.direct_count += 1
@@ -2766,8 +2599,7 @@ class HandControlInterface:
         if self.direct_count < 5 or self.direct_count % 30 == 0:
             freeze_status = " [FROZEN]" if self.is_frozen else ""
             generation_status = " [GENERATING]" if self.generating else " [DIRECT]"
-            # Debug output suppressed for cleaner console
-            pass
+            print(f"🎯 Control {self.direct_count}: positions={[f'{p:.1f}' for p in self.finger_positions]}{generation_status}{freeze_status}")
         
         # Send to hand controller
         self.send_to_hand_controller()
@@ -3111,17 +2943,13 @@ class HandControlInterface:
         self.dataset_info.clear()
         self.active_datasets.clear()
         
-        # 3. Delete all saved files from the configured dataset directory
+        # 3. Delete all saved files in movement_recordings directory
         import os
         import glob
         
-        # Get the actual dataset directory being used (same as startup)
-        dataset_dir = self._load_shared_dataset_directory()
-        
-        if os.path.exists(dataset_dir):
+        if os.path.exists("movement_recordings"):
             files_deleted = 0
-            pattern = os.path.join(dataset_dir, "*.json")
-            for filepath in glob.glob(pattern):
+            for filepath in glob.glob("movement_recordings/*.json"):
                 try:
                     os.remove(filepath)
                     files_deleted += 1
@@ -3129,9 +2957,7 @@ class HandControlInterface:
                 except Exception as e:
                     print(f"⚠️ Could not delete {filepath}: {e}")
             
-            print(f"🗑️ Deleted {files_deleted} dataset files from {dataset_dir}")
-        else:
-            print(f"⚠️ Dataset directory {dataset_dir} not found")
+            print(f"🗑️ Deleted {files_deleted} dataset files")
         
         # 4. Refresh the dropdown to show empty state
         self.refresh_datasets()
@@ -3539,7 +3365,7 @@ class HandControlInterface:
             print("❌ No servo data to save")
             return
             
-        os.makedirs(self.dataset_directory, exist_ok=True)
+        os.makedirs("movement_recordings", exist_ok=True)
         
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         
@@ -3549,10 +3375,10 @@ class HandControlInterface:
             # Clean up the name for filename
             safe_name = "".join(c for c in custom_name if c.isalnum() or c in (' ', '-', '_')).strip()
             safe_name = safe_name.replace(' ', '_')
-            filename = os.path.join(self.dataset_directory, f"{emotion}_{timestamp}_{safe_name}.json")
+            filename = f"movement_recordings/{emotion}_{timestamp}_{safe_name}.json"
             self.dataset_name_var.set("")  # Clear for next time
         else:
-            filename = os.path.join(self.dataset_directory, f"{emotion}_{timestamp}.json")
+            filename = f"movement_recordings/{emotion}_{timestamp}.json"
         
         # Get servo-based movements and Markov chain
         movements = self.recorded_movements[emotion]
@@ -3630,43 +3456,14 @@ class HandControlInterface:
             save_msg += " + chain"
         self.record_status.config(text=save_msg, foreground="green")
     
-    def _load_shared_dataset_directory(self):
-        """Load shared dataset configuration to allow both standalone and integrated versions to use same datasets."""
-        config_path = os.path.join(os.path.dirname(__file__), 'shared_dataset_config.json')
-        
-        # Default fallback to local movement_recordings
-        default_path = os.path.join(os.path.dirname(__file__), 'movement_recordings')
-        
-        try:
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                    
-                # Try each path in priority order
-                for path in config.get('dataset_source_priority', []):
-                    expanded_path = os.path.expanduser(path)
-                    if os.path.exists(expanded_path) and os.path.isdir(expanded_path):
-                        print(f"📁 Using shared dataset directory: {expanded_path}")
-                        return expanded_path
-                        
-                print(f"⚠️ No shared dataset paths found, using local: {default_path}")
-                return default_path
-            else:
-                print(f"📁 No shared config found, using local: {default_path}")
-                return default_path
-                
-        except Exception as e:
-            print(f"⚠️ Error loading shared dataset config: {e}")
-            return default_path
-    
     def refresh_datasets(self):
         """Scan for available datasets and update display - ONLY compatible current format."""
         print("🔄 Refreshing dataset list (current format only)...")
         self.available_datasets = {}
         self.dataset_info = {}
         
-        if not os.path.exists(self.dataset_directory):
-            print(f"📁 No dataset directory found: {self.dataset_directory}")
+        if not os.path.exists("movement_recordings"):
+            print("📁 No movement_recordings directory found")
             self.update_dataset_display()
             return
             
@@ -3674,11 +3471,11 @@ class HandControlInterface:
         compatible_files = 0
         incompatible_files = 0
         
-        for filename in os.listdir(self.dataset_directory):
+        for filename in os.listdir("movement_recordings"):
             if not filename.endswith('.json'):
                 continue
                 
-            filepath = os.path.join(self.dataset_directory, filename)
+            filepath = os.path.join("movement_recordings", filename)
             try:
                 with open(filepath, 'r') as f:
                     data = json.load(f)
@@ -3777,7 +3574,6 @@ class HandControlInterface:
         """Update the dataset display for current emotion with clear, explicit information."""
         emotion = self.current_emotional_state
         datasets = self.available_datasets.get(emotion, [])
-        display_options = []  # Initialize display_options at the beginning
         
         # Update emotion dataset label with more explicit information
         if not datasets:
@@ -4287,14 +4083,14 @@ File: {dataset['filename']}
     
     def load_saved_movements(self):
         """Load previously saved movements from disk for persistence."""
-        if not os.path.exists(self.dataset_directory):
+        if not os.path.exists("movement_recordings"):
             print("📁 No saved movements found - starting fresh")
             return
         
         loaded_count = 0
         for emotion_key in self.emotional_states.keys():
             # Find the most recent file for this emotion
-            pattern = os.path.join(self.dataset_directory, f"{emotion_key}_*.json")
+            pattern = f"movement_recordings/{emotion_key}_*.json"
             files = []
             try:
                 import glob
@@ -4306,8 +4102,8 @@ File: {dataset['filename']}
                         data = json.load(f)
                     
                     # Load movements and vectors
-                    if 'servo_movements' in data and data['servo_movements']:
-                        self.recorded_movements[emotion_key] = data['servo_movements']
+                    if 'movements' in data and data['movements']:
+                        self.recorded_movements[emotion_key] = data['movements']
                         loaded_count += 1
                     
                     if 'vectors' in data and data['vectors']:
@@ -4324,19 +4120,6 @@ File: {dataset['filename']}
 
     def start_playback(self):
         """Start playing back recorded movements for current emotional state."""
-        print(f"🔍 DEBUG: Playback requested for emotion: {self.current_emotional_state}")
-        print(f"🔍 DEBUG: recorded_movements keys: {list(self.recorded_movements.keys())}")
-        print(f"🔍 DEBUG: Emotion in recorded_movements? {self.current_emotional_state in self.recorded_movements}")
-        if self.current_emotional_state in self.recorded_movements:
-            movements = self.recorded_movements[self.current_emotional_state]
-            print(f"🔍 DEBUG: Found {len(movements)} movements for {self.current_emotional_state}")
-            if movements:
-                print(f"🔍 DEBUG: First movement type: {type(movements[0])}")
-                if isinstance(movements[0], dict):
-                    print(f"🔍 DEBUG: First movement keys: {list(movements[0].keys())}")
-                else:
-                    print(f"🔍 DEBUG: First movement value: {movements[0]}")
-        
         # CRITICAL: Stop any other active operations first
         if self.generating:
             print("🛑 Stopping Markov generation to start playback")
@@ -4475,6 +4258,8 @@ File: {dataset['filename']}
     
     def start_markov_generation(self):
         """Start Markov chain generation for current emotional state with second-order support."""
+        print(f"🎯 start_markov_generation called for {self.current_emotional_state}")
+        
         # CRITICAL: Stop any other active operations first  
         if self.playing_back:
             print("🛑 Stopping playback to start Markov generation")
@@ -4485,12 +4270,18 @@ File: {dataset['filename']}
             self.stop_recording()
             
         if self.generating:
+            print("🛑 Already generating - stopping first")
             self.stop_markov_generation()
-            return
+            # Continue to start new generation for current emotion
             
         if self.current_emotional_state not in self.markov_chains:
             print(f"❌ No Markov chain available for {self.current_emotional_state}")
-            self.markov_status.config(text="No chain for this emotion", foreground="red")
+            # Only update GUI if it exists (headless mode compatibility)
+            if hasattr(self, 'markov_status') and self.markov_status:
+                try:
+                    self.markov_status.config(text="No chain for this emotion", foreground="red")
+                except:
+                    pass  # Ignore GUI errors in headless mode
             return
             
         chain = self.markov_chains[self.current_emotional_state]
@@ -4565,7 +4356,12 @@ File: {dataset['filename']}
                 transitions = chain['transitions']
             else:
                 print(f"❌ No valid transitions found in Markov chain for {self.current_emotional_state}")
-                self.markov_status.config(text="Invalid chain format", foreground="red")
+                # Only update GUI if it exists (headless mode compatibility)
+                if hasattr(self, 'markov_status') and self.markov_status:
+                    try:
+                        self.markov_status.config(text="Invalid chain format", foreground="red")
+                    except:
+                        pass  # Ignore GUI errors in headless mode
                 return
                 
             if not transitions:
@@ -4627,28 +4423,40 @@ File: {dataset['filename']}
             
             # Cancel any existing timer before scheduling new one
             if self.generation_timer:
-                self.root.after_cancel(self.generation_timer)
+                try:
+                    self.root.after_cancel(self.generation_timer)
+                except:
+                    # In headless mode, root.after_cancel might not work
+                    pass
                 self.generation_timer = None
             
             # Schedule next step (only if still generating)
             if self.generating:
-                interval_ms = int(self.generation_speed * 1000)
-                self.generation_timer = self.root.after(interval_ms, self.start_generation_timer)
+                interval_s = self.generation_speed
+                try:
+                    # Try to use Tkinter timer first
+                    interval_ms = int(interval_s * 1000)
+                    self.generation_timer = self.root.after(interval_ms, self.start_generation_timer)
+                except:
+                    # Fallback to threading timer for headless mode
+                    print("🔄 Using threading timer for headless mode")
+                    import threading
+                    self.generation_timer = threading.Timer(interval_s, self.start_generation_timer)
+                    self.generation_timer.daemon = True
+                    self.generation_timer.start()
     
     def step_markov_generation(self):
         """Take one step in Markov generation with second-order support."""
+        print(f"🔄 step_markov_generation called - generating: {self.generating}, emotion: {self.current_emotional_state}")
         if not self.generating or self.current_emotional_state not in self.markov_chains:
+            print(f"❌ Skipping generation - generating: {self.generating}, chains: {list(self.markov_chains.keys())}")
             return
         
-        # Handle blended dataset transitions
-        if hasattr(self, 'transition_blending') and self.transition_blending:
+        # Handle dataset transitions (smooth easing)
+        if hasattr(self, 'dataset_transitioning') and self.dataset_transitioning:
+            print(f"🔄 Transition active - calling update_dataset_transition")
             self.update_dataset_transition()
-            return  # Skip normal generation during blend transition
-        
-        # Handle emotion transitions
-        if hasattr(self, 'emotion_blending') and self.emotion_blending:
-            self.update_emotion_transition()
-            # Continue with generation but blend between emotion chains
+            return  # Skip normal generation during transition
         
         try:
             chain = self.markov_chains[self.current_emotional_state]
@@ -4720,21 +4528,13 @@ File: {dataset['filename']}
                         self.prev_markov_state = self.current_markov_state
                         self.current_markov_state = next_state_key
                         
-                        # Parse and apply the new state with emotion blending support
+                        # Parse and apply the new state - TRUST THE RECORDED DATA COMPLETELY
                         if len(next_state) >= 4:
-                            # Generate positions
-                            new_positions = []
+                            # Apply recorded positions directly - the 40Hz recording already contains 
+                            # all the natural human timing, smoothness, and twitchiness exactly as performed
                             for i in range(4):
                                 target_pos = max(0.0, min(180.0, float(next_state[i])))
-                                new_positions.append(target_pos)
-                            
-                            # Apply emotion blending if transitioning
-                            if hasattr(self, 'emotion_blending') and self.emotion_blending:
-                                self.apply_emotion_blending(new_positions)
-                            else:
-                                # Apply positions directly when not blending
-                                for i in range(4):
-                                    self.finger_positions[i] = new_positions[i]
+                                self.finger_positions[i] = target_pos  # Pure data application - no artificial smoothing
                             
                             movement_phase = next_state[4] if len(next_state) > 4 else 'MEDIUM'
                             # Silenced raw data output
@@ -4776,21 +4576,19 @@ File: {dataset['filename']}
                     return
             
             # ROBUST: Double-check that our current state has transitions
-            current_state_key = str(self.current_markov_state) if self.current_markov_state is not None else None
-            if current_state_key not in transitions:
+            if self.current_markov_state not in transitions:
                 print(f"❌ Current state {self.current_markov_state} still not in transitions after recovery")
                 # Force pick the first available state
                 available_states = list(transitions.keys())
                 if available_states:
                     self.current_markov_state = available_states[0]
-                    current_state_key = str(self.current_markov_state)
                     print(f"🔄 Force-selecting first available state: {self.current_markov_state}")
                 else:
                     print("❌ No states available at all")
                     return
             
             # Get possible next states and their probabilities (exactly like golden master)
-            next_states = transitions[current_state_key]
+            next_states = transitions[self.current_markov_state]
             
             # ROBUST: Ensure next_states is not empty
             if not next_states:
@@ -4798,7 +4596,7 @@ File: {dataset['filename']}
                 available_states = list(transitions.keys())
                 if available_states:
                     self.current_markov_state = random.choice(available_states)
-                    next_states = transitions[str(self.current_markov_state)]
+                    next_states = transitions[self.current_markov_state]
                 else:
                     print("❌ No states available for fallback")
                     return
@@ -4860,7 +4658,7 @@ File: {dataset['filename']}
                     diversity_chance = base_diversity_chance + stuck_bonus
                     if random.random() < diversity_chance:
                         diversity_jump = True
-                        # Stuck state broken - silent operation
+                        print(f"🔓 Breaking stuck state after {self._state_repetition_count} repetitions (chance: {diversity_chance:.1%})")
                 elif random.random() < base_diversity_chance:
                     diversity_jump = True
                 
@@ -4890,14 +4688,14 @@ File: {dataset['filename']}
                         weights = [1.0 / (1.0 + dist * 0.1) for _, dist in candidate_states]  # Inverse distance weighting
                         selected_state, distance = random.choices(candidate_states, weights=weights)[0]
                         next_state_key = selected_state
-                        # Gentle diversity drift - silent operation
+                        print(f"🌊 Gentle diversity drift (avg Δ={distance:.1f}°): {next_state_key}")
                         
                         # Reset repetition counter since we're moving to a new state
                         self._state_repetition_count = 0
                     else:
                         # Fallback to normal selection if no reasonable candidates
                         next_state_key = random.choices(state_keys, weights=probabilities)[0]
-                        # Normal selection fallback - silent operation
+                        print("🎯 No suitable diversity candidates, using normal selection")
                 else:
                     # Normal weighted choice
                     next_state_key = random.choices(state_keys, weights=probabilities)[0]
@@ -4923,43 +4721,30 @@ File: {dataset['filename']}
                 # Use current finger positions as fallback
                 next_state = self.finger_positions.copy()
             
-            # Apply to servo positions with emotion blending support
+            # Apply to servo positions (simple, direct like golden master sets cursor)
             if len(next_state) >= 4:  # Should be (servo1, servo2, servo3, servo4)
-                # Generate new positions
-                new_positions = []
+                # ADAPTIVE EASING: Use data-driven easing from recorded movement characteristics
+                if hasattr(self, '_is_diversity_jump') and self._is_diversity_jump:
+                    # Much gentler easing for diversity jumps to avoid jarring movement
+                    easing_factor = 0.08  # Very gentle 8% easing for smooth diversity transitions
+                    print(f"🌊 Applying gentle diversity easing: {easing_factor}")
+                else:
+                    # Use the intelligent easing factor calculated from movement data
+                    if hasattr(self, '_intelligent_easing_factor'):
+                        easing_factor = self._intelligent_easing_factor
+                    else:
+                        # Fallback to normal easing
+                        easing_factor = self.generation_easing_factor  # 0.3 for normal smooth movement
+                
                 for i in range(self.num_fingers):
                     if i < len(next_state):
                         target_pos = float(next_state[i])
                         # Clamp target position to valid servo range
                         target_pos = max(0.0, min(180.0, target_pos))
-                        new_positions.append(target_pos)
-                    else:
-                        new_positions.append(self.finger_positions[i])
-                
-                # Apply emotion blending if transitioning
-                if hasattr(self, 'emotion_blending') and self.emotion_blending:
-                    self.apply_emotion_blending(new_positions)
-                else:
-                    # Apply normal easing when not blending emotions
-                    # ADAPTIVE EASING: Use data-driven easing from recorded movement characteristics
-                    if hasattr(self, '_is_diversity_jump') and self._is_diversity_jump:
-                        # Much gentler easing for diversity jumps to avoid jarring movement
-                        easing_factor = 0.08  # Very gentle 8% easing for smooth diversity transitions
-                        print(f"🌊 Applying gentle diversity easing: {easing_factor}")
-                    else:
-                        # Use the intelligent easing factor calculated from movement data
-                        if hasattr(self, '_intelligent_easing_factor'):
-                            easing_factor = self._intelligent_easing_factor
-                        else:
-                            # Fallback to normal easing
-                            easing_factor = self.generation_easing_factor  # 0.3 for normal smooth movement
-                    
-                    # Only update finger positions if not transitioning between datasets
-                    if not self.transitioning_to_dataset:
-                        for i in range(self.num_fingers):
-                            if i < len(new_positions):
-                                # Simple interpolation (like golden master cursor movement)
-                                self.finger_positions[i] = self.finger_positions[i] * (1 - easing_factor) + new_positions[i] * easing_factor
+                        # Only update finger positions if not transitioning between datasets
+                        if not self.transitioning_to_dataset:
+                            # Simple interpolation (like golden master cursor movement)
+                            self.finger_positions[i] = self.finger_positions[i] * (1 - easing_factor) + target_pos * easing_factor
                 
                 # Debug output for sudden/twitchy movements to verify preservation
                 if hasattr(self, '_intelligent_easing_factor') and self._intelligent_easing_factor > 0.9:
@@ -5107,89 +4892,10 @@ File: {dataset['filename']}
         if self.generating:
             self.stop_markov_generation()
     
-    def pause_markov_generation(self):
-        """Smoothly pause Markov generation while preserving current position."""
-        if not self.generating:
-            return
-            
-        # Store current state for smooth resume
-        if hasattr(self, 'current_markov_state'):
-            self.paused_markov_state = self.current_markov_state
-            self.paused_prev_state = getattr(self, 'prev_markov_state', None)
-        
-        # Store current finger positions for smooth resume
-        self.paused_finger_positions = self.finger_positions.copy()
-        
-        # IMMEDIATE FREEZE: Set targets to current positions to stop any ongoing movement
-        if hasattr(self, 'finger_targets'):
-            self.finger_targets = self.finger_positions.copy()
-        
-        # Cancel any ongoing movement animations
-        if hasattr(self, 'movement_timer') and self.movement_timer:
-            self.root.after_cancel(self.movement_timer)
-            self.movement_timer = None
-        
-        # Pause the generation timer but don't clear state
-        if hasattr(self, 'generation_timer') and self.generation_timer:
-            self.root.after_cancel(self.generation_timer)
-            self.generation_timer = None
-        
-        self.generating = False
-        # Flag to prevent control loop from taking over with direct control
-        self.is_paused_for_reactivity = True
-        self.markov_status.config(text="Paused - frozen in place", foreground="orange")
-    
-    def resume_markov_generation(self):
-        """Smoothly resume Markov generation from paused position."""
-        if self.generating:
-            return
-            
-        # Check if we have a Markov chain for current emotion
-        emotion = self.current_emotional_state
-        if emotion not in self.markov_chains:
-            print(f"❌ No Markov chain available for {emotion}")
-            return
-            
-        # Restore previous state if available
-        if hasattr(self, 'paused_markov_state') and self.paused_markov_state:
-            self.current_markov_state = self.paused_markov_state
-            if hasattr(self, 'paused_prev_state'):
-                self.prev_markov_state = self.paused_prev_state
-        
-        # Restore finger positions if available
-        if hasattr(self, 'paused_finger_positions'):
-            self.finger_positions = self.paused_finger_positions.copy()
-        
-        # Resume generation
-        self.generating = True
-        # Clear the reactivity pause flag
-        self.is_paused_for_reactivity = False
-        self.generation_start_time = time.time()
-        
-        self.markov_status.config(text="Generating - resumed smoothly", foreground="green")
-        
-        # Continue with next generation cycle
-        self._schedule_next_generation()
-    
-    def get_current_generation_delay(self):
-        """Get the current generation delay in milliseconds."""
-        if hasattr(self, 'generation_speed'):
-            return int(self.generation_speed * 1000)  # Convert seconds to milliseconds
-        else:
-            return 100  # Default 100ms if generation_speed not set
-    
-    def _schedule_next_generation(self):
-        """Schedule the next generation step with current timing."""
-        if not self.generating:
-            return
-            
-        # Use the existing generation timer method
-        self.start_generation_timer()
-    
     def load_saved_movements(self):
         """Load previously saved movements and Markov chains from disk."""
-        if not os.path.exists(self.dataset_directory):
-            print(f"📁 No dataset directory found: {self.dataset_directory}")
+        if not os.path.exists("movement_recordings"):
+            print("📁 No movement_recordings directory found")
             return
         
         loaded_count = 0
@@ -5197,7 +4903,7 @@ File: {dataset['filename']}
         
         for emotion_key in self.emotional_states.keys():
             # Find most recent recording for this emotion
-            pattern = os.path.join(self.dataset_directory, f"{emotion_key}_*.json")
+            pattern = f"movement_recordings/{emotion_key}_*.json"
             files = glob.glob(pattern)
             if not files:
                 continue
@@ -5210,8 +4916,8 @@ File: {dataset['filename']}
                     data = json.load(f)
                     
                 # Load movements (for playback compatibility)
-                if 'servo_movements' in data:
-                    self.recorded_movements[emotion_key] = data['servo_movements']
+                if 'movements' in data:
+                    self.recorded_movements[emotion_key] = data['movements']
                     loaded_count += 1
                     
                 # Load Markov chain
@@ -5328,17 +5034,17 @@ File: {dataset['filename']}
     def load_all_datasets_on_startup(self):
         """Load all datasets on startup with progress indication for autonomous operation."""
         try:
-            self.update_startup_progress(10, "Checking dataset directory...")
+            self.update_startup_progress(10, "Checking movement_recordings directory...")
             
-            if not os.path.exists(self.dataset_directory):
+            if not os.path.exists("movement_recordings"):
                 self.update_startup_progress(100, "No datasets found - ready for recording")
                 self.root.after(1000, self.hide_startup_loading)  # Hide after 1 second
-                print(f"📁 No dataset directory found: {self.dataset_directory} - system ready for fresh recordings")
+                print("📁 No movement_recordings directory - system ready for fresh recordings")
                 return
             
             # Get list of all dataset files
             self.update_startup_progress(20, "Scanning dataset files...")
-            all_files = [f for f in os.listdir(self.dataset_directory) if f.endswith('.json')]
+            all_files = [f for f in os.listdir("movement_recordings") if f.endswith('.json')]
             total_files = len(all_files)
             
             if total_files == 0:
@@ -5361,7 +5067,7 @@ File: {dataset['filename']}
                 file_progress = 30 + int((i / total_files) * 60)  # 30% to 90%
                 self.update_startup_progress(file_progress, f"Loading {filename}...")
                 
-                filepath = os.path.join(self.dataset_directory, filename)
+                filepath = os.path.join("movement_recordings", filename)
                 try:
                     with open(filepath, 'r') as f:
                         data = json.load(f)
@@ -5455,17 +5161,9 @@ File: {dataset['filename']}
                         markov_chain = data.get('markov_chain', {})
                         if markov_chain:
                             self.markov_chains[emotion] = markov_chain
-                            if config.DEBUG_HAND_CONTROLLER:
-                                print(f"🔗 Pre-loaded Markov chain for {emotion}: {markov_chain.get('unique_states', 0)} states")
-                        
-                        # Pre-load recorded movements for playback (fixes missing playback functionality)
-                        movements = data.get('servo_movements', [])
-                        if movements:
-                            self.recorded_movements[emotion] = movements
-                            if config.DEBUG_HAND_CONTROLLER:
-                                print(f"📼 Pre-loaded {len(movements)} movements for {emotion} playback")
+                            print(f"🔗 Pre-loaded Markov chain for {emotion}: {markov_chain.get('unique_states', 0)} states")
                     except Exception as e:
-                        print(f"⚠️ Error pre-loading data for {emotion}: {e}")
+                        print(f"⚠️ Error pre-loading chain for {emotion}: {e}")
             
             # Final status
             self.update_startup_progress(100, f"Ready! Loaded {compatible_files} datasets for {len(self.available_datasets)} emotions")
@@ -5473,79 +5171,160 @@ File: {dataset['filename']}
             # Auto-hide loading window after 2 seconds
             self.root.after(2000, self.hide_startup_loading)
             
-            if config.DEBUG_HAND_CONTROLLER:
-                print(f"✅ STARTUP COMPLETE: Loaded {compatible_files} compatible datasets for {len(self.available_datasets)} emotions")
-                if incompatible_files > 0:
-                    print(f"⚠️ Skipped {incompatible_files} incompatible files")
+            print(f"✅ STARTUP COMPLETE: Loaded {compatible_files} compatible datasets for {len(self.available_datasets)} emotions")
+            if incompatible_files > 0:
+                print(f"⚠️ Skipped {incompatible_files} incompatible files")
             
-                print(f"🚀 System ready for autonomous operation with pre-loaded datasets!")
+            print(f"🚀 System ready for autonomous operation with pre-loaded datasets!")
             
         except Exception as e:
             print(f"❌ Error during startup dataset loading: {e}")
             self.update_startup_progress(100, "Error loading datasets - manual refresh may be needed")
             self.root.after(3000, self.hide_startup_loading)
 
+    def _async_load_datasets(self):
+        """Load datasets asynchronously to avoid blocking GUI initialization."""
+        try:
+            # Load datasets without GUI updates from background thread
+            self._load_datasets_background()
+            # Schedule completion on main thread
+            self.root.after(0, self._complete_dataset_loading)
+        except Exception as e:
+            print(f"❌ Background dataset loading failed: {e}")
+            # Schedule error handling on main thread
+            self.root.after(0, self._handle_dataset_loading_error)
+    
+    def _load_datasets_background(self):
+        """Load datasets in background without GUI updates."""
+        import os
+        import json
+        import glob
+        
+        # Same logic as load_all_datasets_on_startup but without GUI updates
+        print("🔄 Background: Loading datasets...")
+        
+        if not os.path.exists("movement_recordings"):
+            print("📁 No movement_recordings directory - system ready for fresh recordings")
+            return
+            
+        all_files = [f for f in os.listdir("movement_recordings") if f.endswith('.json')]
+        if not all_files:
+            print("📁 No dataset files found - system ready for fresh recordings")
+            return
+            
+        # Load datasets without progress updates
+        compatible_files = 0
+        incompatible_files = 0
+        
+        for filename in all_files:
+            try:
+                filepath = os.path.join("movement_recordings", filename)
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+                
+                emotion = data.get('emotion', 'unknown')
+                if emotion in self.emotional_states:
+                    # Store dataset info
+                    if emotion not in self.available_datasets:
+                        self.available_datasets[emotion] = []
+                    
+                    dataset_info = {
+                        'filename': filename,
+                        'display_name': data.get('display_name', filename),
+                        'timestamp': data.get('timestamp', ''),
+                        'sample_count': len(data.get('movements', [])),
+                        'data': data
+                    }
+                    self.available_datasets[emotion].append(dataset_info)
+                    compatible_files += 1
+                else:
+                    incompatible_files += 1
+                    
+            except Exception as e:
+                print(f"❌ Error loading {filename}: {e}")
+                incompatible_files += 1
+        
+        print(f"✅ Background loading complete: {compatible_files} compatible datasets")
+        
+    def _complete_dataset_loading(self):
+        """Complete dataset loading on main thread."""
+        try:
+            self.update_startup_progress(100, "Datasets loaded successfully")
+            self.root.after(2000, self.hide_startup_loading)
+            print("🚀 System ready for autonomous operation!")
+        except Exception as e:
+            print(f"❌ Error completing dataset loading: {e}")
+            
+    def _handle_dataset_loading_error(self):
+        """Handle dataset loading error on main thread."""
+        try:
+            self.update_startup_progress(100, "Dataset loading failed")
+            self.root.after(3000, self.hide_startup_loading)
+        except Exception as e:
+            print(f"❌ Error handling dataset loading error: {e}")
 
-# Global interface instance for machine.py integration
-_global_interface = None
+    def _load_datasets_headless(self):
+        """Load datasets without any GUI updates for headless mode."""
+        try:
+            import os
+            import json
+            
+            if not os.path.exists("movement_recordings"):
+                print("📁 No movement_recordings directory - system ready for fresh recordings")
+                return
+                
+            all_files = [f for f in os.listdir("movement_recordings") if f.endswith('.json')]
+            if not all_files:
+                print("📁 No dataset files found - system ready for fresh recordings")
+                return
+                
+            # Load datasets without any GUI updates
+            compatible_files = 0
+            
+            for filename in all_files:
+                try:
+                    filepath = os.path.join("movement_recordings", filename)
+                    with open(filepath, 'r') as f:
+                        data = json.load(f)
+                    
+                    emotion = data.get('emotion', 'unknown')
+                    if emotion in self.emotional_states:
+                        # Store dataset info
+                        if emotion not in self.available_datasets:
+                            self.available_datasets[emotion] = []
+                        
+                        dataset_info = {
+                            'filename': filename,
+                            'display_name': data.get('display_name', filename),
+                            'timestamp': data.get('timestamp', ''),
+                            'sample_count': len(data.get('movements', [])),
+                            'data': data
+                        }
+                        self.available_datasets[emotion].append(dataset_info)
+                        compatible_files += 1
+                        
+                        # IMMEDIATELY load the Markov chain for this emotion
+                        if 'markov_chain' in data:
+                            print(f"🔗 Pre-loading Markov chain for {emotion} from {filename}")
+                            self.markov_chains[emotion] = data['markov_chain']
+                            print(f"✅ Markov chain loaded for {emotion}: {data['markov_chain'].get('unique_states', 0)} states")
+                        
+                except Exception as e:
+                    print(f"❌ Error loading {filename}: {e}")
+            
+            print(f"✅ Headless loading complete: {compatible_files} compatible datasets")
+            print(f"🔗 Loaded Markov chains for: {list(self.markov_chains.keys())}")
+            
+        except Exception as e:
+            print(f"❌ Error in headless dataset loading: {e}")
 
-def start_hand_controller():
-    """Start the hand controller interface for machine.py integration."""
-    global _global_interface
-    if _global_interface is None:
-        print("🤖 Starting hand controller interface...")
-        _global_interface = HandControlInterface()
-    return _global_interface
-
-def stop_hand_controller():
-    """Stop the hand controller interface."""
-    global _global_interface
-    if _global_interface:
-        print("🛑 Stopping hand controller interface...")
-        _global_interface.cleanup_all_timers()
-        _global_interface = None
-
-def set_emotion(emotion):
-    """Set the current emotional state."""
-    global _global_interface
-    if _global_interface:
-        _global_interface.switch_emotional_state(emotion)
-
-def send_reactivity_data(data):
-    """Send reactivity data to the hand controller."""
-    global _global_interface
-    if _global_interface:
-        # This would integrate with reactivity system if needed
-        pass
-
-def get_status():
-    """Get current hand controller status."""
-    global _global_interface
-    if _global_interface:
-        return {
-            'active': True,
-            'emotion': _global_interface.current_emotional_state,
-            'datasets_available': len(_global_interface.available_datasets)
-        }
-    return {'active': False}
-
-def change_to_emotion(emotion):
-    """Change to a specific emotion (alias for set_emotion)."""
-    set_emotion(emotion)
-
-def start_autonomous_mode():
-    """Start autonomous mode."""
-    global _global_interface
-    if _global_interface:
-        # Autonomous mode is already running by default
-        print("🤖 Hand controller autonomous mode active")
 
 def main():
     """Main function to start the interface."""
-    print("[START] Starting Hand Control Interface...")
+    print("[START] Starting Clean Emotional Hand Control...")
     
     # Create and run the interface
-    interface = HandControlInterface()
+    interface = CleanCursorInterface()
     
     def on_closing():
         """Handle application closing - cleanup timers and resources."""
