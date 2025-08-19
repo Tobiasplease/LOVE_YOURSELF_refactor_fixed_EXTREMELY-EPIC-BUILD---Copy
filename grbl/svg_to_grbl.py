@@ -17,9 +17,11 @@ sys.path.insert(0, grbl_path)
 
 from grbl_utils import find_grbl_port, initialize_grbl_for_drawing, execute_gcode_file, convert_with_vpype, convert_gcode_to_servo_format
 
+#   G20 is inches
 #   G21 (millimeters) is standard for most plotters since:
 #   - SVG coordinates are typically in mm or pixels
 #   - Easier to work with small precise movements
+
 
 #   G17 (XY plane) is essential because:
 #   - We're doing 2D plotting on the XY plane
@@ -61,6 +63,7 @@ def main():
     parser.add_argument("--origin-x", type=float, default=0, help="Work origin X (default: 0)")
     parser.add_argument("--origin-y", type=float, default=0, help="Work origin Y (default: 0)")
     parser.add_argument("--feed-rate", type=int, default=3000, help="Feed rate (default: 3000)")
+    parser.add_argument("--scale-to", help="Scale to fit size (e.g., '50x50mm', '100x100mm')")
     parser.add_argument("--no-execute", action="store_true", help="Generate G-code only, don't execute")
     parser.add_argument("--temp-dir", help="Directory for temporary files (default: system temp)")
 
@@ -88,20 +91,21 @@ def main():
     try:
         origin_offset = (args.offset_x, args.offset_y, 0)
 
-        convert_with_vpype(args.svg_file, output_file_vpype)
+        convert_with_vpype(args.svg_file, output_file_vpype, scale_to=args.scale_to)
         print(f"[SUCCESS] V-PYPE G-code generated: {output_file_vpype}")
-        convert_gcode_to_servo_format(output_file_vpype, output_file_adjusted, origin_offset)
+        convert_gcode_to_servo_format(output_file_vpype, output_file_adjusted)
         print(f"[SUCCESS] Servo G-code generated: {output_file_adjusted}")
 
         # Step 4: Execute on GRBL (if requested)
         if not args.no_execute:
-            print("[STEP 3] Executing on GRBL...")
+            print("[INFO] Executing on GRBL...")
 
             try:
                 # Connect to GRBL
                 ser = find_grbl_port()
 
                 # Initialize GRBL
+                # todo ORIGIN OFFSET?!
                 initialize_grbl_for_drawing(ser, origin_x=args.origin_x, origin_y=args.origin_y, feed_rate=args.feed_rate)
 
                 # Execute G-code

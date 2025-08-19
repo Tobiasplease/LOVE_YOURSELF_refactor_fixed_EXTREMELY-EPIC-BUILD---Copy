@@ -151,13 +151,19 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT):
     raise TimeoutError("Homing took too long")
 
 
-def convert_with_vpype(svg_file, output_file):
+def convert_with_vpype(svg_file, output_file, scale_to=None):
     """Convert SVG to G-code using vpype with vpype-gcode plugin"""
     try:
         # Use one of the built-in profiles, then post-process for servo commands
         # temp_gcode = output_file + ".temp"
 
-        cmd = ["vpype", "read", svg_file, "linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcode", output_file]
+        cmd = ["vpype", "read", svg_file]
+
+        # Add scaling if specified
+        if scale_to:
+            cmd.extend(["layout", "--fit-to-margins", "0", scale_to])
+
+        cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcode", output_file])
 
         print(f"[INFO] Kör vpype med gcode plugin: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -228,7 +234,7 @@ def convert_with_vpype(svg_file, output_file):
 #         return False
 
 
-def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
+def convert_gcode_to_servo_format(input_gcode, output_gcode):
     """Convert vpype-generated G-code to servo format"""
     try:
         with open(input_gcode, "r") as f:
