@@ -44,6 +44,29 @@ except OSError:
 
 
 class MemoryMixin:
+    def score_motif_with_tinyllama(self, motif: str, context: str = "") -> float:
+        """Use TinyLlama to judge motif novelty/emotional interest. Returns score 0.0-1.0."""
+        # Use emotional_voice_model (TinyLlama) for scoring
+        if not hasattr(self, 'emotional_voice_model'):
+            return 0.5  # fallback
+        try:
+            # Build prompt for TinyLlama
+            prompt = f"How novel and emotionally interesting is the motif '{motif}' in this context? Reply with a score from 0 (boring/common) to 1 (highly novel/emotionally charged). Context: {context}"
+            # Use model_wrapper to query TinyLlama
+            if hasattr(self, 'model') and hasattr(self.model, 'query_tinyllama'):
+                score_str = self.model.query_tinyllama(prompt)
+                try:
+                    score = float(score_str.strip())
+                    return max(0.0, min(1.0, score))
+                except Exception:
+                    pass
+            # Fallback: use emotional_voice as proxy
+            if hasattr(self, 'emotional_voice') and motif in self.emotional_voice:
+                return 0.7
+        except Exception:
+            pass
+        return 0.5  # default if uncertain
+
     def __init__(self) -> None:
         # Experience queues
         self.memory_queue: Deque[dict] = deque(maxlen=MAX_MEMORY_ENTRIES)
@@ -181,9 +204,17 @@ class MemoryMixin:
             self.motif_first_seen[motif] = now_time
         self.motif_last_seen[motif] = now_time
         self.current_motifs.add(motif)
-        if motif not in self.motif_confidence:
-            self.motif_confidence[motif] = 0.4  # default to low confidence
-            self.motif_confirmed[motif] = False
+        # Score motif with TinyLlama for novelty/emotional interest
+        context = " | ".join(list(self.current_motifs)[-3:])
+        score = self.score_motif_with_tinyllama(motif, context)
+        # Weighted motif system: weight = frequency * score
+        if not hasattr(self, 'motif_weights'):
+            self.motif_weights = {}
+        freq = self.motif_counter[motif]
+        self.motif_weights[motif] = freq * score
+        # Store confidence as score for now
+        self.motif_confidence[motif] = score
+        self.motif_confirmed[motif] = score > 0.6
 
     def cleanup_motifs(self):
         """Aggressively clean motifs - only keep truly meaningful recurring elements."""

@@ -6,11 +6,19 @@ Allows switching between LLaVA, Qwen, and other models with optimized parameters
 # Model-specific generation options
 MODEL_GENERATION_OPTIONS = {
     "llava:7b-v1.6-mistral-q5_1": {
-        "temperature": 0.95,
-        "top_p": 0.9,
+        "temperature": 1.2,    # Higher for more emotional variety and fragmentation
+        "top_p": 0.85,         # Slightly more focused to encourage natural cutoffs
         "repeat_penalty": 1.3,
         "num_ctx": 4096,
-        "stop": []
+        "stop": [
+            # Encourage natural fragmentation
+            "However,", "Moreover,", "Furthermore,", "Additionally,", "In conclusion,",
+            "As I observe,", "As I continue to", "As I watch", "As I look",
+            "The combination of", "This sense of", "The presence of",
+            # Stop overly analytical language
+            "This suggests that", "It appears that", "This indicates",
+            "One could argue", "It's worth noting"
+        ]
     },
     
     "qwen2.5vl:3b": {

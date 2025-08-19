@@ -1,3 +1,4 @@
+LIGHTBULB_SENSITIVITY = 2.0  # Default sensitivity for frame diff to PWM mapping
 import os
 
 from config.prompt_templates import *  # noqa: F401
@@ -93,6 +94,8 @@ DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
 REACTIVITY_PAUSE_THRESHOLD = 0.30  # Activity level to trigger pause
 REACTIVITY_PAUSE_DURATION = 4.0   # Seconds to pause Markov generation
 REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
+USE_LIGHTBULB_PWM = True
+LIGHTBULB_SERIAL_PORT = "COM4"  # Update as needed
 
 # ATT: TOBIAS
 # TO SEE ONLY CLEAN CAPTIONS:

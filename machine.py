@@ -7,6 +7,8 @@ import subprocess
 import os
 import signal
 import atexit
+from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY
+from servo_control.lightbulb_pwm import LightbulbController
 
 
 def parse_args():
@@ -82,12 +84,21 @@ VERBOSE = False
 
 # === INIT ===
 debug_print("Opening camera", "INIT")
+lightbulb = None
+if USE_LIGHTBULB_PWM:
+    try:
+        lightbulb = LightbulbController(LIGHTBULB_SERIAL_PORT)
+    except Exception as e:
+        print(f"Lightbulb PWM controller init failed: {e}")
 cap = cv2.VideoCapture(CAMERA_INDEX if "CAMERA_INDEX" in globals() else 0)
 _global_cap = cap
 if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 debug_print("Camera opened successfully", "INIT")
+# Increase camera resolution (e.g., 1280x720)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 proto = f"{MODEL_PATH}/deploy.prototxt"
 model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
@@ -103,12 +114,11 @@ if USE_SERVO:
     time.sleep(2)
 else:
     servos = None
-
-lung_angle = 0.0
-breath_speed = 4.0
-breath_paused = False
-pause_start_time = 0
-last_breath_direction = None
+    lung_angle = 0.0
+    breath_speed = 4.0
+    breath_paused = False
+    pause_start_time = 0
+    last_breath_direction = None
 
 last_mood_time = 0
 last_seen_time = time.time()
@@ -381,6 +391,12 @@ def mood_update_thread(frame, timestamp):
             snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
             cv2.imwrite(snapshot_path, frame)
             debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
+            # Lightbulb flicker on snapshot
+            if USE_LIGHTBULB_PWM and lightbulb:
+                try:
+                    lightbulb.flicker(duration=0.2, brightness=255)
+                except Exception as e:
+                    print(f"Lightbulb PWM flicker failed: {e}")
 
             try:
                 # First: Update captioner to generate new captions
@@ -399,6 +415,12 @@ def mood_update_thread(frame, timestamp):
                     clean_caption = captioner.last_caption
                     if clean_caption.lower().startswith("caption:"):
                         clean_caption = clean_caption[len("caption:") :].strip()
+                    # Lightbulb ease on caption print
+                    if USE_LIGHTBULB_PWM and lightbulb:
+                        try:
+                            lightbulb.ease(duration=0.6, brightness=180)
+                        except Exception as e:
+                            print(f"Lightbulb PWM ease failed: {e}")
 
                     if PRINT_CLEAN_CAPTIONS:
                         print(f"\n{clean_caption}\n")
@@ -434,15 +456,37 @@ last_display_time = 0
 DISPLAY_THROTTLE_INTERVAL = 0.1  # Show camera feed max 10 FPS to save memory
 
 try:
+    prev_gray = None
+    smoothed_pwm = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             continue
-        
+
         object_detector.set_frame(frame)
 
         frame = cv2.resize(frame, (320, 240))
         frame = cv2.flip(frame, 1)
+
+        # === RAW FRAME DIFF FOR PWM ===
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if prev_gray is not None:
+            diff = cv2.absdiff(prev_gray, gray)
+            diff_score = diff.mean() * LIGHTBULB_SENSITIVITY  # Range: 0-255, scaled
+            max_diff = 50.0
+            diff_score = max(0, min(max_diff, diff_score))
+            pwm_value = int((diff_score / max_diff) * 255)
+            alpha = 0.2  # Smoothing factor
+            smoothed_pwm = int(alpha * pwm_value + (1 - alpha) * smoothed_pwm)
+            if diff_score < 1:
+                smoothed_pwm = 0
+            # PWM debug print removed for silent operation
+            if USE_LIGHTBULB_PWM and lightbulb:
+                try:
+                    lightbulb.set_pwm(smoothed_pwm)
+                except Exception as e:
+                    print(f"Lightbulb PWM send failed: {e}")
+        prev_gray = gray.copy()
 
         # Force garbage collection periodically to prevent memory accumulation
         frame_count += 1
@@ -650,6 +694,15 @@ try:
             if reactivity_metrics.get('paused', False):
                 cv2.rectangle(frame, (bar_x + bar_w - 30, bar_y + 10), (bar_x + bar_w - 10, bar_y + 30), (0, 0, 255), -1)
                 cv2.putText(frame, "PAUSE", (bar_x + bar_w - 28, bar_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+
+                # === LIGHTBULB PWM OUTPUT ===
+                if USE_LIGHTBULB_PWM and lightbulb:
+                    try:
+                        chaos_val = reactivity_metrics.get('chaos_multiplier', 0.3)
+                        pwm_value = int(max(0, min(1, (chaos_val - 0.3) / 3.2)) * 255)
+                        lightbulb.set_pwm(pwm_value)
+                    except Exception as e:
+                        print(f"Lightbulb PWM send failed: {e}")
 
         # MEMORY FIX: Throttle camera display to prevent graphics memory exhaustion
         current_time = time.time()

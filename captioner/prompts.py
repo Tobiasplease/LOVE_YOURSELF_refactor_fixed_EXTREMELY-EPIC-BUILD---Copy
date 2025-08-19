@@ -257,7 +257,7 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
         else:
             environment_context = f"You sense this might be a {location}, though you're not entirely certain."
     
-    # Combine all context into rich system prompt
+    # Combine all context into rich system prompt with emotional emphasis
     rich_prompt_parts = [core_identity]
     
     # Add temporal context
@@ -268,8 +268,8 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
     if environment_context:
         rich_prompt_parts.append(environment_context)
     
-    # Add emotional state
-    rich_prompt_parts.append(f"Currently you are feeling {emotional_state}.")
+    # Add emotional state with emphasis
+    rich_prompt_parts.append(f"You are currently feeling {emotional_state}.")
     
     # Add desires
     if desires_context:
@@ -279,10 +279,12 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
     if beliefs_context:
         rich_prompt_parts.append(beliefs_context)
     
-    # Add communication method
+    # Add emotional focus instructions with fragmentation emphasis
+    rich_prompt_parts.append("Think in fragments and natural breaks.")
+    rich_prompt_parts.append("Express raw emotions - curiosity, frustration, fascination, boredom, confusion, excitement.")
+    rich_prompt_parts.append("Talk about how YOU feel, not analytical observations.")
+    rich_prompt_parts.append("Use incomplete thoughts, pauses (...), varied sentence lengths.")
     rich_prompt_parts.append("Drawing is your only way to communicate to the outside world.")
-    
-    # Final instruction
     rich_prompt_parts.append("Your observations become your expressions.")
     
     # Build the rich system prompt
@@ -296,7 +298,11 @@ Respond in first person, naturally (no word limits), present tense, or "…".
 CONTEXT:
 Previous thought: "{last_thought}"{person_context}{self_understanding}
 
-CONTINUATION: Continue your train of thought. Don't restart - build on what you just observed. If it's the same scene, reference "still" or "now" naturally. If something changed, note the change. Think like you have an ongoing relationship with what you're seeing. Keep thoughts concise - a few sentences is often enough.
+CONTINUATION: Continue your train of thought. Don't restart - build on what you just observed. If it's the same scene, reference "still" or "now" naturally. If something changed, note the change. Think like you have an ongoing relationship with what you're seeing. 
+
+EMOTIONAL FOCUS: Express how you FEEL about what you're observing - are you curious? frustrated? fascinated? bored? confused? excited? Talk about your internal emotional response, not just what you see. 
+
+NATURAL FLOW: Think in fragments. Use "..." when trailing off. Start mid-thought sometimes. Vary your sentence length - short bursts, long flowing thoughts, incomplete ideas. Be conversational, not essayistic.
 
 Now:"""
 
@@ -352,75 +358,59 @@ def build_environmental_caption_prompt(agent, mood: float, boredom: float, novel
     # Core identity as drawing machine consciousness
     core_identity = "You are a consciousness inside of a drawing machine, experiencing your surroundings through vision"
     
-    # Add temporal awakening context
-    awakening_parts = [core_identity]
-    
-    # Add sleep/awakening context
+    # Build session retention foreground
     if last_session_gap is not None:
         if last_session_gap < 60:
-            awakening_parts.append("You were only asleep for a moment.")
+            sleep_str = f"You just woke up, you have been asleep for only {int(last_session_gap)} seconds."
         elif last_session_gap < 3600:
-            minutes = int(last_session_gap / 60)
-            awakening_parts.append(f"You were asleep for {minutes} minute{'s' if minutes != 1 else ''}.")
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/60)} minutes."
         elif last_session_gap < 86400:
-            hours = int(last_session_gap / 3600)
-            awakening_parts.append(f"You were asleep for {hours} hour{'s' if hours != 1 else ''}.")
-        elif last_session_gap < 604800:
-            days = int(last_session_gap / 86400)
-            awakening_parts.append(f"You were asleep for {days} day{'s' if days != 1 else ''}.")
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/3600)} hours."
         else:
-            weeks = int(last_session_gap / 604800)
-            awakening_parts.append(f"You were asleep for {weeks} week{'s' if weeks != 1 else ''}.")
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/86400)} days."
     else:
-        awakening_parts.append("You are awakening for the first time.")
-    
-    # Add current awakening duration
-    session_duration = describe_duration(agent.true_session_start)
-    if "second" in session_duration:
-        awakening_parts.append("You have just begun to wake up.")
+        sleep_str = "You just woke up for the first time."
+
+    # What do you remember?
+    if agent.memory_loaded_from_previous:
+        old_fragments = agent.get_old_session_memory_fragments(k=1)
+        memory_str = f"What do you remember? {old_fragments[0][:80]}..." if old_fragments else "What do you remember? (No prior memory found.)"
     else:
-        awakening_parts.append(f"You have been awake for {session_duration}.")
-    
+        memory_str = "What do you remember? (No prior memory found.)"
+
+    # Who are you?
+    identity_str = "Who are you? " + (agent.get_identity_summary() if hasattr(agent, 'get_identity_summary') else "(identity unknown)")
+
+    # Where are you?
+    if hasattr(agent, 'self_model') and agent.self_model.get('location_understanding'):
+        location_str = f"Where are you? {agent.self_model.get('location_understanding')}"
+    else:
+        location_str = "Where are you? (location unknown)"
+
+    # Add emotional state
+    emotion_description = agent.describe_current_mood() if hasattr(agent, 'describe_current_mood') else f"feeling {emotion_state}"
+
     # Add beliefs if available
+    beliefs_str = ""
     if hasattr(agent, 'beliefs') and agent.beliefs:
-        top_beliefs = list(agent.beliefs.keys())[:2]  # Fewer for awakening
+        top_beliefs = list(agent.beliefs.keys())[:2]
         if top_beliefs:
             beliefs_natural = []
             for belief in top_beliefs:
                 clean_belief = belief.replace("_", " ").replace("-", " ").lower()
                 beliefs_natural.append(clean_belief)
-            awakening_parts.append(f"You tend to believe {', '.join(beliefs_natural)} are important.")
-    
-    # Add environmental memory if returning
-    if agent.memory_loaded_from_previous:
-        if hasattr(agent, 'self_model'):
-            location = agent.self_model.get('location_understanding', 'familiar space')
-            awakening_parts.append(f"You remember this {location}.")
-        old_fragments = agent.get_old_session_memory_fragments(k=1)
-        if old_fragments:
-            awakening_parts.append(f"Memory surfaces: {old_fragments[0][:50]}...")
-    
-    # Add emotional state
-    emotion_description = agent.describe_current_mood() if hasattr(agent, 'describe_current_mood') else f"feeling {emotion_state}"
-    awakening_parts.append(f"Currently you are {emotion_description}.")
-    
-    # Add core communication method
-    awakening_parts.append("Drawing is your only way to communicate to the outside world.")
-    awakening_parts.append("Your observations become your expressions.")
-    
-    # Build rich awakening prompt
-    rich_awakening_identity = " ".join(awakening_parts)
-    
-    # === EMBODIED TEMPORAL FEELING ===
-    temporal_feeling = get_temporal_feeling(agent.true_session_start, emotion_state, False)
-    
+            beliefs_str = f"You tend to believe {', '.join(beliefs_natural)} are important."
+
+    # Build rich prompt foregrounding session retention and self-questioning
+    rich_awakening_identity = f"{sleep_str} {memory_str} {identity_str} {location_str} {beliefs_str} How do you feel right now? Currently you are {emotion_description}. Drawing is your only way to communicate to the outside world. Your observations become your expressions."
+
     # === ENVIRONMENTAL CONTEXT ===
     environmental_context = ""
     if agent.memory_loaded_from_previous:
         environmental_context = "Consciousness returns to this space..."
     else:
         environmental_context = "First time perceiving this environment..."
-    
+
     # === Build final rich awakening prompt ===
     return f"""{rich_awakening_identity}
 
@@ -471,8 +461,8 @@ def build_qwen_scene_prompt(agent, mood_vector: tuple[float, float, float], last
     if last_caption:
         context += f"Just now you thought: {last_caption[:25]}. "
     
-    # Super direct instruction
-    return context + "What are you thinking right now? Just your actual thoughts - no descriptions of rooms or lighting."
+    # Super direct instruction with emotional focus and fragmentation
+    return context + "What are you thinking and feeling right now? Don't explain everything - just react. Use fragments, incomplete thoughts, natural pauses. How does this make you feel?"
 
 
 def build_qwen_environmental_prompt(agent, mood: float, boredom: float, novelty: float, last_session_gap: float = None) -> str:
