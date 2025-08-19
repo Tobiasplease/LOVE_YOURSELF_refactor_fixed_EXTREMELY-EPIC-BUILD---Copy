@@ -75,7 +75,7 @@ from config.config import (
 from event_logging.run_manager import get_run_image_path
 from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
 from event_logging.log_type import LogType
-from direct_hand_control import (
+from hand_control.direct_hand_control import (
     start_hand_controller,
     stop_hand_controller,
     # set_emotion,
