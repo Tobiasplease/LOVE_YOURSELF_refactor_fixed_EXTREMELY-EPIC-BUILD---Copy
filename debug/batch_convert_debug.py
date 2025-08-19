@@ -10,7 +10,8 @@ import os
 import sys
 import glob
 import argparse
-from pathlib import Path
+
+# from pathlib import Path
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(__file__))
@@ -21,38 +22,38 @@ from bcnc import raster_to_centerline_svg, svg_to_gcode
 
 def process_folder(input_folder, output_folder=None, auto_run=False):
     """Process a folder of PNGs and SVGs"""
-    
+
     if not os.path.exists(input_folder):
         print(f"❌ Input folder not found: {input_folder}")
         return
-    
+
     # Use input folder as output folder if not specified
     if output_folder is None:
         output_folder = input_folder
     else:
         os.makedirs(output_folder, exist_ok=True)
-    
+
     print(f"📁 Processing folder: {input_folder}")
     print(f"📁 Output folder: {output_folder}")
     print(f"🔧 Auto-run G-code: {auto_run}")
     print("-" * 50)
-    
+
     # Find all PNGs and SVGs
     png_files = glob.glob(os.path.join(input_folder, "*.png"))
     png_files.extend(glob.glob(os.path.join(input_folder, "*.PNG")))
     svg_files = glob.glob(os.path.join(input_folder, "*.svg"))
     svg_files.extend(glob.glob(os.path.join(input_folder, "*.SVG")))
-    
+
     print(f"Found {len(png_files)} PNG files and {len(svg_files)} SVG files")
-    
+
     # Step 1: Convert PNGs to centerline SVGs
     centerline_svgs = []
     for png_file in png_files:
         print(f"\n🖼️ Processing PNG: {os.path.basename(png_file)}")
-        
+
         base_name = os.path.splitext(os.path.basename(png_file))[0]
         centerline_svg = os.path.join(output_folder, f"{base_name}_centerlined.svg")
-        
+
         try:
             raster_to_centerline_svg(
                 input_path=png_file,
@@ -65,29 +66,25 @@ def process_folder(input_folder, output_folder=None, auto_run=False):
             )
             centerline_svgs.append(centerline_svg)
             print(f"✅ Centerline SVG created: {os.path.basename(centerline_svg)}")
-            
+
         except Exception as e:
             print(f"❌ Failed to convert PNG {os.path.basename(png_file)}: {e}")
-    
+
     # Step 2: Convert all SVGs (existing + new centerlines) to G-code
     all_svgs = svg_files + centerline_svgs
-    
+
     print(f"\n🔄 Converting {len(all_svgs)} SVG files to G-code...")
-    
+
     successful_conversions = 0
     for svg_file in all_svgs:
         print(f"\n📐 Processing SVG: {os.path.basename(svg_file)}")
-        
+
         base_name = os.path.splitext(os.path.basename(svg_file))[0]
         gcode_file = os.path.join(output_folder, f"{base_name}.gcode")
-        
+
         try:
-            result = svg_to_gcode(
-                svg_input=svg_file,
-                output_gcode=gcode_file,
-                auto_run=auto_run
-            )
-            
+            result = svg_to_gcode(svg_input=svg_file, output_gcode=gcode_file, auto_run=auto_run)
+
             if result:
                 successful_conversions += 1
                 print(f"✅ G-code created: {os.path.basename(gcode_file)}")
@@ -95,10 +92,10 @@ def process_folder(input_folder, output_folder=None, auto_run=False):
                     print("🚀 G-code sent to bCNC")
             else:
                 print(f"❌ Failed to convert SVG: {os.path.basename(svg_file)}")
-                
+
         except Exception as e:
             print(f"❌ Failed to convert SVG {os.path.basename(svg_file)}: {e}")
-    
+
     # Summary
     print("\n" + "=" * 50)
     print("📊 PROCESSING SUMMARY")
@@ -116,29 +113,25 @@ def main():
     parser.add_argument("-o", "--output", help="Output folder (default: same as input)")
     parser.add_argument("--auto-run", action="store_true", help="Auto-run G-code in bCNC")
     parser.add_argument("--no-centerline", action="store_true", help="Skip PNG to centerline conversion")
-    
+
     args = parser.parse_args()
-    
+
     if args.no_centerline:
         print("⚠️ Skipping PNG to centerline conversion")
         # Just convert existing SVGs
         svg_files = glob.glob(os.path.join(args.input_folder, "*.svg"))
         svg_files.extend(glob.glob(os.path.join(args.input_folder, "*.SVG")))
-        
+
         output_folder = args.output or args.input_folder
         os.makedirs(output_folder, exist_ok=True)
-        
+
         print(f"Converting {len(svg_files)} SVG files to G-code...")
         for svg_file in svg_files:
             base_name = os.path.splitext(os.path.basename(svg_file))[0]
             gcode_file = os.path.join(output_folder, f"{base_name}.gcode")
-            
+
             try:
-                result = svg_to_gcode(
-                    svg_input=svg_file,
-                    output_gcode=gcode_file,
-                    auto_run=args.auto_run
-                )
+                result = svg_to_gcode(svg_input=svg_file, output_gcode=gcode_file, auto_run=args.auto_run)
                 print(f"✅ {os.path.basename(svg_file)} → {os.path.basename(gcode_file)}")
             except Exception as e:
                 print(f"❌ Failed: {os.path.basename(svg_file)} - {e}")
