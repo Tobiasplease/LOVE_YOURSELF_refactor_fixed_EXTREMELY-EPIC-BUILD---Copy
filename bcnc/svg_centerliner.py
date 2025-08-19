@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
 from skimage.morphology import skeletonize
-from skimage.util import invert
+
+# from skimage.util import invert
 import svgwrite
 
 
@@ -13,14 +14,22 @@ def raster_to_centerline_svg(
     do_dilate=True,
     dilation_iterations=1,
     scale=1.0,
+    contrast_alpha=2.0,  # Contrast control (1.0 = no change, >1.0 = more contrast, above 3.0...bad?
+    contrast_beta=0,  # Brightness control (0 = no change)
 ):
 
     print("[INFO] Läser in bild...")
     img = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
 
     # === Förbehandling ===
+    # Step 1: Increase contrast, no greyscales
+    if contrast_alpha != 1.0 or contrast_beta != 0:
+        print(f"[INFO] Ökar kontrast (alpha={contrast_alpha}, beta={contrast_beta})...")
+        img = cv2.convertScaleAbs(img, alpha=contrast_alpha, beta=contrast_beta)  # type: ignore
+
+    # Step 2: Gaussian blur
     print("[INFO] Kör Gaussian blur...")
-    img = cv2.GaussianBlur(img, blur_kernel, 0)
+    img = cv2.GaussianBlur(img, blur_kernel, 0)  # type: ignore
 
     print(f"[INFO] Trösklar med värde {threshold_value}...")
     _, binary = cv2.threshold(img, threshold_value, 255, cv2.THRESH_BINARY)
@@ -40,19 +49,15 @@ def raster_to_centerline_svg(
     # === Konvertera till SVG ===
     print("[INFO] Konverterar till SVG...")
     skeleton_uint8 = (skeleton * 255).astype(np.uint8)
-    contours, _ = cv2.findContours(
-        skeleton_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
-    )
+    contours, _ = cv2.findContours(skeleton_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
     height, width = skeleton.shape
     dwg = svgwrite.Drawing(output_path, size=(f"{width*scale}px", f"{height*scale}px"))
 
     for cnt in contours:
-        points = [(p[0][0] * scale, p[0][1] * scale) for p in cnt]
+        points = [(p[0][0] * scale, p[0][1] * scale) for p in cnt]  # type: ignore
         if len(points) > 1:
-            dwg.add(
-                dwg.polyline(points=points, stroke="black", fill="none", stroke_width=1)
-            )
+            dwg.add(dwg.polyline(points=points, stroke="black", fill="none", stroke_width=1))
 
     dwg.save()
     print(f"[KLART] Sparade centerline-SVG till {output_path}")

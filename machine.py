@@ -3,7 +3,8 @@ import argparse
 import sys
 import cv2
 import threading
-import subprocess
+
+# import subprocess
 import os
 import signal
 import atexit
@@ -16,6 +17,7 @@ def parse_args():
     parser.add_argument("--config_override", type=str, help="Path to JSON config override file")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode with verbose output")
     return parser.parse_args()
+
 
 args = parse_args()
 
@@ -73,7 +75,15 @@ from config.config import (
 from event_logging.run_manager import get_run_image_path
 from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
 from event_logging.log_type import LogType
-from direct_hand_control import start_hand_controller, stop_hand_controller, set_emotion, send_reactivity_data, get_status, change_to_emotion, start_autonomous_mode
+from direct_hand_control import (
+    start_hand_controller,
+    stop_hand_controller,
+    # set_emotion,
+    send_reactivity_data,
+    get_status,
+    change_to_emotion,
+    start_autonomous_mode,
+)
 from reactivity.camera_reactive import CameraReactivityEngine
 
 
@@ -138,17 +148,18 @@ _global_state_manager = None
 _global_start_time = None
 _global_run_id = None
 
+
 def emergency_cleanup():
     """Emergency cleanup function that can be called from signal handlers."""
     global shutdown_in_progress, cleanup_completed
-    
+
     if shutdown_in_progress:
         print("[⚠️] Multiple shutdown signals - forcing exit")
         os._exit(1)
-        
+
     shutdown_in_progress = True
     print("[🛑] Emergency shutdown initiated...")
-    
+
     try:
         # Quick cleanup - no waiting
         if _global_object_detector:
@@ -157,32 +168,33 @@ def emergency_cleanup():
             _global_image_monitor.stop()
         if _global_cap:
             _global_cap.release()
-            
+
         # Emergency hand controller stop
         try:
             stop_hand_controller()
-        except:
+        except Exception:
             pass
-            
+
         cv2.destroyAllWindows()
         print("[✅] Emergency cleanup completed")
         cleanup_completed = True
-        
+
     except Exception as e:
         print(f"[❌] Emergency cleanup error: {e}")
     finally:
         os._exit(0)
 
+
 def graceful_cleanup():
     """Graceful cleanup with timeouts and error handling."""
     global shutdown_in_progress, cleanup_completed
-    
+
     if cleanup_completed:
         return
-        
+
     shutdown_in_progress = True
     print("[🛑] Graceful shutdown initiated...")
-    
+
     # Save session state first (most important)
     if _global_captioner and _global_mood_engine and _global_state_manager:
         try:
@@ -191,7 +203,7 @@ def graceful_cleanup():
             print("[✅] Session state saved successfully" if success else "[❌] Failed to save session state")
         except Exception as e:
             print(f"[❌] Error saving session state: {e}")
-    
+
     # Log session end
     if _global_start_time and _global_run_id:
         try:
@@ -203,7 +215,7 @@ def graceful_cleanup():
             )
         except Exception as e:
             print(f"[❌] Error logging session end: {e}")
-    
+
     # Stop threads with timeouts
     if _global_object_detector:
         try:
@@ -213,39 +225,41 @@ def graceful_cleanup():
                 print("[⚠️] Object detector thread didn't stop cleanly")
         except Exception as e:
             print(f"[❌] Error stopping object detector: {e}")
-    
+
     if _global_image_monitor:
         try:
             _global_image_monitor.stop()
         except Exception as e:
             print(f"[❌] Error stopping image monitor: {e}")
-    
+
     # Stop hand controller
     try:
         stop_hand_controller()
     except Exception as e:
         print(f"[❌] Error stopping hand controller: {e}")
-    
+
     # Release camera
     if _global_cap:
         try:
             _global_cap.release()
         except Exception as e:
             print(f"[❌] Error releasing camera: {e}")
-    
+
     try:
         cv2.destroyAllWindows()
     except Exception as e:
         print(f"[❌] Error destroying windows: {e}")
-    
+
     cleanup_completed = True
     print("[✅] Graceful shutdown completed")
+
 
 def signal_handler(signum, frame):
     """Handle interrupt signals."""
     print(f"\n[🔄] Received signal {signum}")
     graceful_cleanup()
     sys.exit(0)
+
 
 # Register signal handlers
 signal.signal(signal.SIGINT, signal_handler)
@@ -302,7 +316,7 @@ debug_print("Initializing direct hand controller integration", "INIT")
 hand_controller_started = start_hand_controller(headless=False)
 if hand_controller_started:
     debug_print("Hand controller started with UI", "INIT")
-    
+
     # Start autonomous mode (Markov generation) after successful initialization
     time.sleep(1)  # Give time for datasets to load
     if start_autonomous_mode():
@@ -319,10 +333,12 @@ debug_print("Initializing camera reactivity engine", "INIT")
 reactivity_engine = CameraReactivityEngine(sensitivity=1.8, smoothing_factor=0.85, pause_threshold=0.20, pause_duration=3.0)
 debug_print("Camera reactivity enabled - hand will respond to environmental changes", "INIT")
 
+
 # Set up image monitor with self-critique callback
 def on_drawing_complete(image_path: str):
     """Handle drawing completion with self-critique."""
     captioner.drawing.critique_drawing(image_path)
+
 
 image_monitor.on_image_complete = on_drawing_complete
 image_monitor.start()
@@ -334,16 +350,16 @@ if previous_state:
     # Apply state to components
     state_manager.apply_state_to_captioner(previous_state, captioner)
     state_manager.apply_state_to_mood_engine(previous_state, mood_engine)
-    
+
     # Send immediate mood update to hand controller with restored state
     debug_print("Sending restored mood to hand controller", "INIT")
-    
+
     # Direct integration - set emotion based on mood
     emotion = mood_engine.get_emotion_for_hand_controller()
     change_to_emotion(emotion)
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
-    
+
     # Reset last_caption so remnants from previous session are not printed
     captioner.last_caption = ""
     # Set memory loaded flag BEFORE generating awakening message
@@ -406,7 +422,7 @@ def mood_update_thread(frame, timestamp):
                     mood=mood_engine.get_current_mood(),
                     mood_vector=mood_engine.mood_vector,  # Pass 3D mood state
                     emotion_state=mood_engine.get_emotion_for_hand_controller(),  # Pass current emotion
-                    reactivity_data=reactivity_metrics
+                    reactivity_data=reactivity_metrics,
                 )
                 debug_print("Captioner updated successfully", "CAPTIONER")
 
@@ -429,7 +445,9 @@ def mood_update_thread(frame, timestamp):
                     current_emotion = mood_engine.get_emotion_for_hand_controller()
                     temporal_feeling = get_temporal_feeling(start_time, current_emotion, scene_stagnation=False)
 
-                    current_mood = mood_engine.analyze_mood(clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling)
+                    current_mood = mood_engine.analyze_mood(
+                        clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling
+                    )
                     debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
 
                     # Update hand controller with new emotional state
@@ -445,6 +463,7 @@ def mood_update_thread(frame, timestamp):
             last_snapshot_time = now
     else:
         debug_print("Captioner is processing, skipping mood update", "MOOD")
+
 
 # === REACTIVITY PAUSE SYSTEM STATE ===
 last_pause_time = 0.0
@@ -492,69 +511,68 @@ try:
         frame_count += 1
         if frame_count % 100 == 0:  # Every 100 frames
             import gc
+
             gc.collect()
 
         # === CAMERA REACTIVITY PROCESSING ===
         # Process frame for real-time behavioral reactivity
         reactivity_metrics = reactivity_engine.process_frame(frame)
         frame_count += 1
-        
+
         # Get current time for pause/cooldown calculations
         now = time.time()
-        
+
         # Add pause/cooldown information to metrics for display
         if pause_is_active:
             # Currently paused - show remaining pause time
             pause_elapsed = now - last_pause_time
             pause_remaining = max(0, REACTIVITY_PAUSE_DURATION - pause_elapsed)
-            reactivity_metrics['is_paused'] = True
-            reactivity_metrics['pause_remaining'] = pause_remaining
+            reactivity_metrics["is_paused"] = True
+            reactivity_metrics["pause_remaining"] = pause_remaining
         else:
             # Not paused - check cooldown
             cooldown_elapsed = now - last_pause_time
             cooldown_remaining = max(0, REACTIVITY_PAUSE_COOLDOWN - cooldown_elapsed)
-            reactivity_metrics['is_paused'] = False
-            reactivity_metrics['cooldown_remaining'] = cooldown_remaining
-        
+            reactivity_metrics["is_paused"] = False
+            reactivity_metrics["cooldown_remaining"] = cooldown_remaining
+
         # === REACTIVITY PAUSE SYSTEM ===
         # Check if activity level crosses threshold for pausing Markov generation
-        current_activity = reactivity_metrics.get('activity_level', 0.0)
-        
+        current_activity = reactivity_metrics.get("activity_level", 0.0)
+
         # Debug: Show activity level occasionally
         if frame_count % 180 == 0:  # Every ~6 seconds at 30fps
             debug_print(f"Current activity level: {current_activity:.3f} (threshold: {REACTIVITY_PAUSE_THRESHOLD})", "ACTIVITY")
-        
-        if (current_activity > REACTIVITY_PAUSE_THRESHOLD and 
-            not pause_is_active and 
-            now - last_pause_time > REACTIVITY_PAUSE_COOLDOWN):
-            
+
+        if current_activity > REACTIVITY_PAUSE_THRESHOLD and not pause_is_active and now - last_pause_time > REACTIVITY_PAUSE_COOLDOWN:
+
             # High activity detected - pause Markov generation
             pause_data = {
-                'action': 'pause',
-                'duration': REACTIVITY_PAUSE_DURATION,
-                'activity_level': float(current_activity)  # Convert numpy to Python float
+                "action": "pause",
+                "duration": REACTIVITY_PAUSE_DURATION,
+                "activity_level": float(current_activity),  # Convert numpy to Python float
             }
             if DEBUG_REACTIVITY_PAUSE:
                 debug_print(f"🚨 Sending pause command: {pause_data}", "REACTIVITY")
-            
+
             send_reactivity_data(pause_data)
             pause_is_active = True
             last_pause_time = now
             if DEBUG_REACTIVITY_PAUSE:
-                debug_print(f"🚨 High activity detected ({current_activity:.2f}) - pausing hand controller for {REACTIVITY_PAUSE_DURATION}s", "REACTIVITY")
-        
+                debug_print(
+                    f"🚨 High activity detected ({current_activity:.2f}) - pausing hand controller for {REACTIVITY_PAUSE_DURATION}s", "REACTIVITY"
+                )
+
         # Check if pause duration has expired OR activity dropped significantly
-        elif pause_is_active and (now - last_pause_time > REACTIVITY_PAUSE_DURATION or 
-                                 (current_activity < REACTIVITY_PAUSE_THRESHOLD * 0.1 and now - last_pause_time > 2.0)):  # Only resume early if activity is very low AND at least 2s have passed
+        elif pause_is_active and (
+            now - last_pause_time > REACTIVITY_PAUSE_DURATION or (current_activity < REACTIVITY_PAUSE_THRESHOLD * 0.1 and now - last_pause_time > 2.0)
+        ):  # Only resume early if activity is very low AND at least 2s have passed
             # Pause duration expired or activity dropped - resume Markov generation
             resume_reason = "duration expired" if now - last_pause_time > REACTIVITY_PAUSE_DURATION else "very low activity"
-            resume_data = {
-                'action': 'resume',
-                'activity_level': float(current_activity)  # Convert numpy to Python float
-            }
+            resume_data = {"action": "resume", "activity_level": float(current_activity)}  # Convert numpy to Python float
             if DEBUG_REACTIVITY_PAUSE:
                 debug_print(f"▶️ Sending resume command ({resume_reason}): {resume_data}", "REACTIVITY")
-                
+
             send_reactivity_data(resume_data)
             pause_is_active = False
             if DEBUG_REACTIVITY_PAUSE:
@@ -650,15 +668,15 @@ try:
             bar_w, bar_h = 200, 12
             bar_x = 10  # Left side
             bar_y = frame.shape[0] - 30  # Bottom with small margin
-            
+
             # Background (black with white border)
             cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (0, 0, 0), -1)
             cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (255, 255, 255), 2)
-            
+
             # Progress to pause bar (color changes with proximity)
-            progress = reactivity_metrics.get('progress_to_pause', 0)
+            progress = reactivity_metrics.get("progress_to_pause", 0)
             progress_len = int(min(progress, 100) * bar_w / 100)
-            
+
             # Color: green -> yellow -> red as it approaches pause
             if progress >= 100:
                 color = (0, 0, 255)  # Red (paused)
@@ -668,37 +686,37 @@ try:
                 color = (0, 255, 255)  # Yellow
             else:
                 color = (0, 255, 0)  # Green
-                
+
             cv2.rectangle(frame, (bar_x, bar_y), (bar_x + progress_len, bar_y + bar_h), color, -1)
-            
+
             # Pause threshold line (always at 100%)
             threshold_x = bar_x + bar_w
             cv2.line(frame, (threshold_x, bar_y), (threshold_x, bar_y + bar_h), (0, 0, 255), 3)
-            
+
             # Text
             text = f"Pause: {progress:.0f}%"
-            if reactivity_metrics.get('is_paused', False):
+            if reactivity_metrics.get("is_paused", False):
                 text = f"PAUSED: {reactivity_metrics.get('pause_remaining', 0):.1f}s"
-            elif reactivity_metrics.get('cooldown_remaining', 0) > 0:
+            elif reactivity_metrics.get("cooldown_remaining", 0) > 0:
                 text = f"Cooldown: {reactivity_metrics.get('cooldown_remaining', 0):.1f}s"
-                
+
             cv2.putText(frame, text, (bar_x, bar_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            # Chaos bar (blue) - normalize to 0-1 range  
-            chaos_norm = min(1.0, (reactivity_metrics['chaos_multiplier'] - 0.3) / 3.2)  # 0.3-3.5 -> 0-1
+
+            # Chaos bar (blue) - normalize to 0-1 range
+            chaos_norm = min(1.0, (reactivity_metrics["chaos_multiplier"] - 0.3) / 3.2)  # 0.3-3.5 -> 0-1
             chaos_len = int(chaos_norm * (bar_w - 20))
             cv2.rectangle(frame, (bar_x + 10, bar_y + 32), (bar_x + 10 + chaos_len, bar_y + 40), (255, 0, 0), -1)
             cv2.putText(frame, "CHS", (bar_x + 2, bar_y + 38), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
-            
+
             # Pause indicator
-            if reactivity_metrics.get('paused', False):
+            if reactivity_metrics.get("paused", False):
                 cv2.rectangle(frame, (bar_x + bar_w - 30, bar_y + 10), (bar_x + bar_w - 10, bar_y + 30), (0, 0, 255), -1)
                 cv2.putText(frame, "PAUSE", (bar_x + bar_w - 28, bar_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
 
                 # === LIGHTBULB PWM OUTPUT ===
                 if USE_LIGHTBULB_PWM and lightbulb:
                     try:
-                        chaos_val = reactivity_metrics.get('chaos_multiplier', 0.3)
+                        chaos_val = reactivity_metrics.get("chaos_multiplier", 0.3)
                         pwm_value = int(max(0, min(1, (chaos_val - 0.3) / 3.2)) * 255)
                         lightbulb.set_pwm(pwm_value)
                     except Exception as e:

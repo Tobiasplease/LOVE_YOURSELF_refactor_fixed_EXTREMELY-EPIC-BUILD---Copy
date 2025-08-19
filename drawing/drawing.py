@@ -19,7 +19,7 @@ from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 
-from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER
+from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER, TRIGGER_PROMPT
 from config.prompt_templates import SELF_CRITIQUE_PROMPT
 from utils.ollama import query_ollama
 from utils.state_manager import state_manager
@@ -67,19 +67,18 @@ class DrawingController:
         try:
             if not self.last_drawing_prompt or not self.last_reflection:
                 return
-                
+
             critique_prompt = SELF_CRITIQUE_PROMPT.format(
-                original_prompt=self.last_drawing_prompt,
-                reflection=self.last_reflection or "No specific reflection recorded"
+                original_prompt=self.last_drawing_prompt, reflection=self.last_reflection or "No specific reflection recorded"
             )
-            
+
             critique_response = query_ollama(
                 prompt=critique_prompt,
                 image=image_path,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
-                system_prompt="You are critiquing your own artwork. Be honest and constructive."
+                system_prompt="You are critiquing your own artwork. Be honest and constructive.",
             )
-            
+
             log_json_entry(
                 LogType.REFLECTION,
                 {
@@ -87,16 +86,16 @@ class DrawingController:
                     "image_path": image_path,
                     "original_prompt": self.last_drawing_prompt,
                     "critique": critique_response,
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 },
-                print_message=f"🎯 Self-critique: {critique_response[:100]}..."
+                print_message=f"🎯 Self-critique: {critique_response[:100]}...",
             )
-            
+
         except Exception as exc:
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Error in drawing critique: {exc}", "component": "drawing_critique"},
-                print_message=f"⚠️ Error critiquing drawing: {exc}"
+                print_message=f"⚠️ Error critiquing drawing: {exc}",
             )
 
     def handle_drawing_flow(
@@ -181,7 +180,7 @@ class DrawingController:
             controller = create_impostor_controller(
                 load_image_path=image_path,
                 override_prompt=drawing_prompt,
-                primitive_string="impostor black and white sketch line art ",
+                primitive_string=TRIGGER_PROMPT,
                 filename_prefix=f"impostor-{timestamp}",
                 flux_guidance=4.0,  # @todo: mood controlled?
                 cnet_strength=0.3,
