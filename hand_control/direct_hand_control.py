@@ -26,13 +26,13 @@ except ImportError:
 
     config = Config()
 
-# Add hand_control to path for imports
-hand_control_path = os.path.join(os.path.dirname(__file__), "hand_control")
+# Add current directory to path for imports (we're already in hand_control/)
+hand_control_path = os.path.dirname(__file__)
 if hand_control_path not in sys.path:
     sys.path.insert(0, hand_control_path)
 
 try:
-    from hand_control_interface import HandControlInterface
+    from hand_control_interface import CleanCursorInterface as HandControlInterface
 
     HAND_CONTROL_AVAILABLE = True
 except ImportError as e:
@@ -88,27 +88,10 @@ class DirectHandController:
             return False
 
     def _initialize_headless_controller(self):
-        """Initialize a minimal headless controller for servo control only."""
+        """Initialize a full headless controller with all functionality."""
         try:
-            # Import just the servo control components
-            from hand_expression import HandExpressionController
-
-            # Create minimal controller structure
-            class HeadlessHandController:
-                def __init__(self):
-                    self.hand_expression = HandExpressionController()
-                    self.current_emotion = "calm_observant"
-                    self.dataset_directory = "C:/Users/tobia/Downloads/HandControlStandalone/movement_recordings"
-
-                def change_to_emotion(self, emotion):
-                    self.current_emotion = emotion
-                    print(f"🎭 Headless emotion change: {emotion}")
-
-                def update_reactivity(self, activity, sudden, motion):
-                    # Minimal reactivity handling
-                    pass
-
-            self.controller = HeadlessHandController()
+            # Use the full CleanCursorInterface in headless mode
+            self.controller = HandControlInterface(headless_mode=True)
             print("✅ Headless hand controller initialized")
             return True
 
@@ -271,8 +254,8 @@ class DirectHandController:
 
         try:
             # Call the emotion change method directly
-            if hasattr(self.controller, "change_to_emotion"):
-                self.controller.change_to_emotion(mapped_emotion)
+            if hasattr(self.controller, "change_emotion"):
+                self.controller.change_emotion(mapped_emotion)
                 print(f"🎭 Hand controller emotion changed to: {mapped_emotion}")
                 return True
             else:
@@ -391,10 +374,9 @@ class DirectHandController:
             return False
 
         try:
-            if hasattr(self.controller, "start_markov_generation"):
+            if hasattr(self.controller, "start_autonomous_mode"):
                 print("🧠 Starting autonomous Markov generation...")
-                self.controller.start_markov_generation()
-                return True
+                return self.controller.start_autonomous_mode()
             else:
                 print("⚠️ Hand controller doesn't support autonomous mode")
                 return False

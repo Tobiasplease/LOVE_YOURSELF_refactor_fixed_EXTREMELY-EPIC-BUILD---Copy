@@ -134,9 +134,9 @@ if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 debug_print("Camera opened successfully", "INIT")
-# Increase camera resolution (e.g., 1280x720)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+# Reduce camera resolution to prevent memory issues
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
 proto = f"{MODEL_PATH}/deploy.prototxt"
 model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
