@@ -116,6 +116,8 @@ The debug/ folder contains individual component tests:
 
 No formal test framework is configured - tests are standalone scripts.
 
+Put all test and evaluation scripts in the debug folder and all plan files in the docs folder.
+
 ### Code Style
 
 - Line length: 150 characters (configured in pyproject.toml)

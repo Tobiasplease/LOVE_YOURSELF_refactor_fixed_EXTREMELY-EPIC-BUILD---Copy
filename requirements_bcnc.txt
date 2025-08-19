@@ -1,3 +1,0 @@
-bCNC>=0.9.16
-PyAutoGUI
-PyGetWindow

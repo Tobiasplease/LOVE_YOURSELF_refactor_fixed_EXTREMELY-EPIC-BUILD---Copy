@@ -23,6 +23,9 @@ matplotlib>=3.7.0
 # pyaudio>=0.2.11
 
 #bCNC>=0.9.16
+vpype
+vpype-gcode
+scikit-image
 PyAutoGUI
 PyGetWindow
 spacy

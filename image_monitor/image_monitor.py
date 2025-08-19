@@ -4,10 +4,12 @@ import glob
 import threading
 from pathlib import Path
 from typing import Callable, Optional
-from config.config import COMFY_OUTPUT_FOLDER, MOOD_SNAPSHOT_FOLDER
+from config.config import COMFY_OUTPUT_FOLDER, MOOD_SNAPSHOT_FOLDER, CENTER_LINE_SVG
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.state_manager import state_manager
+
+from bcnc import raster_to_centerline_svg, svg_to_gcode
 
 
 class ImageMonitor:
@@ -71,6 +73,91 @@ class ImageMonitor:
 
         return current_images
 
+    def _find_latest_svg_in_folder(self, folder_path):
+        """Find the most recently created SVG file in the given folder."""
+        svg_pattern = os.path.join(folder_path, "*.svg")
+        svg_files = glob.glob(svg_pattern)
+
+        if not svg_files:
+            return None
+
+        # Sort by modification time, newest first
+        svg_files.sort(key=os.path.getmtime, reverse=True)
+        return svg_files[0]
+
+    def _process_png_to_gcode(self, png_path):
+        """Process a PNG file to G-code based on CENTER_LINE_SVG config."""
+        try:
+            base_name = os.path.splitext(os.path.basename(png_path))[0]
+            output_folder = os.path.dirname(png_path)
+
+            if CENTER_LINE_SVG:
+                # Convert PNG to centerline SVG, then to G-code
+                centerline_svg_path = os.path.join(output_folder, f"{base_name}_center_lined.svg")
+                gcode_path = os.path.join(output_folder, f"{base_name}_center_lined.gcode")
+
+                log_json_entry(
+                    LogType.INFO,
+                    {"message": f"Converting PNG to centerline SVG: {png_path}"},
+                    print_message=f"🔄 Converting PNG to centerline SVG: {base_name}",
+                )
+
+                # Run svg_centerliner
+                raster_to_centerline_svg(
+                    input_path=png_path,
+                    output_path=centerline_svg_path,
+                    threshold_value=200,  # Testa 160–200 beroende på bild
+                    blur_kernel=(1, 1),  # (1,1) = ingen blur, (3,3) = mild
+                    do_dilate=True,  # Sätt till False om det tar med för mycket
+                    dilation_iterations=1,  # Testa 0–2
+                    scale=1.0,  # SVG-skalning
+                )
+
+                # Convert SVG to G-code
+                svg_to_gcode(svg_input=centerline_svg_path, output_gcode=gcode_path, auto_run=True)
+
+                log_json_entry(
+                    LogType.INFO,
+                    {"message": f"G-code generated: {gcode_path}"},
+                    print_message=f"🔧 G-code generated: {os.path.basename(gcode_path)}",
+                )
+
+            else:
+                # Find latest SVG in output folder and convert to G-code
+                latest_svg = self._find_latest_svg_in_folder(output_folder)
+
+                if latest_svg:
+                    svg_base_name = os.path.splitext(os.path.basename(latest_svg))[0]
+                    gcode_path = os.path.join(output_folder, f"{svg_base_name}.gcode")
+
+                    log_json_entry(
+                        LogType.INFO,
+                        {"message": f"Converting latest SVG to G-code: {latest_svg}"},
+                        print_message=f"🔄 Converting latest SVG to G-code: {os.path.basename(latest_svg)}",
+                    )
+
+                    # Convert SVG to G-code
+                    svg_to_gcode(svg_input=latest_svg, output_gcode=gcode_path, auto_run=True)
+
+                    log_json_entry(
+                        LogType.INFO,
+                        {"message": f"G-code generated: {gcode_path}"},
+                        print_message=f"🔧 G-code generated: {os.path.basename(gcode_path)}",
+                    )
+                else:
+                    log_json_entry(
+                        LogType.ERROR,
+                        {"message": f"No SVG files found in output folder: {output_folder}"},
+                        print_message=f"⚠️ No SVG files found in output folder",
+                    )
+
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {"error": f"PNG to G-code conversion failed: {str(e)}"},
+                print_message=f"❌ PNG to G-code conversion failed: {str(e)}",
+            )
+
     def _log_new_image(self, image_path):
         """Log a newly detected image."""
         filename = os.path.basename(image_path)
@@ -81,15 +168,17 @@ class ImageMonitor:
             {"event": "new_image_detected", "filename": filename, "image_path": image_path, "file_size": file_size, "timestamp": time.time()},
             print_message=f"🖼 New drawing: {filename} ({file_size} bytes)",
         )
-        
+
         if state_manager.is_generating_drawing:
             state_manager.finish_drawing_generation()
             log_json_entry(
-                LogType.INFO,
-                {"message": "Drawing generation completed", "image_path": image_path},
-                print_message="✅ Drawing generation completed"
+                LogType.INFO, {"message": "Drawing generation completed", "image_path": image_path}, print_message="✅ Drawing generation completed"
             )
-            
+
+        # Process PNG to G-code if it's a PNG file
+        if image_path.lower().endswith(".png"):
+            self._process_png_to_gcode(image_path)
+
         if self.on_image_complete:
             self.on_image_complete(image_path)
 
