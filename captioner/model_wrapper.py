@@ -27,15 +27,15 @@ class MultimodalModel:
             # This ensures first-time awakenings get proper environmental descriptions
             if self.memory_ref:
                 # Get last session gap from captioner (not memory)
-                captioner_ref = getattr(self.memory_ref, '_captioner_ref', None)
-                session_gap = getattr(captioner_ref, 'last_session_gap', None) if captioner_ref else None
-                
+                captioner_ref = getattr(self.memory_ref, "_captioner_ref", None)
+                session_gap = getattr(captioner_ref, "last_session_gap", None) if captioner_ref else None
+
                 prompt = build_environmental_caption_prompt(
                     self.memory_ref,
                     mood=self.memory_ref.current_mood,
                     boredom=self.memory_ref.boredom,
                     novelty=self.memory_ref.novelty_score,
-                    last_session_gap=session_gap
+                    last_session_gap=session_gap,  # type: ignore
                 )
             else:
                 # Fallback if no memory reference available
@@ -67,21 +67,46 @@ class MultimodalModel:
         prompt = build_drawing_prompt(self.memory_ref, extra=extra)
         return self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT)
 
+    def query_tinyllama(self, prompt: str) -> str:
+        """Query TinyLlama model for motif scoring and emotional analysis."""
+        # Use TinyLlama for fast, lightweight text-only queries
+        tinyllama_options = {
+            "temperature": 0.8,  # Allow some creativity for emotional scoring
+            "top_p": 0.9,
+            "num_predict": 10,  # Short responses expected (just a score)
+        }
+
+        try:
+            response = query_ollama(
+                prompt=prompt,
+                model="tinyllama:latest",
+                timeout=15,  # Shorter timeout for quick scoring
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                system_prompt="You are a scoring assistant. Provide concise numerical scores as requested.",
+                options=tinyllama_options,
+            )
+            # THIS IS NOT A FLOAT NECESSARILY?
+            print("TINYLLAMA", response.strip())
+            return response.strip()
+        except Exception:
+            # Fallback if TinyLlama fails
+            return "0.5"
+
     def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None) -> str:
         # Get model-specific generation options
         model_options = get_model_options(self.model_name)
-        
+
         # Get model-specific system prompt if none provided
         if system_prompt is None:
             model_system_config = get_model_system_prompt(self.model_name)
             system_prompt = model_system_config["base_prompt"]
-        
+
         # Add dynamic self-understanding to system prompt
-        if self.memory_ref and hasattr(self.memory_ref, 'get_dynamic_system_context'):
+        if self.memory_ref and hasattr(self.memory_ref, "get_dynamic_system_context"):
             dynamic_context = self.memory_ref.get_dynamic_system_context()
             if dynamic_context:
                 system_prompt += dynamic_context
-        
+
         # For Qwen models, use different prompt formatting
         if is_qwen_model(self.model_name):
             # Qwen prefers SYSTEM/USER format to prevent role confusion
@@ -91,7 +116,7 @@ class MultimodalModel:
             # LLaVA and other models use system prompt normally
             formatted_prompt = prompt
             final_system_prompt = system_prompt
-        
+
         response = query_ollama(
             prompt=formatted_prompt,
             model=self.model_name,
@@ -99,7 +124,7 @@ class MultimodalModel:
             timeout=90,
             log_dir=MOOD_SNAPSHOT_FOLDER,
             system_prompt=final_system_prompt,
-            options=model_options  # Pass model-specific options
+            options=model_options,  # Pass model-specific options
         )
 
         # Clean up AI model leakage - remove unwanted prompt-like text

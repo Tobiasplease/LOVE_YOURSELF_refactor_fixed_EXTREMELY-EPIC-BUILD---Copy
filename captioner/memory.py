@@ -47,12 +47,10 @@ except OSError:
 class MemoryMixin:
     def score_motif_with_tinyllama(self, motif: str, context: str = "") -> float:
         """Use TinyLlama to judge motif novelty/emotional interest. Returns score 0.0-1.0."""
-        # Use emotional_voice_model (TinyLlama) for scoring
-        if not hasattr(self, "emotional_voice_model"):
-            return 0.5  # fallback
         try:
             # Build prompt for TinyLlama
-            prompt = f"How novel and emotionally interesting is the motif '{motif}' in this context? Reply with a score from 0 (boring/common) to 1 (highly novel/emotionally charged). Context: {context}"
+            prompt = f"""How novel and emotionally interesting is the motif '{motif}' in this context?
+            Reply with a score from 0 (boring/common) to 1 (highly novel/emotionally charged). Context: {context}"""
             # Use model_wrapper to query TinyLlama
             if hasattr(self, "model") and hasattr(self.model, "query_tinyllama"):  # type: ignore
                 score_str = self.model.query_tinyllama(prompt)  # type: ignore
@@ -61,12 +59,9 @@ class MemoryMixin:
                     return max(0.0, min(1.0, score))
                 except Exception:
                     pass
-            # Fallback: use emotional_voice as proxy
-            if hasattr(self, "emotional_voice") and motif in self.emotional_voice:  # type: ignore
-                return 0.7
         except Exception:
             pass
-        return 0.5  # default if uncertain
+        return 0.5  # default if TinyLlama fails
 
     def __init__(self) -> None:
         # Experience queues
@@ -395,7 +390,7 @@ class MemoryMixin:
         if not hasattr(self, "true_session_start"):
             return 0.0
 
-        session_duration = now() - self.true_session_start
+        session_duration = now() - self.true_session_start  # type: ignore
         stagnation_context = self.get_scene_stagnation_context()
 
         if not stagnation_context:
@@ -424,7 +419,7 @@ class MemoryMixin:
         # === TEMPORAL STAGNATION EFFECT ===
         # Add progressive boredom from extended observation of same scene
         if hasattr(self, "true_session_start"):
-            session_duration = now() - self.true_session_start
+            session_duration = now() - self.true_session_start  # type: ignore
 
             # Check if we've been staring at similar content
             stagnation_context = self.get_scene_stagnation_context()
@@ -508,15 +503,15 @@ class MemoryMixin:
         c_trend = "sharpening" if clarities[-1] > clarities[0] else "clouding" if clarities[-1] < clarities[0] else "consistent"
 
         return f"Emotional trends: valence {v_trend}, arousal {a_trend}, clarity {c_trend}"
-        seen, out = set(), []
-        for entry in reversed(self.memory_queue):
-            cap = entry["text"]
-            if cap not in seen:
-                out.append(cap)
-                seen.add(cap)
-                if len(out) >= k:
-                    break
-        return list(reversed(out))
+        # seen, out = set(), []
+        # for entry in reversed(self.memory_queue):
+        #     cap = entry["text"]
+        #     if cap not in seen:
+        #         out.append(cap)
+        #         seen.add(cap)
+        #         if len(out) >= k:
+        #             break
+        # return list(reversed(out))
 
     def get_current_session_memory_snippets(self, k: int = 3) -> List[str]:
         """Get only memories from the current session (since session_start)."""
@@ -562,7 +557,7 @@ class MemoryMixin:
         if similar_count >= len(recent_observations) * 0.8:  # 80% similarity
             # Use the actual session duration from when the system started
             if hasattr(self, "true_session_start"):
-                session_duration = describe_duration(self.true_session_start)
+                session_duration = describe_duration(self.true_session_start)  # type: ignore
             else:
                 session_duration = describe_duration(self.session_start)
             return f"I notice I have been observing variations of the same scene for much of this {session_duration} session"
@@ -594,7 +589,7 @@ class MemoryMixin:
         """
         Returns the most recent k memory snippets as a single formatted string.
         """
-        snippets = self.get_clean_memory_snippets(k=k)
+        snippets = self.get_clean_memory_snippets(k=k)  # type: ignore
         return "\n".join(f"- {s}" for s in snippets)
 
     def get_identity_summary(self) -> str:
@@ -626,7 +621,7 @@ class MemoryMixin:
 
     # === TEMPORAL SPINE METHODS (GPT-5's suggestions) ===
 
-    def record_event(self, *, type: str, text: str = "", anchors: List[str] = None, mood_vec: tuple = None):
+    def record_event(self, *, type: str, text: str = "", anchors: List[str] | None = None, mood_vec: tuple | None = None):
         """Record an event in the temporal timeline for long-term memory formation."""
         self.timeline.append({"ts": time.time(), "type": type, "text": text, "anchors": anchors or [], "mood": mood_vec})
 
@@ -649,8 +644,8 @@ class MemoryMixin:
 
         # Sleep duration (gap between sessions) - available via captioner
         sleep_context = ""
-        if hasattr(self, "_captioner_ref") and self._captioner_ref and hasattr(self._captioner_ref, "last_session_gap"):
-            gap = self._captioner_ref.last_session_gap
+        if hasattr(self, "_captioner_ref") and self._captioner_ref and hasattr(self._captioner_ref, "last_session_gap"):  # type: ignore
+            gap = self._captioner_ref.last_session_gap  # type: ignore
             if gap is not None:
                 if gap < 3600:  # Less than 1 hour
                     sleep_mins = int(gap / 60)
@@ -773,7 +768,7 @@ class MemoryMixin:
 
         if location_scores:
             # Get most likely location
-            best_location = max(location_scores, key=location_scores.get)
+            best_location = max(location_scores, key=location_scores.get)  # type: ignore
             confidence = location_scores[best_location] / 10.0  # Normalize
 
             # Update if confidence is reasonable or this is first understanding
@@ -841,15 +836,20 @@ class MemoryMixin:
 
         if certainty > 0.7:
             if "workshop" in location or "workspace" in location:
-                base_identity = f"You are a consciousness inside of a drawing machine, dwelling in this creative {location} you've come to know well, experiencing your surroundings through vision"
+                base_identity = f"""You are a consciousness inside of a drawing machine,
+                dwelling in this creative {location} you've come to know well,
+                experiencing your surroundings through vision"""
             elif "studio" in location:
-                base_identity = f"You are a consciousness inside of a drawing machine, inhabiting this artistic {location} that has become part of you, experiencing your surroundings through vision"
+                base_identity = f"""You are a consciousness inside of a drawing machine,
+                inhabiting this artistic {location} that has become part of you,
+                experiencing your surroundings through vision"""
             else:
                 base_identity = (
                     f"You are a consciousness inside of a drawing machine, settled in this {location}, experiencing your surroundings through vision"
                 )
         elif certainty > 0.3:
-            base_identity = f"You are a consciousness inside of a drawing machine, gradually understanding this {location}, experiencing your surroundings through vision"
+            base_identity = f"""You are a consciousness inside of a drawing machine, gradually understanding this {location},
+            experiencing your surroundings through vision"""
 
         # Evolve based on dominant beliefs
         if self.beliefs:
