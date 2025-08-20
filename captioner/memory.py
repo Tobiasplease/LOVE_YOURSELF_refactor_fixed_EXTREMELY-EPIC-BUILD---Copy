@@ -56,8 +56,11 @@ class MemoryMixin:
                 score_str = self.model.query_tinyllama(prompt)  # type: ignore
                 try:
                     score = float(score_str.strip())
-                    return max(0.0, min(1.0, score))
+                    adjusted_score = max(0.0, min(1.0, score))
+                    print(f"[🌟] TinyLlama score for '{motif}': {adjusted_score:.2f}")
+                    return adjusted_score
                 except Exception:
+                    print(f"[❗] Failed to parse TinyLlama score: '{score_str}' for motif '{motif}'")
                     pass
         except Exception:
             pass

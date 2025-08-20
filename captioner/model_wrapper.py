@@ -85,8 +85,6 @@ class MultimodalModel:
                 system_prompt="You are a scoring assistant. Provide concise numerical scores as requested.",
                 options=tinyllama_options,
             )
-            # THIS IS NOT A FLOAT NECESSARILY?
-            print("TINYLLAMA", response.strip())
             return response.strip()
         except Exception:
             # Fallback if TinyLlama fails
