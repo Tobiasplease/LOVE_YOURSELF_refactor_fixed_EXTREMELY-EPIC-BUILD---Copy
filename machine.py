@@ -75,34 +75,43 @@ from config.config import (
 from event_logging.run_manager import get_run_image_path
 from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
 from event_logging.log_type import LogType
+
 try:
     from hand_control.direct_hand_control import (
-        start_hand_controller,
+        start_hand_controller,  # type: ignore
         stop_hand_controller,
         # set_emotion,
-        send_reactivity_data,
-        get_status,
-        change_to_emotion,
-        start_autonomous_mode,
+        send_reactivity_data,  # type: ignore
+        get_status,  # type: ignore
+        change_to_emotion,  # type: ignore
+        start_autonomous_mode,  # type: ignore
     )
+
     HAND_CONTROL_AVAILABLE = True
 except ImportError:
     print("Warning: hand_control module not available (tkinter dependency missing). Hand control features disabled.")
     HAND_CONTROL_AVAILABLE = False
-    
+
     # Define stub functions
     def start_hand_controller(headless=False):
         return False
+
     def stop_hand_controller():
         pass
+
     def send_reactivity_data(*args, **kwargs):
         pass
+
     def get_status():
         return "disabled"
+
     def change_to_emotion(*args, **kwargs):
         pass
+
     def start_autonomous_mode(*args, **kwargs):
         pass
+
+
 from reactivity.camera_reactive import CameraReactivityEngine
 
 
