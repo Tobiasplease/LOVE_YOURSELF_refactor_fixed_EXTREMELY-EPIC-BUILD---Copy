@@ -26,9 +26,8 @@ class MultimodalModel:
             # Use the same detailed environmental prompt system for fresh starts
             # This ensures first-time awakenings get proper environmental descriptions
             if self.memory_ref:
-                # Get last session gap from captioner (not memory)
-                captioner_ref = getattr(self.memory_ref, "_captioner_ref", None)
-                session_gap = getattr(captioner_ref, "last_session_gap", None) if captioner_ref else None
+                # Get last session gap directly from captioner
+                session_gap = getattr(self.memory_ref, "last_session_gap", None)
 
                 prompt = build_environmental_caption_prompt(
                     self.memory_ref,
@@ -71,9 +70,9 @@ class MultimodalModel:
         """Query TinyLlama model for motif scoring and emotional analysis."""
         # Use TinyLlama for fast, lightweight text-only queries
         tinyllama_options = {
-            "temperature": 0.8,  # Allow some creativity for emotional scoring
-            "top_p": 0.9,
-            "num_predict": 10,  # Short responses expected (just a score)
+            "temperature": 0.1,  # Low temperature for consistent numeric output
+            "top_p": 0.8,
+            "num_predict": 5,  # Very short - just a number like "0.7"
         }
 
         try:
@@ -82,7 +81,7 @@ class MultimodalModel:
                 model="tinyllama:latest",
                 timeout=15,  # Shorter timeout for quick scoring
                 log_dir=MOOD_SNAPSHOT_FOLDER,
-                system_prompt="You are a scoring assistant. Provide concise numerical scores as requested.",
+                system_prompt="You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number.",
                 options=tinyllama_options,
             )
             return response.strip()
@@ -123,6 +122,7 @@ class MultimodalModel:
             log_dir=MOOD_SNAPSHOT_FOLDER,
             system_prompt=final_system_prompt,
             options=model_options,  # Pass model-specific options
+            show_progress=True,  # Enable progress bar for captions
         )
 
         # Clean up AI model leakage - remove unwanted prompt-like text

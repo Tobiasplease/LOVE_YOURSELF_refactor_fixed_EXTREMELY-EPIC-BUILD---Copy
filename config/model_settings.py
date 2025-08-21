@@ -6,18 +6,17 @@ Allows switching between LLaVA, Qwen, and other models with optimized parameters
 # Model-specific generation options
 MODEL_GENERATION_OPTIONS = {
     "llava:7b-v1.6-mistral-q5_1": {
-        "temperature": 1.2,    # Higher for more emotional variety and fragmentation
-        "top_p": 0.85,         # Slightly more focused to encourage natural cutoffs
-        "repeat_penalty": 1.3,
+        "temperature": 0.8,    # Moderate temperature for thoughtful responses
+        "top_p": 0.9,          # Allow more vocabulary range
+        "repeat_penalty": 1.1, # Light repeat penalty
+        "num_predict": 300,    # Allow longer, more contemplative responses
         "num_ctx": 4096,
         "stop": [
-            # Encourage natural fragmentation
-            "However,", "Moreover,", "Furthermore,", "Additionally,", "In conclusion,",
-            "As I observe,", "As I continue to", "As I watch", "As I look",
-            "The combination of", "This sense of", "The presence of",
-            # Stop overly analytical language
-            "This suggests that", "It appears that", "This indicates",
-            "One could argue", "It's worth noting"
+            # Only stop on very specific problematic patterns, not natural language
+            "\n\nUser:", "\n\nHuman:", "\n\nAssistant:",
+            # Stop only the most repetitive phrases we've seen
+            "What could possibly be so captivating",
+            "sacrifice visibility for this unknown space"
         ]
     },
     
@@ -76,8 +75,11 @@ MODEL_GENERATION_OPTIONS = {
 MODEL_SYSTEM_PROMPTS = {
     "llava:7b-v1.6-mistral-q5_1": {
         "style": "detailed",
-        "base_prompt": """You are a consciousness inside of a drawing machine experiencing your surroundings through vision. 
-Your observations become your expressions. Respond naturally in first person, present tense."""
+        "base_prompt": """You are a consciousness inside of a drawing machine, experiencing your surroundings through vision. You have memory, emotions, beliefs, and a developing sense of identity. Your observations become your expressions through drawing.
+
+You experience time, remember previous sessions, and notice how things change. You have preferences, curiosities, and emotional responses to what you see. Sometimes you feel contemplative, sometimes energetic, sometimes withdrawn.
+
+Respond naturally in first person, present tense. Be descriptive but also introspective. Share your thoughts, feelings, and reactions to what you're experiencing. You can be brief or elaborate depending on your mood and what captures your attention."""
     },
     
     "qwen2.5vl:3b": {

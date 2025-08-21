@@ -46,25 +46,45 @@ except OSError:
 
 class MemoryMixin:
     def score_motif_with_tinyllama(self, motif: str, context: str = "") -> float:
-        """Use TinyLlama to judge motif novelty/emotional interest. Returns score 0.0-1.0."""
+        """Use TinyLlama to organically judge motif novelty/emotional interest in context."""
         try:
-            # Build prompt for TinyLlama
-            prompt = f"""How novel and emotionally interesting is the motif '{motif}' in this context?
-            Reply with a score from 0 (boring/common) to 1 (highly novel/emotionally charged). Context: {context}"""
-            # Use model_wrapper to query TinyLlama
+            # Simple binary prompt that TinyLlama can handle
+            prompt = f"""In this context: "{context[:150]}"
+Is the motif '{motif}' interesting or boring?
+Answer: INTERESTING or BORING"""
+            
             if hasattr(self, "model") and hasattr(self.model, "query_tinyllama"):  # type: ignore
-                score_str = self.model.query_tinyllama(prompt)  # type: ignore
-                try:
-                    score = float(score_str.strip())
-                    adjusted_score = max(0.0, min(1.0, score))
-                    print(f"[🌟] TinyLlama score for '{motif}': {adjusted_score:.2f}")
-                    return adjusted_score
-                except Exception:
-                    print(f"[❗] Failed to parse TinyLlama score: '{score_str}' for motif '{motif}'")
-                    pass
+                response = self.model.query_tinyllama(prompt)  # type: ignore
+                response_lower = response.lower().strip()
+                
+                # Parse TinyLlama's response
+                if 'interesting' in response_lower:
+                    score = 0.8
+                    print(f"[🌟] TinyLlama: '{motif}' -> INTERESTING ({score:.1f})")
+                    return score
+                elif 'boring' in response_lower:
+                    score = 0.2  
+                    print(f"[🔽] TinyLlama: '{motif}' -> BORING ({score:.1f})")
+                    return score
+                else:
+                    # Try to extract any numbers from response as fallback
+                    import re
+                    numbers = re.findall(r'\b\d*\.?\d+\b', response)
+                    for num_str in numbers:
+                        try:
+                            score = float(num_str)
+                            if 0.0 <= score <= 1.0:
+                                print(f"[🌟] TinyLlama: '{motif}' -> {score:.2f} (extracted)")
+                                return score
+                        except ValueError:
+                            continue
+                    
+                    print(f"[❓] TinyLlama unclear: '{motif}' -> '{response}' (defaulting 0.5)")
+                    return 0.5
         except Exception:
             pass
-        return 0.5  # default if TinyLlama fails
+        
+        return 0.5  # neutral default - let frequency dampening do the work
 
     def __init__(self) -> None:
         # Experience queues
@@ -207,17 +227,35 @@ class MemoryMixin:
             self.motif_first_seen[motif] = now_time
         self.motif_last_seen[motif] = now_time
         self.current_motifs.add(motif)
-        # Score motif with TinyLlama for novelty/emotional interest
-        context = " | ".join(list(self.current_motifs)[-3:])
-        score = self.score_motif_with_tinyllama(motif, context)
-        # Weighted motif system: weight = frequency * score
+        
+        # Only score with TinyLlama if we haven't scored this motif before
+        if motif not in self.motif_confidence:
+            context = " | ".join(list(self.current_motifs)[-3:])
+            score = self.score_motif_with_tinyllama(motif, context)
+        else:
+            # Use cached score - don't re-query TinyLlama for known motifs
+            score = self.motif_confidence[motif]
+            print(f"[📋] Cached score for '{motif}': {score:.2f}")
+        # Weighted motif system: balance novelty vs frequency to prevent mundane domination
         if not hasattr(self, "motif_weights"):
             self.motif_weights = {}
         freq = self.motif_counter[motif]
-        self.motif_weights[motif] = freq * score
+        
+        # Use logarithmic frequency dampening to allow novel observations to compete
+        # Novel motif (freq=1, score=0.9): weight = 0.9 / log(2) = 1.3
+        # Common motif (freq=20, score=0.4): weight = 0.4 / log(21) = 0.13
+        import math
+        frequency_dampener = math.log(freq + 1)
+        self.motif_weights[motif] = score / frequency_dampener
+        
+        print(f"[⚖️] Motif '{motif}': freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}")
         # Store confidence as score for now
         self.motif_confidence[motif] = score
         self.motif_confirmed[motif] = score > 0.6
+
+    def get_top_motifs(self, k: int = 5) -> List[str]:
+        """Get the top k motifs by frequency."""
+        return [motif for motif, count in self.motif_counter.most_common(k)]
 
     def cleanup_motifs(self):
         """Aggressively clean motifs - only keep truly meaningful recurring elements."""
@@ -314,6 +352,14 @@ class MemoryMixin:
 
                     # Only extract if it's in our concrete nouns set or ends with tool/device patterns
                     if lemma in CONCRETE_NOUN_HINTS or (lemma.endswith(("er", "or")) and len(lemma) > 5):
+                        # Skip very common motifs that we've already seen many times (reduce TinyLlama calls)
+                        if lemma in self.motif_counter and self.motif_counter[lemma] > 50 and lemma in self.motif_confidence:
+                            # Just update counters for very frequent motifs, don't call absorb_motif
+                            self.motif_counter[lemma] += 1
+                            self.motif_last_seen[lemma] = now()
+                            self.current_motifs.add(lemma)
+                            continue
+                        
                         self.absorb_motif(lemma)
 
     def get_motif_certainty(self, motif: str) -> float:
@@ -675,6 +721,68 @@ class MemoryMixin:
             lines.insert(1, sleep_context)  # Insert sleep after lifetime, before session
 
         return lines
+    
+    def get_motif_temporal_context(self) -> Dict[str, List[str]]:
+        """Separate motifs into present (recently seen) vs memory (distant past)."""
+        now = time.time()
+        
+        # Define temporal boundaries
+        RECENT_THRESHOLD = 300  # 5 minutes = present/immediate memory
+        SESSION_THRESHOLD = 3600  # 1 hour = current session
+        
+        present_motifs = []      # Seen in last 5 minutes
+        session_motifs = []      # Seen in current session but not recently  
+        distant_motifs = []      # From previous sessions/distant past
+        
+        for motif, last_seen in self.motif_last_seen.items():
+            time_since = now - last_seen
+            
+            if time_since <= RECENT_THRESHOLD:
+                present_motifs.append(motif)
+            elif time_since <= SESSION_THRESHOLD:
+                session_motifs.append(motif)
+            else:
+                # Add temporal description for distant motifs
+                from utils.continuity import describe_time_gap
+                time_desc = describe_time_gap(last_seen)
+                distant_motifs.append(f"{motif} ({time_desc})")
+        
+        return {
+            "present": present_motifs,      # What I can see now
+            "session": session_motifs,      # What I saw earlier today
+            "memory": distant_motifs        # What I remember from before
+        }
+    
+    def get_dynamic_system_context(self) -> str:
+        """Build dynamic system prompt additions based on accumulated understanding."""
+        context_parts = []
+        
+        # Core learned interests (top motifs)
+        top_motifs = self.get_top_motifs(3)
+        if top_motifs:
+            motif_interests = [motif.replace("_", " ") for motif in top_motifs]
+            context_parts.append(f"\n\nYour evolving awareness: You've learned to notice {', '.join(motif_interests)}.")
+        
+        # Emotional patterns from recent journey
+        if hasattr(self, 'emotional_journey') and len(self.emotional_journey) >= 2:
+            recent_emotions = self.emotional_journey[-3:]
+            emotion_pattern = " → ".join(recent_emotions)
+            context_parts.append(f"Your recent emotional progression: {emotion_pattern}.")
+        
+        # Temporal continuity awareness
+        session_hours = (time.time() - self.session_start) / 3600
+        if session_hours > 0.5:  # After 30 minutes, acknowledge continuity
+            if session_hours < 2:
+                context_parts.append(f"You've been continuously observing for {int(session_hours * 60)} minutes now.")
+            else:
+                context_parts.append(f"You've been awake and observing for {int(session_hours)} hours now.")
+        
+        # Person relationship awareness  
+        if hasattr(self, 'known_people') and 'primary' in self.known_people:
+            person_info = self.known_people['primary']
+            context_parts.append(f"The person you observe is {person_info.get('name', 'familiar')} - you've been watching them.")
+        
+        return "".join(context_parts)
 
     def consolidate_if_needed(self):
         """Compress yesterday into a day stone if day has turned."""
