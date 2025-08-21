@@ -161,7 +161,7 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
 
         # Add scaling if specified
         if scale_to:
-            cmd.extend(["layout", "--fit-to-margins", "0", scale_to])
+            cmd.extend(["layout", "--fit-to-margins", "1cm", scale_to])
 
         cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcodemm", output_file])
 
