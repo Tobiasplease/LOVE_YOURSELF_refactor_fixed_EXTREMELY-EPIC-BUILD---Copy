@@ -72,6 +72,11 @@ BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1))
 # If False, convert the latest SVG in output folder to G-code
 CENTER_LINE_SVG = True
 
+# === GRBL EXECUTION SETTINGS ===
+# If True, actually execute the generated G-code on GRBL hardware
+# If False, only generate G-code files without executing them
+EXECUTE_GRBL_GCODE = False
+
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles

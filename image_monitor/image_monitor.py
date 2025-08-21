@@ -4,12 +4,13 @@ import glob
 import threading
 from pathlib import Path
 from typing import Callable, Optional
-from config.config import COMFY_OUTPUT_FOLDER, MOOD_SNAPSHOT_FOLDER, CENTER_LINE_SVG
+from config.config import COMFY_OUTPUT_FOLDER, MOOD_SNAPSHOT_FOLDER, CENTER_LINE_SVG, EXECUTE_GRBL_GCODE
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.state_manager import state_manager
 
-from bcnc import raster_to_centerline_svg, svg_to_gcode
+from bcnc import raster_to_centerline_svg
+from grbl import svg_to_grbl
 
 
 class ImageMonitor:
@@ -113,8 +114,7 @@ class ImageMonitor:
                     scale=1.0,  # SVG-skalning
                 )
 
-                # Convert SVG to G-code
-                svg_to_gcode(svg_input=centerline_svg_path, output_gcode=gcode_path, auto_run=True)
+                svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
                 log_json_entry(
                     LogType.INFO,
@@ -137,7 +137,7 @@ class ImageMonitor:
                     )
 
                     # Convert SVG to G-code
-                    svg_to_gcode(svg_input=latest_svg, output_gcode=gcode_path, auto_run=True)
+                    svg_to_grbl(svg_input=latest_svg, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
                     log_json_entry(
                         LogType.INFO,

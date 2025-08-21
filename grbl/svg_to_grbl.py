@@ -15,7 +15,7 @@ grbl_path = os.path.dirname(__file__)
 # sys.path.insert(0, bcnc_path)
 sys.path.insert(0, grbl_path)
 
-from grbl_utils import find_grbl_port, initialize_grbl_for_drawing, execute_gcode_file, convert_with_vpype, convert_gcode_to_servo_format
+from grbl_utils import process_svg_to_grbl
 
 
 def main():
@@ -33,7 +33,6 @@ def main():
 
     args = parser.parse_args()
 
-    # Validate input file
     if not os.path.exists(args.svg_file):
         print(f"[ERROR] SVG file not found: {args.svg_file}")
         sys.exit(1)
@@ -41,47 +40,31 @@ def main():
     svg_path = Path(args.svg_file)
 
     if args.output:
-        output_file_vpype = args.output
-        output_file_adjusted = f"{output_file_vpype}_servo_adjusted.gcode"
+        output_file_adjusted = args.output
     else:
-        output_file_vpype = str(svg_path.parent / f"{svg_path.stem}_raw_vpype.gcode")
         output_file_adjusted = str(svg_path.parent / f"{svg_path.stem}_servo_adjusted.gcode")
 
     try:
-        convert_with_vpype(args.svg_file, output_file_vpype, scale_to=args.scale_to)
-        print(f"[SUCCESS] V-PYPE G-code generated: {output_file_vpype}")
-        convert_gcode_to_servo_format(output_file_vpype, output_file_adjusted)
-        print(f"[SUCCESS] Servo G-code generated: {output_file_adjusted}")
-        os.remove(output_file_vpype)  # Clean up raw G-code file
+        result = process_svg_to_grbl(
+            svg_input=args.svg_file,
+            output_gcode=output_file_adjusted,
+            execute_grbl=not args.no_execute,
+            scale_to=args.scale_to,
+            origin=(args.origin_x, args.origin_y, 0),
+            origin_offset=(args.offset_x, args.offset_y, 0),
+            feed_rate=args.feed_rate,
+            use_absolute_positioning=args.use_absolute,
+        )
 
-        # Execute on GRBL (if requested)
-        if not args.no_execute:
-            print("[INFO] Executing on GRBL...")
-            origin = (args.origin_x, args.origin_y, 0)
-            origin_offset = (args.offset_x, args.offset_y, 0)
-            try:
-                ser = find_grbl_port()
-                initialize_grbl_for_drawing(
-                    ser, origin=origin, origin_offset=origin_offset, feed_rate=args.feed_rate, use_absolute_positioning=args.use_absolute
-                )
-
-                # Execute G-code, skips first three lines!
-                execute_gcode_file(ser, output_file_adjusted)
-
-                print("[SUCCESS] Drawing complete!")
-
-            except Exception as e:
-                print(f"[ERROR] GRBL execution failed: {e}")
-                print(f"[INFO] G-code file saved at: {output_file_adjusted}")
-                print("[INFO] You can manually load and run this file in bCNC")
-                sys.exit(1)
-
-            finally:
-                if "ser" in locals():
-                    ser.close()
+        if result:
+            if args.no_execute:
+                print(f"[INFO] G-code generation complete. File saved: {result}")
+                print("[INFO] Use --no-execute flag was used.")
+            else:
+                print(f"[SUCCESS] Processing complete. File saved: {result}")
         else:
-            print(f"[INFO] G-code generation complete. File saved: {output_file_adjusted}")
-            print("[INFO] Use --no-execute flag was used.")
+            print("[ERROR] Failed to process SVG")
+            sys.exit(1)
 
     except Exception as e:
         print(f"[ERROR] Failed to process SVG: {e}")

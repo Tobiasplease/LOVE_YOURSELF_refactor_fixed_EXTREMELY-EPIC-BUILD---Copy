@@ -284,7 +284,6 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                 timeout = DEFAULT_CMD_TIMEOUT
 
             send_cmd(ser, line, timeout=timeout)
-            # wait_until_idle(ser, timeout)
             executed_lines += 1
 
             if executed_lines % 10 == 0:  # Progress update every 10 commands
@@ -308,3 +307,77 @@ def initialize_grbl_for_drawing(ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), 
     pen_control(ser, pen_down=False)
 
     print("[INFO] GRBL initialization complete")
+
+
+def process_svg_to_grbl(
+    svg_input,
+    output_gcode=None,
+    execute_grbl=True,
+    scale_to=None,
+    origin=(0, 0, 0),
+    origin_offset=(0, 0, 0),
+    feed_rate=DEFAULT_FEED_RATE,
+    use_absolute_positioning=False,
+):
+    """
+    Process SVG to G-code and optionally execute on GRBL hardware
+
+    Args:
+        svg_input: Path to input SVG file
+        output_gcode: Path for output G-code file (optional)
+        execute_grbl: Whether to execute the G-code on GRBL hardware
+        scale_to: Scale to fit size (e.g., '50x50mm', '100x100mm')
+        origin: Work origin (x, y, z) tuple
+        origin_offset: Origin offset (x, y, z) tuple
+        feed_rate: Feed rate for movements
+        use_absolute_positioning: Whether to use absolute positioning
+
+    Returns:
+        str: Path to generated G-code file if successful, None if failed
+    """
+    try:
+        from pathlib import Path
+        import os
+
+        svg_path = Path(svg_input)
+        if not svg_path.exists():
+            print(f"[ERROR] SVG file not found: {svg_input}")
+            return None
+
+        if output_gcode:
+            output_file_adjusted = output_gcode
+            output_file_vpype = f"{output_gcode}_raw_vpype.gcode"
+        else:
+            output_file_vpype = str(svg_path.parent / f"{svg_path.stem}_raw_vpype.gcode")
+            output_file_adjusted = str(svg_path.parent / f"{svg_path.stem}_servo_adjusted.gcode")
+
+        convert_with_vpype(str(svg_path), output_file_vpype, scale_to=scale_to)
+        print(f"[SUCCESS] V-PYPE G-code generated: {output_file_vpype}")
+        convert_gcode_to_servo_format(output_file_vpype, output_file_adjusted)
+        print(f"[SUCCESS] Servo G-code generated: {output_file_adjusted}")
+
+        if os.path.exists(output_file_vpype):
+            os.remove(output_file_vpype)
+
+        # Execute on GRBL if requested
+        if execute_grbl:
+            print("[INFO] Executing on GRBL...")
+            try:
+                ser = find_grbl_port()
+                initialize_grbl_for_drawing(
+                    ser, origin=origin, origin_offset=origin_offset, feed_rate=feed_rate, use_absolute_positioning=use_absolute_positioning
+                )
+                execute_gcode_file(ser, output_file_adjusted)
+                print("[SUCCESS] Drawing complete!")
+                ser.close()
+            except Exception as e:
+                print(f"[ERROR] GRBL execution failed: {e}")
+                print(f"[INFO] G-code file saved at: {output_file_adjusted}")
+        else:
+            print(f"[INFO] G-code generation complete. File saved: {output_file_adjusted}")
+
+        return output_file_adjusted
+
+    except Exception as e:
+        print(f"[ERROR] Failed to process SVG: {e}")
+        return None
