@@ -1,0 +1,8 @@
+[gwrite.gcodemm]
+document_start = "G21\nG17\nG90\n"
+segment_first = "G00 X{x:.4f} Y{y:.4f}\n"
+segment = "G01 X{x:.4f} Y{y:.4f}\n"
+document_end = "M2\n"
+unit = "mm"
+vertical_flip = true
+info= "This gcode profile is correctly inverted across the y-axis"

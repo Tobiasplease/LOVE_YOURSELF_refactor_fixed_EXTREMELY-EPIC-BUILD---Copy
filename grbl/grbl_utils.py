@@ -163,7 +163,7 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
         if scale_to:
             cmd.extend(["layout", "--fit-to-margins", "0", scale_to])
 
-        cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcode", output_file])
+        cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcodemm", output_file])
 
         print(f"[INFO] Kör vpype med gcode plugin: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
