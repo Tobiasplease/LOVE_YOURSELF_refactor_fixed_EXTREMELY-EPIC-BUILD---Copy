@@ -2,6 +2,56 @@
 
 This directory contains scripts for controlling GRBL CNC controllers with pen/servo plotters.
 
+## GCODE Reference
+
+G20 is inches
+
+G21 (millimeters) is standard for most plotters since:
+
+- SVG coordinates are typically in mm or pixels
+- Easier to work with small precise movements
+
+G17 (XY plane) is essential because:
+
+- We're doing 2D plotting on the XY plane
+- Required for proper arc/curve interpretation
+
+G90 (absolute positioning) is preferred because:
+
+- SVG coordinates are absolute positions
+- Easier to debug and predict movements
+- Less accumulation of positioning errors
+
+G00 X5 Y5 ; Move rapidly to start position (pen up)
+
+M3 S50 ; Lower pen
+
+G01 X15 Y5 ; Draw line to X=15 (pen down, controlled speed)
+
+G01 X15 Y15 ; Draw line to Y=15
+
+G01 X5 Y15 ; Draw line back to X=5
+
+G01 X5 Y5 ; Draw line back to start (complete rectangle)
+
+M3 S30 ; Raise pen
+
+G00 X0 Y0 ; Move rapidly back to origin
+
+M2 ; End program
+
+Use M2 when:
+
+- Single drawing job
+- Want machine to stay in place after drawing
+- Manual control after completion
+
+Use M30 when:
+
+- Production/batch jobs (run same drawing multiple times)
+- Want machine to return to safe home position
+- Automated workflows
+
 ## svg_to_grbl.py
 
 A complete SVG to GRBL pipeline that converts SVG files to G-code and executes them on GRBL controllers with servo pen control.
@@ -55,7 +105,6 @@ python svg_to_grbl.py drawing.svg --use-absolute
 - `--origin-y` - Work origin Y coordinate (default: -2.0)
 - `--feed-rate` - Feed rate for movements (default: 3000)
 - `--no-execute` - Generate G-code only, don't execute on GRBL
-- `--temp-dir` - Directory for temporary files
 - `--scale-to` - scale to fit dims e.g 500x500mm
 - `--use-absolute` - send G90 and use absolute positioning
 

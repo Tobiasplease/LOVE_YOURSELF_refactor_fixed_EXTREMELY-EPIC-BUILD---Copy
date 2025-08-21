@@ -8,9 +8,6 @@ import serial
 from serial.tools import list_ports
 import subprocess
 
-# import shutil
-# import os
-
 # Default configuration
 DEFAULT_BAUD = 115200
 DEFAULT_STATUS_POLL = 0.1
@@ -154,9 +151,6 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT):
 def convert_with_vpype(svg_file, output_file, scale_to=None):
     """Convert SVG to G-code using vpype with vpype-gcode plugin"""
     try:
-        # Use one of the built-in profiles, then post-process for servo commands
-        # temp_gcode = output_file + ".temp"
-
         cmd = ["vpype", "read", svg_file]
 
         # Add scaling if specified
@@ -170,68 +164,11 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
         print(f"[INFO] vpype gcode konvertering lyckades", result)
         return True
 
-        # # Post-process the G-code to add servo commands and origin
-        # if convert_gcode_to_servo_format(temp_gcode, output_file, origin):
-        #     # Clean up temp file
-        #     try:
-        #         os.remove(temp_gcode)
-        #     except ValueError:
-        #         pass
-        #     return True
-        # else:
-        #     return False
-
     except subprocess.CalledProcessError as e:
         print(f"[FEL] vpype gcode misslyckades: {e.stderr}")
-        # Fallback to our custom converter
-        # print("[INFO] Faller tillbaka till anpassad konverterare...")
-        # return convert_with_vpype_fallback(svg_file, output_file, origin)
     except FileNotFoundError:
         print("[FEL] vpype eller vpype-gcode inte installerat")
         return False
-
-
-# REFERENCE
-# def convert_z_to_servo(input_file, output_file):
-#     """Convert Z commands to servo commands for pen up/down control"""
-#     print("[INFO] Konverterar Z-kommandon till servo...")
-#     try:
-#         current_pen_state = None
-#         with open(input_file, "r") as infile, open(output_file, "w") as outfile:
-#             for line in infile:
-#                 clean = line.strip()
-#                 if clean.startswith("G0"):
-#                     if current_pen_state != "up":
-#                         outfile.write(f"{PEN_UP_CMD}\n")
-#                         current_pen_state = "up"
-#                     outfile.write(line)
-#                 elif clean.startswith("G1"):
-#                     if current_pen_state != "down":
-#                         outfile.write(f"{PEN_DOWN_CMD}\n")
-#                         current_pen_state = "down"
-#                     outfile.write(line)
-#                 elif "Z" in clean:
-#                     for part in clean.split():
-#                         if part.startswith("Z"):
-#                             try:
-#                                 z = float(part[1:])
-#                                 if z > 0 and current_pen_state != "up":
-#                                     outfile.write(f"{PEN_UP_CMD}\n")
-#                                     current_pen_state = "up"
-#                                 elif z <= 0 and current_pen_state != "down":
-#                                     outfile.write(f"{PEN_DOWN_CMD}\n")
-#                                     current_pen_state = "down"
-#                             except ValueError:
-#                                 print(f"[FEL] Kunde inte konvertera Z-värde: {part}")
-#                                 pass
-#                     outfile.write(line)
-#                 else:
-#                     outfile.write(line)
-#         print(f"[INFO] Optimerad G-kod sparad: {output_file}")
-#         return True
-#     except Exception as e:
-#         print(f"[FEL] Z-to-servo konvertering misslyckades: {e}")
-#         return False
 
 
 def convert_gcode_to_servo_format(input_gcode, output_gcode):
@@ -241,14 +178,6 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
             lines = f.readlines()
 
         with open(output_gcode, "w") as f:
-            # Write header
-            # f.write("; G-code generated with vpype-gcode, optimized for servo control\n")
-            # f.write("G21 ; Set units to millimeters\n")
-            # f.write("G90 ; Absolute positioning\n")
-            # f.write("G28 ; Home all axes\n")
-            # f.write(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset\n")
-            # f.write("M3 S30 ; PEN UP (initial state)\n")
-            # f.write("\n")
 
             pen_down = False
             for line in lines:
@@ -275,12 +204,6 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
                     # Pass through other commands (G17, G20, G21, G90, etc.)
                     f.write(f"{line}\n")
 
-            # Write footer
-            # f.write("\n")
-            # f.write(f"{PEN_UP_CMD}\n")
-            # f.write("G28 ; Return home\n")
-            # f.write("M30 ; Program end\n")
-
         print(f"[INFO] G-code konverterad till servo-format: {output_gcode}")
         return True
 
@@ -306,19 +229,21 @@ def setup_basic_grbl(ser, feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=
     wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
 
 
-def set_work_origin(ser, origin_x, origin_y, origin_z=0.0, move_timeout=DEFAULT_MOVE_TIMEOUT):
+def set_work_origin_and_offset(ser, origin, origin_offset, move_timeout=DEFAULT_MOVE_TIMEOUT):
     """Move to and set work origin offset"""
-    if origin_x != 0 or origin_y != 0:
-        print(f"[INFO] Moving to work origin: X{origin_x} Y{origin_y}")
-        send_cmd(ser, f"G0 X{origin_x} Y{origin_y}", timeout=move_timeout)
+    if origin[0] != 0 or origin[1] != 0:
+        print(f"[INFO] Moving to work origin: X{ origin[0]} Y{origin[1]}")
+        send_cmd(ser, f"G0 X{origin[0]} Y{origin[1]}", timeout=move_timeout)
         wait_until_idle(ser, move_timeout)
         send_cmd(ser, "G55")
         wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
-        send_cmd(ser, f"G10 L20 P2 X0 Y0 Z{origin_z}")
+        send_cmd(ser, f"G10 L20 P2 X0 Y0 Z0")
         wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
         print("[INFO] Work origin set in G55 coordinate system")
-        return True
-    return False
+
+    if origin_offset != (0, 0, 0):
+        # difference from G55? G10? L20?
+        send_cmd(ser, f"G92 X{origin_offset[0]} Y{origin_offset[1]} Z{origin_offset[2]} ; Set origin offset")
 
 
 def pen_control(ser, pen_down=True, pen_down_cmd=PEN_DOWN_CMD, pen_up_cmd=PEN_UP_CMD):
@@ -373,21 +298,13 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     print(f"[INFO] G-code execution complete: {executed_lines} lines executed")
 
 
-def initialize_grbl_for_drawing(ser, origin_x=0, origin_y=0, origin_z=0, feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False):
+def initialize_grbl_for_drawing(ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False):
     """Complete GRBL initialization sequence for drawing"""
     print("[INFO] Initializing GRBL for drawing...")
 
-    # Home and setup coordinate system
     ensure_homed(ser)
-
-    # Basic GRBL setup with feed rate
     setup_basic_grbl(ser, feed_rate, use_absolute_positioning=use_absolute_positioning)
-
-    # Set work origin if specified
-    if origin_x != 0 or origin_y != 0:
-        set_work_origin(ser, origin_x, origin_y, origin_z)
-
-    # Initial pen up
+    set_work_origin_and_offset(ser, origin, origin_offset)
     pen_control(ser, pen_down=False)
 
     print("[INFO] GRBL initialization complete")
