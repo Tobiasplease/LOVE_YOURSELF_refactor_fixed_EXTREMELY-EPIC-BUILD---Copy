@@ -13,7 +13,7 @@ import subprocess
 
 # Default configuration
 DEFAULT_BAUD = 115200
-DEFAULT_STATUS_POLL = 0.2
+DEFAULT_STATUS_POLL = 0.1
 DEFAULT_HOME_TIMEOUT = 120  # seconds
 DEFAULT_MOVE_TIMEOUT = 15  # seconds
 DEFAULT_CMD_TIMEOUT = 5.0  # seconds
@@ -359,7 +359,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                 timeout = DEFAULT_CMD_TIMEOUT
 
             send_cmd(ser, line, timeout=timeout)
-            wait_until_idle(ser, timeout)
+            # wait_until_idle(ser, timeout)
             executed_lines += 1
 
             if executed_lines % 10 == 0:  # Progress update every 10 commands
