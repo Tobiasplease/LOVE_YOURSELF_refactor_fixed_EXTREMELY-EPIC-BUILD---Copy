@@ -9,7 +9,15 @@ from captioner.prompts import (
     build_change_focused_caption_prompt,
 )
 from config import config
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, VISUAL_CHANGE_THRESHOLD, TINYLLAMA_TEMPERATURE, TINYLLAMA_TOP_P, TINYLLAMA_NUM_PREDICT, TINYLLAMA_TIMEOUT
+from config.config import (
+    MOOD_SNAPSHOT_FOLDER,
+    OLLAMA_MODEL,
+    VISUAL_CHANGE_THRESHOLD,
+    TINYLLAMA_TEMPERATURE,
+    TINYLLAMA_TOP_P,
+    TINYLLAMA_NUM_PREDICT,
+    TINYLLAMA_TIMEOUT,
+)
 from config.model_settings import get_model_options, get_model_system_prompt, is_qwen_model
 from utils.ollama import query_ollama
 
@@ -44,7 +52,7 @@ class MultimodalModel:
         elif flowing and self.memory_ref:
             # Check for significant visual change in snapshot
             visual_change_detected = self._detect_significant_visual_change()
-            
+
             if visual_change_detected:
                 # Use change-focused prompt to ground the AI in current reality
                 prompt = build_change_focused_caption_prompt(
@@ -107,10 +115,10 @@ class MultimodalModel:
         """Detect if there's been a significant visual change in the snapshot (not video feed)."""
         if not self.memory_ref:
             return False
-            
+
         # Get the novelty score - high novelty indicates visual change
-        novelty = getattr(self.memory_ref, 'novelty_score', 0.0)
-        
+        novelty = getattr(self.memory_ref, "novelty_score", 0.0)
+
         # Use configurable threshold for "significant change"
         return novelty > VISUAL_CHANGE_THRESHOLD
 
@@ -147,7 +155,7 @@ class MultimodalModel:
             log_dir=MOOD_SNAPSHOT_FOLDER,
             system_prompt=final_system_prompt,
             options=model_options,  # Pass model-specific options
-            # show_progress=True,  # Enable progress bar for captions
+            show_progress=True,  # Enable progress bar for captions
         )
 
         # Clean up AI model leakage - remove unwanted prompt-like text

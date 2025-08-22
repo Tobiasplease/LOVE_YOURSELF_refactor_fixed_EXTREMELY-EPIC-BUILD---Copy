@@ -112,7 +112,7 @@ def query_ollama(
         Response text from Ollama
     """
     _wait_for_drawing_completion()
-    
+
     # Use streaming if progress bar is requested
     use_streaming = show_progress
     payload = {"model": model, "prompt": prompt, "stream": use_streaming}
@@ -157,24 +157,23 @@ def query_ollama(
             # Start progress bar for streaming
             progress_bar = ProgressBar(description="")
             progress_bar.start()
-            
+
             # Streaming request
-            response = requests.post("http://localhost:11434/api/generate", json=payload, 
-                                   timeout=timeout, stream=True)
+            response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=timeout, stream=True)
             response.raise_for_status()
-            
+
             response_text = ""
             for line in response.iter_lines():
                 if line:
                     try:
-                        chunk = json.loads(line.decode('utf-8'))
-                        if 'response' in chunk:
-                            response_text += chunk['response']
-                        if chunk.get('done', False):
+                        chunk = json.loads(line.decode("utf-8"))
+                        if "response" in chunk:
+                            response_text += chunk["response"]
+                        if chunk.get("done", False):
                             break
                     except json.JSONDecodeError:
                         continue
-            
+
             # Stop progress bar
             progress_bar.stop(success=True)
         else:
@@ -199,7 +198,7 @@ def query_ollama(
 
     except Exception as e:
         error_msg = str(e)
-        
+
         # Stop progress bar on error
         if progress_bar:
             progress_bar.stop(success=False)
