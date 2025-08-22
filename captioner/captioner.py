@@ -6,6 +6,8 @@ import threading
 from collections import deque
 from typing import Deque, Optional, Tuple, Dict, List
 
+# from weakref import ref
+
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
@@ -22,6 +24,7 @@ from .model_wrapper import MultimodalModel
 class Captioner(MemoryMixin):
     def shutdown(self):
         self.save_session_time()
+
     caption_window: Optional[any] = None  # type: ignore
 
     def __init__(self) -> None:
@@ -77,7 +80,16 @@ class Captioner(MemoryMixin):
     def is_processing(self) -> bool:
         return bool(self.snapshot_queue)
 
-    def update(self, frame: Optional[np.ndarray] = None, *, person_present: bool = False, mood: Optional[float] = None, mood_vector: Optional[Tuple[float, float, float]] = None, emotion_state: Optional[str] = None, reactivity_data: Optional[Dict] = None) -> None:
+    def update(
+        self,
+        frame: Optional[np.ndarray] = None,
+        *,
+        person_present: bool = False,
+        mood: Optional[float] = None,
+        mood_vector: Optional[Tuple[float, float, float]] = None,
+        emotion_state: Optional[str] = None,
+        reactivity_data: Optional[Dict] = None,
+    ) -> None:
         if frame is not None:
             if mood is not None:
                 self.current_mood = mood
@@ -151,17 +163,26 @@ class Captioner(MemoryMixin):
             print_message=f"👁️ Caption: {caption}",
         )
 
-        self.observe(caption, self.current_mood, img_path, memory_type="perception", 
-                    reactivity_data=reactivity_data, 
-                    mood_vector=self.current_mood_vector,
-                    emotion_state=self.current_emotion_state)
+        self.observe(
+            caption,
+            self.current_mood,
+            img_path,
+            memory_type="perception",
+            reactivity_data=reactivity_data,
+            mood_vector=self.current_mood_vector,
+            emotion_state=self.current_emotion_state,
+        )
         self.last_caption = caption
 
         if now - self.last_reason_time > REASON_INTERVAL:
-            mood_text = self.describe_current_mood()
-            context = self.get_reflection_context()
-            reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
 
+            print("REASONING1")
+            mood_text = self.describe_current_mood()
+            print("REASONING2", mood_text)
+            context = self.get_reflection_context()
+            print("REASONING2", context)
+            reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
+            print("REASONING3 DOES NOT RUN", reflection)
             if reflection and len(reflection.strip()) > 10:
                 log_json_entry(
                     LogType.REFLECTION,
@@ -191,37 +212,37 @@ class Captioner(MemoryMixin):
     def describe_current_mood(self) -> str:
         """Rich emotional description using 3D mood state and temporal context."""
         valence, arousal, clarity = self.current_mood_vector
-        
+
         # Base emotional state description
         emotion_descriptions = {
-            'energized_engaged': "I feel energized and deeply engaged with what I'm seeing",
-            'alert_curious': "I'm alert and curious, noticing details with heightened attention", 
-            'calm_observant': "I feel calm and peacefully observant, taking in the scene with serenity",
-            'quiet_detached': "I'm in a quiet, somewhat detached state, observing from a distance",
-            'withdrawn_distant': "I feel withdrawn and distant, as if viewing through a fog"
+            "energized_engaged": "I feel energized and deeply engaged with what I'm seeing",
+            "alert_curious": "I'm alert and curious, noticing details with heightened attention",
+            "calm_observant": "I feel calm and peacefully observant, taking in the scene with serenity",
+            "quiet_detached": "I'm in a quiet, somewhat detached state, observing from a distance",
+            "withdrawn_distant": "I feel withdrawn and distant, as if viewing through a fog",
         }
-        
+
         base_mood = emotion_descriptions.get(self.current_emotion_state, "I'm in a neutral observational state")
-        
+
         # Add 3D mood nuances
         valence_note = ""
         if valence > 0.4:
             valence_note = ", finding contentment in what I observe"
         elif valence < -0.4:
             valence_note = ", feeling somewhat troubled by what I see"
-            
+
         arousal_note = ""
         if arousal > 0.4:
             arousal_note = ", with an energetic intensity"
         elif arousal < -0.4:
             arousal_note = ", in a deeply calm state"
-            
+
         clarity_note = ""
         if clarity > 0.4:
             clarity_note = ", with clear understanding"
         elif clarity < -0.4:
             clarity_note = ", feeling somewhat confused"
-        
+
         # Add temporal emotional context
         journey_note = ""
         if len(self.emotional_journey) >= 3:
@@ -230,7 +251,7 @@ class Captioner(MemoryMixin):
                 journey_note = f". I've been consistently {self.current_emotion_state} lately"
             else:
                 journey_note = f". My emotions have shifted: {' → '.join(recent_states)}"
-        
+
         return f"{base_mood}{valence_note}{arousal_note}{clarity_note}{journey_note}."
 
     def get_reflection_context(self) -> str:
@@ -241,7 +262,7 @@ class Captioner(MemoryMixin):
                 Recent memory: {self.get_recent_memory()}""".strip()
 
     def get_recent_memory(self, k: int = 5) -> str:
-        snippets = self.get_clean_memory_snippets(k=k)
+        snippets = self.get_clean_memory_snippets(k=k)  # type: ignore
         return "\n".join(f"- {s}" for s in snippets)
 
     def get_last_reflection(self) -> str:

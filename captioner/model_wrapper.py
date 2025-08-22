@@ -147,7 +147,7 @@ class MultimodalModel:
             log_dir=MOOD_SNAPSHOT_FOLDER,
             system_prompt=final_system_prompt,
             options=model_options,  # Pass model-specific options
-            show_progress=True,  # Enable progress bar for captions
+            # show_progress=True,  # Enable progress bar for captions
         )
 
         # Clean up AI model leakage - remove unwanted prompt-like text

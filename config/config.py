@@ -113,9 +113,9 @@ OLLAMA_TIMEOUT_EVAL = 90
 
 # === OUTPUT SETTINGS ===
 # TO SEE ONLY CLEAN CAPTIONS:
-# LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood"]
-LOG_TYPES_TO_PRINT = []
-PRINT_CLEAN_CAPTIONS = True
+LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
+# LOG_TYPES_TO_PRINT = []
+PRINT_CLEAN_CAPTIONS = False
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
