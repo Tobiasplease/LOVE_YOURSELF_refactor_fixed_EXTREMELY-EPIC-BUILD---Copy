@@ -8,7 +8,7 @@ import threading
 import os
 import signal
 import atexit
-from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY
+from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY, NO_HANDS
 from servo_control.lightbulb_pwm import LightbulbController
 
 
@@ -77,6 +77,9 @@ from event_logging.event_logger import get_current_run_id, set_start_time, log_j
 from event_logging.log_type import LogType
 
 try:
+    if NO_HANDS:
+        raise ImportError("Hand control disabled by NO_HANDS config")
+
     from hand_control.direct_hand_control import (
         start_hand_controller,  # type: ignore
         stop_hand_controller,
@@ -204,10 +207,11 @@ def emergency_cleanup():
             pass
 
         cv2.destroyAllWindows()
-        
+
         # Clear PyTorch cache if available (helps with YOLO cleanup)
         try:
             import torch
+
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 print("[🔧] GPU cache cleared")
@@ -215,7 +219,7 @@ def emergency_cleanup():
             pass  # PyTorch not available, skip
         except Exception as e:
             print(f"[⚠️] Warning: Could not clear GPU cache: {e}")
-        
+
         print("[✅] Emergency cleanup completed")
         cleanup_completed = True
 
@@ -265,10 +269,8 @@ def graceful_cleanup():
                 print("[⚠️] Object detector thread didn't stop cleanly - forcing termination")
                 # Force terminate if it's still alive
                 import ctypes
-                ctypes.pythonapi.PyThreadState_SetAsyncExc(
-                    ctypes.c_long(_global_object_detector.ident), 
-                    ctypes.py_object(SystemExit)
-                )
+
+                ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(_global_object_detector.ident), ctypes.py_object(SystemExit))  # type: ignore
         except Exception as e:
             print(f"[❌] Error stopping object detector: {e}")
 
@@ -299,6 +301,7 @@ def graceful_cleanup():
     # Clear PyTorch cache if available (helps with YOLO cleanup)
     try:
         import torch
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             print("[🔧] GPU cache cleared")
@@ -539,7 +542,7 @@ try:
         if shutdown_in_progress:
             print("[🛑] Shutdown signal received - breaking main loop")
             break
-            
+
         ret, frame = cap.read()
         if not ret:
             continue

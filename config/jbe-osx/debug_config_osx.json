@@ -5,5 +5,6 @@
   "DRAWING_INTERVAL": 600,
   "COMFY_OUTPUT_FOLDER": "/Users/jbe/Dropbox/_outputs",
   "LOG_TYPES_TO_PRINT": ["system", "caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"],
-  "PRINT_CLEAN_CAPTIONS": false
+  "PRINT_CLEAN_CAPTIONS": false,
+  "NO_HANDS": true
 }

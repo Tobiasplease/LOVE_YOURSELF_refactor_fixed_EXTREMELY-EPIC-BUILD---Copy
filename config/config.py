@@ -119,6 +119,7 @@ PRINT_CLEAN_CAPTIONS = False
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
+NO_HANDS = False
 
 # === REACTIVITY PAUSE SYSTEM ===
 REACTIVITY_PAUSE_THRESHOLD = 0.30  # Activity level to trigger pause

@@ -11,5 +11,6 @@
   "FLUX_GGUF_PATH": "flux1/flux1-dev-Q4_K_S.gguf",
   "FLUX_DEV_PATH": "flux1/flux1-dev.safetensors",
   "CONTROLNET_NET_PATH": "flux/flux-dev-controlnet-union-pro-2.safetensors",
-  "BATCH_SIZE": 1
+  "BATCH_SIZE": 1,
+  "NO_HANDS": true
 }
