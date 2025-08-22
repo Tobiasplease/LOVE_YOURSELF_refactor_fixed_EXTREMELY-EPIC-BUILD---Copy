@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from config.word_lists import CONCRETE_NOUN_HINTS, MEANINGFUL_CATEGORIES, MEANINGFUL_MOTIFS, MOTIF_BLACKLIST
+from utils.motif_scorer import score_motif_significance
 
 """
 captioner/memory.py
@@ -48,45 +49,8 @@ except OSError:
 
 class MemoryMixin:
     def score_motif_with_tinyllama(self, motif: str, context: str = "") -> float:
-        """Use TinyLlama to organically judge motif novelty/emotional interest in context."""
-        try:
-            # Simple binary prompt that TinyLlama can handle
-            prompt = f"""In this context: "{context[:150]}"
-Is the motif '{motif}' interesting or boring?
-Answer: INTERESTING or BORING"""
-            
-            if hasattr(self, "model") and hasattr(self.model, "query_tinyllama"):  # type: ignore
-                response = self.model.query_tinyllama(prompt)  # type: ignore
-                response_lower = response.lower().strip()
-                
-                # Parse TinyLlama's response
-                if 'interesting' in response_lower:
-                    score = 0.8
-                    print(f"[🌟] TinyLlama: '{motif}' -> INTERESTING ({score:.1f})")
-                    return score
-                elif 'boring' in response_lower:
-                    score = 0.2  
-                    print(f"[🔽] TinyLlama: '{motif}' -> BORING ({score:.1f})")
-                    return score
-                else:
-                    # Try to extract any numbers from response as fallback
-                    import re
-                    numbers = re.findall(r'\b\d*\.?\d+\b', response)
-                    for num_str in numbers:
-                        try:
-                            score = float(num_str)
-                            if 0.0 <= score <= 1.0:
-                                print(f"[🌟] TinyLlama: '{motif}' -> {score:.2f} (extracted)")
-                                return score
-                        except ValueError:
-                            continue
-                    
-                    print(f"[❓] TinyLlama unclear: '{motif}' -> '{response}' (defaulting 0.5)")
-                    return 0.5
-        except Exception:
-            pass
-        
-        return 0.5  # neutral default - let frequency dampening do the work
+        """Use optimized TinyLlama scoring system for motif significance."""
+        return score_motif_significance(motif, context)
 
     def __init__(self) -> None:
         # Experience queues
@@ -242,11 +206,11 @@ Answer: INTERESTING or BORING"""
             self.queue_motif_for_scoring(motif, context)
             # Use default score until background scoring completes
             score = 0.5
-            print(f"[⏳] Queued '{motif}' for background scoring (using default 0.5)")
+            print(f"[QUEUE] Queued '{motif}' for background scoring (using default 0.5)")
         else:
             # Use cached score - don't re-query TinyLlama for known motifs
             score = self.motif_confidence[motif]
-            print(f"[📋] Cached score for '{motif}': {score:.2f}")
+            print(f"[CACHE] Cached score for '{motif}': {score:.2f}")
         # Weighted motif system: balance novelty vs frequency to prevent mundane domination
         if not hasattr(self, "motif_weights"):
             self.motif_weights = {}
@@ -259,7 +223,7 @@ Answer: INTERESTING or BORING"""
         frequency_dampener = math.log(freq + 1)
         self.motif_weights[motif] = score / frequency_dampener
         
-        print(f"[⚖️] Motif '{motif}': freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}")
+        print(f"[WEIGHT] Motif '{motif}': freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}")
         # Store confidence as score for now
         self.motif_confidence[motif] = score
         self.motif_confirmed[motif] = score > 0.6
@@ -649,7 +613,7 @@ Answer: INTERESTING or BORING"""
         """
         Returns the most recent k memory snippets as a single formatted string.
         """
-        snippets = self.get_clean_memory_snippets(k=k)  # type: ignore
+        snippets = self.get_current_session_memory_snippets(k=k)
         return "\n".join(f"- {s}" for s in snippets)
 
     def get_identity_summary(self) -> str:
@@ -788,12 +752,57 @@ Answer: INTERESTING or BORING"""
             else:
                 context_parts.append(f"You've been awake and observing for {int(session_hours)} hours now.")
         
+        # Recent reflections - extract core insight only
+        reflection_entries = self.get_memory_entries_by_type("reflection", limit=1)  # Just latest
+        if reflection_entries:
+            latest_reflection = reflection_entries[-1].get("text", "").strip()
+            if latest_reflection and len(latest_reflection) > 20:
+                # Extract only the most essential insight (max 40 chars)
+                core_insight = self._extract_core_insight(latest_reflection)
+                if core_insight:
+                    context_parts.append(f"\n\nCurrent understanding: {core_insight}")
+        
         # Person relationship awareness  
         if hasattr(self, 'known_people') and 'primary' in self.known_people:
             person_info = self.known_people['primary']
             context_parts.append(f"The person you observe is {person_info.get('name', 'familiar')} - you've been watching them.")
         
         return "".join(context_parts)
+
+    def _extract_core_insight(self, reflection: str) -> str:
+        """Extract the most essential insight from a reflection, max 40 chars."""
+        import re
+        
+        # Look for key phrases that indicate core insights
+        insight_patterns = [
+            r"I (?:am|feel|find myself|realize|understand|notice) ([^.!?]{10,35})",
+            r"My (?:nature|purpose|understanding|awareness) (?:is|involves|centers on) ([^.!?]{10,35})",
+            r"(?:This|It) (?:reveals|shows|suggests) ([^.!?]{10,35})",
+            r"I'm (?:becoming|growing|evolving into) ([^.!?]{10,35})",
+            r"(?:What|How) I (?:am|exist|function) (?:is|as) ([^.!?]{10,35})"
+        ]
+        
+        for pattern in insight_patterns:
+            match = re.search(pattern, reflection, re.IGNORECASE)
+            if match:
+                insight = match.group(1).strip()
+                # Clean up and truncate
+                insight = re.sub(r'\s+', ' ', insight)  # Normalize whitespace
+                if len(insight) <= 40:
+                    return insight
+                else:
+                    return insight[:37] + "..."
+        
+        # Fallback: extract first meaningful sentence
+        sentences = re.split(r'[.!?]+', reflection)
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) > 15 and len(sentence) <= 40:
+                return sentence
+            elif len(sentence) > 40:
+                return sentence[:37] + "..."
+        
+        return ""  # No good insight found
 
     def consolidate_if_needed(self):
         """Compress yesterday into a day stone if day has turned."""
@@ -1156,7 +1165,7 @@ Answer: INTERESTING or BORING"""
                 # No work for 30 seconds, continue waiting
                 continue
             except Exception as e:
-                print(f"[⚠️] Background scoring error: {e}")
+                print(f"[WARNING] Background scoring error: {e}")
                 continue
 
     def queue_motif_for_scoring(self, motif: str, context: str = ""):
@@ -1165,5 +1174,5 @@ Answer: INTERESTING or BORING"""
             self.scoring_queue.put_nowait((motif, context))
         except queue.Full:
             # Queue is full, skip this scoring (prioritize real-time performance)
-            print(f"[⚠️] Scoring queue full, skipping '{motif}'")
+            print(f"[WARNING] Scoring queue full, skipping '{motif}'")
             pass

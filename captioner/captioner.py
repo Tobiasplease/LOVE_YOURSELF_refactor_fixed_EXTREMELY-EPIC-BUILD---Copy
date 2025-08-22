@@ -19,6 +19,8 @@ from drawing.drawing import DrawingController
 from .memory import MemoryMixin
 from .prompts import extract_motifs_spacy
 from .model_wrapper import MultimodalModel
+from utils.motif_scorer import score_multiple_motifs
+from utils.error_tracking import track_component_health, robust_execution
 
 
 class Captioner(MemoryMixin):
@@ -43,6 +45,7 @@ class Captioner(MemoryMixin):
         self.last_caption: str = ""
         self.boredom: float = 0.0
         self.novelty_score: float = 0.0
+        self.current_motifs_from_mood: List[str] = []
 
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
@@ -80,6 +83,7 @@ class Captioner(MemoryMixin):
     def is_processing(self) -> bool:
         return bool(self.snapshot_queue)
 
+    @track_component_health('captioner')
     def update(
         self,
         frame: Optional[np.ndarray] = None,
@@ -117,11 +121,12 @@ class Captioner(MemoryMixin):
                     log_json_entry(
                         LogType.ERROR,
                         {"message": f"Caption thread error: {exc}", "component": "captioner"},
-                        print_message=f"⚠️ Caption thread error: {exc}",
+                        print_message=f"WARNING Caption thread error: {exc}",
                     )
             else:
                 time.sleep(0.05)
 
+    @robust_execution('captioner', 'caption_generation', fallback_result=None)
     def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None) -> None:
         now = time.time()
         if now - self.last_caption_time < CAPTION_INTERVAL:
@@ -134,25 +139,25 @@ class Captioner(MemoryMixin):
 
         try:
             if not self.first_caption_done:
-                print("🌅 Observing environment for the first time...")
+                print("Observing environment for the first time...")
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)
             else:
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
         except Exception as e:
-            caption = "[⚠️] Vision unavailable"
+            caption = "[WARNING] Vision unavailable"
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Caption error: {e}", "component": "captioner"},
-                print_message=f"⚠️ Caption error: {e}",
+                print_message=f"WARNING Caption error: {e}",
             )
 
         self.first_caption_done = True
 
-        if "[⚠️]" in caption:
+        if "[WARNING]" in caption:
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Caption error: {caption}", "component": "captioner"},
-                print_message=f"📍 Caption error: {caption}",
+                print_message=f"Caption error: {caption}",
             )
             self.observe("I couldn’t see anything just now.", self.current_mood, img_path, memory_type="glitch")
             return
@@ -160,7 +165,7 @@ class Captioner(MemoryMixin):
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            print_message=f"👁️ Caption: {caption}",
+            print_message=caption,
         )
 
         self.observe(
@@ -175,31 +180,44 @@ class Captioner(MemoryMixin):
         self.last_caption = caption
 
         if now - self.last_reason_time > REASON_INTERVAL:
+            try:
+                mood_text = self.describe_current_mood()
+                context = self.get_reflection_context()
+                
+                print(f"[REFLECTION] Starting reflection (last: {(now - self.last_reason_time):.0f}s ago)")
+                reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
+                print(f"[REFLECTION] Completed: {len(reflection.strip())} chars")
+                
+                if reflection and len(reflection.strip()) > 10:
+                    log_json_entry(
+                        LogType.REFLECTION,
+                        {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
+                        print_message=f"REFLECTION: {reflection}",
+                    )
+                    self.last_reason_time = now
+                    self.awakening_done = True
 
-            print("REASONING1")
-            mood_text = self.describe_current_mood()
-            print("REASONING2", mood_text)
-            context = self.get_reflection_context()
-            print("REASONING2", context)
-            reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
-            print("REASONING3 DOES NOT RUN", reflection)
-            if reflection and len(reflection.strip()) > 10:
-                log_json_entry(
-                    LogType.REFLECTION,
-                    {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
-                    print_message=f"🧠 Reflection: {reflection}",
-                )
-                self.last_reason_time = now
-                self.awakening_done = True
+                    m = re.search(r"-?\d+(?:\.\d+)?", reflection)
+                    mood_val = float(m.group()) if m else self.current_mood
+                    self.current_mood += 0.25 * (mood_val - self.current_mood)
 
-                m = re.search(r"-?\d+(?:\.\d+)?", reflection)
-                mood_val = float(m.group()) if m else self.current_mood
-                self.current_mood += 0.25 * (mood_val - self.current_mood)
+                    # Use motifs from mood engine's pattern recognition instead of re-extracting
+                    if hasattr(self, 'current_motifs_from_mood') and self.current_motifs_from_mood:
+                        for motif in self.current_motifs_from_mood:
+                            self.absorb_motif(motif)
+                    else:
+                        # Fallback to direct extraction if mood data not available
+                        for motif in extract_motifs_spacy(caption):
+                            self.absorb_motif(motif)
 
-                for motif in extract_motifs_spacy(caption):
-                    self.absorb_motif(motif)
-
-                self.observe(reflection, self.current_mood, img_path, memory_type="reflection")
+                    self.observe(reflection, self.current_mood, img_path, memory_type="reflection")
+                else:
+                    print("[REFLECTION] Generated reflection too short, skipping")
+                        
+            except Exception as e:
+                print(f"[REFLECTION] Error during reflection: {e}")
+                # Still update the timer to prevent infinite retries
+                self.last_reason_time = now - REASON_INTERVAL + 60  # Retry in 60 seconds
 
         if now - self.last_drawing_time > DRAWING_INTERVAL:
             memory_context = self.get_recent_memory()
@@ -255,14 +273,64 @@ class Captioner(MemoryMixin):
         return f"{base_mood}{valence_note}{arousal_note}{clarity_note}{journey_note}."
 
     def get_reflection_context(self) -> str:
-        return f"""Mood: {self.current_mood:.2f}
-                Boredom: {self.boredom:.2f}
-                Novelty: {self.novelty_score:.2f}
-                Identity: {self.get_identity_summary()}
-                Recent memory: {self.get_recent_memory()}""".strip()
+        """Enhanced reflection context with specific experiential data."""
+        
+        # Get specific motifs and patterns from current session
+        top_motifs = ""
+        new_motifs = ""
+        recurring_motifs = ""
+        
+        if hasattr(self, 'current_motifs_from_mood') and self.current_motifs_from_mood:
+            # Use real-time motif data from pattern recognition
+            recent_motifs = self.current_motifs_from_mood[:5]
+            top_motifs = f"Current motifs: {', '.join(recent_motifs)}"
+        elif hasattr(self, 'get_top_motifs'):
+            motifs = self.get_top_motifs(5)
+            if motifs:
+                top_motifs = f"Recurring motifs: {', '.join(motifs[:5])}"
+        
+        # Get specific emotional changes
+        emotion_changes = ""
+        if hasattr(self, 'emotional_journey') and self.emotional_journey:
+            if len(self.emotional_journey) >= 2:
+                recent_emotions = self.emotional_journey[-3:]
+                emotion_changes = f"Emotional shifts: {' → '.join(recent_emotions)}"
+            else:
+                emotion_changes = f"Current state: {self.current_emotion_state}"
+        
+        # Get specific observations from recent memory
+        recent_observations = self.get_recent_memory(k=3)
+        
+        # Get mood vector details for specificity
+        valence, arousal, clarity = self.current_mood_vector
+        mood_details = f"Mood details: valence={valence:.2f} (feeling {'positive' if valence > 0 else 'negative' if valence < 0 else 'neutral'}), arousal={arousal:.2f} (energy {'high' if arousal > 0.3 else 'low' if arousal < -0.3 else 'medium'}), clarity={clarity:.2f} (understanding {'clear' if clarity > 0.3 else 'confused' if clarity < -0.3 else 'uncertain'})"
+        
+        # Build context focused on concrete experience
+        context_parts = [
+            f"Current experience: Just observed '{self.last_caption}'",
+            f"Overall mood: {self.current_mood:.2f} (novelty: {self.novelty_score:.2f}, boredom: {self.boredom:.2f})",
+            mood_details,
+            f"Session time: {(time.time() - self.true_session_start)/60:.0f} minutes active"
+        ]
+        
+        if recent_observations:
+            context_parts.append(f"Recent observations:\n{recent_observations}")
+        
+        if top_motifs:
+            context_parts.append(top_motifs)
+            
+        if emotion_changes:
+            context_parts.append(emotion_changes)
+            
+        # Add any identity formation
+        identity = self.get_identity_summary()
+        if identity and "forming" not in identity.lower():
+            context_parts.append(f"Identity: {identity}")
+            
+        return "\n".join(context_parts)
 
     def get_recent_memory(self, k: int = 5) -> str:
-        snippets = self.get_clean_memory_snippets(k=k)  # type: ignore
+        snippets = self.get_current_session_memory_snippets(k=k)
         return "\n".join(f"- {s}" for s in snippets)
 
     def get_last_reflection(self) -> str:

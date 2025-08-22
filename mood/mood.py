@@ -12,6 +12,7 @@ from config.prompt_templates import MOOD_PROMPT_TEMPLATE
 from event_logging.event_logger import log_json_entry, read_json_logs
 from event_logging.log_type import LogType
 from utils.ollama import query_ollama
+from utils.pattern_recognition import PatternRecognitionEngine
 
 
 # ---------------------------------------------------------------------------#
@@ -20,8 +21,8 @@ from utils.ollama import query_ollama
 class MoodEngine:
     def __init__(self) -> None:
         self.current_mood = 0.5  # Backward compatibility scalar
-        self.mood_vector = (0.0, 0.0, 0.5)  # Initial: neutral valence, neutral arousal, moderate clarity
-        self.previous_mood_vector = (0.0, 0.0, 0.5)  # For emotional momentum tracking
+        self.mood_vector = (0.0, 0.0, 0.0)  # Initial: truly neutral valence, arousal, clarity  
+        self.previous_mood_vector = (0.0, 0.0, 0.0)  # For emotional momentum tracking
         self.emotional_momentum = 0.4  # How much previous mood influences new mood (0.0-1.0) - reduced for more responsive emotional evolution
         self.last_caption = ""
         self.last_person_detected = False
@@ -30,6 +31,9 @@ class MoodEngine:
         
         # GPT-5's suggestion: Long-term mood bias for tone evolution over weeks
         self.long_bias = getattr(self, "long_bias", (0.0, 0.0, 0.0))  # val, aro, clr drift
+        
+        # Initialize unified pattern recognition engine
+        self.pattern_engine = PatternRecognitionEngine()
 
     # -------------------------------------------------------------- main hook
     def analyze_mood(self, caption: str, saw_person: bool = False, image_path: str = None, memory_context: Optional[any] = None, temporal_feeling: Optional[str] = None) -> float:
@@ -57,12 +61,12 @@ class MoodEngine:
         
         # Add natural emotional decay toward neutral over time
         time_since_start = time.time() - self.session_start
-        decay_factor = min(0.05, time_since_start / 3600.0 * 0.02)  # Max 5% decay per hour
+        decay_factor = min(0.15, time_since_start / 1800.0 * 0.05)  # Max 15% decay, faster timeline (30min cycles)
         
-        # Apply decay toward neutral (0, 0, 0.5)
+        # Apply decay toward neutral (0, 0, 0)
         prev_v = prev_v * (1 - decay_factor) if abs(prev_v) > 0.1 else prev_v
         prev_a = prev_a * (1 - decay_factor) if abs(prev_a) > 0.1 else prev_a
-        prev_c = prev_c * (1 - decay_factor) + 0.5 * decay_factor if abs(prev_c - 0.5) > 0.1 else prev_c
+        prev_c = prev_c * (1 - decay_factor) if abs(prev_c) > 0.1 else prev_c
         
         # Reduce emotional momentum slightly over time to prevent lock-in
         adjusted_momentum = self.emotional_momentum * (1 - decay_factor * 0.5)
@@ -83,8 +87,10 @@ class MoodEngine:
         # Convert 3D mood to scalar for backward compatibility
         scalar_mood = self.convert_3d_to_scalar(valence, arousal, clarity)
         
-        # Apply traditional adjustments (novelty, person detection, decay)
-        novelty = self.calculate_novelty(caption)
+        # Apply unified pattern analysis (motifs + novelty)
+        pattern_data = self.pattern_engine.analyze_caption(caption)
+        novelty = pattern_data['novelty']
+        self._last_novelty = novelty  # Store for external access
         traditional_change = self.compute_mood_change(novelty, saw_person)
         
         # Combine 3D analysis with traditional factors
@@ -127,25 +133,13 @@ class MoodEngine:
         else:
             return "calm_observant"  # Default neutral state
 
-    def calculate_novelty(self, caption):
-        """Calculate novelty based on semantic similarity, not exact match."""
-        if not self.last_caption:
-            return 0.3  # Moderate novelty for first caption, not maximum
-        
-        # Simple keyword-based similarity check
-        current_words = set(caption.lower().split())
-        last_words = set(self.last_caption.lower().split())
-        
-        # Calculate Jaccard similarity (intersection / union)
-        intersection = len(current_words & last_words)
-        union = len(current_words | last_words)
-        similarity = intersection / union if union > 0 else 0
-        
-        # Convert similarity to novelty (inverse relationship)
-        novelty = 1.0 - similarity
-        
-        # Scale novelty to be less dramatic
-        return min(0.4, novelty * 0.6)  # Cap at 0.4, scale down
+    def get_pattern_data(self) -> dict:
+        """Get current pattern recognition data for external access."""
+        return {
+            'recent_motifs': list(self.pattern_engine.current_motifs),
+            'motif_summary': self.pattern_engine.get_motif_summary(),
+            'novelty_score': getattr(self, '_last_novelty', 0.0)
+        }
 
     def compute_mood_change(self, novelty, saw_person):
 
@@ -168,8 +162,8 @@ class MoodEngine:
         # Base novelty effect - much smaller and proportional
         change += novelty * 0.03  # Scale down novelty impact significantly
         
-        # Natural mood decay - stronger to prevent getting stuck high
-        change -= 0.04  # Increased from -0.02 to ensure gradual decline
+        # Natural mood decay - much stronger to prevent getting stuck high
+        change -= 0.08  # Doubled from -0.04 to ensure proper decline
         
         # Person presence effects - reduced
         if saw_person and not self.last_person_detected:
@@ -267,7 +261,7 @@ class MoodEngine:
             return valence, arousal, clarity
             
         except Exception as e:
-            print(f"[⚠️ ] 3D mood analysis failed: {e}")
+            print(f"[WARNING ] 3D mood analysis failed: {e}")
             # Fallback to slight emotional evolution from current state
             curr_v, curr_a, curr_c = self.mood_vector
             return (
@@ -313,22 +307,24 @@ class MoodEngine:
                 clarity = np.clip(float(numbers[2]), -1.0, 1.0)
                 return valence, arousal, clarity
             
-            # Fallback: try to extract semantic meaning
+            # Fallback: try to extract semantic meaning with symmetric, neutral-biased values
             response_lower = response.lower()
-            valence = 0.3 if "positive" in response_lower or "pleasant" in response_lower else -0.2
-            arousal = 0.4 if "energetic" in response_lower or "alert" in response_lower else -0.1
-            clarity = 0.5 if "clear" in response_lower or "focused" in response_lower else 0.0
+            valence = 0.2 if "positive" in response_lower or "pleasant" in response_lower else -0.2 if "negative" in response_lower or "unpleasant" in response_lower else 0.0
+            arousal = 0.3 if "energetic" in response_lower or "alert" in response_lower else -0.3 if "tired" in response_lower or "calm" in response_lower else 0.0
+            clarity = 0.3 if "clear" in response_lower or "focused" in response_lower else -0.3 if "confused" in response_lower or "foggy" in response_lower else 0.0
             
             return valence, arousal, clarity
             
         except Exception as e:
-            print(f"[⚠️ ] Failed to parse 3D mood response: {e}")
-            return (0.0, 0.0, 0.5)
+            print(f"[WARNING ] Failed to parse 3D mood response: {e}")
+            # Return truly neutral values instead of positive-biased clarity
+            return (0.0, 0.0, 0.0)
     
     def convert_3d_to_scalar(self, valence: float, arousal: float, clarity: float) -> float:
-        """Convert 3D mood to scalar for backward compatibility."""
-        # Weighted combination: valence is primary, arousal and clarity add nuance
-        scalar = 0.5 + (valence * 0.4) + (arousal * 0.2) + (clarity * 0.1)
+        """Convert 3D mood to scalar for backward compatibility with neutral baseline."""
+        # Neutral 3D vector (0,0,0) should map to 0.5 scalar (true neutral)
+        # All dimensions now use 0.0 as neutral, no baseline bias
+        scalar = 0.5 + (valence * 0.3) + (arousal * 0.15) + (clarity * 0.1)
         return np.clip(scalar, 0.0, 1.0)
     
     # === GPT-5's LONG-TERM TONE EVOLUTION ===
@@ -403,6 +399,7 @@ class MoodEngine:
 def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
     """
     Log mood data in JSON format with timestamp, caption, mood value, and image path.
+    Only print to console when mood change is meaningful (>0.05).
     """
     data = {
         "caption": caption,
@@ -411,18 +408,13 @@ def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
         "image_path": image_path if image_path and os.path.exists(image_path) else None,
     }
 
-    if mood > 0.7:
-        emoji = "😊"
-    elif mood > 0.5:
-        emoji = "🙂"
-    elif mood > 0.3:
-        emoji = "😐"
-    elif mood > 0.1:
-        emoji = "😔"
-    else:
-        emoji = "😞"
+    # Only print mood updates for meaningful changes (>0.05) to reduce noise
+    print_message = None
+    if abs(mood_change) > 0.05:
+        change_indicator = "↗" if mood_change > 0 else "↘"
+        print_message = f"Mood {change_indicator} {mood:.2f} (Δ{mood_change:+.2f})"
 
-    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=f"{emoji} Mood: {mood:.2f} - {caption}")
+    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=print_message)
 
 
 def read_mood_logs(limit: Optional[int] = None) -> List[dict]:
@@ -490,7 +482,7 @@ def read_mood_logs(limit: Optional[int] = None) -> List[dict]:
                         )
 
                 except (ValueError, IOError) as e:
-                    print(f"[⚠️] Error reading old mood log {filepath}: {e}")
+                    print(f"[WARNING] Error reading old mood log {filepath}: {e}")
 
     # Also handle old JSON format with different naming convention
     if os.path.exists(MOOD_SNAPSHOT_FOLDER):
@@ -528,7 +520,7 @@ def read_mood_logs(limit: Optional[int] = None) -> List[dict]:
                                     )
 
                 except (json.JSONDecodeError, IOError) as e:
-                    print(f"[⚠️] Error reading old JSON mood log {filepath}: {e}")
+                    print(f"[WARNING] Error reading old JSON mood log {filepath}: {e}")
 
     # Sort by timestamp (newest first) and apply limit
     mood_logs.sort(key=lambda x: x["timestamp"], reverse=True)

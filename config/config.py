@@ -12,7 +12,7 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
 USE_SERVO = False
-USE_HAND_CONTROLLER = False  # Completely disable hand controller system
+USE_HAND_CONTROLLER = True  # Completely disable hand controller system
 SERVO_MIN = 45
 SERVO_MAX = 135
 EASING_FACTOR = 0.09

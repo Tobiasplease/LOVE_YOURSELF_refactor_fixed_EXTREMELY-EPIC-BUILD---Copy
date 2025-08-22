@@ -72,7 +72,7 @@ def load_config_metadata() -> Dict[str, Any]:
         _config_metadata = config_vars
         return _config_metadata
     except Exception as e:
-        print(f"[⚠️] Error loading config metadata: {e}")
+        print(f"[WARNING] Error loading config metadata: {e}")
         _config_metadata = {}
         return _config_metadata
 
@@ -252,7 +252,7 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
                             logs.append(entry)
 
         except (json.JSONDecodeError, IOError) as e:
-            print(f"[⚠️] Error reading log file {filepath}: {e}")
+            print(f"[WARNING] Error reading log file {filepath}: {e}")
             continue
 
     # Sort by timestamp

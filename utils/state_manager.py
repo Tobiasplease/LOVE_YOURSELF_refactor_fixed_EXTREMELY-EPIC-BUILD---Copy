@@ -101,7 +101,7 @@ class StateManager:
             return True
 
         except Exception as e:
-            print(f"[❌] Failed to save session state: {e}")
+            print(f"[ERROR] Failed to save session state: {e}")
             return False
 
     def load_session_state(self) -> Optional[Dict[str, Any]]:
@@ -116,7 +116,7 @@ class StateManager:
 
             # Validate state format
             if not self._validate_state(state):
-                print("[⚠️] Invalid state format - starting fresh")
+                print("[WARNING] Invalid state format - starting fresh")
                 return None
 
             save_time = state["metadata"]["save_time"]
@@ -126,7 +126,7 @@ class StateManager:
             return state
 
         except Exception as e:
-            print(f"[❌] Failed to load session state: {e}")
+            print(f"[ERROR] Failed to load session state: {e}")
             return None
 
     def apply_state_to_captioner(self, state: Dict[str, Any], captioner) -> bool:
@@ -192,11 +192,11 @@ class StateManager:
             save_time = state["metadata"]["save_time"]
             captioner.true_session_start = save_time
 
-            print(f"[✅] Restored captioner state: {len(captioner.beliefs)} beliefs, {len(captioner.motif_counter)} motifs")
+            print(f"[SUCCESS] Restored captioner state: {len(captioner.beliefs)} beliefs, {len(captioner.motif_counter)} motifs")
             return True
 
         except Exception as e:
-            print(f"[❌] Failed to apply captioner state: {e}")
+            print(f"[ERROR] Failed to apply captioner state: {e}")
             return False
 
     def apply_state_to_mood_engine(self, state: Dict[str, Any], mood_engine) -> bool:
@@ -208,11 +208,11 @@ class StateManager:
             mood_engine.last_caption = mood_state.get("last_caption", "")
             mood_engine.last_person_detected = mood_state.get("last_person_detected", False)
 
-            print(f"[✅] Restored mood engine state: mood={mood_engine.current_mood:.2f}")
+            print(f"[SUCCESS] Restored mood engine state: mood={mood_engine.current_mood:.2f}")
             return True
 
         except Exception as e:
-            print(f"[❌] Failed to apply mood engine state: {e}")
+            print(f"[ERROR] Failed to apply mood engine state: {e}")
             return False
 
     def get_lifetime_stats(self) -> Dict[str, Any]:
@@ -258,7 +258,7 @@ class StateManager:
                 json.dump(lifetime_stats, f, indent=2)
 
         except Exception as e:
-            print(f"[⚠️] Failed to update lifetime stats: {e}")
+            print(f"[WARNING] Failed to update lifetime stats: {e}")
 
     def start_drawing_generation(self, prompt: str) -> None:
         """Mark drawing generation as started."""

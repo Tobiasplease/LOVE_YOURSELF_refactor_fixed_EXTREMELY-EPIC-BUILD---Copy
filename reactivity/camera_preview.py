@@ -16,7 +16,7 @@ def run_camera_preview():
     # Initialize camera and reactivity engine
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print("❌ Could not open camera")
+        print("ERROR Could not open camera")
         return
 
     reactivity_engine = CameraReactivityEngine()

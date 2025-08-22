@@ -89,7 +89,7 @@ class CleanCursorInterface:
         self.root.resizable(False, False)  # Disable resizing completely
         self.root.minsize(750, 650)  # Enforce minimum
         self.root.maxsize(750, 650)  # Enforce maximum
-        # Soft Pastel Pink Color Scheme 🌸✨
+        # Soft Pastel Pink Color Scheme 🌸SPARKLE
         self.colors = {
             'bg_main': '#FEF7F7',        # Very light rose - softest main background
             'bg_frame': '#F8E8E8',       # Pale rose - subtle frame backgrounds  
@@ -120,7 +120,7 @@ class CleanCursorInterface:
         except:
             pass  # No icon is fine
         
-        # Configure cute pastel ttk style 🌸✨
+        # Configure cute pastel ttk style 🌸SPARKLE
         self.style = ttk.Style()
         self.style.theme_use('clam')  # Use a modern base theme
         
@@ -393,9 +393,9 @@ class CleanCursorInterface:
             if self.current_emotional_state in self.markov_chains:
                 print(f"🔗 Markov chain found for {self.current_emotional_state}")
                 self.start_markov_generation()
-                print(f"✅ Markov generation started successfully")
+                print(f"SUCCESS Markov generation started successfully")
             else:
-                print(f"❌ No Markov chain available for {self.current_emotional_state}")
+                print(f"ERROR No Markov chain available for {self.current_emotional_state}")
                 print(f"🔄 Attempting to load datasets for {self.current_emotional_state}...")
                 # Try to load a dataset for this emotion
                 if self.current_emotional_state in self.available_datasets:
@@ -404,9 +404,9 @@ class CleanCursorInterface:
                         print(f"🔗 Loading first available dataset: {datasets[0]['display_name']}")
                         self.load_markov_chain_from_dataset(datasets[0], self.current_emotional_state)
                         self.start_markov_generation()
-                        print(f"✅ Markov generation started with loaded dataset")
+                        print(f"SUCCESS Markov generation started with loaded dataset")
         except Exception as e:
-            print(f"❌ Failed to start Markov generation: {e}")
+            print(f"ERROR Failed to start Markov generation: {e}")
             import traceback
             print(traceback.format_exc())
         
@@ -467,7 +467,7 @@ class CleanCursorInterface:
         # Update UI status for current emotion
         if hasattr(self, 'update_markov_status_for_emotion'):
             self.update_markov_status_for_emotion(self.current_emotional_state)
-        print("✅ Startup dataset display finalized")
+        print("SUCCESS Startup dataset display finalized")
         self._startup_loading_complete = True
     
     def _on_mousewheel(self, event):
@@ -487,12 +487,12 @@ class CleanCursorInterface:
     def on_text_field_enter(self, event=None):
         """Handle Enter key in text field - clear focus and return to hand control."""
         self.focus_hand_control()
-        print("✅ Text entry confirmed - focus returned to hand control")
+        print("SUCCESS Text entry confirmed - focus returned to hand control")
     
     def on_text_field_escape(self, event=None):
         """Handle Escape key in text field - clear focus and return to hand control."""
         self.focus_hand_control()
-        print("❌ Text entry cancelled - focus returned to hand control")
+        print("ERROR Text entry cancelled - focus returned to hand control")
     
     def focus_hand_control(self):
         """Set focus back to main window for keyboard finger control."""
@@ -547,7 +547,7 @@ class CleanCursorInterface:
         self.connect_btn.pack(side=tk.LEFT, padx=(0, 15))
         
         # Status label
-        self.status_label = ttk.Label(conn_inner, text="❌ Disconnected", width=20)
+        self.status_label = ttk.Label(conn_inner, text="ERROR Disconnected", width=20)
         self.status_label.pack(side=tk.LEFT)
         
         # Auto-populate ports on startup
@@ -587,7 +587,7 @@ class CleanCursorInterface:
         
         # Emotion button data with cute emojis
         emotion_emojis = {
-            'energized_engaged': '⚡',
+            'energized_engaged': 'BOLT',
             'alert_curious': '👀', 
             'calm_observant': '😌',
             'quiet_detached': '😐',
@@ -619,7 +619,7 @@ class CleanCursorInterface:
         self.record_btn.pack(pady=5)
         
         # Playback button
-        self.playback_btn = ttk.Button(record_buttons_frame, text="▶️ Play Back", 
+        self.playback_btn = ttk.Button(record_buttons_frame, text="PLAY Play Back", 
                                      command=self.start_playback, width=24, takefocus=False)
         self.playback_btn.pack(pady=5)
         
@@ -1159,7 +1159,7 @@ class CleanCursorInterface:
                 self.images['heart'] = ImageTk.PhotoImage(heart_img)
                 print("💖 Created cute default heart image!")
         except Exception as e:
-            print(f"⚠️ Could not create default images: {e}")
+            print(f"WARNING Could not create default images: {e}")
     
     def setup_custom_fonts(self):
         """Setup beautiful custom fonts for the interface."""
@@ -1362,13 +1362,13 @@ class CleanCursorInterface:
                 return sorted(datasets) if datasets else []
             return []
         except Exception as e:
-            print(f"❌ Error getting datasets for {emotion}: {e}")
+            print(f"ERROR Error getting datasets for {emotion}: {e}")
             return []
     
     def start_emotion_transition(self, target_emotion):
         """Start smooth transition to target emotion."""
         if target_emotion not in self.emotional_states:
-            print(f"❌ Unknown emotion: {target_emotion}")
+            print(f"ERROR Unknown emotion: {target_emotion}")
             return
         
         self.emotion_transitioning = True
@@ -1410,11 +1410,11 @@ class CleanCursorInterface:
             if self.load_markov_chain_from_dataset(dataset_info, target_emotion):
                 print(f"🔗 Loaded Markov chain for emotion transition to {target_emotion}")
             else:
-                print(f"⚠️ Failed to load Markov chain for {target_emotion}")
+                print(f"WARNING Failed to load Markov chain for {target_emotion}")
                 
             print(f"🎭 Emotion transition: Selected dataset {target_dataset} for {target_emotion}")
         else:
-            print(f"⚠️ No datasets available for {target_emotion} - emotion will switch but no dataset selected")
+            print(f"WARNING No datasets available for {target_emotion} - emotion will switch but no dataset selected")
         
         print(f"🌊 Starting smooth transition to {target_emotion}")
     
@@ -1431,7 +1431,7 @@ class CleanCursorInterface:
             self.current_emotional_state = self.emotion_transition_target
             self.emotion_var.set(self.current_emotional_state)
             self.emotion_transitioning = False
-            print(f"✅ Emotion transition complete: {self.current_emotional_state}")
+            print(f"SUCCESS Emotion transition complete: {self.current_emotional_state}")
             
             # Update UI and restart Markov if needed
             self.update_emotion_display()
@@ -1526,13 +1526,13 @@ class CleanCursorInterface:
             # Complete transition - NOW load the new chain
             target = self.dataset_transition_target
             
-            print(f"✅ Transition complete - loading new chain")
+            print(f"SUCCESS Transition complete - loading new chain")
             if self.load_markov_chain_from_dataset(target['dataset_info'], target['emotion']):
-                print(f"✅ New dataset loaded: {target['display_name']}")
+                print(f"SUCCESS New dataset loaded: {target['display_name']}")
                 self.dataset_var.set(target['display_name'])
                 self.active_datasets[target['emotion']] = target['dataset_info']['filename']
             else:
-                print(f"❌ Failed to load dataset: {target['display_name']}")
+                print(f"ERROR Failed to load dataset: {target['display_name']}")
             
             self.dataset_transitioning = False
             print("🏁 Dataset transition finished")
@@ -1612,7 +1612,7 @@ class CleanCursorInterface:
                     return closest_position
         
         # Fallback - stay at current position if no valid dataset found
-        print("⚠️ No valid dataset found - staying at current position")
+        print("WARNING No valid dataset found - staying at current position")
         return current_pos.copy()
     
     def interpolate_dataset_behavior(self, progress):
@@ -1668,7 +1668,7 @@ class CleanCursorInterface:
                 
             print(f"🎯 Initialized Markov state for new dataset: {start_state_key}")
         else:
-            print("⚠️ No valid transitions found in new dataset")
+            print("WARNING No valid transitions found in new dataset")
 
     def update_markov_state_from_current_position(self):
         """Update Markov state to match current finger positions without restarting."""
@@ -1719,7 +1719,7 @@ class CleanCursorInterface:
             print(f"🎯 Updated Markov state to match transition position: {best_match_key}")
             print(f"📏 Position match distance: {closest_distance:.1f}°")
         else:
-            print("⚠️ Could not find matching state in new dataset")
+            print("WARNING Could not find matching state in new dataset")
 
     def restart_markov_with_new_dataset(self):
         """Restart Markov generation smoothly with the new dataset."""
@@ -1777,7 +1777,7 @@ class CleanCursorInterface:
         for i in range(self.num_fingers):
             self.finger_positions[i] = 90.0
             self.finger_targets[i] = 90.0
-        print("✅ Reset complete")
+        print("SUCCESS Reset complete")
     
     def update_cycling_status_displays(self, current_time):
         """Update the cycling status displays with countdown timers."""
@@ -1869,7 +1869,7 @@ class CleanCursorInterface:
             self.start_markov_generation()
             return True
         except Exception as e:
-            print(f"❌ Failed to start autonomous mode: {e}")
+            print(f"ERROR Failed to start autonomous mode: {e}")
             return False
             
     def send_reactivity_data(self, data):
@@ -1880,7 +1880,7 @@ class CleanCursorInterface:
             print(f"⏸️ Pausing due to high activity: {data.get('activity_level', 0):.3f}")
             # TODO: Implement pause logic if needed
         elif data.get('action') == 'resume':
-            print(f"▶️ Resuming due to low activity: {data.get('activity_level', 0):.3f}")
+            print(f"PLAY Resuming due to low activity: {data.get('activity_level', 0):.3f}")
             # TODO: Implement resume logic if needed
         
         # Update dataset display for current emotion (fix the undefined variable)
@@ -1888,7 +1888,7 @@ class CleanCursorInterface:
             if hasattr(self, 'update_emotion_dataset_display'):
                 self.update_emotion_dataset_display()
         except Exception as e:
-            print(f"❌ Error updating emotion dataset display: {e}")
+            print(f"ERROR Error updating emotion dataset display: {e}")
         
         # DON'T restart Markov generation here - it causes conflicts
         # The emotion change will happen separately via change_emotion()
@@ -1952,12 +1952,12 @@ class CleanCursorInterface:
             active_dataset = self.active_datasets.get(emotion, "")
             if active_dataset:
                 self.dataset_status_label.config(
-                    text=f"✅ Using: {active_dataset}",
+                    text=f"SUCCESS Using: {active_dataset}",
                     foreground="green"
                 )
             else:
                 self.dataset_status_label.config(
-                    text="⚠️ No dataset selected for generation",
+                    text="WARNING No dataset selected for generation",
                     foreground="orange"
                 )
     
@@ -2033,7 +2033,7 @@ class CleanCursorInterface:
                 print(f"🔍 Found {len(port_list)} serial ports: {port_list}")
             else:
                 options = ["No ports found"]
-                print("⚠️ No serial ports detected")
+                print("WARNING No serial ports detected")
             
             # Update combobox
             if hasattr(self, 'port_combo'):
@@ -2047,7 +2047,7 @@ class CleanCursorInterface:
                     self.port_combo.set("Auto" if port_list else "No ports found")
             
         except Exception as e:
-            print(f"❌ Error detecting serial ports: {e}")
+            print(f"ERROR Error detecting serial ports: {e}")
             if hasattr(self, 'port_combo'):
                 self.port_combo['values'] = ["Error detecting ports"]
                 self.port_combo.set("Error detecting ports")
@@ -2073,8 +2073,8 @@ class CleanCursorInterface:
     def toggle_connection(self):
         """Toggle hand controller connection with auto-detected port."""
         if not HAND_CONTROLLER_AVAILABLE:
-            self.status_label.config(text="❌ Controller unavailable")
-            print("⚠️ Hand controller not available - simulation mode")
+            self.status_label.config(text="ERROR Controller unavailable")
+            print("WARNING Hand controller not available - simulation mode")
             return
         
         if not self.connected:
@@ -2095,16 +2095,16 @@ class CleanCursorInterface:
                     # Enable manual override to ensure our commands are processed
                     self.hand_controller.enable_manual_override()
                     self.connected = True
-                    self.status_label.config(text=f"✅ Connected ({port})")
+                    self.status_label.config(text=f"SUCCESS Connected ({port})")
                     self.connect_btn.config(text="Disconnect")
-                    print(f"✅ Connected to hand controller on {port}")
+                    print(f"SUCCESS Connected to hand controller on {port}")
                     print("🎮 Manual override enabled - ready for cursor control")
                 else:
-                    self.status_label.config(text="❌ Connection failed")
-                    print(f"❌ Failed to connect to {port}")
+                    self.status_label.config(text="ERROR Connection failed")
+                    print(f"ERROR Failed to connect to {port}")
             except Exception as e:
-                self.status_label.config(text="❌ Connection error")
-                print(f"❌ Connection error: {e}")
+                self.status_label.config(text="ERROR Connection error")
+                print(f"ERROR Connection error: {e}")
         else:
             # Disconnect
             if self.hand_controller:
@@ -2114,18 +2114,18 @@ class CleanCursorInterface:
                     self.hand_controller.cleanup()
             self.hand_controller = None
             self.connected = False
-            self.status_label.config(text="❌ Disconnected")
+            self.status_label.config(text="ERROR Disconnected")
             self.connect_btn.config(text="Connect to Hand Controller")
             print("🔌 Disconnected from hand controller")
     
     def auto_connect_arduino(self):
         """Automatically detect and connect to Arduino."""
         if not HAND_CONTROLLER_AVAILABLE:
-            print("⚠️ Hand controller not available - running in simulation mode")
+            print("WARNING Hand controller not available - running in simulation mode")
             return
             
         if self.connected:
-            print("✅ Already connected to Arduino")
+            print("SUCCESS Already connected to Arduino")
             return
             
         print("🔍 Scanning for Arduino ports...")
@@ -2141,7 +2141,7 @@ class CleanCursorInterface:
                     arduino_ports.append(port.device)
                     print(f"🎯 Found potential Arduino: {port.device} - {port.description}")
         except Exception as e:
-            print(f"⚠️ Error scanning ports: {e}")
+            print(f"WARNING Error scanning ports: {e}")
             
         # Try connecting to found ports
         for port in arduino_ports:
@@ -2157,9 +2157,9 @@ class CleanCursorInterface:
                 if self.hand_controller.serial_connection:
                     self.hand_controller.enable_manual_override()
                     self.connected = True
-                    self.status_label.config(text=f"✅ Auto-connected ({port})")
+                    self.status_label.config(text=f"SUCCESS Auto-connected ({port})")
                     self.connect_btn.config(text="Disconnect")
-                    print(f"✅ Auto-connected to Arduino on {port}")
+                    print(f"SUCCESS Auto-connected to Arduino on {port}")
                     return
                 else:
                     if self.hand_controller:
@@ -2168,14 +2168,14 @@ class CleanCursorInterface:
                         self.hand_controller = None
                         
             except Exception as e:
-                print(f"❌ Failed to connect to {port}: {e}")
+                print(f"ERROR Failed to connect to {port}: {e}")
                 if self.hand_controller:
                     if hasattr(self.hand_controller, 'cleanup'):
                         self.hand_controller.cleanup()
                     self.hand_controller = None
                     
-        print("❌ No Arduino found - running in simulation mode")
-        self.status_label.config(text="❌ No Arduino detected")
+        print("ERROR No Arduino found - running in simulation mode")
+        self.status_label.config(text="ERROR No Arduino detected")
     
     def on_canvas_configure(self, event):
         """Prevent canvas from being resized and maintain fixed dimensions."""
@@ -2248,7 +2248,7 @@ class CleanCursorInterface:
                 
             # EMERGENCY BRAKE: Stop recording if we hit memory limits
             if len(self.recorded_movements.get(self.current_emotional_state, [])) >= self.max_recording_points:
-                print(f"⚠️ Recording buffer full ({self.max_recording_points} points) - stopping recording to prevent lag")
+                print(f"WARNING Recording buffer full ({self.max_recording_points} points) - stopping recording to prevent lag")
                 self.stop_recording()
                 return
             
@@ -2277,7 +2277,7 @@ class CleanCursorInterface:
         
         # Don't interfere with playback
         if self.playing_back:
-            print("▶️ Spacebar ignored - playback in progress")
+            print("PLAY Spacebar ignored - playback in progress")
             return "break"  # Prevent event propagation
             
         # Safe to toggle recording
@@ -2289,7 +2289,7 @@ class CleanCursorInterface:
                 self.start_recording()
                 print("🎬 Spacebar: Started recording")
         except Exception as e:
-            print(f"❌ Error handling spacebar: {e}")
+            print(f"ERROR Error handling spacebar: {e}")
             # Don't let errors break the interface
         
         return "break"  # Always prevent spacebar from propagating to other widgets
@@ -2362,7 +2362,7 @@ class CleanCursorInterface:
             else:
                 self.keyboard_move_count = 1
             if self.keyboard_move_count < 10:  # Only log first few moves
-                print(f"⚡ Finger {finger_index+1} {direction}→{effective_direction}: {old_target:.1f}° → {new_target:.1f}° (INSTANT){reverse_indicator}")
+                print(f"BOLT Finger {finger_index+1} {direction}→{effective_direction}: {old_target:.1f}° → {new_target:.1f}° (INSTANT){reverse_indicator}")
     
     def process_continuous_keyboard_input(self):
         """Process continuous keyboard input in the main control loop - NO TIMERS!"""
@@ -2513,7 +2513,7 @@ class CleanCursorInterface:
         self.is_thawing = False
         self.person_detected.set(False)  # Reset toggle
         
-        print(f"✅ Freeze complete - resumed normal {self.current_emotional_state} movement")
+        print(f"SUCCESS Freeze complete - resumed normal {self.current_emotional_state} movement")
     
     def reset_to_center(self):
         """Reset cursor and servos to center position."""
@@ -2834,7 +2834,7 @@ class CleanCursorInterface:
             self.canvas.create_text(10, status_y, text="🎬 RECORDING", fill=self.colors['error'], anchor="nw",
                                   font=("Arial", 9, "bold"))
         elif self.playing_back:
-            self.canvas.create_text(10, status_y, text="▶️ PLAYBACK", fill=self.colors['success'], anchor="nw",
+            self.canvas.create_text(10, status_y, text="PLAY PLAYBACK", fill=self.colors['success'], anchor="nw",
                                   font=("Arial", 9))
         elif self.generating:
             self.canvas.create_text(10, status_y, text="🧠 GENERATING", fill=self.colors['text_accent'], anchor="nw",
@@ -2909,7 +2909,7 @@ class CleanCursorInterface:
                 self.last_any_send_time = current_time
                 
             except Exception as e:
-                print(f"❌ Error sending to hand controller: {e}")
+                print(f"ERROR Error sending to hand controller: {e}")
                 import traceback
                 traceback.print_exc()
     
@@ -2966,7 +2966,7 @@ class CleanCursorInterface:
                     files_deleted += 1
                     print(f"🗑️ Deleted: {filepath}")
                 except Exception as e:
-                    print(f"⚠️ Could not delete {filepath}: {e}")
+                    print(f"WARNING Could not delete {filepath}: {e}")
             
             print(f"🗑️ Deleted {files_deleted} dataset files")
         
@@ -3012,7 +3012,7 @@ class CleanCursorInterface:
         
         # UPDATE ALL UI BUTTONS
         self.record_btn.config(text="⏹️ Stop Recording")
-        self.playback_btn.config(text="▶️ Play Back")        # Reset playback button
+        self.playback_btn.config(text="PLAY Play Back")        # Reset playback button
         self.generate_btn.config(text="🧠 Generate (Markov)") # Reset generate button
         self.record_status.config(text="🎬 RECORDING... (Spacebar to stop)", foreground="red")
         self.markov_status.config(text="Capturing positions...", foreground="orange")
@@ -3177,7 +3177,7 @@ class CleanCursorInterface:
         sample_count = len(self.recorded_positions)
         
         self.record_btn.config(text="🎬 Record Movement (20s)")
-        self.record_status.config(text=f"✅ Recorded {sample_count} samples ({duration:.1f}s)", foreground="green")
+        self.record_status.config(text=f"SUCCESS Recorded {sample_count} samples ({duration:.1f}s)", foreground="green")
         
         print(f"🎬 Stopped recording. Captured {sample_count} position samples in {duration:.1f} seconds")
         print(f"📊 Sample rate: {sample_count/duration:.1f} Hz")
@@ -3197,7 +3197,7 @@ class CleanCursorInterface:
         """Build second-order Markov chain with timing from servo movements."""
         emotion = self.current_emotional_state
         if emotion not in self.recorded_movements or len(self.recorded_movements[emotion]) < 10:
-            print(f"⚠️ Not enough samples to build Markov chain for {emotion}")
+            print(f"WARNING Not enough samples to build Markov chain for {emotion}")
             return
             
         movements = self.recorded_movements[emotion]
@@ -3356,7 +3356,7 @@ class CleanCursorInterface:
             'sample_rate': 40
         }
         
-        print(f"✅ SECOND-ORDER Servo Markov chain built for {emotion}:")
+        print(f"SUCCESS SECOND-ORDER Servo Markov chain built for {emotion}:")
         print(f"   📊 {len(movements)} movements → {len(servo_transitions)} first-order states")
         print(f"   🔗 {len(servo_second_order)} second-order transitions (prev|curr → next)")
         print(f"   🎯 Fine discretization: {discretization_step}° steps (preserves flow)")
@@ -3373,7 +3373,7 @@ class CleanCursorInterface:
         """Save servo-based recorded movements AND Markov chain to file with optional custom name."""
         emotion = self.current_emotional_state
         if emotion not in self.recorded_movements or len(self.recorded_movements[emotion]) < 2:
-            print("❌ No servo data to save")
+            print("ERROR No servo data to save")
             return
             
         os.makedirs("movement_recordings", exist_ok=True)
@@ -3436,7 +3436,7 @@ class CleanCursorInterface:
             self.refresh_datasets()
             
         except Exception as e:
-            print(f"❌ ERROR saving servo recording: {e}")
+            print(f"ERROR ERROR saving servo recording: {e}")
             print(f"📍 Debug: movements type = {type(movements)}")
             if movements:
                 print(f"📍 Debug: first movement = {movements[0]}")
@@ -3446,7 +3446,7 @@ class CleanCursorInterface:
         """Manual save button - saves current servo-based recordings and Markov chains."""
         emotion = self.current_emotional_state
         if emotion not in self.recorded_movements or len(self.recorded_movements[emotion]) < 2:
-            print("❌ No servo data to save for current emotional state")
+            print("ERROR No servo data to save for current emotional state")
             self.record_status.config(text="No data to save", foreground="red")
             return
         
@@ -3523,7 +3523,7 @@ class CleanCursorInterface:
                         print(f"📊 Loading recent format file: {filename} ({sample_count} samples)")
                     else:
                         sample_count = data.get('movement_count', len(data.get('movements', [])))  # Old format
-                        print(f"⚠️ Loading compatible old format file: {filename}")
+                        print(f"WARNING Loading compatible old format file: {filename}")
                         
                     duration = data.get('duration', 0)
                     unique_states = markov_chain.get('unique_states', 0)
@@ -3555,10 +3555,10 @@ class CleanCursorInterface:
                 else:
                     # Skip incompatible old format files
                     incompatible_files += 1
-                    print(f"⚠️ Skipping incompatible file: {filename} (format: {format_version})")
+                    print(f"WARNING Skipping incompatible file: {filename} (format: {format_version})")
                     
             except Exception as e:
-                print(f"❌ Error loading {filename}: {e}")
+                print(f"ERROR Error loading {filename}: {e}")
                 incompatible_files += 1
         
         # Sort datasets by timestamp (newest first)
@@ -3566,19 +3566,19 @@ class CleanCursorInterface:
             try:
                 self.available_datasets[emotion].sort(key=lambda x: str(x['timestamp']), reverse=True)
             except Exception as e:
-                print(f"⚠️ Error sorting datasets for {emotion}: {e}")
+                print(f"WARNING Error sorting datasets for {emotion}: {e}")
                 self.available_datasets[emotion].sort(key=lambda x: x['filename'], reverse=True)
             
         self.update_dataset_display()
         
         # Clear status message
         if compatible_files > 0:
-            print(f"✅ Loaded {compatible_files} compatible datasets for {len(self.available_datasets)} emotions")
+            print(f"SUCCESS Loaded {compatible_files} compatible datasets for {len(self.available_datasets)} emotions")
         else:
             print("📁 No compatible datasets found - record some fresh data!")
             
         if incompatible_files > 0:
-            print(f"⚠️ Skipped {incompatible_files} incompatible old format files")
+            print(f"WARNING Skipped {incompatible_files} incompatible old format files")
             print("💡 Use 'Clear All' to remove old incompatible files and start fresh")
     
     def update_dataset_display(self):
@@ -3666,17 +3666,17 @@ class CleanCursorInterface:
                     chain_status = " [Chain Ready]" if has_preloaded_chain else ""
                     
                     self.dataset_status_label.config(
-                        text=f"✅ {emotion_display}: {selected_dataset.split(' - ')[0]}{chain_status}", 
+                        text=f"SUCCESS {emotion_display}: {selected_dataset.split(' - ')[0]}{chain_status}", 
                         foreground="darkgreen"
                     )
                 else:
                     self.dataset_status_label.config(
-                        text=f"⚠️ Select a {emotion_display} dataset for generation", 
+                        text=f"WARNING Select a {emotion_display} dataset for generation", 
                         foreground="orange"
                     )
             else:
                 self.dataset_status_label.config(
-                    text=f"❌ No {emotion_display} datasets - record some first!", 
+                    text=f"ERROR No {emotion_display} datasets - record some first!", 
                     foreground="red"
                 )
     
@@ -3718,11 +3718,11 @@ class CleanCursorInterface:
                         print(f"🔗 Loaded legacy Markov chain: {unique_states} states")
                         self.markov_status.config(text=f"{unique_states} states, {avg_transitions:.1f} avg transitions", foreground="green")
                         print(f"🔗 Loaded legacy Markov chain: {unique_states} states")
-                    print(f"✅ Loaded Markov chain from {selected_dataset['display_name']}")
+                    print(f"SUCCESS Loaded Markov chain from {selected_dataset['display_name']}")
                 else:
-                    print(f"⚠️ No Markov chain in {selected_dataset['display_name']}")
+                    print(f"WARNING No Markov chain in {selected_dataset['display_name']}")
             except Exception as e:
-                print(f"❌ Error loading dataset: {e}")
+                print(f"ERROR Error loading dataset: {e}")
     
     def load_markov_chain_from_dataset(self, dataset_info, emotion):
         """Load Markov chain from a specific dataset info object."""
@@ -3762,13 +3762,13 @@ class CleanCursorInterface:
                     self.markov_status.config(text=f"{unique_states} states, {avg_transitions:.1f} avg transitions", foreground="green")
                     print(f"🔗 Loaded legacy Markov chain: {unique_states} states")
                     
-                print(f"✅ Loaded Markov chain from {dataset_info['display_name']} for {emotion}")
+                print(f"SUCCESS Loaded Markov chain from {dataset_info['display_name']} for {emotion}")
                 return True
             else:
-                print(f"⚠️ No Markov chain in {dataset_info['display_name']}")
+                print(f"WARNING No Markov chain in {dataset_info['display_name']}")
                 return False
         except Exception as e:
-            print(f"❌ Error loading Markov chain from dataset: {e}")
+            print(f"ERROR Error loading Markov chain from dataset: {e}")
             return False
     
 
@@ -3797,7 +3797,7 @@ class CleanCursorInterface:
     def delete_dataset(self):
         """Delete the currently selected dataset."""
         if not self.dataset_var.get():
-            print("⚠️ No dataset selected for deletion")
+            print("WARNING No dataset selected for deletion")
             return
             
         emotion = self.current_emotional_state
@@ -3823,12 +3823,12 @@ class CleanCursorInterface:
                     print(f"🗑️ Deleted dataset: {dataset['display_name']}")
                     self.refresh_datasets()
                 except Exception as e:
-                    print(f"❌ Error deleting dataset: {e}")
+                    print(f"ERROR Error deleting dataset: {e}")
     
     def show_dataset_details(self):
         """Show detailed information about selected dataset."""
         if not self.dataset_var.get():
-            print("⚠️ No dataset selected")
+            print("WARNING No dataset selected")
             return
             
         emotion = self.current_emotional_state
@@ -3969,7 +3969,7 @@ File: {dataset['filename']}
         # Detect breathing-like patterns (expansion/contraction with pauses)
         self.detect_breathing_patterns(vectors)
         
-        print(f"✅ Enhanced temporal rhythm analysis complete - stillness and movement patterns detected")
+        print(f"SUCCESS Enhanced temporal rhythm analysis complete - stillness and movement patterns detected")
     
     def detect_stillness_patterns(self, vectors):
         """Detect periods of stillness, micro-movements, and position holding."""
@@ -4007,7 +4007,7 @@ File: {dataset['filename']}
         
         print(f"   📍 Detected stillness patterns: {sum(1 for v in vectors if v.get('position_hold', False))} position holds")
         print(f"   🤏 Detected micro-movements: {sum(1 for v in vectors if v.get('micro_tremor', False))} micro tremors")
-        print(f"   ⚡ Detected movement impulses: {sum(1 for v in vectors if v.get('movement_impulse', False))} impulses")
+        print(f"   BOLT Detected movement impulses: {sum(1 for v in vectors if v.get('movement_impulse', False))} impulses")
     
     def detect_movement_impulses(self, vectors):
         """Detect sudden movements that break stillness patterns."""
@@ -4122,10 +4122,10 @@ File: {dataset['filename']}
                     
                     print(f"📂 Loaded {len(data.get('movements', []))} movements for {emotion_key}")
             except Exception as e:
-                print(f"⚠️ Error loading {emotion_key}: {e}")
+                print(f"WARNING Error loading {emotion_key}: {e}")
         
         if loaded_count > 0:
-            print(f"✅ Loaded movements for {loaded_count} emotional states")
+            print(f"SUCCESS Loaded movements for {loaded_count} emotional states")
         else:
             print("📁 No valid saved movements found")
 
@@ -4158,14 +4158,14 @@ File: {dataset['filename']}
         self.playback_btn.config(text="⏹️ Stop Playback")
         self.record_btn.config(text="🎬 Record Movement (20s)")  # Reset record button
         self.generate_btn.config(text="🧠 Generate (Markov)")     # Reset generate button
-        self.record_status.config(text="▶️ PLAYING BACK...", foreground="blue")
+        self.record_status.config(text="PLAY PLAYING BACK...", foreground="blue")
         
-        print(f"▶️ Started playback of {len(self.current_playback)} movements for {self.current_emotional_state}")
+        print(f"PLAY Started playback of {len(self.current_playback)} movements for {self.current_emotional_state}")
     
     def stop_playback(self):
         """Stop playback."""
         self.playing_back = False
-        self.playback_btn.config(text="▶️ Play Back")
+        self.playback_btn.config(text="PLAY Play Back")
         self.record_status.config(text="Ready to record 20s segments (Spacebar)", foreground="gray")
         print("⏹️ Playback stopped")
     
@@ -4206,7 +4206,7 @@ File: {dataset['filename']}
         if self.current_playback:
             total_duration = self.current_playback[-1]['time'] - self.current_playback[0]['time']
             if playback_elapsed >= total_duration:
-                print(f"✅ Playback completed after {total_duration:.1f}s ({len(self.current_playback)} movements)")
+                print(f"SUCCESS Playback completed after {total_duration:.1f}s ({len(self.current_playback)} movements)")
                 self.stop_playback()
     
     def parse_markov_state_key(self, key_str):
@@ -4224,10 +4224,10 @@ File: {dataset['filename']}
                     curr_state = self._parse_single_state(parts[1])
                     return [prev_state, curr_state]  # Return list of two tuples
                 else:
-                    print(f"⚠️ Invalid second-order key format: {key_str}")
+                    print(f"WARNING Invalid second-order key format: {key_str}")
                     return (90, 90, 90, 90)  # Fallback
             except Exception as e:
-                print(f"⚠️ Error parsing second-order key '{key_str}': {e}")
+                print(f"WARNING Error parsing second-order key '{key_str}': {e}")
                 return (90, 90, 90, 90)  # Fallback
         else:
             # Regular first-order key
@@ -4263,7 +4263,7 @@ File: {dataset['filename']}
                 # Try to parse as generic tuple
                 return tuple(int(float(part)) for part in parts)
         except (ValueError, IndexError) as e:
-            print(f"⚠️ Failed to parse single state '{state_str}': {e}")
+            print(f"WARNING Failed to parse single state '{state_str}': {e}")
             # Return a fallback state
             return (90, 90, 90, 90)  # Default servo positions
     
@@ -4286,7 +4286,7 @@ File: {dataset['filename']}
             # Continue to start new generation for current emotion
             
         if self.current_emotional_state not in self.markov_chains:
-            print(f"❌ No Markov chain available for {self.current_emotional_state}")
+            print(f"ERROR No Markov chain available for {self.current_emotional_state}")
             # Only update GUI if it exists (headless mode compatibility)
             if hasattr(self, 'markov_status') and self.markov_status:
                 try:
@@ -4303,7 +4303,7 @@ File: {dataset['filename']}
             servo_second_order = chain['servo_second_order']
             
             if not servo_second_order:
-                print(f"❌ Empty second-order Markov chain for {self.current_emotional_state}")
+                print(f"ERROR Empty second-order Markov chain for {self.current_emotional_state}")
                 return
             
             print(f"🎨 Starting SECOND-ORDER Markov generation for {self.current_emotional_state}")
@@ -4366,7 +4366,7 @@ File: {dataset['filename']}
             elif 'transitions' in chain:
                 transitions = chain['transitions']
             else:
-                print(f"❌ No valid transitions found in Markov chain for {self.current_emotional_state}")
+                print(f"ERROR No valid transitions found in Markov chain for {self.current_emotional_state}")
                 # Only update GUI if it exists (headless mode compatibility)
                 if hasattr(self, 'markov_status') and self.markov_status:
                     try:
@@ -4376,7 +4376,7 @@ File: {dataset['filename']}
                 return
                 
             if not transitions:
-                print(f"❌ Empty Markov chain for {self.current_emotional_state}")
+                print(f"ERROR Empty Markov chain for {self.current_emotional_state}")
                 return
             
             # Standard first-order initialization
@@ -4429,7 +4429,7 @@ File: {dataset['filename']}
             try:
                 self.step_markov_generation()
             except Exception as e:
-                print(f"❌ Error in generation step: {e}")
+                print(f"ERROR Error in generation step: {e}")
                 print("🔄 Continuing generation despite error...")
             
             # Cancel any existing timer before scheduling new one
@@ -4461,7 +4461,7 @@ File: {dataset['filename']}
         print(f"🔄 step_markov_generation called - generating: {self.generating}, emotion: {self.current_emotional_state}")
         
         if not self.generating or self.current_emotional_state not in self.markov_chains:
-            print(f"❌ Skipping generation - generating: {self.generating}, current_emotion: '{self.current_emotional_state}', available_chains: {list(self.markov_chains.keys())}")
+            print(f"ERROR Skipping generation - generating: {self.generating}, current_emotion: '{self.current_emotional_state}', available_chains: {list(self.markov_chains.keys())}")
             return
         
         # Handle dataset transitions (smooth easing)
@@ -4519,7 +4519,7 @@ File: {dataset['filename']}
                             elif transition_context.get('has_sudden', False):
                                 # Sudden movement - use shorter, snappy timing
                                 selected_dt = timing_dist.get('min_dt', timing_dist.get('avg_dt', 0.03))
-                                print(f"⚡ Sudden movement: using min timing {selected_dt:.3f}s")
+                                print(f"BOLT Sudden movement: using min timing {selected_dt:.3f}s")
                             elif max_change > 30:
                                 # Large movement - use upper percentile for weight/hesitation
                                 selected_dt = timing_dist.get('p75_dt', timing_dist.get('avg_dt', 0.03))
@@ -4555,7 +4555,7 @@ File: {dataset['filename']}
                         self.send_to_hand_controller()
                         return
                     else:
-                        print(f"⚠️ Empty transitions for second-order key: {lookup_key}")
+                        print(f"WARNING Empty transitions for second-order key: {lookup_key}")
                 else:
                     print(f"🔄 Second-order key not found: {lookup_key}, falling back to first-order")
                 
@@ -4565,14 +4565,14 @@ File: {dataset['filename']}
             # FIRST-ORDER FALLBACK (or primary for first-order chains)
             # Get servo transitions (simple like golden master)
             if 'servo_transitions' not in chain:
-                print("❌ No servo transitions found in chain")
+                print("ERROR No servo transitions found in chain")
                 return
                 
             transitions = chain['servo_transitions']
             
             # ROBUST: Ensure we have transitions to work with
             if not transitions:
-                print("❌ Empty transitions dict - cannot generate")
+                print("ERROR Empty transitions dict - cannot generate")
                 return
             
             # Handle dead ends like golden master (simple random jump)
@@ -4584,19 +4584,19 @@ File: {dataset['filename']}
                     print(f"🔄 Dead end - jumping to new state: {self.current_markov_state}")
                     # Continue to apply the new state immediately (don't return)
                 else:
-                    print("❌ No available states in Markov chain")
+                    print("ERROR No available states in Markov chain")
                     return
             
             # ROBUST: Double-check that our current state has transitions
             if self.current_markov_state not in transitions:
-                print(f"❌ Current state {self.current_markov_state} still not in transitions after recovery")
+                print(f"ERROR Current state {self.current_markov_state} still not in transitions after recovery")
                 # Force pick the first available state
                 available_states = list(transitions.keys())
                 if available_states:
                     self.current_markov_state = available_states[0]
                     print(f"🔄 Force-selecting first available state: {self.current_markov_state}")
                 else:
-                    print("❌ No states available at all")
+                    print("ERROR No states available at all")
                     return
             
             # Get possible next states and their probabilities (exactly like golden master)
@@ -4604,13 +4604,13 @@ File: {dataset['filename']}
             
             # ROBUST: Ensure next_states is not empty
             if not next_states:
-                print(f"⚠️ No transitions from current state {self.current_markov_state}, picking random state")
+                print(f"WARNING No transitions from current state {self.current_markov_state}, picking random state")
                 available_states = list(transitions.keys())
                 if available_states:
                     self.current_markov_state = random.choice(available_states)
                     next_states = transitions[self.current_markov_state]
                 else:
-                    print("❌ No states available for fallback")
+                    print("ERROR No states available for fallback")
                     return
             
             state_keys = list(next_states.keys())
@@ -4638,13 +4638,13 @@ File: {dataset['filename']}
             
             # ROBUST: Ensure we have valid probabilities
             if not state_keys or not probabilities:
-                print(f"⚠️ Invalid state/probability data, using random fallback")
+                print(f"WARNING Invalid state/probability data, using random fallback")
                 available_states = list(transitions.keys())
                 if available_states:
                     self.current_markov_state = random.choice(available_states)
                     return  # Will try again next cycle
                 else:
-                    print("❌ Cannot recover - no valid states")
+                    print("ERROR Cannot recover - no valid states")
                     return
             
             # Weighted random choice (same as golden master) WITH ENHANCED DIVERSITY INJECTION
@@ -4719,7 +4719,7 @@ File: {dataset['filename']}
                 # Store diversity jump flag for gentler easing
                 self._is_diversity_jump = diversity_jump
             except (ValueError, IndexError) as e:
-                print(f"⚠️ Error in weighted choice: {e}, using uniform random")
+                print(f"WARNING Error in weighted choice: {e}, using uniform random")
                 next_state_key = random.choice(state_keys)
                 self.prev_markov_state = self.current_markov_state
                 self.current_markov_state = next_state_key
@@ -4729,7 +4729,7 @@ File: {dataset['filename']}
             
             # ROBUST: Ensure we got valid servo positions
             if not next_state or len(next_state) < 2:
-                print(f"⚠️ Invalid parsed state {next_state}, using fallback")
+                print(f"WARNING Invalid parsed state {next_state}, using fallback")
                 # Use current finger positions as fallback
                 next_state = self.finger_positions.copy()
             
@@ -4789,7 +4789,7 @@ File: {dataset['filename']}
                 # Send to servos
                 self.send_to_hand_controller()
             else:
-                print(f"⚠️ Invalid servo state format: {next_state}, continuing anyway")
+                print(f"WARNING Invalid servo state format: {next_state}, continuing anyway")
             
             # Clean up diversity jump flag for next step
             if hasattr(self, '_is_diversity_jump'):
@@ -4800,7 +4800,7 @@ File: {dataset['filename']}
                 self.update_simple_transition()
                 
         except Exception as e:
-            print(f"❌ Error in Markov generation step: {e}")
+            print(f"ERROR Error in Markov generation step: {e}")
             print("🔄 Attempting to recover by selecting random state...")
             try:
                 # Emergency recovery - pick any available state
@@ -4809,11 +4809,11 @@ File: {dataset['filename']}
                 if available_states:
                     self.prev_markov_state = self.current_markov_state
                     self.current_markov_state = random.choice(available_states)
-                    print(f"✅ Recovery successful, new state: {self.current_markov_state}")
+                    print(f"SUCCESS Recovery successful, new state: {self.current_markov_state}")
                 else:
-                    print("❌ Recovery failed - no available states")
+                    print("ERROR Recovery failed - no available states")
             except Exception as recovery_error:
-                print(f"❌ Recovery also failed: {recovery_error}")
+                print(f"ERROR Recovery also failed: {recovery_error}")
                 # Continue anyway - don't stop generation
         
     
@@ -4842,7 +4842,7 @@ File: {dataset['filename']}
             # Check if transition is complete
             if progress >= 1.0:
                 self.transitioning_to_dataset = False
-                print(f"✅ Dataset transition complete - now using new Markov chain")
+                print(f"SUCCESS Dataset transition complete - now using new Markov chain")
                 
                 # Clear transition data
                 if hasattr(self, 'transition_start_positions'):
@@ -4940,11 +4940,11 @@ File: {dataset['filename']}
                     print(f"🔗 Loaded Markov chain for {emotion_key}: {data['markov_chain'].get('unique_states', 0)} states")
                     
             except Exception as e:
-                print(f"❌ Error loading {latest_file}: {e}")
+                print(f"ERROR Error loading {latest_file}: {e}")
                 continue
         
         if loaded_count > 0:
-            print(f"✅ Loaded {loaded_count} movement recordings and {chain_count} Markov chains")
+            print(f"SUCCESS Loaded {loaded_count} movement recordings and {chain_count} Markov chains")
             self.markov_status.config(text=f"{chain_count} chains loaded", foreground="green")
         else:
             print("📁 No saved recordings found")
@@ -4966,9 +4966,9 @@ File: {dataset['filename']}
             try:
                 self.root.after_cancel(timer_id)
                 setattr(self, timer_name, None)
-                print(f"✅ Cancelled {timer_name}")
+                print(f"SUCCESS Cancelled {timer_name}")
             except Exception as e:
-                print(f"⚠️ Error cancelling {timer_name}: {e}")
+                print(f"WARNING Error cancelling {timer_name}: {e}")
         
         print(f"🧹 Timer cleanup complete - cancelled {len(timers_to_cancel)} timers")
     
@@ -5142,10 +5142,10 @@ File: {dataset['filename']}
                         compatible_files += 1
                     else:
                         incompatible_files += 1
-                        print(f"⚠️ Skipping incompatible file: {filename}")
+                        print(f"WARNING Skipping incompatible file: {filename}")
                         
                 except Exception as e:
-                    print(f"❌ Error loading {filename}: {e}")
+                    print(f"ERROR Error loading {filename}: {e}")
                     incompatible_files += 1
             
             # Sort datasets by timestamp (newest first)
@@ -5154,7 +5154,7 @@ File: {dataset['filename']}
                 try:
                     self.available_datasets[emotion].sort(key=lambda x: str(x['timestamp']), reverse=True)
                 except Exception as e:
-                    print(f"⚠️ Error sorting datasets for {emotion}: {e}")
+                    print(f"WARNING Error sorting datasets for {emotion}: {e}")
                     self.available_datasets[emotion].sort(key=lambda x: x['filename'], reverse=True)
             
             # Update dataset displays for all emotions
@@ -5176,7 +5176,7 @@ File: {dataset['filename']}
                             self.markov_chains[emotion] = markov_chain
                             print(f"🔗 Pre-loaded Markov chain for {emotion}: {markov_chain.get('unique_states', 0)} states")
                     except Exception as e:
-                        print(f"⚠️ Error pre-loading chain for {emotion}: {e}")
+                        print(f"WARNING Error pre-loading chain for {emotion}: {e}")
             
             # Final status
             self.update_startup_progress(100, f"Ready! Loaded {compatible_files} datasets for {len(self.available_datasets)} emotions")
@@ -5184,14 +5184,14 @@ File: {dataset['filename']}
             # Auto-hide loading window after 2 seconds
             self.root.after(2000, self.hide_startup_loading)
             
-            print(f"✅ STARTUP COMPLETE: Loaded {compatible_files} compatible datasets for {len(self.available_datasets)} emotions")
+            print(f"SUCCESS STARTUP COMPLETE: Loaded {compatible_files} compatible datasets for {len(self.available_datasets)} emotions")
             if incompatible_files > 0:
-                print(f"⚠️ Skipped {incompatible_files} incompatible files")
+                print(f"WARNING Skipped {incompatible_files} incompatible files")
             
             print(f"🚀 System ready for autonomous operation with pre-loaded datasets!")
             
         except Exception as e:
-            print(f"❌ Error during startup dataset loading: {e}")
+            print(f"ERROR Error during startup dataset loading: {e}")
             self.update_startup_progress(100, "Error loading datasets - manual refresh may be needed")
             self.root.after(3000, self.hide_startup_loading)
 
@@ -5203,7 +5203,7 @@ File: {dataset['filename']}
             # Schedule completion on main thread
             self.root.after(0, self._complete_dataset_loading)
         except Exception as e:
-            print(f"❌ Background dataset loading failed: {e}")
+            print(f"ERROR Background dataset loading failed: {e}")
             # Schedule error handling on main thread
             self.root.after(0, self._handle_dataset_loading_error)
     
@@ -5254,10 +5254,10 @@ File: {dataset['filename']}
                     incompatible_files += 1
                     
             except Exception as e:
-                print(f"❌ Error loading {filename}: {e}")
+                print(f"ERROR Error loading {filename}: {e}")
                 incompatible_files += 1
         
-        print(f"✅ Background loading complete: {compatible_files} compatible datasets")
+        print(f"SUCCESS Background loading complete: {compatible_files} compatible datasets")
         
     def _complete_dataset_loading(self):
         """Complete dataset loading on main thread."""
@@ -5266,7 +5266,7 @@ File: {dataset['filename']}
             self.root.after(2000, self.hide_startup_loading)
             print("🚀 System ready for autonomous operation!")
         except Exception as e:
-            print(f"❌ Error completing dataset loading: {e}")
+            print(f"ERROR Error completing dataset loading: {e}")
             
     def _handle_dataset_loading_error(self):
         """Handle dataset loading error on main thread."""
@@ -5274,7 +5274,7 @@ File: {dataset['filename']}
             self.update_startup_progress(100, "Dataset loading failed")
             self.root.after(3000, self.hide_startup_loading)
         except Exception as e:
-            print(f"❌ Error handling dataset loading error: {e}")
+            print(f"ERROR Error handling dataset loading error: {e}")
 
     def _load_datasets_headless(self):
         """Load datasets without any GUI updates for headless mode."""
@@ -5320,16 +5320,16 @@ File: {dataset['filename']}
                         if 'markov_chain' in data:
                             print(f"🔗 Pre-loading Markov chain for {emotion} from {filename}")
                             self.markov_chains[emotion] = data['markov_chain']
-                            print(f"✅ Markov chain loaded for {emotion}: {data['markov_chain'].get('unique_states', 0)} states")
+                            print(f"SUCCESS Markov chain loaded for {emotion}: {data['markov_chain'].get('unique_states', 0)} states")
                         
                 except Exception as e:
-                    print(f"❌ Error loading {filename}: {e}")
+                    print(f"ERROR Error loading {filename}: {e}")
             
-            print(f"✅ Headless loading complete: {compatible_files} compatible datasets")
+            print(f"SUCCESS Headless loading complete: {compatible_files} compatible datasets")
             print(f"🔗 Loaded Markov chains for: {list(self.markov_chains.keys())}")
             
         except Exception as e:
-            print(f"❌ Error in headless dataset loading: {e}")
+            print(f"ERROR Error in headless dataset loading: {e}")
 
 
 def main():

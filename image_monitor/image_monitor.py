@@ -148,14 +148,14 @@ class ImageMonitor:
                     log_json_entry(
                         LogType.ERROR,
                         {"message": f"No SVG files found in output folder: {output_folder}"},
-                        print_message=f"⚠️ No SVG files found in output folder",
+                        print_message=f"WARNING No SVG files found in output folder",
                     )
 
         except Exception as e:
             log_json_entry(
                 LogType.ERROR,
                 {"error": f"PNG to G-code conversion failed: {str(e)}"},
-                print_message=f"❌ PNG to G-code conversion failed: {str(e)}",
+                print_message=f"ERROR PNG to G-code conversion failed: {str(e)}",
             )
 
     def _log_new_image(self, image_path):
@@ -176,7 +176,7 @@ class ImageMonitor:
         if state_manager.is_generating_drawing:
             state_manager.finish_drawing_generation()
             log_json_entry(
-                LogType.INFO, {"message": "Drawing generation completed", "image_path": image_path}, print_message="✅ Drawing generation completed"
+                LogType.INFO, {"message": "Drawing generation completed", "image_path": image_path}, print_message="SUCCESS Drawing generation completed"
             )
         if self.on_image_complete:
             self.on_image_complete(image_path)
@@ -200,6 +200,6 @@ class ImageMonitor:
                 log_json_entry(
                     LogType.ERROR,
                     {"error": f"Image monitor error: {str(e)}"},
-                    print_message=f"❌ Image monitor error: {str(e)}",
+                    print_message=f"ERROR Image monitor error: {str(e)}",
                 )
                 time.sleep(5.0)  # Wait longer on error
