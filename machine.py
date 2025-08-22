@@ -58,6 +58,7 @@ from utils.state_manager import state_manager
 from utils.continuity import describe_duration, get_temporal_feeling
 from config.config import (
     USE_SERVO,
+    USE_HAND_CONTROLLER,
     CAMERA_INDEX,
     SERIAL_PORT,
     BAUD_RATE,
@@ -373,8 +374,13 @@ _global_captioner = captioner
 _global_state_manager = state_manager
 
 # Initialize direct hand controller integration
-debug_print("Initializing direct hand controller integration", "INIT")
-hand_controller_started = start_hand_controller(headless=False)
+if USE_HAND_CONTROLLER:
+    debug_print("Initializing direct hand controller integration", "INIT")
+    hand_controller_started = start_hand_controller(headless=False)
+else:
+    debug_print("Hand controller disabled in config", "INIT")
+    hand_controller_started = False
+
 if hand_controller_started:
     debug_print("Hand controller started with UI", "INIT")
 
