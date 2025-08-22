@@ -31,7 +31,7 @@ class MultimodalModel:
 
     def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False) -> str:
         if not os.path.exists(image_path):
-            return "[⚠️] No image found"
+            return "[WARNING] No image found"
 
         if first_time:
             # Use the same detailed environmental prompt system for fresh starts
@@ -84,18 +84,18 @@ class MultimodalModel:
             prompt = build_reflection_prompt(caption, extra=extra, agent=agent)
             print(f"[🔍] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s")
             response = self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT, timeout=OLLAMA_TIMEOUT_REFLECTION)
-            print(f"[✅] Reflection completed: {len(response)} chars")
+            print(f"[SUCCESS] Reflection completed: {len(response)} chars")
             return response
         except Exception as e:
-            print(f"[❌] Reflection failed: {e}")
+            print(f"[ERROR] Reflection failed: {e}")
             import traceback
 
             traceback.print_exc()
-            return "[⚠️] Reflection generation failed"
+            return "[WARNING] Reflection generation failed"
 
     def generate_drawing_prompt(self, *, extra: Optional[str] = None) -> str:
         if not self.memory_ref:
-            return "[⚠️] No memory available for drawing prompt"
+            return "[WARNING] No memory available for drawing prompt"
 
         prompt = build_drawing_prompt(self.memory_ref, extra=extra)
         return self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT)

@@ -95,7 +95,7 @@ class DrawingController:
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Error in drawing critique: {exc}", "component": "drawing_critique"},
-                print_message=f"⚠️ Error critiquing drawing: {exc}",
+                print_message=f"WARNING Error critiquing drawing: {exc}",
             )
 
     def handle_drawing_flow(
@@ -126,7 +126,7 @@ class DrawingController:
                         "ready_to_draw": self.ready_to_draw(),
                         "cooldown_remaining": max(0, self.cooldown - (time.time() - self.last_drawing_time)),
                     },
-                    print_message="❌ Not inspired to draw",
+                    print_message="ERROR Not inspired to draw",
                 )
                 return
 
@@ -143,7 +143,7 @@ class DrawingController:
                     "drawing_prompt": drawing_prompt,
                     "reflection": (reflection or "").strip(),
                 },
-                print_message="🎨 Drawing triggered",
+                print_message="Drawing triggered",
             )
 
             if latest_image and os.path.exists(latest_image):
@@ -152,14 +152,14 @@ class DrawingController:
                 log_json_entry(
                     LogType.ERROR,
                     {"message": "Cannot invoke ComfyUI - no valid image available", "component": "drawing", "image_path": latest_image},
-                    print_message="⚠️ Cannot invoke ComfyUI – no valid image available",
+                    print_message="WARNING Cannot invoke ComfyUI – no valid image available",
                 )
 
         except Exception as exc:
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Error in drawing flow: {exc}", "component": "drawing"},
-                print_message=f"⚠️ Error in drawing flow: {exc}",
+                print_message=f"WARNING Error in drawing flow: {exc}",
             )
 
     # ------------------------------------------------------------------
@@ -191,17 +191,17 @@ class DrawingController:
                 log_json_entry(
                     LogType.COMFY_PROMPT,
                     {"message": "ComfyUI drawing queued successfully", "drawing_prompt": drawing_prompt},
-                    print_message="🎨 ComfyUI drawing queued successfully",
+                    print_message="ComfyUI drawing queued successfully",
                 )
             else:
                 log_json_entry(
                     LogType.ERROR,
                     {"message": "Failed to queue ComfyUI drawing", "component": "comfy", "drawing_prompt": drawing_prompt},
-                    print_message="❌ Failed to queue ComfyUI drawing",
+                    print_message="ERROR Failed to queue ComfyUI drawing",
                 )
         except Exception as exc:
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Error invoking ComfyUI: {exc}", "component": "comfy"},
-                print_message=f"⚠️ Error invoking ComfyUI: {exc}",
+                print_message=f"WARNING Error invoking ComfyUI: {exc}",
             )

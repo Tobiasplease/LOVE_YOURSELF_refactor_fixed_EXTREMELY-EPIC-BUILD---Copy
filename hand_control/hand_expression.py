@@ -34,7 +34,7 @@ class HandExpressionController:
             self.serial_connection = serial.Serial(self.port, self.baudrate, timeout=1)
             time.sleep(2)  # Arduino boot time
             if not self.clean_output:
-                print(f"✅ Connected to hand controller on {self.port} at {self.baudrate} baud")
+                print(f"SUCCESS Connected to hand controller on {self.port} at {self.baudrate} baud")
             # Send test command to verify connection
             test_command = "HAND,90,90,90,90\n"
             self.serial_connection.write(test_command.encode())
@@ -42,7 +42,7 @@ class HandExpressionController:
                 print(f"📤 Test command sent: {test_command.strip()}")
         except Exception as e:
             if not self.clean_output:
-                print(f"❌ Failed to connect to {self.port}: {e}")
+                print(f"ERROR Failed to connect to {self.port}: {e}")
             self.serial_connection = None
     
     def set_hand_positions(self, positions: list):
@@ -110,7 +110,7 @@ class HandExpressionController:
                 
         except Exception as e:
             if not self.clean_output:
-                print(f"❌ Serial write error: {e}")
+                print(f"ERROR Serial write error: {e}")
     
     def enable_manual_override(self):
         """Enable manual override mode."""
@@ -133,4 +133,4 @@ class HandExpressionController:
                     print("🔌 Serial connection closed")
             except Exception as e:
                 if not self.clean_output:
-                    print(f"❌ Error closing serial: {e}")
+                    print(f"ERROR Error closing serial: {e}")

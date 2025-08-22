@@ -3,12 +3,12 @@ import time
 import random
 from config.config import LUNG_MIN, LUNG_MAX, PAUSE_DURATION, EASING_FACTOR
 
-lung_eased = 90.0  # ✨ persistent easing memory
+lung_eased = 90.0  # SPARKLE persistent easing memory
 
 MIN_LUNG_SPEED = 1.0  # fast cycle (high mood)
 MAX_LUNG_SPEED = 12.0  # slow cycle (low mood)
 
-# ✨ Breathing mode state
+# SPARKLE Breathing mode state
 breath_mode = "BIRTH_WAKE"
 mode_timer = time.time() + 6  # Birth mode lasts ~6s
 
@@ -47,7 +47,7 @@ def update_lung_position(current_mood, person_present, delta, lung_angle, breath
     elif breath_mode == "SLOW_SIGH":
         target_breath_speed = base_speed * 2.2
     elif breath_mode == "BIRTH_WAKE":
-        target_breath_speed = 0.4  # ✨ Extra fast startup
+        target_breath_speed = 0.4  # SPARKLE Extra fast startup
     else:
         target_breath_speed = base_speed
 
@@ -59,7 +59,7 @@ def update_lung_position(current_mood, person_present, delta, lung_angle, breath
     # === Breathing phase movement ===
     breath_phase = math.sin(lung_angle)
 
-    # ✨ Mood-scaled dynamic pause modulation ===
+    # SPARKLE Mood-scaled dynamic pause modulation ===
     pause_mood_scale = 1.5 - mood_clamped  # low mood = longer pause
     mode_modifier = {
         "FAST_BURST": 0.2,
@@ -102,7 +102,7 @@ def update_lung_position(current_mood, person_present, delta, lung_angle, breath
 
     target_lung = raw_lung * (LUNG_MAX - LUNG_MIN) + LUNG_MIN
 
-    # ✨ Restore config-based easing instead of dynamic
+    # SPARKLE Restore config-based easing instead of dynamic
     lung_eased = lung_eased * (1 - EASING_FACTOR) + target_lung * EASING_FACTOR
 
     if servo_controller:

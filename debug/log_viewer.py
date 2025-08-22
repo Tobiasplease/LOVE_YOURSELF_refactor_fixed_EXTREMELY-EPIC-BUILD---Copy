@@ -103,12 +103,14 @@ class LogViewer:
         print(f"  Events: {len(events)} total")
         
         # Show event type breakdown
-        main_types = ['caption', 'mood', 'reflection', 'drawing_decision', 'tinyllama_score', 'motif_score', 'error']
+        main_types = ['caption', 'mood', 'reflection', 'drawing_decision', 'motif_score', 'motif_extraction', 'motif_analysis', 'tinyllama_score', 'error']
         type_summary = []
         for t in main_types:
             if t in event_types:
                 if t in ['tinyllama_score', 'motif_score']:
-                    type_summary.append(f"{event_types[t]} TLL scores")
+                    type_summary.append(f"{event_types[t]} motif scores")
+                elif t in ['motif_extraction', 'motif_analysis']:
+                    type_summary.append(f"{event_types[t]} motif events")
                 elif t == 'error':
                     type_summary.append(f"{event_types[t]} errors")
                 else:
@@ -174,7 +176,36 @@ class LogViewer:
             print(f"[{time_str}] [IMG] SNAPSHOT")
             if 'image_path' in data:
                 print(f"  Image: {data['image_path']}")
-        elif event_type == 'tinyllama_score' or event_type == 'motif_score':
+        elif event_type == 'motif_score':
+            print(f"[{time_str}] [MOT] MOTIF SCORE")
+            if 'motif' in data:
+                print(f"  Motif: {data['motif']}")
+            if 'score' in data:
+                print(f"  Score: {data['score']}")
+            if 'method' in data:
+                print(f"  Method: {data['method']}")
+            if 'elapsed_ms' in data:
+                print(f"  Time: {data['elapsed_ms']}ms")
+            if 'cache_stats' in data:
+                cache = data['cache_stats']
+                print(f"  Cache: {cache.get('hit_rate', 0):.1%} hit rate")
+        elif event_type == 'motif_extraction':
+            print(f"[{time_str}] [EXT] MOTIF EXTRACTION")
+            if 'motifs_found' in data:
+                print(f"  Found: {len(data['motifs_found'])} motifs")
+                if data['motifs_found']:
+                    print(f"  Top: {', '.join(data['motifs_found'][:3])}")
+            if 'extraction_time_ms' in data:
+                print(f"  Time: {data['extraction_time_ms']}ms")
+        elif event_type == 'motif_analysis':
+            print(f"[{time_str}] [ANA] MOTIF ANALYSIS")
+            if 'analyzed_motifs' in data:
+                print(f"  Analyzed: {len(data['analyzed_motifs'])}")
+            if 'high_significance' in data:
+                high_sig = data['high_significance']
+                if high_sig:
+                    print(f"  Significant: {', '.join(high_sig[:3])}")
+        elif event_type == 'tinyllama_score':
             print(f"[{time_str}] [TLL] TINYLLAMA")
             if 'motif' in data:
                 print(f"  Motif: {data['motif']}")
@@ -227,6 +258,7 @@ class LogViewer:
         total_reflections = 0
         total_drawings = 0
         total_tinyllama_scores = 0
+        total_motif_scores = 0
         total_errors = 0
         all_emotions = []
         all_moods = []
@@ -243,8 +275,10 @@ class LogViewer:
                     total_reflections += 1
                 elif event_type == 'drawing_decision' and data.get('will_draw'):
                     total_drawings += 1
-                elif event_type in ['tinyllama_score', 'motif_score']:
+                elif event_type == 'tinyllama_score':
                     total_tinyllama_scores += 1
+                elif event_type in ['motif_score', 'motif_extraction', 'motif_analysis']:
+                    total_motif_scores += 1
                 elif event_type == 'error':
                     total_errors += 1
                 elif event_type == 'mood':
@@ -259,6 +293,7 @@ class LogViewer:
         print(f"Total reflections: {total_reflections:,}")
         print(f"Total drawings initiated: {total_drawings}")
         print(f"Total TinyLlama scores: {total_tinyllama_scores}")
+        print(f"Total motif events: {total_motif_scores}")
         print(f"Total errors logged: {total_errors}")
         
         if all_moods:

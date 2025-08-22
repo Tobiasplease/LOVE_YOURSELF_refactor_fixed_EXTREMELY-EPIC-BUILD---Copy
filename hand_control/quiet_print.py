@@ -17,7 +17,7 @@ def apply_hand_controller_quiet_mode():
         if args and isinstance(args[0], str):
             message = args[0]
             # Suppress any hand controller debug message with emojis
-            if any(emoji in message for emoji in ["🎯", "🔄", "📤", "🎲", "🔗", "✅", "🔒", "⏳", "🎨", "🏋️", "🛑", "📁", "⏱️", "🌅", "🌊", "🤖", "🔧", "🎪", "⚡", "🔍", "💡", "📍", "⭐", "💾", "📐", "😊", "🔌", "❌", "🧹", "🎭", "📊", "💖"]):
+            if any(emoji in message for emoji in ["🎯", "🔄", "📤", "🎲", "🔗", "SUCCESS", "🔒", "⏳", "🎨", "🏋️", "🛑", "📁", "⏱️", "🌅", "🌊", "🤖", "🔧", "🎪", "⚡", "🔍", "💡", "📍", "⭐", "💾", "📐", "😊", "🔌", "ERROR", "🧹", "🎭", "📊", "💖"]):
                 return
             # Also suppress specific text patterns
             if any(pattern in message for pattern in ["Using fonts", "[INFO]", "No background image", "Direct wave-based"]):

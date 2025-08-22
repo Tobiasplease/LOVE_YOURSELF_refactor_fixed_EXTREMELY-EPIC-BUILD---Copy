@@ -348,10 +348,97 @@ NATURAL FLOW: Think in fragments. Use "..." when trailing off. Start mid-thought
 Now:"""
 
 
-# === MOTIF EXTRACTION ===
+# === SOPHISTICATED MOTIF EXTRACTION ===
 def extract_motifs_spacy(text: str) -> List[str]:
+    """Enhanced motif extraction with filtering and semantic analysis."""
     doc = nlp(text)
-    return [chunk.text.lower() for chunk in doc.noun_chunks if len(chunk.text.strip()) > 2]
+    
+    # Extract various linguistic patterns
+    motifs = []
+    
+    # 1. Noun chunks (filtered)
+    for chunk in doc.noun_chunks:
+        clean_chunk = chunk.text.lower().strip()
+        if _is_significant_motif(clean_chunk):
+            motifs.append(clean_chunk)
+    
+    # 2. Named entities (meaningful ones)
+    for ent in doc.ents:
+        if ent.label_ in ['PERSON', 'ORG', 'GPE', 'PRODUCT', 'EVENT', 'WORK_OF_ART']:
+            clean_ent = ent.text.lower().strip()
+            if _is_significant_motif(clean_ent):
+                motifs.append(clean_ent)
+    
+    # 3. Adjective + noun combinations
+    for token in doc:
+        if token.pos_ == 'ADJ' and token.head.pos_ == 'NOUN':
+            combo = f"{token.text.lower()} {token.head.text.lower()}"
+            if _is_significant_motif(combo):
+                motifs.append(combo)
+    
+    # 4. Compound concepts (verb + object patterns)
+    for token in doc:
+        if token.pos_ == 'VERB' and token.dep_ == 'ROOT':
+            for child in token.children:
+                if child.dep_ in ['dobj', 'pobj']:
+                    concept = f"{token.lemma_.lower()} {child.text.lower()}"
+                    if _is_significant_motif(concept):
+                        motifs.append(concept)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_motifs = []
+    for motif in motifs:
+        if motif not in seen:
+            seen.add(motif)
+            unique_motifs.append(motif)
+    
+    return unique_motifs
+
+
+def _is_significant_motif(text: str) -> bool:
+    """Filter out insignificant motifs using heuristics."""
+    if len(text.strip()) < 3:
+        return False
+    
+    # Common mundane objects and filler words
+    mundane_objects = {
+        'table', 'chair', 'desk', 'wall', 'door', 'window', 'laptop', 'phone', 'book',
+        'paper', 'screen', 'corner', 'room', 'floor', 'ceiling', 'surface', 'object',
+        'keyboard', 'mouse', 'monitor', 'shelf', 'couch', 'bed', 'thing', 'stuff',
+        'item', 'place', 'area', 'spot', 'side', 'part', 'way', 'time', 'moment',
+        'second', 'minute', 'hour', 'day', 'something', 'anything', 'everything',
+        'somewhere', 'anywhere', 'everywhere', 'someone', 'anyone', 'everyone'
+    }
+    
+    # Pronouns and determiners
+    pronouns = {'i', 'me', 'my', 'mine', 'you', 'your', 'yours', 'he', 'him', 'his', 
+                'she', 'her', 'hers', 'it', 'its', 'we', 'us', 'our', 'ours', 'they', 
+                'them', 'their', 'theirs', 'this', 'that', 'these', 'those', 'a', 'an', 
+                'the', 'some', 'any', 'all', 'each', 'every', 'no', 'none'}
+    
+    # Single words that are too generic
+    generic_words = {'good', 'bad', 'big', 'small', 'new', 'old', 'long', 'short', 
+                     'high', 'low', 'right', 'left', 'first', 'last', 'next', 'other'}
+    
+    text_lower = text.lower().strip()
+    
+    # Check against filter lists
+    if text_lower in mundane_objects or text_lower in pronouns or text_lower in generic_words:
+        return False
+    
+    # Filter out purely numeric or single character
+    if text_lower.isdigit() or len(text_lower) == 1:
+        return False
+    
+    # Filter out common articles and prepositions within phrases
+    words = text_lower.split()
+    if len(words) > 1:
+        content_words = [w for w in words if w not in {'the', 'a', 'an', 'of', 'in', 'on', 'at', 'by', 'for', 'with', 'to', 'from'}]
+        if len(content_words) == 0:
+            return False
+    
+    return True
 
 
 # === DYNAMIC SYSTEM PROMPT ===
@@ -734,7 +821,7 @@ def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Op
         if extra:
             base_prompt += f"Plus these details: {extra.strip()} "
 
-        base_prompt += "What's going through your mind about yourself, your nature, your purpose? Think to yourself about what all this means."
+        base_prompt += "Based on these specific details - your mood changes, the patterns you're noticing, your emotional shifts - what thoughts come up? Reference the concrete data about your experience rather than abstract concepts."
 
         return base_prompt
     else:
