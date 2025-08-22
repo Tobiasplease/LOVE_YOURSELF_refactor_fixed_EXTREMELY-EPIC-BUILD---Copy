@@ -19,6 +19,7 @@ def raster_to_centerline_svg(
     scale=1.0,
     contrast_alpha=2.0,  # Contrast control (1.0 = no change, >1.0 = more contrast, above 2.0...bad?
     save_steps=False,  # When True, saves intermediate images with "_step1", "_step2", etc.
+    bypass_threshold=False,  # When True, skips thresholding step
 ):
 
     print("[INFO] Läser in bild...")
@@ -32,16 +33,22 @@ def raster_to_centerline_svg(
 
     # === Förbehandling ===
     # Step 1: Adjust contrast
-    if contrast_alpha != 1.0:
-        print(f"[INFO] Justerar kontrast med PyTorch (factor={contrast_alpha})...")
-        # Convert to tensor, normalize to [0,1], apply contrast, convert back
-        img_tensor = torch.from_numpy(img).float() / 255.0
-        img_tensor = img_tensor.unsqueeze(0)  # Add channel dimension
-        img_tensor = F.adjust_contrast(img_tensor, contrast_alpha)
-        img = (torch.clamp(img_tensor.squeeze(0), 0, 1) * 255).byte().numpy()
+    print(f"[INFO] Justerar kontrast med PyTorch (factor={contrast_alpha})...")
+    # Convert to tensor, normalize to [0,1], apply contrast, convert back
+    img_tensor = torch.from_numpy(img).float() / 255.0
+    img_tensor = img_tensor.unsqueeze(0)  # Add channel dimension
+    img_tensor = F.adjust_contrast(img_tensor, contrast_alpha)
+    img = (torch.clamp(img_tensor.squeeze(0), 0, 1) * 255).byte().numpy()
 
-        if save_steps:
-            cv2.imwrite(f"{base_path}_step1_contrast.png", img)
+    # Check if image is mostly black after contrast, if so invert it
+    black_pixels = np.sum(img < 128)
+    total_pixels = img.shape[0] * img.shape[1]
+    if black_pixels / total_pixels > 0.7:  # If more than 70% is dark
+        print("[INFO] Bild mestadels svart efter kontrast, inverterar...")
+        img = 255 - img
+
+    if save_steps:
+        cv2.imwrite(f"{base_path}_step1_contrast.png", img)
 
     # Step 2: Gaussian blur
     print("[INFO] Kör Gaussian blur...")
@@ -49,12 +56,17 @@ def raster_to_centerline_svg(
     if save_steps:
         cv2.imwrite(f"{base_path}_step2_blur.png", img)
 
-    print(f"[INFO] Trösklar med värde {threshold_value}...")
-    _, binary = cv2.threshold(img, threshold_value, 255, cv2.THRESH_BINARY)
-    if save_steps:
-        cv2.imwrite(f"{base_path}_step3_threshold.png", binary)
-
-    binary = binary == 0  # Gör om till bool för skeletonize
+    if bypass_threshold or threshold_value == 0:
+        print("[INFO] Hoppar över tröskelvärde...")
+        binary = img < 128  # Direct conversion to bool, assuming dark areas are features
+        if save_steps:
+            cv2.imwrite(f"{base_path}_step3_no_threshold.png", (binary * 255).astype(np.uint8))
+    else:
+        print(f"[INFO] Trösklar med värde {threshold_value}...")
+        _, binary_img = cv2.threshold(img, threshold_value, 255, cv2.THRESH_BINARY)
+        if save_steps:
+            cv2.imwrite(f"{base_path}_step3_threshold.png", binary_img)
+        binary = binary_img == 0  # Convert to bool for skeletonize
 
     if do_dilate:
         #  Dilation expands/thickens the black regions in the binary image using a 2x2 kernel. It fills small
