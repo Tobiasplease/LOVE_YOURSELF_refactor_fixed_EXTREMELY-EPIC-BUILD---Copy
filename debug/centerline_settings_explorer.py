@@ -57,7 +57,7 @@ def explore_settings(input_folder, output_folder=None):
     # Define parameter combinations to test
     blur_kernels = [(1, 1), (3, 3)]
     # blur_kernels = [(1, 1)]
-    thresholds = [0, 60, 120, 140, 160, 180, 200, 255]
+    thresholds = [0, 40, 60, 120, 140, 160, 180, 200]
     dilate_options = [True, False]
     # dilate_options = [False]
 
@@ -99,7 +99,7 @@ def explore_settings(input_folder, output_folder=None):
                     do_dilate=dilate,
                     dilation_iterations=1,  # Keep this constant
                     scale=1.0,  # Keep this constant
-                    save_steps=True,  # Set to True if you want to save intermediate steps
+                    save_steps=False,  # Set to True if you want to save intermediate steps
                 )
                 print("✅")
                 successful_conversions += 1

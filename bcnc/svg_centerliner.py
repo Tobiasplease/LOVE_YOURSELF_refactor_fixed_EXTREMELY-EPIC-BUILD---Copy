@@ -89,7 +89,8 @@ def raster_to_centerline_svg(
     # === Konvertera till SVG ===
     print("[INFO] Konverterar till SVG...")
     skeleton_uint8 = (skeleton * 255).astype(np.uint8)
-    contours, _ = cv2.findContours(skeleton_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    # contours, _ = cv2.findContours(skeleton_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    contours, _ = cv2.findContours(skeleton_uint8, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
 
     height, width = skeleton.shape
     dwg = svgwrite.Drawing(output_path, size=(f"{width*scale}px", f"{height*scale}px"))
