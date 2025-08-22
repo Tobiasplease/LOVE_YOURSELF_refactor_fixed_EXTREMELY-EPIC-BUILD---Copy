@@ -12,6 +12,7 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
 USE_SERVO = False
+USE_HAND_CONTROLLER = False  # Completely disable hand controller system
 SERVO_MIN = 45
 SERVO_MAX = 135
 EASING_FACTOR = 0.09
@@ -110,6 +111,7 @@ MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 # === OLLAMA SETTINGS ===
 OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
+OLLAMA_TIMEOUT_REFLECTION = 120  # Timeout for reflection/reasoning calls
 
 # === OUTPUT SETTINGS ===
 # TO SEE ONLY CLEAN CAPTIONS:
@@ -119,6 +121,7 @@ PRINT_CLEAN_CAPTIONS = False
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
+DEBUG_VERBOSE = False  # enable verbose debug logging for all operations
 
 # === REACTIVITY PAUSE SYSTEM ===
 REACTIVITY_PAUSE_THRESHOLD = 0.30  # Activity level to trigger pause
