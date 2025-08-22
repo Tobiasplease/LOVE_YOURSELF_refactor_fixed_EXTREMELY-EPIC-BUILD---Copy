@@ -169,16 +169,15 @@ class ImageMonitor:
             print_message=f"🖼 New drawing: {filename} ({file_size} bytes)",
         )
 
+        # Process PNG to G-code and execute it (if configured)
+        if image_path.lower().endswith(".png"):
+            self._process_png_to_gcode(image_path)
+
         if state_manager.is_generating_drawing:
             state_manager.finish_drawing_generation()
             log_json_entry(
                 LogType.INFO, {"message": "Drawing generation completed", "image_path": image_path}, print_message="✅ Drawing generation completed"
             )
-
-        # Process PNG to G-code if it's a PNG file
-        if image_path.lower().endswith(".png"):
-            self._process_png_to_gcode(image_path)
-
         if self.on_image_complete:
             self.on_image_complete(image_path)
 
