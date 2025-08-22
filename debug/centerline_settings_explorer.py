@@ -24,7 +24,7 @@ from itertools import product
 project_root = os.path.dirname(os.path.dirname(__file__))
 sys.path.insert(0, project_root)
 
-from bcnc import raster_to_centerline_svg
+from bcnc.svg_centerliner import raster_to_centerline_svg
 
 
 def explore_settings(input_folder, output_folder=None):
@@ -55,7 +55,7 @@ def explore_settings(input_folder, output_folder=None):
     print(f"Found {len(png_files)} PNG files")
 
     # Define parameter combinations to test
-    blur_kernels = [(1, 1), (2, 2), (3, 3)]
+    blur_kernels = [(1, 1), (3, 3)]
     thresholds = [120, 140, 160, 180, 200]
     dilate_options = [True, False]
 
@@ -102,7 +102,7 @@ def explore_settings(input_folder, output_folder=None):
                 successful_conversions += 1
 
             except Exception as e:
-                print(f"❌ Error: {str(e)[:50]}...")
+                print(f"❌ Error: {str(e)}...")
                 failed_conversions += 1
 
     # Create summary report

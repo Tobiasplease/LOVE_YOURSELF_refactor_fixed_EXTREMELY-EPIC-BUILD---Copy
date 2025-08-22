@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from skimage.morphology import skeletonize
+
 import torch
 import torchvision.transforms.functional as F
 
@@ -30,7 +31,7 @@ def raster_to_centerline_svg(
         cv2.imwrite(f"{base_path}_step0_original.png", img)
 
     # === Förbehandling ===
-    # Step 1: Adjust contrast using PyTorch like YANCcontrast
+    # Step 1: Adjust contrast
     if contrast_alpha != 1.0:
         print(f"[INFO] Justerar kontrast med PyTorch (factor={contrast_alpha})...")
         # Convert to tensor, normalize to [0,1], apply contrast, convert back
@@ -38,8 +39,9 @@ def raster_to_centerline_svg(
         img_tensor = img_tensor.unsqueeze(0)  # Add channel dimension
         img_tensor = F.adjust_contrast(img_tensor, contrast_alpha)
         img = (torch.clamp(img_tensor.squeeze(0), 0, 1) * 255).byte().numpy()
+
         if save_steps:
-            cv2.imwrite(f"{base_path}_step1_pytorch_contrast.png", img)
+            cv2.imwrite(f"{base_path}_step1_contrast.png", img)
 
     # Step 2: Gaussian blur
     print("[INFO] Kör Gaussian blur...")
