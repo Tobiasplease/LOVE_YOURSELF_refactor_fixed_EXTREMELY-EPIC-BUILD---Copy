@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 from skimage.morphology import skeletonize
+import torch
+import torchvision.transforms.functional as F
 
 # from skimage.util import invert
 import svgwrite
@@ -11,11 +13,10 @@ def raster_to_centerline_svg(
     output_path,
     threshold_value=180,
     blur_kernel=(1, 1),  # (1,1) = ingen blur, (3,3) = mild
-    do_dilate=True,
+    do_dilate=False,
     dilation_iterations=1,
     scale=1.0,
-    contrast_alpha=2.0,  # Contrast control (1.0 = no change, >1.0 = more contrast, above 3.0...bad?
-    contrast_beta=0,  # Brightness control (0 = no change)
+    contrast_alpha=2.0,  # Contrast control (1.0 = no change, >1.0 = more contrast, above 2.0...bad?
     save_steps=False,  # When True, saves intermediate images with "_step1", "_step2", etc.
 ):
 
@@ -29,12 +30,16 @@ def raster_to_centerline_svg(
         cv2.imwrite(f"{base_path}_step0_original.png", img)
 
     # === Förbehandling ===
-    # Step 1: Increase contrast, no greyscales
-    if contrast_alpha != 1.0 or contrast_beta != 0:
-        print(f"[INFO] Ökar kontrast (alpha={contrast_alpha}, beta={contrast_beta})...")
-        img = cv2.convertScaleAbs(img, alpha=contrast_alpha, beta=contrast_beta)  # type: ignore
+    # Step 1: Adjust contrast using PyTorch like YANCcontrast
+    if contrast_alpha != 1.0:
+        print(f"[INFO] Justerar kontrast med PyTorch (factor={contrast_alpha})...")
+        # Convert to tensor, normalize to [0,1], apply contrast, convert back
+        img_tensor = torch.from_numpy(img).float() / 255.0
+        img_tensor = img_tensor.unsqueeze(0)  # Add channel dimension
+        img_tensor = F.adjust_contrast(img_tensor, contrast_alpha)
+        img = (torch.clamp(img_tensor.squeeze(0), 0, 1) * 255).byte().numpy()
         if save_steps:
-            cv2.imwrite(f"{base_path}_step1_contrast.png", img)
+            cv2.imwrite(f"{base_path}_step1_pytorch_contrast.png", img)
 
     # Step 2: Gaussian blur
     print("[INFO] Kör Gaussian blur...")
@@ -50,6 +55,10 @@ def raster_to_centerline_svg(
     binary = binary == 0  # Gör om till bool för skeletonize
 
     if do_dilate:
+        #  Dilation expands/thickens the black regions in the binary image using a 2x2 kernel. It fills small
+        #  gaps and makes thin lines thicker before skeletonization. This can help connect broken line segments
+        #  but may also merge separate features that are close together.
+
         print(f"[INFO] Dilar {dilation_iterations} gång(er)...")
         binary = binary.astype(np.uint8)
         kernel = np.ones((2, 2), np.uint8)
@@ -82,16 +91,16 @@ def raster_to_centerline_svg(
 
 if __name__ == "__main__":
     import sys
-    
+
     input_path = sys.argv[1] if len(sys.argv) > 1 else "input.png"
-    output_path = input_path.rsplit('.', 1)[0] + ".svg"
-    
+    output_path = input_path.rsplit(".", 1)[0] + ".svg"
+
     raster_to_centerline_svg(
         input_path=input_path,
         output_path=output_path,
         threshold_value=180,  # Testa 160–200 beroende på bild
         blur_kernel=(1, 1),  # (1,1) = ingen blur, (3,3) = mild
-        do_dilate=False,  # Sätt till False om det tar med för mycket
+        do_dilate=True,  # Sätt till False om det tar med för mycket
         dilation_iterations=1,  # Testa 0–2
         scale=1.0,  # SVG-skalning
         save_steps=True,  # Spara mellanliggande steg
