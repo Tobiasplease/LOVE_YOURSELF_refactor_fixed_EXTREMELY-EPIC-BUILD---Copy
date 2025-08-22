@@ -17,6 +17,8 @@ from config.config import (
     TINYLLAMA_TOP_P,
     TINYLLAMA_NUM_PREDICT,
     TINYLLAMA_TIMEOUT,
+    OLLAMA_TIMEOUT_REFLECTION,
+    DEBUG_VERBOSE,
 )
 from config.model_settings import get_model_options, get_model_system_prompt, is_qwen_model
 from utils.ollama import query_ollama
@@ -78,8 +80,18 @@ class MultimodalModel:
     def reason_about_caption(
         self, caption: str, *, agent: Optional[any] = None, mood_text: Optional[str] = None, extra: Optional[str] = None  # type: ignore
     ) -> str:  # type: ignore
-        prompt = build_reflection_prompt(caption, extra=extra, agent=agent)
-        return self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT)
+        try:
+            prompt = build_reflection_prompt(caption, extra=extra, agent=agent)
+            print(f"[🔍] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s")
+            response = self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT, timeout=OLLAMA_TIMEOUT_REFLECTION)
+            print(f"[✅] Reflection completed: {len(response)} chars")
+            return response
+        except Exception as e:
+            print(f"[❌] Reflection failed: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return "[⚠️] Reflection generation failed"
 
     def generate_drawing_prompt(self, *, extra: Optional[str] = None) -> str:
         if not self.memory_ref:
@@ -122,7 +134,7 @@ class MultimodalModel:
         # Use configurable threshold for "significant change"
         return novelty > VISUAL_CHANGE_THRESHOLD
 
-    def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None) -> str:
+    def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None, timeout: int = 90) -> str:
         # Get model-specific generation options
         model_options = get_model_options(self.model_name)
 
@@ -151,7 +163,7 @@ class MultimodalModel:
             prompt=formatted_prompt,
             model=self.model_name,
             image=image_path,
-            timeout=90,
+            timeout=timeout,
             log_dir=MOOD_SNAPSHOT_FOLDER,
             system_prompt=final_system_prompt,
             options=model_options,  # Pass model-specific options
