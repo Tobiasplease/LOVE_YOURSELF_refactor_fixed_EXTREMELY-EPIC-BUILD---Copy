@@ -217,4 +217,4 @@ def query_ollama(
             system_prompt=system_prompt,
         )
 
-        return f"[⚠️] Ollama API failed: {error_msg}"
+        return f"[WARNING] Ollama API failed: {error_msg}"

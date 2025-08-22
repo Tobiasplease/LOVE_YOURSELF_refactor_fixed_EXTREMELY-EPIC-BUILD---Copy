@@ -10,8 +10,8 @@ try:
     start = time.time()
     response = query_ollama(prompt="What do you see?", model="mistral", image=image_path, timeout=20, log_dir="mood_snapshots")
     duration = time.time() - start
-    print(f"✅ ollama responded in {duration:.2f} seconds.")
+    print(f"SUCCESS ollama responded in {duration:.2f} seconds.")
     print("Response:", response)
 
 except Exception as e:
-    print("⚠️ Exception:", e)
+    print("WARNING Exception:", e)

@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", message=".*attempted relative import.*")
 
 
 class ObjectDetectionThread(threading.Thread):
-    def __init__(self, model_path="models/yolov8m.pt", update_interval=5):  # ✨ Changed to yolov8m.pt
+    def __init__(self, model_path="models/yolov8m.pt", update_interval=5):  # SPARKLE Changed to yolov8m.pt
         super().__init__()
         self.model = YOLO(model_path)
         self.update_interval = update_interval

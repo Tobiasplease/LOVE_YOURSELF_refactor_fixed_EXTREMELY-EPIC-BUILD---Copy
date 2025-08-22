@@ -56,6 +56,7 @@ from breathing.breathing import update_lung_position
 from image_monitor import ImageMonitor
 from utils.state_manager import state_manager
 from utils.continuity import describe_duration, get_temporal_feeling
+from utils.error_tracking import track_component_health, log_silent_failure, get_failure_tracker
 from config.config import (
     USE_SERVO,
     USE_HAND_CONTROLLER,
@@ -183,11 +184,11 @@ def emergency_cleanup():
     global shutdown_in_progress, cleanup_completed
 
     if shutdown_in_progress:
-        print("[⚠️] Multiple shutdown signals - forcing exit")
+        print("[WARNING] Multiple shutdown signals - forcing exit")
         os._exit(1)
 
     shutdown_in_progress = True
-    print("[🛑] Emergency shutdown initiated...")
+    print("[EMERGENCY] Emergency shutdown initiated...")
 
     try:
         # Quick cleanup - no waiting
@@ -215,13 +216,13 @@ def emergency_cleanup():
         except ImportError:
             pass  # PyTorch not available, skip
         except Exception as e:
-            print(f"[⚠️] Warning: Could not clear GPU cache: {e}")
+            print(f"[WARNING] Warning: Could not clear GPU cache: {e}")
         
-        print("[✅] Emergency cleanup completed")
+        print("[SUCCESS] Emergency cleanup completed")
         cleanup_completed = True
 
     except Exception as e:
-        print(f"[❌] Emergency cleanup error: {e}")
+        print(f"[ERROR] Emergency cleanup error: {e}")
     finally:
         os._exit(0)
 
@@ -234,16 +235,16 @@ def graceful_cleanup():
         return
 
     shutdown_in_progress = True
-    print("[🛑] Graceful shutdown initiated...")
+    print("[SHUTDOWN] Graceful shutdown initiated...")
 
     # Save session state first (most important)
     if _global_captioner and _global_mood_engine and _global_state_manager:
         try:
             print("[💾] Saving session state...")
             success = _global_state_manager.save_session_state(_global_captioner, _global_mood_engine)
-            print("[✅] Session state saved successfully" if success else "[❌] Failed to save session state")
+            print("[SUCCESS] Session state saved successfully" if success else "[ERROR] Failed to save session state")
         except Exception as e:
-            print(f"[❌] Error saving session state: {e}")
+            print(f"[ERROR] Error saving session state: {e}")
 
     # Log session end
     if _global_start_time and _global_run_id:
@@ -255,7 +256,7 @@ def graceful_cleanup():
                 print_message=f"[👋] Session ended. Duration: {time.time() - _global_start_time:.1f}s",
             )
         except Exception as e:
-            print(f"[❌] Error logging session end: {e}")
+            print(f"[ERROR] Error logging session end: {e}")
 
     # Stop threads with timeouts
     if _global_object_detector:
@@ -263,7 +264,7 @@ def graceful_cleanup():
             _global_object_detector.stop()
             _global_object_detector.join(timeout=2.0)
             if _global_object_detector.is_alive():
-                print("[⚠️] Object detector thread didn't stop cleanly - forcing termination")
+                print("[WARNING] Object detector thread didn't stop cleanly - forcing termination")
                 # Force terminate if it's still alive
                 import ctypes
                 ctypes.pythonapi.PyThreadState_SetAsyncExc(
@@ -271,31 +272,31 @@ def graceful_cleanup():
                     ctypes.py_object(SystemExit)
                 )
         except Exception as e:
-            print(f"[❌] Error stopping object detector: {e}")
+            print(f"[ERROR] Error stopping object detector: {e}")
 
     if _global_image_monitor:
         try:
             _global_image_monitor.stop()
         except Exception as e:
-            print(f"[❌] Error stopping image monitor: {e}")
+            print(f"[ERROR] Error stopping image monitor: {e}")
 
     # Stop hand controller
     try:
         stop_hand_controller()
     except Exception as e:
-        print(f"[❌] Error stopping hand controller: {e}")
+        print(f"[ERROR] Error stopping hand controller: {e}")
 
     # Release camera
     if _global_cap:
         try:
             _global_cap.release()
         except Exception as e:
-            print(f"[❌] Error releasing camera: {e}")
+            print(f"[ERROR] Error releasing camera: {e}")
 
     try:
         cv2.destroyAllWindows()
     except Exception as e:
-        print(f"[❌] Error destroying windows: {e}")
+        print(f"[ERROR] Error destroying windows: {e}")
 
     # Clear PyTorch cache if available (helps with YOLO cleanup)
     try:
@@ -306,10 +307,17 @@ def graceful_cleanup():
     except ImportError:
         pass  # PyTorch not available, skip
     except Exception as e:
-        print(f"[⚠️] Warning: Could not clear GPU cache: {e}")
+        print(f"[WARNING] Warning: Could not clear GPU cache: {e}")
+
+    # Shutdown error tracker
+    try:
+        get_failure_tracker().shutdown()
+        print("[📊] Error tracker shutdown")
+    except Exception as e:
+        print(f"[WARNING] Error shutting down error tracker: {e}")
 
     cleanup_completed = True
-    print("[✅] Graceful shutdown completed")
+    print("[SUCCESS] Graceful shutdown completed")
 
 
 def signal_handler(signum, frame):
@@ -518,8 +526,12 @@ def mood_update_thread(frame, timestamp):
                     change_to_emotion(emotion)
                     debug_print(f"Updated hand controller emotion: {emotion}", "HAND")
 
-                    # Third: Update captioner's mood state for next cycle
+                    # Third: Update captioner's mood state and pattern data for next cycle
                     captioner.current_mood = current_mood
+                    pattern_data = mood_engine.get_pattern_data()
+                    captioner.novelty_score = pattern_data['novelty_score']
+                    # Pass recent motifs to captioner for memory integration
+                    captioner.current_motifs_from_mood = pattern_data['recent_motifs']
 
             except Exception as e:
                 debug_print(f"Captioner update failed: {e}", "ERROR")
@@ -543,7 +555,7 @@ try:
     while True:
         # Check for shutdown signal
         if shutdown_in_progress:
-            print("[🛑] Shutdown signal received - breaking main loop")
+            print("[SHUTDOWN] Shutdown signal received - breaking main loop")
             break
             
         ret, frame = cap.read()
@@ -639,12 +651,12 @@ try:
             resume_reason = "duration expired" if now - last_pause_time > REACTIVITY_PAUSE_DURATION else "very low activity"
             resume_data = {"action": "resume", "activity_level": float(current_activity)}  # Convert numpy to Python float
             if DEBUG_REACTIVITY_PAUSE:
-                debug_print(f"▶️ Sending resume command ({resume_reason}): {resume_data}", "REACTIVITY")
+                debug_print(f"RESUME Sending resume command ({resume_reason}): {resume_data}", "REACTIVITY")
 
             send_reactivity_data(resume_data)
             pause_is_active = False
             if DEBUG_REACTIVITY_PAUSE:
-                debug_print(f"✅ Resume triggered by {resume_reason} - resuming hand controller", "REACTIVITY")
+                debug_print(f"SUCCESS Resume triggered by {resume_reason} - resuming hand controller", "REACTIVITY")
 
         now = time.time()
         delta = now - last_time

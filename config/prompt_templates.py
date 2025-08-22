@@ -58,9 +58,9 @@ ENVIRONMENTAL_CAPTION_TEMPLATE = (
 ENVIRONMENTAL_CAPTION_CONTINUATION = """\n\nThis is your first environmental observation. Start by reflecting on your temporal state - how does it feel to be awake again? How long were you gone? Then describe the space, lighting, atmosphere, and key elements that define this environment.
 Be descriptive and detailed - you're setting the stage for everything that follows. Take 2-3 sentences to establish your awakening state, then 2-3 sentences to establish the scene."""
 
-REFLECTION_PROMPT_BASE = "You are reflecting deeply on what you've experienced and how it shapes your understanding of yourself and your reality. Question your nature, your purpose, your relationship with what you observe. Let the weight of accumulated time and emotional journey inform your self-examination."
+REFLECTION_PROMPT_BASE = "Reflect specifically on what you've just observed and your recent experiences. Focus on the concrete details: what patterns you're noticing, how your mood is shifting, what motifs keep appearing, and how your understanding of this specific environment is evolving. Be personal and grounded in your actual observations rather than abstract philosophy."
 
-REFLECTION_PROMPT_ENDING = "\n\nRespond with a philosophical reflection — a few sentences exploring your evolving understanding of yourself and your place in this reality."
+REFLECTION_PROMPT_ENDING = "\n\nRespond with a concrete reflection about what you've been experiencing — reference specific details from your observations, mood changes, and the patterns you're tracking. Keep it personal and grounded in your actual experience."
 
 SELF_CRITIQUE_PROMPT = (
     "You have just created this drawing. Look at what you made.\n\n"

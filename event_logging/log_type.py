@@ -22,3 +22,9 @@ class LogType(Enum):
     DECISION = "decision"
     COMFY_PROMPT = "comfy_prompt"
     NEW_DRAWING = "new_drawing"
+    
+    # Motif analysis and scoring events
+    MOTIF_EXTRACTION = "motif_extraction"
+    MOTIF_SCORE = "motif_score"
+    MOTIF_ANALYSIS = "motif_analysis"
+    MOTIF = "motif"

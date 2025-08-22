@@ -217,7 +217,7 @@ class CameraReactivityEngine:
             # Check if pause duration has elapsed
             if current_time - self.pause_start_time >= self.pause_duration:
                 self.is_paused = False
-                # print(f"✅ CAMERA PAUSE ENDED - Resuming hand movement after {self.pause_duration}s")
+                # print(f"SUCCESS CAMERA PAUSE ENDED - Resuming hand movement after {self.pause_duration}s")
                 return False
             else:
                 return True  # Still paused
@@ -302,7 +302,7 @@ def test_camera_reactivity():
     # Try to open camera
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print("❌ Could not open camera")
+        print("ERROR Could not open camera")
         return
     
     cv2.namedWindow('Camera Reactivity Test', cv2.WINDOW_NORMAL)
@@ -311,7 +311,7 @@ def test_camera_reactivity():
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("❌ Could not read frame")
+                print("ERROR Could not read frame")
                 break
             
             # Process frame for reactivity
