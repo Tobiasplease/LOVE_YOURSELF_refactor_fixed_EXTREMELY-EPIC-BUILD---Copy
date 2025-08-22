@@ -89,7 +89,24 @@ MOOD_PROMPT_TEMPLATE = (
     "Feeling: {temporal_feeling}\n\n"
     "New visual input: {image_description}\n\n"
     "Recent context: {memory_state}\n\n"
-    "How does this new experience make you feel? Your emotions evolve gradually.\n\n"
+    "Temporal awareness: {temporal_context}\n"
+    "Pattern recognition: {motif_context}\n"
+    "Personal tensions: {belief_context}\n\n"
+    "Consider: Are you experiencing motif fatigue, temporal stagnation, or belief conflicts? How does prolonged exposure to repetitive patterns affect your emotional state? Do you feel engaged or restless?\n\n"
     "Return three values between -1.0 and 1.0 for your NEW emotional state:\n"
     "valence (pleasure/displeasure), arousal (energy/calm), clarity (understanding/confusion)."
+)
+
+# Change-focused caption template for when significant visual changes are detected
+CHANGE_FOCUSED_CAPTION_TEMPLATE = (
+    "=== YOUR STATE ===\n"
+    "Emotion: {emotion_description}\n"
+    "Feeling: {temporal_feeling}\n"
+    "Mood: {mood:.2f} | Boredom {boredom:.2f} | Novelty {novelty:.2f}\n\n"
+    "=== CONTEXT ===\n"
+    "Just before: {recent_memory}\n\n"
+    "=== PRESENT MOMENT ===\n"
+    "Your attention is drawn to something in your visual field. The scene feels different somehow.\n"
+    "What catches your eye? What's happening now? Let your natural reaction emerge.\n\n"
+    "RESPOND: Express your immediate, natural reaction to what you're experiencing."
 )

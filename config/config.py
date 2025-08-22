@@ -92,6 +92,15 @@ YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 MOOD_DECAY_RATE = 0.05  # how much mood fades when nothing new happens
 NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
 
+# === CHANGE DETECTION ===
+VISUAL_CHANGE_THRESHOLD = 1.0  # novelty score threshold for triggering change-focused prompts (0.0-1.0) - disabled for now
+
+# === TINYLLAMA SETTINGS ===
+TINYLLAMA_TEMPERATURE = 0.1  # Low temperature for consistent numeric output
+TINYLLAMA_TOP_P = 0.8  # Top-p sampling for TinyLlama
+TINYLLAMA_NUM_PREDICT = 5  # Very short - just a number like "0.7"
+TINYLLAMA_TIMEOUT = 20  # Timeout in seconds for TinyLlama queries
+
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
 # --- Mistral LLM settings ---

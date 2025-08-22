@@ -22,7 +22,7 @@ class MoodEngine:
         self.current_mood = 0.5  # Backward compatibility scalar
         self.mood_vector = (0.0, 0.0, 0.5)  # Initial: neutral valence, neutral arousal, moderate clarity
         self.previous_mood_vector = (0.0, 0.0, 0.5)  # For emotional momentum tracking
-        self.emotional_momentum = 0.7  # How much previous mood influences new mood (0.0-1.0)
+        self.emotional_momentum = 0.4  # How much previous mood influences new mood (0.0-1.0) - reduced for more responsive emotional evolution
         self.last_caption = ""
         self.last_person_detected = False
         self.memory = []
@@ -239,6 +239,12 @@ class MoodEngine:
             if emotional_memory_context:
                 memory_state += f" | Emotional context: {emotional_memory_context}"
             
+            # Generate lightweight contextual information for mood analysis
+            session_duration = time.time() - self.session_start
+            temporal_context = self._generate_temporal_context(session_duration, emotional_memory_context)
+            motif_context = self._generate_motif_context(caption)
+            belief_context = self._generate_belief_context()
+            
             # Use the enhanced recursive prompt with current emotional state, memory, and temporal feeling
             prompt = MOOD_PROMPT_TEMPLATE.format(
                 image_description=caption,
@@ -247,7 +253,10 @@ class MoodEngine:
                 current_valence=self.mood_vector[0],
                 current_arousal=self.mood_vector[1], 
                 current_clarity=self.mood_vector[2],
-                temporal_feeling=temporal_feeling or "time flows neutrally"
+                temporal_feeling=temporal_feeling or "time flows neutrally",
+                temporal_context=temporal_context,
+                motif_context=motif_context,
+                belief_context=belief_context
             )
             
             response = query_ollama(prompt, model="llava:7b-v1.6-mistral-q5_1")
@@ -338,6 +347,57 @@ class MoodEngine:
         v, a, c = self.mood_vector
         bv, ba, bc = self.long_bias
         return (v + bv, a + ba, c + bc)
+    
+    # === LIGHTWEIGHT CONTEXTUAL AWARENESS ===
+    def _generate_temporal_context(self, session_duration: float, emotional_context: Optional[str] = None) -> str:
+        """Generate lightweight temporal awareness for mood analysis."""
+        hours = session_duration / 3600
+        context_parts = []
+        
+        if hours > 2:
+            context_parts.append(f"Session duration: {hours:.1f} hours")
+        elif session_duration > 1800:  # 30 minutes
+            context_parts.append(f"Session duration: {session_duration/60:.0f} minutes") 
+        
+        # Check for temporal stagnation patterns
+        if emotional_context and "similar emotional memories" in emotional_context:
+            context_parts.append("Recurring emotional patterns detected")
+        
+        if hours > 1.5:
+            context_parts.append("Extended observation period may affect emotional state")
+            
+        return " | ".join(context_parts) if context_parts else "Fresh session"
+    
+    def _generate_motif_context(self, current_caption: str) -> str:
+        """Generate lightweight motif pattern awareness for mood analysis."""
+        # Simple keyword frequency check using recent memory
+        recent_captions = self.memory[-10:] if len(self.memory) >= 10 else self.memory
+        
+        if not recent_captions:
+            return "New visual patterns emerging"
+            
+        # Check for repetitive keywords in recent captions
+        current_words = set(current_caption.lower().split())
+        repetition_count = 0
+        
+        for past_caption in recent_captions:
+            past_words = set(past_caption.lower().split())
+            overlap = len(current_words & past_words) / len(current_words | past_words) if current_words else 0
+            if overlap > 0.6:  # 60% similarity
+                repetition_count += 1
+        
+        if repetition_count >= 7:  # 7 out of 10 recent captions are similar
+            return "High pattern repetition detected in recent observations"
+        elif repetition_count >= 4:
+            return "Some recurring visual patterns noticed"
+        else:
+            return "Visual variety in recent observations"
+    
+    def _generate_belief_context(self) -> str:
+        """Generate lightweight belief conflict awareness for mood analysis."""
+        # For now, return a neutral statement - this can be enhanced when belief system is available
+        # In future: check if current motifs conflict with stated beliefs/desires
+        return "Beliefs and desires developing through observation"
 
 
 def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):

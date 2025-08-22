@@ -18,6 +18,8 @@ import re
 import os
 import glob
 import time
+import threading
+import queue
 from collections import deque, Counter
 from typing import Deque, List, Tuple, Set, Dict, Any, Optional
 
@@ -114,6 +116,11 @@ Answer: INTERESTING or BORING"""
                 "location_history": [],  # Past understandings of this space
             },
         )
+
+        # Background TinyLlama scoring system
+        self.scoring_queue = queue.Queue()
+        self.scoring_thread = None
+        self._start_background_scorer()
 
         # Organic emotional evolution (preserves servo compatibility)
         self.emotional_expressions = getattr(self, "emotional_expressions", [])  # Self-generated emotional statements
@@ -231,7 +238,11 @@ Answer: INTERESTING or BORING"""
         # Only score with TinyLlama if we haven't scored this motif before
         if motif not in self.motif_confidence:
             context = " | ".join(list(self.current_motifs)[-3:])
-            score = self.score_motif_with_tinyllama(motif, context)
+            # Queue for background scoring (non-blocking)
+            self.queue_motif_for_scoring(motif, context)
+            # Use default score until background scoring completes
+            score = 0.5
+            print(f"[⏳] Queued '{motif}' for background scoring (using default 0.5)")
         else:
             # Use cached score - don't re-query TinyLlama for known motifs
             score = self.motif_confidence[motif]
@@ -1117,3 +1128,42 @@ Answer: INTERESTING or BORING"""
                 return f"Often: {most_used[0]}"
 
         return ""
+
+    # === BACKGROUND TINYLLAMA SCORING ===
+    def _start_background_scorer(self):
+        """Start the background thread for TinyLlama scoring."""
+        if self.scoring_thread is None or not self.scoring_thread.is_alive():
+            self.scoring_thread = threading.Thread(target=self._background_scorer_worker, daemon=True)
+            self.scoring_thread.start()
+
+    def _background_scorer_worker(self):
+        """Background worker that processes TinyLlama scoring queue."""
+        while True:
+            try:
+                # Get next motif to score (blocks until available)
+                motif, context = self.scoring_queue.get(timeout=30)
+                
+                # Score the motif with TinyLlama
+                score = self.score_motif_with_tinyllama(motif, context)
+                
+                # Update the motif confidence (thread-safe since it's just dict assignment)
+                self.motif_confidence[motif] = score
+                
+                # Mark task as done
+                self.scoring_queue.task_done()
+                
+            except queue.Empty:
+                # No work for 30 seconds, continue waiting
+                continue
+            except Exception as e:
+                print(f"[⚠️] Background scoring error: {e}")
+                continue
+
+    def queue_motif_for_scoring(self, motif: str, context: str = ""):
+        """Add a motif to the background scoring queue (non-blocking)."""
+        try:
+            self.scoring_queue.put_nowait((motif, context))
+        except queue.Full:
+            # Queue is full, skip this scoring (prioritize real-time performance)
+            print(f"[⚠️] Scoring queue full, skipping '{motif}'")
+            pass

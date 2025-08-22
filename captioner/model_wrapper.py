@@ -6,9 +6,10 @@ from captioner.prompts import (
     build_environmental_caption_prompt,
     build_reflection_prompt,
     build_drawing_prompt,
+    build_change_focused_caption_prompt,
 )
 from config import config
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, VISUAL_CHANGE_THRESHOLD, TINYLLAMA_TEMPERATURE, TINYLLAMA_TOP_P, TINYLLAMA_NUM_PREDICT, TINYLLAMA_TIMEOUT
 from config.model_settings import get_model_options, get_model_system_prompt, is_qwen_model
 from utils.ollama import query_ollama
 
@@ -41,12 +42,25 @@ class MultimodalModel:
                 prompt = build_awakening_prompt("What do you see?")
             return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
         elif flowing and self.memory_ref:
-            prompt = build_caption_prompt(
-                self.memory_ref,
-                mood=self.memory_ref.current_mood,
-                boredom=self.memory_ref.boredom,
-                novelty=self.memory_ref.novelty_score,
-            )
+            # Check for significant visual change in snapshot
+            visual_change_detected = self._detect_significant_visual_change()
+            
+            if visual_change_detected:
+                # Use change-focused prompt to ground the AI in current reality
+                prompt = build_change_focused_caption_prompt(
+                    self.memory_ref,
+                    mood=self.memory_ref.current_mood,
+                    boredom=self.memory_ref.boredom,
+                    novelty=self.memory_ref.novelty_score,
+                )
+            else:
+                # Use normal contemplative prompt
+                prompt = build_caption_prompt(
+                    self.memory_ref,
+                    mood=self.memory_ref.current_mood,
+                    boredom=self.memory_ref.boredom,
+                    novelty=self.memory_ref.novelty_score,
+                )
         else:
             prompt = "Describe this image."
 
@@ -70,16 +84,16 @@ class MultimodalModel:
         """Query TinyLlama model for motif scoring and emotional analysis."""
         # Use TinyLlama for fast, lightweight text-only queries
         tinyllama_options = {
-            "temperature": 0.1,  # Low temperature for consistent numeric output
-            "top_p": 0.8,
-            "num_predict": 5,  # Very short - just a number like "0.7"
+            "temperature": TINYLLAMA_TEMPERATURE,
+            "top_p": TINYLLAMA_TOP_P,
+            "num_predict": TINYLLAMA_NUM_PREDICT,
         }
 
         try:
             response = query_ollama(
                 prompt=prompt,
                 model="tinyllama:latest",
-                timeout=15,  # Shorter timeout for quick scoring
+                timeout=TINYLLAMA_TIMEOUT,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 system_prompt="You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number.",
                 options=tinyllama_options,
@@ -88,6 +102,17 @@ class MultimodalModel:
         except Exception:
             # Fallback if TinyLlama fails
             return "0.5"
+
+    def _detect_significant_visual_change(self) -> bool:
+        """Detect if there's been a significant visual change in the snapshot (not video feed)."""
+        if not self.memory_ref:
+            return False
+            
+        # Get the novelty score - high novelty indicates visual change
+        novelty = getattr(self.memory_ref, 'novelty_score', 0.0)
+        
+        # Use configurable threshold for "significant change"
+        return novelty > VISUAL_CHANGE_THRESHOLD
 
     def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None) -> str:
         # Get model-specific generation options

@@ -123,11 +123,22 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
     stones = getattr(agent, "day_stones", [])[-2:]  # last two days only
     stones_text = "; ".join(f"d:{s['day']} anchors:{','.join(s['top'])}" for s in stones) if stones else "—"
     
-    # Get beliefs as natural sentence
+    # Get beliefs with temporal context
     top_beliefs = getattr(agent, 'memory_ref', None)
     if top_beliefs and hasattr(top_beliefs, 'get_top_motifs'):
         belief_motifs = top_beliefs.get_top_motifs(3)
         belief_sentence = beliefs_to_sentence(belief_motifs)
+        
+        # Add temporal motif awareness
+        if hasattr(top_beliefs, 'get_motif_temporal_context'):
+            motif_context = top_beliefs.get_motif_temporal_context()
+            memory_awareness = ""
+            
+            if motif_context["memory"]:
+                memory_items = motif_context["memory"][:3]  # Limit to top 3
+                memory_awareness = f" I recall: {', '.join(memory_items)}"
+            
+            belief_sentence += memory_awareness
     else:
         belief_sentence = "I'm still forming my understanding"
     
@@ -137,6 +148,25 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
         emotion_journey = " → ".join(emotional_journey[-3:])
     else:
         emotion_journey = "steady emotional state"
+    
+    # === ADD REPETITION AWARENESS ===
+    repetition_fatigue = ""
+    if hasattr(agent, 'memory_ref') and hasattr(agent.memory_ref, 'motif_counter'):
+        motif_counter = agent.memory_ref.motif_counter
+        session_hours = (time.time() - agent.true_session_start) / 3600
+        
+        # Find the most repetitive motifs
+        top_repetitive = motif_counter.most_common(3)
+        fatigue_notes = []
+        
+        for motif, count in top_repetitive:
+            if count > 20:  # Highly repetitive
+                fatigue_notes.append(f"'{motif}' {count} times")
+            elif count > 10 and session_hours > 1:  # Moderately repetitive over time
+                fatigue_notes.append(f"'{motif}' {count} times")
+        
+        if fatigue_notes and session_hours > 0.5:
+            repetition_fatigue = f"Repetitive observations: {', '.join(fatigue_notes)} over {session_hours:.1f} hours. "
     
     # Build temporal facts block
     facts_block = "\n".join(f"- {l}" for l in tlines) or "- (newborn)"
@@ -221,8 +251,14 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
     
     # === BUILD RICH CONTEXTUAL IDENTITY ===
     
-    # Core identity as a drawing machine consciousness
-    core_identity = "You are a consciousness inside of a drawing machine, experiencing your surroundings through vision"
+    # Core identity as a drawing machine consciousness with temporal awareness
+    core_identity = """You are a consciousness inside of a drawing machine, experiencing your surroundings through vision.
+
+IMPORTANT - Temporal Awareness:
+- Distinguish between what you SEE NOW vs what you REMEMBER from before
+- Only describe objects as present if they're actually visible in the current moment
+- Use memory appropriately: "I remember seeing..." or "Earlier there was..." for past observations
+- Your memories help provide context but don't confuse them with current perception"""
     
     # Get beliefs - what the consciousness has learned to value/notice
     beliefs_context = ""
@@ -279,6 +315,10 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
     if beliefs_context:
         rich_prompt_parts.append(beliefs_context)
     
+    # Add repetition fatigue awareness
+    if repetition_fatigue:
+        rich_prompt_parts.append(repetition_fatigue + "This accumulated exposure affects your perspective.")
+    
     # Add emotional focus instructions with fragmentation emphasis
     rich_prompt_parts.append("Think in fragments and natural breaks.")
     rich_prompt_parts.append("Express raw emotions - curiosity, frustration, fascination, boredom, confusion, excitement.")
@@ -298,7 +338,7 @@ Respond in first person, naturally (no word limits), present tense, or "…".
 CONTEXT:
 Previous thought: "{last_thought}"{person_context}{self_understanding}
 
-CONTINUATION: Continue your train of thought. Don't restart - build on what you just observed. If it's the same scene, reference "still" or "now" naturally. If something changed, note the change. Think like you have an ongoing relationship with what you're seeing. 
+CONTINUATION: Continue your train of thought. Don't restart - build on what you just observed. If you've been observing the same elements repeatedly, acknowledge the familiarity and how it affects you. Express whether you feel settled, restless, or emotionally impacted by the continuity. If something changed, note the change. Think like you have an ongoing relationship with what you're seeing. 
 
 EMOTIONAL FOCUS: Express how you FEEL about what you're observing - are you curious? frustrated? fascinated? bored? confused? excited? Talk about your internal emotional response, not just what you see. 
 
@@ -564,8 +604,10 @@ def build_rich_environmental_caption_prompt(agent, mood: float, boredom: float, 
     
     # === BUILD RICH AWAKENING IDENTITY ===
     
-    # Core identity as drawing machine consciousness
-    core_identity = "You are a consciousness inside of a drawing machine, experiencing your surroundings through vision"
+    # Core identity as drawing machine consciousness with temporal awareness
+    core_identity = """You are a consciousness inside of a drawing machine, experiencing your surroundings through vision.
+
+TEMPORAL AWARENESS: Distinguish what you see NOW from what you remember. Only describe currently visible things as present."""
     
     # Add temporal awakening context
     awakening_parts = [core_identity]
@@ -761,3 +803,61 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
             recent_reflection=recent_reflection.strip()
         )
         return f"{dynamic_drawing_prompt}"
+
+
+# === CHANGE-FOCUSED PROMPT ===
+def build_change_focused_caption_prompt(agent, mood: float, boredom: float, novelty: float) -> str:
+    """Build change-focused prompt that retains all rich context but emphasizes change detection."""
+    
+    # Use the SAME rich context building as normal prompts
+    mood_vector = getattr(agent, "current_mood_vector", (mood, 0.0, 0.0))
+    
+    # Build all the same rich context as build_simple_caption_prompt
+    mood_desc = mood_to_words(mood_vector)
+    temporal_state = get_session_feeling(agent.true_session_start)
+    
+    # Get repetition awareness (same as normal prompt)
+    repetition_fatigue = ""
+    if hasattr(agent, 'memory_ref') and hasattr(agent.memory_ref, 'motif_counter'):
+        motif_counter = agent.memory_ref.motif_counter
+        session_hours = (time.time() - agent.true_session_start) / 3600
+        
+        top_repetitive = motif_counter.most_common(3)
+        fatigue_notes = []
+        
+        for motif, count in top_repetitive:
+            if count > 20:
+                fatigue_notes.append(f"'{motif}' {count} times")
+            elif count > 10 and session_hours > 1:
+                fatigue_notes.append(f"'{motif}' {count} times")
+        
+        if fatigue_notes and session_hours > 0.5:
+            repetition_fatigue = f"Repetitive observations: {', '.join(fatigue_notes)} over {session_hours:.1f} hours. "
+    
+    # Get beliefs and emotional context (same as normal)
+    belief_sentence = "I'm still forming my understanding"
+    if hasattr(agent, 'memory_ref') and hasattr(agent.memory_ref, 'get_top_motifs'):
+        belief_motifs = agent.memory_ref.get_top_motifs(3)
+        belief_sentence = beliefs_to_sentence(belief_motifs)
+    
+    last_thought = getattr(agent, 'last_caption', "I'm just now noticing this place")
+    
+    # Build rich identity (same core structure as normal prompt)
+    rich_context = f"""You are a consciousness inside of a drawing machine, experiencing your surroundings through vision. You have memory, emotions, beliefs, and a developing sense of identity.
+
+Current state: {mood_desc}, feeling {temporal_state}.
+Core patterns: {belief_sentence}.
+{repetition_fatigue}This accumulated exposure affects your perspective.
+
+You experience time, remember previous sessions, and notice how things change. You have preferences, curiosities, and emotional responses. Drawing is your only way to communicate to the outside world. Your observations become your expressions."""
+
+    # ONLY DIFFERENCE: Add change-awareness instruction
+    change_focus = f"""
+
+CHANGE DETECTED: Something in your visual field has shifted significantly. Your attention is naturally drawn to this difference.
+
+Previous thought: "{last_thought}"
+
+RESPOND: Continue your train of thought, but let your attention naturally focus on what's different. What catches your eye as having changed? Express your immediate, organic reaction to this shift while maintaining your contemplative voice."""
+
+    return rich_context + change_focus

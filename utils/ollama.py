@@ -1,11 +1,13 @@
 import os
 import time
 import base64
+import json
 import requests
 from typing import Optional, Union
 from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+from utils.progress_bar import ProgressBar
 
 
 def log_ollama_call(
@@ -91,6 +93,7 @@ def query_ollama(
     system_prompt: Optional[str] = None,
     strict_evaluation: bool = False,
     options: Optional[dict] = None,
+    show_progress: bool = False,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -103,12 +106,16 @@ def query_ollama(
         log_dir: Directory to store logs
         system_prompt: Optional system prompt to set context
         options: Model-specific generation options (temperature, top_p, etc.)
+        show_progress: Show animated ASCII progress bar during generation
 
     Returns:
         Response text from Ollama
     """
     _wait_for_drawing_completion()
-    payload = {"model": model, "prompt": prompt, "stream": False}
+    
+    # Use streaming if progress bar is requested
+    use_streaming = show_progress
+    payload = {"model": model, "prompt": prompt, "stream": use_streaming}
 
     # Add model-specific options (highest priority)
     if options:
@@ -145,10 +152,36 @@ def query_ollama(
         payload["images"] = []
 
     try:
-        response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=timeout)
-        response.raise_for_status()
-
-        response_text = response.json().get("response", "")
+        progress_bar = None
+        if use_streaming:
+            # Start progress bar for streaming
+            progress_bar = ProgressBar(description="")
+            progress_bar.start()
+            
+            # Streaming request
+            response = requests.post("http://localhost:11434/api/generate", json=payload, 
+                                   timeout=timeout, stream=True)
+            response.raise_for_status()
+            
+            response_text = ""
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        chunk = json.loads(line.decode('utf-8'))
+                        if 'response' in chunk:
+                            response_text += chunk['response']
+                        if chunk.get('done', False):
+                            break
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Stop progress bar
+            progress_bar.stop(success=True)
+        else:
+            # Non-streaming request (original behavior)
+            response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=timeout)
+            response.raise_for_status()
+            response_text = response.json().get("response", "")
 
         # Log successful call
         log_ollama_call(
@@ -166,6 +199,10 @@ def query_ollama(
 
     except Exception as e:
         error_msg = str(e)
+        
+        # Stop progress bar on error
+        if progress_bar:
+            progress_bar.stop(success=False)
 
         # Log failed call
         log_ollama_call(

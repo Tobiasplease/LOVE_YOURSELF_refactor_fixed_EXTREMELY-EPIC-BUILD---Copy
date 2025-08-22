@@ -204,6 +204,18 @@ def emergency_cleanup():
             pass
 
         cv2.destroyAllWindows()
+        
+        # Clear PyTorch cache if available (helps with YOLO cleanup)
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                print("[🔧] GPU cache cleared")
+        except ImportError:
+            pass  # PyTorch not available, skip
+        except Exception as e:
+            print(f"[⚠️] Warning: Could not clear GPU cache: {e}")
+        
         print("[✅] Emergency cleanup completed")
         cleanup_completed = True
 
@@ -248,9 +260,15 @@ def graceful_cleanup():
     if _global_object_detector:
         try:
             _global_object_detector.stop()
-            _global_object_detector.join(timeout=1.0)
+            _global_object_detector.join(timeout=2.0)
             if _global_object_detector.is_alive():
-                print("[⚠️] Object detector thread didn't stop cleanly")
+                print("[⚠️] Object detector thread didn't stop cleanly - forcing termination")
+                # Force terminate if it's still alive
+                import ctypes
+                ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                    ctypes.c_long(_global_object_detector.ident), 
+                    ctypes.py_object(SystemExit)
+                )
         except Exception as e:
             print(f"[❌] Error stopping object detector: {e}")
 
@@ -277,6 +295,17 @@ def graceful_cleanup():
         cv2.destroyAllWindows()
     except Exception as e:
         print(f"[❌] Error destroying windows: {e}")
+
+    # Clear PyTorch cache if available (helps with YOLO cleanup)
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            print("[🔧] GPU cache cleared")
+    except ImportError:
+        pass  # PyTorch not available, skip
+    except Exception as e:
+        print(f"[⚠️] Warning: Could not clear GPU cache: {e}")
 
     cleanup_completed = True
     print("[✅] Graceful shutdown completed")
@@ -506,6 +535,11 @@ try:
     prev_gray = None
     smoothed_pwm = 0
     while True:
+        # Check for shutdown signal
+        if shutdown_in_progress:
+            print("[🛑] Shutdown signal received - breaking main loop")
+            break
+            
         ret, frame = cap.read()
         if not ret:
             continue
@@ -764,3 +798,9 @@ try:
 
 except KeyboardInterrupt:
     graceful_cleanup()
+    sys.exit(0)
+finally:
+    # Always ensure cleanup happens
+    if not cleanup_completed:
+        graceful_cleanup()
+    sys.exit(0)

@@ -1817,6 +1817,10 @@ class CleanCursorInterface:
         
         self.current_emotional_state = emotion_name
         
+        # Update the emotion variable for UI binding
+        if hasattr(self, 'emotion_var'):
+            self.emotion_var.set(emotion_name)
+        
         # Only update GUI elements if they exist (headless mode compatibility)
         if hasattr(self, 'current_state_label') and self.current_state_label:
             try:
@@ -1843,6 +1847,13 @@ class CleanCursorInterface:
         if hasattr(self, 'update_markov_status_for_emotion'):
             try:
                 self.update_markov_status_for_emotion(emotion_name)
+            except:
+                pass  # Ignore errors in headless mode
+        
+        # Update dropdown to show datasets for the new emotion
+        if hasattr(self, 'update_emotion_dataset_display'):
+            try:
+                self.update_emotion_dataset_display()
             except:
                 pass  # Ignore errors in headless mode
     
@@ -4448,8 +4459,9 @@ File: {dataset['filename']}
     def step_markov_generation(self):
         """Take one step in Markov generation with second-order support."""
         print(f"🔄 step_markov_generation called - generating: {self.generating}, emotion: {self.current_emotional_state}")
+        
         if not self.generating or self.current_emotional_state not in self.markov_chains:
-            print(f"❌ Skipping generation - generating: {self.generating}, chains: {list(self.markov_chains.keys())}")
+            print(f"❌ Skipping generation - generating: {self.generating}, current_emotion: '{self.current_emotional_state}', available_chains: {list(self.markov_chains.keys())}")
             return
         
         # Handle dataset transitions (smooth easing)
@@ -4658,7 +4670,7 @@ File: {dataset['filename']}
                     diversity_chance = base_diversity_chance + stuck_bonus
                     if random.random() < diversity_chance:
                         diversity_jump = True
-                        print(f"🔓 Breaking stuck state after {self._state_repetition_count} repetitions (chance: {diversity_chance:.1%})")
+                        # Silenced: Breaking stuck state debug output
                 elif random.random() < base_diversity_chance:
                     diversity_jump = True
                 
@@ -4803,6 +4815,7 @@ File: {dataset['filename']}
             except Exception as recovery_error:
                 print(f"❌ Recovery also failed: {recovery_error}")
                 # Continue anyway - don't stop generation
+        
     
     def update_simple_transition(self):
         """Update simple smooth transition to new dataset."""

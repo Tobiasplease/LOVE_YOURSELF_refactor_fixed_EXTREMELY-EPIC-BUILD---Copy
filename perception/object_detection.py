@@ -55,4 +55,21 @@ class ObjectDetectionThread(threading.Thread):
             time.sleep(self.update_interval)
 
     def stop(self):
+        print("[YOLOv8] Stopping object detection thread...")
         self.running = False
+        
+        # Clean up YOLO model resources
+        if hasattr(self, 'model') and self.model is not None:
+            try:
+                # Clear YOLO model cache and free resources
+                if hasattr(self.model, 'model'):
+                    del self.model.model
+                del self.model
+                self.model = None
+                print("[YOLOv8] Model resources cleaned up")
+            except Exception as e:
+                print(f"[YOLOv8] Warning: Error cleaning up model: {e}")
+        
+        # Clear shared frame
+        with self.lock:
+            self.shared_frame = None
