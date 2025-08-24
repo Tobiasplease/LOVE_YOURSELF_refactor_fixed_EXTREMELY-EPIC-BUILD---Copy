@@ -19,6 +19,7 @@ from drawing.drawing import DrawingController
 from .memory import MemoryMixin
 from .prompts import extract_motifs_spacy
 from .model_wrapper import MultimodalModel
+from .emotional_drift import EmotionalDrift
 from utils.motif_scorer import score_multiple_motifs
 from utils.error_tracking import track_component_health, robust_execution
 
@@ -33,6 +34,7 @@ class Captioner(MemoryMixin):
         super().__init__()
         self.model = MultimodalModel(memory_ref=self)
         self.drawing = DrawingController()
+        self.emotional_drift = EmotionalDrift()  # Initialize drift system
 
         self.true_session_start = time.time()
         self.first_caption_done = False
@@ -202,6 +204,21 @@ class Captioner(MemoryMixin):
             emotion_state=self.current_emotion_state,
         )
         self.last_caption = caption
+        
+        # Process emotional drift
+        environmental_factors = {
+            "scene_static": getattr(self, '_scene_static', False),  # Will be tracked by semantic memory
+            "novelty": self.novelty_score,
+            "person_present": reactivity_data.get("person_present", False) if reactivity_data else False,
+            "boredom": self.boredom
+        }
+        
+        drift_momentum = self.emotional_drift.process_caption(caption, environmental_factors)
+        
+        # Log drift state occasionally
+        if self.emotional_drift.comparison_count % 10 == 0:
+            drift_descriptor = self.emotional_drift.get_emotional_descriptor()
+            print(f"[DRIFT] Emotional state: {drift_descriptor} | Momentum: E:{drift_momentum['energy']:.2f} V:{drift_momentum['valence']:.2f} C:{drift_momentum['coherence']:.2f}")
 
         if now - self.last_reason_time > REASON_INTERVAL:
             try:
