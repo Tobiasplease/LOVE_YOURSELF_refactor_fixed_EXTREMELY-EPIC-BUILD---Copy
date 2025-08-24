@@ -72,12 +72,12 @@ class ImmediateReactionEngine:
         
         # Use AI mode for more natural reactions 30% of the time
         if use_ai_mode and memory_ref and random.random() < 0.3:
-            # from captioner.prompts import build_immediate_reaction_prompt, mood_to_words  # Function removed
+            from captioner.prompts import mood_to_words
             from config.model_settings import get_model_options
             from config import config
             from utils.ollama import query_ollama
             
-            mood_desc = mood_to_words(mood_vector)
+            mood_desc = mood_to_words(mood_vector, memory_ref)
             last_thought = getattr(memory_ref, 'last_caption', '')[:50] + "..." if getattr(memory_ref, 'last_caption', '') else ""
             
             # prompt = build_immediate_reaction_prompt(mood_desc, last_thought)  # Function removed\n            return None  # AI mode disabled
