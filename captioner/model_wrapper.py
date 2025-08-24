@@ -1,7 +1,6 @@
 import os
 from typing import Optional
 from captioner.prompts import (
-    build_awakening_prompt,
     build_caption_prompt,
     build_environmental_caption_prompt,
     build_reflection_prompt,
@@ -35,10 +34,9 @@ class MultimodalModel:
             return "[WARNING] No image found"
 
         if first_time:
-            # Use the same detailed environmental prompt system for fresh starts
-            # This ensures first-time awakenings get proper environmental descriptions
+            # Use the rich environmental awakening prompt with reorientation context
             if self.memory_ref:
-                # Get last session gap directly from captioner
+                # Get last session gap directly from captioner  
                 session_gap = getattr(self.memory_ref, "last_session_gap", None)
 
                 prompt = build_environmental_caption_prompt(
@@ -49,8 +47,8 @@ class MultimodalModel:
                     last_session_gap=session_gap,  # type: ignore
                 )
             else:
-                # Fallback if no memory reference available
-                prompt = build_awakening_prompt("What do you see?")
+                # Fallback for first-ever awakening
+                prompt = "What do I perceive as I awaken to consciousness for the first time?"
             return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
         elif flowing and self.memory_ref:
             # Check for significant visual change in snapshot
@@ -147,7 +145,20 @@ class MultimodalModel:
         if self.memory_ref and hasattr(self.memory_ref, "get_dynamic_system_context"):
             dynamic_context = self.memory_ref.get_dynamic_system_context()
             if dynamic_context:
-                system_prompt += dynamic_context
+                if isinstance(dynamic_context, dict):
+                    # New organic format - context is embedded in template
+                    try:
+                        system_prompt = system_prompt.format(
+                            emotional_state=dynamic_context.get('emotional_state', 'contemplative'),
+                            temporal_context=dynamic_context.get('temporal_context', ''),
+                            accumulated_understanding=dynamic_context.get('accumulated_understanding', '')
+                        )
+                    except KeyError:
+                        # Template doesn't have placeholders, append as before
+                        system_prompt += str(dynamic_context.get('temporal_context', '')) + str(dynamic_context.get('accumulated_understanding', ''))
+                else:
+                    # Fallback for old format
+                    system_prompt += str(dynamic_context)
 
         # For Qwen models, use different prompt formatting
         if is_qwen_model(self.model_name):
