@@ -354,8 +354,15 @@ WHAT NOW? Your awareness is still fresh - what draws your attention in this mome
     # Smart memory vs continuity logic
     memory_guidance = analyze_memory_vs_present_context(last_thought, session_duration)
     
+    # Add drift context if available
+    drift_context = ""
+    if hasattr(agent, 'emotional_drift') and agent.emotional_drift:
+        drift_context = agent.emotional_drift.get_drift_context()
+        if drift_context:
+            drift_context = f" {drift_context}"
+    
     # Immediate reactive consciousness instructions
-    flow_instructions = f"""{memory_guidance}
+    flow_instructions = f"""{memory_guidance}{drift_context}
 
 You are experiencing this moment in time. Notice what draws you... wonder about things... follow your attention wherever it goes.
 

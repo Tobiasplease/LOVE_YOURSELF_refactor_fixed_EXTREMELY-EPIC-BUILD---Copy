@@ -731,9 +731,18 @@ class MemoryMixin:
         """Generate organic consciousness context as flowing narrative components."""
         from captioner.prompts import mood_to_words
         
-        # Get current emotional state naturally
-        mood_vector = getattr(self, 'current_mood_vector', (0.5, 0.5, 0.5))
-        emotional_state = mood_to_words(mood_vector, agent=self)
+        # Get current emotional state - use drift if extreme, fallback to mood
+        if hasattr(self, 'emotional_drift'):
+            max_momentum = max(abs(v) for v in self.emotional_drift.momentum.values())
+            if max_momentum > 3:  # Use drift for stronger emotional states
+                emotional_state = self.emotional_drift.get_emotional_descriptor()
+            else:
+                # Use traditional mood for moderate states
+                mood_vector = getattr(self, 'current_mood_vector', (0.5, 0.5, 0.5))
+                emotional_state = mood_to_words(mood_vector, agent=self)
+        else:
+            mood_vector = getattr(self, 'current_mood_vector', (0.5, 0.5, 0.5))
+            emotional_state = mood_to_words(mood_vector, agent=self)
         
         # Build natural temporal awareness with lifetime depth
         now = time.time()
