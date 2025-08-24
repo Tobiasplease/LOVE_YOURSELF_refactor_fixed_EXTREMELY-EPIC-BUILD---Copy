@@ -43,9 +43,9 @@ class MultimodalModel:
 
                 prompt = build_environmental_caption_prompt(
                     self.memory_ref,
-                    mood=self.memory_ref.current_mood,
-                    boredom=self.memory_ref.boredom,
-                    novelty=self.memory_ref.novelty_score,
+                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
+                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
+                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
                     last_session_gap=session_gap,  # type: ignore
                 )
             else:
@@ -60,22 +60,21 @@ class MultimodalModel:
                 # Use change-focused prompt to ground the AI in current reality
                 prompt = build_change_focused_caption_prompt(
                     self.memory_ref,
-                    mood=self.memory_ref.current_mood,
-                    boredom=self.memory_ref.boredom,
-                    novelty=self.memory_ref.novelty_score,
+                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
+                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
+                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
                 )
             else:
                 # Use normal contemplative prompt
                 prompt = build_caption_prompt(
                     self.memory_ref,
-                    mood=self.memory_ref.current_mood,
-                    boredom=self.memory_ref.boredom,
-                    novelty=self.memory_ref.novelty_score,
+                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
+                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
+                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
                 )
         else:
             prompt = "Describe this image."
 
-        # @todo SYS PROMPT HERE? SO NO "IN THIS IMAGE?"
         return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
 
     def reason_about_caption(

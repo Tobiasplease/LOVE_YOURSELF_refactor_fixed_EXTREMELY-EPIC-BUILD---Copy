@@ -48,9 +48,10 @@ class DrawingController:
     def should_draw(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
         if not self.ready_to_draw():
             return False
-        if novelty > 0.65 or boredom > 0.7 or mood < 0.3:
+        # More reasonable thresholds for drawing triggers
+        if novelty > 0.4 or boredom > 0.5 or mood < 0.4:
             return True
-        if reflection and any(key in reflection.lower() for key in ("i feel stuck", "i need to express", "nothing is changing")):
+        if reflection and any(key in reflection.lower() for key in ("i feel stuck", "i need to express", "nothing is changing", "want to draw", "create something")):
             return True
         return False
 
@@ -126,7 +127,7 @@ class DrawingController:
                         "ready_to_draw": self.ready_to_draw(),
                         "cooldown_remaining": max(0, self.cooldown - (time.time() - self.last_drawing_time)),
                     },
-                    print_message="ERROR Not inspired to draw",
+                    print_message=f"[DRAWING] Not inspired (novelty:{getattr(agent, 'novelty_score', 0.0):.2f} boredom:{getattr(agent, 'boredom', 0.0):.2f} mood:{agent.current_mood:.2f})",
                 )
                 return
 
@@ -143,7 +144,7 @@ class DrawingController:
                     "drawing_prompt": drawing_prompt,
                     "reflection": (reflection or "").strip(),
                 },
-                print_message="Drawing triggered",
+                print_message=f"[DRAWING] Inspired! Creating artwork...",
             )
 
             if latest_image and os.path.exists(latest_image):

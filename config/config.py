@@ -83,7 +83,7 @@ MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
 REASON_INTERVAL = 360  # seconds between reflections
-DRAWING_INTERVAL = 600  # seconds between drawing triggers
+DRAWING_INTERVAL = 360  # seconds between drawing triggers (6 minutes)
 DRAWING_COOLDOWN = 180  # seconds between drawings
 
 # === OBJECT DETECTION ===

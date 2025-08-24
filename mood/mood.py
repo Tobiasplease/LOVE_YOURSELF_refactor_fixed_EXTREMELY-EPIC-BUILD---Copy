@@ -23,7 +23,7 @@ class MoodEngine:
         self.current_mood = 0.5  # Backward compatibility scalar
         self.mood_vector = (0.0, 0.0, 0.0)  # Initial: truly neutral valence, arousal, clarity  
         self.previous_mood_vector = (0.0, 0.0, 0.0)  # For emotional momentum tracking
-        self.emotional_momentum = 0.4  # How much previous mood influences new mood (0.0-1.0) - reduced for more responsive emotional evolution
+        self.emotional_momentum = 0.2  # How much previous mood influences new mood (0.0-1.0) - lower for more responsive emotional evolution
         self.last_caption = ""
         self.last_person_detected = False
         self.memory = []
@@ -59,9 +59,9 @@ class MoodEngine:
         # Apply emotional momentum - new emotions build on previous ones
         prev_v, prev_a, prev_c = self.mood_vector
         
-        # Add natural emotional decay toward neutral over time
+        # Add natural emotional decay toward neutral over time - reduced for more dynamic moods
         time_since_start = time.time() - self.session_start
-        decay_factor = min(0.15, time_since_start / 1800.0 * 0.05)  # Max 15% decay, faster timeline (30min cycles)
+        decay_factor = min(0.08, time_since_start / 1800.0 * 0.03)  # Max 8% decay, slower pull to neutral
         
         # Apply decay toward neutral (0, 0, 0)
         prev_v = prev_v * (1 - decay_factor) if abs(prev_v) > 0.1 else prev_v
@@ -410,11 +410,11 @@ def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
 
     # Only print mood updates for meaningful changes (>0.05) to reduce noise
     print_message = None
-    if abs(mood_change) > 0.05:
-        change_indicator = "↗" if mood_change > 0 else "↘"
-        print_message = f"Mood {change_indicator} {mood:.2f} (Δ{mood_change:+.2f})"
+    # if abs(mood_change) > 0.05:
+    #     change_indicator = "↗" if mood_change > 0 else "↘"
+    #     print_message = f"Mood {change_indicator} {mood:.2f} (Δ{mood_change:+.2f})"
 
-    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=print_message)
+    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=None)
 
 
 def read_mood_logs(limit: Optional[int] = None) -> List[dict]:
