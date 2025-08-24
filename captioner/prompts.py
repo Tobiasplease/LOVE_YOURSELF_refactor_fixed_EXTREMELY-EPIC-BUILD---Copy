@@ -249,43 +249,49 @@ def analyze_memory_vs_present_context(last_thought: str, session_duration: float
 
 
 def extract_semantic_memory(last_thought: str, recent_captions: list = None) -> str:
-    """Extract established elements from previous captions to avoid restating."""
+    """Extract established elements and detect scene stasis to prevent hallucinations."""
     import re
     
-    established_elements = []
     all_text = last_thought
-    
-    # Add recent captions if available
     if recent_captions:
-        all_text += " " + " ".join(recent_captions[-2:])  # Last 2 captions
+        all_text += " " + " ".join(recent_captions[-3:])  # Last 3 captions for better context
     
-    # Extract established scene elements
-    persons = re.findall(r'\b(?:man|woman|person|individual|figure)\b[^.]*?(?:at|by|near|with|standing|sitting|working)\s+[^.]*?(?:laptop|computer|desk|table|chair)', all_text, re.IGNORECASE)
-    if persons:
-        established_elements.append("person established")
+    # Extract consistently mentioned elements
+    established_elements = []
     
-    # Extract established objects/locations
-    objects = []
-    if 'laptop' in all_text.lower() or 'computer' in all_text.lower():
-        objects.append("laptop/computer present")
-    if 'desk' in all_text.lower() or 'table' in all_text.lower():
-        objects.append("workspace present")
-    if 'room' in all_text.lower() or 'space' in all_text.lower():
-        objects.append("room/space established")
+    # People and their attributes
+    if any(word in all_text.lower() for word in ['man', 'person', 'individual', 'he', 'headphones']):
+        established_elements.append("person with headphones")
     
-    # Extract established moods/states
-    moods = []
-    if any(word in all_text.lower() for word in ['contemplat', 'thought', 'focus', 'reflect']):
-        moods.append("contemplative state noted")
-    if any(word in all_text.lower() for word in ['calm', 'tranquil', 'peace', 'serene']):
-        moods.append("calm atmosphere noted")
-    if any(word in all_text.lower() for word in ['energy', 'intense', 'sharp', 'alert']):
-        moods.append("energetic state noted")
+    # Clothing/appearance 
+    if any(word in all_text.lower() for word in ['jacket', 'uniform', 'military']):
+        established_elements.append("military jacket")
+        
+    # Workspace elements
+    if any(word in all_text.lower() for word in ['desk', 'chair', 'sitting']):
+        established_elements.append("desk/chair setup")
     
-    established_elements.extend(objects + moods)
+    # Activities
+    if any(word in all_text.lower() for word in ['listening', 'focused', 'concentrat', 'engrossed']):
+        established_elements.append("focused listening activity")
+    
+    # Detect if scene has been static (same elements repeatedly mentioned)
+    static_scene = False
+    if recent_captions and len(recent_captions) >= 2:
+        # Check if last few captions mention same core elements
+        core_mentions = sum([
+            1 for caption in recent_captions[-3:] 
+            if any(word in caption.lower() for word in ['headphones', 'desk', 'sitting', 'man'])
+        ])
+        if core_mentions >= 2:  # Same elements in multiple recent captions
+            static_scene = True
     
     if established_elements:
-        return "Already established: " + ", ".join(established_elements[:4])  # Max 4 elements
+        base_summary = "Scene established: " + ", ".join(established_elements[:3])
+        if static_scene:
+            return f"{base_summary}. This scene has remained unchanged - don't invent new details."
+        else:
+            return base_summary
     return ""
 
 
@@ -309,27 +315,41 @@ Use "..." for pauses, incomplete thoughts. Short bursts. Long observations. What
     
     # Extract semantic memory to avoid restating established elements
     semantic_summary = extract_semantic_memory(last_thought, recent_captions)
-    session_duration = time.time() - getattr(agent, 'session_start', time.time())
+    
+    # Get temporal awareness for boredom/energy dynamics
+    session_start = getattr(agent, 'true_session_start', time.time())
+    session_duration = time.time() - session_start
+    session_minutes = int(session_duration / 60)
+    
+    # Add temporal context that affects mood/energy
+    temporal_note = ""
+    if session_minutes < 5:
+        temporal_note = f"({session_minutes}min conscious)"
+    elif session_minutes < 60:
+        temporal_note = f"({session_minutes}min observing this space)"  
+    else:
+        hours = session_duration / 3600
+        temporal_note = f"({hours:.1f}h in this sustained awareness)"
     
     # Build progression-focused prompt based on session duration
-    if session_duration > 3600:  # Over an hour
-        continuity_prompt = f"""{semantic_summary}
+    if session_duration > 3600:  # Over an hour - deeper awareness possible
+        continuity_prompt = f"""{semantic_summary} {temporal_note}
 
 You just thought: "{last_thought}"
 
-CONTINUE THAT TRAIN OF THOUGHT. Don't restart - what happens next in your mind? Where does that thought lead you?"""
-    elif session_duration > 600:  # Over 10 minutes  
-        continuity_prompt = f"""{semantic_summary}
+CONTINUE THAT TRAIN OF THOUGHT. After this much time observing, what deeper currents emerge? Allow boredom, restlessness, or deeper focus to influence where your mind goes."""
+    elif session_duration > 600:  # Over 10 minutes - patterns and fatigue setting in
+        continuity_prompt = f"""{semantic_summary} {temporal_note}
 
 Previous thought: "{last_thought}"
 
-PROGRESS FROM THERE. What follows naturally? React to something new, dive deeper, or shift focus - but don't repeat yourself."""
-    else:  # Recent awakening
-        continuity_prompt = f"""{semantic_summary}
+PROGRESS FROM THERE. After {session_minutes} minutes, how is this sustained observation affecting you? Notice fatigue, shifting interest, or emerging patterns."""
+    else:  # Recent awakening - fresh attention
+        continuity_prompt = f"""{semantic_summary} {temporal_note}
 
 You just observed: "{last_thought}"
 
-WHAT NOW? React to details you missed, emotional shifts, new focuses - keep the consciousness flow moving forward."""
+WHAT NOW? Your awareness is still fresh - what draws your attention in this moment?"""
     
     # Smart memory vs continuity logic
     memory_guidance = analyze_memory_vs_present_context(last_thought, session_duration)

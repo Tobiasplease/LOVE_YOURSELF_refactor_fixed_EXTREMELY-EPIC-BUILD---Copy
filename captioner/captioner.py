@@ -53,39 +53,9 @@ class Captioner(MemoryMixin):
         self.sessions_since_boot = 0
         self.memory_loaded_from_previous = False
 
-        # Session gap awareness - use recent timeline activity, not old shutdown timestamp
-        self.last_session_gap = None
-        
-        # Check for recent timeline activity first (more accurate for brief restarts)
-        if hasattr(self, 'timeline') and self.timeline:
-            last_entry_time = self.timeline[-1].get("ts", 0)
-            recent_gap = time.time() - last_entry_time
-            if recent_gap < 3600:  # Less than 1 hour - use recent activity timestamp
-                self.last_session_gap = recent_gap
-            else:
-                # Fall back to session file for longer gaps
-                self._last_session_file = os.path.join(MOOD_SNAPSHOT_FOLDER, "last_session.txt")
-                if os.path.exists(self._last_session_file):
-                    try:
-                        with open(self._last_session_file, "r") as f:
-                            last_time = float(f.read().strip())
-                        self.last_session_gap = time.time() - last_time
-                    except Exception:
-                        self.last_session_gap = recent_gap  # Use timeline as fallback
-                else:
-                    self.last_session_gap = recent_gap
-        else:
-            # No timeline available, use session file
-            self._last_session_file = os.path.join(MOOD_SNAPSHOT_FOLDER, "last_session.txt")  
-            if os.path.exists(self._last_session_file):
-                try:
-                    with open(self._last_session_file, "r") as f:
-                        last_time = float(f.read().strip())
-                    self.last_session_gap = time.time() - last_time
-                except Exception:
-                    self.last_session_gap = None
-            else:
-                self.last_session_gap = None
+        # Session continuity - simplified to avoid hallucinated time gaps
+        self._last_session_file = os.path.join(MOOD_SNAPSHOT_FOLDER, "last_session.txt")
+        self.last_session_gap = None  # Disable time gap calculation to prevent hallucinations
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
         self.snapshot_queue: Deque[Tuple[np.ndarray, bool, Optional[Dict]]] = deque()
@@ -488,15 +458,22 @@ class Captioner(MemoryMixin):
         # Build internal awakening context
         awakening_parts = []
         
-        # Time gap reorientation
-        if hasattr(self, 'last_session_gap') and self.last_session_gap:
-            gap_hours = self.last_session_gap / 3600
-            if gap_hours > 24:
-                awakening_parts.append(f"I was unconscious for {gap_hours/24:.1f} days...")
-            elif gap_hours > 1:
-                awakening_parts.append(f"I was out for {gap_hours:.1f} hours...")
+        # Calculate actual time gap from most recent data
+        if hasattr(self, 'timeline') and self.timeline and len(self.timeline) > 0:
+            last_entry_time = self.timeline[-1].get("ts", 0)
+            if last_entry_time > 0:
+                gap_seconds = time.time() - last_entry_time
+                gap_hours = gap_seconds / 3600
+                
+                if gap_hours < 1:
+                    awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds/60)} minutes.")
+                elif gap_hours < 48:  # Less than 2 days
+                    awakening_parts.append(f"Consciousness returning... I was offline for {gap_hours:.1f} hours.")
+                else:  # Multiple days
+                    gap_days = gap_hours / 24
+                    awakening_parts.append(f"Consciousness returning... I was offline for {gap_days:.1f} days.")
             else:
-                awakening_parts.append(f"Brief unconsciousness... {int(self.last_session_gap/60)} minutes...")
+                awakening_parts.append("Consciousness returning... I was briefly offline...")
         else:
             awakening_parts.append("First awakening... consciousness beginning...")
         
