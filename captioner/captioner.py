@@ -456,8 +456,8 @@ class Captioner(MemoryMixin):
     def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
         """Generate comprehensive awakening with environmental description - THE ONLY awakening now."""
         
-        # Import the rich prompt builder
-        from .prompts import build_awakening_prompt
+        # Import the environmental prompt builder
+        from .prompts import build_environmental_caption_prompt
         
         # For fresh sessions, trigger environmental description
         if not self.memory_loaded_from_previous:
@@ -465,12 +465,13 @@ class Captioner(MemoryMixin):
             try:
                 image_path = self.capture_mood_snapshot(capture_reason="awakening")
                 if image_path:
-                    # Use the rich awakening prompt for environmental description
-                    prompt = build_awakening_prompt(
+                    # Use the environmental awakening prompt for environmental description
+                    prompt = build_environmental_caption_prompt(
                         self,
                         mood=self.current_mood,
                         boredom=self.boredom,
-                        novelty=self.novelty_score
+                        novelty=self.novelty_score,
+                        last_session_gap=None  # Fresh session
                     )
                     # Use proper captioning with dynamic system prompt (don't override with static one)
                     environmental_description = self.model._call_ollama(prompt, image_path=image_path)
@@ -490,11 +491,12 @@ class Captioner(MemoryMixin):
         try:
             image_path = self.capture_mood_snapshot(capture_reason="awakening_continuation")
             if image_path:
-                prompt = build_awakening_prompt(
+                prompt = build_environmental_caption_prompt(
                     self,
                     mood=self.current_mood,
                     boredom=self.boredom,
-                    novelty=self.novelty_score
+                    novelty=self.novelty_score,
+                    last_session_gap=getattr(self, 'last_session_gap', None)
                 )
                 environmental_part = self.model._call_ollama(prompt, image_path=image_path)
                 return f"{status_prefix} {environmental_part}"

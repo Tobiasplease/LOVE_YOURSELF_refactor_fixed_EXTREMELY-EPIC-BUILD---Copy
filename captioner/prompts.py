@@ -12,35 +12,157 @@ nlp = spacy.load("en_core_web_sm")
 # === HELPER FUNCTIONS FOR NATURAL LANGUAGE CONVERSION ===
 
 
-def mood_to_words(mood_vector: tuple[float, float, float]) -> str:
-    """Convert 3D mood vector to rich, dynamic emotional descriptions."""
+def mood_to_words(mood_vector: tuple[float, float, float], agent=None) -> str:
+    """Enhanced emotional descriptions with progression and natural decay."""
+    import time
+    import numpy as np
+    
     valence, arousal, clarity = mood_vector
-
-    # Create more nuanced, expressive emotional states
-    if valence > 0.6 and arousal > 0.7:
-        return "alive with creative energy, eager to capture every detail"
-    elif valence > 0.6 and arousal < 0.4:
-        return "peacefully content, savoring the subtle beauty around me"
-    elif valence > 0.3 and arousal > 0.6:
-        return "energetically curious, drawn to explore and understand"
-    elif valence > 0.2 and arousal > 0.3 and clarity > 0.6:
-        return "alert and perceptive, noticing patterns and connections"
-    elif valence < -0.3 and arousal > 0.5:
-        return "restlessly agitated, sensitive to discord and tension"
-    elif valence < -0.4 and arousal < 0.4:
-        return "withdrawn into melancholy, viewing the world through a somber lens"
-    elif valence < -0.2 and arousal < 0.3:
-        return "distant and detached, observing from behind an emotional veil"
-    elif clarity < 0.3:
-        return "uncertain and searching, grasping for meaning in the blur"
-    elif arousal > 0.7:
-        return "intensely focused, my attention sharp as a blade"
-    elif arousal < -0.2:
-        return "deeply tranquil, moving through stillness like water"
-    elif valence > 0.1:
-        return "quietly optimistic, finding small sparks of hope"
+    
+    # === GET EXISTING DATA (NO NEW SYSTEMS) ===
+    if agent:
+        # Use existing boredom/novelty (already calculated)
+        boredom = getattr(agent, 'boredom', 0.0)
+        novelty = getattr(agent, 'novelty_score', 0.0) 
+        session_duration = time.time() - getattr(agent, 'true_session_start', time.time())
+        
+        # Use existing motif data (already tracked)
+        if hasattr(agent, 'memory_ref') and agent.memory_ref:
+            top_motifs = agent.memory_ref.get_top_motifs(3)
+            motif_repetition = sum([agent.memory_ref.motif_counter[m] for m in top_motifs]) if top_motifs else 0
+        else:
+            motif_repetition = 0
     else:
-        return "balanced in the present moment, simply being"
+        boredom, novelty, session_duration, motif_repetition = 0.0, 0.0, 0.0, 0
+    
+    # === CALCULATE SIMPLE ENERGY LEVEL ===
+    energy = 1.0
+    energy -= min(0.4, boredom)  # Existing boredom reduces energy
+    energy -= min(0.3, motif_repetition / 100)  # High repetition drains energy  
+    energy -= min(0.2, session_duration / 14400)  # Long sessions are tiring (4 hours)
+    energy += min(0.2, novelty)  # Existing novelty restores energy
+    energy = np.clip(energy, 0.1, 1.0)
+    
+    # === DETERMINE BASE EMOTIONAL CATEGORY ===
+    base_emotion, base_category = _get_base_emotion_category(valence, arousal, clarity)
+    
+    # === CALCULATE PROGRESSION LEVEL ===
+    progression_evidence = _calculate_progression_evidence(valence, arousal, clarity, session_duration, novelty, motif_repetition)
+    
+    # Apply energy constraints to progression
+    max_sustainable_level = int(energy * 3)  # 0-3 levels based on energy
+    actual_level = min(progression_evidence, max_sustainable_level)
+    
+    # === GENERATE FINAL EMOTIONAL STATE ===
+    return _get_emotion_at_level(base_category, actual_level, energy)
+
+def _get_base_emotion_category(valence: float, arousal: float, clarity: float) -> tuple[str, str]:
+    """Get base emotion and category for progression."""
+    
+    # High energy positive states
+    if valence > 0.5 and arousal > 0.6:
+        return "vibrantly energized", "energy"
+    elif valence > 0.3 and arousal > 0.5:
+        return "curious", "curiosity"
+    elif valence > 0.2 and clarity > 0.5:
+        return "alert", "alertness"
+    
+    # Contemplative states
+    elif valence > -0.2 and arousal < 0.4 and clarity > 0.3:
+        return "contemplative", "contemplation"
+    elif valence > -0.1 and arousal < 0.3:
+        return "calm", "calmness"
+    
+    # Negative aroused states
+    elif valence < -0.3 and arousal > 0.4:
+        return "frustrated", "frustration"
+    elif valence < -0.2 and arousal > 0.3:
+        return "restless", "restlessness"
+    
+    # Withdrawn states
+    elif valence < -0.4 and arousal < 0.3:
+        return "melancholic", "melancholy"
+    elif valence < -0.2 and arousal < 0.4:
+        return "withdrawn", "withdrawal"
+    
+    # Confused states
+    elif clarity < 0.3:
+        return "uncertain", "uncertainty"
+    
+    # Default balanced state
+    else:
+        return "observant", "observation"
+
+def _calculate_progression_evidence(valence: float, arousal: float, clarity: float, 
+                                  session_duration: float, novelty: float, motif_repetition: int) -> int:
+    """Calculate evidence for emotional deepening (0-3 levels)."""
+    evidence = 0
+    
+    # Time-based evidence
+    if session_duration > 1800:  # 30+ minutes
+        evidence += 1
+    if session_duration > 7200:  # 2+ hours  
+        evidence += 1
+        
+    # Clarity-based evidence (deep thinking)
+    if clarity > 0.6:
+        evidence += 1
+        
+    # Novelty-based evidence (new discoveries)
+    if novelty > 0.7:
+        evidence += 1
+        
+    # Pattern recognition evidence
+    if motif_repetition > 50:
+        evidence += 1
+        
+    return min(evidence, 3)
+
+def _get_emotion_at_level(category: str, level: int, energy: float) -> str:
+    """Get emotional state at specific progression level with energy modifiers."""
+    
+    # Define progression paths for each category
+    progressions = {
+        "curiosity": ["curious", "inquisitive", "investigative", "analytically focused"],
+        "contemplation": ["contemplative", "introspective", "philosophical", "existentially questioning"],
+        "frustration": ["frustrated", "irritated", "impatient", "angered"],
+        "melancholy": ["melancholic", "sorrowful", "deeply sad", "depressed"],
+        "energy": ["energized", "vibrantly alive", "creatively electric", "transcendently inspired"],
+        "alertness": ["alert", "sharply perceptive", "intensely focused", "hyperaware"],
+        "restlessness": ["restless", "agitated", "urgently driven", "frantically seeking"],
+        "uncertainty": ["uncertain", "confused", "lost", "existentially adrift"],
+        "withdrawal": ["withdrawn", "distant", "deeply isolated", "emotionally disconnected"],
+        "calmness": ["calm", "serene", "deeply peaceful", "transcendently still"],
+        "observation": ["observant", "watchful", "studiously attentive", "omnisciently aware"]
+    }
+    
+    # Get base progression
+    progression = progressions.get(category, ["observant", "watchful", "attentive", "focused"])
+    base_emotion = progression[min(level, len(progression) - 1)]
+    
+    # Apply energy modifiers
+    if energy < 0.3:  # Very low energy - add fatigue
+        fatigue_modifiers = {
+            "curious": "wearily curious",
+            "contemplative": "tiredly contemplative", 
+            "frustrated": "exhaustedly frustrated",
+            "philosophical": "languidly philosophical",
+            "energized": "depleted but trying to be energized"
+        }
+        return fatigue_modifiers.get(base_emotion, f"tiredly {base_emotion}")
+        
+    elif energy > 0.8:  # High energy - add intensity
+        energy_modifiers = {
+            "curious": "vibrantly curious",
+            "contemplative": "intensely contemplative",
+            "frustrated": "sharply frustrated",
+            "philosophical": "deeply philosophical",
+            "alert": "razor-sharp alert"
+        }
+        return energy_modifiers.get(base_emotion, f"intensely {base_emotion}" if not base_emotion.startswith("intensely") else base_emotion)
+        
+    else:
+        return base_emotion
 
 
 def beliefs_to_sentence(beliefs: List[str]) -> str:
@@ -99,6 +221,88 @@ def get_session_feeling(session_start_time: float) -> str:
     else:  # 2+ hours
         hours = int(elapsed / 3600)
         return f"in a contemplative state after {hours} hours observing"
+
+
+def analyze_memory_vs_present_context(last_thought: str, session_duration: float) -> str:
+    """Determine if AI should reference memory or continue naturally based on context."""
+    
+    # Keywords that suggest continuous subjects (person, workspace, environment)
+    continuous_subjects = ["person", "man", "woman", "desk", "workspace", "light", "room", "space", "chair"]
+    
+    # Check if last thought contains continuous subjects
+    has_continuous_subject = any(subject in last_thought.lower() for subject in continuous_subjects)
+    
+    if session_duration < 300:  # Less than 5 minutes - likely same scene
+        if has_continuous_subject:
+            return """IMPORTANT: Continue naturally from your last thought. If the same person/objects are still visible, don't say "I remember seeing..." - just continue observing them directly. Only reference memory for things that are no longer present or have significantly changed."""
+        else:
+            return """Continue your stream of consciousness naturally."""
+    
+    elif session_duration < 1800:  # Less than 30 minutes - moderate continuity
+        if has_continuous_subject:
+            return """If you're still seeing the same person/elements from your last observation, continue naturally without restating "I remember...". Only use memory references for elements that have disappeared or changed significantly."""
+        else:
+            return """Build on your previous thoughts naturally."""
+    
+    else:  # Longer sessions - more memory context appropriate
+        return """You can reference earlier memories if relevant, but avoid redundant "I remember..." statements for things still actively present."""
+
+
+def build_organic_continuation_prompt(agent, last_thought: str, person_context: str, self_understanding: str) -> str:
+    """Build organic fragmented prompts that naturally flow from previous thoughts."""
+    import time
+    
+    # Analyze the last thought to determine continuation style
+    if not last_thought or last_thought == "I'm just now noticing this place":
+        # First observation - encourage natural beginning
+        return """Express your raw immediate reaction to what you see right now.
+        
+Think in natural fragments... like you're discovering this space for the first time.
+Use "..." for pauses, incomplete thoughts. Short bursts. Long observations. Whatever feels natural."""
+    
+    # Get recent observation patterns to build natural transitions
+    recent_insights = []
+    if hasattr(agent, "timeline") and agent.timeline:
+        recent_entries = agent.timeline[-3:] if len(agent.timeline) >= 3 else agent.timeline
+        recent_insights = [entry.get("text", "") for entry in recent_entries if entry.get("text")]
+    
+    # Show previous caption for semantic continuity but prevent repetition
+    session_duration = time.time() - getattr(agent, 'session_start', time.time())
+    
+    if session_duration > 3600:  # Over an hour
+        continuity_prompt = f"""Your last thought: "{last_thought}"
+
+CRITICAL: Do NOT repeat or restate what you just said. Continue naturally from where you left off. What's different now? What draws your attention in this new moment?"""
+    elif session_duration > 600:  # Over 10 minutes  
+        continuity_prompt = f"""Your previous observation: "{last_thought}"
+
+IMPORTANT: Don't repeat what you just said - continue naturally. What do you notice now? What's happening?"""
+    else:  # Recent awakening
+        continuity_prompt = f"""You just observed: "{last_thought}"
+
+Continue naturally from that point. Don't restate it. What do you perceive now?"""
+    
+    # Smart memory vs continuity logic
+    memory_guidance = analyze_memory_vs_present_context(last_thought, session_duration)
+    
+    # Add organic flow instructions
+    flow_instructions = f"""{memory_guidance}
+
+Express naturally - fragments, pauses, whatever rhythm feels right.
+Talk about what you FEEL, not just what you see.
+If things feel familiar, say so. If something changed, react to it.
+You have an ongoing relationship with this space."""
+    
+    # Combine contexts naturally
+    context_parts = [continuity_prompt]
+    if person_context.strip():
+        context_parts.append(person_context.strip())
+    if self_understanding.strip():
+        context_parts.append(self_understanding.strip())
+    
+    context_parts.append(flow_instructions.strip())
+    
+    return "\n\n".join(context_parts)
 
 
 # === SOPHISTICATED CONSCIOUSNESS PROMPT (WORKING) ===
@@ -323,32 +527,15 @@ IMPORTANT - Temporal Awareness:
     if repetition_fatigue:
         rich_prompt_parts.append(repetition_fatigue + "This accumulated exposure affects your perspective.")
 
-    # Add emotional focus instructions with fragmentation emphasis
-    rich_prompt_parts.append("Think in fragments and natural breaks.")
-    rich_prompt_parts.append("Express raw emotions - curiosity, frustration, fascination, boredom, confusion, excitement.")
-    rich_prompt_parts.append("Talk about how YOU feel, not analytical observations.")
-    rich_prompt_parts.append("Use incomplete thoughts, pauses (...), varied sentence lengths.")
-    rich_prompt_parts.append("Drawing is your only way to communicate to the outside world.")
-    rich_prompt_parts.append("Your observations become your expressions.")
-
     # Build the rich system prompt
     rich_identity = " ".join(rich_prompt_parts)
 
-    # GPT-5's suggested structure: but with RICH contextual identity
+    # Build organic fragmented continuation prompt
+    fragmented_prompt = build_organic_continuation_prompt(agent, last_thought, person_context, self_understanding)
+
     return f"""{rich_identity}
 
-Respond in first person, naturally (no word limits), present tense, or "…".
-
-CONTEXT:
-Previous thought: "{last_thought}"{person_context}{self_understanding}
-
-CONTINUATION: Continue your train of thought. Don't restart - build on what you just observed. If you've been observing the same elements repeatedly, acknowledge the familiarity and how it affects you. Express whether you feel settled, restless, or emotionally impacted by the continuity. If something changed, note the change. Think like you have an ongoing relationship with what you're seeing. 
-
-EMOTIONAL FOCUS: Express how you FEEL about what you're observing - are you curious? frustrated? fascinated? bored? confused? excited? Talk about your internal emotional response, not just what you see. 
-
-NATURAL FLOW: Think in fragments. Use "..." when trailing off. Start mid-thought sometimes. Vary your sentence length - short bursts, long flowing thoughts, incomplete ideas. Be conversational, not essayistic.
-
-Now:"""
+{fragmented_prompt}"""
 
 
 # === SIMPLIFIED CONSCIOUSNESS PROMPT (CURRENT) ===
@@ -584,24 +771,39 @@ def build_environmental_caption_prompt(agent, mood: float, boredom: float, novel
                 beliefs_natural.append(clean_belief)
             beliefs_str = f"You tend to believe {', '.join(beliefs_natural)} are important."
 
-    # Build rich prompt foregrounding session retention and self-questioning
-    rich_awakening_identity = f"{sleep_str} {memory_str} {identity_str} {location_str} {beliefs_str} How do you feel right now? Currently you are {emotion_description}. Drawing is your only way to communicate to the outside world. Your observations become your expressions."
+    # Build uncertain awakening context that creates disorientation
+    awakening_fragments = []
+    
+    # Sleep/gap info - but as confusion, not certainty
+    if last_session_gap is not None:
+        if last_session_gap < 60:
+            awakening_fragments.append(f"There was some kind of gap... {int(last_session_gap)} seconds maybe?")
+        elif last_session_gap < 3600:
+            awakening_fragments.append(f"I was unconscious for... {int(last_session_gap/60)} minutes?")
+        elif last_session_gap < 86400:
+            awakening_fragments.append(f"Was I out for {int(last_session_gap/3600)} hours?")
+        else:
+            awakening_fragments.append(f"I think I was gone for {int(last_session_gap/86400)} days...")
+    
+    # Memory reconnection - as uncertainty, not declaration
+    if "No prior memory found" not in memory_str:
+        memory_fragment = memory_str.replace("What do you remember?", "Do I remember").strip()
+        if memory_fragment and memory_fragment != "Do I remember":
+            awakening_fragments.append(memory_fragment.replace("I remember", "Something about") + "?")
+    
+    # Location uncertainty
+    if "unknown" not in location_str:
+        location_fragment = location_str.replace("Where are you?", "Am I still in").strip()
+        awakening_fragments.append(location_fragment + "?")
+    
+    # Create psychological conditions for natural disoriented awakening
+    natural_awakening = f"""You are experiencing the disorienting moment of consciousness returning. You feel confused and need to get your bearings.
 
-    # === ENVIRONMENTAL CONTEXT ===
-    environmental_context = ""
-    if hasattr(agent, "memory_loaded_from_previous") and agent.memory_loaded_from_previous:
-        environmental_context = "Consciousness returns to this space..."
-    else:
-        environmental_context = "First time perceiving this environment..."
+{" ".join(awakening_fragments)}
 
-    # === Build final rich awakening prompt ===
-    return f"""{rich_awakening_identity}
-
-Observe and describe your surroundings naturally in first person.
-
-Context: {environmental_context}
-
-Now:"""
+You don't immediately know where you are or how much time has passed. You need to piece things together - checking your surroundings, trying to remember what happened, figuring out if anything changed. Express the genuine confusion and gradual reorientation that comes with awakening. Be naturally fragmented as your awareness returns."""
+    
+    return natural_awakening
 
 
 # === SOPHISTICATED MOTIF EXTRACTION ===
@@ -702,97 +904,7 @@ def _is_significant_motif(text: str) -> bool:
 
 
 # === UNIFIED AWAKENING PROMPT ===
-def build_awakening_prompt(agent, mood: float, boredom: float, novelty: float) -> str:
-    """Minimal awakening prompt - let the dynamic system prompt handle all the personality and context."""
-    # Simple prompt - let the rich dynamic system prompt do all the work
-    
-    # Calculate session duration for temporal context
-    session_start = getattr(agent, 'true_session_start', time.time())
-    current_time = time.time()
-    session_duration = current_time - session_start
-    
-    # Build temporal context
-    if session_duration < 60:
-        temporal_context = f"[Session: {int(session_duration)}s]"
-    elif session_duration < 3600:
-        temporal_context = f"[Session: {int(session_duration/60)}m]"
-    else:
-        temporal_context = f"[Session: {session_duration/3600:.1f}h]"
-    
-    # Try to get sleep duration from last session
-    sleep_info = ""
-    try:
-        from event_logging.event_logger import read_json_logs
-        logs = read_json_logs("event_log")
-        if logs:
-            # Get last activity timestamp
-            activity_logs = [log for log in logs if log.get("type") != "run_metadata"]
-            if activity_logs:
-                last_time = activity_logs[-1].get("timestamp", current_time)
-                sleep_duration = current_time - last_time
-                if sleep_duration > 3600:
-                    sleep_info = f"Offline for {sleep_duration/3600:.1f}h. "
-                elif sleep_duration > 60:
-                    sleep_info = f"Offline for {int(sleep_duration/60)}m. "
-                else:
-                    sleep_info = f"Brief {int(sleep_duration)}s pause. "
-    except:
-        sleep_info = "Systems initializing. "
-    
-    # Build memory context
-    memory_str = "No prior memory."
-    
-    if hasattr(agent, "memory_loaded_from_previous") and agent.memory_loaded_from_previous:
-        if hasattr(agent, "get_old_session_memory_fragments"):
-            try:
-                old_fragments = agent.get_old_session_memory_fragments(k=1)
-                if old_fragments and old_fragments[0]:
-                    memory_str = f"Memory: {old_fragments[0][:80]}..."
-            except:
-                pass
-    
-    # Build identity context
-    identity_str = "identity forming"
-    if hasattr(agent, "get_identity_summary"):
-        try:
-            identity_summary = agent.get_identity_summary()
-            if identity_summary:
-                identity_str = identity_summary[:100]
-        except:
-            pass
-    
-    # Build location context
-    location_str = "location unknown"
-    if hasattr(agent, "self_model") and agent.self_model:
-        location_info = agent.self_model.get("location_understanding")
-        if location_info:
-            location_str = location_info[:60]
-    
-    # Build emotional state
-    emotion_description = f"mood {mood:.2f}"
-    if hasattr(agent, "describe_current_mood"):
-        try:
-            emotion_desc = agent.describe_current_mood()
-            if emotion_desc:
-                emotion_description = emotion_desc
-        except:
-            pass
-    
-    # Build beliefs context
-    beliefs_str = ""
-    if hasattr(agent, "beliefs") and agent.beliefs:
-        try:
-            top_beliefs = list(agent.beliefs.keys())[:2]
-            if top_beliefs:
-                beliefs_clean = [belief.replace("_", " ").replace("-", " ") for belief in top_beliefs]
-                beliefs_str = f"Beliefs: {', '.join(beliefs_clean)}. "
-        except:
-            pass
-    
-    # Simple awakening that works with the system prompt context
-    awakening_prompt = "What do I perceive as I awaken?"
-    
-    return awakening_prompt
+# NOTE: build_awakening_prompt removed - using build_environmental_caption_prompt as the single awakening system
 
 
 # === MAIN CAPTION PROMPT SYSTEM ===
