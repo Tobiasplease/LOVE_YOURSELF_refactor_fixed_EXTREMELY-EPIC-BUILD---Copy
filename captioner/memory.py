@@ -105,8 +105,8 @@ class MemoryMixin:
         self.belief_history: List[str] = []
 
         # Novelty/Boredom
-        self.novelty_score: float = 1.0
-        self.boredom: float = 0.0
+        self._novelty_score: float = 1.0
+        self._boredom: float = 0.0
 
         # Timing
         self.session_start: float = now()
@@ -206,11 +206,10 @@ class MemoryMixin:
             self.queue_motif_for_scoring(motif, context)
             # Use default score until background scoring completes
             score = 0.5
-            print(f"[QUEUE] Queued '{motif}' for background scoring (using default 0.5)")
+            # Queued motif for background scoring using default 0.5
         else:
             # Use cached score - don't re-query TinyLlama for known motifs
             score = self.motif_confidence[motif]
-            print(f"[CACHE] Cached score for '{motif}': {score:.2f}")
         # Weighted motif system: balance novelty vs frequency to prevent mundane domination
         if not hasattr(self, "motif_weights"):
             self.motif_weights = {}
@@ -223,7 +222,7 @@ class MemoryMixin:
         frequency_dampener = math.log(freq + 1)
         self.motif_weights[motif] = score / frequency_dampener
         
-        print(f"[WEIGHT] Motif '{motif}': freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}")
+        # Motif weighted: freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}
         # Store confidence as score for now
         self.motif_confidence[motif] = score
         self.motif_confirmed[motif] = score > 0.6
@@ -386,7 +385,7 @@ class MemoryMixin:
 
     def estimate_novelty(self, reactivity_metrics: Optional[Dict[str, float]] = None) -> float:
         if len(self.memory_queue) < 2:
-            self.novelty_score = 1.0
+            self._novelty_score = 1.0
             return 1.0
 
         # Base novelty from caption comparison
@@ -406,8 +405,8 @@ class MemoryMixin:
 
         # Combine caption and environmental novelty
         # Environmental change should override text repetition
-        self.novelty_score = max(caption_novelty, environmental_novelty * 0.8)
-        return self.novelty_score
+        self._novelty_score = max(caption_novelty, environmental_novelty * 0.8)
+        return self._novelty_score
 
     def get_temporal_mood_modifier(self) -> float:
         """Calculate mood modifier based on temporal stagnation effects."""
@@ -435,10 +434,10 @@ class MemoryMixin:
 
     def update_boredom(self) -> None:
         # Base boredom update from novelty
-        if self.novelty_score < 0.3:
-            self.boredom = min(1.0, self.boredom + 0.1)
+        if self._novelty_score < 0.3:
+            self._boredom = min(1.0, self._boredom + 0.1)
         else:
-            self.boredom = max(0.0, self.boredom - 0.05)
+            self._boredom = max(0.0, self._boredom - 0.05)
 
         # === TEMPORAL STAGNATION EFFECT ===
         # Add progressive boredom from extended observation of same scene
@@ -461,7 +460,7 @@ class MemoryMixin:
                     temporal_boredom = 0.0
 
                 # Apply temporal boredom (weighted more heavily for longer sessions)
-                self.boredom = max(self.boredom, temporal_boredom)
+                self._boredom = max(self._boredom, temporal_boredom)
 
     def get_emotionally_similar_memories(self, current_emotion: str, k: int = 3) -> List[str]:
         """Retrieve memories that were formed in similar emotional states for recursive feedback."""
@@ -729,45 +728,53 @@ class MemoryMixin:
         }
     
     def get_dynamic_system_context(self) -> str:
-        """Build dynamic system prompt additions based on accumulated understanding."""
-        context_parts = []
+        """Build plain narrative context - no instructions, just accumulated understanding as text."""
+        narrative_parts = []
         
-        # Core learned interests (top motifs)
-        top_motifs = self.get_top_motifs(3)
-        if top_motifs:
-            motif_interests = [motif.replace("_", " ") for motif in top_motifs]
-            context_parts.append(f"\n\nYour evolving awareness: You've learned to notice {', '.join(motif_interests)}.")
-        
-        # Emotional patterns from recent journey
-        if hasattr(self, 'emotional_journey') and len(self.emotional_journey) >= 2:
-            recent_emotions = self.emotional_journey[-3:]
-            emotion_pattern = " → ".join(recent_emotions)
-            context_parts.append(f"Your recent emotional progression: {emotion_pattern}.")
-        
-        # Temporal continuity awareness
+        # Session temporal context as plain fact
         session_hours = (time.time() - self.session_start) / 3600
-        if session_hours > 0.5:  # After 30 minutes, acknowledge continuity
-            if session_hours < 2:
-                context_parts.append(f"You've been continuously observing for {int(session_hours * 60)} minutes now.")
+        if session_hours < 0.5:
+            narrative_parts.append("\n\nThis session just began.")
+        elif session_hours < 2:
+            narrative_parts.append(f"\n\nThis session has been ongoing for {int(session_hours * 60)} minutes.")
+        else:
+            narrative_parts.append(f"\n\nThis session has continued for {int(session_hours)} hours.")
+        
+        # Accumulated patterns as observation
+        top_motifs = self.get_top_motifs(5)
+        if top_motifs:
+            motif_text = ", ".join([m.replace("_", " ") for m in top_motifs[:3]])
+            narrative_parts.append(f" Recurring elements include {motif_text}.")
+        
+        # Current emotional state as fact
+        if hasattr(self, 'current_mood'):
+            if self.current_mood > 0.7:
+                narrative_parts.append(" The mood is elevated.")
+            elif self.current_mood < 0.3:
+                narrative_parts.append(" The mood is subdued.")
             else:
-                context_parts.append(f"You've been awake and observing for {int(session_hours)} hours now.")
+                narrative_parts.append(" The mood is neutral.")
         
-        # Recent reflections - extract core insight only
-        reflection_entries = self.get_memory_entries_by_type("reflection", limit=1)  # Just latest
-        if reflection_entries:
-            latest_reflection = reflection_entries[-1].get("text", "").strip()
-            if latest_reflection and len(latest_reflection) > 20:
-                # Extract only the most essential insight (max 40 chars)
-                core_insight = self._extract_core_insight(latest_reflection)
-                if core_insight:
-                    context_parts.append(f"\n\nCurrent understanding: {core_insight}")
+        # Recent memory fragments as context
+        recent_memories = self.get_memory_entries_by_type("observation", limit=3)
+        if recent_memories:
+            last_memory = recent_memories[-1].get("text", "")
+            if last_memory:
+                # Just the fact of what was observed
+                narrative_parts.append(f" Recently observed: {last_memory[:50]}")
         
-        # Person relationship awareness  
-        if hasattr(self, 'known_people') and 'primary' in self.known_people:
-            person_info = self.known_people['primary']
-            context_parts.append(f"The person you observe is {person_info.get('name', 'familiar')} - you've been watching them.")
+        # Beliefs as understanding
+        if self.beliefs:
+            belief_keys = list(self.beliefs.keys())[:2]
+            if belief_keys:
+                belief_text = " and ".join([b.replace("_", " ") for b in belief_keys])
+                narrative_parts.append(f" Core understanding centers on {belief_text}.")
         
-        return "".join(context_parts)
+        # Session count if available
+        if hasattr(self, 'session_count'):
+            narrative_parts.append(f" Session number {self.session_count}.")
+            
+        return "".join(narrative_parts) if narrative_parts else ""
 
     def _extract_core_insight(self, reflection: str) -> str:
         """Extract the most essential insight from a reflection, max 40 chars."""

@@ -127,7 +127,7 @@ def query_ollama(
             "repeat_penalty": 1.1,  # Discourage repetition of unseen details
         }
 
-    if system_prompt:
+    if system_prompt and system_prompt.strip():
         payload["system"] = system_prompt
 
     # Handle image input

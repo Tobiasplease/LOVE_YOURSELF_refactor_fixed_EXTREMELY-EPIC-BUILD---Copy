@@ -179,20 +179,11 @@ def log_json_entry(
     update_all_run_log(log_dir, entry)
 
     if log_type_str.lower() in LOG_TYPES_TO_PRINT or "all" in LOG_TYPES_TO_PRINT:
-        # Avoid generating generic "X event" strings in fallback message for known content types
-        if log_type_str.lower() == "caption":
-            message = print_message or data.get("message", "caption")
-        elif log_type_str.lower() == "reflection":
-            message = print_message or data.get("message", "reflection")
-        elif log_type_str.lower() == "comfy_prompt":
-            message = print_message or data.get("message", "drawing prompt")
-        elif log_type_str.lower() == "decision":
-            message = print_message or data.get("message", "decision")
-        else:
-            # ollama_api_call get a generic message etm
-            message = print_message or data.get("message", f"{log_type_str} event")
-        elapsed = get_elapsed_time()
-        print(f"[{elapsed}] {message}")
+        # Only print if there's an explicit print_message - don't fall back to generic strings
+        if print_message:
+            elapsed = get_elapsed_time()
+            print(f"[{elapsed}] {print_message}")
+        # Skip printing when print_message=None (handled elsewhere with custom formatting)
 
     return filepath
 

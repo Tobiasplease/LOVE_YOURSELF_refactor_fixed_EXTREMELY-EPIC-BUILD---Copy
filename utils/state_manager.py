@@ -137,8 +137,7 @@ class StateManager:
             # Restore mood and state
             captioner.current_mood = cap_state.get("current_mood", 0.5)
             captioner.last_caption = cap_state.get("last_caption", "")
-            captioner.boredom = cap_state.get("boredom", 0.0)
-            captioner.novelty_score = cap_state.get("novelty_score", 1.0)
+            # Skip boredom and novelty_score - they're now properties that access memory system
             captioner.awakening_done = cap_state.get("awakening_done", False)
 
             # Restore memory system

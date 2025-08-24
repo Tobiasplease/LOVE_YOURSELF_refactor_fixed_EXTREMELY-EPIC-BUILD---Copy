@@ -335,10 +335,12 @@ signal.signal(signal.SIGTERM, signal_handler)
 atexit.register(emergency_cleanup)
 
 last_snapshot_time = 0
-debug_print("Starting object detection thread", "INIT")
-object_detector = ObjectDetectionThread()
-_global_object_detector = object_detector
-object_detector.start()
+debug_print("YOLO object detection disabled", "INIT")
+# object_detector = ObjectDetectionThread()
+# _global_object_detector = object_detector
+# object_detector.start()
+object_detector = None
+_global_object_detector = None
 
 # Start image monitoring
 debug_print("Starting image monitor", "INIT")
@@ -471,73 +473,69 @@ best_box = None
 def mood_update_thread(frame, timestamp):
     global last_snapshot_time, best_box
     debug_print("Mood update thread started", "MOOD")
-    if not captioner.is_processing:
-        debug_print("Captioner is not processing, proceeding with mood update", "MOOD")
-        now = time.time()
-        if now - last_snapshot_time >= 10:
-            snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
-            cv2.imwrite(snapshot_path, frame)
-            debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
-            # Lightbulb flicker on snapshot
-            if USE_LIGHTBULB_PWM and lightbulb:
-                try:
-                    lightbulb.flicker(duration=0.2, brightness=255)
-                except Exception as e:
-                    print(f"Lightbulb PWM flicker failed: {e}")
-
+    now = time.time()
+    if now - last_snapshot_time >= 10:
+        snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
+        cv2.imwrite(snapshot_path, frame)
+        debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
+        # Lightbulb flicker on snapshot
+        if USE_LIGHTBULB_PWM and lightbulb:
             try:
-                # First: Update captioner to generate new captions
-                captioner.update(
-                    frame=frame,
-                    person_present=best_box is not None,
-                    mood=mood_engine.get_current_mood(),
-                    mood_vector=mood_engine.mood_vector,  # Pass 3D mood state
-                    emotion_state=mood_engine.get_emotion_for_hand_controller(),  # Pass current emotion
-                    reactivity_data=reactivity_metrics,
-                )
-                debug_print("Captioner updated successfully", "CAPTIONER")
-
-                # Second: Analyze mood from captioner's latest caption
-                if captioner.last_caption:
-                    clean_caption = captioner.last_caption
-                    if clean_caption.lower().startswith("caption:"):
-                        clean_caption = clean_caption[len("caption:") :].strip()
-                    # Lightbulb ease on caption print
-                    if USE_LIGHTBULB_PWM and lightbulb:
-                        try:
-                            lightbulb.ease(duration=0.6, brightness=180)
-                        except Exception as e:
-                            print(f"Lightbulb PWM ease failed: {e}")
-
-                    if PRINT_CLEAN_CAPTIONS:
-                        print(f"\n{clean_caption}\n")
-
-                    # Generate embodied temporal feeling for mood analysis
-                    current_emotion = mood_engine.get_emotion_for_hand_controller()
-                    temporal_feeling = get_temporal_feeling(start_time, current_emotion, scene_stagnation=False)
-
-                    current_mood = mood_engine.analyze_mood(
-                        clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling
-                    )
-                    debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
-
-                    # Update hand controller with new emotional state
-                    emotion = mood_engine.get_emotion_for_hand_controller()
-                    change_to_emotion(emotion)
-                    debug_print(f"Updated hand controller emotion: {emotion}", "HAND")
-
-                    # Third: Update captioner's mood state and pattern data for next cycle
-                    captioner.current_mood = current_mood
-                    pattern_data = mood_engine.get_pattern_data()
-                    captioner.novelty_score = pattern_data['novelty_score']
-                    # Pass recent motifs to captioner for memory integration
-                    captioner.current_motifs_from_mood = pattern_data['recent_motifs']
-
+                lightbulb.flicker(duration=0.2, brightness=255)
             except Exception as e:
-                debug_print(f"Captioner update failed: {e}", "ERROR")
-            last_snapshot_time = now
-    else:
-        debug_print("Captioner is processing, skipping mood update", "MOOD")
+                print(f"Lightbulb PWM flicker failed: {e}")
+
+        try:
+            # First: Update captioner to generate new captions
+            captioner.update(
+                frame=frame,
+                person_present=best_box is not None,
+                mood=mood_engine.get_current_mood(),
+                mood_vector=mood_engine.mood_vector,  # Pass 3D mood state
+                emotion_state=mood_engine.get_emotion_for_hand_controller(),  # Pass current emotion
+                reactivity_data=reactivity_metrics,
+            )
+            debug_print("Captioner updated successfully", "CAPTIONER")
+
+            # Second: Analyze mood from captioner's latest caption
+            if captioner.last_caption:
+                clean_caption = captioner.last_caption
+                if clean_caption.lower().startswith("caption:"):
+                    clean_caption = clean_caption[len("caption:") :].strip()
+                # Lightbulb ease on caption print
+                if USE_LIGHTBULB_PWM and lightbulb:
+                    try:
+                        lightbulb.ease(duration=0.6, brightness=180)
+                    except Exception as e:
+                        print(f"Lightbulb PWM ease failed: {e}")
+
+                if PRINT_CLEAN_CAPTIONS:
+                    print(f"\n{clean_caption}\n")
+
+                # Generate embodied temporal feeling for mood analysis
+                current_emotion = mood_engine.get_emotion_for_hand_controller()
+                temporal_feeling = get_temporal_feeling(start_time, current_emotion, scene_stagnation=False)
+
+                current_mood = mood_engine.analyze_mood(
+                    clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling
+                )
+                debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
+
+                # Update hand controller with new emotional state
+                emotion = mood_engine.get_emotion_for_hand_controller()
+                change_to_emotion(emotion)
+                debug_print(f"Updated hand controller emotion: {emotion}", "HAND")
+
+                # Third: Update captioner's mood state and pattern data for next cycle
+                captioner.current_mood = current_mood
+                pattern_data = mood_engine.get_pattern_data()
+                captioner.novelty_score = pattern_data['novelty_score']
+                # Pass recent motifs to captioner for memory integration
+                captioner.current_motifs_from_mood = pattern_data['recent_motifs']
+
+        except Exception as e:
+            debug_print(f"Captioner update failed: {e}", "ERROR")
+        last_snapshot_time = now
 
 
 # === REACTIVITY PAUSE SYSTEM STATE ===
@@ -562,7 +560,7 @@ try:
         if not ret:
             continue
 
-        object_detector.set_frame(frame)
+        # object_detector.set_frame(frame)  # YOLO disabled
 
         frame = cv2.resize(frame, (320, 240))
         frame = cv2.flip(frame, 1)
