@@ -55,11 +55,3 @@ def build_simple_contextual_prompt(agent):
     
     return " ".join(prompt_parts)
 
-def build_simple_awakening_prompt():
-    """Simple first-time observation prompt"""
-    return (
-        "I have just opened my eyes. I can see through my camera, but I don't know where I am. "
-        "Describe what surrounds me — the light, the objects, any figures — in first person, as if I were there. "
-        "Do not mention 'the image'. Do not explain that you are describing. Just observe. "
-        "Use concrete, visual details from my direct field of view. Keep it under 30 words."
-    )
