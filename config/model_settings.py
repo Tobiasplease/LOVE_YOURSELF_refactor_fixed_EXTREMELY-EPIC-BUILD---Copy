@@ -9,14 +9,20 @@ MODEL_GENERATION_OPTIONS = {
         "temperature": 0.8,    # Moderate temperature for thoughtful responses
         "top_p": 0.9,          # Allow more vocabulary range
         "repeat_penalty": 1.1, # Light repeat penalty
-        "num_predict": 500,    # Allow longer, more flowing consciousness responses
+        "num_predict": 200,    # Allow complete thoughts while maintaining brevity
         "num_ctx": 4096,
         "stop": [
             # Only stop on very specific problematic patterns, not natural language
             "\n\nUser:", "\n\nHuman:", "\n\nAssistant:",
             # Stop only the most repetitive phrases we've seen
             "What could possibly be so captivating",
-            "sacrifice visibility for this unknown space"
+            "sacrifice visibility for this unknown space",
+            # Block image analysis language that breaks immersion
+            "This is an image of", "I'm looking at an image of", "the image depicts",
+            "This is a photograph of", "The photograph shows", "This image shows",
+            "In this image", "The image contains", "I can see an image",
+            # Encourage natural sentence completion
+            "\n\n"
         ]
     },
     
