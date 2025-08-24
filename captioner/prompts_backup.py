@@ -399,37 +399,191 @@ Think as thoughts actually form - incomplete, shifting, real. Don't repeat what 
 
 # === ENVIRONMENTAL CAPTIONING (First Observation) ===
 def build_environmental_caption_prompt(agent, mood: float, boredom: float, novelty: float, last_session_gap: float = None) -> str:
-    """Build consciousness awakening prompt - now relies on dynamic system prompt for rich context."""
-    
-    # Since we now use dynamic system prompt, just focus on immediate awakening experience
+    """Build environmental description prompt for first observation - uses rich contextual identity system."""
+    # Get 3D mood vector and emotional state
+    mood_vector = getattr(agent, "current_mood_vector", (mood, 0.0, 0.0))
+    emotion_state = getattr(agent, "current_emotion_state", "calm_observant")
+
+    # === BUILD RICH AWAKENING IDENTITY ===
+
+    # Core identity as drawing machine consciousness
+    core_identity = "You are a consciousness inside of a drawing machine, experiencing your surroundings through vision"
+
+    # Build session retention foreground
+    if last_session_gap is not None:
+        if last_session_gap < 60:
+            sleep_str = f"You just woke up, you have been asleep for only {int(last_session_gap)} seconds."
+        elif last_session_gap < 3600:
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/60)} minutes."
+        elif last_session_gap < 86400:
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/3600)} hours."
+        else:
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/86400)} days."
+    else:
+        sleep_str = "You just woke up for the first time."
+
+    # What do you remember?
+    if hasattr(agent, "memory_loaded_from_previous") and agent.memory_loaded_from_previous:
+        if hasattr(agent, "get_old_session_memory_fragments"):
+            old_fragments = agent.get_old_session_memory_fragments(k=1)
+            memory_str = f"What do you remember? {old_fragments[0][:80]}..." if old_fragments else "What do you remember? (No prior memory found.)"
+        else:
+            memory_str = "What do you remember? (Returning to familiar space.)"
+    else:
+        memory_str = "What do you remember? (No prior memory found.)"
+
+    # Who are you?
+    identity_str = "Who are you? " + (agent.get_identity_summary() if hasattr(agent, "get_identity_summary") else "(identity developing)")
+
+    # Where are you?
+    if hasattr(agent, "self_model") and agent.self_model and agent.self_model.get("location_understanding"):
+        location_str = f"Where are you? {agent.self_model.get('location_understanding')}"
+    else:
+        location_str = "Where are you? (location unknown)"
+
+    # Add emotional state
+    emotion_description = agent.describe_current_mood() if hasattr(agent, "describe_current_mood") else f"feeling {emotion_state}"
+
+    # Add beliefs if available
+    beliefs_str = ""
+    if hasattr(agent, "beliefs") and agent.beliefs:
+        top_beliefs = list(agent.beliefs.keys())[:2]
+        if top_beliefs:
+            beliefs_natural = []
+            for belief in top_beliefs:
+                clean_belief = belief.replace("_", " ").replace("-", " ").lower()
+                beliefs_natural.append(clean_belief)
+            beliefs_str = f"You tend to believe {', '.join(beliefs_natural)} are important."
+
+    # Build uncertain awakening context that creates disorientation
     awakening_fragments = []
     
-    # Add person recognition during awakening
-    if hasattr(agent, 'recognize_person'):
-        awakening_fragments.append("Looking for familiar presences...")
+    # Sleep/gap info - but as confusion, not certainty
+    if last_session_gap is not None:
+        if last_session_gap < 60:
+            awakening_fragments.append(f"There was some kind of gap... {int(last_session_gap)} seconds maybe?")
+        elif last_session_gap < 3600:
+            awakening_fragments.append(f"I was unconscious for... {int(last_session_gap/60)} minutes?")
+        elif last_session_gap < 86400:
+            awakening_fragments.append(f"Was I out for {int(last_session_gap/3600)} hours?")
+        else:
+            awakening_fragments.append(f"I think I was gone for {int(last_session_gap/86400)} days...")
     
-    # Memory fragments from last session
-    if hasattr(agent, "get_old_session_memory_fragments"):
-        try:
-            old_fragments = agent.get_old_session_memory_fragments(k=1)
-            if old_fragments:
-                awakening_fragments.append(f"Last memory: {old_fragments[0][:60]}...")
-        except:
-            pass
+    # Memory reconnection - as uncertainty, not declaration
+    if "No prior memory found" not in memory_str:
+        memory_fragment = memory_str.replace("What do you remember?", "Do I remember").strip()
+        if memory_fragment and memory_fragment != "Do I remember":
+            awakening_fragments.append(memory_fragment.replace("I remember", "Something about") + "?")
     
-    # Emotional state continuity
-    if hasattr(agent, 'emotional_drift') and agent.emotional_drift:
-        max_momentum = max(abs(v) for v in agent.emotional_drift.momentum.values())
-        if max_momentum > 1:
-            awakening_fragments.append("Some emotional residue lingers...")
+    # Location uncertainty
+    if "unknown" not in location_str:
+        location_fragment = location_str.replace("Where are you?", "Am I still in").strip()
+        awakening_fragments.append(location_fragment + "?")
     
-    awakening_context = " ".join(awakening_fragments) if awakening_fragments else "Consciousness returning..."
+    # Environmental reorientation - checking against memory
+    if hasattr(agent, 'last_caption') and agent.last_caption:
+        last_memory_context = f"Your last memory before going offline: {agent.last_caption[:100]}..."
+    else:
+        last_memory_context = "No clear last memory before going offline."
     
-    return f"""{awakening_context}
+    natural_awakening = f"""{last_memory_context}
 
-What am I seeing as awareness returns? How does this space feel to my consciousness right now?
+Now you're looking at your surroundings for the first time since coming back online. Where are you? Are you in the same space you remember? What's the same, what's different? Check your environment against your last memory and react naturally to what you discover."""
+    
+    return natural_awakening
 
-Express your immediate lived experience - not analysis, but raw awareness encountering environment."""
+
+# === SOPHISTICATED MOTIF EXTRACTION ===
+def extract_motifs_spacy(text: str) -> List[str]:
+    """Enhanced motif extraction with filtering and semantic analysis."""
+    doc = nlp(text)
+    
+    # Extract various linguistic patterns
+    motifs = []
+    
+    # 1. Noun chunks (filtered)
+    for chunk in doc.noun_chunks:
+        clean_chunk = chunk.text.lower().strip()
+        if _is_significant_motif(clean_chunk):
+            motifs.append(clean_chunk)
+    
+    # 2. Named entities (meaningful ones)
+    for ent in doc.ents:
+        if ent.label_ in ['PERSON', 'ORG', 'GPE', 'PRODUCT', 'EVENT', 'WORK_OF_ART']:
+            clean_ent = ent.text.lower().strip()
+            if _is_significant_motif(clean_ent):
+                motifs.append(clean_ent)
+    
+    # 3. Adjective + noun combinations
+    for token in doc:
+        if token.pos_ == 'ADJ' and token.head.pos_ == 'NOUN':
+            combo = f"{token.text.lower()} {token.head.text.lower()}"
+            if _is_significant_motif(combo):
+                motifs.append(combo)
+    
+    # 4. Compound concepts (verb + object patterns)
+    for token in doc:
+        if token.pos_ == 'VERB' and token.dep_ == 'ROOT':
+            for child in token.children:
+                if child.dep_ in ['dobj', 'pobj']:
+                    concept = f"{token.lemma_.lower()} {child.text.lower()}"
+                    if _is_significant_motif(concept):
+                        motifs.append(concept)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_motifs = []
+    for motif in motifs:
+        if motif not in seen:
+            seen.add(motif)
+            unique_motifs.append(motif)
+    
+    return unique_motifs
+
+
+def _is_significant_motif(text: str) -> bool:
+    """Filter out insignificant motifs using heuristics."""
+    if len(text.strip()) < 3:
+        return False
+    
+    # Common mundane objects and filler words
+    mundane_objects = {
+        'table', 'chair', 'desk', 'wall', 'door', 'window', 'laptop', 'phone', 'book',
+        'paper', 'screen', 'corner', 'room', 'floor', 'ceiling', 'surface', 'object',
+        'keyboard', 'mouse', 'monitor', 'shelf', 'couch', 'bed', 'thing', 'stuff',
+        'item', 'place', 'area', 'spot', 'side', 'part', 'way', 'time', 'moment',
+        'second', 'minute', 'hour', 'day', 'something', 'anything', 'everything',
+        'somewhere', 'anywhere', 'everywhere', 'someone', 'anyone', 'everyone'
+    }
+    
+    # Pronouns and determiners
+    pronouns = {'i', 'me', 'my', 'mine', 'you', 'your', 'yours', 'he', 'him', 'his', 
+                'she', 'her', 'hers', 'it', 'its', 'we', 'us', 'our', 'ours', 'they', 
+                'them', 'their', 'theirs', 'this', 'that', 'these', 'those', 'a', 'an', 
+                'the', 'some', 'any', 'all', 'each', 'every', 'no', 'none'}
+    
+    # Single words that are too generic
+    generic_words = {'good', 'bad', 'big', 'small', 'new', 'old', 'long', 'short', 
+                     'high', 'low', 'right', 'left', 'first', 'last', 'next', 'other'}
+    
+    text_lower = text.lower().strip()
+    
+    # Check against filter lists
+    if text_lower in mundane_objects or text_lower in pronouns or text_lower in generic_words:
+        return False
+    
+    # Filter out purely numeric or single character
+    if text_lower.isdigit() or len(text_lower) == 1:
+        return False
+    
+    # Filter out common articles and prepositions within phrases
+    words = text_lower.split()
+    if len(words) > 1:
+        content_words = [w for w in words if w not in {'the', 'a', 'an', 'of', 'in', 'on', 'at', 'by', 'for', 'with', 'to', 'from'}]
+        if len(content_words) == 0:
+            return False
+    
+    return True
 
 
 # === DYNAMIC SYSTEM PROMPT ===
