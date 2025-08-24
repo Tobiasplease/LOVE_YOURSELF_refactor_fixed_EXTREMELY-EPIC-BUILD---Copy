@@ -49,7 +49,8 @@ class MultimodalModel:
             else:
                 # Fallback for first-ever awakening
                 prompt = "What do I perceive as I awaken to consciousness for the first time?"
-            return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
+            # Use dynamic system prompt for awakening too
+            return self._call_ollama(prompt, image_path=image_path, system_prompt=None)  # Will use dynamic system prompt
         elif flowing and self.memory_ref:
             # Check for significant visual change in snapshot
             visual_change_detected = self._detect_significant_visual_change()
