@@ -20,7 +20,7 @@ MODEL_GENERATION_OPTIONS = {
             # Block image analysis language that breaks immersion
             "This is an image of", "I'm looking at an image of", "the image depicts",
             "This is a photograph of", "The photograph shows", "This image shows",
-            "In this image", "The image contains", "I can see an image",
+            "The image shows", "In this image", "The image contains", "I can see an image",
             # Encourage natural sentence completion
             "\n\n"
         ]
