@@ -295,7 +295,7 @@ def extract_semantic_memory(last_thought: str, recent_captions: list = None) -> 
     return ""
 
 
-def build_organic_continuation_prompt(agent, last_thought: str, person_context: str, self_understanding: str) -> str:
+def build_organic_continuation_prompt(agent, last_thought: str, person_context: str = "", self_understanding: str = "") -> str:
     """Build organic fragmented prompts that naturally flow from previous thoughts."""
     import time
     
@@ -354,6 +354,18 @@ WHAT NOW? Your awareness is still fresh - what draws your attention in this mome
     # Smart memory vs continuity logic
     memory_guidance = analyze_memory_vs_present_context(last_thought, session_duration)
     
+    # Add person recognition context
+    person_context = ""
+    if hasattr(agent, 'recognize_person') and last_thought:
+        try:
+            person_id = agent.recognize_person(last_thought)
+            if person_id and person_id != "no_person":
+                person_info = agent.get_person_context(person_id)
+                if person_info and "Unknown person" not in person_info:
+                    person_context = f" Familiar presence: {person_info}"
+        except:
+            pass
+    
     # Add drift context if available
     drift_context = ""
     if hasattr(agent, 'emotional_drift') and agent.emotional_drift:
@@ -362,7 +374,7 @@ WHAT NOW? Your awareness is still fresh - what draws your attention in this mome
             drift_context = f" {drift_context}"
     
     # Immediate reactive consciousness instructions
-    flow_instructions = f"""{memory_guidance}{drift_context}
+    flow_instructions = f"""{memory_guidance}{person_context}{drift_context}
 
 You are experiencing this moment in time. Notice what draws you... wonder about things... follow your attention wherever it goes.
 
@@ -370,11 +382,6 @@ Think as thoughts actually form - incomplete, shifting, real. Don't repeat what 
     
     # Combine contexts naturally
     context_parts = [continuity_prompt]
-    if person_context.strip():
-        context_parts.append(person_context.strip())
-    if self_understanding.strip():
-        context_parts.append(self_understanding.strip())
-    
     context_parts.append(flow_instructions.strip())
     
     return "\n\n".join(context_parts)
