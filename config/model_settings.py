@@ -9,7 +9,7 @@ MODEL_GENERATION_OPTIONS = {
         "temperature": 0.8,    # Moderate temperature for thoughtful responses
         "top_p": 0.9,          # Allow more vocabulary range
         "repeat_penalty": 1.1, # Light repeat penalty
-        "num_predict": 200,    # Allow complete thoughts while maintaining brevity
+        "num_predict": 200,    # Allow longer, more complete thoughts
         "num_ctx": 4096,
         "stop": [
             # Only stop on very specific problematic patterns, not natural language
@@ -31,6 +31,7 @@ MODEL_GENERATION_OPTIONS = {
         "top_p": 0.75,          # More focused to avoid formal completions
         "repeat_penalty": 1.6,  # Very aggressive 
         "repeat_last_n": 1024,  # Look at much more context
+        "num_predict": 180,     # Allow complete thoughts
         "num_ctx": 3072,
         "stop": [
             "\nUser:", "\nUSER:", "\nSystem:", "\nSYSTEM:",
@@ -58,6 +59,7 @@ MODEL_GENERATION_OPTIONS = {
         "top_p": 0.7,           # More focused to avoid boring completions
         "repeat_penalty": 1.8,  # Very aggressive anti-repetition
         "repeat_last_n": 1024,  # Look at much more context for repeats
+        "num_predict": 200,     # Allow complete thoughts
         "num_ctx": 4096,        # Larger context window
         "stop": [
             "\nUser:", "\nUSER:", "\nSystem:", "\nSYSTEM:", 

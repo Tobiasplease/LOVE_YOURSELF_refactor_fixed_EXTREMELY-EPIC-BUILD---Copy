@@ -1,89 +1,83 @@
-import os
-from typing import Optional
-from captioner.prompts import (
-    build_caption_prompt,
-    build_environmental_caption_prompt,
-    build_reflection_prompt,
-    build_drawing_prompt,
-    build_change_focused_caption_prompt,
-)
-from config import config
+"""
+Clean model wrapper - pure API handler only.
+All prompt logic moved to prompt_interface.py for centralization.
+"""
 
+import os
+import re
+from typing import Optional
+from config import config
 from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     OLLAMA_MODEL,
-    VISUAL_CHANGE_THRESHOLD,
     TINYLLAMA_TEMPERATURE,
     TINYLLAMA_TOP_P,
     TINYLLAMA_NUM_PREDICT,
     TINYLLAMA_TIMEOUT,
     OLLAMA_TIMEOUT_REFLECTION,
-    DEBUG_VERBOSE,
 )
-from config.model_settings import get_model_options, get_model_system_prompt, is_qwen_model
 from utils.ollama import query_ollama
+from .prompt_interface import PromptInterface
 
 
 class MultimodalModel:
+    """Simplified model wrapper - pure API handler."""
+
     def __init__(self, memory_ref: Optional[any] = None) -> None:  # type: ignore
         self.memory_ref = memory_ref
         self.model_name = OLLAMA_MODEL
+        self.prompt_interface = PromptInterface(self.model_name)
 
     def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False) -> str:
-        if not os.path.exists(image_path):
+        """Generate image caption using centralized prompt interface."""
+        # Get prompt and options from centralized interface
+        prompt, model_options, system_prompt = self.prompt_interface.build_caption_prompt_with_options(
+            self.memory_ref, image_path, flowing=flowing, first_time=first_time
+        )
+
+        if prompt is None:
             return "[WARNING] No image found"
 
-        if first_time:
-            # Use the rich environmental awakening prompt with reorientation context
-            if self.memory_ref:
-                # Get last session gap directly from captioner  
-                session_gap = getattr(self.memory_ref, "last_session_gap", None)
+        # Suppress debug output when clean captions are enabled
+        try:
+            from config.config import PRINT_CLEAN_CAPTIONS
 
-                prompt = build_environmental_caption_prompt(
-                    self.memory_ref,
-                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
-                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
-                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
-                    last_session_gap=session_gap,  # type: ignore
-                )
-            else:
-                # Fallback for first-ever awakening
-                prompt = "What do I perceive as I awaken to consciousness for the first time?"
-            # Use dynamic system prompt for awakening too
-            return self._call_ollama(prompt, image_path=image_path, system_prompt=None)  # Will use dynamic system prompt
-        elif flowing and self.memory_ref:
-            # Check for significant visual change in snapshot
-            visual_change_detected = self._detect_significant_visual_change()
+            if not PRINT_CLEAN_CAPTIONS:
+                print(f"[DEBUG] Prompt hash: {hash(prompt)}, first 200 chars: {prompt[:200]}...")
+        except:
+            pass
 
-            if visual_change_detected:
-                # Use change-focused prompt to ground the AI in current reality
-                prompt = build_change_focused_caption_prompt(
-                    self.memory_ref,
-                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
-                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
-                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
-                )
-            else:
-                # Use normal contemplative prompt
-                prompt = build_caption_prompt(
-                    self.memory_ref,
-                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
-                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
-                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
-                )
-        else:
-            prompt = "Describe this image."
+        result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="normal")
 
-        return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
+        try:
+            from config.config import PRINT_CLEAN_CAPTIONS
+
+            if not PRINT_CLEAN_CAPTIONS:
+                print(f"[DEBUG] Response hash: {hash(result)}, first 50 chars: {result[:50]}...")
+        except:
+            pass
+        return result
 
     def reason_about_caption(
         self, caption: str, *, agent: Optional[any] = None, mood_text: Optional[str] = None, extra: Optional[str] = None  # type: ignore
     ) -> str:  # type: ignore
+        """Generate reflection using centralized prompt interface."""
         try:
-            prompt = build_reflection_prompt(caption, extra=extra, agent=agent)
-            print(f"[🔍] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s")
-            response = self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT, timeout=OLLAMA_TIMEOUT_REFLECTION)
-            print(f"[SUCCESS] Reflection completed: {len(response)} chars")
+            prompt, model_options, system_prompt = self.prompt_interface.build_reflection_prompt_with_options(caption, agent=agent, extra=extra)
+
+            # Suppress debug output when clean captions enabled
+            from config.config import PRINT_CLEAN_CAPTIONS
+
+            if not PRINT_CLEAN_CAPTIONS:
+                print(f"[REFLECTION] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s")
+
+            response = self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options, timeout=OLLAMA_TIMEOUT_REFLECTION)
+
+            if not PRINT_CLEAN_CAPTIONS:
+                print(f"[SUCCESS] Reflection completed: {len(response)} chars")
+            else:
+                # Show FULL reflection when clean captions enabled
+                print(f"\n[REFLECTION]\n{response}\n")
             return response
         except Exception as e:
             print(f"[ERROR] Reflection failed: {e}")
@@ -93,15 +87,16 @@ class MultimodalModel:
             return "[WARNING] Reflection generation failed"
 
     def generate_drawing_prompt(self, *, extra: Optional[str] = None) -> str:
-        if not self.memory_ref:
+        """Generate drawing prompt using centralized prompt interface."""
+        prompt, model_options, system_prompt = self.prompt_interface.build_drawing_prompt_with_options(self.memory_ref, extra=extra)
+
+        if prompt is None:
             return "[WARNING] No memory available for drawing prompt"
 
-        prompt = build_drawing_prompt(self.memory_ref, extra=extra)
-        return self._call_ollama(prompt, system_prompt=config.SYSTEM_PROMPT)
+        return self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options)
 
     def query_tinyllama(self, prompt: str) -> str:
         """Query TinyLlama model for motif scoring and emotional analysis."""
-        # Use TinyLlama for fast, lightweight text-only queries
         tinyllama_options = {
             "temperature": TINYLLAMA_TEMPERATURE,
             "top_p": TINYLLAMA_TOP_P,
@@ -119,91 +114,70 @@ class MultimodalModel:
             )
             return response.strip()
         except Exception:
-            # Fallback if TinyLlama fails
             return "0.5"
 
-    def _detect_significant_visual_change(self) -> bool:
-        """Detect if there's been a significant visual change in the snapshot (not video feed)."""
-        if not self.memory_ref:
-            return False
+    def _call_ollama(
+        self,
+        prompt: str,
+        image_path: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        timeout: int = 90,
+        model_options: dict = None,
+        prompt_type: str = "normal",
+    ) -> str:
+        """Pure API call handler - no prompt logic here."""
 
-        # Get the novelty score - high novelty indicates visual change
-        novelty = getattr(self.memory_ref, "novelty_score", 0.0)
+        # Use provided options or get defaults
+        if model_options is None:
+            model_options = self.prompt_interface._get_base_model_options()
 
-        # Use configurable threshold for "significant change"
-        return novelty > VISUAL_CHANGE_THRESHOLD
+        # Debug output - suppress when clean captions are enabled
+        try:
+            from config.config import PRINT_CLEAN_CAPTIONS
 
-    def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None, timeout: int = 90) -> str:
-        # Get model-specific generation options
-        model_options = get_model_options(self.model_name)
-
-        # Get model-specific system prompt if none provided
-        if system_prompt is None:
-            model_system_config = get_model_system_prompt(self.model_name)
-            system_prompt = model_system_config["base_prompt"]
-
-        # Add dynamic self-understanding to system prompt
-        if self.memory_ref and hasattr(self.memory_ref, "get_dynamic_system_context"):
-            dynamic_context = self.memory_ref.get_dynamic_system_context()
-            if dynamic_context:
-                if isinstance(dynamic_context, dict):
-                    # New organic format - context is embedded in template
-                    try:
-                        system_prompt = system_prompt.format(
-                            emotional_state=dynamic_context.get('emotional_state', 'contemplative'),
-                            temporal_context=dynamic_context.get('temporal_context', ''),
-                            accumulated_understanding=dynamic_context.get('accumulated_understanding', '')
-                        )
-                    except KeyError:
-                        # Template doesn't have placeholders, append as before
-                        system_prompt += str(dynamic_context.get('temporal_context', '')) + str(dynamic_context.get('accumulated_understanding', ''))
-                else:
-                    # Fallback for old format
-                    system_prompt += str(dynamic_context)
-
-        # For Qwen models, use different prompt formatting
-        if is_qwen_model(self.model_name):
-            # Qwen prefers SYSTEM/USER format to prevent role confusion
-            formatted_prompt = f"SYSTEM: {system_prompt}\n\nUSER: {prompt}"
-            final_system_prompt = None  # Don't double-set system prompt
-        else:
-            # LLaVA and other models use system prompt normally
-            formatted_prompt = prompt
-            final_system_prompt = system_prompt
+            if not PRINT_CLEAN_CAPTIONS:
+                print(f"[DEBUG] Model options with seed: {model_options}")
+                print(f"[FULL_DEBUG] ==================== CAPTION REQUEST ====================")
+                print(f"[FULL_DEBUG] MODEL: {self.model_name}")
+                print(f"[FULL_DEBUG] IMAGE: {image_path}")
+                print(f"[FULL_DEBUG] TIMEOUT: {timeout}")
+                print(f"[FULL_DEBUG] PROMPT_TYPE: {prompt_type}")
+                print(f"[FULL_DEBUG] MODEL_OPTIONS: {model_options}")
+                print(f"[FULL_DEBUG] SYSTEM_PROMPT (first 200 chars): {(system_prompt or 'None')[:200]}")
+                print(f"[FULL_DEBUG] FORMATTED_PROMPT (first 500 chars):\\n{prompt[:500]}")
+                print(f"[FULL_DEBUG] FORMATTED_PROMPT (full length): {len(prompt)} chars")
+                print(f"[FULL_DEBUG] ============================================================")
+        except:
+            pass
 
         response = query_ollama(
-            prompt=formatted_prompt,
+            prompt=prompt,
             model=self.model_name,
             image=image_path,
             timeout=timeout,
             log_dir=MOOD_SNAPSHOT_FOLDER,
-            system_prompt=final_system_prompt,
-            options=model_options,  # Pass model-specific options
-            show_progress=True,  # Enable progress bar for captions
+            system_prompt=system_prompt,
+            options=model_options,
         )
 
-        # Clean up AI model leakage - remove unwanted prompt-like text
-        response = self._clean_response(response)
-        return response
+        if not response:
+            response = ""
+
+        return self._clean_response(response)
 
     def _clean_response(self, response: str) -> str:
         """Remove unwanted AI-generated prompt leakage from responses."""
-        # Common patterns the AI model sometimes generates
         unwanted_patterns = [
-            r"\n\nFeelings:.*?\?",
-            r"\n\nReflection:.*?\?",
-            r"\n\nWhat do you feel\?",
-            r"\n\nHow does.*?feel\?",
-            r"Feelings: What do you feel\?",
-            r"Reflection: How does.*?\?",
+            r"\\n\\nFeelings:.*?\\?",
+            r"\\n\\nReflection:.*?\\?",
+            r"\\n\\nWhat do you feel\\?",
+            r"\\n\\nHow does.*?feel\\?",
+            r"Feelings: What do you feel\\?",
+            r"Reflection: How does.*?\\?",
         ]
 
         cleaned = response
         for pattern in unwanted_patterns:
-            import re
-
             cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE | re.DOTALL)
 
-        # Clean up extra whitespace
-        cleaned = cleaned.strip()
-        return cleaned
+        return cleaned.strip()
