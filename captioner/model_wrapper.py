@@ -5,13 +5,11 @@ from captioner.prompts import (
     build_environmental_caption_prompt,
     build_reflection_prompt,
     build_drawing_prompt,
-    build_change_focused_caption_prompt,
 )
 from config import config
 from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     OLLAMA_MODEL,
-    VISUAL_CHANGE_THRESHOLD,
     TINYLLAMA_TEMPERATURE,
     TINYLLAMA_TOP_P,
     TINYLLAMA_NUM_PREDICT,
@@ -35,45 +33,32 @@ class MultimodalModel:
         if first_time:
             # Use the rich environmental awakening prompt with reorientation context
             if self.memory_ref:
-                # Get last session gap directly from captioner  
+                # Get last session gap directly from captioner
                 session_gap = getattr(self.memory_ref, "last_session_gap", None)
 
                 prompt = build_environmental_caption_prompt(
                     self.memory_ref,
-                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
-                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
-                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
+                    mood=getattr(self.memory_ref, "current_mood", 0.5),
+                    boredom=getattr(self.memory_ref, "boredom", 0.0),
+                    novelty=getattr(self.memory_ref, "novelty_score", 0.5),
                     last_session_gap=session_gap,  # type: ignore
                 )
             else:
                 # Fallback for first-ever awakening
                 prompt = "What do I perceive as I awaken to consciousness for the first time?"
-            # Use dynamic system prompt for awakening too
-            return self._call_ollama(prompt, image_path=image_path, system_prompt=None)  # Will use dynamic system prompt
+            return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
         elif flowing and self.memory_ref:
-            # Check for significant visual change in snapshot
-            visual_change_detected = self._detect_significant_visual_change()
-
-            if visual_change_detected:
-                # Use change-focused prompt to ground the AI in current reality
-                prompt = build_change_focused_caption_prompt(
-                    self.memory_ref,
-                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
-                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
-                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
-                )
-            else:
-                # Use normal contemplative prompt
-                prompt = build_caption_prompt(
-                    self.memory_ref,
-                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
-                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
-                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
-                )
+            # Use normal contemplative prompt for continuous captioning
+            prompt = build_caption_prompt(
+                self.memory_ref,
+                mood=getattr(self.memory_ref, "current_mood", 0.5),
+                boredom=getattr(self.memory_ref, "boredom", 0.0),
+                novelty=getattr(self.memory_ref, "novelty_score", 0.5),
+            )
         else:
             prompt = "Describe this image."
 
-        return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
+        return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT, prompt_type="normal")
 
     def reason_about_caption(
         self, caption: str, *, agent: Optional[any] = None, mood_text: Optional[str] = None, extra: Optional[str] = None  # type: ignore
@@ -121,18 +106,9 @@ class MultimodalModel:
             # Fallback if TinyLlama fails
             return "0.5"
 
-    def _detect_significant_visual_change(self) -> bool:
-        """Detect if there's been a significant visual change in the snapshot (not video feed)."""
-        if not self.memory_ref:
-            return False
-
-        # Get the novelty score - high novelty indicates visual change
-        novelty = getattr(self.memory_ref, "novelty_score", 0.0)
-
-        # Use configurable threshold for "significant change"
-        return novelty > VISUAL_CHANGE_THRESHOLD
-
-    def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None, timeout: int = 90) -> str:
+    def _call_ollama(
+        self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None, timeout: int = 90, prompt_type: str = "normal"
+    ) -> str:
         # Get model-specific generation options
         model_options = get_model_options(self.model_name)
 
@@ -149,13 +125,13 @@ class MultimodalModel:
                     # New organic format - context is embedded in template
                     try:
                         system_prompt = system_prompt.format(
-                            emotional_state=dynamic_context.get('emotional_state', 'contemplative'),
-                            temporal_context=dynamic_context.get('temporal_context', ''),
-                            accumulated_understanding=dynamic_context.get('accumulated_understanding', '')
+                            emotional_state=dynamic_context.get("emotional_state", "contemplative"),
+                            temporal_context=dynamic_context.get("temporal_context", ""),
+                            accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
                         )
                     except KeyError:
                         # Template doesn't have placeholders, append as before
-                        system_prompt += str(dynamic_context.get('temporal_context', '')) + str(dynamic_context.get('accumulated_understanding', ''))
+                        system_prompt += str(dynamic_context.get("temporal_context", "")) + str(dynamic_context.get("accumulated_understanding", ""))
                 else:
                     # Fallback for old format
                     system_prompt += str(dynamic_context)
@@ -178,7 +154,7 @@ class MultimodalModel:
             log_dir=MOOD_SNAPSHOT_FOLDER,
             system_prompt=final_system_prompt,
             options=model_options,  # Pass model-specific options
-            show_progress=True,  # Enable progress bar for captions
+            # show_progress=True,  # Enable progress bar for captions
         )
 
         # Clean up AI model leakage - remove unwanted prompt-like text
