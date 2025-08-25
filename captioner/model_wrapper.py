@@ -5,10 +5,9 @@ from captioner.prompts import (
     build_environmental_caption_prompt,
     build_reflection_prompt,
     build_drawing_prompt,
-    build_change_focused_caption_prompt,
 )
 from config import config
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, VISUAL_CHANGE_THRESHOLD, TINYLLAMA_TEMPERATURE, TINYLLAMA_TOP_P, TINYLLAMA_NUM_PREDICT, TINYLLAMA_TIMEOUT, OLLAMA_TIMEOUT_REFLECTION, DEBUG_VERBOSE
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, TINYLLAMA_TEMPERATURE, TINYLLAMA_TOP_P, TINYLLAMA_NUM_PREDICT, TINYLLAMA_TIMEOUT, OLLAMA_TIMEOUT_REFLECTION, DEBUG_VERBOSE
 from config.model_settings import get_model_options, get_model_system_prompt, is_qwen_model
 from utils.ollama import query_ollama
 
@@ -38,32 +37,19 @@ class MultimodalModel:
             else:
                 # Fallback for first-ever awakening
                 prompt = "What do I perceive as I awaken to consciousness for the first time?"
-            # Use dynamic system prompt for awakening too
-            return self._call_ollama(prompt, image_path=image_path, system_prompt=None)  # Will use dynamic system prompt
+            return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
         elif flowing and self.memory_ref:
-            # Check for significant visual change in snapshot
-            visual_change_detected = self._detect_significant_visual_change()
-            
-            if visual_change_detected:
-                # Use change-focused prompt to ground the AI in current reality
-                prompt = build_change_focused_caption_prompt(
-                    self.memory_ref,
-                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
-                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
-                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
-                )
-            else:
-                # Use normal contemplative prompt
-                prompt = build_caption_prompt(
-                    self.memory_ref,
-                    mood=getattr(self.memory_ref, 'current_mood', 0.5),
-                    boredom=getattr(self.memory_ref, 'boredom', 0.0),
-                    novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
-                )
+            # Use normal contemplative prompt for continuous captioning
+            prompt = build_caption_prompt(
+                self.memory_ref,
+                mood=getattr(self.memory_ref, 'current_mood', 0.5),
+                boredom=getattr(self.memory_ref, 'boredom', 0.0),
+                novelty=getattr(self.memory_ref, 'novelty_score', 0.5),
+            )
         else:
             prompt = "Describe this image."
 
-        return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT)
+        return self._call_ollama(prompt, image_path=image_path, system_prompt=config.SYSTEM_PROMPT, prompt_type="normal")
 
     def reason_about_caption(
         self, caption: str, *, agent: Optional[any] = None, mood_text: Optional[str] = None, extra: Optional[str] = None  # type: ignore
@@ -110,18 +96,8 @@ class MultimodalModel:
             # Fallback if TinyLlama fails
             return "0.5"
 
-    def _detect_significant_visual_change(self) -> bool:
-        """Detect if there's been a significant visual change in the snapshot (not video feed)."""
-        if not self.memory_ref:
-            return False
-            
-        # Get the novelty score - high novelty indicates visual change
-        novelty = getattr(self.memory_ref, 'novelty_score', 0.0)
-        
-        # Use configurable threshold for "significant change"
-        return novelty > VISUAL_CHANGE_THRESHOLD
 
-    def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None, timeout: int = 90) -> str:
+    def _call_ollama(self, prompt: str, image_path: Optional[str] = None, system_prompt: Optional[str] = None, timeout: int = 90, prompt_type: str = "normal") -> str:
         # Get model-specific generation options
         model_options = get_model_options(self.model_name)
 
@@ -158,6 +134,7 @@ class MultimodalModel:
             # LLaVA and other models use system prompt normally
             formatted_prompt = prompt
             final_system_prompt = system_prompt
+
 
         response = query_ollama(
             prompt=formatted_prompt,
