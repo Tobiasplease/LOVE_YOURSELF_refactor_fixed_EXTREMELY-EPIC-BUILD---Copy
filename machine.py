@@ -8,7 +8,7 @@ import threading
 import os
 import signal
 import atexit
-from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY
+from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY, NO_HANDS
 from servo_control.lightbulb_pwm import LightbulbController
 
 
@@ -79,6 +79,8 @@ from event_logging.event_logger import get_current_run_id, set_start_time, log_j
 from event_logging.log_type import LogType
 
 try:
+    if getattr(config_module, "NO_HANDS", False):
+        raise ImportError("Hand control disabled by NO_HANDS config")
     from hand_control.direct_hand_control import (
         start_hand_controller,  # type: ignore
         stop_hand_controller,
