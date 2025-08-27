@@ -4,13 +4,14 @@ import re
 import time
 import threading
 from collections import deque
+from datetime import datetime
 from typing import Deque, Optional, Tuple, Dict, List
 
 # from weakref import ref
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
-from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
+from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL, PRINT_CLEAN_CAPTIONS
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
@@ -19,9 +20,15 @@ from drawing.drawing import DrawingController
 from .memory import MemoryMixin
 from .prompts import extract_motifs_spacy
 from .model_wrapper import MultimodalModel
-from .emotional_drift import EmotionalDrift
 from utils.motif_scorer import score_multiple_motifs
 from utils.error_tracking import track_component_health, robust_execution
+
+# Import context compressor with error handling
+try:
+    from .context_compression import context_compressor
+except Exception as e:
+    print(f"[WARNING] Context compression module failed to load: {e}")
+    context_compressor = None
 
 
 class Captioner(MemoryMixin):
@@ -34,11 +41,11 @@ class Captioner(MemoryMixin):
         super().__init__()
         self.model = MultimodalModel(memory_ref=self)
         self.drawing = DrawingController()
-        self.emotional_drift = EmotionalDrift()  # Initialize drift system
 
         self.true_session_start = time.time()
         self.first_caption_done = False
         self.awakening_done = False
+        self.print_lock = threading.Lock()  # Prevent multiple simultaneous prints
 
         self.current_mood: float = 0.0
         self.current_mood_vector: Tuple[float, float, float] = (0.0, 0.0, 0.5)  # valence, arousal, clarity
@@ -55,9 +62,9 @@ class Captioner(MemoryMixin):
         self.sessions_since_boot = 0
         self.memory_loaded_from_previous = False
 
-        # Session continuity - simplified to avoid hallucinated time gaps
+        # Session continuity - time gap will be set by state manager if restoring session
         self._last_session_file = os.path.join(MOOD_SNAPSHOT_FOLDER, "last_session.txt")
-        self.last_session_gap = None  # Disable time gap calculation to prevent hallucinations
+        self.last_session_gap = None  # Will be set by state manager during restoration
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
         self.snapshot_queue: Deque[Tuple[np.ndarray, bool, Optional[Dict]]] = deque()
@@ -126,10 +133,12 @@ class Captioner(MemoryMixin):
         if now - self.last_caption_time < CAPTION_INTERVAL:
             return
 
-        self.last_caption_time = now
+        # Don't update timestamp yet - wait until caption is actually generated
         ts = int(now)
         img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{ts}.jpg")
         cv2.imwrite(img_path, frame)
+        
+        skip_caption_print = False  # Track if we should skip printing
 
         # Start loading animation in separate thread
         import threading
@@ -139,7 +148,11 @@ class Captioner(MemoryMixin):
             frames = [" ", ".", "..", "..."]
             idx = 0
             while not loading_stop.is_set():
-                print(f"\r{frames[idx % 4]}", end="", flush=True)
+                if hasattr(self, 'print_lock'):
+                    with self.print_lock:
+                        print(f"\r{frames[idx % 4]}", end="", flush=True)
+                else:
+                    print(f"\r{frames[idx % 4]}", end="", flush=True)
                 idx += 1
                 time.sleep(0.3)
         
@@ -156,7 +169,27 @@ class Captioner(MemoryMixin):
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)  # Use awakening prompts
                 self.awaiting_environmental_phase = False  # Clear flag
             else:
+                # Suppress debug when clean captions enabled
+                try:
+                    from config.config import PRINT_CLEAN_CAPTIONS
+                    if not PRINT_CLEAN_CAPTIONS:
+                        print(f"[DEBUG] Requesting new caption for {img_path}")
+                except:
+                    pass
+                previous_caption = getattr(self, 'last_caption', '')
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
+                if caption == previous_caption:
+                    if not PRINT_CLEAN_CAPTIONS:
+                        print(f"[WARNING] Caption is identical to previous: {caption[:50]}...")
+                    # Don't print the same caption again but still check reflection/drawing
+                    skip_caption_print = True
+                else:
+                    try:
+                        from config.config import PRINT_CLEAN_CAPTIONS
+                        if not PRINT_CLEAN_CAPTIONS:
+                            print(f"[DEBUG] New caption generated: {caption[:50]}...")
+                    except:
+                        pass
         except Exception as e:
             caption = "[WARNING] Vision unavailable"
             log_json_entry(
@@ -165,9 +198,12 @@ class Captioner(MemoryMixin):
                 print_message=f"WARNING Caption error: {e}",
             )
         finally:
-            # Stop loading animation
+            # Stop loading animation and wait for it to fully terminate
             loading_stop.set()
-            loading_thread.join(timeout=0.5)
+            loading_thread.join(timeout=2.0)  # Increased timeout
+            if loading_thread.is_alive():
+                # Force terminate if still running
+                print("\r" + " " * 80 + "\r", end="")  # Clear any remaining animation
 
         self.first_caption_done = True
 
@@ -177,16 +213,26 @@ class Captioner(MemoryMixin):
                 {"message": f"Caption error: {caption}", "component": "captioner"},
                 print_message=f"Caption error: {caption}",
             )
-            self.observe("I couldn’t see anything just now.", self.current_mood, img_path, memory_type="glitch")
-            return
+            self.observe("I couldn't see anything just now.", self.current_mood, img_path, memory_type="glitch")
+            # Don't return early - still need to check reflection/drawing timing
+            caption = "Vision unclear right now"  # Use fallback caption
 
-        # Clear the animation line and print caption with timestamp
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        formatted_caption = f"[{timestamp}] {caption}"
-        
-        print(f"\r{formatted_caption}")
-        print()  # Add blank line after caption
+        # Clear the animation line and print caption with timestamp (thread-safe)
+        # Only print here if clean captions are NOT enabled (machine.py handles clean printing)
+        if not skip_caption_print:
+            try:
+                from config.config import PRINT_CLEAN_CAPTIONS
+                if not PRINT_CLEAN_CAPTIONS:  # Only print here if clean captions disabled
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    formatted_caption = f"[{timestamp}] {caption}"
+                    
+                    # Thread-safe printing to prevent multiple simultaneous outputs
+                    with self.print_lock:
+                        # Properly clear the line before printing to prevent repetition
+                        print("\r" + " " * 80 + "\r", end="")  # Clear any animation remnants
+                        print(formatted_caption)  # Print without \r to avoid buffer issues
+            except:
+                pass
         
         log_json_entry(
             LogType.CAPTION,
@@ -205,6 +251,16 @@ class Captioner(MemoryMixin):
         )
         self.last_caption = caption
         
+        # Now update the timestamp since we have a new caption
+        self.last_caption_time = now
+        
+        # Add caption to context compression system (with error handling)
+        try:
+            if caption and caption.strip():
+                context_compressor.add_caption(caption, time.time())
+        except Exception as e:
+            print(f"[CAPTIONER] Context compression failed: {e}")
+        
         # Process emotional drift
         environmental_factors = {
             "scene_static": getattr(self, '_scene_static', False),  # Will be tracked by semantic memory
@@ -213,14 +269,12 @@ class Captioner(MemoryMixin):
             "boredom": self.boredom
         }
         
-        drift_momentum = self.emotional_drift.process_caption(caption, environmental_factors)
-        
-        # Log drift state occasionally
-        if self.emotional_drift.comparison_count % 10 == 0:
-            drift_descriptor = self.emotional_drift.get_emotional_descriptor()
-            print(f"[DRIFT] Emotional state: {drift_descriptor} | Momentum: E:{drift_momentum['energy']:.2f} V:{drift_momentum['valence']:.2f} C:{drift_momentum['coherence']:.2f}")
 
-        if now - self.last_reason_time > REASON_INTERVAL:
+        # Debug reflection timing
+        time_since_reflection = now - self.last_reason_time
+        if time_since_reflection > REASON_INTERVAL:
+            if not PRINT_CLEAN_CAPTIONS:
+                print(f"[DEBUG] Reflection triggered! Time since last: {time_since_reflection:.0f}s > {REASON_INTERVAL}s")
             try:
                 mood_text = self.describe_current_mood()
                 context = self.get_reflection_context()
@@ -232,7 +286,11 @@ class Captioner(MemoryMixin):
                     frames = [" ", ".", "..", "..."]
                     idx = 0
                     while not loading_stop.is_set():
-                        print(f"\r{frames[idx % 4]}", end="", flush=True)
+                        if hasattr(self, 'print_lock'):
+                            with self.print_lock:
+                                print(f"\r{frames[idx % 4]}", end="", flush=True)
+                        else:
+                            print(f"\r{frames[idx % 4]}", end="", flush=True)
                         idx += 1
                         time.sleep(0.3)
                 
@@ -244,15 +302,20 @@ class Captioner(MemoryMixin):
                 finally:
                     # Stop loading animation
                     loading_stop.set()
-                    loading_thread.join(timeout=0.5)
+                    loading_thread.join(timeout=2.0)  # Increased timeout
+                    if loading_thread.is_alive():
+                        # Force clear animation remnants if thread still running
+                        with self.print_lock:
+                            print("\r" + " " * 80 + "\r", end="")
                 
                 if reflection and len(reflection.strip()) > 10:
                     # Format reflection with timestamp like captions
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     formatted_reflection = f"[{timestamp}] REFLECTION: {reflection}"
                     
-                    print(f"\r{formatted_reflection}")
-                    print()  # Add blank line after reflection
+                    with self.print_lock:
+                        print("\r" + " " * 80 + "\r", end="")  # Clear line
+                        print(formatted_reflection)  # Thread-safe reflection print
                     
                     log_json_entry(
                         LogType.REFLECTION,
@@ -278,7 +341,11 @@ class Captioner(MemoryMixin):
                     self.observe(reflection, self.current_mood, img_path, memory_type="reflection")
                 else:
                     # Clear animation line for short reflection message
-                    print(f"\r[REFLECTION] Generated reflection too short, skipping")
+                    with self.print_lock:
+                        print("\r" + " " * 80 + "\r", end="")
+                        print("[REFLECTION] Generated reflection too short, skipping")
+                    # Update timer even for short reflections to prevent continuous retries
+                    self.last_reason_time = now
                         
             except Exception as e:
                 print(f"[REFLECTION] Error during reflection: {e}")
@@ -288,7 +355,10 @@ class Captioner(MemoryMixin):
         # Debug: Check drawing interval condition
         time_since_last_drawing = now - self.last_drawing_time
         if time_since_last_drawing > DRAWING_INTERVAL:
-            print(f"\r[DEBUG] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...")
+            with self.print_lock:
+                print("\r" + " " * 80 + "\r", end="")
+                if not PRINT_CLEAN_CAPTIONS:
+                    print(f"[DEBUG] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...")
             
             memory_context = self.get_recent_memory()
             reflection_context = self.get_last_reflection()
@@ -301,7 +371,11 @@ class Captioner(MemoryMixin):
                 frames = [" ", ".", "..", "..."]
                 idx = 0
                 while not loading_stop.is_set():
-                    print(f"\r{frames[idx % 4]}", end="", flush=True)
+                    if hasattr(self, 'print_lock'):
+                        with self.print_lock:
+                            print(f"\r{frames[idx % 4]}", end="", flush=True)
+                    else:
+                        print(f"\r{frames[idx % 4]}", end="", flush=True)
                     idx += 1
                     time.sleep(0.3)
             
@@ -310,24 +384,44 @@ class Captioner(MemoryMixin):
             
             try:
                 prompt = self.model.generate_drawing_prompt(extra=extra_context)
-                print(f"\r[DEBUG] Drawing prompt generated: {prompt[:50]}...")
+                with self.print_lock:
+                    print("\r" + " " * 80 + "\r", end="")
+                    if not PRINT_CLEAN_CAPTIONS:
+                        print(f"[DEBUG] Drawing prompt generated: {prompt[:50]}...")
+                    else:
+                        # Show FULL drawing prompt when clean captions enabled
+                        print(f"\n[DRAWING PROMPT]\n{prompt}\n")
             except Exception as e:
-                print(f"\r[DEBUG] Error generating drawing prompt: {e}")
+                with self.print_lock:
+                    print("\r" + " " * 80 + "\r", end="")
+                    print(f"[DEBUG] Error generating drawing prompt: {e}")
                 prompt = "[ERROR] Drawing prompt generation failed"
             finally:
-                # Stop loading animation
+                # Stop loading animation and wait for it to fully terminate
                 loading_stop.set()
-                loading_thread.join(timeout=0.5)
+                loading_thread.join(timeout=2.0)  # Increased timeout
+                if loading_thread.is_alive():
+                    # Force clear animation remnants if thread still running
+                    with self.print_lock:
+                        print("\r" + " " * 80 + "\r", end="")
             
             # Format drawing prompt with timestamp like captions and reflections
             timestamp = datetime.now().strftime("%H:%M:%S")
             formatted_prompt = f"[{timestamp}] DRAWING: {prompt}"
             
-            print(f"\r{formatted_prompt}")
-            print()  # Add blank line after drawing prompt
+            with self.print_lock:
+                print("\r" + " " * 80 + "\r", end="")
+                print(formatted_prompt)
             
-            self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
-            self.last_drawing_time = now
+            # Only update timer if drawing system is ready (not in cooldown)
+            if self.drawing.ready_to_draw():
+                if "[ERROR]" not in prompt:
+                    self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
+                self.last_drawing_time = now
+            else:
+                # In cooldown, don't spam drawing attempts
+                cooldown_remaining = self.drawing.cooldown - (time.time() - self.drawing.last_drawing_time)
+                self.last_drawing_time = now - DRAWING_INTERVAL + cooldown_remaining + 30  # Retry after cooldown + 30s
 
     def describe_current_mood(self) -> str:
         """Rich emotional description using 3D mood state and temporal context."""
@@ -475,22 +569,20 @@ class Captioner(MemoryMixin):
         # Build internal awakening context
         awakening_parts = []
         
-        # Calculate actual time gap from most recent data
-        if hasattr(self, 'timeline') and self.timeline and len(self.timeline) > 0:
-            last_entry_time = self.timeline[-1].get("ts", 0)
-            if last_entry_time > 0:
-                gap_seconds = time.time() - last_entry_time
-                gap_hours = gap_seconds / 3600
-                
-                if gap_hours < 1:
-                    awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds/60)} minutes.")
-                elif gap_hours < 48:  # Less than 2 days
-                    awakening_parts.append(f"Consciousness returning... I was offline for {gap_hours:.1f} hours.")
-                else:  # Multiple days
-                    gap_days = gap_hours / 24
-                    awakening_parts.append(f"Consciousness returning... I was offline for {gap_days:.1f} days.")
-            else:
-                awakening_parts.append("Consciousness returning... I was briefly offline...")
+        # Use the properly calculated time gap from state manager
+        if hasattr(self, 'last_session_gap') and self.last_session_gap is not None:
+            gap_seconds = self.last_session_gap
+            gap_hours = gap_seconds / 3600
+            
+            if gap_seconds < 60:
+                awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds)} seconds.")
+            elif gap_hours < 1:
+                awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds/60)} minutes.")
+            elif gap_hours < 48:  # Less than 2 days
+                awakening_parts.append(f"Consciousness returning... I was offline for {gap_hours:.1f} hours.")
+            else:  # Multiple days
+                gap_days = gap_hours / 24
+                awakening_parts.append(f"Consciousness returning... I was offline for {gap_days:.1f} days.")
         else:
             awakening_parts.append("First awakening... consciousness beginning...")
         

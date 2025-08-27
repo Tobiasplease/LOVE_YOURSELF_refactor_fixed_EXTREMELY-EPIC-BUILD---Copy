@@ -53,39 +53,11 @@ class MoodEngine:
             if similar_memories:
                 emotional_context += f" | Similar emotional memories: {' | '.join(similar_memories[:2])}"
 
-        # Use the sophisticated 3D mood analysis (now includes recursive feedback and memory)
-        new_valence, new_arousal, new_clarity = self.analyze_3d_mood_with_ollama(caption, emotional_context, temporal_feeling)
+        # Simple mood analysis for backward compatibility
+        scalar_mood = self._get_simple_mood_analysis(caption)
         
-        # Apply emotional momentum - new emotions build on previous ones
-        prev_v, prev_a, prev_c = self.mood_vector
-        
-        # Add natural emotional decay toward neutral over time - reduced for more dynamic moods
-        time_since_start = time.time() - self.session_start
-        decay_factor = min(0.08, time_since_start / 1800.0 * 0.03)  # Max 8% decay, slower pull to neutral
-        
-        # Apply decay toward neutral (0, 0, 0)
-        prev_v = prev_v * (1 - decay_factor) if abs(prev_v) > 0.1 else prev_v
-        prev_a = prev_a * (1 - decay_factor) if abs(prev_a) > 0.1 else prev_a
-        prev_c = prev_c * (1 - decay_factor) if abs(prev_c) > 0.1 else prev_c
-        
-        # Reduce emotional momentum slightly over time to prevent lock-in
-        adjusted_momentum = self.emotional_momentum * (1 - decay_factor * 0.5)
-        
-        # Smooth emotional transitions using adjusted momentum
-        valence = (new_valence * (1 - adjusted_momentum)) + (prev_v * adjusted_momentum)
-        arousal = (new_arousal * (1 - adjusted_momentum)) + (prev_a * adjusted_momentum)
-        clarity = (new_clarity * (1 - adjusted_momentum)) + (prev_c * adjusted_momentum)
-        
-        # Update mood vector with momentum-smoothed emotions
-        self.previous_mood_vector = self.mood_vector
-        self.mood_vector = (
-            np.clip(valence, -1.0, 1.0),
-            np.clip(arousal, -1.0, 1.0), 
-            np.clip(clarity, -1.0, 1.0)
-        )
-        
-        # Convert 3D mood to scalar for backward compatibility
-        scalar_mood = self.convert_3d_to_scalar(valence, arousal, clarity)
+        # Keep simple mood vector for hand controller compatibility
+        self.mood_vector = (scalar_mood - 0.5, 0.0, 0.0)  # Convert 0-1 to -0.5 to 0.5
         
         # Apply unified pattern analysis (motifs + novelty)
         pattern_data = self.pattern_engine.analyze_caption(caption)
@@ -93,7 +65,7 @@ class MoodEngine:
         self._last_novelty = novelty  # Store for external access
         traditional_change = self.compute_mood_change(novelty, saw_person)
         
-        # Combine 3D analysis with traditional factors
+        # Combine simple analysis with traditional factors
         self.current_mood = np.clip(scalar_mood + traditional_change, 0.0, 1.0)
 
         log_mood(caption, self.current_mood, traditional_change, image_path=image_path)
@@ -179,6 +151,12 @@ class MoodEngine:
             change -= 0.02  # Even more decay
             
         return change
+    
+    def _get_simple_mood_analysis(self, caption: str) -> float:
+        """Simple sentiment analysis for backward compatibility - just returns 0.5 (neutral)."""
+        # The real emotional understanding now comes from compression system sentiment
+        # This just maintains compatibility with hand controller and legacy systems
+        return 0.5
 
     def analyze_caption_sentiment(self, caption: str) -> float:
         """Analyze sentiment from caption content using keyword matching."""

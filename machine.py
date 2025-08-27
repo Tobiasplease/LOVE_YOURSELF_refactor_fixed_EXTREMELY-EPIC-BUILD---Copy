@@ -469,9 +469,13 @@ debug_print("System initialization complete", "INIT")
 
 best_box = None
 
+# Track last printed caption timestamp to prevent duplicates
+last_printed_caption_time = 0.0
+last_state_save_time = 0.0
+
 
 def mood_update_thread(frame, timestamp):
-    global last_snapshot_time, best_box
+    global last_snapshot_time, best_box, last_printed_caption_time, last_state_save_time
     debug_print("Mood update thread started", "MOOD")
     now = time.time()
     if now - last_snapshot_time >= 10:
@@ -502,15 +506,17 @@ def mood_update_thread(frame, timestamp):
                 clean_caption = captioner.last_caption
                 if clean_caption.lower().startswith("caption:"):
                     clean_caption = clean_caption[len("caption:") :].strip()
-                # Lightbulb ease on caption print
+                # Lightbulb boost on caption print
                 if USE_LIGHTBULB_PWM and lightbulb:
                     try:
-                        lightbulb.ease(duration=0.6, brightness=180)
+                        lightbulb.caption_boost(duration=600)
                     except Exception as e:
-                        print(f"Lightbulb PWM ease failed: {e}")
+                        print(f"Lightbulb caption boost failed: {e}")
 
-                if PRINT_CLEAN_CAPTIONS:
+                # Only print if this is a genuinely new caption
+                if PRINT_CLEAN_CAPTIONS and captioner.last_caption_time > last_printed_caption_time:
                     print(f"\n{clean_caption}\n")
+                    last_printed_caption_time = captioner.last_caption_time
 
                 # Generate embodied temporal feeling for mood analysis
                 current_emotion = mood_engine.get_emotion_for_hand_controller()
@@ -520,6 +526,24 @@ def mood_update_thread(frame, timestamp):
                     clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling
                 )
                 debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
+                
+                # Update lightbulb mood parameters
+                if USE_LIGHTBULB_PWM and lightbulb:
+                    try:
+                        mood_speed = 0.2 + (current_mood * 0.6)  # 0.2 to 0.8
+                        mood_randomness = current_mood * 0.3     # 0 to 0.3
+                        lightbulb.update_mood(mood_speed, mood_randomness)
+                    except Exception as e:
+                        print(f"Lightbulb mood update failed: {e}")
+
+                # Periodic state saving (every 2 minutes)
+                if now - last_state_save_time > 120:  # 2 minutes
+                    if _global_state_manager:
+                        try:
+                            _global_state_manager.save_session_state(captioner, mood_engine)
+                            last_state_save_time = now
+                        except Exception as e:
+                            print(f"[ERROR] Periodic state save failed: {e}")
 
                 # Update hand controller with new emotional state
                 emotion = mood_engine.get_emotion_for_hand_controller()
@@ -565,24 +589,41 @@ try:
         frame = cv2.resize(frame, (320, 240))
         frame = cv2.flip(frame, 1)
 
-        # === RAW FRAME DIFF FOR PWM ===
+        # === ENHANCED FRAME DIFF FOR PWM WITH FLUCTUATION ===
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if prev_gray is not None:
             diff = cv2.absdiff(prev_gray, gray)
-            diff_score = diff.mean() * LIGHTBULB_SENSITIVITY  # Range: 0-255, scaled
+            diff_score = diff.mean() * LIGHTBULB_SENSITIVITY
             max_diff = 50.0
             diff_score = max(0, min(max_diff, diff_score))
-            pwm_value = int((diff_score / max_diff) * 255)
-            alpha = 0.2  # Smoothing factor
-            smoothed_pwm = int(alpha * pwm_value + (1 - alpha) * smoothed_pwm)
-            if diff_score < 1:
-                smoothed_pwm = 0
-            # PWM debug print removed for silent operation
+            
+            # Base PWM from activity
+            base_pwm = int((diff_score / max_diff) * 255)
+            
+            # Smooth base value
+            alpha = 0.15  # Gentler smoothing
+            smoothed_pwm = int(alpha * base_pwm + (1 - alpha) * smoothed_pwm)
+            
+            # Set sensible minimum (not too high)
+            MIN_BRIGHTNESS = 18  # Higher baseline
+            MAX_BRIGHTNESS = 255
+            smoothed_pwm = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, smoothed_pwm))
+            
+            # Use Arduino-based high-frequency fluctuation
+            final_brightness = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, smoothed_pwm))
+            
             if USE_LIGHTBULB_PWM and lightbulb:
                 try:
-                    lightbulb.set_pwm(smoothed_pwm)
+                    # Only send if brightness changed significantly (reduce serial traffic)  
+                    if (not hasattr(lightbulb, '_last_base') or 
+                        abs(final_brightness - lightbulb._last_base) > 3 or
+                        not hasattr(lightbulb, '_last_send_time') or 
+                        time.time() - lightbulb._last_send_time > 0.1):  # Max 10fps updates
+                        lightbulb.set_base_brightness(final_brightness)
+                        lightbulb._last_base = final_brightness
+                        lightbulb._last_send_time = time.time()
                 except Exception as e:
-                    print(f"Lightbulb PWM send failed: {e}")
+                    print(f"Lightbulb base brightness failed: {e}")
         prev_gray = gray.copy()
 
         # Force garbage collection periodically to prevent memory accumulation
@@ -796,9 +837,12 @@ try:
                     try:
                         chaos_val = reactivity_metrics.get("chaos_multiplier", 0.3)
                         pwm_value = int(max(0, min(1, (chaos_val - 0.3) / 3.2)) * 255)
-                        lightbulb.set_pwm(pwm_value)
+                        # Use Arduino fluctuation for smoother mood-based lighting
+                        if not lightbulb.fluctuating or abs(pwm_value - getattr(lightbulb, '_last_mood_base', 0)) > 10:
+                            lightbulb.start_fluctuation(max(8, pwm_value), amplitude=5, speed=0.3)  # Slower mood fluctuation
+                            lightbulb._last_mood_base = pwm_value
                     except Exception as e:
-                        print(f"Lightbulb PWM send failed: {e}")
+                        print(f"Lightbulb fluctuation failed: {e}")
 
         # MEMORY FIX: Throttle camera display to prevent graphics memory exhaustion
         current_time = time.time()

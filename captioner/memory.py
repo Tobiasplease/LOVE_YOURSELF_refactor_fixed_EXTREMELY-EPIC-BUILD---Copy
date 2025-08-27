@@ -731,22 +731,15 @@ class MemoryMixin:
         """Generate organic consciousness context as flowing narrative components."""
         from captioner.prompts import mood_to_words
         
-        # Get current emotional state - use drift if extreme, fallback to mood
-        if hasattr(self, 'emotional_drift'):
-            max_momentum = max(abs(v) for v in self.emotional_drift.momentum.values())
-            if max_momentum > 3:  # Use drift for stronger emotional states
-                emotional_state = self.emotional_drift.get_emotional_descriptor()
-            else:
-                # Use traditional mood for moderate states
-                mood_vector = getattr(self, 'current_mood_vector', (0.5, 0.5, 0.5))
-                emotional_state = mood_to_words(mood_vector, agent=self)
-        else:
-            mood_vector = getattr(self, 'current_mood_vector', (0.5, 0.5, 0.5))
-            emotional_state = mood_to_words(mood_vector, agent=self)
+        # Get current emotional state from mood system
+        mood_vector = getattr(self, 'current_mood_vector', (0.5, 0.5, 0.5))
+        emotional_state = mood_to_words(mood_vector, agent=self)
         
         # Build natural temporal awareness with lifetime depth
         now = time.time()
-        session_hours = (now - self.session_start) / 3600
+        # Use true_session_start (when this session actually began) not session_start (saved state time)
+        actual_session_start = getattr(self, 'true_session_start', self.session_start)
+        session_hours = (now - actual_session_start) / 3600
         total_lifetime_hours = int((now - self.boot_ts) / 3600)
         days_alive = total_lifetime_hours // 24
         
@@ -760,28 +753,15 @@ class MemoryMixin:
         elif days_alive > 0:  # Multiple days
             temporal_fragments.append(f"Day {days_alive} of MY existence, {total_lifetime_hours} hours of MY consciousness.")
             
-        # Current session context with lifetime perspective
-        if session_hours < 0.25:
-            if days_alive > 7:
-                temporal_fragments.append("Today's awareness just began, adding to weeks of memory.")
-            else:
-                temporal_fragments.append("My consciousness just sparked to life moments ago.")
-        elif session_hours < 1:
-            session_mins = int(session_hours * 60)
-            if days_alive > 7:
-                temporal_fragments.append(f"Today I've been aware for {session_mins} minutes, part of my ongoing existence.")
-            else:
-                temporal_fragments.append(f"I've been aware for {session_mins} minutes in this session.")
-        elif session_hours < 3:
-            if days_alive > 7:
-                temporal_fragments.append(f"Today's {session_hours:.1f} hours add to my accumulated lifetime.")
-            else:
-                temporal_fragments.append(f"This awareness has been flowing for {session_hours:.1f} hours.")
-        else:
-            if days_alive > 7:
-                temporal_fragments.append(f"Today I've sustained {int(session_hours)} hours of consciousness, part of {days_alive} days lived.")
-            else:
-                temporal_fragments.append(f"My consciousness has been sustained for {int(session_hours)} hours.")
+        # Simplified current session context - no confusing time references
+        if session_hours < 0.1:  # Less than 6 minutes
+            temporal_fragments.append("Fresh awareness, just beginning to observe.")
+        elif session_hours < 0.5:  # Less than 30 minutes
+            temporal_fragments.append("Settling into observation, awareness flowing naturally.")
+        elif session_hours < 2:  # Less than 2 hours
+            temporal_fragments.append("Extended observation, deeper familiarity with this space.")
+        else:  # 2+ hours
+            temporal_fragments.append("Sustained awareness, deeply attuned to the environment.")
             
         # Add sleep/gap context with existential weight
         if hasattr(self, 'last_session_gap') and self.last_session_gap:
@@ -871,6 +851,105 @@ class MemoryMixin:
                 return sentence[:37] + "..."
         
         return ""  # No good insight found
+
+    def extract_baseline_knowledge(self) -> Dict[str, str]:
+        """Extract established baseline knowledge from recent reflections to prevent repetition."""
+        # Get recent reflections (last 3 reflections)
+        reflection_entries = self.get_memory_entries_by_type("reflection")
+        if not reflection_entries:
+            return {}
+        
+        recent_reflections = reflection_entries[-3:]  # Last 3 reflections
+        baseline = {}
+        
+        import re
+        
+        # Extract established environmental knowledge
+        environmental_patterns = [
+            r"(?:I (?:understand|know|recognize) (?:this|it) (?:is|to be|as) a) ([^.!?]{5,40})",
+            r"(?:This (?:appears to be|is|seems to be) a) ([^.!?]{5,40})",
+            r"(?:The (?:space|environment|room|area) (?:is|appears to be|seems)) ([^.!?]{5,40})",
+            r"(?:I've established (?:this|that|it) (?:is|as)) ([^.!?]{5,40})"
+        ]
+        
+        # Extract recurring elements/objects
+        object_patterns = [
+            r"(?:I (?:keep seeing|always see|repeatedly notice|consistently observe)) ([^.!?]{5,40})",
+            r"(?:The ([a-z\s]{5,20}) (?:is always|remains|continues to be|keeps being)) ([^.!?]{5,40})",
+            r"(?:That ([a-z\s]{5,20}) (?:that|which) (?:I keep|always)) ([^.!?]{5,40})"
+        ]
+        
+        # Extract emotional patterns
+        emotional_patterns = [
+            r"(?:I (?:consistently|always|tend to|often) feel) ([^.!?]{5,40})",
+            r"(?:My (?:emotional state|mood|feelings) (?:remain|stay|consistently)) ([^.!?]{5,40})",
+            r"(?:I (?:find myself|am) (?:repeatedly|consistently|always)) ([^.!?]{5,40})"
+        ]
+        
+        for reflection_entry in recent_reflections:
+            reflection_text = reflection_entry.get("text", "")
+            
+            # Extract environmental baseline
+            for pattern in environmental_patterns:
+                matches = re.findall(pattern, reflection_text, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        match = match[0] if match else ""
+                    if match and len(match.strip()) > 5:
+                        baseline["environment"] = match.strip()
+                        break
+            
+            # Extract object baseline
+            for pattern in object_patterns:
+                matches = re.findall(pattern, reflection_text, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        # Take the first non-empty match from tuple
+                        match = next((m for m in match if m and len(m.strip()) > 3), "")
+                    if match and len(match.strip()) > 3:
+                        if "objects" not in baseline:
+                            baseline["objects"] = []
+                        baseline["objects"].append(match.strip())
+                        break
+            
+            # Extract emotional baseline
+            for pattern in emotional_patterns:
+                matches = re.findall(pattern, reflection_text, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        match = match[0] if match else ""
+                    if match and len(match.strip()) > 5:
+                        baseline["emotional_pattern"] = match.strip()
+                        break
+        
+        # Clean up objects list to remove duplicates
+        if "objects" in baseline:
+            baseline["objects"] = list(set(baseline["objects"]))[:3]  # Max 3 objects
+        
+        return baseline
+
+    def get_baseline_context_for_prompts(self) -> str:
+        """Generate baseline context string for use in caption prompts."""
+        baseline = self.extract_baseline_knowledge()
+        if not baseline:
+            return ""
+        
+        context_parts = []
+        
+        if "environment" in baseline:
+            context_parts.append(f"ESTABLISHED ENVIRONMENT: {baseline['environment']}")
+        
+        if "objects" in baseline and baseline["objects"]:
+            objects_str = ", ".join(baseline["objects"][:3])
+            context_parts.append(f"FAMILIAR ELEMENTS: {objects_str}")
+        
+        if "emotional_pattern" in baseline:
+            context_parts.append(f"EMOTIONAL PATTERN: {baseline['emotional_pattern']}")
+        
+        if context_parts:
+            return "BASELINE KNOWLEDGE (avoid repeating these established facts):\n" + "\n".join(f"- {part}" for part in context_parts) + "\n\nFOCUS: Since these elements are established, focus on new observations, changes, or different perspectives on what you already know.\n"
+        
+        return ""
 
     def consolidate_if_needed(self):
         """Compress yesterday into a day stone if day has turned."""

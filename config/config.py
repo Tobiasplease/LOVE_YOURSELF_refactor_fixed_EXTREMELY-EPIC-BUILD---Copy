@@ -1,4 +1,4 @@
-LIGHTBULB_SENSITIVITY = 2.0  # Default sensitivity for frame diff to PWM mapping
+LIGHTBULB_SENSITIVITY = 1.5  # Default sensitivity for frame diff to PWM mapping
 import os
 
 from config.prompt_templates import *  # noqa: F401
@@ -82,8 +82,8 @@ EXECUTE_GRBL_GCODE = False
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
-REASON_INTERVAL = 360  # seconds between reflections
-DRAWING_INTERVAL = 360  # seconds between drawing triggers (6 minutes)
+REASON_INTERVAL = 420  # seconds between reflections (7 minutes)
+DRAWING_INTERVAL = 600  # seconds between drawing triggers (10 minutes)
 DRAWING_COOLDOWN = 180  # seconds between drawings
 
 # === OBJECT DETECTION ===

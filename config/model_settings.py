@@ -41,7 +41,9 @@ MODEL_GENERATION_OPTIONS = {
             "The walls are", "appears to be", "seems to be",
             # Block image analysis language
             "in the image", "in the picture", "in this image", "in this picture",
+            "in the photo", "in this photo", "the photo shows", "this photo",
             "the image shows", "the picture shows", "this image", "this picture",
+            "captured in", "photograph of", "photo of", "picture of",
             # Block formal writing patterns  
             "As I gaze", "As I look", "As I observe", "As I contemplate",
             "brings a sense", "brings a depth", "seems to resonate",

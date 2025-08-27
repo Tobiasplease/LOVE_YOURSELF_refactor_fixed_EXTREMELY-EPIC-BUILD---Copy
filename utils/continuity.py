@@ -183,8 +183,9 @@ def get_temporal_feeling(start_time, current_emotion: str = "calm_observant", sc
         state += ", with a subtle restlessness"
     
     return state
-    
-    return feeling
+
+
+def describe_sleep_duration(last_activity_time):
     """
     Describe how long the system was asleep.
     
