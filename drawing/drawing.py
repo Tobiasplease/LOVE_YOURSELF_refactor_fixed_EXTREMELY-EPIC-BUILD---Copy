@@ -33,7 +33,7 @@ class DrawingController:
     """Decides when to draw and queues ComfyUI jobs."""
 
     def __init__(self) -> None:
-        self.last_drawing_time: float = 0.0
+        self.last_drawing_time: float = time.time()  # Initialize to current time to prevent immediate trigger
         self.cooldown: float = DRAWING_COOLDOWN  # seconds between drawings
         self.last_prompt: Optional[str] = None
         self.last_drawing_prompt: str = ""
