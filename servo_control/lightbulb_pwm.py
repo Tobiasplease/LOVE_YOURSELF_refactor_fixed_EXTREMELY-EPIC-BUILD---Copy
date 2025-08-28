@@ -1,16 +1,19 @@
 import serial
 
+
 class LightbulbController:
     def flicker(self, duration=0.2, brightness=255):
         """Flash bulb to full brightness for a short duration."""
         self.set_pwm(brightness)
         import time
+
         time.sleep(duration)
         self.set_pwm(0)
 
     def ease(self, duration=0.5, brightness=255, steps=20):
         """Ease bulb to brightness and back over duration."""
         import time
+
         interval = duration / (2 * steps)
         # Fade in
         for i in range(steps):
@@ -22,6 +25,7 @@ class LightbulbController:
             val = int((steps - i - 1) * brightness / steps)
             self.set_pwm(val)
             time.sleep(interval)
+
     def __init__(self, port, baudrate=9600):
         self.ser = serial.Serial(port, baudrate, timeout=1)
         self.fluctuating = False

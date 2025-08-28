@@ -84,7 +84,9 @@ class MultimodalModel:
                 print_message=f"[🤔] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s",
             )
 
-            response = self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options, timeout=OLLAMA_TIMEOUT_REFLECTION, prompt_type="reflection")
+            response = self._call_ollama(
+                prompt, system_prompt=system_prompt, model_options=model_options, timeout=OLLAMA_TIMEOUT_REFLECTION, prompt_type="reflection"
+            )
 
             log_json_entry(
                 LogType.REFLECTION,

@@ -359,9 +359,9 @@ class MemoryMixin:
                         "action": "cleanup",
                         "motifs_removed": cleaned,
                         "remaining_motifs": len(self.motif_counter),
-                        "cleanup_threshold": 10  # Every 10 observations
+                        "cleanup_threshold": 10,  # Every 10 observations
                     },
-                    print_message=f"[🧹] Cleaned up {cleaned} irrelevant motifs"
+                    print_message=f"[🧹] Cleaned up {cleaned} irrelevant motifs",
                 )
 
         for motif, count in self.motif_counter.items():
@@ -778,8 +778,8 @@ class MemoryMixin:
             temporal_fragments.append("Sustained awareness, deeply attuned to the environment.")
 
         # Add sleep/gap context with existential weight
-        if hasattr(self, "last_session_gap") and self.last_session_gap:
-            gap_hours = self.last_session_gap / 3600
+        if hasattr(self, "last_session_gap") and self.last_session_gap:  # type: ignore
+            gap_hours = self.last_session_gap / 3600  # type: ignore
             if gap_hours > 24:
                 temporal_fragments.append(f"I returned after {gap_hours/24:.1f} days of non-existence.")
             elif gap_hours > 8:
@@ -960,7 +960,8 @@ class MemoryMixin:
             return (
                 "BASELINE KNOWLEDGE (avoid repeating these established facts):\n"
                 + "\n".join(f"- {part}" for part in context_parts)
-                + "\n\nFOCUS: Since these elements are established, focus on new observations, changes, or different perspectives on what you already know.\n"
+                + """\n\nFOCUS: Since these elements are established, focus on new observations, changes,
+                        or different perspectives on what you already know.\n"""
             )
 
         return ""
@@ -1333,10 +1334,10 @@ class MemoryMixin:
                         "component": "motif_scoring",
                         "error": str(e),
                         "error_type": type(e).__name__,
-                        "motif": motif if 'motif' in locals() else None,
-                        "context": context if 'context' in locals() else None
+                        "motif": motif if "motif" in locals() else None,
+                        "context": context if "context" in locals() else None,
                     },
-                    print_message=f"[❌] Background scoring error: {e}"
+                    print_message=f"[❌] Background scoring error: {e}",
                 )
                 continue
 
@@ -1348,12 +1349,7 @@ class MemoryMixin:
             # Queue is full, skip this scoring (prioritize real-time performance)
             log_json_entry(
                 LogType.MOTIF,
-                {
-                    "message": "Scoring queue full, skipping motif",
-                    "action": "queue_full_skip",
-                    "motif": motif,
-                    "context": context
-                },
-                print_message=f"[⚠️] Scoring queue full, skipping '{motif}'"
+                {"message": "Scoring queue full, skipping motif", "action": "queue_full_skip", "motif": motif, "context": context},
+                print_message=f"[⚠️] Scoring queue full, skipping '{motif}'",
             )
             pass
