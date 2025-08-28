@@ -137,7 +137,7 @@ class Captioner(MemoryMixin):
         img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{ts}.jpg")
         cv2.imwrite(img_path, frame)
 
-        skip_caption_print = False  # Track if we should skip printing
+        # skip_caption_print = False  # Track if we should skip printing
 
         # Start loading animation in separate thread
         import threading
@@ -296,18 +296,10 @@ class Captioner(MemoryMixin):
                             print("\r" + " " * 80 + "\r", end="")
 
                 if reflection and len(reflection.strip()) > 10:
-                    # Format reflection with timestamp like captions
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    formatted_reflection = f"[{timestamp}] REFLECTION: {reflection}"
-
-                    with self.print_lock:
-                        print("\r" + " " * 80 + "\r", end="")  # Clear line
-                        print(formatted_reflection)  # Thread-safe reflection print
-
                     log_json_entry(
                         LogType.REFLECTION,
                         {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
-                        print_message=f"[🤔] {reflection[:100]}{'...' if len(reflection) > 100 else ''}",
+                        print_message=f"[🤔] Reflection: {reflection}{'...' if len(reflection) > 100 else ''}",
                     )
                     self.last_reason_time = now
                     self.awakening_done = True
