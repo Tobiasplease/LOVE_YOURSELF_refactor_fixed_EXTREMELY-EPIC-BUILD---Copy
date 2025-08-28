@@ -276,7 +276,17 @@ class Captioner(MemoryMixin):
         time_since_reflection = now - self.last_reason_time
         if time_since_reflection > REASON_INTERVAL:
             if not PRINT_CLEAN_CAPTIONS:
-                print(f"[DEBUG] Reflection triggered! Time since last: {time_since_reflection:.0f}s > {REASON_INTERVAL}s")
+                log_json_entry(
+                    LogType.REFLECTION,
+                    {
+                        "message": "Reflection triggered",
+                        "action": "trigger",
+                        "time_since_last_reflection": time_since_reflection,
+                        "reason_interval": REASON_INTERVAL,
+                        "mood": self.current_mood
+                    },
+                    print_message=f"[🤔] Reflection triggered! Time since last: {time_since_reflection:.0f}s > {REASON_INTERVAL}s"
+                )
             try:
                 mood_text = self.describe_current_mood()
                 context = self.get_reflection_context()
@@ -345,12 +355,31 @@ class Captioner(MemoryMixin):
                     # Clear animation line for short reflection message
                     with self.print_lock:
                         print("\r" + " " * 80 + "\r", end="")
-                        print("[REFLECTION] Generated reflection too short, skipping")
+                    
+                    log_json_entry(
+                        LogType.REFLECTION,
+                        {
+                            "message": "Generated reflection too short, skipping",
+                            "action": "skip_short",
+                            "reflection_length": len(reflection),
+                            "mood": self.current_mood
+                        },
+                        print_message="[🤔] Generated reflection too short, skipping"
+                    )
                     # Update timer even for short reflections to prevent continuous retries
                     self.last_reason_time = now
 
             except Exception as e:
-                print(f"[REFLECTION] Error during reflection: {e}")
+                log_json_entry(
+                    LogType.ERROR,
+                    {
+                        "message": f"Error during reflection: {e}",
+                        "component": "reflection",
+                        "error_type": type(e).__name__,
+                        "mood": self.current_mood
+                    },
+                    print_message=f"[❌] Error during reflection: {e}"
+                )
                 # Still update the timer to prevent infinite retries
                 self.last_reason_time = now - REASON_INTERVAL + 60  # Retry in 60 seconds
 

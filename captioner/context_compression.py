@@ -35,11 +35,7 @@ class ContextCompressionEngine:
     def add_caption(self, caption: str, timestamp: float | None = None) -> None:
         """Add a new caption and trigger compression if needed."""
         if not caption or not caption.strip():
-            log_json_entry(
-                LogType.COMPRESSION,
-                {"message": "Skipping empty caption", "action": "skip"},
-                print_message="[🗜️] Skipping empty caption"
-            )
+            log_json_entry(LogType.COMPRESSION, {"message": "Skipping empty caption", "action": "skip"}, print_message="[🗜️] Skipping empty caption")
             return
 
         self.recent_captions.append({"text": caption, "timestamp": timestamp or time.time()})
@@ -92,7 +88,7 @@ class ContextCompressionEngine:
             log_json_entry(
                 LogType.COMPRESSION,
                 {"message": "Previous compression still running, skipping", "action": "skip_busy"},
-                print_message="[🗜️] Previous compression still running, skipping..."
+                print_message="[🗜️] Previous compression still running, skipping...",
             )
             return
         # Only queue compression if there are enough valid, non-empty captions
@@ -104,9 +100,9 @@ class ContextCompressionEngine:
                     "message": "Not enough valid captions to compress",
                     "action": "skip_insufficient",
                     "have_captions": len(valid_captions),
-                    "need_captions": self.compression_frequency
+                    "need_captions": self.compression_frequency,
                 },
-                print_message=f"[🗜️] Not enough valid captions to compress (have {len(valid_captions)}, need {self.compression_frequency})"
+                print_message=f"[🗜️] Not enough valid captions to compress (have {len(valid_captions)}, need {self.compression_frequency})",
             )
             return
         try:
@@ -116,18 +112,14 @@ class ContextCompressionEngine:
             self.compression_queue.put_nowait({"captions": captions_snapshot, "baseline": current_baseline, "timestamp": time.time()})
             log_json_entry(
                 LogType.COMPRESSION,
-                {
-                    "message": "Queued background compression",
-                    "action": "queue",
-                    "caption_count": len(captions_snapshot)
-                },
-                print_message="[🗜️] Queued background compression..."
+                {"message": "Queued background compression", "action": "queue", "caption_count": len(captions_snapshot)},
+                print_message="[🗜️] Queued background compression...",
             )
         except queue.Full:
             log_json_entry(
                 LogType.COMPRESSION,
                 {"message": "Queue full, skipping compression", "action": "queue_full"},
-                print_message="[🗜️] Queue full, skipping compression"
+                print_message="[🗜️] Queue full, skipping compression",
             )
 
     def _compression_worker(self) -> None:
@@ -151,7 +143,7 @@ class ContextCompressionEngine:
                 log_json_entry(
                     LogType.ERROR,
                     {"message": f"Compression worker error: {e}", "component": "compression"},
-                    print_message=f"[❌] Compression worker error: {e}"
+                    print_message=f"[❌] Compression worker error: {e}",
                 )
                 self.compression_active = False
 
@@ -165,12 +157,8 @@ class ContextCompressionEngine:
         if len(valid_captions) < 2:
             log_json_entry(
                 LogType.COMPRESSION,
-                {
-                    "message": "Not enough valid captions to compress",
-                    "action": "abort_insufficient",
-                    "caption_count": len(valid_captions)
-                },
-                print_message=f"[🗜️] Not enough valid captions to compress ({len(valid_captions)})"
+                {"message": "Not enough valid captions to compress", "action": "abort_insufficient", "caption_count": len(valid_captions)},
+                print_message=f"[🗜️] Not enough valid captions to compress ({len(valid_captions)})",
             )
             return
 
@@ -230,11 +218,11 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                             "message": "Updated baseline understanding",
                             "action": "update_baseline",
                             "understanding": understanding,
-                            "understanding_length": len(understanding)
+                            "understanding_length": len(understanding),
                         },
-                        print_message=f"[🧠] Updated baseline: {self.baseline_context[:80]}{'...' if len(self.baseline_context) > 80 else ''}"
+                        print_message=f"[🧠] Updated baseline: {self.baseline_context[:80]}{'...' if len(self.baseline_context) > 80 else ''}",
                     )
-                    
+
                     if PRINT_CLEAN_CAPTIONS:
                         print(f"\n[COMPRESSION - UNDERSTANDING]\n{self.baseline_context}\n")
 
@@ -250,11 +238,11 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                             "message": "Updated sentiment analysis",
                             "action": "update_sentiment",
                             "sentiment_text": sentiment_text,
-                            "sentiment_length": len(sentiment_text)
+                            "sentiment_length": len(sentiment_text),
                         },
-                        print_message=f"[😊] Sentiment: {sentiment_text[:60]}{'...' if len(sentiment_text) > 60 else ''}"
+                        print_message=f"[😊] Sentiment: {sentiment_text[:60]}{'...' if len(sentiment_text) > 60 else ''}",
                     )
-                    
+
                     if PRINT_CLEAN_CAPTIONS:
                         print(f"[COMPRESSION - SENTIMENT]\n{sentiment_text}\n")
             else:
@@ -263,20 +251,16 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                     {
                         "message": "Invalid or empty response from compression",
                         "action": "invalid_response",
-                        "response": str(response)[:200] if response else None
+                        "response": str(response)[:200] if response else None,
                     },
-                    print_message=f"[❌] Invalid or empty response: {str(response)[:50]}{'...' if response and len(str(response)) > 50 else ''}"
+                    print_message=f"[❌] Invalid or empty response: {str(response)[:50]}{'...' if response and len(str(response)) > 50 else ''}",
                 )
 
         except Exception as e:
             log_json_entry(
                 LogType.ERROR,
-                {
-                    "message": f"Compression failed: {e}",
-                    "component": "compression",
-                    "error_type": type(e).__name__
-                },
-                print_message=f"[❌] Compression failed: {e}"
+                {"message": f"Compression failed: {e}", "component": "compression", "error_type": type(e).__name__},
+                print_message=f"[❌] Compression failed: {e}",
             )
             # Keep previous baseline on failure
 
@@ -301,12 +285,8 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
         except Exception as e:
             log_json_entry(
                 LogType.ERROR,
-                {
-                    "message": f"Compression parse error: {e}",
-                    "component": "compression",
-                    "error_type": type(e).__name__
-                },
-                print_message=f"[❌] Compression parse error: {e}"
+                {"message": f"Compression parse error: {e}", "component": "compression", "error_type": type(e).__name__},
+                print_message=f"[❌] Compression parse error: {e}",
             )
 
         return understanding, sentiment_text
