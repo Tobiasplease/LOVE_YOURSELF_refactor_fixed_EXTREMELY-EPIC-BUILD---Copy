@@ -122,9 +122,8 @@ LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
-DEBUG_OLLAMA = False  # enable detailed Ollama debug output with prompt types and errors
+DEBUG_OLLAMA = True  # enable detailed Ollama debug output with prompt types and errors
 NO_HANDS = False
-DEBUG_VERBOSE = False  # enable verbose debug logging for all operations
 
 # === REACTIVITY PAUSE SYSTEM ===
 REACTIVITY_PAUSE_THRESHOLD = 0.30  # Activity level to trigger pause
