@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
 import importlib.util
 
-from config.config import LOG_TYPES_TO_PRINT, MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
+from config.config import LOG_TYPES_TO_PRINT, MOOD_SNAPSHOT_FOLDER
 from event_logging.log_type import LogType
 
 
@@ -290,31 +290,3 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
 
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(entries, f, indent=2, ensure_ascii=False)
-
-
-def log_ollama_api_call(
-    prompt: str,
-    model: str = OLLAMA_MODEL,
-    image_path: Optional[str] = None,
-    response: Optional[str] = None,
-    success: bool = True,
-    error_message: Optional[str] = None,
-    timeout: Optional[int] = None,
-    log_dir: str = "mood_snapshots",
-) -> str:
-    """
-    Legacy function for backward compatibility.
-    Redirects to the new ollama module's log_ollama_call function.
-    """
-    from utils.ollama import log_ollama_call
-
-    return log_ollama_call(
-        prompt=prompt,
-        model=model,
-        image_path=image_path,
-        response=response,
-        success=success,
-        error_message=error_message,
-        timeout=timeout,
-        log_dir=log_dir,
-    )
