@@ -98,7 +98,6 @@ def log_ollama_call(
 
     if DEBUG_OLLAMA_PROMPTS:
         debug_details = [" | ".join(call_details)]
-        debug_details = ["-" * 50]
 
         if system_prompt:
             debug_details.extend([f"[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}", system_prompt[:500] + "..." if len(system_prompt) > 500 else system_prompt])
