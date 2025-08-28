@@ -149,7 +149,7 @@ class DrawingController:
                     "drawing_prompt": drawing_prompt,
                     "reflection": (reflection or "").strip(),
                 },
-                print_message=f"[✨] Inspired! Creating artwork...",
+                print_message=f"[🎨] Inspired! Creating artwork...",
             )
 
             if latest_image and os.path.exists(latest_image):
