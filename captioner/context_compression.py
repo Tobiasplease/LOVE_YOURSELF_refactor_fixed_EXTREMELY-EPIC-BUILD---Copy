@@ -12,6 +12,8 @@ from collections import deque
 from config import config
 from utils.ollama import query_ollama
 from config.model_settings import get_model_options
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 
 
 class ContextCompressionEngine:
@@ -33,7 +35,11 @@ class ContextCompressionEngine:
     def add_caption(self, caption: str, timestamp: float | None = None) -> None:
         """Add a new caption and trigger compression if needed."""
         if not caption or not caption.strip():
-            print("[COMPRESSION] Skipping empty caption.")
+            log_json_entry(
+                LogType.COMPRESSION,
+                {"message": "Skipping empty caption", "action": "skip"},
+                print_message="[🗜️] Skipping empty caption"
+            )
             return
 
         self.recent_captions.append({"text": caption, "timestamp": timestamp or time.time()})
@@ -83,21 +89,46 @@ class ContextCompressionEngine:
     def _queue_compression(self) -> None:
         """Queue compression task (non-blocking)."""
         if self.compression_active:
-            print("[COMPRESSION] Previous compression still running, skipping...")
+            log_json_entry(
+                LogType.COMPRESSION,
+                {"message": "Previous compression still running, skipping", "action": "skip_busy"},
+                print_message="[🗜️] Previous compression still running, skipping..."
+            )
             return
         # Only queue compression if there are enough valid, non-empty captions
         valid_captions = [cap for cap in self.recent_captions if cap["text"] and cap["text"].strip()]
         if len(valid_captions) < self.compression_frequency:
-            print(f"[COMPRESSION] Not enough valid captions to compress (have {len(valid_captions)}, need {self.compression_frequency})")
+            log_json_entry(
+                LogType.COMPRESSION,
+                {
+                    "message": "Not enough valid captions to compress",
+                    "action": "skip_insufficient",
+                    "have_captions": len(valid_captions),
+                    "need_captions": self.compression_frequency
+                },
+                print_message=f"[🗜️] Not enough valid captions to compress (have {len(valid_captions)}, need {self.compression_frequency})"
+            )
             return
         try:
             # Copy current captions for background processing
             captions_snapshot = list(valid_captions)
             current_baseline = self.baseline_context
             self.compression_queue.put_nowait({"captions": captions_snapshot, "baseline": current_baseline, "timestamp": time.time()})
-            print("[COMPRESSION] Queued background compression...")
+            log_json_entry(
+                LogType.COMPRESSION,
+                {
+                    "message": "Queued background compression",
+                    "action": "queue",
+                    "caption_count": len(captions_snapshot)
+                },
+                print_message="[🗜️] Queued background compression..."
+            )
         except queue.Full:
-            print("[COMPRESSION] Queue full, skipping compression")
+            log_json_entry(
+                LogType.COMPRESSION,
+                {"message": "Queue full, skipping compression", "action": "queue_full"},
+                print_message="[🗜️] Queue full, skipping compression"
+            )
 
     def _compression_worker(self) -> None:
         """Background worker for LLM compression calls."""
@@ -117,7 +148,11 @@ class ContextCompressionEngine:
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"[COMPRESSION] Worker error: {e}")
+                log_json_entry(
+                    LogType.ERROR,
+                    {"message": f"Compression worker error: {e}", "component": "compression"},
+                    print_message=f"[❌] Compression worker error: {e}"
+                )
                 self.compression_active = False
 
     def _perform_compression(self, task: dict) -> None:
@@ -128,7 +163,15 @@ class ContextCompressionEngine:
         # Validate captions before processing
         valid_captions = [cap for cap in captions if cap.get("text") and cap["text"].strip()]
         if len(valid_captions) < 2:
-            print(f"[COMPRESSION] Not enough valid captions to compress ({len(valid_captions)})")
+            log_json_entry(
+                LogType.COMPRESSION,
+                {
+                    "message": "Not enough valid captions to compress",
+                    "action": "abort_insufficient",
+                    "caption_count": len(valid_captions)
+                },
+                print_message=f"[🗜️] Not enough valid captions to compress ({len(valid_captions)})"
+            )
             return
 
         captions = valid_captions  # Use only valid captions
@@ -181,10 +224,19 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                     # Show full compression output when clean captions enabled, or debug when not
                     from config.config import PRINT_CLEAN_CAPTIONS
 
+                    log_json_entry(
+                        LogType.COMPRESSION,
+                        {
+                            "message": "Updated baseline understanding",
+                            "action": "update_baseline",
+                            "understanding": understanding,
+                            "understanding_length": len(understanding)
+                        },
+                        print_message=f"[🧠] Updated baseline: {self.baseline_context[:80]}{'...' if len(self.baseline_context) > 80 else ''}"
+                    )
+                    
                     if PRINT_CLEAN_CAPTIONS:
                         print(f"\n[COMPRESSION - UNDERSTANDING]\n{self.baseline_context}\n")
-                    else:
-                        print(f"[COMPRESSION] Updated baseline: {self.baseline_context[:80]}...")
 
                 if sentiment_text:
                     # Store sentiment for injection into prompts
@@ -192,15 +244,40 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
 
                     from config.config import PRINT_CLEAN_CAPTIONS
 
+                    log_json_entry(
+                        LogType.COMPRESSION,
+                        {
+                            "message": "Updated sentiment analysis",
+                            "action": "update_sentiment",
+                            "sentiment_text": sentiment_text,
+                            "sentiment_length": len(sentiment_text)
+                        },
+                        print_message=f"[😊] Sentiment: {sentiment_text[:60]}{'...' if len(sentiment_text) > 60 else ''}"
+                    )
+                    
                     if PRINT_CLEAN_CAPTIONS:
                         print(f"[COMPRESSION - SENTIMENT]\n{sentiment_text}\n")
-                    else:
-                        print(f"[COMPRESSION] Sentiment: {sentiment_text[:60]}...")
             else:
-                print(f"[COMPRESSION] Invalid or empty response: {response}")
+                log_json_entry(
+                    LogType.COMPRESSION,
+                    {
+                        "message": "Invalid or empty response from compression",
+                        "action": "invalid_response",
+                        "response": str(response)[:200] if response else None
+                    },
+                    print_message=f"[❌] Invalid or empty response: {str(response)[:50]}{'...' if response and len(str(response)) > 50 else ''}"
+                )
 
         except Exception as e:
-            print(f"[COMPRESSION] Failed: {e}")
+            log_json_entry(
+                LogType.ERROR,
+                {
+                    "message": f"Compression failed: {e}",
+                    "component": "compression",
+                    "error_type": type(e).__name__
+                },
+                print_message=f"[❌] Compression failed: {e}"
+            )
             # Keep previous baseline on failure
 
     def _parse_combined_response(self, response: str) -> tuple:
@@ -222,7 +299,15 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                 sentiment_text = sentiment_match.group(1).strip()
 
         except Exception as e:
-            print(f"[COMPRESSION] Parse error: {e}")
+            log_json_entry(
+                LogType.ERROR,
+                {
+                    "message": f"Compression parse error: {e}",
+                    "component": "compression",
+                    "error_type": type(e).__name__
+                },
+                print_message=f"[❌] Compression parse error: {e}"
+            )
 
         return understanding, sentiment_text
 

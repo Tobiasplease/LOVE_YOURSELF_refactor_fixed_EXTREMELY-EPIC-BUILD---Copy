@@ -16,6 +16,7 @@ class LogType(Enum):
     CAPTION = "caption"
     REFLECTION = "reflection"
     # SENTIMENT = "sentiment_analysis"
+    COMPRESSION = "compression"
     OLLAMA_API_CALL = "ollama_api_call"
 
     # Drawing and creative process events
