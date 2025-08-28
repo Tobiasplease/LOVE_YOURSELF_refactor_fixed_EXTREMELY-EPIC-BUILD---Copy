@@ -9,10 +9,11 @@ memory retention, and identity evolution.
 import json
 import os
 import time
+import threading
 from typing import Dict, Any, Optional
 from datetime import datetime
 from utils.continuity import now, describe_duration
-from config.config import MOOD_SNAPSHOT_FOLDER
+from config.config import DRAWING_TIMEOUT, MOOD_SNAPSHOT_FOLDER
 from event_logging.log_type import LogType
 from event_logging.event_logger import log_json_entry
 
@@ -24,6 +25,7 @@ class StateManager:
         self.is_generating_drawing = False
         self.drawing_start_time = None
         self.current_drawing_prompt = None
+        self.timeout_timer = None
 
     def save_session_state(self, captioner, mood_engine, timekeeper=None) -> bool:
         """Save current session state for next startup."""
@@ -105,13 +107,8 @@ class StateManager:
             # Log session state save
             log_json_entry(
                 LogType.DEBUG,
-                {
-                    "message": "Session state saved",
-                    "action": "state_save",
-                    "file_path": self.state_file,
-                    "components_saved": len(state)
-                },
-                print_message=f"[💾] Session state saved to {self.state_file}"
+                {"message": "Session state saved", "action": "state_save", "file_path": self.state_file, "components_saved": len(state)},
+                print_message=f"[💾] Session state saved to {self.state_file}",
             )
             return True
 
@@ -234,9 +231,9 @@ class StateManager:
                     "save_datetime": save_datetime,
                     "session_gap_seconds": captioner.last_session_gap,
                     "beliefs_count": len(captioner.beliefs),
-                    "motifs_count": len(captioner.motif_counter)
+                    "motifs_count": len(captioner.motif_counter),
                 },
-                print_message=f"[🕐] State was saved at: {save_datetime}, gap: {captioner.last_session_gap:.1f} seconds"
+                print_message=f"[🕐] State was saved at: {save_datetime}, gap: {captioner.last_session_gap:.1f} seconds",
             )
 
             print(f"[SUCCESS] Restored captioner state: {len(captioner.beliefs)} beliefs, {len(captioner.motif_counter)} motifs")
@@ -307,14 +304,40 @@ class StateManager:
         except Exception as e:
             print(f"[WARNING] Failed to update lifetime stats: {e}")
 
+    def _timeout_callback(self) -> None:
+        """Called when timeout expires - automatically finish drawing generation."""
+        if self.is_generating_drawing:
+            print(f"[TIMEOUT] Drawing generation timed out after 5 minutes, auto-finishing")
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "Drawing generation timeout",
+                    "action": "drawing_timeout",
+                    "prompt": self.current_drawing_prompt,
+                    "duration": time.time() - self.drawing_start_time if self.drawing_start_time else None,
+                },
+                print_message=f"[⏰] Drawing generation timed out after 5 minutes",
+            )
+            self.finish_drawing_generation()
+
     def start_drawing_generation(self, prompt: str) -> None:
-        """Mark drawing generation as started."""
+        """Mark drawing generation as started with 5-minute timeout."""
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+
         self.is_generating_drawing = True
         self.drawing_start_time = time.time()
         self.current_drawing_prompt = prompt
 
+        self.timeout_timer = threading.Timer(DRAWING_TIMEOUT, self._timeout_callback)
+        self.timeout_timer.start()
+
     def finish_drawing_generation(self) -> None:
         """Mark drawing generation as finished."""
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
+
         self.is_generating_drawing = False
         self.drawing_start_time = None
         self.current_drawing_prompt = None

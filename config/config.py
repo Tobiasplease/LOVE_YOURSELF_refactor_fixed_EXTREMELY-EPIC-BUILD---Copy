@@ -68,6 +68,10 @@ COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
 TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black and white sketch line art ")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1))
 
+DRAWING_TIMEOUT = float(
+    os.getenv("DRAWING_TIMEOUT", 300.0)
+)  # if drawing generation takes longer than this, it will be auto-finished, something is wrong...
+
 # === SVG TO G-CODE SETTINGS ===
 # If True, run svg_centerliner on PNGs to create centerline SVGs, then convert to G-code
 # If False, convert the latest SVG in output folder to G-code
