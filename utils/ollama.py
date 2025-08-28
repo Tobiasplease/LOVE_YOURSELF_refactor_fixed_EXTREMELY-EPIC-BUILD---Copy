@@ -4,10 +4,36 @@ import base64
 import json
 import requests
 from typing import Optional, Union
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS, DEBUG_OLLAMA
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.progress_bar import ProgressBar
+
+
+def _detect_prompt_type(prompt: str, system_prompt: Optional[str] = None, image_path: Optional[str] = None) -> tuple[str, str]:
+    """Detect the type of prompt and return appropriate emoji."""
+    prompt_lower = prompt.lower()
+    system_lower = system_prompt.lower() if system_prompt else ""
+    
+    # Determine prompt type based on content
+    if "reflection" in prompt_lower or "reflect" in prompt_lower or "reasoning" in system_lower:
+        return "reflection", "🤔"
+    elif "drawing" in prompt_lower or "prompt" in prompt_lower or "artwork" in prompt_lower:
+        return "drawing", "🎨"
+    elif "awakening" in prompt_lower or "consciousness" in prompt_lower or "offline" in prompt_lower:
+        return "awakening", "🌅"
+    elif "compression" in system_lower or "understand" in prompt_lower or "baseline" in prompt_lower:
+        return "compression", "🧠"
+    elif "sentiment" in prompt_lower or "emotion" in prompt_lower:
+        return "sentiment", "😊"
+    elif "motif" in prompt_lower or "score" in prompt_lower or "number" in system_lower:
+        return "motif_scoring", "📊"
+    elif image_path and ("caption" in prompt_lower or "describe" in prompt_lower or "see" in prompt_lower):
+        return "vision", "👁️"
+    elif image_path:
+        return "vision", "📸"
+    else:
+        return "general", "💭"
 
 
 def log_ollama_call(
@@ -59,8 +85,47 @@ def log_ollama_call(
         "api_endpoint": "http://localhost:11434/api/generate",
     }
 
+    # Detect prompt type and get appropriate emojis
+    prompt_type, type_emoji = _detect_prompt_type(prompt, system_prompt, image_path)
+    
+    # Add prompt type to data
+    data["prompt_type"] = prompt_type
+    
+    # Basic status message
     status_emoji = "🤖" if success else "❌"
-    print_message = f"[{status_emoji}] Ollama {model}: {success if success else 'Failed'}"
+    basic_message = f"[{status_emoji}] Ollama {model}: {'Success' if success else 'Failed'}"
+    
+    # Enhanced debug message when DEBUG_OLLAMA is enabled
+    if DEBUG_OLLAMA:
+        debug_parts = [f"[🤖{type_emoji}] {prompt_type.title()} prompt -> {model}"]
+        
+        if success:
+            debug_parts.append(f"✅ Success ({len(response)} chars)" if response else "✅ Success")
+            if timeout:
+                debug_parts.append(f"⏱️ {timeout}s timeout")
+        else:
+            debug_parts.append(f"❌ Failed: {error_message}" if error_message else "❌ Failed")
+            
+        if image_path:
+            debug_parts.append("📸 with image")
+            
+        print_message = " | ".join(debug_parts)
+    else:
+        print_message = basic_message
+        
+    # Always include error in data and print if there was one
+    if error_message and not success:
+        log_json_entry(
+            LogType.ERROR,
+            {
+                "message": f"Ollama API error in {prompt_type} prompt",
+                "error": error_message,
+                "model": model,
+                "prompt_type": prompt_type,
+                "timeout": timeout
+            },
+            print_message=f"[❌🤖] Ollama {prompt_type} error: {error_message}"
+        )
 
     return log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir, print_message=print_message)
 
