@@ -97,6 +97,9 @@ NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
 VISUAL_CHANGE_THRESHOLD = 1.0  # novelty score threshold for triggering change-focused prompts (0.0-1.0) - disabled for now
 
 # === TINYLLAMA SETTINGS ===
+MOTIF_MODEL = "tinyllama:latest"
+# MOTIF_MODEL = OLLAMA_MODEL
+
 TINYLLAMA_TEMPERATURE = 0.1  # Low temperature for consistent numeric output
 TINYLLAMA_TOP_P = 0.8  # Top-p sampling for TinyLlama
 TINYLLAMA_NUM_PREDICT = 5  # Very short - just a number like "0.7"
@@ -105,7 +108,7 @@ TINYLLAMA_TIMEOUT = 20  # Timeout in seconds for TinyLlama queries
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
 # --- Mistral LLM settings ---
-MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts
+# MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts
 MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 
 # === OLLAMA SETTINGS ===
@@ -116,9 +119,10 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 
 # === OUTPUT SETTINGS ===
 # Control which log types are printed to console
-LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
+# LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
 # To see debug information, add "debug" to LOG_TYPES_TO_PRINT
-# LOG_TYPES_TO_PRINT = []
+LOG_TYPES_TO_PRINT = ["all"]
+
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages

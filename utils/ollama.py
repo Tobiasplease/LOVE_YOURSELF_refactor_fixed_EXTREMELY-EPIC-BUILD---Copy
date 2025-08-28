@@ -118,8 +118,8 @@ def log_ollama_call(
     if DEBUG_OLLAMA_PROMPTS:
         debug_details = [" | ".join(call_details)]
 
-        if system_prompt:
-            debug_details.extend([f"[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}", truncate_for_print(system_prompt, 500)])
+        # if system_prompt:
+        #     debug_details.extend([f"[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}", truncate_for_print(system_prompt, 500)])
 
         debug_details.extend([f"\n[🤖📝] {prompt_type.title()} PROMPT:\n{'-' * 50}", truncate_for_print(prompt, 1000), "-" * 50])
 

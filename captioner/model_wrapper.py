@@ -7,6 +7,7 @@ import re
 from typing import Optional
 from config.config import (
     MOOD_SNAPSHOT_FOLDER,
+    MOTIF_MODEL,
     OLLAMA_MODEL,
     TINYLLAMA_TEMPERATURE,
     TINYLLAMA_TOP_P,
@@ -126,7 +127,7 @@ class MultimodalModel:
         try:
             response = query_ollama(
                 prompt=prompt,
-                model="tinyllama:latest",
+                model=MOTIF_MODEL,
                 timeout=TINYLLAMA_TIMEOUT,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 system_prompt="You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number.",
