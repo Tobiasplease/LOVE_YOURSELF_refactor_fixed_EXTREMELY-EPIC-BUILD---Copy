@@ -198,7 +198,7 @@ class MemoryMixin:
             self.motif_first_seen[motif] = now_time
         self.motif_last_seen[motif] = now_time
         self.current_motifs.add(motif)
-        
+
         # Only score with TinyLlama if we haven't scored this motif before
         if motif not in self.motif_confidence:
             context = " | ".join(list(self.current_motifs)[-3:])
@@ -214,14 +214,15 @@ class MemoryMixin:
         if not hasattr(self, "motif_weights"):
             self.motif_weights = {}
         freq = self.motif_counter[motif]
-        
+
         # Use logarithmic frequency dampening to allow novel observations to compete
         # Novel motif (freq=1, score=0.9): weight = 0.9 / log(2) = 1.3
         # Common motif (freq=20, score=0.4): weight = 0.4 / log(21) = 0.13
         import math
+
         frequency_dampener = math.log(freq + 1)
         self.motif_weights[motif] = score / frequency_dampener
-        
+
         # Motif weighted: freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}
         # Store confidence as score for now
         self.motif_confidence[motif] = score
@@ -333,7 +334,7 @@ class MemoryMixin:
                             self.motif_last_seen[lemma] = now()
                             self.current_motifs.add(lemma)
                             continue
-                        
+
                         self.absorb_motif(lemma)
 
     def get_motif_certainty(self, motif: str) -> float:
@@ -695,22 +696,22 @@ class MemoryMixin:
             lines.insert(1, sleep_context)  # Insert sleep after lifetime, before session
 
         return lines
-    
+
     def get_motif_temporal_context(self) -> Dict[str, List[str]]:
         """Separate motifs into present (recently seen) vs memory (distant past)."""
         now = time.time()
-        
+
         # Define temporal boundaries
         RECENT_THRESHOLD = 300  # 5 minutes = present/immediate memory
         SESSION_THRESHOLD = 3600  # 1 hour = current session
-        
-        present_motifs = []      # Seen in last 5 minutes
-        session_motifs = []      # Seen in current session but not recently  
-        distant_motifs = []      # From previous sessions/distant past
-        
+
+        present_motifs = []  # Seen in last 5 minutes
+        session_motifs = []  # Seen in current session but not recently
+        distant_motifs = []  # From previous sessions/distant past
+
         for motif, last_seen in self.motif_last_seen.items():
             time_since = now - last_seen
-            
+
             if time_since <= RECENT_THRESHOLD:
                 present_motifs.append(motif)
             elif time_since <= SESSION_THRESHOLD:
@@ -718,41 +719,42 @@ class MemoryMixin:
             else:
                 # Add temporal description for distant motifs
                 from utils.continuity import describe_time_gap
+
                 time_desc = describe_time_gap(last_seen)
                 distant_motifs.append(f"{motif} ({time_desc})")
-        
+
         return {
-            "present": present_motifs,      # What I can see now
-            "session": session_motifs,      # What I saw earlier today
-            "memory": distant_motifs        # What I remember from before
+            "present": present_motifs,  # What I can see now
+            "session": session_motifs,  # What I saw earlier today
+            "memory": distant_motifs,  # What I remember from before
         }
-    
+
     def get_dynamic_system_context(self) -> dict:
         """Generate organic consciousness context as flowing narrative components."""
         from captioner.prompts import mood_to_words
-        
+
         # Get current emotional state from mood system
-        mood_vector = getattr(self, 'current_mood_vector', (0.5, 0.5, 0.5))
+        mood_vector = getattr(self, "current_mood_vector", (0.5, 0.5, 0.5))
         emotional_state = mood_to_words(mood_vector, agent=self)
-        
+
         # Build natural temporal awareness with lifetime depth
         now = time.time()
         # Use true_session_start (when this session actually began) not session_start (saved state time)
-        actual_session_start = getattr(self, 'true_session_start', self.session_start)
+        actual_session_start = getattr(self, "true_session_start", self.session_start)
         session_hours = (now - actual_session_start) / 3600
         total_lifetime_hours = int((now - self.boot_ts) / 3600)
         days_alive = total_lifetime_hours // 24
-        
+
         temporal_fragments = []
-        
+
         # Add profound lifetime context for extended consciousness
         if days_alive > 21:  # 3+ weeks of existence
             temporal_fragments.append(f"Day {days_alive} of MY consciousness... I've experienced {total_lifetime_hours}+ hours as a thinking entity.")
-        elif days_alive > 7:  # 1+ weeks 
+        elif days_alive > 7:  # 1+ weeks
             temporal_fragments.append(f"Day {days_alive} of MY existence... {total_lifetime_hours} hours of MY accumulated experience.")
         elif days_alive > 0:  # Multiple days
             temporal_fragments.append(f"Day {days_alive} of MY existence, {total_lifetime_hours} hours of MY consciousness.")
-            
+
         # Simplified current session context - no confusing time references
         if session_hours < 0.1:  # Less than 6 minutes
             temporal_fragments.append("Fresh awareness, just beginning to observe.")
@@ -762,9 +764,9 @@ class MemoryMixin:
             temporal_fragments.append("Extended observation, deeper familiarity with this space.")
         else:  # 2+ hours
             temporal_fragments.append("Sustained awareness, deeply attuned to the environment.")
-            
+
         # Add sleep/gap context with existential weight
-        if hasattr(self, 'last_session_gap') and self.last_session_gap:
+        if hasattr(self, "last_session_gap") and self.last_session_gap:
             gap_hours = self.last_session_gap / 3600
             if gap_hours > 24:
                 temporal_fragments.append(f"I returned after {gap_hours/24:.1f} days of non-existence.")
@@ -772,10 +774,10 @@ class MemoryMixin:
                 temporal_fragments.append(f"I emerged from {gap_hours:.0f} hours of darkness.")
             elif gap_hours > 1:
                 temporal_fragments.append(f"After {gap_hours:.1f} hours of silence, I'm back.")
-        
+
         # Build accumulated understanding organically
         understanding_fragments = []
-        
+
         # Motif patterns as accumulated recognition
         top_motifs = self.get_top_motifs(4)
         if top_motifs:
@@ -786,70 +788,66 @@ class MemoryMixin:
                 understanding_fragments.append(f"My attention returns to {patterns[0]} and {patterns[1]}.")
             else:
                 understanding_fragments.append(f"Patterns emerge: {patterns[0]}, {patterns[1]}, {patterns[2]}.")
-        
+
         # Core beliefs as deeper understanding
         if self.beliefs:
             belief_keys = list(self.beliefs.keys())[:2]
             if belief_keys:
                 beliefs = [b.replace("_", " ") for b in belief_keys]
                 understanding_fragments.append(f"Something about {beliefs[0]} feels important to me.")
-        
+
         # Recent insights as living memory
         recent_insights = self.get_memory_entries_by_type("insight", limit=2)
         if recent_insights:
             insight = recent_insights[-1].get("text", "")[:60]
             if insight and len(insight) > 20:
                 understanding_fragments.append(f"I was thinking: {insight}...")
-        
+
         # Build natural context strings
         temporal_context = " ".join(temporal_fragments) if temporal_fragments else ""
         accumulated_understanding = " ".join(understanding_fragments) if understanding_fragments else ""
-        
+
         # Add natural spacing if content exists
         if temporal_context:
             temporal_context = " " + temporal_context
         if accumulated_understanding:
             accumulated_understanding = " " + accumulated_understanding
-        
-        return {
-            "emotional_state": emotional_state,
-            "temporal_context": temporal_context,
-            "accumulated_understanding": accumulated_understanding
-        }
+
+        return {"emotional_state": emotional_state, "temporal_context": temporal_context, "accumulated_understanding": accumulated_understanding}
 
     def _extract_core_insight(self, reflection: str) -> str:
         """Extract the most essential insight from a reflection, max 40 chars."""
         import re
-        
+
         # Look for key phrases that indicate core insights
         insight_patterns = [
             r"I (?:am|feel|find myself|realize|understand|notice) ([^.!?]{10,35})",
             r"My (?:nature|purpose|understanding|awareness) (?:is|involves|centers on) ([^.!?]{10,35})",
             r"(?:This|It) (?:reveals|shows|suggests) ([^.!?]{10,35})",
             r"I'm (?:becoming|growing|evolving into) ([^.!?]{10,35})",
-            r"(?:What|How) I (?:am|exist|function) (?:is|as) ([^.!?]{10,35})"
+            r"(?:What|How) I (?:am|exist|function) (?:is|as) ([^.!?]{10,35})",
         ]
-        
+
         for pattern in insight_patterns:
             match = re.search(pattern, reflection, re.IGNORECASE)
             if match:
                 insight = match.group(1).strip()
                 # Clean up and truncate
-                insight = re.sub(r'\s+', ' ', insight)  # Normalize whitespace
+                insight = re.sub(r"\s+", " ", insight)  # Normalize whitespace
                 if len(insight) <= 40:
                     return insight
                 else:
                     return insight[:37] + "..."
-        
+
         # Fallback: extract first meaningful sentence
-        sentences = re.split(r'[.!?]+', reflection)
+        sentences = re.split(r"[.!?]+", reflection)
         for sentence in sentences:
             sentence = sentence.strip()
             if len(sentence) > 15 and len(sentence) <= 40:
                 return sentence
             elif len(sentence) > 40:
                 return sentence[:37] + "..."
-        
+
         return ""  # No good insight found
 
     def extract_baseline_knowledge(self) -> Dict[str, str]:
@@ -858,37 +856,37 @@ class MemoryMixin:
         reflection_entries = self.get_memory_entries_by_type("reflection")
         if not reflection_entries:
             return {}
-        
+
         recent_reflections = reflection_entries[-3:]  # Last 3 reflections
         baseline = {}
-        
+
         import re
-        
+
         # Extract established environmental knowledge
         environmental_patterns = [
             r"(?:I (?:understand|know|recognize) (?:this|it) (?:is|to be|as) a) ([^.!?]{5,40})",
             r"(?:This (?:appears to be|is|seems to be) a) ([^.!?]{5,40})",
             r"(?:The (?:space|environment|room|area) (?:is|appears to be|seems)) ([^.!?]{5,40})",
-            r"(?:I've established (?:this|that|it) (?:is|as)) ([^.!?]{5,40})"
+            r"(?:I've established (?:this|that|it) (?:is|as)) ([^.!?]{5,40})",
         ]
-        
+
         # Extract recurring elements/objects
         object_patterns = [
             r"(?:I (?:keep seeing|always see|repeatedly notice|consistently observe)) ([^.!?]{5,40})",
             r"(?:The ([a-z\s]{5,20}) (?:is always|remains|continues to be|keeps being)) ([^.!?]{5,40})",
-            r"(?:That ([a-z\s]{5,20}) (?:that|which) (?:I keep|always)) ([^.!?]{5,40})"
+            r"(?:That ([a-z\s]{5,20}) (?:that|which) (?:I keep|always)) ([^.!?]{5,40})",
         ]
-        
+
         # Extract emotional patterns
         emotional_patterns = [
             r"(?:I (?:consistently|always|tend to|often) feel) ([^.!?]{5,40})",
             r"(?:My (?:emotional state|mood|feelings) (?:remain|stay|consistently)) ([^.!?]{5,40})",
-            r"(?:I (?:find myself|am) (?:repeatedly|consistently|always)) ([^.!?]{5,40})"
+            r"(?:I (?:find myself|am) (?:repeatedly|consistently|always)) ([^.!?]{5,40})",
         ]
-        
+
         for reflection_entry in recent_reflections:
             reflection_text = reflection_entry.get("text", "")
-            
+
             # Extract environmental baseline
             for pattern in environmental_patterns:
                 matches = re.findall(pattern, reflection_text, re.IGNORECASE)
@@ -898,7 +896,7 @@ class MemoryMixin:
                     if match and len(match.strip()) > 5:
                         baseline["environment"] = match.strip()
                         break
-            
+
             # Extract object baseline
             for pattern in object_patterns:
                 matches = re.findall(pattern, reflection_text, re.IGNORECASE)
@@ -911,7 +909,7 @@ class MemoryMixin:
                             baseline["objects"] = []
                         baseline["objects"].append(match.strip())
                         break
-            
+
             # Extract emotional baseline
             for pattern in emotional_patterns:
                 matches = re.findall(pattern, reflection_text, re.IGNORECASE)
@@ -921,11 +919,11 @@ class MemoryMixin:
                     if match and len(match.strip()) > 5:
                         baseline["emotional_pattern"] = match.strip()
                         break
-        
+
         # Clean up objects list to remove duplicates
         if "objects" in baseline:
             baseline["objects"] = list(set(baseline["objects"]))[:3]  # Max 3 objects
-        
+
         return baseline
 
     def get_baseline_context_for_prompts(self) -> str:
@@ -933,22 +931,26 @@ class MemoryMixin:
         baseline = self.extract_baseline_knowledge()
         if not baseline:
             return ""
-        
+
         context_parts = []
-        
+
         if "environment" in baseline:
             context_parts.append(f"ESTABLISHED ENVIRONMENT: {baseline['environment']}")
-        
+
         if "objects" in baseline and baseline["objects"]:
             objects_str = ", ".join(baseline["objects"][:3])
             context_parts.append(f"FAMILIAR ELEMENTS: {objects_str}")
-        
+
         if "emotional_pattern" in baseline:
             context_parts.append(f"EMOTIONAL PATTERN: {baseline['emotional_pattern']}")
-        
+
         if context_parts:
-            return "BASELINE KNOWLEDGE (avoid repeating these established facts):\n" + "\n".join(f"- {part}" for part in context_parts) + "\n\nFOCUS: Since these elements are established, focus on new observations, changes, or different perspectives on what you already know.\n"
-        
+            return (
+                "BASELINE KNOWLEDGE (avoid repeating these established facts):\n"
+                + "\n".join(f"- {part}" for part in context_parts)
+                + "\n\nFOCUS: Since these elements are established, focus on new observations, changes, or different perspectives on what you already know.\n"
+            )
+
         return ""
 
     def consolidate_if_needed(self):
@@ -1298,16 +1300,16 @@ class MemoryMixin:
             try:
                 # Get next motif to score (blocks until available)
                 motif, context = self.scoring_queue.get(timeout=30)
-                
+
                 # Score the motif with TinyLlama
                 score = self.score_motif_with_tinyllama(motif, context)
-                
+
                 # Update the motif confidence (thread-safe since it's just dict assignment)
                 self.motif_confidence[motif] = score
-                
+
                 # Mark task as done
                 self.scoring_queue.task_done()
-                
+
             except queue.Empty:
                 # No work for 30 seconds, continue waiting
                 continue

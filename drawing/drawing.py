@@ -51,7 +51,8 @@ class DrawingController:
         # More reasonable thresholds for drawing triggers
         if novelty > 0.4 or boredom > 0.5 or mood < 0.4:
             return True
-        if reflection and any(key in reflection.lower() for key in ("i feel stuck", "i need to express", "nothing is changing", "want to draw", "create something")):
+        reflections = ("i feel stuck", "i need to express", "nothing is changing", "want to draw", "create something")
+        if reflection and any(key in reflection.lower() for key in reflections):
             return True
         return False
 
@@ -127,7 +128,9 @@ class DrawingController:
                         "ready_to_draw": self.ready_to_draw(),
                         "cooldown_remaining": max(0, self.cooldown - (time.time() - self.last_drawing_time)),
                     },
-                    print_message=f"[DRAWING] Not inspired (novelty:{getattr(agent, 'novelty_score', 0.0):.2f} boredom:{getattr(agent, 'boredom', 0.0):.2f} mood:{agent.current_mood:.2f})",
+                    print_message=f"""[DRAWING] Not inspired (novelty:{getattr(agent, 'novelty_score', 0.0):.2f}
+                    boredom:{getattr(agent, 'boredom', 0.0):.2f}
+                    mood:{agent.current_mood:.2f})""",
                 )
                 return
 

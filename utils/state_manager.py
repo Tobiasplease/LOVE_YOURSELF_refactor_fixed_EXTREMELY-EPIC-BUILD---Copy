@@ -103,6 +103,7 @@ class StateManager:
             # Suppress save message when clean captions are enabled
             try:
                 from config.config import PRINT_CLEAN_CAPTIONS
+
                 if not PRINT_CLEAN_CAPTIONS:
                     print(f"[💾] Session state saved to {self.state_file}")
             except:
@@ -195,32 +196,34 @@ class StateManager:
             # Restore recent memory
             recent_memory = cap_state.get("recent_memory", [])
             captioner.memory_queue = deque(recent_memory, maxlen=30)
-            
+
             # Reset timer states to current time for fresh session intervals
             # Don't restore old timer states - start intervals from session startup
             captioner.last_reason_time = time.time()
             captioner.last_drawing_time = time.time()
 
             # Set session start to NOW (when we actually restart), not old save time
-            # The save_time represents when we were last active, but true_session_start 
+            # The save_time represents when we were last active, but true_session_start
             # should be when THIS session began
             captioner.true_session_start = time.time()
-            
+
             # Store the last_session_gap for awakening prompts to reference
             save_time = state["metadata"]["save_time"]
             captioner.last_session_gap = time.time() - save_time
-            
+
             # IMPORTANT: Mark that we've restored state, so we don't repeat awakening
             # The awakening should only happen once per session start
             captioner.first_caption_done = False  # Will trigger awakening sequence once
             captioner.awaiting_environmental_phase = False  # Reset environmental phase flag
-            
+
             # Debug: Show when state was actually saved
             from datetime import datetime
+
             save_datetime = datetime.fromtimestamp(save_time).strftime("%Y-%m-%d %H:%M:%S")
             # Suppress debug output when clean captions are enabled
             try:
                 from config.config import PRINT_CLEAN_CAPTIONS
+
                 if not PRINT_CLEAN_CAPTIONS:
                     print(f"[DEBUG] State was saved at: {save_datetime}, gap: {captioner.last_session_gap:.1f} seconds")
             except:

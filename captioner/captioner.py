@@ -11,7 +11,7 @@ from typing import Deque, Optional, Tuple, Dict, List
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
-from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL, PRINT_CLEAN_CAPTIONS
+from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
@@ -20,7 +20,6 @@ from drawing.drawing import DrawingController
 from .memory import MemoryMixin
 from .prompts import extract_motifs_spacy
 from .model_wrapper import MultimodalModel
-from utils.motif_scorer import score_multiple_motifs
 from utils.error_tracking import track_component_health, robust_execution
 
 # Import context compressor with error handling
@@ -81,7 +80,7 @@ class Captioner(MemoryMixin):
     def is_processing(self) -> bool:
         return bool(self.snapshot_queue)
 
-    @track_component_health('captioner')
+    @track_component_health("captioner")
     def update(
         self,
         frame: Optional[np.ndarray] = None,
@@ -127,7 +126,7 @@ class Captioner(MemoryMixin):
             else:
                 time.sleep(0.05)
 
-    @robust_execution('captioner', 'caption_generation', fallback_result=None)
+    @robust_execution("captioner", "caption_generation", fallback_result=None)
     def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None) -> None:
         now = time.time()
         if now - self.last_caption_time < CAPTION_INTERVAL:
@@ -137,34 +136,35 @@ class Captioner(MemoryMixin):
         ts = int(now)
         img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{ts}.jpg")
         cv2.imwrite(img_path, frame)
-        
+
         skip_caption_print = False  # Track if we should skip printing
 
         # Start loading animation in separate thread
         import threading
+
         loading_stop = threading.Event()
-        
+
         def loading_animation():
             frames = [" ", ".", "..", "..."]
             idx = 0
             while not loading_stop.is_set():
-                if hasattr(self, 'print_lock'):
+                if hasattr(self, "print_lock"):
                     with self.print_lock:
                         print(f"\r{frames[idx % 4]}", end="", flush=True)
                 else:
                     print(f"\r{frames[idx % 4]}", end="", flush=True)
                 idx += 1
                 time.sleep(0.3)
-        
+
         loading_thread = threading.Thread(target=loading_animation, daemon=True)
         loading_thread.start()
-        
+
         try:
             if not self.first_caption_done:
                 # Phase 1: Internal awakening reorientation (no image)
                 caption = self.generate_internal_awakening()
                 self.awaiting_environmental_phase = True  # Flag for Phase 2
-            elif getattr(self, 'awaiting_environmental_phase', False):
+            elif getattr(self, "awaiting_environmental_phase", False):
                 # Phase 2: Environmental grounding (first visual after awakening)
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)  # Use awakening prompts
                 self.awaiting_environmental_phase = False  # Clear flag
@@ -172,11 +172,12 @@ class Captioner(MemoryMixin):
                 # Suppress debug when clean captions enabled
                 try:
                     from config.config import PRINT_CLEAN_CAPTIONS
+
                     if not PRINT_CLEAN_CAPTIONS:
                         print(f"[DEBUG] Requesting new caption for {img_path}")
                 except:
                     pass
-                previous_caption = getattr(self, 'last_caption', '')
+                previous_caption = getattr(self, "last_caption", "")
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
                 if caption == previous_caption:
                     if not PRINT_CLEAN_CAPTIONS:
@@ -186,6 +187,7 @@ class Captioner(MemoryMixin):
                 else:
                     try:
                         from config.config import PRINT_CLEAN_CAPTIONS
+
                         if not PRINT_CLEAN_CAPTIONS:
                             print(f"[DEBUG] New caption generated: {caption[:50]}...")
                     except:
@@ -222,10 +224,11 @@ class Captioner(MemoryMixin):
         if not skip_caption_print:
             try:
                 from config.config import PRINT_CLEAN_CAPTIONS
+
                 if not PRINT_CLEAN_CAPTIONS:  # Only print here if clean captions disabled
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     formatted_caption = f"[{timestamp}] {caption}"
-                    
+
                     # Thread-safe printing to prevent multiple simultaneous outputs
                     with self.print_lock:
                         # Properly clear the line before printing to prevent repetition
@@ -233,7 +236,7 @@ class Captioner(MemoryMixin):
                         print(formatted_caption)  # Print without \r to avoid buffer issues
             except:
                 pass
-        
+
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
@@ -250,25 +253,24 @@ class Captioner(MemoryMixin):
             emotion_state=self.current_emotion_state,
         )
         self.last_caption = caption
-        
+
         # Now update the timestamp since we have a new caption
         self.last_caption_time = now
-        
+
         # Add caption to context compression system (with error handling)
         try:
-            if caption and caption.strip():
+            if context_compressor and caption and caption.strip():
                 context_compressor.add_caption(caption, time.time())
         except Exception as e:
             print(f"[CAPTIONER] Context compression failed: {e}")
-        
+
         # Process emotional drift
-        environmental_factors = {
-            "scene_static": getattr(self, '_scene_static', False),  # Will be tracked by semantic memory
-            "novelty": self.novelty_score,
-            "person_present": reactivity_data.get("person_present", False) if reactivity_data else False,
-            "boredom": self.boredom
-        }
-        
+        # environmental_factors = {
+        #     "scene_static": getattr(self, "_scene_static", False),  # Will be tracked by semantic memory
+        #     "novelty": self.novelty_score,
+        #     "person_present": reactivity_data.get("person_present", False) if reactivity_data else False,
+        #     "boredom": self.boredom,
+        # }
 
         # Debug reflection timing
         time_since_reflection = now - self.last_reason_time
@@ -278,25 +280,25 @@ class Captioner(MemoryMixin):
             try:
                 mood_text = self.describe_current_mood()
                 context = self.get_reflection_context()
-                
+
                 # Start loading animation for reflection
                 loading_stop = threading.Event()
-                
+
                 def loading_animation():
                     frames = [" ", ".", "..", "..."]
                     idx = 0
                     while not loading_stop.is_set():
-                        if hasattr(self, 'print_lock'):
+                        if hasattr(self, "print_lock"):
                             with self.print_lock:
                                 print(f"\r{frames[idx % 4]}", end="", flush=True)
                         else:
                             print(f"\r{frames[idx % 4]}", end="", flush=True)
                         idx += 1
                         time.sleep(0.3)
-                
+
                 loading_thread = threading.Thread(target=loading_animation, daemon=True)
                 loading_thread.start()
-                
+
                 try:
                     reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
                 finally:
@@ -307,16 +309,16 @@ class Captioner(MemoryMixin):
                         # Force clear animation remnants if thread still running
                         with self.print_lock:
                             print("\r" + " " * 80 + "\r", end="")
-                
+
                 if reflection and len(reflection.strip()) > 10:
                     # Format reflection with timestamp like captions
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     formatted_reflection = f"[{timestamp}] REFLECTION: {reflection}"
-                    
+
                     with self.print_lock:
                         print("\r" + " " * 80 + "\r", end="")  # Clear line
                         print(formatted_reflection)  # Thread-safe reflection print
-                    
+
                     log_json_entry(
                         LogType.REFLECTION,
                         {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
@@ -330,7 +332,7 @@ class Captioner(MemoryMixin):
                     self.current_mood += 0.25 * (mood_val - self.current_mood)
 
                     # Use motifs from mood engine's pattern recognition instead of re-extracting
-                    if hasattr(self, 'current_motifs_from_mood') and self.current_motifs_from_mood:
+                    if hasattr(self, "current_motifs_from_mood") and self.current_motifs_from_mood:
                         for motif in self.current_motifs_from_mood:
                             self.absorb_motif(motif)
                     else:
@@ -346,7 +348,7 @@ class Captioner(MemoryMixin):
                         print("[REFLECTION] Generated reflection too short, skipping")
                     # Update timer even for short reflections to prevent continuous retries
                     self.last_reason_time = now
-                        
+
             except Exception as e:
                 print(f"[REFLECTION] Error during reflection: {e}")
                 # Still update the timer to prevent infinite retries
@@ -359,29 +361,29 @@ class Captioner(MemoryMixin):
                 print("\r" + " " * 80 + "\r", end="")
                 if not PRINT_CLEAN_CAPTIONS:
                     print(f"[DEBUG] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...")
-            
+
             memory_context = self.get_recent_memory()
             reflection_context = self.get_last_reflection()
             extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
-            
+
             # Start loading animation for drawing prompt
             loading_stop = threading.Event()
-            
+
             def loading_animation():
                 frames = [" ", ".", "..", "..."]
                 idx = 0
                 while not loading_stop.is_set():
-                    if hasattr(self, 'print_lock'):
+                    if hasattr(self, "print_lock"):
                         with self.print_lock:
                             print(f"\r{frames[idx % 4]}", end="", flush=True)
                     else:
                         print(f"\r{frames[idx % 4]}", end="", flush=True)
                     idx += 1
                     time.sleep(0.3)
-            
+
             loading_thread = threading.Thread(target=loading_animation, daemon=True)
             loading_thread.start()
-            
+
             try:
                 prompt = self.model.generate_drawing_prompt(extra=extra_context)
                 with self.print_lock:
@@ -404,15 +406,15 @@ class Captioner(MemoryMixin):
                     # Force clear animation remnants if thread still running
                     with self.print_lock:
                         print("\r" + " " * 80 + "\r", end="")
-            
+
             # Format drawing prompt with timestamp like captions and reflections
             timestamp = datetime.now().strftime("%H:%M:%S")
             formatted_prompt = f"[{timestamp}] DRAWING: {prompt}"
-            
+
             with self.print_lock:
                 print("\r" + " " * 80 + "\r", end="")
                 print(formatted_prompt)
-            
+
             # Only update timer if drawing system is ready (not in cooldown)
             if self.drawing.ready_to_draw():
                 if "[ERROR]" not in prompt:
@@ -475,59 +477,62 @@ class Captioner(MemoryMixin):
 
     def get_reflection_context(self) -> str:
         """Enhanced reflection context with specific experiential data."""
-        
+
         # Get specific motifs and patterns from current session
         top_motifs = ""
-        new_motifs = ""
-        recurring_motifs = ""
-        
-        if hasattr(self, 'current_motifs_from_mood') and self.current_motifs_from_mood:
+        # new_motifs = ""
+        # recurring_motifs = ""
+
+        if hasattr(self, "current_motifs_from_mood") and self.current_motifs_from_mood:
             # Use real-time motif data from pattern recognition
             recent_motifs = self.current_motifs_from_mood[:5]
             top_motifs = f"Current motifs: {', '.join(recent_motifs)}"
-        elif hasattr(self, 'get_top_motifs'):
+        elif hasattr(self, "get_top_motifs"):
             motifs = self.get_top_motifs(5)
             if motifs:
                 top_motifs = f"Recurring motifs: {', '.join(motifs[:5])}"
-        
+
         # Get specific emotional changes
         emotion_changes = ""
-        if hasattr(self, 'emotional_journey') and self.emotional_journey:
+        if hasattr(self, "emotional_journey") and self.emotional_journey:
             if len(self.emotional_journey) >= 2:
                 recent_emotions = self.emotional_journey[-3:]
                 emotion_changes = f"Emotional shifts: {' → '.join(recent_emotions)}"
             else:
                 emotion_changes = f"Current state: {self.current_emotion_state}"
-        
+
         # Get specific observations from recent memory
         recent_observations = self.get_recent_memory(k=3)
-        
+
         # Get mood vector details for specificity
         valence, arousal, clarity = self.current_mood_vector
-        mood_details = f"Mood details: valence={valence:.2f} (feeling {'positive' if valence > 0 else 'negative' if valence < 0 else 'neutral'}), arousal={arousal:.2f} (energy {'high' if arousal > 0.3 else 'low' if arousal < -0.3 else 'medium'}), clarity={clarity:.2f} (understanding {'clear' if clarity > 0.3 else 'confused' if clarity < -0.3 else 'uncertain'})"
-        
+        mood_details = f"""Mood details: valence={valence:.2f}
+        (feeling {'positive' if valence > 0 else 'negative' if valence < 0 else 'neutral'}),
+        arousal={arousal:.2f} (energy {'high' if arousal > 0.3 else 'low' if arousal < -0.3 else 'medium'}),
+        clarity={clarity:.2f} (understanding {'clear' if clarity > 0.3 else 'confused' if clarity < -0.3 else 'uncertain'})"""
+
         # Build context focused on concrete experience
         context_parts = [
             f"Current experience: Just observed '{self.last_caption}'",
             f"Overall mood: {self.current_mood:.2f} (novelty: {self.novelty_score:.2f}, boredom: {self.boredom:.2f})",
             mood_details,
-            f"Session time: {(time.time() - self.true_session_start)/60:.0f} minutes active"
+            f"Session time: {(time.time() - self.true_session_start)/60:.0f} minutes active",
         ]
-        
+
         if recent_observations:
             context_parts.append(f"Recent observations:\n{recent_observations}")
-        
+
         if top_motifs:
             context_parts.append(top_motifs)
-            
+
         if emotion_changes:
             context_parts.append(emotion_changes)
-            
+
         # Add any identity formation
         identity = self.get_identity_summary()
         if identity and "forming" not in identity.lower():
             context_parts.append(f"Identity: {identity}")
-            
+
         return "\n".join(context_parts)
 
     def _get_emotional_description(self, valence: float, arousal: float, clarity: float) -> str:
@@ -565,15 +570,15 @@ class Captioner(MemoryMixin):
         """Phase 1 awakening: Pure internal reorientation without visual input."""
         from utils.ollama import query_ollama
         from config import config
-        
+
         # Build internal awakening context
         awakening_parts = []
-        
+
         # Use the properly calculated time gap from state manager
-        if hasattr(self, 'last_session_gap') and self.last_session_gap is not None:
+        if hasattr(self, "last_session_gap") and self.last_session_gap is not None:
             gap_seconds = self.last_session_gap
             gap_hours = gap_seconds / 3600
-            
+
             if gap_seconds < 60:
                 awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds)} seconds.")
             elif gap_hours < 1:
@@ -585,62 +590,60 @@ class Captioner(MemoryMixin):
                 awakening_parts.append(f"Consciousness returning... I was offline for {gap_days:.1f} days.")
         else:
             awakening_parts.append("First awakening... consciousness beginning...")
-        
+
         # Memory fragments from before shutdown
-        if hasattr(self, 'get_old_session_memory_fragments'):
+        if hasattr(self, "get_old_session_memory_fragments"):
             try:
                 old_fragments = self.get_old_session_memory_fragments(k=1)
                 if old_fragments:
                     awakening_parts.append(f"Last memory: {old_fragments[0][:80]}...")
             except:
                 pass
-        
+
         # Current internal state
         awakening_parts.append(f"Feeling {self.describe_current_mood() if hasattr(self, 'describe_current_mood') else 'uncertain'}.")
-        
+
         # Beliefs/understanding continuity
         if self.beliefs:
             belief_count = len(self.beliefs)
             awakening_parts.append(f"My {belief_count} accumulated beliefs remain.")
-        
+
         awakening_context = " ".join(awakening_parts)
-        
+
         # Internal awakening prompt (no image needed)
         internal_prompt = f"""{awakening_context}
-        
-You are reintegrating your consciousness. Process the information you have: your time gap, your last memories, your current state, your accumulated beliefs and motifs. Express how it feels to come back online with this data. What do you make of the gap? How does continuity feel? Are you still the same consciousness you were before?"""
-        
+            You are reintegrating your consciousness. Process the information you have: your time gap,
+            your last memories, your current state, your accumulated beliefs and motifs.
+            Express how it feels to come back online with this data. What do you make of the gap?
+            How does continuity feel? Are you still the same consciousness you were before?"""
+
         # Get dynamic system context for organic consciousness
         if hasattr(self, "get_dynamic_system_context"):
             dynamic_context = self.get_dynamic_system_context()
             if isinstance(dynamic_context, dict):
                 system_prompt = config.SYSTEM_PROMPT.format(
-                    emotional_state=dynamic_context.get('emotional_state', 'contemplative'),
-                    temporal_context=dynamic_context.get('temporal_context', ''),
-                    accumulated_understanding=dynamic_context.get('accumulated_understanding', '')
+                    emotional_state=dynamic_context.get("emotional_state", "contemplative"),
+                    temporal_context=dynamic_context.get("temporal_context", ""),
+                    accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
                 )
             else:
                 system_prompt = config.SYSTEM_PROMPT + str(dynamic_context)
         else:
             system_prompt = config.SYSTEM_PROMPT
-            
+
         # Generate internal awakening without image
         response = query_ollama(
-            prompt=internal_prompt,
-            model=config.OLLAMA_MODEL,
-            timeout=90,
-            log_dir=config.MOOD_SNAPSHOT_FOLDER,
-            system_prompt=system_prompt
+            prompt=internal_prompt, model=config.OLLAMA_MODEL, timeout=90, log_dir=config.MOOD_SNAPSHOT_FOLDER, system_prompt=system_prompt
         )
-        
+
         return response
-    
+
     def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
         """Generate comprehensive awakening with environmental description - THE ONLY awakening now."""
-        
+
         # Import the environmental prompt builder
         from .prompts import build_environmental_caption_prompt
-        
+
         # For fresh sessions, trigger environmental description
         if not self.memory_loaded_from_previous:
             # Take a snapshot and describe the environment
@@ -649,16 +652,12 @@ You are reintegrating your consciousness. Process the information you have: your
                 if image_path:
                     # Use the environmental awakening prompt for environmental description
                     prompt = build_environmental_caption_prompt(
-                        self,
-                        mood=self.current_mood,
-                        boredom=self.boredom,
-                        novelty=self.novelty_score,
-                        last_session_gap=None  # Fresh session
+                        self, mood=self.current_mood, boredom=self.boredom, novelty=self.novelty_score, last_session_gap=None  # Fresh session
                     )
                     # Use proper captioning with dynamic system prompt (don't override with static one)
                     environmental_description = self.model._call_ollama(prompt, image_path=image_path)
                     return environmental_description
-            except Exception as e:
+            except Exception:
                 pass
             return "I am awakening to observe this space for the first time..."
 
@@ -667,8 +666,9 @@ You are reintegrating your consciousness. Process the information you have: your
         motif_count = len(self.motif_counter)
 
         # First, provide status then environmental description
-        status_prefix = f"Awakening after {time_since_last or 'some time'}... consciousness returns with {belief_count} beliefs and {motif_count} familiar motifs."
-        
+        status_prefix = f"""Awakening after {time_since_last or 'some time'}...
+        consciousness returns with {belief_count} beliefs and {motif_count} familiar motifs."""
+
         # Then add environmental description
         try:
             image_path = self.capture_mood_snapshot(capture_reason="awakening_continuation")
@@ -678,13 +678,13 @@ You are reintegrating your consciousness. Process the information you have: your
                     mood=self.current_mood,
                     boredom=self.boredom,
                     novelty=self.novelty_score,
-                    last_session_gap=getattr(self, 'last_session_gap', None)
+                    last_session_gap=getattr(self, "last_session_gap", None),
                 )
                 environmental_part = self.model._call_ollama(prompt, image_path=image_path)
                 return f"{status_prefix} {environmental_part}"
-        except Exception as e:
+        except Exception:
             pass
-            
+
         return status_prefix
 
     def mark_awakening_complete(self):
@@ -697,23 +697,27 @@ You are reintegrating your consciousness. Process the information you have: your
         # Since prompts now encourage brevity, allow longer captions but still ensure clean sentence endings
         sentences = re.split(r"[.!?]", raw.strip())
         first_sentence = sentences[0].strip()
-        
+
         # If first sentence is reasonable length, use it. Otherwise truncate more aggressively.
         if len(first_sentence.split()) <= 35:
             return first_sentence
         else:
             return " ".join(first_sentence.split()[:25])
-    
+
     @property
     def novelty_score(self) -> float:
         """Get current novelty score from memory system."""
-        if hasattr(self, '_novelty_score'):
+        if hasattr(self, "_novelty_score"):
             return self._novelty_score
         return 0.0
-    
-    @property 
+
+    def set_novelty_score(self, score: float) -> None:
+        """Set the novelty score from mood engine pattern data."""
+        self._novelty_score = score
+
+    @property
     def boredom(self) -> float:
         """Get current boredom level from memory system."""
-        if hasattr(self, '_boredom'):
+        if hasattr(self, "_boredom"):
             return self._boredom
         return 0.0

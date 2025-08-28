@@ -3,10 +3,8 @@ Clean model wrapper - pure API handler only.
 All prompt logic moved to prompt_interface.py for centralization.
 """
 
-import os
 import re
 from typing import Optional
-from config import config
 from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     OLLAMA_MODEL,
@@ -122,7 +120,7 @@ class MultimodalModel:
         image_path: Optional[str] = None,
         system_prompt: Optional[str] = None,
         timeout: int = 90,
-        model_options: dict = None,
+        model_options: dict | None = None,
         prompt_type: str = "normal",
     ) -> str:
         """Pure API call handler - no prompt logic here."""

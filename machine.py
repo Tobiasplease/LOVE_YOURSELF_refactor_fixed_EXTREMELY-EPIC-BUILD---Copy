@@ -48,7 +48,7 @@ if args.config_override:
         sys.exit(1)
 
 
-from perception.object_detection import ObjectDetectionThread
+# from perception.object_detection import ObjectDetectionThread
 from captioner.captioner import Captioner
 from vision.gaze import update_gaze
 from mood.mood import MoodEngine
@@ -56,7 +56,7 @@ from breathing.breathing import update_lung_position
 from image_monitor import ImageMonitor
 from utils.state_manager import state_manager
 from utils.continuity import describe_duration, get_temporal_feeling
-from utils.error_tracking import track_component_health, log_silent_failure, get_failure_tracker
+from utils.error_tracking import get_failure_tracker
 from config.config import (
     USE_SERVO,
     USE_HAND_CONTROLLER,
@@ -558,7 +558,7 @@ def mood_update_thread(frame, timestamp):
                 # Third: Update captioner's mood state and pattern data for next cycle
                 captioner.current_mood = current_mood
                 pattern_data = mood_engine.get_pattern_data()
-                captioner.novelty_score = pattern_data["novelty_score"]
+                captioner.set_novelty_score(pattern_data["novelty_score"])
                 # Pass recent motifs to captioner for memory integration
                 captioner.current_motifs_from_mood = pattern_data["recent_motifs"]
 
