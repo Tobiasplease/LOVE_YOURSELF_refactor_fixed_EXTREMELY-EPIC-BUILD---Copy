@@ -169,21 +169,16 @@ def log_json_entry(
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump([metadata_entry], f, indent=2, ensure_ascii=False)
 
-        # Also add metadata to all-run-log.json
         update_all_run_log(log_dir, metadata_entry)
 
-    # Append to the individual run event log file
     append_to_log_file(log_dir, filename, entry)
 
-    # Also append to all-run-log.json
     update_all_run_log(log_dir, entry)
 
     if log_type_str.lower() in LOG_TYPES_TO_PRINT or "all" in LOG_TYPES_TO_PRINT:
-        # Only print if there's an explicit print_message - don't fall back to generic strings
         if print_message:
             elapsed = get_elapsed_time()
             print(f"[{elapsed}] {print_message}")
-        # Skip printing when print_message=None (handled elsewhere with custom formatting)
 
     return filepath
 

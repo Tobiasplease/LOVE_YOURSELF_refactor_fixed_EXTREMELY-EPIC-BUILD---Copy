@@ -123,6 +123,7 @@ DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
 DEBUG_OLLAMA_PROMPTS = True  # enable detailed Ollama debug output with prompt types and errors
+OLLAMA_PRINT_FULL_RESPONSE = False  # print full responses in console output (ignores truncation)
 NO_HANDS = False
 
 # === REACTIVITY PAUSE SYSTEM ===

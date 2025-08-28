@@ -17,6 +17,7 @@ from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from drawing.drawing import DrawingController
+from utils.ollama import truncate_for_print
 
 from .memory import MemoryMixin
 from .prompts import extract_motifs_spacy
@@ -243,7 +244,7 @@ class Captioner(MemoryMixin):
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            print_message=f"[📷] {caption}{'...' if len(caption) > 100 else ''}",
+            print_message=f"[📷] {truncate_for_print(caption, 100)}",
         )
 
         self.observe(
@@ -314,7 +315,7 @@ class Captioner(MemoryMixin):
                     log_json_entry(
                         LogType.REFLECTION,
                         {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
-                        print_message=f"[🤔] Reflection: {reflection}{'...' if len(reflection) > 100 else ''}",
+                        print_message=f"[🤔] Reflection: {truncate_for_print(reflection, 100)}",
                     )
                     self.last_reason_time = now
                     self.awakening_done = True

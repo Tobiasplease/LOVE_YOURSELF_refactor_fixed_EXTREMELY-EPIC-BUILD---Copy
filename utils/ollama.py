@@ -5,10 +5,29 @@ import base64
 import json
 import requests
 from typing import Optional, Union
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS, DEBUG_OLLAMA_PROMPTS
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS, DEBUG_OLLAMA_PROMPTS, OLLAMA_PRINT_FULL_RESPONSE
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.progress_bar import ProgressBar
+
+
+def truncate_for_print(text: str | None, max_length: int) -> str:
+    """Format text for print output, respecting OLLAMA_PRINT_FULL_RESPONSE config.
+
+    Args:
+        text: The text to format
+        max_length: Maximum length before truncation (ignored if OLLAMA_PRINT_FULL_RESPONSE is True)
+
+    Returns:
+        Full text if OLLAMA_PRINT_FULL_RESPONSE is True, otherwise truncated with "..." if needed
+    """
+    if not text:
+        return ""
+
+    if OLLAMA_PRINT_FULL_RESPONSE:
+        return text
+
+    return text[:max_length] + "..." if len(text) > max_length else text
 
 
 def _get_prompt_emoji(prompt_type: str) -> str:
@@ -58,9 +77,9 @@ def log_ollama_call(
     """
     # Truncate very long prompts and responses for readability
 
-    truncated_prompt = prompt[:500] + "..." if len(prompt) > 500 else prompt
-    truncated_response = response[:1000] + "..." if response and len(response) > 1000 else response
-    truncated_system_prompt = system_prompt[:500] + "..." if system_prompt and len(system_prompt) > 500 else system_prompt
+    truncated_prompt = truncate_for_print(prompt, 500)
+    truncated_response = truncate_for_print(response, 1000)
+    truncated_system_prompt = truncate_for_print(system_prompt, 500)
 
     data = {
         "prompt": truncated_prompt,
@@ -93,18 +112,16 @@ def log_ollama_call(
     if image_path:
         call_details.append("📸 with image")
 
-    if truncated_response:
-        call_details.append(truncated_response + "\n")
+    if response:
+        call_details.append(truncate_for_print(response, 1000) + "\n")
 
     if DEBUG_OLLAMA_PROMPTS:
         debug_details = [" | ".join(call_details)]
 
         if system_prompt:
-            debug_details.extend([f"[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}", system_prompt[:500] + "..." if len(system_prompt) > 500 else system_prompt])
+            debug_details.extend([f"[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}", truncate_for_print(system_prompt, 500)])
 
-        debug_details.extend(
-            [f"\n[🤖📝] {prompt_type.title()} PROMPT:\n{'-' * 50}", prompt[:1000] + "..." if len(prompt) > 1000 else prompt, "-" * 50]
-        )
+        debug_details.extend([f"\n[🤖📝] {prompt_type.title()} PROMPT:\n{'-' * 50}", truncate_for_print(prompt, 1000), "-" * 50])
 
         print_message = "\n".join(debug_details)
     else:

@@ -14,7 +14,7 @@ from config.config import (
     TINYLLAMA_TIMEOUT,
     OLLAMA_TIMEOUT_REFLECTION,
 )
-from utils.ollama import query_ollama
+from utils.ollama import query_ollama, truncate_for_print
 from .prompt_interface import PromptInterface
 from event_logging.log_type import LogType
 from event_logging.event_logger import log_json_entry
@@ -48,7 +48,7 @@ class MultimodalModel:
                 "flowing": flowing,
                 "first_time": first_time,
             },
-            print_message=f"[🐞] Prompt hash: {hash(prompt)}, preview: {prompt[:200]}...",
+            print_message=f"[🐞] Prompt hash: {hash(prompt)}, preview: {truncate_for_print(prompt, 200)}",
         )
 
         result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="caption")
@@ -62,7 +62,7 @@ class MultimodalModel:
                 "response_preview": result[:50],
                 "response_length": len(result),
             },
-            print_message=f"[🐞] Response hash: {hash(result)}, preview: {result[:50]}...",
+            print_message=f"[🐞] Response hash: {hash(result)}, preview: {truncate_for_print(result, 50)}",
         )
         return result
 

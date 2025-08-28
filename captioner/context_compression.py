@@ -10,7 +10,7 @@ import threading
 import queue
 from collections import deque
 from config import config
-from utils.ollama import query_ollama
+from utils.ollama import query_ollama, truncate_for_print
 from config.model_settings import get_model_options
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
@@ -219,7 +219,7 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                             "understanding": understanding,
                             "understanding_length": len(understanding),
                         },
-                        print_message=f"[🧠] Updated baseline: {self.baseline_context[:80]}{'...' if len(self.baseline_context) > 80 else ''}",
+                        print_message=f"[🧠] Updated baseline: {truncate_for_print(self.baseline_context, 80)}",
                     )
 
                 if sentiment_text:
@@ -234,7 +234,7 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                             "sentiment_text": sentiment_text,
                             "sentiment_length": len(sentiment_text),
                         },
-                        print_message=f"[😊] Sentiment: {sentiment_text[:60]}{'...' if len(sentiment_text) > 60 else ''}",
+                        print_message=f"[😊] Sentiment: {truncate_for_print(sentiment_text, 60)}",
                     )
 
             else:
@@ -245,7 +245,7 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                         "action": "invalid_response",
                         "response": str(response)[:200] if response else None,
                     },
-                    print_message=f"[❌] Invalid or empty response: {str(response)[:50]}{'...' if response and len(str(response)) > 50 else ''}",
+                    print_message=f"[❌] Invalid or empty response: {truncate_for_print(str(response) if response else '', 50)}",
                 )
 
         except Exception as e:

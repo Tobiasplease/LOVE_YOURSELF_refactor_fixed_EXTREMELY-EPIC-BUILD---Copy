@@ -21,7 +21,7 @@ from event_logging.run_manager import get_run_image_path
 
 from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER, TRIGGER_PROMPT
 from config.prompt_templates import SELF_CRITIQUE_PROMPT
-from utils.ollama import query_ollama
+from utils.ollama import query_ollama, truncate_for_print
 from utils.state_manager import state_manager
 from .comfy import create_impostor_controller
 
@@ -91,7 +91,7 @@ class DrawingController:
                     "critique": critique_response,
                     "timestamp": time.time(),
                 },
-                print_message=f"[🎯] Self-critique: {critique_response[:100]}...",
+                print_message=f"[🎯] Self-critique: {truncate_for_print(critique_response, 100)}",
             )
 
         except Exception as exc:
