@@ -213,7 +213,7 @@ Answer with ONLY the letter (A, B, C, D, or E):"""
             log_data["error"] = error
 
         emoji = "❌" if error else "🔍"
-        print_message = f"[{emoji}] Error: " if error else f"[{emoji}] Motif '{motif}': {score:.2f} ({method}, {elapsed*1000:.1f}ms)"
+        print_message = f"[{emoji}] Scoring Error: {error}" if error else f"[{emoji}] Motif '{motif}': {score:.2f} ({method}, {elapsed*1000:.1f}ms)"
 
         log_json_entry(LogType.MOTIF_SCORE, log_data, print_message=print_message)
 
