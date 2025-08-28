@@ -295,3 +295,17 @@ flake8 . --max-line-length=150
 ## Support
 
 For issues and support, please [add contact information or issue tracker].
+
+## Available Loras
+
+- flux/own/impostor/impostor-32-balanced-8-5k.safetensors
+- flux/own/impostor/1l1n3_F1D_SGX.safetensors
+- flux/own/impostor/impostor-32-balanced-15k.safetensors
+- flux/own/impostor/impostor-32-balanced-16k.safetensors
+- flux/own/impostor/impostor-32-balanced-simple.safetensors
+- flux/own/impostor/impostor-32-content-v2-10k.safetensors
+- flux/own/impostor/impostor-32-content-v2-16k.safetensors
+- flux/own/impostor/impostor-32-style-7k.safetensors
+- flux/own/impostor/impostor-32-style-16k.safetensors
+- flux/own/impostor/impostor-64-balanced-v2-16k-no-trig.safetensors
+- flux/own/impostor/Line_Art_FLUX_V1.safetensors

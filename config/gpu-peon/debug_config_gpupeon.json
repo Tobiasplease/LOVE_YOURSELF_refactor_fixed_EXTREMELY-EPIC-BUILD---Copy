@@ -1,7 +1,7 @@
 {
   "MOOD_EVALUATION_INTERVAL": 10,
   "CAPTION_INTERVAL": 10,
-  "REASON_INTERVAL": 30,
+  "REASON_INTERVAL": 360,
   "DRAWING_INTERVAL": 60,
   "COMFY_OUTPUT_FOLDER": "/home/jbe/Dropbox/_outputs",
   "COMFY_TEMPLATE_FILE": "impostor-template-impostor-bot-svg.json",
