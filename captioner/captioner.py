@@ -221,14 +221,10 @@ class Captioner(MemoryMixin):
             # Don't return early - still need to check reflection/drawing timing
             caption = "Vision unclear right now"  # Use fallback caption
 
-        # Clear the animation line and print caption with timestamp (thread-safe)
-        # Caption printing is now handled through structured logging
-        # The caption is logged via log_json_entry with CAPTION log type elsewhere
-
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            print_message=f"[📷] {caption[:100]}{'...' if len(caption) > 100 else ''}",
+            print_message=f"[📷] {caption}{'...' if len(caption) > 100 else ''}",
         )
 
         self.observe(
@@ -410,7 +406,7 @@ class Captioner(MemoryMixin):
                         print("\r" + " " * 80 + "\r", end="")
 
             # Format drawing prompt with timestamp like captions and reflections
-            timestamp = datetime.now().strftime("%H:%M:%S")
+            # timestamp = datetime.now().strftime("%H:%M:%S")
             # formatted_prompt = f"[{timestamp}] DRAWING: {prompt}"
 
             # with self.print_lock:
@@ -635,7 +631,12 @@ class Captioner(MemoryMixin):
 
         # Generate internal awakening without image
         response = query_ollama(
-            prompt=internal_prompt, model=config.OLLAMA_MODEL, timeout=90, log_dir=config.MOOD_SNAPSHOT_FOLDER, system_prompt=system_prompt, prompt_type="awakening"
+            prompt=internal_prompt,
+            model=config.OLLAMA_MODEL,
+            timeout=90,
+            log_dir=config.MOOD_SNAPSHOT_FOLDER,
+            system_prompt=system_prompt,
+            prompt_type="awakening",
         )
 
         return response
