@@ -4,7 +4,8 @@ import re
 import time
 import threading
 from collections import deque
-from datetime import datetime
+
+# from datetime import datetime
 from typing import Deque, Optional, Tuple, Dict, List
 
 # from weakref import ref
@@ -33,6 +34,24 @@ except Exception as e:
 class Captioner(MemoryMixin):
     def shutdown(self):
         self.save_session_time()
+
+    def capture_mood_snapshot(self, capture_reason: str = "general") -> Optional[str]:
+        """Capture a mood snapshot from current frame queue or latest frame."""
+        if not self.snapshot_queue:
+            return None
+
+        # Get the most recent frame from the queue
+        frame, _, _ = self.snapshot_queue[-1]  # Get the latest frame without removing it
+
+        ts = int(time.time())
+        img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{capture_reason}_{ts}.jpg")
+
+        try:
+            cv2.imwrite(img_path, frame)
+            return img_path
+        except Exception as e:
+            print(f"[ERROR] Failed to save mood snapshot: {e}")
+            return None
 
     caption_window: Optional[any] = None  # type: ignore
 

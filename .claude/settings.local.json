@@ -21,7 +21,9 @@
       "Bash(rg:*)",
       "Bash(git checkout:*)",
       "Bash(wmic:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(pylint:*)",
+      "Bash(flake8:*)"
     ],
     "deny": [],
     "ask": []

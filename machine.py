@@ -621,13 +621,13 @@ try:
                     # Only send if brightness changed significantly (reduce serial traffic)
                     if (
                         not hasattr(lightbulb, "_last_base")
-                        or abs(final_brightness - lightbulb._last_base) > 3
+                        or abs(final_brightness - lightbulb._last_base) > 3  # type: ignore
                         or not hasattr(lightbulb, "_last_send_time")
-                        or time.time() - lightbulb._last_send_time > 0.1
+                        or time.time() - lightbulb._last_send_time > 0.1  # type: ignore
                     ):  # Max 10fps updates
                         lightbulb.set_base_brightness(final_brightness)
-                        lightbulb._last_base = final_brightness
-                        lightbulb._last_send_time = time.time()
+                        lightbulb._last_base = final_brightness  # type: ignore
+                        lightbulb._last_send_time = time.time()  # type: ignore
                 except Exception as e:
                     print(f"Lightbulb base brightness failed: {e}")
         prev_gray = gray.copy()
@@ -845,8 +845,8 @@ try:
                         pwm_value = int(max(0, min(1, (chaos_val - 0.3) / 3.2)) * 255)
                         # Use Arduino fluctuation for smoother mood-based lighting
                         if not lightbulb.fluctuating or abs(pwm_value - getattr(lightbulb, "_last_mood_base", 0)) > 10:
-                            lightbulb.start_fluctuation(max(8, pwm_value), amplitude=5, speed=0.3)  # Slower mood fluctuation
-                            lightbulb._last_mood_base = pwm_value
+                            lightbulb.start_fluctuation(max(8, pwm_value), amplitude=5, speed=0.3)  # type: ignore # Slower mood fluctuation
+                            lightbulb._last_mood_base = pwm_value  # type: ignore
                     except Exception as e:
                         print(f"Lightbulb fluctuation failed: {e}")
 
