@@ -26,6 +26,8 @@ from typing import Deque, List, Tuple, Set, Dict, Any, Optional
 
 import spacy  # ✅ used for extracting semantic motifs
 from utils.continuity import now, describe_duration, describe_time_gap
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 
 # from typing import Optional
 
@@ -350,7 +352,17 @@ class MemoryMixin:
         if len(self.memory_queue) % 10 == 0:
             cleaned = self.cleanup_motifs()
             if cleaned > 0:
-                print(f"[🧹] Cleaned up {cleaned} irrelevant motifs")
+                log_json_entry(
+                    LogType.MOTIF,
+                    {
+                        "message": "Cleaned up irrelevant motifs",
+                        "action": "cleanup",
+                        "motifs_removed": cleaned,
+                        "remaining_motifs": len(self.motif_counter),
+                        "cleanup_threshold": 10  # Every 10 observations
+                    },
+                    print_message=f"[🧹] Cleaned up {cleaned} irrelevant motifs"
+                )
 
         for motif, count in self.motif_counter.items():
             motif_age_days = (now_time - self.motif_first_seen.get(motif, now_time)) / 86400
@@ -1314,7 +1326,18 @@ class MemoryMixin:
                 # No work for 30 seconds, continue waiting
                 continue
             except Exception as e:
-                print(f"[WARNING] Background scoring error: {e}")
+                log_json_entry(
+                    LogType.ERROR,
+                    {
+                        "message": "Background motif scoring error",
+                        "component": "motif_scoring",
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "motif": motif if 'motif' in locals() else None,
+                        "context": context if 'context' in locals() else None
+                    },
+                    print_message=f"[❌] Background scoring error: {e}"
+                )
                 continue
 
     def queue_motif_for_scoring(self, motif: str, context: str = ""):
@@ -1323,5 +1346,14 @@ class MemoryMixin:
             self.scoring_queue.put_nowait((motif, context))
         except queue.Full:
             # Queue is full, skip this scoring (prioritize real-time performance)
-            print(f"[WARNING] Scoring queue full, skipping '{motif}'")
+            log_json_entry(
+                LogType.MOTIF,
+                {
+                    "message": "Scoring queue full, skipping motif",
+                    "action": "queue_full_skip",
+                    "motif": motif,
+                    "context": context
+                },
+                print_message=f"[⚠️] Scoring queue full, skipping '{motif}'"
+            )
             pass
