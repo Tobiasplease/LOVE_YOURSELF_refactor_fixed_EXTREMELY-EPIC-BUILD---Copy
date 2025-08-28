@@ -209,9 +209,7 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                     self.baseline_context = understanding.strip()
                     self.last_compression_time = time.time()
 
-                    # Show full compression output when clean captions enabled, or debug when not
-                    from config.config import PRINT_CLEAN_CAPTIONS
-
+                    # Log compression and always show full output
                     log_json_entry(
                         LogType.COMPRESSION,
                         {
@@ -223,14 +221,9 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                         print_message=f"[🧠] Updated baseline: {self.baseline_context[:80]}{'...' if len(self.baseline_context) > 80 else ''}",
                     )
 
-                    if PRINT_CLEAN_CAPTIONS:
-                        print(f"\n[COMPRESSION - UNDERSTANDING]\n{self.baseline_context}\n")
-
                 if sentiment_text:
                     # Store sentiment for injection into prompts
                     self.last_sentiment_analysis = {"sentiment_text": sentiment_text, "timestamp": time.time()}
-
-                    from config.config import PRINT_CLEAN_CAPTIONS
 
                     log_json_entry(
                         LogType.COMPRESSION,
@@ -243,8 +236,6 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                         print_message=f"[😊] Sentiment: {sentiment_text[:60]}{'...' if len(sentiment_text) > 60 else ''}",
                     )
 
-                    if PRINT_CLEAN_CAPTIONS:
-                        print(f"[COMPRESSION - SENTIMENT]\n{sentiment_text}\n")
             else:
                 log_json_entry(
                     LogType.COMPRESSION,

@@ -115,10 +115,10 @@ OLLAMA_TIMEOUT_REFLECTION = 120  # Timeout for reflection/reasoning calls
 OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API calls
 
 # === OUTPUT SETTINGS ===
-# TO SEE ONLY CLEAN CAPTIONS:
+# Control which log types are printed to console
 LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
+# To see debug information, add "debug" to LOG_TYPES_TO_PRINT
 # LOG_TYPES_TO_PRINT = []
-PRINT_CLEAN_CAPTIONS = False
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages

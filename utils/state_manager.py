@@ -13,6 +13,8 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from utils.continuity import now, describe_duration
 from config.config import MOOD_SNAPSHOT_FOLDER
+from event_logging.log_type import LogType
+from event_logging.event_logger import log_json_entry
 
 
 class StateManager:
@@ -100,14 +102,17 @@ class StateManager:
             # Update lifetime stats
             self._update_lifetime_stats(state)
 
-            # Suppress save message when clean captions are enabled
-            try:
-                from config.config import PRINT_CLEAN_CAPTIONS
-
-                if not PRINT_CLEAN_CAPTIONS:
-                    print(f"[💾] Session state saved to {self.state_file}")
-            except:
-                print(f"[💾] Session state saved to {self.state_file}")
+            # Log session state save
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "Session state saved",
+                    "action": "state_save",
+                    "file_path": self.state_file,
+                    "components_saved": len(state)
+                },
+                print_message=f"[💾] Session state saved to {self.state_file}"
+            )
             return True
 
         except Exception as e:
@@ -220,14 +225,19 @@ class StateManager:
             from datetime import datetime
 
             save_datetime = datetime.fromtimestamp(save_time).strftime("%Y-%m-%d %H:%M:%S")
-            # Suppress debug output when clean captions are enabled
-            try:
-                from config.config import PRINT_CLEAN_CAPTIONS
-
-                if not PRINT_CLEAN_CAPTIONS:
-                    print(f"[DEBUG] State was saved at: {save_datetime}, gap: {captioner.last_session_gap:.1f} seconds")
-            except:
-                print(f"[DEBUG] State was saved at: {save_datetime}, gap: {captioner.last_session_gap:.1f} seconds")
+            # Debug: Log state restoration details
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "State restoration details",
+                    "action": "state_timing",
+                    "save_datetime": save_datetime,
+                    "session_gap_seconds": captioner.last_session_gap,
+                    "beliefs_count": len(captioner.beliefs),
+                    "motifs_count": len(captioner.motif_counter)
+                },
+                print_message=f"[🕐] State was saved at: {save_datetime}, gap: {captioner.last_session_gap:.1f} seconds"
+            )
 
             print(f"[SUCCESS] Restored captioner state: {len(captioner.beliefs)} beliefs, {len(captioner.motif_counter)} motifs")
             return True

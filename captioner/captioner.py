@@ -169,29 +169,41 @@ class Captioner(MemoryMixin):
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)  # Use awakening prompts
                 self.awaiting_environmental_phase = False  # Clear flag
             else:
-                # Suppress debug when clean captions enabled
-                try:
-                    from config.config import PRINT_CLEAN_CAPTIONS
-
-                    if not PRINT_CLEAN_CAPTIONS:
-                        print(f"[DEBUG] Requesting new caption for {img_path}")
-                except:
-                    pass
+                # Debug: requesting new caption
+                log_json_entry(
+                    LogType.DEBUG,
+                    {
+                        "message": "Requesting new caption",
+                        "action": "caption_request",
+                        "image_path": img_path
+                    },
+                    print_message=f"[🔎] Requesting new caption for {img_path}"
+                )
                 previous_caption = getattr(self, "last_caption", "")
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
                 if caption == previous_caption:
-                    if not PRINT_CLEAN_CAPTIONS:
-                        print(f"[WARNING] Caption is identical to previous: {caption[:50]}...")
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {
+                            "message": "Caption is identical to previous",
+                            "action": "duplicate_caption",
+                            "caption_preview": caption[:50]
+                        },
+                        print_message=f"[⚠️] Caption is identical to previous: {caption[:50]}..."
+                    )
                     # Don't print the same caption again but still check reflection/drawing
                     skip_caption_print = True
                 else:
-                    try:
-                        from config.config import PRINT_CLEAN_CAPTIONS
-
-                        if not PRINT_CLEAN_CAPTIONS:
-                            print(f"[DEBUG] New caption generated: {caption[:50]}...")
-                    except:
-                        pass
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {
+                            "message": "New caption generated",
+                            "action": "caption_generated",
+                            "caption_preview": caption[:50],
+                            "caption_length": len(caption)
+                        },
+                        print_message=f"[🔎] New caption generated: {caption[:50]}..."
+                    )
         except Exception as e:
             caption = "[WARNING] Vision unavailable"
             log_json_entry(
@@ -220,22 +232,8 @@ class Captioner(MemoryMixin):
             caption = "Vision unclear right now"  # Use fallback caption
 
         # Clear the animation line and print caption with timestamp (thread-safe)
-        # Only print here if clean captions are NOT enabled (machine.py handles clean printing)
-        if not skip_caption_print:
-            try:
-                from config.config import PRINT_CLEAN_CAPTIONS
-
-                if not PRINT_CLEAN_CAPTIONS:  # Only print here if clean captions disabled
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    formatted_caption = f"[{timestamp}] {caption}"
-
-                    # Thread-safe printing to prevent multiple simultaneous outputs
-                    with self.print_lock:
-                        # Properly clear the line before printing to prevent repetition
-                        print("\r" + " " * 80 + "\r", end="")  # Clear any animation remnants
-                        print(formatted_caption)  # Print without \r to avoid buffer issues
-            except:
-                pass
+        # Caption printing is now handled through structured logging
+        # The caption is logged via log_json_entry with CAPTION log type elsewhere
 
         log_json_entry(
             LogType.CAPTION,
@@ -275,18 +273,17 @@ class Captioner(MemoryMixin):
         # Debug reflection timing
         time_since_reflection = now - self.last_reason_time
         if time_since_reflection > REASON_INTERVAL:
-            if not PRINT_CLEAN_CAPTIONS:
-                log_json_entry(
-                    LogType.REFLECTION,
-                    {
-                        "message": "Reflection triggered",
-                        "action": "trigger",
-                        "time_since_last_reflection": time_since_reflection,
-                        "reason_interval": REASON_INTERVAL,
-                        "mood": self.current_mood
-                    },
-                    print_message=f"[🤔] Reflection triggered! Time since last: {time_since_reflection:.0f}s > {REASON_INTERVAL}s"
-                )
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "Reflection triggered",
+                    "action": "reflection_trigger",
+                    "time_since_last_reflection": time_since_reflection,
+                    "reason_interval": REASON_INTERVAL,
+                    "mood": self.current_mood
+                },
+                print_message=f"[🤔] Reflection triggered! Time since last: {time_since_reflection:.0f}s > {REASON_INTERVAL}s"
+            )
             try:
                 mood_text = self.describe_current_mood()
                 context = self.get_reflection_context()
@@ -388,8 +385,16 @@ class Captioner(MemoryMixin):
         if time_since_last_drawing > DRAWING_INTERVAL:
             with self.print_lock:
                 print("\r" + " " * 80 + "\r", end="")
-                if not PRINT_CLEAN_CAPTIONS:
-                    print(f"[DEBUG] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...")
+                log_json_entry(
+                    LogType.DEBUG,
+                    {
+                        "message": "Drawing interval reached",
+                        "action": "drawing_trigger",
+                        "time_since_last_drawing": time_since_last_drawing,
+                        "drawing_interval": DRAWING_INTERVAL
+                    },
+                    print_message=f"[🎨] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt..."
+                )
 
             memory_context = self.get_recent_memory()
             reflection_context = self.get_last_reflection()
@@ -417,15 +422,31 @@ class Captioner(MemoryMixin):
                 prompt = self.model.generate_drawing_prompt(extra=extra_context)
                 with self.print_lock:
                     print("\r" + " " * 80 + "\r", end="")
-                    if not PRINT_CLEAN_CAPTIONS:
-                        print(f"[DEBUG] Drawing prompt generated: {prompt[:50]}...")
-                    else:
-                        # Show FULL drawing prompt when clean captions enabled
-                        print(f"\n[DRAWING PROMPT]\n{prompt}\n")
+                
+                log_json_entry(
+                    LogType.DEBUG,
+                    {
+                        "message": "Drawing prompt generated",
+                        "action": "prompt_generated",
+                        "prompt_preview": prompt[:50],
+                        "prompt_length": len(prompt)
+                    },
+                    print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}..."
+                )
             except Exception as e:
                 with self.print_lock:
                     print("\r" + " " * 80 + "\r", end="")
-                    print(f"[DEBUG] Error generating drawing prompt: {e}")
+                
+                log_json_entry(
+                    LogType.ERROR,
+                    {
+                        "message": "Error generating drawing prompt",
+                        "component": "drawing",
+                        "error": str(e),
+                        "error_type": type(e).__name__
+                    },
+                    print_message=f"[❌] Error generating drawing prompt: {e}"
+                )
                 prompt = "[ERROR] Drawing prompt generation failed"
             finally:
                 # Stop loading animation and wait for it to fully terminate

@@ -9,6 +9,7 @@ class LogType(Enum):
     INFO = "info"
     ERROR = "error"
     SYSTEM = "system"
+    DEBUG = "debug"
     RUN_METADATA = "run_metadata"
 
     # AI/ML processing events

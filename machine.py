@@ -68,7 +68,6 @@ from config.config import (
     MOOD_EVALUATION_INTERVAL,
     PAUSE_DURATION,
     MODEL_PATH,
-    PRINT_CLEAN_CAPTIONS,
     REACTIVITY_PAUSE_THRESHOLD,
     REACTIVITY_PAUSE_DURATION,
     REACTIVITY_PAUSE_COOLDOWN,
@@ -518,10 +517,10 @@ def mood_update_thread(frame, timestamp):
                     except Exception as e:
                         print(f"Lightbulb caption boost failed: {e}")
 
-                # Only print if this is a genuinely new caption
-                if PRINT_CLEAN_CAPTIONS and captioner.last_caption_time > last_printed_caption_time:
-                    print(f"\n{clean_caption}\n")
-                    last_printed_caption_time = captioner.last_caption_time
+                # PRINT_CLEAN_CAPTIONS? chuck into logging func?
+                # if captioner.last_caption_time > last_printed_caption_time:
+                #     print(f"\n{clean_caption}\n")
+                #     last_printed_caption_time = captioner.last_caption_time
 
                 # Generate embodied temporal feeling for mood analysis
                 current_emotion = mood_engine.get_emotion_for_hand_controller()

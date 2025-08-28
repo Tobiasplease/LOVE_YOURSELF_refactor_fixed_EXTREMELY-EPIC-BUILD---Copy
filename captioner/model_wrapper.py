@@ -16,6 +16,8 @@ from config.config import (
 )
 from utils.ollama import query_ollama
 from .prompt_interface import PromptInterface
+from event_logging.log_type import LogType
+from event_logging.event_logger import log_json_entry
 
 
 class MultimodalModel:
@@ -36,24 +38,34 @@ class MultimodalModel:
         if prompt is None:
             return "[WARNING] No image found"
 
-        # Suppress debug output when clean captions are enabled
-        try:
-            from config.config import PRINT_CLEAN_CAPTIONS
-
-            if not PRINT_CLEAN_CAPTIONS:
-                print(f"[DEBUG] Prompt hash: {hash(prompt)}, first 200 chars: {prompt[:200]}...")
-        except:
-            pass
+        # Debug: Log caption prompt details
+        log_json_entry(
+            LogType.DEBUG,
+            {
+                "message": "Caption prompt generated",
+                "action": "prompt_hash",
+                "prompt_hash": hash(prompt),
+                "prompt_preview": prompt[:200],
+                "flowing": flowing,
+                "first_time": first_time,
+            },
+            print_message=f"[🔍] Prompt hash: {hash(prompt)}, preview: {prompt[:200]}...",
+        )
 
         result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options)
 
-        try:
-            from config.config import PRINT_CLEAN_CAPTIONS
-
-            if not PRINT_CLEAN_CAPTIONS:
-                print(f"[DEBUG] Response hash: {hash(result)}, first 50 chars: {result[:50]}...")
-        except:
-            pass
+        # Debug: Log caption response details
+        log_json_entry(
+            LogType.DEBUG,
+            {
+                "message": "Caption response received",
+                "action": "response_hash",
+                "response_hash": hash(result),
+                "response_preview": result[:50],
+                "response_length": len(result),
+            },
+            print_message=f"[📝] Response hash: {hash(result)}, preview: {result[:50]}...",
+        )
         return result
 
     def reason_about_caption(
@@ -63,19 +75,29 @@ class MultimodalModel:
         try:
             prompt, model_options, system_prompt = self.prompt_interface.build_reflection_prompt_with_options(caption, agent=agent, extra=extra)
 
-            # Suppress debug output when clean captions enabled
-            from config.config import PRINT_CLEAN_CAPTIONS
-
-            if not PRINT_CLEAN_CAPTIONS:
-                print(f"[REFLECTION] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s")
+            log_json_entry(
+                LogType.REFLECTION,
+                {
+                    "message": "Starting reflection",
+                    "action": "reflection_start",
+                    "timeout": OLLAMA_TIMEOUT_REFLECTION,
+                    "caption_preview": caption[:50],
+                },
+                print_message=f"[🤔] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s",
+            )
 
             response = self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options, timeout=OLLAMA_TIMEOUT_REFLECTION)
 
-            if not PRINT_CLEAN_CAPTIONS:
-                print(f"[SUCCESS] Reflection completed: {len(response)} chars")
-            else:
-                # Show FULL reflection when clean captions enabled
-                print(f"\n[REFLECTION]\n{response}\n")
+            log_json_entry(
+                LogType.REFLECTION,
+                {
+                    "message": "Reflection completed",
+                    "action": "reflection_success",
+                    "response_length": len(response),
+                    "response_preview": response[:100],
+                },
+                print_message=f"[✅] Reflection completed: {len(response)} chars",
+            )
             return response
         except Exception as e:
             print(f"[ERROR] Reflection failed: {e}")
@@ -127,7 +149,6 @@ class MultimodalModel:
         # Use provided options or get defaults
         if model_options is None:
             model_options = self.prompt_interface._get_base_model_options()
-
 
         response = query_ollama(
             prompt=prompt,
