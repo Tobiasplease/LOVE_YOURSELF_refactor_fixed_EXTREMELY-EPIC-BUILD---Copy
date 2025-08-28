@@ -170,11 +170,10 @@ class Captioner(MemoryMixin):
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)  # Use awakening prompts
                 self.awaiting_environmental_phase = False  # Clear flag
             else:
-                # Debug: requesting new caption
                 log_json_entry(
                     LogType.DEBUG,
                     {"message": "Requesting new caption", "action": "caption_request", "image_path": img_path},
-                    print_message=f"[🔎] Requesting new caption for {img_path}",
+                    print_message=f"[🐞] Requesting new caption for {img_path}",
                 )
                 previous_caption = getattr(self, "last_caption", "")
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
@@ -184,8 +183,6 @@ class Captioner(MemoryMixin):
                         {"message": "Caption is identical to previous", "action": "duplicate_caption", "caption_preview": caption[:50]},
                         print_message=f"[⚠️] Caption is identical to previous: {caption[:50]}...",
                     )
-                    # Don't print the same caption again but still check reflection/drawing
-                    skip_caption_print = True
                 else:
                     log_json_entry(
                         LogType.DEBUG,
@@ -195,7 +192,7 @@ class Captioner(MemoryMixin):
                             "caption_preview": caption[:50],
                             "caption_length": len(caption),
                         },
-                        print_message=f"[🔎] New caption generated: {caption[:50]}...",
+                        print_message=f"[🐞] New caption generated: {caption[:50]}...",
                     )
         except Exception as e:
             caption = "[WARNING] Vision unavailable"
@@ -388,22 +385,22 @@ class Captioner(MemoryMixin):
 
             try:
                 prompt = self.model.generate_drawing_prompt(extra=extra_context)
-                with self.print_lock:
-                    print("\r" + " " * 80 + "\r", end="")
+                # with self.print_lock:
+                #     print("\r" + " " * 80 + "\r", end="")
 
                 log_json_entry(
                     LogType.DEBUG,
                     {
                         "message": "Drawing prompt generated",
                         "action": "prompt_generated",
-                        "prompt_preview": prompt[:50],
+                        "prompt_preview": prompt,
                         "prompt_length": len(prompt),
                     },
                     print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}...",
                 )
             except Exception as e:
-                with self.print_lock:
-                    print("\r" + " " * 80 + "\r", end="")
+                # with self.print_lock:
+                #     print("\r" + " " * 80 + "\r", end="")
 
                 log_json_entry(
                     LogType.ERROR,
@@ -422,11 +419,11 @@ class Captioner(MemoryMixin):
 
             # Format drawing prompt with timestamp like captions and reflections
             timestamp = datetime.now().strftime("%H:%M:%S")
-            formatted_prompt = f"[{timestamp}] DRAWING: {prompt}"
+            # formatted_prompt = f"[{timestamp}] DRAWING: {prompt}"
 
-            with self.print_lock:
-                print("\r" + " " * 80 + "\r", end="")
-                print(formatted_prompt)
+            # with self.print_lock:
+            #     print("\r" + " " * 80 + "\r", end="")
+            #     print(formatted_prompt)
 
             # Only update timer if drawing system is ready (not in cooldown)
             if self.drawing.ready_to_draw():

@@ -38,7 +38,6 @@ class MultimodalModel:
         if prompt is None:
             return "[WARNING] No image found"
 
-        # Debug: Log caption prompt details
         log_json_entry(
             LogType.DEBUG,
             {
@@ -49,12 +48,11 @@ class MultimodalModel:
                 "flowing": flowing,
                 "first_time": first_time,
             },
-            print_message=f"[🔍] Prompt hash: {hash(prompt)}, preview: {prompt[:200]}...",
+            print_message=f"[🐞] Prompt hash: {hash(prompt)}, preview: {prompt[:200]}...",
         )
 
         result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options)
 
-        # Debug: Log caption response details
         log_json_entry(
             LogType.DEBUG,
             {
@@ -64,7 +62,7 @@ class MultimodalModel:
                 "response_preview": result[:50],
                 "response_length": len(result),
             },
-            print_message=f"[📝] Response hash: {hash(result)}, preview: {result[:50]}...",
+            print_message=f"[🐞] Response hash: {hash(result)}, preview: {result[:50]}...",
         )
         return result
 

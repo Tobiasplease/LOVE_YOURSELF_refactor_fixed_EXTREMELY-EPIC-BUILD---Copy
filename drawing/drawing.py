@@ -111,26 +111,27 @@ class DrawingController:
         """Captioner passes the prompt already built – we just queue it."""
         self.last_reflection = reflection
         try:
+            novelty = getattr(agent, "novelty_score", 0.0)
+            boredom = getattr(agent, "boredom", 0.0)
             if not self.should_draw(
                 mood=agent.current_mood,
-                novelty=getattr(agent, "novelty_score", 0.0),
-                boredom=getattr(agent, "boredom", 0.0),
+                novelty=novelty,
+                boredom=boredom,
                 reflection=reflection,
             ):
+                print_message = f"[🎨] Not inspired (novelty:{novelty},boredom:{boredom},mood:{agent.current_mood:.2f})"
                 log_json_entry(
                     LogType.DECISION,
                     {
                         "decision": "skip_drawing",
                         "reason": "not_inspired",
                         "mood": agent.current_mood,
-                        "novelty": getattr(agent, "novelty_score", 0.0),
-                        "boredom": getattr(agent, "boredom", 0.0),
+                        "novelty": novelty,
+                        "boredom": boredom,
                         "ready_to_draw": self.ready_to_draw(),
                         "cooldown_remaining": max(0, self.cooldown - (time.time() - self.last_drawing_time)),
                     },
-                    print_message=f"""[🎨] Not inspired (novelty:{getattr(agent, 'novelty_score', 0.0):.2f},
-                    boredom:{getattr(agent, 'boredom', 0.0):.2f},
-                    mood:{agent.current_mood:.2f})""",
+                    print_message=print_message,
                 )
                 return
 

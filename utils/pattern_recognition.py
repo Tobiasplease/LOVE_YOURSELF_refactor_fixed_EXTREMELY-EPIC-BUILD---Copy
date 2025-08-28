@@ -389,7 +389,7 @@ class PatternRecognitionEngine:
             if new_motifs:
                 message_parts.append(f"New: {', '.join(list(new_motifs)[:3])}")
             if recurring_motifs:
-                message_parts.append(f"Recurring: {', '.join(list(recurring_motifs)[:3])}")
+                message_parts.append(f"Recurring motifs: {', '.join(list(recurring_motifs)[:3])}")
 
             message = f"[🔍] {' | '.join(message_parts)} (novelty: {novelty:.2f})"
 
