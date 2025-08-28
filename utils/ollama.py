@@ -1,10 +1,11 @@
+# from calendar import c
 import os
 import time
 import base64
 import json
 import requests
 from typing import Optional, Union
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS, DEBUG_OLLAMA
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS, DEBUG_OLLAMA_PROMPTS
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.progress_bar import ProgressBar
@@ -21,7 +22,7 @@ def _get_prompt_emoji(prompt_type: str) -> str:
         "motif_scoring": "📊",
         "vision": "👁️",
         "caption": "📸",
-        "general": "💭"
+        "general": "💭",
     }
     return emoji_map.get(prompt_type, "💭")
 
@@ -37,7 +38,7 @@ def log_ollama_call(
     log_dir: str = "mood_snapshots",
     system_prompt: Optional[str] = None,
     prompt_type: str = "general",
-) -> str:
+):
     """
     Log Ollama API call details for monitoring and debugging.
 
@@ -56,6 +57,7 @@ def log_ollama_call(
         Path to the log file
     """
     # Truncate very long prompts and responses for readability
+
     truncated_prompt = prompt[:500] + "..." if len(prompt) > 500 else prompt
     truncated_response = response[:1000] + "..." if response and len(response) > 1000 else response
     truncated_system_prompt = system_prompt[:500] + "..." if system_prompt and len(system_prompt) > 500 else system_prompt
@@ -76,45 +78,41 @@ def log_ollama_call(
         "api_endpoint": "http://localhost:11434/api/generate",
     }
 
-    # Get appropriate emoji for prompt type
     type_emoji = _get_prompt_emoji(prompt_type)
-
-    # Add prompt type to data
     data["prompt_type"] = prompt_type
 
-    # Basic status message
-    status_emoji = "🤖" if success else "❌"
-    basic_message = f"[{status_emoji}] Ollama {model}: {'Success' if success else 'Failed'}"
+    call_details = [f"[🤖{type_emoji}] {prompt_type.title()} prompt -> {model}"]
 
-    # Enhanced debug message when DEBUG_OLLAMA is enabled
-    if DEBUG_OLLAMA:
-        debug_parts = [f"[🤖{type_emoji}] {prompt_type.title()} prompt -> {model}"]
-
-        if success:
-            debug_parts.append(f"✅ Success ({len(response)} chars)" if response else "✅ Success")
-            if timeout:
-                debug_parts.append(f"⏱️ {timeout}s timeout")
-        else:
-            debug_parts.append(f"❌ Failed: {error_message}" if error_message else "❌ Failed")
-
-        if image_path:
-            debug_parts.append("📸 with image")
-
-        print_message = " | ".join(debug_parts)
-
-        print("-" * 50)
-        if system_prompt:
-            print(f"\n[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}")
-            print(system_prompt[:500] + "..." if len(system_prompt) > 500 else system_prompt)
-        # Print the actual prompt content when DEBUG_OLLAMA is enabled
-        print(f"\n[🤖📝] {prompt_type.title()} PROMPT:\n{'-' * 50}")
-        print(prompt[:1000] + "..." if len(prompt) > 1000 else prompt)
-
-        print("-" * 50)
+    if success:
+        call_details.append(f"✅ Success ({len(response)} chars)" if response else "✅ Success")
+        if timeout:
+            call_details.append(f"⏱️ {timeout}s timeout")
     else:
-        print_message = basic_message
+        call_details.append(f"❌ Failed: {error_message}" if error_message else "❌ Failed")
 
-    # Always include error in data and print if there was one
+    if image_path:
+        call_details.append("📸 with image")
+
+    if truncated_response:
+        call_details.append(truncated_response + "\n")
+
+    if DEBUG_OLLAMA_PROMPTS:
+        debug_details = [" | ".join(call_details)]
+        debug_details = ["-" * 50]
+
+        if system_prompt:
+            debug_details.extend([f"[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}", system_prompt[:500] + "..." if len(system_prompt) > 500 else system_prompt])
+
+        debug_details.extend(
+            [f"\n[🤖📝] {prompt_type.title()} PROMPT:\n{'-' * 50}", prompt[:1000] + "..." if len(prompt) > 1000 else prompt, "-" * 50]
+        )
+
+        print_message = "\n".join(debug_details)
+    else:
+        print_message = " | ".join(call_details)
+
+    log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir, print_message=print_message)
+
     if error_message and not success:
         log_json_entry(
             LogType.ERROR,
@@ -127,8 +125,6 @@ def log_ollama_call(
             },
             print_message=f"[❌🤖] Ollama {prompt_type} error: {error_message}",
         )
-
-    return log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir, print_message=print_message)
 
 
 def _wait_for_drawing_completion() -> None:
