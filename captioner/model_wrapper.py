@@ -51,7 +51,7 @@ class MultimodalModel:
             print_message=f"[🐞] Prompt hash: {hash(prompt)}, preview: {prompt[:200]}...",
         )
 
-        result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options)
+        result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="caption")
 
         log_json_entry(
             LogType.DEBUG,
@@ -84,7 +84,7 @@ class MultimodalModel:
                 print_message=f"[🤔] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s",
             )
 
-            response = self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options, timeout=OLLAMA_TIMEOUT_REFLECTION)
+            response = self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options, timeout=OLLAMA_TIMEOUT_REFLECTION, prompt_type="reflection")
 
             log_json_entry(
                 LogType.REFLECTION,
@@ -111,7 +111,7 @@ class MultimodalModel:
         if prompt is None:
             return "[WARNING] No memory available for drawing prompt"
 
-        return self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options)
+        return self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options, prompt_type="drawing")
 
     def query_tinyllama(self, prompt: str) -> str:
         """Query TinyLlama model for motif scoring and emotional analysis."""
@@ -129,6 +129,7 @@ class MultimodalModel:
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 system_prompt="You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number.",
                 options=tinyllama_options,
+                prompt_type="motif_scoring",
             )
             return response.strip()
         except Exception:
@@ -141,6 +142,7 @@ class MultimodalModel:
         system_prompt: Optional[str] = None,
         timeout: int = 90,
         model_options: dict | None = None,
+        prompt_type: str = "general",
     ) -> str:
         """Pure API call handler - no prompt logic here."""
 
@@ -156,6 +158,7 @@ class MultimodalModel:
             log_dir=MOOD_SNAPSHOT_FOLDER,
             system_prompt=system_prompt,
             options=model_options,
+            prompt_type=prompt_type,
         )
 
         if not response:

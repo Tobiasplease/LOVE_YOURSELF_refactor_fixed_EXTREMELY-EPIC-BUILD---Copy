@@ -269,7 +269,7 @@ class MoodEngine:
                 belief_context=belief_context,
             )
 
-            response = query_ollama(prompt, model="llava:7b-v1.6-mistral-q5_1")
+            response = query_ollama(prompt, model="llava:7b-v1.6-mistral-q5_1", prompt_type="sentiment")
 
             # Parse the response for three values
             valence, arousal, clarity = self.parse_3d_mood_response(response)

@@ -79,6 +79,7 @@ class DrawingController:
                 image=image_path,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 system_prompt="You are critiquing your own artwork. Be honest and constructive.",
+                prompt_type="reflection",
             )
 
             log_json_entry(

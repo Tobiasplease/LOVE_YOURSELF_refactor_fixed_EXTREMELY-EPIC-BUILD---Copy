@@ -10,30 +10,20 @@ from event_logging.log_type import LogType
 from utils.progress_bar import ProgressBar
 
 
-def _detect_prompt_type(prompt: str, system_prompt: Optional[str] = None, image_path: Optional[str] = None) -> tuple[str, str]:
-    """Detect the type of prompt and return appropriate emoji."""
-    prompt_lower = prompt.lower()
-    system_lower = system_prompt.lower() if system_prompt else ""
-
-    # Determine prompt type based on content
-    if "reflection" in prompt_lower or "reflect" in prompt_lower or "reasoning" in system_lower:
-        return "reflection", "🤔"
-    elif "drawing" in prompt_lower or "prompt" in prompt_lower or "artwork" in prompt_lower:
-        return "drawing", "🎨"
-    elif "awakening" in prompt_lower or "consciousness" in prompt_lower or "offline" in prompt_lower:
-        return "awakening", "🌅"
-    elif "compression" in system_lower or "understand" in prompt_lower or "baseline" in prompt_lower:
-        return "compression", "🧠"
-    elif "sentiment" in prompt_lower or "emotion" in prompt_lower:
-        return "sentiment", "😊"
-    elif "motif" in prompt_lower or "score" in prompt_lower or "number" in system_lower:
-        return "motif_scoring", "📊"
-    elif image_path and ("caption" in prompt_lower or "describe" in prompt_lower or "see" in prompt_lower):
-        return "vision", "👁️"
-    elif image_path:
-        return "vision", "📸"
-    else:
-        return "general", "💭"
+def _get_prompt_emoji(prompt_type: str) -> str:
+    """Get appropriate emoji for prompt type."""
+    emoji_map = {
+        "reflection": "🤔",
+        "drawing": "🎨",
+        "awakening": "🌅",
+        "compression": "🧠",
+        "sentiment": "😊",
+        "motif_scoring": "📊",
+        "vision": "👁️",
+        "caption": "📸",
+        "general": "💭"
+    }
+    return emoji_map.get(prompt_type, "💭")
 
 
 def log_ollama_call(
@@ -46,6 +36,7 @@ def log_ollama_call(
     timeout: Optional[int] = None,
     log_dir: str = "mood_snapshots",
     system_prompt: Optional[str] = None,
+    prompt_type: str = "general",
 ) -> str:
     """
     Log Ollama API call details for monitoring and debugging.
@@ -85,8 +76,8 @@ def log_ollama_call(
         "api_endpoint": "http://localhost:11434/api/generate",
     }
 
-    # Detect prompt type and get appropriate emojis
-    prompt_type, type_emoji = _detect_prompt_type(prompt, system_prompt, image_path)
+    # Get appropriate emoji for prompt type
+    type_emoji = _get_prompt_emoji(prompt_type)
 
     # Add prompt type to data
     data["prompt_type"] = prompt_type
@@ -172,6 +163,7 @@ def query_ollama(
     strict_evaluation: bool = False,
     options: Optional[dict] = None,
     show_progress: bool = OLLAMA_SHOW_PROGRESS,
+    prompt_type: str = "general",
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -270,6 +262,7 @@ def query_ollama(
             timeout=timeout,
             log_dir=log_dir,
             system_prompt=system_prompt,
+            prompt_type=prompt_type,
         )
 
         return response_text
@@ -292,6 +285,7 @@ def query_ollama(
             timeout=timeout,
             log_dir=log_dir,
             system_prompt=system_prompt,
+            prompt_type=prompt_type,
         )
 
         return f"[WARNING] Ollama API failed: {error_msg}"

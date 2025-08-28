@@ -199,6 +199,7 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                 system_prompt="You are consciousness creating compressed understanding and analyzing your emotional state. Follow the format exactly",
                 timeout=20,
                 options=model_options,
+                prompt_type="compression",
             )
 
             if response and isinstance(response, str) and len(response.strip()) > 20:

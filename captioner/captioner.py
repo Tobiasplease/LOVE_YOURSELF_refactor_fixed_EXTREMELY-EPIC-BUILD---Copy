@@ -635,7 +635,7 @@ class Captioner(MemoryMixin):
 
         # Generate internal awakening without image
         response = query_ollama(
-            prompt=internal_prompt, model=config.OLLAMA_MODEL, timeout=90, log_dir=config.MOOD_SNAPSHOT_FOLDER, system_prompt=system_prompt
+            prompt=internal_prompt, model=config.OLLAMA_MODEL, timeout=90, log_dir=config.MOOD_SNAPSHOT_FOLDER, system_prompt=system_prompt, prompt_type="awakening"
         )
 
         return response
@@ -657,7 +657,7 @@ class Captioner(MemoryMixin):
                         self, mood=self.current_mood, boredom=self.boredom, novelty=self.novelty_score, last_session_gap=None  # Fresh session
                     )
                     # Use proper captioning with dynamic system prompt (don't override with static one)
-                    environmental_description = self.model._call_ollama(prompt, image_path=image_path)
+                    environmental_description = self.model._call_ollama(prompt, image_path=image_path, prompt_type="awakening")
                     return environmental_description
             except Exception:
                 pass
@@ -682,7 +682,7 @@ class Captioner(MemoryMixin):
                     novelty=self.novelty_score,
                     last_session_gap=getattr(self, "last_session_gap", None),
                 )
-                environmental_part = self.model._call_ollama(prompt, image_path=image_path)
+                environmental_part = self.model._call_ollama(prompt, image_path=image_path, prompt_type="awakening")
                 return f"{status_prefix} {environmental_part}"
         except Exception:
             pass
