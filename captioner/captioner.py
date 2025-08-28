@@ -11,7 +11,7 @@ from typing import Deque, Optional, Tuple, Dict, List
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
-from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, REASON_INTERVAL
+from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
@@ -172,24 +172,16 @@ class Captioner(MemoryMixin):
                 # Debug: requesting new caption
                 log_json_entry(
                     LogType.DEBUG,
-                    {
-                        "message": "Requesting new caption",
-                        "action": "caption_request",
-                        "image_path": img_path
-                    },
-                    print_message=f"[🔎] Requesting new caption for {img_path}"
+                    {"message": "Requesting new caption", "action": "caption_request", "image_path": img_path},
+                    print_message=f"[🔎] Requesting new caption for {img_path}",
                 )
                 previous_caption = getattr(self, "last_caption", "")
                 caption = self.model.caption_image(img_path, flowing=True, first_time=False)
                 if caption == previous_caption:
                     log_json_entry(
                         LogType.DEBUG,
-                        {
-                            "message": "Caption is identical to previous",
-                            "action": "duplicate_caption",
-                            "caption_preview": caption[:50]
-                        },
-                        print_message=f"[⚠️] Caption is identical to previous: {caption[:50]}..."
+                        {"message": "Caption is identical to previous", "action": "duplicate_caption", "caption_preview": caption[:50]},
+                        print_message=f"[⚠️] Caption is identical to previous: {caption[:50]}...",
                     )
                     # Don't print the same caption again but still check reflection/drawing
                     skip_caption_print = True
@@ -200,9 +192,9 @@ class Captioner(MemoryMixin):
                             "message": "New caption generated",
                             "action": "caption_generated",
                             "caption_preview": caption[:50],
-                            "caption_length": len(caption)
+                            "caption_length": len(caption),
                         },
-                        print_message=f"[🔎] New caption generated: {caption[:50]}..."
+                        print_message=f"[🔎] New caption generated: {caption[:50]}...",
                     )
         except Exception as e:
             caption = "[WARNING] Vision unavailable"
@@ -280,9 +272,9 @@ class Captioner(MemoryMixin):
                     "action": "reflection_trigger",
                     "time_since_last_reflection": time_since_reflection,
                     "reason_interval": REASON_INTERVAL,
-                    "mood": self.current_mood
+                    "mood": self.current_mood,
                 },
-                print_message=f"[🤔] Reflection triggered! Time since last: {time_since_reflection:.0f}s > {REASON_INTERVAL}s"
+                print_message=f"[🤔] Reflection triggered! Time since last: {time_since_reflection:.0f}s > {REASON_INTERVAL}s",
             )
             try:
                 mood_text = self.describe_current_mood()
@@ -294,12 +286,13 @@ class Captioner(MemoryMixin):
                 def loading_animation():
                     frames = [" ", ".", "..", "..."]
                     idx = 0
-                    while not loading_stop.is_set():
-                        if hasattr(self, "print_lock"):
-                            with self.print_lock:
+                    if OLLAMA_SHOW_PROGRESS:
+                        while not loading_stop.is_set():
+                            if hasattr(self, "print_lock"):
+                                with self.print_lock:
+                                    print(f"\r{frames[idx % 4]}", end="", flush=True)
+                            else:
                                 print(f"\r{frames[idx % 4]}", end="", flush=True)
-                        else:
-                            print(f"\r{frames[idx % 4]}", end="", flush=True)
                         idx += 1
                         time.sleep(0.3)
 
@@ -352,16 +345,16 @@ class Captioner(MemoryMixin):
                     # Clear animation line for short reflection message
                     with self.print_lock:
                         print("\r" + " " * 80 + "\r", end="")
-                    
+
                     log_json_entry(
                         LogType.REFLECTION,
                         {
                             "message": "Generated reflection too short, skipping",
                             "action": "skip_short",
                             "reflection_length": len(reflection),
-                            "mood": self.current_mood
+                            "mood": self.current_mood,
                         },
-                        print_message="[🤔] Generated reflection too short, skipping"
+                        print_message="[🤔] Generated reflection too short, skipping",
                     )
                     # Update timer even for short reflections to prevent continuous retries
                     self.last_reason_time = now
@@ -373,9 +366,9 @@ class Captioner(MemoryMixin):
                         "message": f"Error during reflection: {e}",
                         "component": "reflection",
                         "error_type": type(e).__name__,
-                        "mood": self.current_mood
+                        "mood": self.current_mood,
                     },
-                    print_message=f"[❌] Error during reflection: {e}"
+                    print_message=f"[❌] Error during reflection: {e}",
                 )
                 # Still update the timer to prevent infinite retries
                 self.last_reason_time = now - REASON_INTERVAL + 60  # Retry in 60 seconds
@@ -391,9 +384,9 @@ class Captioner(MemoryMixin):
                         "message": "Drawing interval reached",
                         "action": "drawing_trigger",
                         "time_since_last_drawing": time_since_last_drawing,
-                        "drawing_interval": DRAWING_INTERVAL
+                        "drawing_interval": DRAWING_INTERVAL,
                     },
-                    print_message=f"[🎨] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt..."
+                    print_message=f"[🎨] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...",
                 )
 
             memory_context = self.get_recent_memory()
@@ -402,19 +395,6 @@ class Captioner(MemoryMixin):
 
             # Start loading animation for drawing prompt
             loading_stop = threading.Event()
-
-            def loading_animation():
-                frames = [" ", ".", "..", "..."]
-                idx = 0
-                while not loading_stop.is_set():
-                    if hasattr(self, "print_lock"):
-                        with self.print_lock:
-                            print(f"\r{frames[idx % 4]}", end="", flush=True)
-                    else:
-                        print(f"\r{frames[idx % 4]}", end="", flush=True)
-                    idx += 1
-                    time.sleep(0.3)
-
             loading_thread = threading.Thread(target=loading_animation, daemon=True)
             loading_thread.start()
 
@@ -422,30 +402,25 @@ class Captioner(MemoryMixin):
                 prompt = self.model.generate_drawing_prompt(extra=extra_context)
                 with self.print_lock:
                     print("\r" + " " * 80 + "\r", end="")
-                
+
                 log_json_entry(
                     LogType.DEBUG,
                     {
                         "message": "Drawing prompt generated",
                         "action": "prompt_generated",
                         "prompt_preview": prompt[:50],
-                        "prompt_length": len(prompt)
+                        "prompt_length": len(prompt),
                     },
-                    print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}..."
+                    print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}...",
                 )
             except Exception as e:
                 with self.print_lock:
                     print("\r" + " " * 80 + "\r", end="")
-                
+
                 log_json_entry(
                     LogType.ERROR,
-                    {
-                        "message": "Error generating drawing prompt",
-                        "component": "drawing",
-                        "error": str(e),
-                        "error_type": type(e).__name__
-                    },
-                    print_message=f"[❌] Error generating drawing prompt: {e}"
+                    {"message": "Error generating drawing prompt", "component": "drawing", "error": str(e), "error_type": type(e).__name__},
+                    print_message=f"[❌] Error generating drawing prompt: {e}",
                 )
                 prompt = "[ERROR] Drawing prompt generation failed"
             finally:
