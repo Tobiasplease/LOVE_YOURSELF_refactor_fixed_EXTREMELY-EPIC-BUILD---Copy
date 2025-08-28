@@ -112,6 +112,7 @@ MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
 OLLAMA_TIMEOUT_REFLECTION = 120  # Timeout for reflection/reasoning calls
+OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API calls
 
 # === OUTPUT SETTINGS ===
 # TO SEE ONLY CLEAN CAPTIONS:

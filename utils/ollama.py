@@ -4,7 +4,7 @@ import base64
 import json
 import requests
 from typing import Optional, Union
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.progress_bar import ProgressBar
@@ -96,7 +96,7 @@ def query_ollama(
     system_prompt: Optional[str] = None,
     strict_evaluation: bool = False,
     options: Optional[dict] = None,
-    show_progress: bool = False,
+    show_progress: bool = OLLAMA_SHOW_PROGRESS,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
