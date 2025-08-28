@@ -113,7 +113,7 @@ def log_ollama_call(
         call_details.append("📸 with image")
 
     if response:
-        call_details.append("Response: " + truncate_for_print(response, 1000) + "\n")
+        call_details.append("\nResponse: " + truncate_for_print(response, 1000))
 
     if DEBUG_OLLAMA_PROMPTS:
         debug_details = [" | ".join(call_details)]
@@ -121,7 +121,7 @@ def log_ollama_call(
         # if system_prompt:
         #     debug_details.extend([f"[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}", truncate_for_print(system_prompt, 500)])
 
-        debug_details.extend([f"\n[🤖📝] {prompt_type.title()} PROMPT:\n{'-' * 50}", truncate_for_print(prompt, 1000), "-" * 50])
+        debug_details.extend([f"\n[🤖{type_emoji}] {prompt_type.title()} PROMPT:\n{'-' * 50}", truncate_for_print(prompt, 1000), "-" * 50])
 
         print_message = "\n".join(debug_details)
     else:
