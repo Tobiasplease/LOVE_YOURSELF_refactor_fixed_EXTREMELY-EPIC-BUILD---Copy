@@ -392,9 +392,6 @@ class Captioner(MemoryMixin):
 
             try:
                 prompt = self.model.generate_drawing_prompt(extra=extra_context)
-                # with self.print_lock:
-                #     print("\r" + " " * 80 + "\r", end="")
-
                 log_json_entry(
                     LogType.DEBUG,
                     {
@@ -406,9 +403,6 @@ class Captioner(MemoryMixin):
                     print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}...",
                 )
             except Exception as e:
-                # with self.print_lock:
-                #     print("\r" + " " * 80 + "\r", end="")
-
                 log_json_entry(
                     LogType.ERROR,
                     {"message": "Error generating drawing prompt", "component": "drawing", "error": str(e), "error_type": type(e).__name__},
@@ -423,14 +417,6 @@ class Captioner(MemoryMixin):
                     # Force clear animation remnants if thread still running
                     with self.print_lock:
                         print("\r" + " " * 80 + "\r", end="")
-
-            # Format drawing prompt with timestamp like captions and reflections
-            # timestamp = datetime.now().strftime("%H:%M:%S")
-            # formatted_prompt = f"[{timestamp}] DRAWING: {prompt}"
-
-            # with self.print_lock:
-            #     print("\r" + " " * 80 + "\r", end="")
-            #     print(formatted_prompt)
 
             # Only update timer if drawing system is ready (not in cooldown)
             if self.drawing.ready_to_draw():
