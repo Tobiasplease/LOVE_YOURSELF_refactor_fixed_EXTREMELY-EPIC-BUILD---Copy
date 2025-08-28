@@ -45,7 +45,7 @@ class MultimodalModel:
         except:
             pass
 
-        result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="normal")
+        result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options)
 
         try:
             from config.config import PRINT_CLEAN_CAPTIONS
@@ -121,7 +121,6 @@ class MultimodalModel:
         system_prompt: Optional[str] = None,
         timeout: int = 90,
         model_options: dict | None = None,
-        prompt_type: str = "normal",
     ) -> str:
         """Pure API call handler - no prompt logic here."""
 
@@ -129,24 +128,6 @@ class MultimodalModel:
         if model_options is None:
             model_options = self.prompt_interface._get_base_model_options()
 
-        # Debug output - suppress when clean captions are enabled
-        try:
-            from config.config import PRINT_CLEAN_CAPTIONS
-
-            if not PRINT_CLEAN_CAPTIONS:
-                print(f"[DEBUG] Model options with seed: {model_options}")
-                print(f"[FULL_DEBUG] ==================== CAPTION REQUEST ====================")
-                print(f"[FULL_DEBUG] MODEL: {self.model_name}")
-                print(f"[FULL_DEBUG] IMAGE: {image_path}")
-                print(f"[FULL_DEBUG] TIMEOUT: {timeout}")
-                print(f"[FULL_DEBUG] PROMPT_TYPE: {prompt_type}")
-                print(f"[FULL_DEBUG] MODEL_OPTIONS: {model_options}")
-                print(f"[FULL_DEBUG] SYSTEM_PROMPT (first 200 chars): {(system_prompt or 'None')[:200]}")
-                print(f"[FULL_DEBUG] FORMATTED_PROMPT (first 500 chars):\\n{prompt[:500]}")
-                print(f"[FULL_DEBUG] FORMATTED_PROMPT (full length): {len(prompt)} chars")
-                print(f"[FULL_DEBUG] ============================================================")
-        except:
-            pass
 
         response = query_ollama(
             prompt=prompt,
