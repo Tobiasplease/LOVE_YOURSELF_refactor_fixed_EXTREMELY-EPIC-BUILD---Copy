@@ -147,12 +147,13 @@ class Captioner(MemoryMixin):
         def loading_animation():
             frames = [" ", ".", "..", "..."]
             idx = 0
-            while not loading_stop.is_set():
-                if hasattr(self, "print_lock"):
-                    with self.print_lock:
+            if OLLAMA_SHOW_PROGRESS:
+                while not loading_stop.is_set():
+                    if hasattr(self, "print_lock"):
+                        with self.print_lock:
+                            print(f"\r{frames[idx % 4]}", end="", flush=True)
+                    else:
                         print(f"\r{frames[idx % 4]}", end="", flush=True)
-                else:
-                    print(f"\r{frames[idx % 4]}", end="", flush=True)
                 idx += 1
                 time.sleep(0.3)
 
@@ -282,19 +283,6 @@ class Captioner(MemoryMixin):
 
                 # Start loading animation for reflection
                 loading_stop = threading.Event()
-
-                def loading_animation():
-                    frames = [" ", ".", "..", "..."]
-                    idx = 0
-                    if OLLAMA_SHOW_PROGRESS:
-                        while not loading_stop.is_set():
-                            if hasattr(self, "print_lock"):
-                                with self.print_lock:
-                                    print(f"\r{frames[idx % 4]}", end="", flush=True)
-                            else:
-                                print(f"\r{frames[idx % 4]}", end="", flush=True)
-                        idx += 1
-                        time.sleep(0.3)
 
                 loading_thread = threading.Thread(target=loading_animation, daemon=True)
                 loading_thread.start()
