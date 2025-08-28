@@ -175,7 +175,7 @@ def log_json_entry(
 
     update_all_run_log(log_dir, entry)
 
-    if log_type_str.lower() in LOG_TYPES_TO_PRINT or "all" in LOG_TYPES_TO_PRINT:
+    if log_type_str.lower() in LOG_TYPES_TO_PRINT or ("all" in LOG_TYPES_TO_PRINT and log_type_str.lower() != "debug"):
         if print_message:
             elapsed = get_elapsed_time()
             print(f"[{elapsed}] {print_message}")

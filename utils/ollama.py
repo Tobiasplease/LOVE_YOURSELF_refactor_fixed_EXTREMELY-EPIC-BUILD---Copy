@@ -113,7 +113,7 @@ def log_ollama_call(
         call_details.append("📸 with image")
 
     if response:
-        call_details.append(truncate_for_print(response, 1000) + "\n")
+        call_details.append("Response: " + truncate_for_print(response, 1000) + "\n")
 
     if DEBUG_OLLAMA_PROMPTS:
         debug_details = [" | ".join(call_details)]

@@ -244,7 +244,7 @@ class Captioner(MemoryMixin):
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            print_message=f"[📷] {truncate_for_print(caption, 100)}",
+            print_message=f"[📸] {truncate_for_print(caption, 100)}",
         )
 
         self.observe(
