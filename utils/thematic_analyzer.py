@@ -152,7 +152,7 @@ Example: creative energy, quiet contemplation, digital focus"""
             "analysis_number": self.caption_count // self.analysis_interval,
         }
 
-        message = f"[THEMES] {' | '.join(themes)}"
+        message = f"[🔍] {' | '.join(themes)}"
         log_json_entry(LogType.MOTIF, log_entry, print_message=message)
 
     def get_current_themes(self) -> List[str]:

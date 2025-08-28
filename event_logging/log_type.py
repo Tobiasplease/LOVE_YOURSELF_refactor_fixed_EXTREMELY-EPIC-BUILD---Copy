@@ -24,7 +24,7 @@ class LogType(Enum):
     NEW_DRAWING = "new_drawing"
 
     # Motif analysis and scoring events
-    MOTIF_EXTRACTION = "motif_extraction"
+    # MOTIF_EXTRACTION = "motif_extraction"
     MOTIF_SCORE = "motif_score"
-    MOTIF_ANALYSIS = "motif_analysis"
+    # MOTIF_ANALYSIS = "motif_analysis"
     MOTIF = "motif"

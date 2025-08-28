@@ -121,7 +121,7 @@ class Captioner(MemoryMixin):
                     log_json_entry(
                         LogType.ERROR,
                         {"message": f"Caption thread error: {exc}", "component": "captioner"},
-                        print_message=f"WARNING Caption thread error: {exc}",
+                        print_message=f"[❌] Caption thread error: {exc}",
                     )
             else:
                 time.sleep(0.05)
@@ -197,7 +197,7 @@ class Captioner(MemoryMixin):
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Caption error: {e}", "component": "captioner"},
-                print_message=f"WARNING Caption error: {e}",
+                print_message=f"[❌] Caption error: {e}",
             )
         finally:
             # Stop loading animation and wait for it to fully terminate
@@ -213,7 +213,7 @@ class Captioner(MemoryMixin):
             log_json_entry(
                 LogType.ERROR,
                 {"message": f"Caption error: {caption}", "component": "captioner"},
-                print_message=f"Caption error: {caption}",
+                print_message=f"[❌] Caption error: {caption}",
             )
             self.observe("I couldn't see anything just now.", self.current_mood, img_path, memory_type="glitch")
             # Don't return early - still need to check reflection/drawing timing
@@ -240,7 +240,7 @@ class Captioner(MemoryMixin):
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            print_message=None,  # Don't double-print
+            print_message=f"[📷] {caption[:100]}{'...' if len(caption) > 100 else ''}",
         )
 
         self.observe(
@@ -322,7 +322,7 @@ class Captioner(MemoryMixin):
                     log_json_entry(
                         LogType.REFLECTION,
                         {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
-                        print_message=None,  # Don't double-print
+                        print_message=f"[🤔] {reflection[:100]}{'...' if len(reflection) > 100 else ''}",
                     )
                     self.last_reason_time = now
                     self.awakening_done = True

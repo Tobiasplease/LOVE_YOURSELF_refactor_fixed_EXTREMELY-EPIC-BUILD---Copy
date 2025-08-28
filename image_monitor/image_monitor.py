@@ -38,7 +38,7 @@ class ImageMonitor:
         log_json_entry(
             LogType.INFO,
             {"message": f"Image monitor started for folder: {self.monitor_folder}"},
-            print_message=f"👁️ Image monitor started: {self.monitor_folder}",
+            print_message=f"[👁️] Image monitor started: {self.monitor_folder}",
         )
 
     def stop(self):
@@ -59,7 +59,7 @@ class ImageMonitor:
         log_json_entry(
             LogType.INFO,
             {"message": f"Image monitor initialized with {len(self.monitored_images)} existing images"},
-            print_message=f"📁 Found {len(self.monitored_images)} existing images",
+            print_message=f"[📁] Found {len(self.monitored_images)} existing images",
         )
 
     def _get_current_images(self):
@@ -100,7 +100,7 @@ class ImageMonitor:
                 log_json_entry(
                     LogType.INFO,
                     {"message": f"Converting PNG to centerline SVG: {png_path}"},
-                    print_message=f"🔄 Converting PNG to centerline SVG: {base_name}",
+                    print_message=f"[🔄] Converting PNG to centerline SVG: {base_name}",
                 )
 
                 # Run svg_centerliner
@@ -119,7 +119,7 @@ class ImageMonitor:
                 log_json_entry(
                     LogType.INFO,
                     {"message": f"G-code generated: {gcode_path}"},
-                    print_message=f"🔧 G-code generated: {os.path.basename(gcode_path)}",
+                    print_message=f"[🔧] G-code generated: {os.path.basename(gcode_path)}",
                 )
 
             else:
@@ -133,7 +133,7 @@ class ImageMonitor:
                     log_json_entry(
                         LogType.INFO,
                         {"message": f"Converting latest SVG to G-code: {latest_svg}"},
-                        print_message=f"🔄 Converting latest SVG to G-code: {os.path.basename(latest_svg)}",
+                        print_message=f"[🔄] Converting latest SVG to G-code: {os.path.basename(latest_svg)}",
                     )
 
                     # Convert SVG to G-code
@@ -142,20 +142,20 @@ class ImageMonitor:
                     log_json_entry(
                         LogType.INFO,
                         {"message": f"G-code generated: {gcode_path}"},
-                        print_message=f"🔧 G-code generated: {os.path.basename(gcode_path)}",
+                        print_message=f"[🔧] G-code generated: {os.path.basename(gcode_path)}",
                     )
                 else:
                     log_json_entry(
                         LogType.ERROR,
                         {"message": f"No SVG files found in output folder: {output_folder}"},
-                        print_message=f"WARNING No SVG files found in output folder",
+                        print_message=f"[❌] No SVG files found in output folder",
                     )
 
         except Exception as e:
             log_json_entry(
                 LogType.ERROR,
                 {"error": f"PNG to G-code conversion failed: {str(e)}"},
-                print_message=f"ERROR PNG to G-code conversion failed: {str(e)}",
+                print_message=f"[❌] PNG to G-code conversion failed: {str(e)}",
             )
 
     def _log_new_image(self, image_path):
@@ -166,7 +166,7 @@ class ImageMonitor:
         log_json_entry(
             LogType.NEW_DRAWING,
             {"event": "new_image_detected", "filename": filename, "image_path": image_path, "file_size": file_size, "timestamp": time.time()},
-            print_message=f"🖼 New drawing: {filename} ({file_size} bytes)",
+            print_message=f"[🖼️] New drawing: {filename} ({file_size} bytes)",
         )
 
         # Process PNG to G-code and execute it (if configured)
@@ -178,7 +178,7 @@ class ImageMonitor:
             log_json_entry(
                 LogType.INFO,
                 {"message": "Drawing generation completed", "image_path": image_path},
-                print_message="SUCCESS Drawing generation completed",
+                print_message="[✅] Drawing generation completed",
             )
         if self.on_image_complete:
             self.on_image_complete(image_path)
@@ -202,6 +202,6 @@ class ImageMonitor:
                 log_json_entry(
                     LogType.ERROR,
                     {"error": f"Image monitor error: {str(e)}"},
-                    print_message=f"ERROR Image monitor error: {str(e)}",
+                    print_message=f"[❌] Image monitor error: {str(e)}",
                 )
                 time.sleep(5.0)  # Wait longer on error

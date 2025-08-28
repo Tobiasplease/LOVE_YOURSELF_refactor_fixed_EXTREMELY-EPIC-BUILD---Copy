@@ -434,12 +434,12 @@ def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
     }
 
     # Only print mood updates for meaningful changes (>0.05) to reduce noise
-    # print_message = None
-    # if abs(mood_change) > 0.05:
-    #     change_indicator = "↗" if mood_change > 0 else "↘"
-    #     print_message = f"Mood {change_indicator} {mood:.2f} (Δ{mood_change:+.2f})"
+    print_message = None
+    if abs(mood_change) > 0.05:
+        change_indicator = "↗" if mood_change > 0 else "↘"
+        print_message = f"[😊] Mood {change_indicator} {mood:.2f} (Δ{mood_change:+.2f})"
 
-    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=None)
+    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=print_message)
 
 
 def read_mood_logs(limit: Optional[int] = None) -> List[dict]:

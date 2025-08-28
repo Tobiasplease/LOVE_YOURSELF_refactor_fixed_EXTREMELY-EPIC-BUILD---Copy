@@ -212,7 +212,10 @@ Answer with ONLY the letter (A, B, C, D, or E):"""
         if error:
             log_data["error"] = error
 
-        log_json_entry(LogType.MOTIF_SCORE, log_data)
+        emoji = "❌" if error else "🔍"
+        print_message = f"[{emoji}] Error: {error}" if error else f"[{emoji}] Motif '{motif}': {score:.2f} ({method}, {elapsed*1000:.1f}ms)"
+
+        log_json_entry(LogType.MOTIF_SCORE, log_data, print_message=print_message)
 
     def get_performance_stats(self) -> Dict:
         """Get performance statistics for monitoring."""

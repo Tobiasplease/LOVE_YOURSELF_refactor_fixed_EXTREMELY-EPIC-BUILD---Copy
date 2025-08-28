@@ -47,7 +47,7 @@ class SilentFailureTracker:
             "traceback": traceback.format_exc(),
         }
 
-        log_json_entry(LogType.ERROR, error_data)
+        log_json_entry(LogType.ERROR, error_data, print_message=f"[❌] {component_name} error: {str(error)}")
 
     def _monitor_components(self):
         """Monitor components for silent failures."""
@@ -71,6 +71,7 @@ class SilentFailureTracker:
                         log_json_entry(
                             LogType.ERROR,
                             {"message": f"Component '{component}' has gone silent", "component": component, "silent_failure_data": silence_data},
+                            print_message=f"[⚠️] Component '{component}' has gone silent",
                         )
 
                         # Reset to avoid spam
@@ -127,6 +128,7 @@ def log_silent_failure(component: str, expected_action: str, context: str = ""):
     log_json_entry(
         LogType.ERROR,
         {"message": f"Silent failure detected: {component} failed to {expected_action}", "component": component, "silent_failure": failure_data},
+        print_message=f"[⚠️] Silent failure: {component} failed to {expected_action}",
     )
 
 
@@ -148,6 +150,7 @@ def log_performance_issue(component: str, operation: str, duration_ms: float, ex
                 "component": component,
                 "performance_issue": perf_data,
             },
+            print_message=f"[🐌] Performance issue: {component}.{operation} took {duration_ms:.1f}ms",
         )
 
 
@@ -193,6 +196,7 @@ def robust_execution(component_name: str, operation_name: str, fallback_result=N
                             "fallback_used": True,
                             "original_error": str(e),
                         },
+                        print_message=f"[🔄] Using fallback for {component_name}.{operation_name}",
                     )
 
                 return fallback_result

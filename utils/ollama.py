@@ -59,7 +59,10 @@ def log_ollama_call(
         "api_endpoint": "http://localhost:11434/api/generate",
     }
 
-    return log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir)
+    status_emoji = "🤖" if success else "❌"
+    print_message = f"[{status_emoji}] Ollama {model}: {success if success else 'Failed'}"
+
+    return log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir, print_message=print_message)
 
 
 def _wait_for_drawing_completion() -> None:

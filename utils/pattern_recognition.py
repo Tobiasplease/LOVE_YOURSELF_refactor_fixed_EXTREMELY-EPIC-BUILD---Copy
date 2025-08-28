@@ -391,7 +391,7 @@ class PatternRecognitionEngine:
             if recurring_motifs:
                 message_parts.append(f"Recurring: {', '.join(list(recurring_motifs)[:3])}")
 
-            message = f"[MOTIFS] {' | '.join(message_parts)} (novelty: {novelty:.2f})"
+            message = f"[🔍] {' | '.join(message_parts)} (novelty: {novelty:.2f})"
 
             log_json_entry(LogType.MOTIF, log_entry, print_message=message)
 
