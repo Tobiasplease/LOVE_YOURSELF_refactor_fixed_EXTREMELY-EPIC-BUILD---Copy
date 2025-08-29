@@ -9,10 +9,18 @@ A sophisticated AI-driven interactive system that combines computer vision, mood
 - **Mood Analysis**: AI-driven emotion and mood evaluation via ollama hosted model
 - **Caption Generation**: Automatic scene description and context understanding
 - **Image Generation**: Creates art based on mood analysis using ComfyUI integration
-- **Servo Control**: Optional physical servo motor control for interactive responses
-- **Memory System**: Maintains contextual awareness and interaction history
-- **Breathing Simulation**: Simulates natural breathing patterns for life-like behavior
-- **Event Logging**: Comprehensive JSON-based logging of all system events
+- **Physical Control Systems**: Multi-modal physical interaction capabilities:
+  - **Servo Control**: Arduino-based servo motor control for interactive responses
+  - **Hand Control**: Emotional hand movement mapping and Arduino integration
+  - **GRBL Integration**: CNC machine control for precise drawing/engraving
+  - **bCNC Integration**: G-code processing and CNC workflow management
+- **Advanced Processing**:
+  - **Memory System**: Maintains contextual awareness and interaction history
+  - **Breathing Simulation**: Simulates natural breathing patterns for life-like behavior
+  - **Speech Recognition**: Whisper-based local speech processing (optional)
+  - **Pattern Recognition**: Advanced motif and thematic analysis
+  - **Spatial Memory**: Object tracking and spatial awareness
+- **Event Logging**: Comprehensive JSON-based logging of all system events with run management
 
 ## System Requirements
 
@@ -72,7 +80,22 @@ The system requires these external model files:
   - `res10_300x300_ssd_iter_140000.caffemodel`
 - **YOLO Models**: `yolov8m.pt` and `yolov8n.pt` (included)
 
-### 6. External Service Setup
+### 6. Model Dependencies
+
+The system requires several model files to be present:
+
+```bash
+# Face detection models (place in models/ directory)
+# These should be downloaded from OpenCV's repository
+models/deploy.prototxt
+models/res10_300x300_ssd_iter_140000.caffemodel
+
+# YOLO models (included in repository)
+models/yolov8m.pt
+models/yolov8n.pt
+```
+
+### 7. External Service Setup
 
 #### Ollama API Setup
 
@@ -96,7 +119,11 @@ For AI image generation based on mood:
 # Default URL: http://localhost:8188/prompt
 ```
 
-ComfyUI integration is handled through the `drawing/` module and uses workflow templates.
+ComfyUI integration is handled through the `drawing/` module and uses workflow templates. Multiple template configurations are available for different deployment scenarios:
+
+- `impostor-template-gpupeon.json`: GPU-optimized configuration
+- `impostor-template-impostor-bot.json`: Standard bot configuration
+- `impostor-template-impostor-bot-svg.json`: SVG output configuration
 
 ## Usage
 
@@ -112,6 +139,12 @@ python machine.py
 # Run with configuration override
 python machine.py --config_override config/debug_config.json
 python machine.py --config_override config/production_config.json
+
+# Run with debug mode for verbose output
+python machine.py --debug
+
+# Combine debug mode with config override
+python machine.py --config_override config/debug_config.json --debug
 ```
 
 ### To Control Log Output Folder
@@ -127,8 +160,17 @@ python debug/test_ollama_caption.py
 # Test ComfyUI integration
 python debug/test_comfy.py drawing/example_workflow.json
 
-# Test impostor flow
+# Test complete impostor image generation pipeline
 python debug/test_impostor_flow.py
+
+# Test G-code processing pipeline
+python debug/test_pipeline.py
+
+# View event logs
+python debug/log_viewer.py
+
+# Reset memory system
+python debug/force_memory_reset.py
 ```
 
 ## Project Structure
@@ -138,28 +180,41 @@ LOVE_YOURSELF/
 ├── machine.py              # Main application entry point
 ├── requirements.txt        # Python dependencies
 ├── pyproject.toml         # Code formatting configuration
-├── config/                # Configuration settings
+├── config/                # Configuration settings and overrides
+│   ├── config.py          # Main configuration file
+│   ├── loader.py          # Configuration override system
+│   ├── debug_config.json  # Debug mode settings
+│   ├── production_config.json # Production settings
+│   └── platform-specific/ # Platform-specific configurations
 ├── captioner/             # AI captioning and memory system
 ├── mood/                  # Mood analysis and emotional processing
 ├── perception/            # Computer vision and object detection
 ├── vision/                # Gaze tracking and visual processing
-├── breathing/             # Breathing simulation
+├── breathing/             # Breathing simulation for life-like behavior
 ├── drawing/               # ComfyUI integration for image generation
-├── servo_control/         # Arduino servo control
-├── event_logging/         # JSON event logging system
-├── utils/                 # Utility modules (ollama, continuity)
-├── debug/                 # Test scripts for components
+├── servo_control/         # Arduino servo motor control
+├── hand_control/          # Emotional hand movement control
+├── grbl/                  # GRBL CNC machine integration
+├── bcnc/                  # bCNC G-code processing utilities
+├── event_logging/         # JSON event logging and run management
+├── utils/                 # Utility modules (ollama, continuity, pattern recognition)
+├── labs/                  # Experimental features
+│   └── warp-fix-lab/      # Drawing warp correction
+├── debug/                 # Test scripts and debugging tools
 ├── models/                # AI model files (face detection, YOLO)
-├── mood_snapshots/        # Stored mood analysis images and logs
-└── arduino_src/    # Arduino code for servo control
+├── event_log/             # Stored event logs and captured images
+├── movement_recordings/   # Recorded movement patterns
+└── arduino_src/           # Arduino code for physical control
 ```
 
 ## Key Dependencies
 
-- **Computer Vision**: OpenCV, NumPy
-- **Machine Learning**: Ultralytics (YOLOv8), PyTorch, TorchVision
+- **Computer Vision**: OpenCV, NumPy, scikit-image
+- **Machine Learning**: Ultralytics (YOLOv8), PyTorch, TorchVision, spaCy
 - **Communication**: Requests (API calls), PySerial (Arduino)
 - **Image Processing**: Pillow, Matplotlib
+- **CNC/G-code Processing**: vpype, vpype-gcode
+- **GUI Automation**: PyAutoGUI, PyGetWindow (for certain features)
 
 ## Configuration Options
 
@@ -188,6 +243,12 @@ python machine.py --config_override config/production_config.json
 - Standard production intervals for optimal performance
 - Uses default values from `config/config.py`
 
+**Platform-Specific Configs:**
+
+- `gpu-peon/`: Configurations for GPU-enabled systems
+- `impostor-bot-win/`: Windows-specific settings
+- `jbe-osx/`: macOS-specific configurations
+
 #### Creating Custom Override Files
 
 Any configuration value in `config/config.py` can be overridden by creating a JSON file:
@@ -211,11 +272,25 @@ The system automatically handles type conversion and validates that override key
 - `CAMERA_INDEX`: Webcam device index (default: 0)
 - `CONFIDENCE_THRESHOLD`: Face detection sensitivity (0.0-1.0)
 
-### Servo Control
+### Physical Control Systems
+
+**Servo Control:**
 
 - `USE_SERVO`: Enable/disable physical servo control
 - `SERIAL_PORT`: Arduino serial port (e.g., 'COM3', '/dev/ttyUSB0')
 - `BAUD_RATE`: Serial communication speed (default: 9600)
+
+**Hand Control:**
+
+- Emotional hand movement mapping
+- Arduino integration for expressive gestures
+- Movement pattern recording and playback
+
+**CNC Integration:**
+
+- GRBL-based precise drawing and engraving
+- bCNC G-code processing and workflow management
+- SVG to G-code conversion with centerline processing
 
 ### Mood Analysis
 
@@ -229,9 +304,14 @@ The system automatically handles type conversion and validates that override key
 ### Common Issues
 
 1. **Camera not found**: Check `CAMERA_INDEX` in config
-2. **Servo not responding**: Verify `SERIAL_PORT` and Arduino connection
+2. **Physical control not responding**:
+   - Verify `SERIAL_PORT` and Arduino connection
+   - Check GRBL connection for CNC functionality
+   - Ensure proper Arduino firmware is uploaded
 3. **ollama errors**: Ensure ollama server is running on localhost:11434
 4. **Import errors**: Verify virtual environment is activated and dependencies installed
+5. **Model files missing**: Ensure OpenCV face detection models are in `models/` directory
+6. **G-code processing errors**: Verify vpype and related tools are properly installed
 
 ### Performance Optimization
 
