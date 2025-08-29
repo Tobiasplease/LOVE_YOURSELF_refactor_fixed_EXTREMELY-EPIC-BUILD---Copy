@@ -9,7 +9,6 @@ import os
 import signal
 import atexit
 from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY
-from servo_control.lightbulb_pwm import LightbulbController
 
 
 def parse_args():
@@ -124,6 +123,9 @@ from reactivity.camera_reactive import CameraReactivityEngine
 if USE_SERVO:
     from servo_control.servo_control import ServoController
 
+if USE_LIGHTBULB_PWM:
+    from servo_control.lightbulb_controller_simple import SimpleLightbulbController
+
 VERBOSE = False
 
 # === INIT ===
@@ -131,7 +133,7 @@ debug_print("Opening camera", "INIT")
 lightbulb = None
 if USE_LIGHTBULB_PWM:
     try:
-        lightbulb = LightbulbController(LIGHTBULB_SERIAL_PORT)
+        lightbulb = SimpleLightbulbController(LIGHTBULB_SERIAL_PORT, debug=DEBUG_MODE)
     except Exception as e:
         print(f"Lightbulb PWM controller init failed: {e}")
 cap = cv2.VideoCapture(CAMERA_INDEX if "CAMERA_INDEX" in globals() else 0)
@@ -152,17 +154,17 @@ net = cv2.dnn.readNetFromCaffe(proto, model)
 debug_print("Face detection model loaded", "INIT")
 if USE_SERVO:
     servos = ServoController(port=SERIAL_PORT, baudrate=BAUD_RATE)
-    servos.serial.setDTR(False)  # type: ignore
-    time.sleep(1)
-    servos.serial.setDTR(True)  # type: ignore
-    time.sleep(2)
+    # Skip DTR manipulation - causes issues with servo Arduino
+    time.sleep(2)  # Give Arduino time to initialize
 else:
     servos = None
-    lung_angle = 0.0
-    breath_speed = 4.0
-    breath_paused = False
-    pause_start_time = 0
-    last_breath_direction = None
+
+# Initialize breathing variables regardless of servo setting
+lung_angle = 0.0
+breath_speed = 4.0
+breath_paused = False
+pause_start_time = 0
+last_breath_direction = None
 
 last_mood_time = 0
 last_seen_time = time.time()
@@ -238,6 +240,7 @@ def graceful_cleanup():
 
     if cleanup_completed:
         return
+
 
     shutdown_in_progress = True
     print("[SHUTDOWN] Graceful shutdown initiated...")
@@ -486,12 +489,12 @@ def mood_update_thread(frame, timestamp):
         snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
         cv2.imwrite(snapshot_path, frame)
         debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
-        # Lightbulb flicker on snapshot
+        # Lightbulb flash on snapshot  
         if USE_LIGHTBULB_PWM and lightbulb:
             try:
-                lightbulb.flicker(duration=0.2, brightness=255)
+                lightbulb.caption_flash()
             except Exception as e:
-                print(f"Lightbulb PWM flicker failed: {e}")
+                print(f"Lightbulb flash failed: {e}")
 
         try:
             # First: Update captioner to generate new captions
@@ -510,12 +513,12 @@ def mood_update_thread(frame, timestamp):
                 clean_caption = captioner.last_caption
                 if clean_caption.lower().startswith("caption:"):
                     clean_caption = clean_caption[len("caption:") :].strip()
-                # Lightbulb boost on caption print
+                # Lightbulb flash on caption print
                 if USE_LIGHTBULB_PWM and lightbulb:
                     try:
-                        lightbulb.caption_boost(duration=600)
+                        lightbulb.caption_flash()
                     except Exception as e:
-                        print(f"Lightbulb caption boost failed: {e}")
+                        print(f"Lightbulb caption flash failed: {e}")
 
                 # PRINT_CLEAN_CAPTIONS? chuck into logging func?
                 # if captioner.last_caption_time > last_printed_caption_time:
@@ -531,14 +534,7 @@ def mood_update_thread(frame, timestamp):
                 )
                 debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
 
-                # Update lightbulb mood parameters
-                if USE_LIGHTBULB_PWM and lightbulb:
-                    try:
-                        mood_speed = 0.2 + (current_mood * 0.6)  # 0.2 to 0.8
-                        mood_randomness = current_mood * 0.3  # 0 to 0.3
-                        lightbulb.update_mood(mood_speed, mood_randomness)
-                    except Exception as e:
-                        print(f"Lightbulb mood update failed: {e}")
+                # SimpleLightbulbController doesn't have mood parameters - uses frame diff only
 
                 # Periodic state saving (every 2 minutes)
                 if now - last_state_save_time > 120:  # 2 minutes
@@ -564,6 +560,7 @@ def mood_update_thread(frame, timestamp):
         except Exception as e:
             debug_print(f"Captioner update failed: {e}", "ERROR")
         last_snapshot_time = now
+    debug_print("Mood update thread completed successfully", "MOOD")
 
 
 # === REACTIVITY PAUSE SYSTEM STATE ===
@@ -578,12 +575,14 @@ DISPLAY_THROTTLE_INTERVAL = 0.1  # Show camera feed max 10 FPS to save memory
 try:
     prev_gray = None
     smoothed_pwm = 0
+    debug_print("Entering main camera processing loop", "MAIN")
     while True:
         # Check for shutdown signal
         if shutdown_in_progress:
             print("[SHUTDOWN] Shutdown signal received - breaking main loop")
             break
 
+        debug_print("Reading camera frame", "MAIN")
         ret, frame = cap.read()
         if not ret:
             continue
@@ -618,18 +617,10 @@ try:
 
             if USE_LIGHTBULB_PWM and lightbulb:
                 try:
-                    # Only send if brightness changed significantly (reduce serial traffic)
-                    if (
-                        not hasattr(lightbulb, "_last_base")
-                        or abs(final_brightness - lightbulb._last_base) > 3  # type: ignore
-                        or not hasattr(lightbulb, "_last_send_time")
-                        or time.time() - lightbulb._last_send_time > 0.1  # type: ignore
-                    ):  # Max 10fps updates
-                        lightbulb.set_base_brightness(final_brightness)
-                        lightbulb._last_base = final_brightness  # type: ignore
-                        lightbulb._last_send_time = time.time()  # type: ignore
+                    # Use SimpleLightbulbController's frame diff method
+                    lightbulb.set_frame_diff_brightness(final_brightness)
                 except Exception as e:
-                    print(f"Lightbulb base brightness failed: {e}")
+                    print(f"Lightbulb frame diff brightness failed: {e}")
         prev_gray = gray.copy()
 
         # Force garbage collection periodically to prevent memory accumulation
@@ -761,9 +752,13 @@ try:
             servo_controller=servos,
         )
 
-        if USE_SERVO:
-            servos.set_pan(pan)  # type: ignore
-            servos.set_tilt(tilt)  # type: ignore
+        if USE_SERVO and servos:
+            try:
+                servos.set_pan(pan)  # type: ignore
+                servos.set_tilt(tilt)  # type: ignore
+            except Exception as e:
+                debug_print(f"Servo command failed: {e}", "ERROR")
+                # Don't crash the whole system for servo errors
 
         if face_box:
             (x1, y1, x2, y2) = face_box
@@ -838,17 +833,7 @@ try:
                 cv2.rectangle(frame, (bar_x + bar_w - 30, bar_y + 10), (bar_x + bar_w - 10, bar_y + 30), (0, 0, 255), -1)
                 cv2.putText(frame, "PAUSE", (bar_x + bar_w - 28, bar_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
 
-                # === LIGHTBULB PWM OUTPUT ===
-                if USE_LIGHTBULB_PWM and lightbulb:
-                    try:
-                        chaos_val = reactivity_metrics.get("chaos_multiplier", 0.3)
-                        pwm_value = int(max(0, min(1, (chaos_val - 0.3) / 3.2)) * 255)
-                        # Use Arduino fluctuation for smoother mood-based lighting
-                        if not lightbulb.fluctuating or abs(pwm_value - getattr(lightbulb, "_last_mood_base", 0)) > 10:
-                            lightbulb.start_fluctuation(max(8, pwm_value), amplitude=5, speed=0.3)  # type: ignore # Slower mood fluctuation
-                            lightbulb._last_mood_base = pwm_value  # type: ignore
-                    except Exception as e:
-                        print(f"Lightbulb fluctuation failed: {e}")
+                # SimpleLightbulbController uses frame diff for brightness, not mood fluctuation
 
         # MEMORY FIX: Throttle camera display to prevent graphics memory exhaustion
         current_time = time.time()
@@ -864,9 +849,4 @@ try:
 
 except KeyboardInterrupt:
     graceful_cleanup()
-    sys.exit(0)
-finally:
-    # Always ensure cleanup happens
-    if not cleanup_completed:
-        graceful_cleanup()
     sys.exit(0)

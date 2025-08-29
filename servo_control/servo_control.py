@@ -1,7 +1,9 @@
 import serial
 import time
+import threading
 
 ANGLE_THRESHOLD = 2  # degrees — for gaze only
+MIN_COMMAND_INTERVAL = 0.08  # Minimum 80ms between commands (~12Hz) - Matches Arduino timing
 
 
 class ServoController:
@@ -9,10 +11,8 @@ class ServoController:
         try:
             self.ser = serial.Serial(port, baudrate, timeout=1)
             self.serial = self.ser  # For optional external use
-            self.serial.setDTR(False)  # type: ignore
-            time.sleep(1)
-            self.serial.setDTR(True)  # type: ignore
-            time.sleep(2)
+            # Skip DTR manipulation - causes issues with lint arduinoserial sketch
+            time.sleep(0.5)  # Brief delay for Arduino initialization
             print(f"[ServoController] Connected on {port} at {baudrate} baud.")
         except serial.SerialException as e:
             print(f"[ERROR] Could not connect to {port}: {e}")
@@ -20,16 +20,38 @@ class ServoController:
             self.serial = None
 
         self.last_sent = {}
+        self.last_send_time = 0
+        self.send_lock = threading.Lock()
 
     def send(self, message: str, key=None):
         if not self.ser or not self.ser.is_open:
             return
         if key and self.last_sent.get(key) == message:
             return
-        full = message.strip() + "\n"
-        self.ser.write(full.encode("utf-8"))
-        if key:
-            self.last_sent[key] = message
+            
+        with self.send_lock:
+            # Rate limiting: enforce minimum interval between commands
+            now = time.time()
+            time_since_last = now - self.last_send_time
+            if time_since_last < MIN_COMMAND_INTERVAL:
+                time.sleep(MIN_COMMAND_INTERVAL - time_since_last)
+            
+            try:
+                full = message.strip() + "\n"
+                self.ser.write(full.encode("utf-8"))
+                self.ser.flush()  # Ensure command is sent immediately
+                self.last_send_time = time.time()
+                
+                if key:
+                    self.last_sent[key] = message
+                    
+            except Exception as e:
+                print(f"[ERROR] Servo send failed: {e}")
+                # Try to recover
+                try:
+                    self.ser.reset_output_buffer()
+                except:
+                    pass
 
     def set_pan(self, angle: int):
         if self._should_send("pan", angle):

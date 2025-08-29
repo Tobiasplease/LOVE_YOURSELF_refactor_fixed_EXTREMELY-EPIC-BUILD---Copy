@@ -4,15 +4,17 @@ import os
 from config.prompt_templates import *  # noqa: F401
 
 # === SERIAL SETTINGS ===
-SERIAL_PORT = "COM10"
+# === ARDUINO SERIAL PORT CONFIGURATION (Linux) ===
+# Each Arduino needs a unique port assignment
+SERIAL_PORT = "/dev/ttyUSB3"  # Servo lung/gaze system (or USB0 as backup)
 BAUD_RATE = 9600
 
 # === MODEL PATHS ===
 MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
-USE_SERVO = False
-USE_HAND_CONTROLLER = True  # Completely disable hand controller system
+USE_SERVO = True
+USE_HAND_CONTROLLER = True  # Enable hand controller system
 SERVO_MIN = 45
 SERVO_MAX = 135
 EASING_FACTOR = 0.09
@@ -87,7 +89,7 @@ CENTER_LINE_SVG = True
 # === GRBL EXECUTION SETTINGS ===
 # If True, actually execute the generated G-code on GRBL hardware
 # If False, only generate G-code files without executing them
-EXECUTE_GRBL_GCODE = False
+EXECUTE_GRBL_GCODE = True
 
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
@@ -146,5 +148,22 @@ NO_HANDS = False
 REACTIVITY_PAUSE_THRESHOLD = 0.30  # Activity level to trigger pause
 REACTIVITY_PAUSE_DURATION = 4.0  # Seconds to pause Markov generation
 REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
+# === ARDUINO DEVICE CONFIGURATION ===
+# Configure each Arduino with its specific Linux serial port
+# Use debug/identify_arduinos.py to help identify which device is on which port
+
+# 1. Lightbulb PWM Controller
 USE_LIGHTBULB_PWM = True
-LIGHTBULB_SERIAL_PORT = "COM4"  # Update as needed
+LIGHTBULB_SERIAL_PORT = "/dev/ttyUSB0"  # Lightbulb PWM Arduino (frame diff protocol)
+
+# 2. Hand Controller (hardcoded port required)
+HAND_CONTROLLER_PORT = "/dev/ttyUSB2"  # Hand controller Arduino (Pure Consciousness Mode)
+
+# 3. GRBL CNC Controller  
+GRBL_CNC_PORT = "/dev/ttyUSB0"  # GRBL CNC Arduino
+
+# 4. uArm Swift Pro Controller
+UARM_SWIFT_PORT = "/dev/ttyUSB5"  # uArm Swift Pro Arduino (future connection)
+
+# 5. Additional devices can be added here
+# CUSTOM_DEVICE_PORT = "/dev/ttyUSB5"

@@ -111,6 +111,10 @@ def update_lung_position(
     lung_eased = lung_eased * (1 - EASING_FACTOR) + target_lung * EASING_FACTOR
 
     if servo_controller:
-        servo_controller.set_lung_position(int(lung_eased), force=True)
+        try:
+            servo_controller.set_lung_position(int(lung_eased), force=True)
+        except Exception as e:
+            print(f"[ERROR] Lung servo command failed: {e}")
+            # Don't crash the whole system for servo errors
 
     return int(lung_eased), lung_angle, breath_speed, breath_paused, last_breath_direction, pause_start_time
