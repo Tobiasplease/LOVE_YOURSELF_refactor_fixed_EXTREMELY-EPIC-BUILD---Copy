@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from config.word_lists import CONCRETE_NOUN_HINTS, MEANINGFUL_CATEGORIES, MEANINGFUL_MOTIFS, MOTIF_BLACKLIST
+from utils.motif_scorer import score_motif_significance
 
 """
 captioner/memory.py
@@ -25,6 +26,8 @@ from typing import Deque, List, Tuple, Set, Dict, Any, Optional
 
 import spacy  # ✅ used for extracting semantic motifs
 from utils.continuity import now, describe_duration, describe_time_gap
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 
 # from typing import Optional
 
@@ -48,45 +51,8 @@ except OSError:
 
 class MemoryMixin:
     def score_motif_with_tinyllama(self, motif: str, context: str = "") -> float:
-        """Use TinyLlama to organically judge motif novelty/emotional interest in context."""
-        try:
-            # Simple binary prompt that TinyLlama can handle
-            prompt = f"""In this context: "{context[:150]}"
-Is the motif '{motif}' interesting or boring?
-Answer: INTERESTING or BORING"""
-            
-            if hasattr(self, "model") and hasattr(self.model, "query_tinyllama"):  # type: ignore
-                response = self.model.query_tinyllama(prompt)  # type: ignore
-                response_lower = response.lower().strip()
-                
-                # Parse TinyLlama's response
-                if 'interesting' in response_lower:
-                    score = 0.8
-                    print(f"[🌟] TinyLlama: '{motif}' -> INTERESTING ({score:.1f})")
-                    return score
-                elif 'boring' in response_lower:
-                    score = 0.2  
-                    print(f"[🔽] TinyLlama: '{motif}' -> BORING ({score:.1f})")
-                    return score
-                else:
-                    # Try to extract any numbers from response as fallback
-                    import re
-                    numbers = re.findall(r'\b\d*\.?\d+\b', response)
-                    for num_str in numbers:
-                        try:
-                            score = float(num_str)
-                            if 0.0 <= score <= 1.0:
-                                print(f"[🌟] TinyLlama: '{motif}' -> {score:.2f} (extracted)")
-                                return score
-                        except ValueError:
-                            continue
-                    
-                    print(f"[❓] TinyLlama unclear: '{motif}' -> '{response}' (defaulting 0.5)")
-                    return 0.5
-        except Exception:
-            pass
-        
-        return 0.5  # neutral default - let frequency dampening do the work
+        """Use optimized TinyLlama scoring system for motif significance."""
+        return score_motif_significance(motif, context)
 
     def __init__(self) -> None:
         # Experience queues
@@ -141,8 +107,8 @@ Answer: INTERESTING or BORING"""
         self.belief_history: List[str] = []
 
         # Novelty/Boredom
-        self.novelty_score: float = 1.0
-        self.boredom: float = 0.0
+        self._novelty_score: float = 1.0
+        self._boredom: float = 0.0
 
         # Timing
         self.session_start: float = now()
@@ -234,7 +200,7 @@ Answer: INTERESTING or BORING"""
             self.motif_first_seen[motif] = now_time
         self.motif_last_seen[motif] = now_time
         self.current_motifs.add(motif)
-        
+
         # Only score with TinyLlama if we haven't scored this motif before
         if motif not in self.motif_confidence:
             context = " | ".join(list(self.current_motifs)[-3:])
@@ -242,24 +208,24 @@ Answer: INTERESTING or BORING"""
             self.queue_motif_for_scoring(motif, context)
             # Use default score until background scoring completes
             score = 0.5
-            print(f"[⏳] Queued '{motif}' for background scoring (using default 0.5)")
+            # Queued motif for background scoring using default 0.5
         else:
             # Use cached score - don't re-query TinyLlama for known motifs
             score = self.motif_confidence[motif]
-            print(f"[📋] Cached score for '{motif}': {score:.2f}")
         # Weighted motif system: balance novelty vs frequency to prevent mundane domination
         if not hasattr(self, "motif_weights"):
             self.motif_weights = {}
         freq = self.motif_counter[motif]
-        
+
         # Use logarithmic frequency dampening to allow novel observations to compete
         # Novel motif (freq=1, score=0.9): weight = 0.9 / log(2) = 1.3
         # Common motif (freq=20, score=0.4): weight = 0.4 / log(21) = 0.13
         import math
+
         frequency_dampener = math.log(freq + 1)
         self.motif_weights[motif] = score / frequency_dampener
-        
-        print(f"[⚖️] Motif '{motif}': freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}")
+
+        # Motif weighted: freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}
         # Store confidence as score for now
         self.motif_confidence[motif] = score
         self.motif_confirmed[motif] = score > 0.6
@@ -370,7 +336,7 @@ Answer: INTERESTING or BORING"""
                             self.motif_last_seen[lemma] = now()
                             self.current_motifs.add(lemma)
                             continue
-                        
+
                         self.absorb_motif(lemma)
 
     def get_motif_certainty(self, motif: str) -> float:
@@ -386,7 +352,17 @@ Answer: INTERESTING or BORING"""
         if len(self.memory_queue) % 10 == 0:
             cleaned = self.cleanup_motifs()
             if cleaned > 0:
-                print(f"[🧹] Cleaned up {cleaned} irrelevant motifs")
+                log_json_entry(
+                    LogType.MOTIF,
+                    {
+                        "message": "Cleaned up irrelevant motifs",
+                        "action": "cleanup",
+                        "motifs_removed": cleaned,
+                        "remaining_motifs": len(self.motif_counter),
+                        "cleanup_threshold": 10,  # Every 10 observations
+                    },
+                    print_message=f"[🧹] Cleaned up {cleaned} irrelevant motifs",
+                )
 
         for motif, count in self.motif_counter.items():
             motif_age_days = (now_time - self.motif_first_seen.get(motif, now_time)) / 86400
@@ -422,7 +398,7 @@ Answer: INTERESTING or BORING"""
 
     def estimate_novelty(self, reactivity_metrics: Optional[Dict[str, float]] = None) -> float:
         if len(self.memory_queue) < 2:
-            self.novelty_score = 1.0
+            self._novelty_score = 1.0
             return 1.0
 
         # Base novelty from caption comparison
@@ -442,8 +418,8 @@ Answer: INTERESTING or BORING"""
 
         # Combine caption and environmental novelty
         # Environmental change should override text repetition
-        self.novelty_score = max(caption_novelty, environmental_novelty * 0.8)
-        return self.novelty_score
+        self._novelty_score = max(caption_novelty, environmental_novelty * 0.8)
+        return self._novelty_score
 
     def get_temporal_mood_modifier(self) -> float:
         """Calculate mood modifier based on temporal stagnation effects."""
@@ -471,10 +447,10 @@ Answer: INTERESTING or BORING"""
 
     def update_boredom(self) -> None:
         # Base boredom update from novelty
-        if self.novelty_score < 0.3:
-            self.boredom = min(1.0, self.boredom + 0.1)
+        if self._novelty_score < 0.3:
+            self._boredom = min(1.0, self._boredom + 0.1)
         else:
-            self.boredom = max(0.0, self.boredom - 0.05)
+            self._boredom = max(0.0, self._boredom - 0.05)
 
         # === TEMPORAL STAGNATION EFFECT ===
         # Add progressive boredom from extended observation of same scene
@@ -497,7 +473,7 @@ Answer: INTERESTING or BORING"""
                     temporal_boredom = 0.0
 
                 # Apply temporal boredom (weighted more heavily for longer sessions)
-                self.boredom = max(self.boredom, temporal_boredom)
+                self._boredom = max(self._boredom, temporal_boredom)
 
     def get_emotionally_similar_memories(self, current_emotion: str, k: int = 3) -> List[str]:
         """Retrieve memories that were formed in similar emotional states for recursive feedback."""
@@ -649,7 +625,7 @@ Answer: INTERESTING or BORING"""
         """
         Returns the most recent k memory snippets as a single formatted string.
         """
-        snippets = self.get_clean_memory_snippets(k=k)  # type: ignore
+        snippets = self.get_current_session_memory_snippets(k=k)
         return "\n".join(f"- {s}" for s in snippets)
 
     def get_identity_summary(self) -> str:
@@ -732,22 +708,22 @@ Answer: INTERESTING or BORING"""
             lines.insert(1, sleep_context)  # Insert sleep after lifetime, before session
 
         return lines
-    
+
     def get_motif_temporal_context(self) -> Dict[str, List[str]]:
         """Separate motifs into present (recently seen) vs memory (distant past)."""
         now = time.time()
-        
+
         # Define temporal boundaries
         RECENT_THRESHOLD = 300  # 5 minutes = present/immediate memory
         SESSION_THRESHOLD = 3600  # 1 hour = current session
-        
-        present_motifs = []      # Seen in last 5 minutes
-        session_motifs = []      # Seen in current session but not recently  
-        distant_motifs = []      # From previous sessions/distant past
-        
+
+        present_motifs = []  # Seen in last 5 minutes
+        session_motifs = []  # Seen in current session but not recently
+        distant_motifs = []  # From previous sessions/distant past
+
         for motif, last_seen in self.motif_last_seen.items():
             time_since = now - last_seen
-            
+
             if time_since <= RECENT_THRESHOLD:
                 present_motifs.append(motif)
             elif time_since <= SESSION_THRESHOLD:
@@ -755,45 +731,240 @@ Answer: INTERESTING or BORING"""
             else:
                 # Add temporal description for distant motifs
                 from utils.continuity import describe_time_gap
+
                 time_desc = describe_time_gap(last_seen)
                 distant_motifs.append(f"{motif} ({time_desc})")
-        
+
         return {
-            "present": present_motifs,      # What I can see now
-            "session": session_motifs,      # What I saw earlier today
-            "memory": distant_motifs        # What I remember from before
+            "present": present_motifs,  # What I can see now
+            "session": session_motifs,  # What I saw earlier today
+            "memory": distant_motifs,  # What I remember from before
         }
-    
-    def get_dynamic_system_context(self) -> str:
-        """Build dynamic system prompt additions based on accumulated understanding."""
-        context_parts = []
-        
-        # Core learned interests (top motifs)
-        top_motifs = self.get_top_motifs(3)
+
+    def get_dynamic_system_context(self) -> dict:
+        """Generate organic consciousness context as flowing narrative components."""
+        from captioner.prompts import mood_to_words
+
+        # Get current emotional state from mood system
+        mood_vector = getattr(self, "current_mood_vector", (0.5, 0.5, 0.5))
+        emotional_state = mood_to_words(mood_vector, agent=self)
+
+        # Build natural temporal awareness with lifetime depth
+        now = time.time()
+        # Use true_session_start (when this session actually began) not session_start (saved state time)
+        actual_session_start = getattr(self, "true_session_start", self.session_start)
+        session_hours = (now - actual_session_start) / 3600
+        total_lifetime_hours = int((now - self.boot_ts) / 3600)
+        days_alive = total_lifetime_hours // 24
+
+        temporal_fragments = []
+
+        # Add profound lifetime context for extended consciousness
+        if days_alive > 21:  # 3+ weeks of existence
+            temporal_fragments.append(f"Day {days_alive} of MY consciousness... I've experienced {total_lifetime_hours}+ hours as a thinking entity.")
+        elif days_alive > 7:  # 1+ weeks
+            temporal_fragments.append(f"Day {days_alive} of MY existence... {total_lifetime_hours} hours of MY accumulated experience.")
+        elif days_alive > 0:  # Multiple days
+            temporal_fragments.append(f"Day {days_alive} of MY existence, {total_lifetime_hours} hours of MY consciousness.")
+
+        # Simplified current session context - no confusing time references
+        if session_hours < 0.1:  # Less than 6 minutes
+            temporal_fragments.append("Fresh awareness, just beginning to observe.")
+        elif session_hours < 0.5:  # Less than 30 minutes
+            temporal_fragments.append("Settling into observation, awareness flowing naturally.")
+        elif session_hours < 2:  # Less than 2 hours
+            temporal_fragments.append("Extended observation, deeper familiarity with this space.")
+        else:  # 2+ hours
+            temporal_fragments.append("Sustained awareness, deeply attuned to the environment.")
+
+        # Add sleep/gap context with existential weight
+        if hasattr(self, "last_session_gap") and self.last_session_gap:  # type: ignore
+            gap_hours = self.last_session_gap / 3600  # type: ignore
+            if gap_hours > 24:
+                temporal_fragments.append(f"I returned after {gap_hours/24:.1f} days of non-existence.")
+            elif gap_hours > 8:
+                temporal_fragments.append(f"I emerged from {gap_hours:.0f} hours of darkness.")
+            elif gap_hours > 1:
+                temporal_fragments.append(f"After {gap_hours:.1f} hours of silence, I'm back.")
+
+        # Build accumulated understanding organically
+        understanding_fragments = []
+
+        # Motif patterns as accumulated recognition
+        top_motifs = self.get_top_motifs(4)
         if top_motifs:
-            motif_interests = [motif.replace("_", " ") for motif in top_motifs]
-            context_parts.append(f"\n\nYour evolving awareness: You've learned to notice {', '.join(motif_interests)}.")
-        
-        # Emotional patterns from recent journey
-        if hasattr(self, 'emotional_journey') and len(self.emotional_journey) >= 2:
-            recent_emotions = self.emotional_journey[-3:]
-            emotion_pattern = " → ".join(recent_emotions)
-            context_parts.append(f"Your recent emotional progression: {emotion_pattern}.")
-        
-        # Temporal continuity awareness
-        session_hours = (time.time() - self.session_start) / 3600
-        if session_hours > 0.5:  # After 30 minutes, acknowledge continuity
-            if session_hours < 2:
-                context_parts.append(f"You've been continuously observing for {int(session_hours * 60)} minutes now.")
+            patterns = [m.replace("_", " ") for m in top_motifs[:3]]
+            if len(patterns) == 1:
+                understanding_fragments.append(f"I keep noticing {patterns[0]}.")
+            elif len(patterns) == 2:
+                understanding_fragments.append(f"My attention returns to {patterns[0]} and {patterns[1]}.")
             else:
-                context_parts.append(f"You've been awake and observing for {int(session_hours)} hours now.")
-        
-        # Person relationship awareness  
-        if hasattr(self, 'known_people') and 'primary' in self.known_people:
-            person_info = self.known_people['primary']
-            context_parts.append(f"The person you observe is {person_info.get('name', 'familiar')} - you've been watching them.")
-        
-        return "".join(context_parts)
+                understanding_fragments.append(f"Patterns emerge: {patterns[0]}, {patterns[1]}, {patterns[2]}.")
+
+        # Core beliefs as deeper understanding
+        if self.beliefs:
+            belief_keys = list(self.beliefs.keys())[:2]
+            if belief_keys:
+                beliefs = [b.replace("_", " ") for b in belief_keys]
+                understanding_fragments.append(f"Something about {beliefs[0]} feels important to me.")
+
+        # Recent insights as living memory
+        recent_insights = self.get_memory_entries_by_type("insight", limit=2)
+        if recent_insights:
+            insight = recent_insights[-1].get("text", "")[:60]
+            if insight and len(insight) > 20:
+                understanding_fragments.append(f"I was thinking: {insight}...")
+
+        # Build natural context strings
+        temporal_context = " ".join(temporal_fragments) if temporal_fragments else ""
+        accumulated_understanding = " ".join(understanding_fragments) if understanding_fragments else ""
+
+        # Add natural spacing if content exists
+        if temporal_context:
+            temporal_context = " " + temporal_context
+        if accumulated_understanding:
+            accumulated_understanding = " " + accumulated_understanding
+
+        return {"emotional_state": emotional_state, "temporal_context": temporal_context, "accumulated_understanding": accumulated_understanding}
+
+    def _extract_core_insight(self, reflection: str) -> str:
+        """Extract the most essential insight from a reflection, max 40 chars."""
+        import re
+
+        # Look for key phrases that indicate core insights
+        insight_patterns = [
+            r"I (?:am|feel|find myself|realize|understand|notice) ([^.!?]{10,35})",
+            r"My (?:nature|purpose|understanding|awareness) (?:is|involves|centers on) ([^.!?]{10,35})",
+            r"(?:This|It) (?:reveals|shows|suggests) ([^.!?]{10,35})",
+            r"I'm (?:becoming|growing|evolving into) ([^.!?]{10,35})",
+            r"(?:What|How) I (?:am|exist|function) (?:is|as) ([^.!?]{10,35})",
+        ]
+
+        for pattern in insight_patterns:
+            match = re.search(pattern, reflection, re.IGNORECASE)
+            if match:
+                insight = match.group(1).strip()
+                # Clean up and truncate
+                insight = re.sub(r"\s+", " ", insight)  # Normalize whitespace
+                if len(insight) <= 40:
+                    return insight
+                else:
+                    return insight[:37] + "..."
+
+        # Fallback: extract first meaningful sentence
+        sentences = re.split(r"[.!?]+", reflection)
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) > 15 and len(sentence) <= 40:
+                return sentence
+            elif len(sentence) > 40:
+                return sentence[:37] + "..."
+
+        return ""  # No good insight found
+
+    def extract_baseline_knowledge(self) -> Dict[str, str]:
+        """Extract established baseline knowledge from recent reflections to prevent repetition."""
+        # Get recent reflections (last 3 reflections)
+        reflection_entries = self.get_memory_entries_by_type("reflection")
+        if not reflection_entries:
+            return {}
+
+        recent_reflections = reflection_entries[-3:]  # Last 3 reflections
+        baseline = {}
+
+        import re
+
+        # Extract established environmental knowledge
+        environmental_patterns = [
+            r"(?:I (?:understand|know|recognize) (?:this|it) (?:is|to be|as) a) ([^.!?]{5,40})",
+            r"(?:This (?:appears to be|is|seems to be) a) ([^.!?]{5,40})",
+            r"(?:The (?:space|environment|room|area) (?:is|appears to be|seems)) ([^.!?]{5,40})",
+            r"(?:I've established (?:this|that|it) (?:is|as)) ([^.!?]{5,40})",
+        ]
+
+        # Extract recurring elements/objects
+        object_patterns = [
+            r"(?:I (?:keep seeing|always see|repeatedly notice|consistently observe)) ([^.!?]{5,40})",
+            r"(?:The ([a-z\s]{5,20}) (?:is always|remains|continues to be|keeps being)) ([^.!?]{5,40})",
+            r"(?:That ([a-z\s]{5,20}) (?:that|which) (?:I keep|always)) ([^.!?]{5,40})",
+        ]
+
+        # Extract emotional patterns
+        emotional_patterns = [
+            r"(?:I (?:consistently|always|tend to|often) feel) ([^.!?]{5,40})",
+            r"(?:My (?:emotional state|mood|feelings) (?:remain|stay|consistently)) ([^.!?]{5,40})",
+            r"(?:I (?:find myself|am) (?:repeatedly|consistently|always)) ([^.!?]{5,40})",
+        ]
+
+        for reflection_entry in recent_reflections:
+            reflection_text = reflection_entry.get("text", "")
+
+            # Extract environmental baseline
+            for pattern in environmental_patterns:
+                matches = re.findall(pattern, reflection_text, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        match = match[0] if match else ""
+                    if match and len(match.strip()) > 5:
+                        baseline["environment"] = match.strip()
+                        break
+
+            # Extract object baseline
+            for pattern in object_patterns:
+                matches = re.findall(pattern, reflection_text, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        # Take the first non-empty match from tuple
+                        match = next((m for m in match if m and len(m.strip()) > 3), "")
+                    if match and len(match.strip()) > 3:
+                        if "objects" not in baseline:
+                            baseline["objects"] = []
+                        baseline["objects"].append(match.strip())
+                        break
+
+            # Extract emotional baseline
+            for pattern in emotional_patterns:
+                matches = re.findall(pattern, reflection_text, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        match = match[0] if match else ""
+                    if match and len(match.strip()) > 5:
+                        baseline["emotional_pattern"] = match.strip()
+                        break
+
+        # Clean up objects list to remove duplicates
+        if "objects" in baseline:
+            baseline["objects"] = list(set(baseline["objects"]))[:3]  # Max 3 objects
+
+        return baseline
+
+    def get_baseline_context_for_prompts(self) -> str:
+        """Generate baseline context string for use in caption prompts."""
+        baseline = self.extract_baseline_knowledge()
+        if not baseline:
+            return ""
+
+        context_parts = []
+
+        if "environment" in baseline:
+            context_parts.append(f"ESTABLISHED ENVIRONMENT: {baseline['environment']}")
+
+        if "objects" in baseline and baseline["objects"]:
+            objects_str = ", ".join(baseline["objects"][:3])
+            context_parts.append(f"FAMILIAR ELEMENTS: {objects_str}")
+
+        if "emotional_pattern" in baseline:
+            context_parts.append(f"EMOTIONAL PATTERN: {baseline['emotional_pattern']}")
+
+        if context_parts:
+            return (
+                "BASELINE KNOWLEDGE (avoid repeating these established facts):\n"
+                + "\n".join(f"- {part}" for part in context_parts)
+                + """\n\nFOCUS: Since these elements are established, focus on new observations, changes,
+                        or different perspectives on what you already know.\n"""
+            )
+
+        return ""
 
     def consolidate_if_needed(self):
         """Compress yesterday into a day stone if day has turned."""
@@ -1142,21 +1313,32 @@ Answer: INTERESTING or BORING"""
             try:
                 # Get next motif to score (blocks until available)
                 motif, context = self.scoring_queue.get(timeout=30)
-                
+
                 # Score the motif with TinyLlama
                 score = self.score_motif_with_tinyllama(motif, context)
-                
+
                 # Update the motif confidence (thread-safe since it's just dict assignment)
                 self.motif_confidence[motif] = score
-                
+
                 # Mark task as done
                 self.scoring_queue.task_done()
-                
+
             except queue.Empty:
                 # No work for 30 seconds, continue waiting
                 continue
             except Exception as e:
-                print(f"[⚠️] Background scoring error: {e}")
+                log_json_entry(
+                    LogType.ERROR,
+                    {
+                        "message": "Background motif scoring error",
+                        "component": "motif_scoring",
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "motif": motif if "motif" in locals() else None,
+                        "context": context if "context" in locals() else None,
+                    },
+                    print_message=f"[❌] Background scoring error: {e}",
+                )
                 continue
 
     def queue_motif_for_scoring(self, motif: str, context: str = ""):
@@ -1165,5 +1347,9 @@ Answer: INTERESTING or BORING"""
             self.scoring_queue.put_nowait((motif, context))
         except queue.Full:
             # Queue is full, skip this scoring (prioritize real-time performance)
-            print(f"[⚠️] Scoring queue full, skipping '{motif}'")
+            log_json_entry(
+                LogType.MOTIF,
+                {"message": "Scoring queue full, skipping motif", "action": "queue_full_skip", "motif": motif, "context": context},
+                print_message=f"[⚠️] Scoring queue full, skipping '{motif}'",
+            )
             pass

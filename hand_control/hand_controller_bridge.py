@@ -133,10 +133,10 @@ class HandControllerBridge:
             elif self.communication_method == "tcp":
                 return self._send_via_tcp(emotion_state, mood_value)
             else:
-                print(f"❌ Unknown communication method: {self.communication_method}")
+                print(f"ERROR Unknown communication method: {self.communication_method}")
                 return False
         except Exception as e:
-            print(f"❌ Failed to send state update: {e}")
+            print(f"ERROR Failed to send state update: {e}")
             return False
 
     def _send_via_file(self, emotion_state: str, mood_value: float, reactivity_data: Optional[Dict[str, float]] = None) -> bool:
@@ -162,7 +162,7 @@ class HandControllerBridge:
                 json.dump(state_data, f, indent=2)
             return True
         except Exception as e:
-            print(f"❌ Failed to write bridge file: {e}")
+            print(f"ERROR Failed to write bridge file: {e}")
             return False
 
     def _send_via_tcp(self, emotion_state: str, mood_value: float, reactivity_data: Optional[Dict[str, float]] = None) -> bool:
@@ -202,7 +202,7 @@ def test_bridge():
         bridge.update_hand_controller(mock_engine, force_update=True)  # type: ignore
         time.sleep(0.5)
 
-    print("✅ Bridge test complete")
+    print("SUCCESS Bridge test complete")
 
 
 if __name__ == "__main__":

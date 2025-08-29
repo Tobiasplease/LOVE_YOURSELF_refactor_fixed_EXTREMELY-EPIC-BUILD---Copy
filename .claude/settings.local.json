@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir movement_recordings)",
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "Bash(rm:*)",
+      "Bash(grep:*)",
+      "Bash(powershell:*)",
+      "Bash(sed:*)",
+      "Bash(find:*)",
+      "Bash(for file in mood/mood.py drawing/drawing.py captioner/model_wrapper.py utils/state_manager.py)",
+      "Bash(do sed -i 's/⚠️/WARNING/g; s/❌/ERROR/g; s/✅/SUCCESS/g; s/🔧/SYSTEM/g; s/📊/DATA/g; s/💾/SAVE/g; s/🌟/STAR/g; s/🔽/DOWN/g; s/❓/QUESTION/g' \"$file\")",
+      "Bash(done)",
+      "Bash(for file in image_monitor/image_monitor.py utils/ollama.py perception/object_detection.py event_logging/event_logger.py breathing/breathing.py)",
+      "Bash(for:*)",
+      "Bash(do sed -i 's/🌟/STAR/g; s/🔍/SEARCH/g; s/📸/CAMERA/g; s/💾/SAVE/g; s/🤖/BOT/g; s/💡/LIGHT/g; s/🖼️/IMAGE/g; s/📹/VIDEO/g; s/✨/SPARKLE/g; s/⚠️/WARNING/g; s/❌/ERROR/g; s/🛑/STOP/g; s/🔄/ROTATE/g; s/📊/CHART/g; s/🔽/DOWN/g; s/❓/QUESTION/g; s/🌅/SUNRISE/g' \"$file\")",
+      "Bash(git add:*)",
+      "Bash(timeout:*)",
+      "Bash(pkill:*)",
+      "Bash(rg:*)",
+      "Bash(git checkout:*)",
+      "Bash(wmic:*)",
+      "Bash(taskkill:*)",
+      "Bash(pylint:*)",
+      "Bash(flake8:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

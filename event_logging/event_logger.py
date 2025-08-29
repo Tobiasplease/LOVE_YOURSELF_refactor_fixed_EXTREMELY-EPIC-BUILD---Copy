@@ -1,12 +1,13 @@
 import json
 import os
+import shutil
 import time
 import uuid
 from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
 import importlib.util
 
-from config.config import LOG_TYPES_TO_PRINT, MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
+from config.config import LOG_TYPES_TO_PRINT, MOOD_SNAPSHOT_FOLDER
 from event_logging.log_type import LogType
 
 
@@ -72,7 +73,7 @@ def load_config_metadata() -> Dict[str, Any]:
         _config_metadata = config_vars
         return _config_metadata
     except Exception as e:
-        print(f"[⚠️] Error loading config metadata: {e}")
+        print(f"[WARNING] Error loading config metadata: {e}")
         _config_metadata = {}
         return _config_metadata
 
@@ -169,30 +170,16 @@ def log_json_entry(
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump([metadata_entry], f, indent=2, ensure_ascii=False)
 
-        # Also add metadata to all-run-log.json
         update_all_run_log(log_dir, metadata_entry)
 
-    # Append to the individual run event log file
     append_to_log_file(log_dir, filename, entry)
 
-    # Also append to all-run-log.json
     update_all_run_log(log_dir, entry)
 
-    if log_type_str.lower() in LOG_TYPES_TO_PRINT or "all" in LOG_TYPES_TO_PRINT:
-        # Avoid generating generic "X event" strings in fallback message for known content types
-        if log_type_str.lower() == "caption":
-            message = print_message or data.get("message", "caption")
-        elif log_type_str.lower() == "reflection":
-            message = print_message or data.get("message", "reflection")
-        elif log_type_str.lower() == "comfy_prompt":
-            message = print_message or data.get("message", "drawing prompt")
-        elif log_type_str.lower() == "decision":
-            message = print_message or data.get("message", "decision")
-        else:
-            # ollama_api_call get a generic message etm
-            message = print_message or data.get("message", f"{log_type_str} event")
-        elapsed = get_elapsed_time()
-        print(f"[{elapsed}] {message}")
+    if log_type_str.lower() in LOG_TYPES_TO_PRINT or ("all" in LOG_TYPES_TO_PRINT and log_type_str.lower() != "debug"):
+        if print_message:
+            elapsed = get_elapsed_time()
+            print(f"[{elapsed}] {print_message}")
 
     return filepath
 
@@ -252,7 +239,7 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
                             logs.append(entry)
 
         except (json.JSONDecodeError, IOError) as e:
-            print(f"[⚠️] Error reading log file {filepath}: {e}")
+            print(f"[WARNING] Error reading log file {filepath}: {e}")
             continue
 
     # Sort by timestamp
@@ -292,7 +279,11 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 entries = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except UnicodeDecodeError as e:
+            print(f"[WARNING] Corrupted log file {filepath}, attempting recovery: {e}")
+            entries = _recover_corrupted_log_file(filepath)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"[WARNING] Invalid JSON in {filepath}, starting fresh: {e}")
             entries = []
 
     entries.append(entry)
@@ -301,29 +292,58 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
         json.dump(entries, f, indent=2, ensure_ascii=False)
 
 
-def log_ollama_api_call(
-    prompt: str,
-    model: str = OLLAMA_MODEL,
-    image_path: Optional[str] = None,
-    response: Optional[str] = None,
-    success: bool = True,
-    error_message: Optional[str] = None,
-    timeout: Optional[int] = None,
-    log_dir: str = "mood_snapshots",
-) -> str:
+def _recover_corrupted_log_file(filepath: str) -> List[Dict[str, Any]]:
     """
-    Legacy function for backward compatibility.
-    Redirects to the new ollama module's log_ollama_call function.
-    """
-    from utils.ollama import log_ollama_call
+    Attempt to recover entries from a corrupted log file.
 
-    return log_ollama_call(
-        prompt=prompt,
-        model=model,
-        image_path=image_path,
-        response=response,
-        success=success,
-        error_message=error_message,
-        timeout=timeout,
-        log_dir=log_dir,
-    )
+    Args:
+        filepath: Path to the corrupted file
+
+    Returns:
+        List of recovered entries (may be empty if recovery fails)
+    """
+    backup_path = filepath + ".corrupted_backup"
+    entries = []
+
+    try:
+        shutil.copy2(filepath, backup_path)
+        print(f"[RECOVERY] Backed up corrupted file to {backup_path}")
+    except Exception as e:
+        print(f"[WARNING] Could not backup corrupted file: {e}")
+
+    try:
+        with open(filepath, "rb") as f:
+            raw_data = f.read()
+
+        try:
+            decoded = raw_data.decode("utf-8", errors="replace")
+            entries = json.loads(decoded)
+            print(f"[RECOVERY] Successfully recovered {len(entries)} entries using error replacement")
+        except json.JSONDecodeError:
+            try:
+                decoded = raw_data.decode("latin1")
+                entries = json.loads(decoded)
+                print(f"[RECOVERY] Successfully recovered {len(entries)} entries using latin1 encoding")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                try:
+                    lines = raw_data.decode("utf-8", errors="ignore").split("\n")
+                    for line in lines:
+                        line = line.strip()
+                        if line and line.startswith("{") and line.endswith("}"):
+                            try:
+                                entry = json.loads(line)
+                                entries.append(entry)
+                            except json.JSONDecodeError:
+                                continue
+                    if entries:
+                        print(f"[RECOVERY] Line-by-line recovery found {len(entries)} entries")
+                except Exception:
+                    pass
+
+    except Exception as e:
+        print(f"[ERROR] Could not recover corrupted file: {e}")
+
+    if not entries:
+        print(f"[WARNING] Recovery failed, starting with empty log for {filepath}")
+
+    return entries

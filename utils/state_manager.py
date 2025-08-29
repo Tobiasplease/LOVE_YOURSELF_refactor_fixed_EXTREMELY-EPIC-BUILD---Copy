@@ -9,10 +9,13 @@ memory retention, and identity evolution.
 import json
 import os
 import time
+import threading
 from typing import Dict, Any, Optional
 from datetime import datetime
 from utils.continuity import now, describe_duration
-from config.config import MOOD_SNAPSHOT_FOLDER
+from config.config import DRAWING_TIMEOUT, MOOD_SNAPSHOT_FOLDER
+from event_logging.log_type import LogType
+from event_logging.event_logger import log_json_entry
 
 
 class StateManager:
@@ -22,6 +25,7 @@ class StateManager:
         self.is_generating_drawing = False
         self.drawing_start_time = None
         self.current_drawing_prompt = None
+        self.timeout_timer = None
 
     def save_session_state(self, captioner, mood_engine, timekeeper=None) -> bool:
         """Save current session state for next startup."""
@@ -66,6 +70,9 @@ class StateManager:
                     "emotional_patterns": getattr(captioner, "emotional_patterns", {}),
                     # Recent memory (last 10 entries)
                     "recent_memory": list(captioner.memory_queue)[-10:] if captioner.memory_queue else [],
+                    # Timer states for reflection and drawing intervals
+                    "last_reason_time": captioner.last_reason_time,
+                    "last_drawing_time": captioner.last_drawing_time,
                 },
                 # Mood engine state
                 "mood_engine": {
@@ -97,11 +104,16 @@ class StateManager:
             # Update lifetime stats
             self._update_lifetime_stats(state)
 
-            print(f"[💾] Session state saved to {self.state_file}")
+            # Log session state save
+            log_json_entry(
+                LogType.DEBUG,
+                {"message": "Session state saved", "action": "state_save", "file_path": self.state_file, "components_saved": len(state)},
+                print_message=f"[💾] Session state saved to {self.state_file}",
+            )
             return True
 
         except Exception as e:
-            print(f"[❌] Failed to save session state: {e}")
+            print(f"[ERROR] Failed to save session state: {e}")
             return False
 
     def load_session_state(self) -> Optional[Dict[str, Any]]:
@@ -116,7 +128,7 @@ class StateManager:
 
             # Validate state format
             if not self._validate_state(state):
-                print("[⚠️] Invalid state format - starting fresh")
+                print("[WARNING] Invalid state format - starting fresh")
                 return None
 
             save_time = state["metadata"]["save_time"]
@@ -126,7 +138,7 @@ class StateManager:
             return state
 
         except Exception as e:
-            print(f"[❌] Failed to load session state: {e}")
+            print(f"[ERROR] Failed to load session state: {e}")
             return None
 
     def apply_state_to_captioner(self, state: Dict[str, Any], captioner) -> bool:
@@ -137,8 +149,7 @@ class StateManager:
             # Restore mood and state
             captioner.current_mood = cap_state.get("current_mood", 0.5)
             captioner.last_caption = cap_state.get("last_caption", "")
-            captioner.boredom = cap_state.get("boredom", 0.0)
-            captioner.novelty_score = cap_state.get("novelty_score", 1.0)
+            # Skip boredom and novelty_score - they're now properties that access memory system
             captioner.awakening_done = cap_state.get("awakening_done", False)
 
             # Restore memory system
@@ -188,15 +199,48 @@ class StateManager:
             recent_memory = cap_state.get("recent_memory", [])
             captioner.memory_queue = deque(recent_memory, maxlen=30)
 
-            # Update session start time to maintain continuity
-            save_time = state["metadata"]["save_time"]
-            captioner.true_session_start = save_time
+            # Reset timer states to current time for fresh session intervals
+            # Don't restore old timer states - start intervals from session startup
+            captioner.last_reason_time = time.time()
+            captioner.last_drawing_time = time.time()
 
-            print(f"[✅] Restored captioner state: {len(captioner.beliefs)} beliefs, {len(captioner.motif_counter)} motifs")
+            # Set session start to NOW (when we actually restart), not old save time
+            # The save_time represents when we were last active, but true_session_start
+            # should be when THIS session began
+            captioner.true_session_start = time.time()
+
+            # Store the last_session_gap for awakening prompts to reference
+            save_time = state["metadata"]["save_time"]
+            captioner.last_session_gap = time.time() - save_time
+
+            # IMPORTANT: Mark that we've restored state, so we don't repeat awakening
+            # The awakening should only happen once per session start
+            captioner.first_caption_done = False  # Will trigger awakening sequence once
+            captioner.awaiting_environmental_phase = False  # Reset environmental phase flag
+
+            # Debug: Show when state was actually saved
+            from datetime import datetime
+
+            save_datetime = datetime.fromtimestamp(save_time).strftime("%Y-%m-%d %H:%M:%S")
+            # Debug: Log state restoration details
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "State restoration details",
+                    "action": "state_timing",
+                    "save_datetime": save_datetime,
+                    "session_gap_seconds": captioner.last_session_gap,
+                    "beliefs_count": len(captioner.beliefs),
+                    "motifs_count": len(captioner.motif_counter),
+                },
+                print_message=f"[🕐] State was saved at: {save_datetime}, gap: {captioner.last_session_gap:.1f} seconds",
+            )
+
+            print(f"[SUCCESS] Restored captioner state: {len(captioner.beliefs)} beliefs, {len(captioner.motif_counter)} motifs")
             return True
 
         except Exception as e:
-            print(f"[❌] Failed to apply captioner state: {e}")
+            print(f"[ERROR] Failed to apply captioner state: {e}")
             return False
 
     def apply_state_to_mood_engine(self, state: Dict[str, Any], mood_engine) -> bool:
@@ -208,11 +252,11 @@ class StateManager:
             mood_engine.last_caption = mood_state.get("last_caption", "")
             mood_engine.last_person_detected = mood_state.get("last_person_detected", False)
 
-            print(f"[✅] Restored mood engine state: mood={mood_engine.current_mood:.2f}")
+            print(f"[SUCCESS] Restored mood engine state: mood={mood_engine.current_mood:.2f}")
             return True
 
         except Exception as e:
-            print(f"[❌] Failed to apply mood engine state: {e}")
+            print(f"[ERROR] Failed to apply mood engine state: {e}")
             return False
 
     def get_lifetime_stats(self) -> Dict[str, Any]:
@@ -258,16 +302,42 @@ class StateManager:
                 json.dump(lifetime_stats, f, indent=2)
 
         except Exception as e:
-            print(f"[⚠️] Failed to update lifetime stats: {e}")
+            print(f"[WARNING] Failed to update lifetime stats: {e}")
+
+    def _timeout_callback(self) -> None:
+        """Called when timeout expires - automatically finish drawing generation."""
+        if self.is_generating_drawing:
+            print(f"[TIMEOUT] Drawing generation timed out after 5 minutes, auto-finishing")
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "Drawing generation timeout",
+                    "action": "drawing_timeout",
+                    "prompt": self.current_drawing_prompt,
+                    "duration": time.time() - self.drawing_start_time if self.drawing_start_time else None,
+                },
+                print_message=f"[⏰] Drawing generation timed out after 5 minutes",
+            )
+            self.finish_drawing_generation()
 
     def start_drawing_generation(self, prompt: str) -> None:
-        """Mark drawing generation as started."""
+        """Mark drawing generation as started with 5-minute timeout."""
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+
         self.is_generating_drawing = True
         self.drawing_start_time = time.time()
         self.current_drawing_prompt = prompt
 
+        self.timeout_timer = threading.Timer(DRAWING_TIMEOUT, self._timeout_callback)
+        self.timeout_timer.start()
+
     def finish_drawing_generation(self) -> None:
         """Mark drawing generation as finished."""
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
+
         self.is_generating_drawing = False
         self.drawing_start_time = None
         self.current_drawing_prompt = None

@@ -10,7 +10,6 @@ from .event_logger import (
     append_to_log_file,
     # read_drawing_prompts,
     # read_internal_notes,
-    log_ollama_api_call,
 )
 
 __all__ = [
@@ -21,5 +20,4 @@ __all__ = [
     "append_to_log_file",
     # "read_drawing_prompts",
     # "read_internal_notes",
-    "log_ollama_api_call",
 ]

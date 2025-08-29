@@ -1,13 +1,49 @@
+# from calendar import c
 import os
 import time
 import base64
 import json
 import requests
 from typing import Optional, Union
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL
+from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS, DEBUG_OLLAMA_PROMPTS, OLLAMA_PRINT_FULL_RESPONSE
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.progress_bar import ProgressBar
+
+
+def truncate_for_print(text: str | None, max_length: int) -> str:
+    """Format text for print output, respecting OLLAMA_PRINT_FULL_RESPONSE config.
+
+    Args:
+        text: The text to format
+        max_length: Maximum length before truncation (ignored if OLLAMA_PRINT_FULL_RESPONSE is True)
+
+    Returns:
+        Full text if OLLAMA_PRINT_FULL_RESPONSE is True, otherwise truncated with "..." if needed
+    """
+    if not text:
+        return ""
+
+    if OLLAMA_PRINT_FULL_RESPONSE:
+        return text
+
+    return text[:max_length] + "..." if len(text) > max_length else text
+
+
+def _get_prompt_emoji(prompt_type: str) -> str:
+    """Get appropriate emoji for prompt type."""
+    emoji_map = {
+        "reflection": "🤔",
+        "drawing": "🎨",
+        "awakening": "🌅",
+        "compression": "🧠",
+        "sentiment": "😊",
+        "motif_scoring": "📊",
+        "vision": "👁️",
+        "caption": "📸",
+        "general": "💭",
+    }
+    return emoji_map.get(prompt_type, "💭")
 
 
 def log_ollama_call(
@@ -20,7 +56,8 @@ def log_ollama_call(
     timeout: Optional[int] = None,
     log_dir: str = "mood_snapshots",
     system_prompt: Optional[str] = None,
-) -> str:
+    prompt_type: str = "general",
+):
     """
     Log Ollama API call details for monitoring and debugging.
 
@@ -39,9 +76,10 @@ def log_ollama_call(
         Path to the log file
     """
     # Truncate very long prompts and responses for readability
-    truncated_prompt = prompt[:500] + "..." if len(prompt) > 500 else prompt
-    truncated_response = response[:1000] + "..." if response and len(response) > 1000 else response
-    truncated_system_prompt = system_prompt[:500] + "..." if system_prompt and len(system_prompt) > 500 else system_prompt
+
+    truncated_prompt = truncate_for_print(prompt, 500)
+    truncated_response = truncate_for_print(response, 1000)
+    truncated_system_prompt = truncate_for_print(system_prompt, 500)
 
     data = {
         "prompt": truncated_prompt,
@@ -59,7 +97,50 @@ def log_ollama_call(
         "api_endpoint": "http://localhost:11434/api/generate",
     }
 
-    return log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir)
+    type_emoji = _get_prompt_emoji(prompt_type)
+    data["prompt_type"] = prompt_type
+
+    call_details = [f"[🤖{type_emoji}] {prompt_type.title()} prompt -> {model}"]
+
+    if success:
+        call_details.append(f"✅ Success ({len(response)} chars)" if response else "✅ Success")
+        if timeout:
+            call_details.append(f"⏱️ {timeout}s timeout")
+    else:
+        call_details.append(f"❌ Failed: {error_message}" if error_message else "❌ Failed")
+
+    if image_path:
+        call_details.append("📸 with image")
+
+    if response:
+        call_details.append("\nResponse: " + truncate_for_print(response, 1000))
+
+    if DEBUG_OLLAMA_PROMPTS:
+        debug_details = [f"\n[🤖{type_emoji}] {prompt_type.title()} PROMPT:\n{'-' * 50}", truncate_for_print(prompt, 1000), "-" * 50]
+
+        # if system_prompt:
+        #     debug_details.extend([f"[🤖⚙️] SYSTEM PROMPT:\n{'-' * 30}", truncate_for_print(system_prompt, 500)])
+
+        debug_details.append(" | ".join(call_details))
+
+        print_message = "\n".join(debug_details)
+    else:
+        print_message = " | ".join(call_details)
+
+    log_json_entry(LogType.OLLAMA_API_CALL, data, log_dir, print_message=print_message)
+
+    if error_message and not success:
+        log_json_entry(
+            LogType.ERROR,
+            {
+                "message": f"Ollama API error in {prompt_type} prompt",
+                "error": error_message,
+                "model": model,
+                "prompt_type": prompt_type,
+                "timeout": timeout,
+            },
+            print_message=f"[❌🤖] Ollama {prompt_type} error: {error_message}",
+        )
 
 
 def _wait_for_drawing_completion() -> None:
@@ -93,7 +174,8 @@ def query_ollama(
     system_prompt: Optional[str] = None,
     strict_evaluation: bool = False,
     options: Optional[dict] = None,
-    show_progress: bool = False,
+    show_progress: bool = OLLAMA_SHOW_PROGRESS,
+    prompt_type: str = "general",
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -127,7 +209,7 @@ def query_ollama(
             "repeat_penalty": 1.1,  # Discourage repetition of unseen details
         }
 
-    if system_prompt:
+    if system_prompt and system_prompt.strip():
         payload["system"] = system_prompt
 
     # Handle image input
@@ -192,6 +274,7 @@ def query_ollama(
             timeout=timeout,
             log_dir=log_dir,
             system_prompt=system_prompt,
+            prompt_type=prompt_type,
         )
 
         return response_text
@@ -214,6 +297,7 @@ def query_ollama(
             timeout=timeout,
             log_dir=log_dir,
             system_prompt=system_prompt,
+            prompt_type=prompt_type,
         )
 
-        return f"[⚠️] Ollama API failed: {error_msg}"
+        return f"[WARNING] Ollama API failed: {error_msg}"

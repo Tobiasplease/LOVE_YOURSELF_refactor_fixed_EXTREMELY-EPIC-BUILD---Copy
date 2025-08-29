@@ -5,15 +5,13 @@
   "DRAWING_INTERVAL": 200,
   "COMFY_OUTPUT_FOLDER": "/home/jbe/Dropbox/_outputs",
   "COMFY_TEMPLATE_FILE": "impostor-template-impostor-bot-svg.json",
-  "COMFY_LORA_PATH": "flux/own/impostor/impostor-32-balanced-16k.safetensors",
-  "COMFY_LORA_STRENGTH": 1.0,
-  "TRIGGER_PROMPT": "impostor line art, black and white sketch",
+  "COMFY_LORA_PATH": "flux/own/impostor/impostor-64-balanced-v2-16k-no-trig.safetensors",
+  "COMFY_LORA_STRENGTH": 1.2,
+  "TRIGGER_PROMPT": "line art, simple lines, black and white sketch, no hard shading",
   "FLUX_GGUF_PATH": "flux1/flux1-dev-Q4_K_S.gguf",
   "FLUX_DEV_PATH": "flux1/flux1-dev.safetensors",
   "CONTROLNET_NET_PATH": "flux/flux-dev-controlnet-union-pro-2.safetensors",
   "BATCH_SIZE": 1,
   "NO_HANDS": true,
-  "DEBUG_OLLAMA_PROMPTS": false,
-  "OLLAMA_PRINT_FULL_RESPONSE": false,
   "LOG_TYPES_TO_PRINT": ["all"]
 }

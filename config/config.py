@@ -1,4 +1,4 @@
-LIGHTBULB_SENSITIVITY = 2.0  # Default sensitivity for frame diff to PWM mapping
+LIGHTBULB_SENSITIVITY = 1.5  # Default sensitivity for frame diff to PWM mapping
 import os
 
 from config.prompt_templates import *  # noqa: F401
@@ -12,6 +12,7 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
 USE_SERVO = False
+USE_HAND_CONTROLLER = True  # Completely disable hand controller system
 SERVO_MIN = 45
 SERVO_MAX = 135
 EASING_FACTOR = 0.09
@@ -63,9 +64,20 @@ FLUX_GGUF_PATH = os.getenv("FLUX_GGUF_PATH", "flux1-dev-Q4_K_S.gguf")
 CONTROLNET_NET_PATH = os.getenv("CONTROLNET_NET_PATH", "flux-dev-controlnet-union-pro-2.safetensors")
 COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot-svg.json")
 COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
-COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
 TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black and white sketch line art ")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1))
+
+# === COMFY CONTROLLER SETTINGS ===
+COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
+COMFY_CNET_STRENGTH = float(os.getenv("COMFY_CNET_STRENGTH", 0.3))
+COMFY_FLUX_GUIDANCE = float(os.getenv("COMFY_FLUX_GUIDANCE", 4.0))
+COMFY_LATENT_WIDTH = int(os.getenv("COMFY_LATENT_WIDTH", 1024))
+COMFY_LATENT_HEIGHT = int(os.getenv("COMFY_LATENT_HEIGHT", 1024))
+COMFY_STEPS = int(os.getenv("COMFY_STEPS", 25))
+
+DRAWING_TIMEOUT = float(
+    os.getenv("DRAWING_TIMEOUT", 300.0)
+)  # if drawing generation takes longer than this, it will be auto-finished, something is wrong...
 
 # === SVG TO G-CODE SETTINGS ===
 # If True, run svg_centerliner on PNGs to create centerline SVGs, then convert to G-code
@@ -81,8 +93,8 @@ EXECUTE_GRBL_GCODE = False
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
-REASON_INTERVAL = 360  # seconds between reflections
-DRAWING_INTERVAL = 600  # seconds between drawing triggers
+REASON_INTERVAL = 420  # seconds between reflections (7 minutes)
+DRAWING_INTERVAL = 600  # seconds between drawing triggers (10 minutes)
 DRAWING_COOLDOWN = 180  # seconds between drawings
 
 # === OBJECT DETECTION ===
@@ -95,7 +107,11 @@ NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
 # === CHANGE DETECTION ===
 VISUAL_CHANGE_THRESHOLD = 1.0  # novelty score threshold for triggering change-focused prompts (0.0-1.0) - disabled for now
 
+
 # === TINYLLAMA SETTINGS ===
+MOTIF_MODEL = "tinyllama:latest"
+# MOTIF_MODEL = OLLAMA_MODEL
+
 TINYLLAMA_TEMPERATURE = 0.1  # Low temperature for consistent numeric output
 TINYLLAMA_TOP_P = 0.8  # Top-p sampling for TinyLlama
 TINYLLAMA_NUM_PREDICT = 5  # Very short - just a number like "0.7"
@@ -104,21 +120,26 @@ TINYLLAMA_TIMEOUT = 20  # Timeout in seconds for TinyLlama queries
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
 # --- Mistral LLM settings ---
-MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts
+# MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts
 MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
 
 # === OLLAMA SETTINGS ===
 OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
+OLLAMA_TIMEOUT_REFLECTION = 120  # Timeout for reflection/reasoning calls
+OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API calls
 
 # === OUTPUT SETTINGS ===
-# TO SEE ONLY CLEAN CAPTIONS:
-LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
-# LOG_TYPES_TO_PRINT = []
-PRINT_CLEAN_CAPTIONS = False
+# Control which log types are printed to console
+# LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
+# To see debug information, add "debug" to LOG_TYPES_TO_PRINT
+LOG_TYPES_TO_PRINT = ["all"]
+
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
+DEBUG_OLLAMA_PROMPTS = False  # enable detailed Ollama debug output with prompt types and errors
+OLLAMA_PRINT_FULL_RESPONSE = False  # print full responses in console output (ignores truncation)
 NO_HANDS = False
 
 # === REACTIVITY PAUSE SYSTEM ===
