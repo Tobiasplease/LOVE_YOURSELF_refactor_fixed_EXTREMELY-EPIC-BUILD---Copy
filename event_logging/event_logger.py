@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import time
 import uuid
 from typing import Any, Dict, Optional, List, Union
@@ -278,10 +279,71 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 entries = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except UnicodeDecodeError as e:
+            print(f"[WARNING] Corrupted log file {filepath}, attempting recovery: {e}")
+            entries = _recover_corrupted_log_file(filepath)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"[WARNING] Invalid JSON in {filepath}, starting fresh: {e}")
             entries = []
 
     entries.append(entry)
 
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(entries, f, indent=2, ensure_ascii=False)
+
+
+def _recover_corrupted_log_file(filepath: str) -> List[Dict[str, Any]]:
+    """
+    Attempt to recover entries from a corrupted log file.
+
+    Args:
+        filepath: Path to the corrupted file
+
+    Returns:
+        List of recovered entries (may be empty if recovery fails)
+    """
+    backup_path = filepath + ".corrupted_backup"
+    entries = []
+
+    try:
+        shutil.copy2(filepath, backup_path)
+        print(f"[RECOVERY] Backed up corrupted file to {backup_path}")
+    except Exception as e:
+        print(f"[WARNING] Could not backup corrupted file: {e}")
+
+    try:
+        with open(filepath, "rb") as f:
+            raw_data = f.read()
+
+        try:
+            decoded = raw_data.decode("utf-8", errors="replace")
+            entries = json.loads(decoded)
+            print(f"[RECOVERY] Successfully recovered {len(entries)} entries using error replacement")
+        except json.JSONDecodeError:
+            try:
+                decoded = raw_data.decode("latin1")
+                entries = json.loads(decoded)
+                print(f"[RECOVERY] Successfully recovered {len(entries)} entries using latin1 encoding")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                try:
+                    lines = raw_data.decode("utf-8", errors="ignore").split("\n")
+                    for line in lines:
+                        line = line.strip()
+                        if line and line.startswith("{") and line.endswith("}"):
+                            try:
+                                entry = json.loads(line)
+                                entries.append(entry)
+                            except json.JSONDecodeError:
+                                continue
+                    if entries:
+                        print(f"[RECOVERY] Line-by-line recovery found {len(entries)} entries")
+                except Exception:
+                    pass
+
+    except Exception as e:
+        print(f"[ERROR] Could not recover corrupted file: {e}")
+
+    if not entries:
+        print(f"[WARNING] Recovery failed, starting with empty log for {filepath}")
+
+    return entries
