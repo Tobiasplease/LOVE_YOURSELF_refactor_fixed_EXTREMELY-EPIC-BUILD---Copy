@@ -19,7 +19,17 @@ from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 
-from config.config import DRAWING_COOLDOWN, MOOD_SNAPSHOT_FOLDER, TRIGGER_PROMPT
+from config.config import (
+    DRAWING_COOLDOWN,
+    MOOD_SNAPSHOT_FOLDER,
+    TRIGGER_PROMPT,
+    COMFY_LATENT_WIDTH,
+    COMFY_LATENT_HEIGHT,
+    COMFY_CNET_STRENGTH,
+    COMFY_FLUX_GUIDANCE,
+    COMFY_STEPS,
+    COMFY_LORA_STRENGTH,
+)
 from config.prompt_templates import SELF_CRITIQUE_PROMPT
 from utils.ollama import query_ollama, truncate_for_print
 from utils.state_manager import state_manager
@@ -188,9 +198,12 @@ class DrawingController:
                 override_prompt=drawing_prompt,
                 primitive_string=TRIGGER_PROMPT,
                 filename_prefix=f"impostor-{timestamp}",
-                flux_guidance=4.0,  # @todo: mood controlled?
-                cnet_strength=0.3,
-                steps=25,
+                latent_width=COMFY_LATENT_WIDTH,
+                latent_height=COMFY_LATENT_HEIGHT,
+                cnet_strength=COMFY_CNET_STRENGTH,
+                flux_guidance=COMFY_FLUX_GUIDANCE,
+                steps=COMFY_STEPS,
+                lora_strength=COMFY_LORA_STRENGTH,
             )
             if controller.queue_prompt():
                 state_manager.start_drawing_generation(drawing_prompt)

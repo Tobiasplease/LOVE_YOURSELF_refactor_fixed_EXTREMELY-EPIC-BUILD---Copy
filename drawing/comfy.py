@@ -10,7 +10,6 @@ import random
 
 from config.config import (
     COMFY_LORA_PATH,
-    COMFY_LORA_STRENGTH,
     COMFY_TEMPLATE_FILE,
     TRIGGER_PROMPT,
     FLUX_DEV_PATH,
@@ -51,7 +50,7 @@ class ImpostorConfig:
     # LoRA parameters
     # lora_path: str = "flux/own/impostor/impostor-64-balanced-v2-16k-no-trig.safetensors"
     lora_path: str = COMFY_LORA_PATH
-    lora_strength: float = COMFY_LORA_STRENGTH
+    lora_strength: float = 1.0
 
     flux_dev_path: str = FLUX_DEV_PATH
     flux_gguf_path: str = FLUX_GGUF_PATH
@@ -196,7 +195,13 @@ def create_impostor_controller(api_url: str = "http://localhost:8188/prompt", **
     Returns:
         ComfyUIController instance configured for impostor template
     """
-    config = ImpostorConfig(**config_params)
+    # Set defaults from config if not provided
+    defaults = {}
+
+    # Merge defaults with provided config_params (provided params take precedence)
+    final_config = {**defaults, **config_params}
+
+    config = ImpostorConfig(**final_config)
     controller = ComfyUIController(api_url=api_url, config=config)
 
     # Set default workflow file path

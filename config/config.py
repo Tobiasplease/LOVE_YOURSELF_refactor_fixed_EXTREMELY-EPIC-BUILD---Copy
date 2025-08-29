@@ -64,9 +64,16 @@ FLUX_GGUF_PATH = os.getenv("FLUX_GGUF_PATH", "flux1-dev-Q4_K_S.gguf")
 CONTROLNET_NET_PATH = os.getenv("CONTROLNET_NET_PATH", "flux-dev-controlnet-union-pro-2.safetensors")
 COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot-svg.json")
 COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
-COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
 TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black and white sketch line art ")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1))
+
+# === COMFY CONTROLLER SETTINGS ===
+COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
+COMFY_CNET_STRENGTH = float(os.getenv("COMFY_CNET_STRENGTH", 0.3))
+COMFY_FLUX_GUIDANCE = float(os.getenv("COMFY_FLUX_GUIDANCE", 4.0))
+COMFY_LATENT_WIDTH = int(os.getenv("COMFY_LATENT_WIDTH", 1024))
+COMFY_LATENT_HEIGHT = int(os.getenv("COMFY_LATENT_HEIGHT", 1024))
+COMFY_STEPS = int(os.getenv("COMFY_STEPS", 25))
 
 DRAWING_TIMEOUT = float(
     os.getenv("DRAWING_TIMEOUT", 300.0)
@@ -100,6 +107,7 @@ NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
 # === CHANGE DETECTION ===
 VISUAL_CHANGE_THRESHOLD = 1.0  # novelty score threshold for triggering change-focused prompts (0.0-1.0) - disabled for now
 
+
 # === TINYLLAMA SETTINGS ===
 MOTIF_MODEL = "tinyllama:latest"
 # MOTIF_MODEL = OLLAMA_MODEL
@@ -130,7 +138,7 @@ LOG_TYPES_TO_PRINT = ["all"]
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
-DEBUG_OLLAMA_PROMPTS = True  # enable detailed Ollama debug output with prompt types and errors
+DEBUG_OLLAMA_PROMPTS = False  # enable detailed Ollama debug output with prompt types and errors
 OLLAMA_PRINT_FULL_RESPONSE = False  # print full responses in console output (ignores truncation)
 NO_HANDS = False
 
