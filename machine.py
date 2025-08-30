@@ -128,45 +128,38 @@ if USE_LIGHTBULB_PWM:
 
 VERBOSE = False
 
-
-# Import bulletproof Arduino detection system
-from arduino_port_detector import ArduinoPortDetector
+# Fixed udev device paths for each Arduino
+ARDUINO_DEVICES = {
+    'LIGHTBULB': '/dev/arduino_lightbulb',  # Lightbulb PWM controller
+    'LUNGGAZE': '/dev/arduino_lunggaze',    # Gaze pan/tilt and breath controller
+    'LEFTHAND': '/dev/arduino_lefthand',    # Hand gesture controller
+    'CNC': '/dev/arduino_cnc',              # GRBL CNC controller (for bCNC)
+    'UARM': '/dev/arduino_uarm'             # uArm (not integrated yet)
+}
 
 # === INIT ===
-debug_print("Initializing bulletproof Arduino port detection...", "INIT")
-arduino_detector = ArduinoPortDetector(debug=DEBUG_MODE)
-
-# Detect all Arduino ports with comprehensive error handling
-detected_ports = arduino_detector.detect_arduino_ports()
-
-# Set environment variables for all detected devices
-arduino_detector.set_environment_variables()
-
-# Log results
-if detected_ports:
-    debug_print(f"Successfully detected {len(detected_ports)} Arduino devices", "INIT")
-    for device_id, port in detected_ports.items():
-        debug_print(f"  {device_id}: {port}", "INIT")
-else:
-    debug_print("WARNING: No Arduino devices detected!", "INIT")
+debug_print("Using fixed udev Arduino device paths", "INIT")
+for device_name, device_path in ARDUINO_DEVICES.items():
+    if os.path.exists(device_path):
+        debug_print(f"  {device_name}: {device_path} [FOUND]", "INIT")
+    else:
+        debug_print(f"  {device_name}: {device_path} [NOT CONNECTED]", "INIT")
 
 debug_print("Opening camera", "INIT")
 lightbulb = None
 if USE_LIGHTBULB_PWM:
-    lightbulb_port = detected_ports.get('LIGHTBULB_CONTROLLER')
-    if lightbulb_port:
+    lightbulb_port = ARDUINO_DEVICES['LIGHTBULB']
+    if os.path.exists(lightbulb_port):
         try:
-            # Wait a moment for port to stabilize after detection
-            time.sleep(0.5)
             lightbulb = ThreadSafeLightbulbWrapper(lightbulb_port, debug=DEBUG_MODE)
-            debug_print(f"Robust lightbulb controller initialized on {lightbulb_port}", "INIT")
+            debug_print(f"Lightbulb controller initialized on {lightbulb_port}", "INIT")
         except Exception as e:
             print(f"ERROR: Lightbulb controller init failed on {lightbulb_port}: {e}")
-            print("  This may indicate a firmware mismatch or port conflict")
+            print("  Device may not be ready or firmware mismatch")
             lightbulb = None
     else:
-        print("WARNING: Lightbulb controller not found during auto-detection")
-        print("  Check that the Arduino has the correct firmware with DEVICE_ID")
+        print(f"WARNING: Lightbulb controller not found at {lightbulb_port}")
+        print("  Device may not be connected")
 cap = cv2.VideoCapture(CAMERA_INDEX if "CAMERA_INDEX" in globals() else 0)
 _global_cap = cap
 if not cap.isOpened():
@@ -184,20 +177,18 @@ debug_print("Loading face detection model", "INIT")
 net = cv2.dnn.readNetFromCaffe(proto, model)
 debug_print("Face detection model loaded", "INIT")
 if USE_SERVO:
-    servo_port = detected_ports.get('SERVO_CONTROLLER')
-    if servo_port:
+    servo_port = ARDUINO_DEVICES['LUNGGAZE']  # Gaze pan/tilt and breath controller
+    if os.path.exists(servo_port):
         try:
-            # Wait for port to stabilize after detection
-            time.sleep(0.5)
             servos = ServoController(port=servo_port, baudrate=BAUD_RATE)
             debug_print(f"Servo controller initialized on {servo_port}", "INIT")
         except Exception as e:
             print(f"ERROR: Servo controller init failed on {servo_port}: {e}")
-            print("  Check Arduino connection and firmware compatibility")
+            print("  Device may not be ready or firmware mismatch")
             servos = None
     else:
-        print("WARNING: Servo controller not found during auto-detection")
-        print("  Check that the Arduino has the correct firmware with DEVICE_ID")
+        print(f"WARNING: Servo controller not found at {servo_port}")
+        print("  Device may not be connected")
         servos = None
 else:
     debug_print("Servo control disabled in config", "INIT")

@@ -25,10 +25,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.config import HAND_CONTROLLER_PORT
 import os
 
-# Use detected port from auto-detection if available
-if 'DETECTED_HAND_PORT' in os.environ:
-    HAND_CONTROLLER_PORT = os.environ['DETECTED_HAND_PORT']
-    print(f"[AUTO-DETECT] Using detected hand controller port: {HAND_CONTROLLER_PORT}")
+# Use fixed udev symlink for hand controller
+HAND_CONTROLLER_PORT = '/dev/arduino_lefthand'
 import time
 import math
 import random
@@ -39,7 +37,7 @@ import traceback
 import datetime
 import threading
 from typing import Optional
-from serial.tools import list_ports  # For COM port auto-detection
+# Serial port auto-detection removed - using fixed udev symlinks
 try:
     from PIL import Image, ImageTk  # For better image support
     PIL_AVAILABLE = True
@@ -2065,57 +2063,33 @@ class CleanCursorInterface:
             self.dataset_var.set(dataset_options[0])
     
     def refresh_serial_ports(self):
-        """Auto-detect available serial ports (works on Windows, Linux, macOS)."""
+        """Check if fixed hand controller port exists."""
         try:
-            # Get all available serial ports
-            ports = list_ports.comports()
-            port_list = [port.device for port in ports]
-            
-            # Store available ports
-            self.available_ports = port_list
-            
-            # Create dropdown options
-            if port_list:
-                options = ["Auto"] + port_list
-                print(f"🔍 Found {len(port_list)} serial ports: {port_list}")
+            # Check if the fixed udev symlink exists
+            if os.path.exists(HAND_CONTROLLER_PORT):
+                self.available_ports = [HAND_CONTROLLER_PORT]
+                options = [HAND_CONTROLLER_PORT]
+                print(f"✓ Hand controller found at: {HAND_CONTROLLER_PORT}")
             else:
-                options = ["No ports found"]
-                print("WARNING No serial ports detected")
+                self.available_ports = []
+                options = ["Hand controller not connected"]
+                print(f"WARNING Hand controller not found at {HAND_CONTROLLER_PORT}")
             
             # Update combobox
             if hasattr(self, 'port_combo'):
                 self.port_combo['values'] = options
-                
-                # Keep current selection if still valid, otherwise default to Auto
-                current = self.selected_port.get()
-                if current in options:
-                    self.port_combo.set(current)
-                else:
-                    self.port_combo.set("Auto" if port_list else "No ports found")
+                self.port_combo.set(options[0])
             
         except Exception as e:
-            print(f"ERROR Error detecting serial ports: {e}")
+            print(f"ERROR Error checking hand controller port: {e}")
             if hasattr(self, 'port_combo'):
-                self.port_combo['values'] = ["Error detecting ports"]
-                self.port_combo.set("Error detecting ports")
+                self.port_combo['values'] = ["Error checking port"]
+                self.port_combo.set("Error checking port")
     
     def get_selected_port(self):
-        """Get the currently selected port, with auto-detection logic."""
-        selected = self.selected_port.get()
-        
-        if selected == "Auto":
-            # Auto-detect: prefer configured port if available, otherwise first available port
-            if self.available_ports:
-                if HAND_CONTROLLER_PORT in self.available_ports:
-                    return HAND_CONTROLLER_PORT
-                else:
-                    return self.available_ports[0]
-            else:
-                return HAND_CONTROLLER_PORT  # Fallback
-        elif selected in ["No ports found", "Error detecting ports"]:
-            return HAND_CONTROLLER_PORT  # Fallback
-        else:
-            return selected
+        """Get the fixed hand controller port."""
+        # Always use the fixed udev symlink
+        return HAND_CONTROLLER_PORT
 
     def toggle_connection(self):
         """Toggle hand controller connection with auto-detected port."""

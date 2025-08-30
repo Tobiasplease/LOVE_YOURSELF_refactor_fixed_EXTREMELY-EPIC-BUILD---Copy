@@ -40,23 +40,14 @@ class HandExpressionController:
                 print("WARNING: No hand controller port detected - running in simulation mode")
     
     def _detect_hand_controller_port(self) -> Optional[str]:
-        """Detect hand controller port from environment variables or config."""
-        # Try environment variable first (set by auto-detection)
-        if 'DETECTED_HAND_PORT' in os.environ:
-            port = os.environ['DETECTED_HAND_PORT']
-            if not self.clean_output:
-                print(f"Using auto-detected hand controller port: {port}")
-            return port
+        """Return fixed udev symlink for hand controller."""
+        # Use fixed udev symlink
+        port = '/dev/arduino_lefthand'
+        if not self.clean_output:
+            print(f"Using fixed hand controller port: {port}")
+        return port
         
-        # Try alternative environment variables
-        for env_var in ['DETECTED_HAND_CONTROLLER_PORT', 'HAND_CONTROLLER_PORT']:
-            if env_var in os.environ:
-                port = os.environ[env_var]
-                if not self.clean_output:
-                    print(f"Using hand controller port from {env_var}: {port}")
-                return port
-        
-        # Try to import config as fallback
+        # Note: Removed environment variable checks - using fixed udev symlink
         try:
             import sys
             import os as os_mod
