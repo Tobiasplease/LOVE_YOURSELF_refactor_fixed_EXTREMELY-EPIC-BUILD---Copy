@@ -10,6 +10,10 @@ import signal
 import atexit
 from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY
 
+# Import our improved systems
+from serial_port_manager import get_serial_manager, cleanup_all
+from improved_arduino_detector import get_arduino_detector
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="AI Mirror System")
@@ -124,49 +128,87 @@ if USE_SERVO:
     from servo_control.servo_control import ServoController
 
 if USE_LIGHTBULB_PWM:
-    from servo_control.lightbulb_controller_robust import ThreadSafeLightbulbWrapper
+    from servo_control.lightbulb_controller_simple import SimpleLightbulbController
 
 VERBOSE = False
 
 
-# Import bulletproof Arduino detection system
-from arduino_port_detector import ArduinoPortDetector
+# === IMPROVED ARDUINO INITIALIZATION ===
+debug_print("Initializing improved Arduino port detection and management...", "INIT")
 
-# === INIT ===
-debug_print("Initializing bulletproof Arduino port detection...", "INIT")
-arduino_detector = ArduinoPortDetector(debug=DEBUG_MODE)
+# Initialize serial manager and Arduino detector
+serial_manager = get_serial_manager()
+arduino_detector = get_arduino_detector(debug=DEBUG_MODE)
 
-# Detect all Arduino ports with comprehensive error handling
-detected_ports = arduino_detector.detect_arduino_ports()
+# Detect all Arduino devices with improved system
+debug_print("Detecting Arduino devices...", "INIT")
+detected_devices = arduino_detector.detect_arduino_devices()
 
-# Set environment variables for all detected devices
+# Set environment variables for detected devices
 arduino_detector.set_environment_variables()
 
-# Log results
-if detected_ports:
-    debug_print(f"Successfully detected {len(detected_ports)} Arduino devices", "INIT")
-    for device_id, port in detected_ports.items():
-        debug_print(f"  {device_id}: {port}", "INIT")
+# Log detection results
+if detected_devices:
+    debug_print(f"Successfully detected {len(detected_devices)} Arduino devices", "INIT")
+    for device_id, port in detected_devices.items():
+        device_info = arduino_detector.get_device_info(device_id)
+        debug_print(f"  ✓ {device_info['name']}: {port}", "INIT")
 else:
     debug_print("WARNING: No Arduino devices detected!", "INIT")
 
 debug_print("Opening camera", "INIT")
-lightbulb = None
+
+# Initialize controllers with better error handling
+servo_controller = None
+lightbulb_controller = None
+
+# === SERVO CONTROLLER INITIALIZATION ===
+if USE_SERVO:
+    servo_port = detected_devices.get('SERVO_CONTROLLER')
+    if servo_port:
+        try:
+            debug_print(f"Initializing servo controller on {servo_port}", "INIT")
+            # Use serial manager for connection
+            servo_connection = serial_manager.acquire_port(servo_port, BAUD_RATE)
+            if servo_connection:
+                servo_controller = ServoController(port=servo_port, baudrate=BAUD_RATE)
+                debug_print(f"✓ Servo controller initialized successfully", "INIT")
+            else:
+                debug_print(f"✗ Failed to acquire servo port {servo_port}", "ERROR")
+        except Exception as e:
+            debug_print(f"✗ Servo controller initialization failed: {e}", "ERROR")
+            debug_print("  System will continue without servo control", "INFO")
+            servo_controller = None
+    else:
+        debug_print("Servo controller not detected - check Arduino connection and firmware", "WARN")
+        servo_controller = None
+else:
+    debug_print("Servo control disabled in configuration", "INIT")
+
+# === LIGHTBULB CONTROLLER INITIALIZATION ===
 if USE_LIGHTBULB_PWM:
-    lightbulb_port = detected_ports.get('LIGHTBULB_CONTROLLER')
+    lightbulb_port = detected_devices.get('LIGHTBULB_CONTROLLER')
     if lightbulb_port:
         try:
-            # Wait a moment for port to stabilize after detection
-            time.sleep(0.5)
-            lightbulb = ThreadSafeLightbulbWrapper(lightbulb_port, debug=DEBUG_MODE)
-            debug_print(f"Robust lightbulb controller initialized on {lightbulb_port}", "INIT")
+            debug_print(f"Initializing lightbulb controller on {lightbulb_port}", "INIT")
+            # Use serial manager for connection
+            lightbulb_connection = serial_manager.acquire_port(lightbulb_port, 9600)
+            if lightbulb_connection:
+                lightbulb_controller = SimpleLightbulbController(lightbulb_port, debug=DEBUG_MODE)
+                debug_print(f"✓ Lightbulb controller initialized successfully", "INIT")
+            else:
+                debug_print(f"✗ Failed to acquire lightbulb port {lightbulb_port}", "ERROR")
         except Exception as e:
-            print(f"ERROR: Lightbulb controller init failed on {lightbulb_port}: {e}")
-            print("  This may indicate a firmware mismatch or port conflict")
-            lightbulb = None
+            debug_print(f"✗ Lightbulb controller initialization failed: {e}", "ERROR")
+            debug_print("  System will continue without lightbulb control", "INFO")
+            lightbulb_controller = None
     else:
-        print("WARNING: Lightbulb controller not found during auto-detection")
-        print("  Check that the Arduino has the correct firmware with DEVICE_ID")
+        debug_print("Lightbulb controller not detected - check Arduino connection and firmware", "WARN")
+        lightbulb_controller = None
+else:
+    debug_print("Lightbulb PWM control disabled in configuration", "INIT")
+
+# Initialize camera
 cap = cv2.VideoCapture(CAMERA_INDEX if "CAMERA_INDEX" in globals() else 0)
 _global_cap = cap
 if not cap.isOpened():
@@ -183,25 +225,6 @@ model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
 debug_print("Loading face detection model", "INIT")
 net = cv2.dnn.readNetFromCaffe(proto, model)
 debug_print("Face detection model loaded", "INIT")
-if USE_SERVO:
-    servo_port = detected_ports.get('SERVO_CONTROLLER')
-    if servo_port:
-        try:
-            # Wait for port to stabilize after detection
-            time.sleep(0.5)
-            servos = ServoController(port=servo_port, baudrate=BAUD_RATE)
-            debug_print(f"Servo controller initialized on {servo_port}", "INIT")
-        except Exception as e:
-            print(f"ERROR: Servo controller init failed on {servo_port}: {e}")
-            print("  Check Arduino connection and firmware compatibility")
-            servos = None
-    else:
-        print("WARNING: Servo controller not found during auto-detection")
-        print("  Check that the Arduino has the correct firmware with DEVICE_ID")
-        servos = None
-else:
-    debug_print("Servo control disabled in config", "INIT")
-    servos = None
 
 # Initialize breathing variables regardless of servo setting
 lung_angle = 0.0
@@ -256,6 +279,12 @@ def emergency_cleanup():
             pass
 
         cv2.destroyAllWindows()
+
+        # Emergency serial cleanup
+        try:
+            cleanup_all()
+        except Exception as e:
+            print(f"[WARNING] Serial cleanup error: {e}")
 
         # Clear PyTorch cache if available (helps with YOLO cleanup)
         try:
@@ -347,6 +376,13 @@ def graceful_cleanup():
         cv2.destroyAllWindows()
     except Exception as e:
         print(f"[ERROR] Error destroying windows: {e}")
+
+    # Clean up serial connections
+    try:
+        cleanup_all()
+        print("[🔌] Serial connections cleaned up")
+    except Exception as e:
+        print(f"[ERROR] Error cleaning up serial connections: {e}")
 
     # Clear PyTorch cache if available (helps with YOLO cleanup)
     try:
@@ -534,9 +570,9 @@ def mood_update_thread(frame, timestamp):
         cv2.imwrite(snapshot_path, frame)
         debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
         # Lightbulb flash on snapshot  
-        if USE_LIGHTBULB_PWM and lightbulb:
+        if USE_LIGHTBULB_PWM and lightbulb_controller:
             try:
-                lightbulb.caption_flash()
+                lightbulb_controller.caption_flash()
             except Exception as e:
                 print(f"Lightbulb flash failed: {e}")
 
@@ -558,16 +594,11 @@ def mood_update_thread(frame, timestamp):
                 if clean_caption.lower().startswith("caption:"):
                     clean_caption = clean_caption[len("caption:") :].strip()
                 # Lightbulb flash on caption print
-                if USE_LIGHTBULB_PWM and lightbulb:
+                if USE_LIGHTBULB_PWM and lightbulb_controller:
                     try:
-                        lightbulb.caption_flash()
+                        lightbulb_controller.caption_flash()
                     except Exception as e:
                         print(f"Lightbulb caption flash failed: {e}")
-
-                # PRINT_CLEAN_CAPTIONS? chuck into logging func?
-                # if captioner.last_caption_time > last_printed_caption_time:
-                #     print(f"\n{clean_caption}\n")
-                #     last_printed_caption_time = captioner.last_caption_time
 
                 # Generate embodied temporal feeling for mood analysis
                 current_emotion = mood_engine.get_emotion_for_hand_controller()
@@ -577,8 +608,6 @@ def mood_update_thread(frame, timestamp):
                     clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling
                 )
                 debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
-
-                # SimpleLightbulbController doesn't have mood parameters - uses frame diff only
 
                 # Periodic state saving (every 2 minutes)
                 if now - last_state_save_time > 120:  # 2 minutes
@@ -659,10 +688,10 @@ try:
             # Use Arduino-based high-frequency fluctuation
             final_brightness = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, smoothed_pwm))
 
-            if USE_LIGHTBULB_PWM and lightbulb:
+            if USE_LIGHTBULB_PWM and lightbulb_controller:
                 try:
                     # Use SimpleLightbulbController's frame diff method
-                    lightbulb.set_frame_diff_brightness(final_brightness)
+                    lightbulb_controller.set_frame_diff_brightness(final_brightness)
                 except Exception as e:
                     print(f"Lightbulb frame diff brightness failed: {e}")
         prev_gray = gray.copy()
@@ -793,13 +822,13 @@ try:
             last_breath_direction=last_breath_direction,
             pause_start_time=pause_start_time,
             pause_duration=PAUSE_DURATION,
-            servo_controller=servos,
+            servo_controller=servo_controller,  # Use our initialized controller
         )
 
-        if USE_SERVO and servos:
+        if USE_SERVO and servo_controller:
             try:
-                servos.set_pan(pan)  # type: ignore
-                servos.set_tilt(tilt)  # type: ignore
+                servo_controller.set_pan(pan)  # type: ignore
+                servo_controller.set_tilt(tilt)  # type: ignore
             except Exception as e:
                 debug_print(f"Servo command failed: {e}", "ERROR")
                 # Don't crash the whole system for servo errors
@@ -876,8 +905,6 @@ try:
             if reactivity_metrics.get("paused", False):
                 cv2.rectangle(frame, (bar_x + bar_w - 30, bar_y + 10), (bar_x + bar_w - 10, bar_y + 30), (0, 0, 255), -1)
                 cv2.putText(frame, "PAUSE", (bar_x + bar_w - 28, bar_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
-
-                # SimpleLightbulbController uses frame diff for brightness, not mood fluctuation
 
         # MEMORY FIX: Throttle camera display to prevent graphics memory exhaustion
         current_time = time.time()

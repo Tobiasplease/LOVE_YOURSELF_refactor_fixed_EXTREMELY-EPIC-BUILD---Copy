@@ -22,8 +22,55 @@ PEN_DOWN_CMD = "M3 S50 ; PEN DOWN"  # Command to lower pen
 PEN_UP_CMD = "M3 S30 ; PEN UP"  # Command to raise pen
 
 
-def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5):
+def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
     """Find and connect to GRBL controller port"""
+    
+    # Try preferred port first if specified
+    if preferred_port:
+        try:
+            log_json_entry(
+                LogType.GRBL,
+                {
+                    "message": "Testing preferred GRBL port",
+                    "action": "preferred_port_test",
+                    "port": preferred_port,
+                    "baud": baud
+                },
+                print_message=f"[🔌] Testing preferred port {preferred_port}..."
+            )
+            ser = serial.Serial(preferred_port, baud, timeout=timeout)
+            time.sleep(2.0)
+            ser.reset_input_buffer()
+            ser.write(b"?")
+            ser.flush()
+            line = ser.readline().decode(errors="ignore").strip()
+            if line.startswith("<") or "Grbl" in line:
+                log_json_entry(
+                    LogType.GRBL,
+                    {
+                        "message": "Preferred GRBL port found",
+                        "action": "preferred_port_found",
+                        "port": preferred_port,
+                        "response": line,
+                        "baud": baud
+                    },
+                    print_message=f"[✅] {preferred_port} responds as GRBL: {line}"
+                )
+                return ser
+            ser.close()
+        except Exception as e:
+            log_json_entry(
+                LogType.GRBL,
+                {
+                    "message": "Preferred port test failed, falling back to auto-discovery",
+                    "action": "preferred_port_failed",
+                    "port": preferred_port,
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                },
+                print_message=f"[⚠️] Preferred port {preferred_port} failed, trying auto-discovery..."
+            )
+
     ports = list(list_ports.comports())
     if not ports:
         raise RuntimeError("No serial ports found")
@@ -608,7 +655,11 @@ def process_svg_to_grbl(
                 print_message="[🚀] Executing on GRBL..."
             )
             try:
-                ser = find_grbl_port()
+                try:
+                    from config.config import GRBL_CNC_PORT
+                    ser = find_grbl_port(preferred_port=GRBL_CNC_PORT)
+                except ImportError:
+                    ser = find_grbl_port()
                 initialize_grbl_for_drawing(
                     ser, origin=origin, origin_offset=origin_offset, feed_rate=feed_rate, use_absolute_positioning=use_absolute_positioning
                 )

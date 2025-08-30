@@ -24,6 +24,7 @@ int currentLung = 90;
 
 void setup() {
   Serial.begin(9600);
+  Serial.println("DEVICE_ID:SERVO_CONTROLLER");
   Serial.println("READY");
 }
 

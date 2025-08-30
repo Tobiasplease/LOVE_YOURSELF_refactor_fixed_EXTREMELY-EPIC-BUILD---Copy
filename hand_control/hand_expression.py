@@ -7,16 +7,23 @@ Provides the exact same API as the original HandExpressionController.
 
 import time
 import serial
+import os
 from typing import Optional
 
 
 class HandExpressionController:
     """Standalone hand expression controller with exact same API as original."""
     
-    def __init__(self, port: str = "COM3", baudrate: int = 9600, clean_output: bool = True):
+    def __init__(self, port: str = None, baudrate: int = 9600, clean_output: bool = True):
+        # Set clean_output first (used in _detect_hand_controller_port)
+        self.clean_output = clean_output
+        
+        # Auto-detect port if not specified
+        if port is None:
+            port = self._detect_hand_controller_port()
+        
         self.port = port
         self.baudrate = baudrate
-        self.clean_output = clean_output
         self.serial_connection = None
         self.manual_override = False
         
@@ -26,7 +33,46 @@ class HandExpressionController:
         self.last_sent_positions = {}
         self.position_change_threshold = 3.0
         
-        self._init_serial()
+        if self.port:
+            self._init_serial()
+        else:
+            if not self.clean_output:
+                print("WARNING: No hand controller port detected - running in simulation mode")
+    
+    def _detect_hand_controller_port(self) -> Optional[str]:
+        """Detect hand controller port from environment variables or config."""
+        # Try environment variable first (set by auto-detection)
+        if 'DETECTED_HAND_PORT' in os.environ:
+            port = os.environ['DETECTED_HAND_PORT']
+            if not self.clean_output:
+                print(f"Using auto-detected hand controller port: {port}")
+            return port
+        
+        # Try alternative environment variables
+        for env_var in ['DETECTED_HAND_CONTROLLER_PORT', 'HAND_CONTROLLER_PORT']:
+            if env_var in os.environ:
+                port = os.environ[env_var]
+                if not self.clean_output:
+                    print(f"Using hand controller port from {env_var}: {port}")
+                return port
+        
+        # Try to import config as fallback
+        try:
+            import sys
+            import os as os_mod
+            # Add parent directory to path
+            parent_dir = os_mod.path.dirname(os_mod.path.dirname(os_mod.path.abspath(__file__)))
+            if parent_dir not in sys.path:
+                sys.path.insert(0, parent_dir)
+            
+            from config.config import HAND_CONTROLLER_PORT
+            if not self.clean_output:
+                print(f"Using hand controller port from config: {HAND_CONTROLLER_PORT}")
+            return HAND_CONTROLLER_PORT
+        except ImportError:
+            if not self.clean_output:
+                print("WARNING: Could not import config - no port available")
+            return None
         
     def _init_serial(self):
         """Initialize serial connection to Arduino hand controller."""

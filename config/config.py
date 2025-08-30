@@ -6,7 +6,7 @@ from config.prompt_templates import *  # noqa: F401
 # === SERIAL SETTINGS ===
 # === ARDUINO SERIAL PORT CONFIGURATION (Linux) ===
 # Each Arduino needs a unique port assignment
-SERIAL_PORT = "/dev/ttyUSB3"  # Servo lung/gaze system (or USB0 as backup)
+SERIAL_PORT = "/dev/ttyUSB0"  # Servo controller (PAN/TILT/LUNG) - actually on USB0
 BAUD_RATE = 9600
 
 # === MODEL PATHS ===
@@ -154,10 +154,10 @@ REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 
 # 1. Lightbulb PWM Controller
 USE_LIGHTBULB_PWM = True
-LIGHTBULB_SERIAL_PORT = "/dev/ttyUSB0"  # Lightbulb PWM Arduino (frame diff protocol)
+LIGHTBULB_SERIAL_PORT = "/dev/ttyUSB1"  # Lightbulb controller - actually on USB1
 
 # 2. Hand Controller (hardcoded port required)
-HAND_CONTROLLER_PORT = "/dev/ttyUSB2"  # Hand controller Arduino (Pure Consciousness Mode)
+HAND_CONTROLLER_PORT = "/dev/ttyUSB0"  # Hand controller (5 micro servos) - only Arduino connected
 
 # 3. GRBL CNC Controller  
 GRBL_CNC_PORT = "/dev/ttyUSB0"  # GRBL CNC Arduino

@@ -1,117 +1,129 @@
 import time
 import random
-import math
 from config.config import (
     SERVO_MIN,
     SERVO_MAX,
     FLIP_X,
     FLIP_Y,
-    DEAD_ZONE,
-    IDLE_CENTER_X,
-    IDLE_CENTER_Y,
-    IDLE_SPEED_MIN,
-    IDLE_SPEED_MAX,
 )
 
+# === SIMPLIFIED STATE MANAGEMENT ===
 servo_x = 90
 servo_y = 90
 target_x = 90
 target_y = 90
-
-# Independent idle targets and timers
-idle_target_x = IDLE_CENTER_X
-idle_target_y = IDLE_CENTER_Y
-idle_hold_until_x = 0
-idle_hold_until_y = 0
-idle_speed_x = 0.1
-idle_speed_y = 0.1
-
-last_seen_time = time.time()
-face_lock_start = 0
+last_seen_time = time.time() - 10  # Start as if we've been idle for 10 seconds
+state = "idle"
+idle_next_move_time = 0  # Trigger immediate movement
 
 # === CONFIGURABLE PARAMETERS ===
-FACE_LOCK_TIMEOUT = 6.0
-TRACK_EASING = 0.5
-IDLE_PAUSE_MIN = 0.5
-IDLE_PAUSE_MAX = 5.0
-IDLE_JITTER = 40
-SYNC_PROBABILITY = 0.1  # 10% chance that both axes move together
+FACE_TIMEOUT = 3.0   # Wait longer before going idle
+TRACK_EASING = 0.15  # Smooth but responsive tracking
+DEAD_ZONE = 5        # Reasonable threshold
+IDLE_CENTER_X = 90
+IDLE_CENTER_Y = 90
+IDLE_RANGE = 35      # Much larger sweeping movements  
+IDLE_PAUSE_MIN = 3.0   # Shorter pause between moves
+IDLE_PAUSE_MAX = 12.0  # Still good pausing
+IDLE_EASING = 0.12   # Faster than original but not too aggressive
+SWEEP_PROBABILITY = 0.6  # 60% chance of big sweeping movement
 
 
 def clamp(val, min_val, max_val):
     return max(min_val, min(max_val, val))
 
 
-def ease_in_out(current, target, t):
-    # t in 0.0–1.0 range; smooth cosine-based easing
-    t = clamp(t, 0.0, 1.0)
-    eased = (1 - math.cos(t * math.pi)) / 2
-    return current + (target - current) * eased
-
-
 def update_gaze(frame, face_box, current_mood=0.0):
-    global servo_x, servo_y, target_x, target_y
-    global idle_target_x, idle_target_y
-    global idle_hold_until_x, idle_hold_until_y
-    global idle_speed_x, idle_speed_y
-    global last_seen_time, face_lock_start
+    global servo_x, servo_y, target_x, target_y, last_seen_time, state, idle_next_move_time
 
     h, w = frame.shape[:2]
     person_present = face_box is not None
     now = time.time()
 
-    # === FACE TRACKING ===
+    # === CLEAR STATE MACHINE ===
     if person_present:
+        state = "tracking"
+        last_seen_time = now
+
+        # Direct position mapping (not incremental!)
         (startX, startY, endX, endY) = face_box
         face_center_x = (startX + endX) // 2
         face_center_y = (startY + endY) // 2
+
         if FLIP_X:
             face_center_x = w - face_center_x
         if FLIP_Y:
             face_center_y = h - face_center_y
 
-        dx = face_center_x - (w // 2)
-        dy = face_center_y - (h // 2)
+        # Map face position directly to servo range
+        face_x_norm = face_center_x / w  # 0.0 to 1.0
+        face_y_norm = face_center_y / h  # 0.0 to 1.0
 
-        face_movement = abs(dx) + abs(dy)
-        if face_movement > 15:
-            face_lock_start = now
+        # Direct servo position calculation
+        target_x = SERVO_MIN + (SERVO_MAX - SERVO_MIN) * face_x_norm
+        target_y = SERVO_MIN + (SERVO_MAX - SERVO_MIN) * face_y_norm
 
-        if now - face_lock_start < FACE_LOCK_TIMEOUT:
-            if abs(dx) > DEAD_ZONE:
-                target_x = clamp(target_x + dx * 0.05, SERVO_MIN, SERVO_MAX)
-            if abs(dy) > DEAD_ZONE:
-                target_y = clamp(target_y + dy * 0.05, SERVO_MIN, SERVO_MAX)
+        # Apply dead zone only for small movements
+        dx = abs(target_x - servo_x)
+        dy = abs(target_y - servo_y)
 
+        if dx > DEAD_ZONE:
             servo_x = smooth_step(servo_x, target_x, TRACK_EASING)
+        if dy > DEAD_ZONE:
             servo_y = smooth_step(servo_y, target_y, TRACK_EASING)
-            last_seen_time = now
-        else:
-            person_present = False  # break away
 
-    # === IDLE WANDERING GAZE ===
-    if not person_present and now - last_seen_time > FACE_LOCK_TIMEOUT:
+    elif state == "tracking" and now - last_seen_time < FACE_TIMEOUT:
+        # Grace period - hold position
+        state = "grace"
 
-        sync_axes = random.random() < SYNC_PROBABILITY
+    elif state in ["tracking", "grace"] and now - last_seen_time >= FACE_TIMEOUT:
+        # Transition to idle
+        state = "idle"
+        idle_next_move_time = now + random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
 
-        if now > idle_hold_until_x or sync_axes:
-            jitter_x = random.randint(-IDLE_JITTER, IDLE_JITTER)
-            idle_target_x = clamp(IDLE_CENTER_X + jitter_x, SERVO_MIN, SERVO_MAX)
-            idle_hold_until_x = now + random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
-            idle_speed_x = random.uniform(IDLE_SPEED_MIN, IDLE_SPEED_MAX)
+    elif state == "idle":
+        # Dynamic idle behavior with sweeping movements
+        if now >= idle_next_move_time:
+            # Decide between small local movement or big sweep
+            if random.random() < SWEEP_PROBABILITY:
+                # Big sweeping movement across the full range
+                if random.choice([True, False]):
+                    # Horizontal sweep
+                    target_x = random.choice([SERVO_MIN + 10, SERVO_MAX - 10])
+                    target_y = clamp(IDLE_CENTER_Y + random.randint(-20, 20), SERVO_MIN, SERVO_MAX)
+                else:
+                    # Vertical sweep  
+                    target_y = random.choice([SERVO_MIN + 10, SERVO_MAX - 10])
+                    target_x = clamp(IDLE_CENTER_X + random.randint(-20, 20), SERVO_MIN, SERVO_MAX)
+                    
+                # Longer pause after big movements to "observe" and complete movement
+                idle_next_move_time = now + random.uniform(IDLE_PAUSE_MAX * 1.5, IDLE_PAUSE_MAX * 2.5)
+            else:
+                # Smaller local movements around center
+                jitter_x = random.randint(-IDLE_RANGE, IDLE_RANGE)
+                jitter_y = random.randint(-IDLE_RANGE, IDLE_RANGE)
+                target_x = clamp(IDLE_CENTER_X + jitter_x, SERVO_MIN, SERVO_MAX)
+                target_y = clamp(IDLE_CENTER_Y + jitter_y, SERVO_MIN, SERVO_MAX)
+                
+                # Shorter pause for small movements
+                idle_next_move_time = now + random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
 
-        if now > idle_hold_until_y or sync_axes:
-            jitter_y = random.randint(-IDLE_JITTER, IDLE_JITTER)
-            idle_target_y = clamp(IDLE_CENTER_Y + jitter_y, SERVO_MIN, SERVO_MAX)
-            idle_hold_until_y = now + random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
-            idle_speed_y = random.uniform(IDLE_SPEED_MIN, IDLE_SPEED_MAX)
+        # Movement toward targets with good easing
+        servo_x = smooth_step(servo_x, target_x, IDLE_EASING)
+        servo_y = smooth_step(servo_y, target_y, IDLE_EASING)
 
-        # Eased wandering movement
-        servo_x = ease_in_out(servo_x, idle_target_x, idle_speed_x)
-        servo_y = ease_in_out(servo_y, idle_target_y, idle_speed_y)
-
-    return person_present, round(servo_x), round(servo_y)
+    # Keep decimal precision for smoother movement - only round at final output
+    return person_present, int(servo_x + 0.5), int(servo_y + 0.5)
 
 
 def smooth_step(current, target, factor):
-    return current + (target - current) * factor
+    """Smooth exponential easing for silky servo movement"""
+    diff = target - current
+    # Use smaller steps for very smooth movement
+    step = diff * factor
+    
+    # Prevent tiny oscillations by stopping when close enough
+    if abs(diff) < 0.1:
+        return target
+    
+    return current + step
