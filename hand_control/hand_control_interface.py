@@ -18,6 +18,17 @@ Author: Simplified Emotional Control System
 import tkinter as tk
 from tkinter import ttk
 import tkinter.messagebox
+import sys
+import os
+# Add parent directory to path to import config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config.config import HAND_CONTROLLER_PORT
+import os
+
+# Use detected port from auto-detection if available
+if 'DETECTED_HAND_PORT' in os.environ:
+    HAND_CONTROLLER_PORT = os.environ['DETECTED_HAND_PORT']
+    print(f"[AUTO-DETECT] Using detected hand controller port: {HAND_CONTROLLER_PORT}")
 import time
 import math
 import random
@@ -419,7 +430,7 @@ class CleanCursorInterface:
             self.root.lift()       # Bring to front
             print("🖼️ Hand controller GUI window should be visible")
         
-        # AUTO-CONNECT TO ARDUINO: Automatically connect to hand controller
+        # AUTO-CONNECT ENABLED: Automatically connect to detected port
         print("🔌 Auto-connecting to Arduino...")
         self.auto_connect_arduino()
         
@@ -1820,6 +1831,9 @@ class CleanCursorInterface:
         # Update the emotion variable for UI binding
         if hasattr(self, 'emotion_var'):
             self.emotion_var.set(emotion_name)
+            
+        # Switch to appropriate dataset and Markov chain for this emotion
+        self._switch_to_emotion_dataset(emotion_name)
         
         # Only update GUI elements if they exist (headless mode compatibility)
         if hasattr(self, 'current_state_label') and self.current_state_label:
@@ -1856,6 +1870,39 @@ class CleanCursorInterface:
                 self.update_emotion_dataset_display()
             except:
                 pass  # Ignore errors in headless mode
+    
+    def _switch_to_emotion_dataset(self, emotion_name):
+        """Switch to appropriate dataset and start Markov generation for the emotion."""
+        if emotion_name not in self.emotional_states:
+            print(f"WARNING Unknown emotion: {emotion_name}")
+            return False
+            
+        # Check if we already have a loaded Markov chain for this emotion
+        if emotion_name in self.markov_chains:
+            print(f"🔗 Markov chain already loaded for {emotion_name}")
+            # Ensure Markov generation is running
+            if hasattr(self, 'start_markov_generation'):
+                self.start_markov_generation()
+            return True
+        
+        # Try to load a dataset for this emotion
+        available_datasets = self.available_datasets.get(emotion_name, [])
+        if available_datasets:
+            dataset_info = available_datasets[0]  # Use first available dataset
+            print(f"🔗 Loading dataset for {emotion_name}: {dataset_info.get('display_name', 'unknown')}")
+            
+            if self.load_markov_chain_from_dataset(dataset_info, emotion_name):
+                print(f"SUCCESS Loaded Markov chain for {emotion_name}")
+                # Start Markov generation for this emotion
+                if hasattr(self, 'start_markov_generation'):
+                    self.start_markov_generation()
+                return True
+            else:
+                print(f"ERROR Failed to load dataset for {emotion_name}")
+                return False
+        else:
+            print(f"WARNING No datasets available for {emotion_name}")
+            return False
     
     def change_emotion(self, emotion_name):
         """API method for external control - switches to specified emotion."""
@@ -2057,16 +2104,16 @@ class CleanCursorInterface:
         selected = self.selected_port.get()
         
         if selected == "Auto":
-            # Auto-detect: prefer COM3 if available, otherwise first available port
+            # Auto-detect: prefer configured port if available, otherwise first available port
             if self.available_ports:
-                if "COM3" in self.available_ports:
-                    return "COM3"
+                if HAND_CONTROLLER_PORT in self.available_ports:
+                    return HAND_CONTROLLER_PORT
                 else:
                     return self.available_ports[0]
             else:
-                return "COM3"  # Fallback
+                return HAND_CONTROLLER_PORT  # Fallback
         elif selected in ["No ports found", "Error detecting ports"]:
-            return "COM3"  # Fallback
+            return HAND_CONTROLLER_PORT  # Fallback
         else:
             return selected
 
@@ -2079,9 +2126,9 @@ class CleanCursorInterface:
         
         if not self.connected:
             try:
-                # Get the selected port (with auto-detection)
-                port = self.get_selected_port()
-                print(f"🔌 Attempting connection to {port}...")
+                # FORCE connection to configured port only (no auto-detection)
+                port = HAND_CONTROLLER_PORT
+                print(f"🔌 Connecting to CONFIGURED port only: {port}...")
                 
                 # Initialize HandExpressionController with selected port
                 self.hand_controller = HandExpressionController(
@@ -2128,51 +2175,39 @@ class CleanCursorInterface:
             print("SUCCESS Already connected to Arduino")
             return
             
-        print("🔍 Scanning for Arduino ports...")
+        # Use the properly detected hand controller port (from Arduino auto-detection)
+        hand_controller_port = HAND_CONTROLLER_PORT
+        print(f"🔍 Using detected hand controller port: {hand_controller_port}")
         
-        # Try to find Arduino automatically
-        arduino_ports = []
         try:
-            ports = list_ports.comports()
-            for port in ports:
-                # Look for common Arduino identifiers
-                if any(keyword in (port.description or "").lower() for keyword in 
-                       ['arduino', 'ch340', 'cp210', 'ftdi', 'serial']):
-                    arduino_ports.append(port.device)
-                    print(f"🎯 Found potential Arduino: {port.device} - {port.description}")
-        except Exception as e:
-            print(f"WARNING Error scanning ports: {e}")
+            print(f"🔌 Connecting to hand controller on {hand_controller_port}...")
             
-        # Try connecting to found ports
-        for port in arduino_ports:
-            try:
-                print(f"🔌 Trying to connect to {port}...")
-                
-                self.hand_controller = HandExpressionController(
-                    port=port,
-                    baudrate=9600,
-                    clean_output=True
-                )
-                
-                if self.hand_controller.serial_connection:
-                    self.hand_controller.enable_manual_override()
-                    self.connected = True
-                    self.status_label.config(text=f"SUCCESS Auto-connected ({port})")
-                    self.connect_btn.config(text="Disconnect")
-                    print(f"SUCCESS Auto-connected to Arduino on {port}")
-                    return
-                else:
-                    if self.hand_controller:
-                        if hasattr(self.hand_controller, 'cleanup'):
-                            self.hand_controller.cleanup()
-                        self.hand_controller = None
-                        
-            except Exception as e:
-                print(f"ERROR Failed to connect to {port}: {e}")
+            self.hand_controller = HandExpressionController(
+                port=hand_controller_port,
+                baudrate=9600,
+                clean_output=True
+            )
+            
+            if self.hand_controller.serial_connection:
+                self.hand_controller.enable_manual_override()
+                self.connected = True
+                self.status_label.config(text=f"SUCCESS Auto-connected ({hand_controller_port})")
+                self.connect_btn.config(text="Disconnect")
+                print(f"SUCCESS Auto-connected to hand controller on {hand_controller_port}")
+                return
+            else:
+                print(f"ERROR Failed to connect to hand controller on {hand_controller_port}")
                 if self.hand_controller:
                     if hasattr(self.hand_controller, 'cleanup'):
                         self.hand_controller.cleanup()
                     self.hand_controller = None
+                
+        except Exception as e:
+            print(f"ERROR Hand controller connection failed on {hand_controller_port}: {e}")
+            if self.hand_controller:
+                if hasattr(self.hand_controller, 'cleanup'):
+                    self.hand_controller.cleanup()
+                self.hand_controller = None
                     
         print("ERROR No Arduino found - running in simulation mode")
         self.status_label.config(text="ERROR No Arduino detected")
