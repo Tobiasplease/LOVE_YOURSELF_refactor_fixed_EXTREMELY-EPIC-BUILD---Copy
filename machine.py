@@ -1,14 +1,16 @@
-import time
 import argparse
-import sys
-import cv2
-import threading
+import atexit
 
 # import subprocess
 import os
 import signal
-import atexit
-from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY
+import sys
+import threading
+import time
+
+import cv2
+
+from config.config import LIGHTBULB_SENSITIVITY, LIGHTBULB_SERIAL_PORT, USE_LIGHTBULB_PWM
 
 
 def parse_args():
@@ -36,8 +38,8 @@ if DEBUG_MODE:
 
 if args.config_override:
     try:
-        from config.loader import load_config_override, apply_config_overrides
         import config.config as config_module
+        from config.loader import apply_config_overrides, load_config_override
 
         overrides = load_config_override(args.config_override)
         apply_config_overrides(config_module, overrides)
@@ -47,34 +49,35 @@ if args.config_override:
         sys.exit(1)
 
 
+from breathing.breathing import update_lung_position
+
 # from perception.object_detection import ObjectDetectionThread
 from captioner.captioner import Captioner
-from vision.gaze import update_gaze
-from mood.mood import MoodEngine
-from breathing.breathing import update_lung_position
+from config.config import (
+    BAUD_RATE,
+    CAMERA_INDEX,
+    CONFIDENCE_THRESHOLD,
+    DEBUG_REACTIVITY_PAUSE,
+    MODEL_PATH,
+    MOOD_EVALUATION_INTERVAL,
+    MOOD_SNAPSHOT_FOLDER,
+    PAUSE_DURATION,
+    REACTIVITY_PAUSE_COOLDOWN,
+    REACTIVITY_PAUSE_DURATION,
+    REACTIVITY_PAUSE_THRESHOLD,
+    SERIAL_PORT,
+    USE_HAND_CONTROLLER,
+    USE_SERVO,
+)
+from event_logging.event_logger import get_current_run_id, log_json_entry, set_start_time
+from event_logging.log_type import LogType
+from event_logging.run_manager import get_run_image_path
 from image_monitor import ImageMonitor
-from utils.state_manager import state_manager
+from mood.mood import MoodEngine
 from utils.continuity import describe_duration, get_temporal_feeling
 from utils.error_tracking import get_failure_tracker
-from config.config import (
-    USE_SERVO,
-    USE_HAND_CONTROLLER,
-    CAMERA_INDEX,
-    SERIAL_PORT,
-    BAUD_RATE,
-    CONFIDENCE_THRESHOLD,
-    MOOD_SNAPSHOT_FOLDER,
-    MOOD_EVALUATION_INTERVAL,
-    PAUSE_DURATION,
-    MODEL_PATH,
-    REACTIVITY_PAUSE_THRESHOLD,
-    REACTIVITY_PAUSE_DURATION,
-    REACTIVITY_PAUSE_COOLDOWN,
-    DEBUG_REACTIVITY_PAUSE,
-)
-from event_logging.run_manager import get_run_image_path
-from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
-from event_logging.log_type import LogType
+from utils.state_manager import state_manager
+from vision.gaze import update_gaze
 
 try:
     import config.config as config_module
@@ -82,14 +85,13 @@ try:
     if getattr(config_module, "NO_HANDS", False):
         raise ImportError("Hand control disabled by NO_HANDS config")
 
-    from hand_control.direct_hand_control import (
-        start_hand_controller,  # type: ignore
+    from hand_control.direct_hand_control import change_to_emotion  # type: ignore
+    from hand_control.direct_hand_control import get_status  # type: ignore
+    from hand_control.direct_hand_control import send_reactivity_data  # type: ignore
+    from hand_control.direct_hand_control import start_autonomous_mode  # type: ignore
+    from hand_control.direct_hand_control import start_hand_controller  # type: ignore
+    from hand_control.direct_hand_control import (  # set_emotion,
         stop_hand_controller,
-        # set_emotion,
-        send_reactivity_data,  # type: ignore
-        get_status,  # type: ignore
-        change_to_emotion,  # type: ignore
-        start_autonomous_mode,  # type: ignore
     )
 
     HAND_CONTROL_AVAILABLE = True
@@ -119,7 +121,6 @@ except ImportError:
 
 from reactivity.camera_reactive import CameraReactivityEngine
 
-
 if USE_SERVO:
     from servo_control.servo_control import ServoController
 
@@ -130,11 +131,11 @@ VERBOSE = False
 
 # Fixed udev device paths for each Arduino
 ARDUINO_DEVICES = {
-    'LIGHTBULB': '/dev/arduino_lightbulb',  # Lightbulb PWM controller
-    'LUNGGAZE': '/dev/arduino_lunggaze',    # Gaze pan/tilt and breath controller
-    'LEFTHAND': '/dev/arduino_lefthand',    # Hand gesture controller
-    'CNC': '/dev/arduino_cnc',              # GRBL CNC controller (for bCNC)
-    'UARM': '/dev/arduino_uarm'             # uArm (not integrated yet)
+    "LIGHTBULB": "/dev/arduino_lightbulb",  # Lightbulb PWM controller
+    "LUNGGAZE": "/dev/arduino_lunggaze",  # Gaze pan/tilt and breath controller
+    "LEFTHAND": "/dev/arduino_lefthand",  # Hand gesture controller
+    "CNC": "/dev/arduino_cnc",  # GRBL CNC controller (for bCNC)
+    "UARM": "/dev/arduino_uarm",  # uArm (not integrated yet)
 }
 
 # === INIT ===
@@ -148,7 +149,7 @@ for device_name, device_path in ARDUINO_DEVICES.items():
 debug_print("Opening camera", "INIT")
 lightbulb = None
 if USE_LIGHTBULB_PWM:
-    lightbulb_port = ARDUINO_DEVICES['LIGHTBULB']
+    lightbulb_port = ARDUINO_DEVICES["LIGHTBULB"]
     if os.path.exists(lightbulb_port):
         try:
             lightbulb = ThreadSafeLightbulbWrapper(lightbulb_port, debug=DEBUG_MODE)
@@ -177,7 +178,7 @@ debug_print("Loading face detection model", "INIT")
 net = cv2.dnn.readNetFromCaffe(proto, model)
 debug_print("Face detection model loaded", "INIT")
 if USE_SERVO:
-    servo_port = ARDUINO_DEVICES['LUNGGAZE']  # Gaze pan/tilt and breath controller
+    servo_port = ARDUINO_DEVICES["LUNGGAZE"]  # Gaze pan/tilt and breath controller
     if os.path.exists(servo_port):
         try:
             servos = ServoController(port=servo_port, baudrate=BAUD_RATE)
@@ -275,7 +276,6 @@ def graceful_cleanup():
 
     if cleanup_completed:
         return
-
 
     shutdown_in_progress = True
     print("[SHUTDOWN] Graceful shutdown initiated...")
@@ -524,7 +524,7 @@ def mood_update_thread(frame, timestamp):
         snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
         cv2.imwrite(snapshot_path, frame)
         debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
-        # Lightbulb flash on snapshot  
+        # Lightbulb flash on snapshot
         if USE_LIGHTBULB_PWM and lightbulb:
             try:
                 lightbulb.caption_flash()

@@ -159,7 +159,7 @@ LIGHTBULB_SERIAL_PORT = "/dev/ttyUSB1"  # Lightbulb controller - actually on USB
 # 2. Hand Controller (hardcoded port required)
 HAND_CONTROLLER_PORT = "/dev/arduino_lefthand"  # Hand controller (5 micro servos) - fixed udev symlink
 
-# 3. GRBL CNC Controller  
+# 3. GRBL CNC Controller
 GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 
 # 4. uArm Swift Pro Controller

@@ -43,7 +43,8 @@
       "Bash(pip install black flake8 isort pylint)",
       "Bash(black --version)",
       "Bash(isort --version)",
-      "Bash(black:*)"
+      "Bash(black:*)",
+      "Bash(isort:*)"
     ],
     "deny": [],
     "ask": []
