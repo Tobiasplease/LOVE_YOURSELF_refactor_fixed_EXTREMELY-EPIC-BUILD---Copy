@@ -12,8 +12,9 @@ import time
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.config import LIGHTBULB_SERIAL_PORT
 from servo_control.lightbulb_controller_simple import SimpleLightbulbController
+
+LIGHTBULB_PORT = '/dev/arduino_lightbulb'
 
 def test_basic_connection():
     """Test basic connection to lightbulb."""
@@ -21,10 +22,10 @@ def test_basic_connection():
     print("SIMPLE LIGHTBULB TEST")
     print("=" * 50)
     
-    print(f"Testing connection to: {LIGHTBULB_SERIAL_PORT}")
+    print(f"Testing connection to: {LIGHTBULB_PORT}")
     
     try:
-        controller = SimpleLightbulbController(LIGHTBULB_SERIAL_PORT, debug=True)
+        controller = SimpleLightbulbController(LIGHTBULB_PORT, debug=True)
         
         if controller.ser:
             print("✅ Connection successful!")
@@ -108,7 +109,7 @@ def main():
     if not controller:
         print("\n❌ Cannot continue - connection failed!")
         print("\nTroubleshooting:")
-        print(f"  1. Check Arduino is connected to {LIGHTBULB_SERIAL_PORT}")
+        print(f"  1. Check Arduino is connected to {LIGHTBULB_PORT}")
         print("  2. Upload lightbulb_simple.ino to the Arduino")
         print("  3. Check port permissions: sudo chmod 666 /dev/ttyUSB*")
         return

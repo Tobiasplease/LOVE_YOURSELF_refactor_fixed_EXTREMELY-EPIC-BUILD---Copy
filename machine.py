@@ -125,7 +125,7 @@ if USE_SERVO:
     from servo_control.servo_control import ServoController
 
 if USE_LIGHTBULB_PWM:
-    from servo_control.lightbulb_controller_robust import ThreadSafeLightbulbWrapper
+    from servo_control.lightbulb_controller_simple import SimpleLightbulbController
 
 VERBOSE = False
 
@@ -152,7 +152,7 @@ if USE_LIGHTBULB_PWM:
     lightbulb_port = ARDUINO_DEVICES["LIGHTBULB"]
     if os.path.exists(lightbulb_port):
         try:
-            lightbulb = ThreadSafeLightbulbWrapper(lightbulb_port, debug=DEBUG_MODE)
+            lightbulb = SimpleLightbulbController(lightbulb_port, debug=DEBUG_MODE)
             debug_print(f"Lightbulb controller initialized on {lightbulb_port}", "INIT")
         except Exception as e:
             print(f"ERROR: Lightbulb controller init failed on {lightbulb_port}: {e}")
@@ -631,24 +631,28 @@ try:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if prev_gray is not None:
             diff = cv2.absdiff(prev_gray, gray)
-            diff_score = diff.mean() * LIGHTBULB_SENSITIVITY
-            max_diff = 50.0
-            diff_score = max(0, min(max_diff, diff_score))
-
-            # Base PWM from activity
-            base_pwm = int((diff_score / max_diff) * 255)
-
-            # Smooth base value
-            alpha = 0.15  # Gentler smoothing
+            raw_diff_mean = diff.mean()
+            
+            # Scale up the sensitivity - typical diff.mean() is 1-5 for normal motion
+            # We want this to map to a wider brightness range
+            diff_score = raw_diff_mean * LIGHTBULB_SENSITIVITY * 10.0  # Scale up by 10x
+            
+            # Map to 0-255 range more directly
+            # Typical motion (1-5 raw) -> 15-75 score -> 60-255 brightness
+            base_pwm = int(min(255, diff_score * 4))  # Direct scaling
+            
+            # Smooth the value to prevent jitter
+            alpha = 0.25  # Moderate smoothing
             smoothed_pwm = int(alpha * base_pwm + (1 - alpha) * smoothed_pwm)
-
-            # Set sensible minimum (not too high)
-            MIN_BRIGHTNESS = 18  # Higher baseline
+            
+            # Set a low minimum so we can see the difference
+            MIN_BRIGHTNESS = 0  # Allow full off
             MAX_BRIGHTNESS = 255
-            smoothed_pwm = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, smoothed_pwm))
-
-            # Use Arduino-based high-frequency fluctuation
             final_brightness = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, smoothed_pwm))
+            
+            # Debug output every 30 frames
+            if frame_count % 30 == 0 and DEBUG_MODE:
+                debug_print(f"Lightbulb: raw_diff={raw_diff_mean:.2f}, base_pwm={base_pwm}, final={final_brightness}", "LIGHTBULB")
 
             if USE_LIGHTBULB_PWM and lightbulb:
                 try:
