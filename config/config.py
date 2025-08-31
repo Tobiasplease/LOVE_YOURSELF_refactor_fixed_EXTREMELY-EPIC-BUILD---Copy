@@ -6,7 +6,7 @@ from config.prompt_templates import *  # noqa: F401
 # === SERIAL SETTINGS ===
 # === ARDUINO SERIAL PORT CONFIGURATION (Linux) ===
 # Each Arduino needs a unique port assignment
-SERIAL_PORT = "/dev/ttyUSB0"  # Servo controller (PAN/TILT/LUNG) - actually on USB0
+SERIAL_PORT = "/dev/arduino_lunggaze"  # Servo controller (PAN/TILT/LUNG) - fixed udev symlink
 BAUD_RATE = 9600
 
 # === MODEL PATHS ===
@@ -155,7 +155,7 @@ REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 
 # 1. Lightbulb PWM Controller
 USE_LIGHTBULB_PWM = True  # Re-enabled with non-blocking controller
-LIGHTBULB_SERIAL_PORT = "/dev/arduino_lightbulb"  # Lightbulb controller - actually on USB1
+LIGHTBULB_SERIAL_PORT = "/dev/arduino_lightbulb"  # Lightbulb controller - fixed udev symlink
 
 # 2. Hand Controller (hardcoded port required)
 HAND_CONTROLLER_PORT = "/dev/arduino_lefthand"  # Hand controller (5 micro servos) - fixed udev symlink
