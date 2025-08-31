@@ -43,7 +43,8 @@ void loop() {
     }
 
     else if (line.startsWith("TILT:")) {
-      targetTilt = constrain(line.substring(5).toInt(), 0, 180);
+      // Constrain TILT to center position (90) with only ±5 degrees movement (85-95)
+      targetTilt = constrain(line.substring(5).toInt(), 85, 95);
       if (!tiltAttached) {
         tiltServo.attach(10);
         tiltAttached = true;

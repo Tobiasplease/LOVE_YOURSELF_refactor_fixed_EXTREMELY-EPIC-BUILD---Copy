@@ -1,7 +1,8 @@
 import math
-import time
 import random
-from config.config import LUNG_MIN, LUNG_MAX, EASING_FACTOR
+import time
+
+from config.config import EASING_FACTOR, LUNG_MAX, LUNG_MIN
 
 lung_eased = 90.0  # SPARKLE persistent easing memory
 

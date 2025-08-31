@@ -4,10 +4,11 @@ Test script for ComfyUI integration.
 Usage: python test_comfy.py <workflow.json> [api_url]
 """
 
-import sys
 import argparse
 import json
+import sys
 from pathlib import Path
+
 from drawing import ComfyUIController
 
 

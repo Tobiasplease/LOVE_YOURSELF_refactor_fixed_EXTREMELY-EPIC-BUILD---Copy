@@ -15,19 +15,20 @@ Imports for Captioner:
     from .memory import MemoryMixin, CAPTION_SAVE_THRESHOLD
 """
 
-import re
-import os
 import glob
-import time
-import threading
+import os
 import queue
-from collections import deque, Counter
-from typing import Deque, List, Tuple, Set, Dict, Any, Optional
+import re
+import threading
+import time
+from collections import Counter, deque
+from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
 import spacy  # ✅ used for extracting semantic motifs
-from utils.continuity import now, describe_duration, describe_time_gap
+
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+from utils.continuity import describe_duration, describe_time_gap, now
 
 # from typing import Optional
 

@@ -125,7 +125,7 @@ if USE_SERVO:
     from servo_control.servo_control import ServoController
 
 if USE_LIGHTBULB_PWM:
-    from servo_control.lightbulb_controller_simple import SimpleLightbulbController
+    from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
 
 VERBOSE = False
 
@@ -152,14 +152,14 @@ if USE_LIGHTBULB_PWM:
     lightbulb_port = ARDUINO_DEVICES["LIGHTBULB"]
     if os.path.exists(lightbulb_port):
         try:
-            lightbulb = SimpleLightbulbController(lightbulb_port, debug=DEBUG_MODE)
+            lightbulb = NonBlockingLightbulbController(lightbulb_port, debug=False)
             debug_print(f"Lightbulb controller initialized on {lightbulb_port}", "INIT")
         except Exception as e:
-            print(f"ERROR: Lightbulb controller init failed on {lightbulb_port}: {e}")
+            debug_print(f"Lightbulb controller init failed on {lightbulb_port}: {e}", "ERROR")
             print("  Device may not be ready or firmware mismatch")
             lightbulb = None
     else:
-        print(f"WARNING: Lightbulb controller not found at {lightbulb_port}")
+        debug_print(f"Lightbulb controller not found at {lightbulb_port}", "WARN")
         print("  Device may not be connected")
 cap = cv2.VideoCapture(CAMERA_INDEX if "CAMERA_INDEX" in globals() else 0)
 _global_cap = cap
@@ -524,12 +524,6 @@ def mood_update_thread(frame, timestamp):
         snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
         cv2.imwrite(snapshot_path, frame)
         debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
-        # Lightbulb flash on snapshot
-        if USE_LIGHTBULB_PWM and lightbulb:
-            try:
-                lightbulb.caption_flash()
-            except Exception as e:
-                print(f"Lightbulb flash failed: {e}")
 
         try:
             # First: Update captioner to generate new captions
@@ -553,7 +547,7 @@ def mood_update_thread(frame, timestamp):
                     try:
                         lightbulb.caption_flash()
                     except Exception as e:
-                        print(f"Lightbulb caption flash failed: {e}")
+                        debug_print(f"Lightbulb caption flash failed: {e}", "ERROR")
 
                 # PRINT_CLEAN_CAPTIONS? chuck into logging func?
                 # if captioner.last_caption_time > last_printed_caption_time:
@@ -627,41 +621,6 @@ try:
         frame = cv2.resize(frame, (320, 240))
         frame = cv2.flip(frame, 1)
 
-        # === ENHANCED FRAME DIFF FOR PWM WITH FLUCTUATION ===
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        if prev_gray is not None:
-            diff = cv2.absdiff(prev_gray, gray)
-            raw_diff_mean = diff.mean()
-            
-            # Scale up the sensitivity - typical diff.mean() is 1-5 for normal motion
-            # We want this to map to a wider brightness range
-            diff_score = raw_diff_mean * LIGHTBULB_SENSITIVITY * 10.0  # Scale up by 10x
-            
-            # Map to 0-255 range more directly
-            # Typical motion (1-5 raw) -> 15-75 score -> 60-255 brightness
-            base_pwm = int(min(255, diff_score * 4))  # Direct scaling
-            
-            # Smooth the value to prevent jitter
-            alpha = 0.25  # Moderate smoothing
-            smoothed_pwm = int(alpha * base_pwm + (1 - alpha) * smoothed_pwm)
-            
-            # Set a low minimum so we can see the difference
-            MIN_BRIGHTNESS = 0  # Allow full off
-            MAX_BRIGHTNESS = 255
-            final_brightness = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, smoothed_pwm))
-            
-            # Debug output every 30 frames
-            if frame_count % 30 == 0 and DEBUG_MODE:
-                debug_print(f"Lightbulb: raw_diff={raw_diff_mean:.2f}, base_pwm={base_pwm}, final={final_brightness}", "LIGHTBULB")
-
-            if USE_LIGHTBULB_PWM and lightbulb:
-                try:
-                    # Use SimpleLightbulbController's frame diff method
-                    lightbulb.set_frame_diff_brightness(final_brightness)
-                except Exception as e:
-                    print(f"Lightbulb frame diff brightness failed: {e}")
-        prev_gray = gray.copy()
-
         # Force garbage collection periodically to prevent memory accumulation
         frame_count += 1
         if frame_count % 100 == 0:  # Every 100 frames
@@ -673,6 +632,20 @@ try:
         # Process frame for real-time behavioral reactivity
         reactivity_metrics = reactivity_engine.process_frame(frame)
         frame_count += 1
+
+        # === LIGHTBULB BRIGHTNESS FROM REACTIVITY DATA ===
+        # Use the same activity level that drives the reactivity bar
+        if USE_LIGHTBULB_PWM and lightbulb and reactivity_metrics:
+            try:
+                # Get activity level from reactivity engine (0.0-1.0 scale)
+                activity_level = reactivity_metrics.get("activity_level", 0.0)
+
+                # Convert to 0-255 brightness scale
+                brightness = int(min(255, activity_level * 255))
+
+                lightbulb.set_frame_diff_brightness(brightness)
+            except Exception as e:
+                debug_print(f"Lightbulb brightness failed: {e}", "ERROR")
 
         # Get current time for pause/cooldown calculations
         now = time.time()

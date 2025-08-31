@@ -2,9 +2,10 @@
 Simple dot animation for caption generation.
 """
 
+import threading
+
 # import sys
 import time
-import threading
 from typing import Optional
 
 

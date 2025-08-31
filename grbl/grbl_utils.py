@@ -3,10 +3,12 @@ GRBL Utility Functions
 Shared functions for GRBL communication and control
 """
 
+import subprocess
 import time
+
 import serial
 from serial.tools import list_ports
-import subprocess
+
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 
@@ -24,19 +26,14 @@ PEN_UP_CMD = "M3 S30 ; PEN UP"  # Command to raise pen
 
 def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
     """Find and connect to GRBL controller port"""
-    
+
     # Try preferred port first if specified
     if preferred_port:
         try:
             log_json_entry(
                 LogType.GRBL,
-                {
-                    "message": "Testing preferred GRBL port",
-                    "action": "preferred_port_test",
-                    "port": preferred_port,
-                    "baud": baud
-                },
-                print_message=f"[🔌] Testing preferred port {preferred_port}..."
+                {"message": "Testing preferred GRBL port", "action": "preferred_port_test", "port": preferred_port, "baud": baud},
+                print_message=f"[🔌] Testing preferred port {preferred_port}...",
             )
             ser = serial.Serial(preferred_port, baud, timeout=timeout)
             time.sleep(2.0)
@@ -52,9 +49,9 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
                         "action": "preferred_port_found",
                         "port": preferred_port,
                         "response": line,
-                        "baud": baud
+                        "baud": baud,
                     },
-                    print_message=f"[✅] {preferred_port} responds as GRBL: {line}"
+                    print_message=f"[✅] {preferred_port} responds as GRBL: {line}",
                 )
                 return ser
             ser.close()
@@ -66,9 +63,9 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
                     "action": "preferred_port_failed",
                     "port": preferred_port,
                     "error": str(e),
-                    "error_type": type(e).__name__
+                    "error_type": type(e).__name__,
                 },
-                print_message=f"[⚠️] Preferred port {preferred_port} failed, trying auto-discovery..."
+                print_message=f"[⚠️] Preferred port {preferred_port} failed, trying auto-discovery...",
             )
 
     ports = list(list_ports.comports())
@@ -77,26 +74,16 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
 
     log_json_entry(
         LogType.GRBL,
-        {
-            "message": "Available serial ports",
-            "action": "port_discovery",
-            "available_ports": [p.device for p in ports],
-            "port_count": len(ports)
-        },
-        print_message=f"[🔌] Available ports: {', '.join(p.device for p in ports)}"
+        {"message": "Available serial ports", "action": "port_discovery", "available_ports": [p.device for p in ports], "port_count": len(ports)},
+        print_message=f"[🔌] Available ports: {', '.join(p.device for p in ports)}",
     )
 
     for p in ports:
         try:
             log_json_entry(
                 LogType.GRBL,
-                {
-                    "message": "Testing port for GRBL",
-                    "action": "port_test",
-                    "port": p.device,
-                    "baud": baud
-                },
-                print_message=f"[🔌] Testing {p.device}..."
+                {"message": "Testing port for GRBL", "action": "port_test", "port": p.device, "baud": baud},
+                print_message=f"[🔌] Testing {p.device}...",
             )
             ser = serial.Serial(p.device, baud, timeout=timeout)
             time.sleep(2.0)
@@ -107,28 +94,16 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
             if line.startswith("<") or "Grbl" in line:
                 log_json_entry(
                     LogType.GRBL,
-                    {
-                        "message": "GRBL port found",
-                        "action": "port_found",
-                        "port": p.device,
-                        "response": line,
-                        "baud": baud
-                    },
-                    print_message=f"[✅] {p.device} responds as GRBL: {line}"
+                    {"message": "GRBL port found", "action": "port_found", "port": p.device, "response": line, "baud": baud},
+                    print_message=f"[✅] {p.device} responds as GRBL: {line}",
                 )
                 return ser
             ser.close()
         except Exception as e:
             log_json_entry(
                 LogType.GRBL,
-                {
-                    "message": "Port test failed",
-                    "action": "port_test_failed",
-                    "port": p.device,
-                    "error": str(e),
-                    "error_type": type(e).__name__
-                },
-                print_message=f"[❌] {p.device} failed ({e})"
+                {"message": "Port test failed", "action": "port_test_failed", "port": p.device, "error": str(e), "error_type": type(e).__name__},
+                print_message=f"[❌] {p.device} failed ({e})",
             )
 
     raise RuntimeError("No GRBL port found")
@@ -211,26 +186,16 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT):
     if parse_state(status) == "Alarm":
         log_json_entry(
             LogType.GRBL,
-            {
-                "message": "Clearing alarm state",
-                "action": "clear_alarm",
-                "command": "$X",
-                "status": status
-            },
-            print_message="[⚠️] Clearing alarm state with $X"
+            {"message": "Clearing alarm state", "action": "clear_alarm", "command": "$X", "status": status},
+            print_message="[⚠️] Clearing alarm state with $X",
         )
         send_cmd(ser, "$X", wait_ok=True)
         time.sleep(0.2)
 
     log_json_entry(
         LogType.GRBL,
-        {
-            "message": "Running homing cycle",
-            "action": "homing_start",
-            "command": "$H",
-            "timeout": home_timeout
-        },
-        print_message="[🏠] Running homing cycle ($H)..."
+        {"message": "Running homing cycle", "action": "homing_start", "command": "$H", "timeout": home_timeout},
+        print_message="[🏠] Running homing cycle ($H)...",
     )
     send_cmd(ser, "$H", wait_ok=False)
 
@@ -241,13 +206,8 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT):
         if state == "Idle":
             log_json_entry(
                 LogType.GRBL,
-                {
-                    "message": "Homing complete",
-                    "action": "homing_complete",
-                    "final_status": status,
-                    "duration": time.time() - start
-                },
-                print_message="[✅] Homing complete"
+                {"message": "Homing complete", "action": "homing_complete", "final_status": status, "duration": time.time() - start},
+                print_message="[✅] Homing complete",
             )
             send_cmd(ser, "G54")
             wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
@@ -259,9 +219,9 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT):
                     "message": "Work coordinate system setup complete",
                     "action": "coordinate_system_setup",
                     "coordinate_system": "G54",
-                    "origin": "0,0,0"
+                    "origin": "0,0,0",
                 },
-                print_message="[📍] Work coordinate system G54 set to 0,0,0 at home position"
+                print_message="[📍] Work coordinate system G54 set to 0,0,0 at home position",
             )
             return
         if state == "Alarm":
@@ -287,12 +247,12 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
             {
                 "message": "Running vpype with gcode plugin",
                 "action": "vpype_conversion",
-                "command": ' '.join(cmd),
+                "command": " ".join(cmd),
                 "input_file": svg_file,
                 "output_file": output_file,
-                "scale": scale_to
+                "scale": scale_to,
             },
-            print_message=f"[🔧] Running vpype with gcode plugin: {' '.join(cmd)}"
+            print_message=f"[🔧] Running vpype with gcode plugin: {' '.join(cmd)}",
         )
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         log_json_entry(
@@ -302,34 +262,23 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
                 "action": "vpype_success",
                 "input_file": svg_file,
                 "output_file": output_file,
-                "result": str(result)
+                "result": str(result),
             },
-            print_message="[✅] vpype gcode conversion successful"
+            print_message="[✅] vpype gcode conversion successful",
         )
         return True
 
     except subprocess.CalledProcessError as e:
         log_json_entry(
             LogType.ERROR,
-            {
-                "message": "vpype gcode conversion failed",
-                "component": "grbl",
-                "error": e.stderr,
-                "input_file": svg_file,
-                "output_file": output_file
-            },
-            print_message=f"[❌] vpype gcode conversion failed: {e.stderr}"
+            {"message": "vpype gcode conversion failed", "component": "grbl", "error": e.stderr, "input_file": svg_file, "output_file": output_file},
+            print_message=f"[❌] vpype gcode conversion failed: {e.stderr}",
         )
     except FileNotFoundError:
         log_json_entry(
             LogType.ERROR,
-            {
-                "message": "vpype or vpype-gcode not installed",
-                "component": "grbl",
-                "input_file": svg_file,
-                "output_file": output_file
-            },
-            print_message="[❌] vpype or vpype-gcode not installed"
+            {"message": "vpype or vpype-gcode not installed", "component": "grbl", "input_file": svg_file, "output_file": output_file},
+            print_message="[❌] vpype or vpype-gcode not installed",
         )
         return False
 
@@ -373,9 +322,9 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
                 "message": "G-code converted to servo format",
                 "action": "servo_conversion_success",
                 "input_file": input_gcode,
-                "output_file": output_gcode
+                "output_file": output_gcode,
             },
-            print_message=f"[✅] G-code converted to servo format: {output_gcode}"
+            print_message=f"[✅] G-code converted to servo format: {output_gcode}",
         )
         return True
 
@@ -388,9 +337,9 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
                 "error": str(e),
                 "error_type": type(e).__name__,
                 "input_file": input_gcode,
-                "output_file": output_gcode
+                "output_file": output_gcode,
             },
-            print_message=f"[❌] Servo formatting failed: {e}"
+            print_message=f"[❌] Servo formatting failed: {e}",
         )
         return False
 
@@ -417,13 +366,8 @@ def set_work_origin_and_offset(ser, origin, origin_offset, move_timeout=DEFAULT_
     if origin[0] != 0 or origin[1] != 0:
         log_json_entry(
             LogType.GRBL,
-            {
-                "message": "Moving to work origin",
-                "action": "move_to_origin",
-                "origin_x": origin[0],
-                "origin_y": origin[1]
-            },
-            print_message=f"[📍] Moving to work origin: X{origin[0]} Y{origin[1]}"
+            {"message": "Moving to work origin", "action": "move_to_origin", "origin_x": origin[0], "origin_y": origin[1]},
+            print_message=f"[📍] Moving to work origin: X{origin[0]} Y{origin[1]}",
         )
         send_cmd(ser, f"G0 X{origin[0]} Y{origin[1]}", timeout=move_timeout)
         wait_until_idle(ser, move_timeout)
@@ -433,13 +377,8 @@ def set_work_origin_and_offset(ser, origin, origin_offset, move_timeout=DEFAULT_
         wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
         log_json_entry(
             LogType.GRBL,
-            {
-                "message": "Work origin set",
-                "action": "origin_set",
-                "coordinate_system": "G55",
-                "origin": origin
-            },
-            print_message="[📍] Work origin set in G55 coordinate system"
+            {"message": "Work origin set", "action": "origin_set", "coordinate_system": "G55", "origin": origin},
+            print_message="[📍] Work origin set in G55 coordinate system",
         )
 
     if origin_offset != (0, 0, 0):
@@ -460,13 +399,8 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     """Execute G-code file line by line with proper waiting"""
     log_json_entry(
         LogType.GRBL,
-        {
-            "message": "Starting G-code file execution",
-            "action": "gcode_execution_start",
-            "file": gcode_file,
-            "timeout": move_timeout
-        },
-        print_message=f"[🚀] Executing G-code file: {gcode_file}"
+        {"message": "Starting G-code file execution", "action": "gcode_execution_start", "file": gcode_file, "timeout": move_timeout},
+        print_message=f"[🚀] Executing G-code file: {gcode_file}",
     )
 
     try:
@@ -504,9 +438,9 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                         "action": "execution_progress",
                         "executed_lines": executed_lines,
                         "total_lines": total_lines,
-                        "progress_percent": (executed_lines / total_lines) * 100
+                        "progress_percent": (executed_lines / total_lines) * 100,
                     },
-                    print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed"
+                    print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed",
                 )
 
         except Exception as e:
@@ -518,9 +452,9 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                     "line_number": line_num,
                     "command": line,
                     "error": str(e),
-                    "error_type": type(e).__name__
+                    "error_type": type(e).__name__,
                 },
-                print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}"
+                print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
             )
             raise
 
@@ -531,9 +465,9 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             "action": "gcode_execution_complete",
             "file": gcode_file,
             "executed_lines": executed_lines,
-            "total_lines": total_lines
+            "total_lines": total_lines,
         },
-        print_message=f"[✅] G-code execution complete: {executed_lines} lines executed"
+        print_message=f"[✅] G-code execution complete: {executed_lines} lines executed",
     )
 
 
@@ -547,9 +481,9 @@ def initialize_grbl_for_drawing(ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), 
             "origin": origin,
             "origin_offset": origin_offset,
             "feed_rate": feed_rate,
-            "absolute_positioning": use_absolute_positioning
+            "absolute_positioning": use_absolute_positioning,
         },
-        print_message="[🎨] Initializing GRBL for drawing..."
+        print_message="[🎨] Initializing GRBL for drawing...",
     )
 
     ensure_homed(ser)
@@ -559,11 +493,8 @@ def initialize_grbl_for_drawing(ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), 
 
     log_json_entry(
         LogType.GRBL,
-        {
-            "message": "GRBL initialization complete",
-            "action": "initialization_complete"
-        },
-        print_message="[✅] GRBL initialization complete"
+        {"message": "GRBL initialization complete", "action": "initialization_complete"},
+        print_message="[✅] GRBL initialization complete",
     )
 
 
@@ -594,19 +525,15 @@ def process_svg_to_grbl(
         str: Path to generated G-code file if successful, None if failed
     """
     try:
-        from pathlib import Path
         import os
+        from pathlib import Path
 
         svg_path = Path(svg_input)
         if not svg_path.exists():
             log_json_entry(
                 LogType.ERROR,
-                {
-                    "message": "SVG file not found",
-                    "component": "grbl",
-                    "file_path": svg_input
-                },
-                print_message=f"[❌] SVG file not found: {svg_input}"
+                {"message": "SVG file not found", "component": "grbl", "file_path": svg_input},
+                print_message=f"[❌] SVG file not found: {svg_input}",
             )
             return None
 
@@ -620,13 +547,8 @@ def process_svg_to_grbl(
         convert_with_vpype(str(svg_path), output_file_vpype, scale_to=scale_to)
         log_json_entry(
             LogType.GRBL,
-            {
-                "message": "V-PYPE G-code generated",
-                "action": "vpype_gcode_generated",
-                "output_file": output_file_vpype,
-                "input_file": str(svg_path)
-            },
-            print_message=f"[✅] V-PYPE G-code generated: {output_file_vpype}"
+            {"message": "V-PYPE G-code generated", "action": "vpype_gcode_generated", "output_file": output_file_vpype, "input_file": str(svg_path)},
+            print_message=f"[✅] V-PYPE G-code generated: {output_file_vpype}",
         )
         convert_gcode_to_servo_format(output_file_vpype, output_file_adjusted)
         log_json_entry(
@@ -635,9 +557,9 @@ def process_svg_to_grbl(
                 "message": "Servo G-code generated",
                 "action": "servo_gcode_generated",
                 "output_file": output_file_adjusted,
-                "input_file": output_file_vpype
+                "input_file": output_file_vpype,
             },
-            print_message=f"[✅] Servo G-code generated: {output_file_adjusted}"
+            print_message=f"[✅] Servo G-code generated: {output_file_adjusted}",
         )
 
         if os.path.exists(output_file_vpype):
@@ -647,16 +569,13 @@ def process_svg_to_grbl(
         if execute_grbl:
             log_json_entry(
                 LogType.GRBL,
-                {
-                    "message": "Starting GRBL execution",
-                    "action": "grbl_execution_start",
-                    "gcode_file": output_file_adjusted
-                },
-                print_message="[🚀] Executing on GRBL..."
+                {"message": "Starting GRBL execution", "action": "grbl_execution_start", "gcode_file": output_file_adjusted},
+                print_message="[🚀] Executing on GRBL...",
             )
             try:
                 try:
                     from config.config import GRBL_CNC_PORT
+
                     ser = find_grbl_port(preferred_port=GRBL_CNC_PORT)
                 except ImportError:
                     ser = find_grbl_port()
@@ -666,12 +585,8 @@ def process_svg_to_grbl(
                 execute_gcode_file(ser, output_file_adjusted)
                 log_json_entry(
                     LogType.GRBL,
-                    {
-                        "message": "Drawing complete",
-                        "action": "drawing_complete",
-                        "gcode_file": output_file_adjusted
-                    },
-                    print_message="[✅] Drawing complete!"
+                    {"message": "Drawing complete", "action": "drawing_complete", "gcode_file": output_file_adjusted},
+                    print_message="[✅] Drawing complete!",
                 )
                 ser.close()
             except Exception as e:
@@ -682,28 +597,20 @@ def process_svg_to_grbl(
                         "component": "grbl",
                         "error": str(e),
                         "error_type": type(e).__name__,
-                        "gcode_file": output_file_adjusted
+                        "gcode_file": output_file_adjusted,
                     },
-                    print_message=f"[❌] GRBL execution failed: {e}"
+                    print_message=f"[❌] GRBL execution failed: {e}",
                 )
                 log_json_entry(
                     LogType.GRBL,
-                    {
-                        "message": "G-code file saved (execution failed)",
-                        "action": "gcode_file_saved",
-                        "file_path": output_file_adjusted
-                    },
-                    print_message=f"[💾] G-code file saved at: {output_file_adjusted}"
+                    {"message": "G-code file saved (execution failed)", "action": "gcode_file_saved", "file_path": output_file_adjusted},
+                    print_message=f"[💾] G-code file saved at: {output_file_adjusted}",
                 )
         else:
             log_json_entry(
                 LogType.GRBL,
-                {
-                    "message": "G-code generation complete (no execution)",
-                    "action": "gcode_generation_only",
-                    "file_path": output_file_adjusted
-                },
-                print_message=f"[💾] G-code generation complete but will not be executed. File saved: {output_file_adjusted}"
+                {"message": "G-code generation complete (no execution)", "action": "gcode_generation_only", "file_path": output_file_adjusted},
+                print_message=f"[💾] G-code generation complete but will not be executed. File saved: {output_file_adjusted}",
             )
 
         return output_file_adjusted
@@ -711,13 +618,7 @@ def process_svg_to_grbl(
     except Exception as e:
         log_json_entry(
             LogType.ERROR,
-            {
-                "message": "Failed to process SVG",
-                "component": "grbl",
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "svg_input": svg_input
-            },
-            print_message=f"[❌] Failed to process SVG: {e}"
+            {"message": "Failed to process SVG", "component": "grbl", "error": str(e), "error_type": type(e).__name__, "svg_input": svg_input},
+            print_message=f"[❌] Failed to process SVG: {e}",
         )
         return None

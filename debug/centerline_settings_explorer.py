@@ -12,10 +12,10 @@ Parameters tested:
 Output format: {basename}_blur{N}_thresh{N}_dilate{T/F}.svg
 """
 
+import argparse
+import glob
 import os
 import sys
-import glob
-import argparse
 
 # from pathlib import Path
 from itertools import product

@@ -5,15 +5,16 @@ Frequent LLM-based compression of recent observations to create evolving baselin
 Prevents repetition by building understanding that carries forward.
 """
 
-import time
-import threading
 import queue
+import threading
+import time
 from collections import deque
+
 from config import config
-from utils.ollama import query_ollama, truncate_for_print
 from config.model_settings import get_model_options
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+from utils.ollama import query_ollama, truncate_for_print
 
 
 class ContextCompressionEngine:

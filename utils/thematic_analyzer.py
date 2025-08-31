@@ -4,12 +4,14 @@ Replaces the bloated per-caption concept extraction with meaningful periodic ins
 """
 
 import time
-import requests
-from typing import List, Optional, Tuple
 from collections import deque
+from typing import List, Optional, Tuple
+
+import requests
+
+from config.config import TINYLLAMA_TOP_P
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
-from config.config import TINYLLAMA_TOP_P
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 

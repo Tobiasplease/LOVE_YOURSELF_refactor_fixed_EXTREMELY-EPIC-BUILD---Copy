@@ -9,30 +9,30 @@ scene caption + reflection. This version does not query the LLM again,
 and passes the prompt directly to ComfyUI.
 """
 
+import base64
 import os
 import time
-import base64
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
-
-from event_logging.event_logger import log_json_entry
-from event_logging.log_type import LogType
-from event_logging.run_manager import get_run_image_path
+from typing import TYPE_CHECKING, Optional
 
 from config.config import (
+    COMFY_CNET_STRENGTH,
+    COMFY_FLUX_GUIDANCE,
+    COMFY_LATENT_HEIGHT,
+    COMFY_LATENT_WIDTH,
+    COMFY_LORA_STRENGTH,
+    COMFY_STEPS,
     DRAWING_COOLDOWN,
     MOOD_SNAPSHOT_FOLDER,
     TRIGGER_PROMPT,
-    COMFY_LATENT_WIDTH,
-    COMFY_LATENT_HEIGHT,
-    COMFY_CNET_STRENGTH,
-    COMFY_FLUX_GUIDANCE,
-    COMFY_STEPS,
-    COMFY_LORA_STRENGTH,
 )
 from config.prompt_templates import SELF_CRITIQUE_PROMPT
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
+from event_logging.run_manager import get_run_image_path
 from utils.ollama import query_ollama, truncate_for_print
 from utils.state_manager import state_manager
+
 from .comfy import create_impostor_controller
 
 if TYPE_CHECKING:

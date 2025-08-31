@@ -3693,15 +3693,39 @@ class CleanCursorInterface:
                 self.markov_chains[emotion] = markov_chain
 
                 # Reset Markov state variables when loading new chain to prevent generation breaking
-                # Initialize with a random starting state from the new chain
+                # Find closest starting state to current position for smooth transition
                 servo_transitions = markov_chain.get("servo_transitions", {})
                 if servo_transitions:
-                    import random
+                    # Find the state closest to current servo positions for smooth transition
+                    current_positions = list(self.finger_positions)[:2]  # Use first two servos for state matching
+                    closest_state = None
+                    min_distance = float("inf")
 
-                    starting_state = random.choice(list(servo_transitions.keys()))
-                    self.current_markov_state = starting_state
+                    for state_key in servo_transitions.keys():
+                        try:
+                            # Parse state key format like "(90, 90)"
+                            state_positions = eval(state_key) if isinstance(state_key, str) else state_key
+                            if isinstance(state_positions, (list, tuple)) and len(state_positions) >= 2:
+                                # Calculate distance to current position
+                                distance = sum(abs(current_positions[i] - state_positions[i]) for i in range(2))
+                                if distance < min_distance:
+                                    min_distance = distance
+                                    closest_state = state_key
+                        except Exception:
+                            continue
+
+                    # Use closest state if found, otherwise fallback to random
+                    if closest_state:
+                        self.current_markov_state = closest_state
+                        print(f"🌊 Smooth transition: starting with closest state {closest_state} (distance: {min_distance:.1f})")
+                    else:
+                        import random
+
+                        starting_state = random.choice(list(servo_transitions.keys()))
+                        self.current_markov_state = starting_state
+                        print(f"🎲 Fallback to random state: {starting_state}")
+
                     self.prev_markov_state = None
-                    print(f"🔄 Reset Markov state variables - starting with: {starting_state}")
                 else:
                     self.current_markov_state = None
                     self.prev_markov_state = None

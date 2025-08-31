@@ -1,16 +1,16 @@
-import time
-import os
 import glob
+import os
 import threading
+import time
 from pathlib import Path
 from typing import Callable, Optional
-from config.config import COMFY_OUTPUT_FOLDER, MOOD_SNAPSHOT_FOLDER, CENTER_LINE_SVG, EXECUTE_GRBL_GCODE
-from event_logging.event_logger import log_json_entry
-from event_logging.log_type import LogType
-from utils.state_manager import state_manager
 
 from bcnc import raster_to_centerline_svg
+from config.config import CENTER_LINE_SVG, COMFY_OUTPUT_FOLDER, EXECUTE_GRBL_GCODE, MOOD_SNAPSHOT_FOLDER
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 from grbl import svg_to_grbl
+from utils.state_manager import state_manager
 
 
 class ImageMonitor:

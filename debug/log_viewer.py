@@ -9,17 +9,17 @@ Usage:
     python debug/log_viewer.py --run abc123       # View specific run
 """
 
+import argparse
+import io
 import json
 import os
 import sys
-import argparse
-import io
 
 # Fix Windows console encoding for emojis
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+import glob
 from datetime import datetime
 from typing import Dict, List, Optional
-import glob
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

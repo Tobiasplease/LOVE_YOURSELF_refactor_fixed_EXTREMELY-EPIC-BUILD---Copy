@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 def load_config_override(json_path: str) -> Dict[str, Any]:

@@ -14,7 +14,7 @@ import sys
 import threading
 
 # import time
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 # Import config for debug settings
 try:
@@ -92,8 +92,9 @@ class DirectHandController:
         try:
             # Apply global print suppression for hand controller
             from quiet_print import apply_hand_controller_quiet_mode, restore_original_print
+
             original_print = apply_hand_controller_quiet_mode()
-            
+
             try:
                 # Use the full CleanCursorInterface in headless mode
                 self.controller = HandControlInterface(headless_mode=True)

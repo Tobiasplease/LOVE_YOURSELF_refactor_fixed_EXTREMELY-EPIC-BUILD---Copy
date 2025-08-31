@@ -44,7 +44,15 @@
       "Bash(black --version)",
       "Bash(isort --version)",
       "Bash(black:*)",
-      "Bash(isort:*)"
+      "Bash(isort:*)",
+      "Read(/dev/**)",
+      "Bash(lsusb:*)",
+      "Read(/dev/**)",
+      "Read(/dev/**)",
+      "Read(/dev/**)",
+      "Read(/dev/**)",
+      "Bash(PYTHONPATH=/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy python grbl/svg_to_grbl.py grbl/test_files/impostor-20250815_213953_00001__center_lined.svg)",
+      "Read(/dev/**)"
     ],
     "deny": [],
     "ask": []

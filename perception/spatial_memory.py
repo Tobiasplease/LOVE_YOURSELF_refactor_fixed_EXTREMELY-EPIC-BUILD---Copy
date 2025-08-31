@@ -14,12 +14,13 @@ Key Features:
 - Spatial context for captions
 """
 
-import time
 import json
-import numpy as np
-from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass, asdict
+import time
 from collections import defaultdict, deque
+from dataclasses import asdict, dataclass
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
 
 # import cv2
 

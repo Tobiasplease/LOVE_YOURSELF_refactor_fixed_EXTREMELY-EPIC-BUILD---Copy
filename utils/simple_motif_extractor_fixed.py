@@ -5,8 +5,8 @@ Replaces the broken thematic analyzer with something that actually works.
 """
 
 import re
-from typing import List
 from collections import defaultdict
+from typing import List
 
 
 class SimpleMotifExtractor:

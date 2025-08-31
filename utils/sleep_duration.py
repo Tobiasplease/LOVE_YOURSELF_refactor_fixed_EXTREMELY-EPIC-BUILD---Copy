@@ -6,7 +6,8 @@ Calculates how long the system has been "sleeping" based on event logs.
 
 import time
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from event_logging.event_logger import read_json_logs
 
 

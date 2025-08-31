@@ -1,28 +1,32 @@
 from __future__ import annotations
+
 import os
 import re
-import time
 import threading
+import time
 from collections import deque
 
 # from datetime import datetime
-from typing import Deque, Optional, Tuple, Dict, List
-
-# from weakref import ref
+from typing import Deque, Dict, List, Optional, Tuple
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
+
 from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
+from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
-from drawing.drawing import DrawingController
+from utils.error_tracking import robust_execution, track_component_health
 from utils.ollama import truncate_for_print
 
 from .memory import MemoryMixin
-from .prompts import extract_motifs_spacy
 from .model_wrapper import MultimodalModel
-from utils.error_tracking import track_component_health, robust_execution
+from .prompts import extract_motifs_spacy
+
+# from weakref import ref
+
+
 
 # Import context compressor with error handling
 try:
@@ -572,8 +576,8 @@ class Captioner(MemoryMixin):
 
     def generate_internal_awakening(self) -> str:
         """Phase 1 awakening: Pure internal reorientation without visual input."""
-        from utils.ollama import query_ollama
         from config import config
+        from utils.ollama import query_ollama
 
         # Build internal awakening context
         awakening_parts = []

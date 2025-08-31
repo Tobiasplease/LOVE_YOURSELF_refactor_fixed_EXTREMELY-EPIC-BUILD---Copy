@@ -1,6 +1,7 @@
-import serial
-import time
 import threading
+import time
+
+import serial
 
 ANGLE_THRESHOLD = 2  # degrees — for gaze only
 MIN_COMMAND_INTERVAL = 0.08  # Minimum 80ms between commands (~12Hz) - Matches Arduino timing
@@ -28,23 +29,23 @@ class ServoController:
             return
         if key and self.last_sent.get(key) == message:
             return
-            
+
         with self.send_lock:
             # Rate limiting: enforce minimum interval between commands
             now = time.time()
             time_since_last = now - self.last_send_time
             if time_since_last < MIN_COMMAND_INTERVAL:
                 time.sleep(MIN_COMMAND_INTERVAL - time_since_last)
-            
+
             try:
                 full = message.strip() + "\n"
                 self.ser.write(full.encode("utf-8"))
                 self.ser.flush()  # Ensure command is sent immediately
                 self.last_send_time = time.time()
-                
+
                 if key:
                     self.last_sent[key] = message
-                    
+
             except Exception as e:
                 print(f"[ERROR] Servo send failed: {e}")
                 # Try to recover

@@ -3,8 +3,9 @@ Optimized TinyLlama-based motif significance scorer with strict multiple choice 
 """
 
 import time
-import requests
 from typing import Dict, List, Optional, Tuple
+
+import requests
 
 # Use default Ollama URL since OLLAMA_BASE_URL not in config
 OLLAMA_BASE_URL = "http://localhost:11434"

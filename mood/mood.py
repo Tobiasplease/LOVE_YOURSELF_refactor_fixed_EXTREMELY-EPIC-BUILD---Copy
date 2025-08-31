@@ -1,11 +1,12 @@
 # mood/mood.py
 from __future__ import annotations
 
+import json
 import os
 import time
-import json
-import numpy as np  # type: ignore
 from typing import List, Optional, Tuple
+
+import numpy as np  # type: ignore
 
 from config.config import MOOD_SNAPSHOT_FOLDER
 from config.prompt_templates import MOOD_PROMPT_TEMPLATE

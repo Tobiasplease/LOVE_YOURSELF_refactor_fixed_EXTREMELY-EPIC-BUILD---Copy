@@ -3,11 +3,14 @@ Unified pattern recognition engine combining motif extraction and novelty detect
 """
 
 from __future__ import annotations
-import time
-import spacy
+
 import re
-from typing import Dict, List, Set, Tuple
+import time
 from collections import Counter, deque
+from typing import Dict, List, Set, Tuple
+
+import spacy
+
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 

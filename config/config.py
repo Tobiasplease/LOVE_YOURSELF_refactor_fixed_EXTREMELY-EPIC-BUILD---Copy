@@ -25,11 +25,11 @@ FLIP_Y = True
 
 # === FACE DETECTION ===
 CONFIDENCE_THRESHOLD = 0.6
-DEAD_ZONE = 30
+DEAD_ZONE = 10
 
 # === IDLE GAZE SETTINGS ===
-IDLE_AMPLITUDE_X = 20
-IDLE_AMPLITUDE_Y = 30
+IDLE_AMPLITUDE_X = 10
+IDLE_AMPLITUDE_Y = 15
 IDLE_CENTER_X = 90
 IDLE_CENTER_Y = 90
 FACE_STABLE_TIMEOUT = 2.0
@@ -95,16 +95,16 @@ EXECUTE_GRBL_GCODE = True
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
-REASON_INTERVAL = 420  # seconds between reflections (7 minutes)
-DRAWING_INTERVAL = 600  # seconds between drawing triggers (10 minutes)
+REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
+DRAWING_INTERVAL = 420  # seconds between drawing triggers (10 minutes)
 DRAWING_COOLDOWN = 180  # seconds between drawings
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
 
 # === CAPTIONER MEMORY CONTROL ===
-MOOD_DECAY_RATE = 0.05  # how much mood fades when nothing new happens
-NOVELTY_RANDOMNESS = 0.3  # random weight to boost novelty
+MOOD_DECAY_RATE = 0.03  # how much mood fades when nothing new happens
+NOVELTY_RANDOMNESS = 0.5  # random weight to boost novelty
 
 # === CHANGE DETECTION ===
 VISUAL_CHANGE_THRESHOLD = 1.0  # novelty score threshold for triggering change-focused prompts (0.0-1.0) - disabled for now
@@ -135,13 +135,14 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 # Control which log types are printed to console
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
 # To see debug information, add "debug" to LOG_TYPES_TO_PRINT
-LOG_TYPES_TO_PRINT = ["all"]
+LOG_TYPES_TO_PRINT = ["ollama_api_call"]
+CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
 DEBUG_OLLAMA_PROMPTS = False  # enable detailed Ollama debug output with prompt types and errors
-OLLAMA_PRINT_FULL_RESPONSE = False  # print full responses in console output (ignores truncation)
+OLLAMA_PRINT_FULL_RESPONSE = True  # print full responses in console output (ignores truncation)
 NO_HANDS = False
 
 # === REACTIVITY PAUSE SYSTEM ===
@@ -153,8 +154,8 @@ REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 # Use debug/identify_arduinos.py to help identify which device is on which port
 
 # 1. Lightbulb PWM Controller
-USE_LIGHTBULB_PWM = True
-LIGHTBULB_SERIAL_PORT = "/dev/ttyUSB1"  # Lightbulb controller - actually on USB1
+USE_LIGHTBULB_PWM = True  # Re-enabled with non-blocking controller
+LIGHTBULB_SERIAL_PORT = "/dev/arduino_lightbulb"  # Lightbulb controller - actually on USB1
 
 # 2. Hand Controller (hardcoded port required)
 HAND_CONTROLLER_PORT = "/dev/arduino_lefthand"  # Hand controller (5 micro servos) - fixed udev symlink

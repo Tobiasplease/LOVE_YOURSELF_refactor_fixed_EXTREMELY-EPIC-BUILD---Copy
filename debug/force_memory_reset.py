@@ -4,8 +4,8 @@ Force a complete memory reset by clearing all state files and cached data.
 Run this script before starting the system for a truly fresh start.
 """
 
-import sys
 import os
+import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

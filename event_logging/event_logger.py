@@ -1,15 +1,16 @@
+import fcntl
+import importlib.util
 import json
 import os
+import random
 import shutil
 import time
 import uuid
-from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
-import importlib.util
+from typing import Any, Dict, List, Optional, Union
 
 from config.config import LOG_TYPES_TO_PRINT, MOOD_SNAPSHOT_FOLDER
 from event_logging.log_type import LogType
-
 
 # Global run ID - generated once per application run
 _current_run_id: Optional[str] = None
@@ -264,7 +265,7 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
 
 def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> None:
     """
-    Append a JSON entry to a log file (for aggregated logs).
+    Append a JSON entry to a log file with atomic file locking to prevent corruption.
 
     Args:
         log_dir: Directory containing log files
@@ -274,22 +275,56 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
     filepath = os.path.join(log_dir, filename)
     os.makedirs(log_dir, exist_ok=True)
 
-    entries = []
-    if os.path.exists(filepath):
+    # Retry logic with exponential backoff for file lock contention
+    max_retries = 5
+    base_delay = 0.001  # 1ms base delay
+
+    for attempt in range(max_retries):
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                entries = json.load(f)
-        except UnicodeDecodeError as e:
-            print(f"[WARNING] Corrupted log file {filepath}, attempting recovery: {e}")
-            entries = _recover_corrupted_log_file(filepath)
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"[WARNING] Invalid JSON in {filepath}, starting fresh: {e}")
-            entries = []
+            # Open file in read+write mode, create if doesn't exist
+            with open(filepath, "a+", encoding="utf-8") as f:
+                # Get exclusive lock (blocks until available)
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
 
-    entries.append(entry)
+                try:
+                    # Seek to beginning and read current contents
+                    f.seek(0)
+                    content = f.read().strip()
 
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(entries, f, indent=2, ensure_ascii=False)
+                    entries = []
+                    if content:
+                        try:
+                            entries = json.loads(content)
+                        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                            print(f"[WARNING] Corrupted JSON in {filepath}, attempting recovery: {e}")
+                            entries = _recover_corrupted_log_file(filepath)
+
+                    # Append new entry
+                    entries.append(entry)
+
+                    # Truncate and write new contents atomically
+                    f.seek(0)
+                    f.truncate()
+                    json.dump(entries, f, indent=2, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())  # Force write to disk
+
+                finally:
+                    # Lock is automatically released when file closes
+                    pass
+
+            # Success - break out of retry loop
+            break
+
+        except (IOError, OSError) as e:
+            if attempt < max_retries - 1:
+                # Exponential backoff with jitter
+                delay = base_delay * (2**attempt) + random.uniform(0, 0.001)
+                time.sleep(delay)
+                continue
+            else:
+                print(f"[ERROR] Failed to write to log file {filepath} after {max_retries} attempts: {e}")
+                raise
 
 
 def _recover_corrupted_log_file(filepath: str) -> List[Dict[str, Any]]:
@@ -317,6 +352,27 @@ def _recover_corrupted_log_file(filepath: str) -> List[Dict[str, Any]]:
 
         try:
             decoded = raw_data.decode("utf-8", errors="replace")
+
+            # Check for duplicate array issue first
+            bracket_count = 0
+            first_array_end = -1
+
+            for i, char in enumerate(decoded):
+                if char == "[":
+                    bracket_count += 1
+                elif char == "]":
+                    bracket_count -= 1
+                    if bracket_count == 0:  # First complete array ends here
+                        first_array_end = i
+                        break
+
+            if first_array_end != -1:
+                remaining = decoded[first_array_end + 1 :].strip()
+                if remaining.startswith("["):
+                    # Duplicate array detected - fix by truncating
+                    print(f"[RECOVERY] Detected duplicate array at position {first_array_end+1}, truncating...")
+                    decoded = decoded[: first_array_end + 1]
+
             entries = json.loads(decoded)
             print(f"[RECOVERY] Successfully recovered {len(entries)} entries using error replacement")
         except json.JSONDecodeError:

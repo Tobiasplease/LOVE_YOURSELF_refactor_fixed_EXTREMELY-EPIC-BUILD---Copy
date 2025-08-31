@@ -3,8 +3,8 @@ bCNC Utility Functions
 Shared functions for G-code processing and bCNC CLI operations
 """
 
-import subprocess
 import shutil
+import subprocess
 
 
 def convert_z_to_servo(input_file, output_file):

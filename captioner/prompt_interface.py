@@ -6,11 +6,13 @@ This replaces the scattered prompt logic across model_wrapper.py and prompts.py.
 import os
 import random
 from typing import Optional
+
 from config import config
 
 # from config.config import OLLAMA_TIMEOUT_REFLECTION
 from config.model_settings import get_model_options
-from .prompts import build_simple_caption_prompt, build_environmental_caption_prompt, build_reflection_prompt, build_drawing_prompt
+
+from .prompts import build_drawing_prompt, build_environmental_caption_prompt, build_reflection_prompt, build_simple_caption_prompt
 
 
 class PromptInterface:

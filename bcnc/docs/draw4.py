@@ -1,7 +1,9 @@
  import os
+
 import time
-import pygetwindow as gw
+
 import pyautogui
+import pygetwindow as gw
 
 # === FILVÄGAR ===
 base_path = r'C:\Users\Tobia\Tobias_robot'

@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import json
 import os
+import random
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 from urllib import request
 from urllib.error import URLError
-from typing import Optional, Dict, Any
-from dataclasses import dataclass
-import random
 
 from config.config import (
+    BATCH_SIZE,
     COMFY_LORA_PATH,
     COMFY_TEMPLATE_FILE,
-    TRIGGER_PROMPT,
+    CONTROLNET_NET_PATH,
     FLUX_DEV_PATH,
     FLUX_GGUF_PATH,
-    CONTROLNET_NET_PATH,
-    BATCH_SIZE,
+    TRIGGER_PROMPT,
 )
 
 

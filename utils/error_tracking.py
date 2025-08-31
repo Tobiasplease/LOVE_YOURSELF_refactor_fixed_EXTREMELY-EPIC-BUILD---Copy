@@ -3,10 +3,11 @@ Comprehensive error tracking and silent failure detection for the LOVE_YOURSELF 
 """
 
 import functools
-import traceback
-import time
 import threading
+import time
+import traceback
 from typing import Any, Callable, Dict
+
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 

@@ -4,8 +4,8 @@ Uses vpype for optimization and vpype-gcode plugin for G-code generation
 """
 
 import os
-import subprocess
 import shutil
+import subprocess
 
 # import tempfile
 import sys

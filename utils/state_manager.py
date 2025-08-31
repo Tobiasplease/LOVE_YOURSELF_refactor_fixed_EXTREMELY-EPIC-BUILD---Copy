@@ -8,14 +8,15 @@ memory retention, and identity evolution.
 
 import json
 import os
-import time
 import threading
-from typing import Dict, Any, Optional
+import time
 from datetime import datetime
-from utils.continuity import now, describe_duration
+from typing import Any, Dict, Optional
+
 from config.config import DRAWING_TIMEOUT, MOOD_SNAPSHOT_FOLDER
-from event_logging.log_type import LogType
 from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
+from utils.continuity import describe_duration, now
 
 
 class StateManager:

@@ -1,7 +1,10 @@
 from __future__ import annotations
-from typing import List, Optional
-import spacy
+
 import time
+from typing import List, Optional
+
+import spacy
+
 from config import config
 
 # from config.model_settings import get_model_prompt_style

@@ -5,20 +5,22 @@ All prompt logic moved to prompt_interface.py for centralization.
 
 import re
 from typing import Optional
+
 from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     MOTIF_MODEL,
     OLLAMA_MODEL,
-    TINYLLAMA_TEMPERATURE,
-    TINYLLAMA_TOP_P,
-    TINYLLAMA_NUM_PREDICT,
-    TINYLLAMA_TIMEOUT,
     OLLAMA_TIMEOUT_REFLECTION,
+    TINYLLAMA_NUM_PREDICT,
+    TINYLLAMA_TEMPERATURE,
+    TINYLLAMA_TIMEOUT,
+    TINYLLAMA_TOP_P,
 )
-from utils.ollama import query_ollama, truncate_for_print
-from .prompt_interface import PromptInterface
-from event_logging.log_type import LogType
 from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
+from utils.ollama import query_ollama, truncate_for_print
+
+from .prompt_interface import PromptInterface
 
 
 class MultimodalModel:

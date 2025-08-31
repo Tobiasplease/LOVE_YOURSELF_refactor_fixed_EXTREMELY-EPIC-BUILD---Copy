@@ -1,11 +1,13 @@
 # from calendar import c
-import os
-import time
 import base64
 import json
-import requests
+import os
+import time
 from typing import Optional, Union
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS, DEBUG_OLLAMA_PROMPTS, OLLAMA_PRINT_FULL_RESPONSE
+
+import requests
+
+from config.config import CLEAN_LLM_OUTPUT, DEBUG_OLLAMA_PROMPTS, MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_PRINT_FULL_RESPONSE, OLLAMA_SHOW_PROGRESS
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.progress_bar import ProgressBar
@@ -115,7 +117,10 @@ def log_ollama_call(
     if response:
         call_details.append("\nResponse: " + truncate_for_print(response, 1000))
 
-    if DEBUG_OLLAMA_PROMPTS:
+    if CLEAN_LLM_OUTPUT and response:
+        # Clean output: just the LLM response text with no metadata
+        print_message = truncate_for_print(response, 1000)
+    elif DEBUG_OLLAMA_PROMPTS:
         debug_details = [f"\n[🤖{type_emoji}] {prompt_type.title()} PROMPT:\n{'-' * 50}", truncate_for_print(prompt, 1000), "-" * 50]
 
         # if system_prompt:

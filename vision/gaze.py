@@ -1,10 +1,11 @@
-import time
 import random
+import time
+
 from config.config import (
-    SERVO_MIN,
-    SERVO_MAX,
     FLIP_X,
     FLIP_Y,
+    SERVO_MAX,
+    SERVO_MIN,
 )
 
 # === SIMPLIFIED STATE MANAGEMENT ===
@@ -17,15 +18,15 @@ state = "idle"
 idle_next_move_time = 0  # Trigger immediate movement
 
 # === CONFIGURABLE PARAMETERS ===
-FACE_TIMEOUT = 3.0   # Wait longer before going idle
+FACE_TIMEOUT = 3.0  # Wait longer before going idle
 TRACK_EASING = 0.15  # Smooth but responsive tracking
-DEAD_ZONE = 5        # Reasonable threshold
+DEAD_ZONE = 5  # Reasonable threshold
 IDLE_CENTER_X = 90
 IDLE_CENTER_Y = 90
-IDLE_RANGE = 35      # Much larger sweeping movements  
-IDLE_PAUSE_MIN = 3.0   # Shorter pause between moves
+IDLE_RANGE = 35  # Much larger sweeping movements
+IDLE_PAUSE_MIN = 3.0  # Shorter pause between moves
 IDLE_PAUSE_MAX = 12.0  # Still good pausing
-IDLE_EASING = 0.12   # Faster than original but not too aggressive
+IDLE_EASING = 0.12  # Faster than original but not too aggressive
 SWEEP_PROBABILITY = 0.6  # 60% chance of big sweeping movement
 
 
@@ -92,10 +93,10 @@ def update_gaze(frame, face_box, current_mood=0.0):
                     target_x = random.choice([SERVO_MIN + 10, SERVO_MAX - 10])
                     target_y = clamp(IDLE_CENTER_Y + random.randint(-20, 20), SERVO_MIN, SERVO_MAX)
                 else:
-                    # Vertical sweep  
+                    # Vertical sweep
                     target_y = random.choice([SERVO_MIN + 10, SERVO_MAX - 10])
                     target_x = clamp(IDLE_CENTER_X + random.randint(-20, 20), SERVO_MIN, SERVO_MAX)
-                    
+
                 # Longer pause after big movements to "observe" and complete movement
                 idle_next_move_time = now + random.uniform(IDLE_PAUSE_MAX * 1.5, IDLE_PAUSE_MAX * 2.5)
             else:
@@ -104,7 +105,7 @@ def update_gaze(frame, face_box, current_mood=0.0):
                 jitter_y = random.randint(-IDLE_RANGE, IDLE_RANGE)
                 target_x = clamp(IDLE_CENTER_X + jitter_x, SERVO_MIN, SERVO_MAX)
                 target_y = clamp(IDLE_CENTER_Y + jitter_y, SERVO_MIN, SERVO_MAX)
-                
+
                 # Shorter pause for small movements
                 idle_next_move_time = now + random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
 
@@ -121,9 +122,9 @@ def smooth_step(current, target, factor):
     diff = target - current
     # Use smaller steps for very smooth movement
     step = diff * factor
-    
+
     # Prevent tiny oscillations by stopping when close enough
     if abs(diff) < 0.1:
         return target
-    
+
     return current + step
