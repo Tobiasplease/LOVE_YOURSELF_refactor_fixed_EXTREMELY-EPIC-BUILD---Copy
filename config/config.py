@@ -95,6 +95,16 @@ CENTER_LINE_SVG = True
 # If False, only generate G-code files without executing them
 EXECUTE_GRBL_GCODE = True
 
+# === GRBL IDLE MOVEMENT SETTINGS ===
+# Idle movements happen in far corner away from home (0,0)
+# Physical work area constrained to 40x40mm for safe operation
+GRBL_IDLE_CENTER = (30, 30)  # Center point for idle movements (far corner of 40x40 area)
+GRBL_IDLE_RADIUS_MIN = 5  # Minimum movement radius in mm
+GRBL_IDLE_RADIUS_MAX = 8  # Maximum movement radius in mm (reduced for 40x40 area)
+GRBL_IDLE_FEED_RATE = 500  # Feed rate for idle movements (mm/min) - very slow and organic
+GRBL_IDLE_ZONE = (20, 40, 20, 40)  # Boundary box: (x_min, x_max, y_min, y_max) for 40x40 area
+GRBL_IDLE_UPDATE_INTERVAL = 3.0  # Seconds between movement updates - longer pauses
+
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
