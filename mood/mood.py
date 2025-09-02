@@ -61,11 +61,23 @@ class MoodEngine:
             if similar_memories:
                 emotional_context += f" | Similar emotional memories: {' | '.join(similar_memories[:2])}"
 
-        # Simple mood analysis for backward compatibility
-        scalar_mood = self._get_simple_mood_analysis(caption)
+        # Get 3D mood analysis from Ollama for physical control systems
+        valence, arousal, clarity = self.analyze_3d_mood_with_ollama(
+            caption, emotional_memory_context=emotional_context, temporal_feeling=temporal_feeling
+        )
 
-        # Keep simple mood vector for hand controller compatibility
-        self.mood_vector = (scalar_mood - 0.5, 0.0, 0.0)  # Convert 0-1 to -0.5 to 0.5
+        # Apply emotional momentum for smoother transitions
+        prev_v, prev_a, prev_c = self.previous_mood_vector
+        valence = valence * (1 - self.emotional_momentum) + prev_v * self.emotional_momentum
+        arousal = arousal * (1 - self.emotional_momentum) + prev_a * self.emotional_momentum
+        clarity = clarity * (1 - self.emotional_momentum) + prev_c * self.emotional_momentum
+
+        # Update mood vectors
+        self.mood_vector = (valence, arousal, clarity)
+        self.previous_mood_vector = self.mood_vector
+
+        # Simple mood analysis for backward compatibility
+        scalar_mood = self.convert_3d_to_scalar(valence, arousal, clarity)
 
         # Apply unified pattern analysis (motifs + novelty)
         pattern_data = self.pattern_engine.analyze_caption(caption)
@@ -86,32 +98,38 @@ class MoodEngine:
         return self.current_mood
 
     def get_emotion_for_hand_controller(self) -> str:
-        """Map 3D mood vector to hand controller emotion states with natural variation."""
+        """Map 3D mood vector to hand controller emotion states with enhanced natural variation."""
         valence, arousal, clarity = self.mood_vector
 
-        # Add slight natural variation to prevent permanent lock-in
-        time_factor = (time.time() - self.session_start) / 1800.0  # 30-minute cycles
-        natural_variation = 0.1 * np.sin(time_factor)  # ±0.1 oscillation
+        # Enhanced natural variation to prevent mood stagnation
+        time_factor = (time.time() - self.session_start) / 900.0  # 15-minute cycles (faster)
+        valence_variation = 0.25 * np.sin(time_factor)  # ±0.25 oscillation
+        arousal_variation = 0.3 * np.cos(time_factor * 1.3)  # Different frequency
+        clarity_variation = 0.2 * np.sin(time_factor * 0.7)  # Slower clarity drift
 
-        adjusted_arousal = arousal + natural_variation
+        adjusted_valence = valence + valence_variation
+        adjusted_arousal = arousal + arousal_variation  
+        adjusted_clarity = clarity + clarity_variation
 
-        # Use the sophisticated mapping from captioner/prompts.py
-        if valence > 0.5 and adjusted_arousal < 0.4:
-            return "calm_observant"  # "content and quiet"
-        elif valence > 0.5 and adjusted_arousal > 0.6:
-            return "energized_engaged"  # "curious and energized"
-        elif valence < -0.3 and adjusted_arousal > 0.5:
-            return "alert_curious"  # "anxious and alert"
-        elif valence < -0.3 and adjusted_arousal < 0.4:
-            return "withdrawn_distant"  # "withdrawn and foggy"
-        elif clarity < 0.2:
-            return "quiet_detached"  # "uncertain and confused"
-        elif valence > 0.2 and adjusted_arousal > 0.3:
-            return "alert_curious"  # Generally alert and engaged
-        elif valence < -0.1:
-            return "quiet_detached"  # Generally withdrawn
+        # More dynamic mapping with escape paths from quiet_detached
+        if adjusted_valence > 0.3 and adjusted_arousal > 0.7:
+            return "energized_engaged"  # High positive energy
+        elif adjusted_valence > 0.4 and adjusted_arousal < 0.5:
+            return "calm_observant"  # Positive but calm
+        elif adjusted_arousal > 0.6 and adjusted_clarity > 0.3:
+            return "alert_curious"  # High arousal + decent clarity = curious
+        elif adjusted_valence < -0.4 and adjusted_arousal > 0.5:
+            return "alert_curious"  # Negative but alert (anxious curiosity)
+        elif adjusted_valence < -0.5 and adjusted_arousal < 0.4:
+            return "withdrawn_distant"  # Low energy + negative
+        elif adjusted_clarity < 0.1 and adjusted_arousal < 0.3:
+            return "quiet_detached"  # Only when both clarity AND arousal are very low
+        elif adjusted_valence > 0.1:  # More lenient positive threshold
+            return "alert_curious" if adjusted_arousal > 0.4 else "calm_observant"
+        elif adjusted_arousal > 0.5:  # Escape path: high arousal = curious regardless
+            return "alert_curious"
         else:
-            return "calm_observant"  # Default neutral state
+            return "calm_observant"  # Less trapped default state
 
     def get_pattern_data(self) -> dict:
         """Get current pattern recognition data for external access."""
@@ -161,10 +179,8 @@ class MoodEngine:
         return change
 
     def _get_simple_mood_analysis(self, caption: str) -> float:
-        """Simple sentiment analysis for backward compatibility - just returns 0.5 (neutral)."""
-        # The real emotional understanding now comes from compression system sentiment
-        # This just maintains compatibility with hand controller and legacy systems
-        return 0.5
+        """Simple sentiment analysis for backward compatibility."""
+        return 0.5 + self.analyze_caption_sentiment(caption)
 
     def analyze_caption_sentiment(self, caption: str) -> float:
         """Analyze sentiment from caption content using keyword matching."""

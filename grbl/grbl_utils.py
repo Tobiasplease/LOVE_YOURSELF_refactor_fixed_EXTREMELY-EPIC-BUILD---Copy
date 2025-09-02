@@ -18,7 +18,7 @@ DEFAULT_STATUS_POLL = 0.1
 DEFAULT_HOME_TIMEOUT = 120  # seconds
 DEFAULT_MOVE_TIMEOUT = 15  # seconds
 DEFAULT_CMD_TIMEOUT = 5.0  # seconds
-DEFAULT_FEED_RATE = 5000
+DEFAULT_FEED_RATE = 12000  # Balanced speed for clean drawing
 
 PEN_DOWN_CMD = "M3 S50 ; PEN DOWN"  # Command to lower pen
 PEN_UP_CMD = "M3 S30 ; PEN UP"  # Command to raise pen
@@ -413,50 +413,72 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     executed_lines = 0
 
     lines = lines[3:]  # Skip first three lines (G20, G17, G90), from vpype inject somehow
-    for line_num, line in enumerate(lines, 1):
-        line = line.strip()
+    
+    try:
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
 
-        # Skip empty lines and comments
-        if not line or line.startswith(";") or line.startswith("%"):
-            continue
+            # Skip empty lines and comments
+            if not line or line.startswith(";") or line.startswith("%"):
+                continue
 
-        try:
-            # Determine timeout based on command type
-            if line.startswith(("G0", "G1", "G00", "G01")):
-                timeout = move_timeout
-            else:
-                timeout = DEFAULT_CMD_TIMEOUT
+            try:
+                # Determine timeout based on command type
+                if line.startswith(("G0", "G1", "G00", "G01")):
+                    timeout = move_timeout
+                else:
+                    timeout = DEFAULT_CMD_TIMEOUT
 
-            send_cmd(ser, line, timeout=timeout)
-            executed_lines += 1
+                send_cmd(ser, line, timeout=timeout)
+                executed_lines += 1
 
-            if executed_lines % 10 == 0:  # Progress update every 10 commands
+                if executed_lines % 10 == 0:  # Progress update every 10 commands
+                    log_json_entry(
+                        LogType.GRBL,
+                        {
+                            "message": "G-code execution progress",
+                            "action": "execution_progress",
+                            "executed_lines": executed_lines,
+                            "total_lines": total_lines,
+                            "progress_percent": (executed_lines / total_lines) * 100,
+                        },
+                        print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed",
+                    )
+
+            except Exception as e:
                 log_json_entry(
-                    LogType.GRBL,
+                    LogType.ERROR,
                     {
-                        "message": "G-code execution progress",
-                        "action": "execution_progress",
-                        "executed_lines": executed_lines,
-                        "total_lines": total_lines,
-                        "progress_percent": (executed_lines / total_lines) * 100,
+                        "message": "Failed to execute G-code line",
+                        "component": "grbl",
+                        "line_number": line_num,
+                        "command": line,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
                     },
-                    print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed",
+                    print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
                 )
-
-        except Exception as e:
-            log_json_entry(
-                LogType.ERROR,
-                {
-                    "message": "Failed to execute G-code line",
-                    "component": "grbl",
-                    "line_number": line_num,
-                    "command": line,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                },
-                print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
-            )
-            raise
+                raise
+                
+    except KeyboardInterrupt:
+        log_json_entry(
+            LogType.GRBL,
+            {
+                "message": "G-code execution interrupted by user",
+                "action": "execution_interrupted",
+                "executed_lines": executed_lines,
+                "total_lines": total_lines,
+                "progress_percent": (executed_lines / total_lines) * 100 if total_lines > 0 else 0,
+            },
+            print_message=f"[⚠️] G-code execution interrupted! Executed {executed_lines}/{total_lines} lines",
+        )
+        # Send any emergency stops or cleanup commands if needed
+        try:
+            send_cmd(ser, "M3 S30", wait_ok=False)  # Pen up
+            send_cmd(ser, "!", wait_ok=False)       # Emergency stop
+        except:
+            pass
+        raise
 
     log_json_entry(
         LogType.GRBL,

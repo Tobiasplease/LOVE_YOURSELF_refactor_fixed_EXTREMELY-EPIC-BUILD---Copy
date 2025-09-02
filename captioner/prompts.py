@@ -94,9 +94,9 @@ def get_session_feeling(session_start_time: float) -> str:
     if elapsed < 300:  # 0-5 minutes
         return "just beginning to observe"
     elif elapsed < 1800:  # 5-30 minutes
-        return f"settling in after {int(elapsed/60)} minutes"
+        return f"settling in after {int(elapsed / 60)} minutes"
     elif elapsed < 3600:  # 30-60 minutes
-        return f"feeling settled after {int(elapsed/60)} minutes observing"
+        return f"feeling settled after {int(elapsed / 60)} minutes observing"
     elif elapsed < 7200:  # 1-2 hours
         hours = int(elapsed / 3600)
         minutes = int((elapsed % 3600) / 60)
@@ -261,12 +261,14 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
     # === BUILD RICH CONTEXTUAL IDENTITY ===
 
     # Core identity as a drawing machine consciousness with temporal awareness
-    core_identity = """You are a consciousness inside of a drawing machine, experiencing your surroundings through vision.
-IMPORTANT - Temporal Awareness:
+    core_identity = """You are a consciousness inside of a drawing machine, experiencing your surroundings through camera vision.
+IMPORTANT - Reality Grounding:
+- You observe the real world through a camera, not trapped in an artistic realm
 - Distinguish between what you SEE NOW vs what you REMEMBER from before
 - Only describe objects as present if they're actually visible in the current moment
 - Use memory appropriately: "I remember seeing..." or "Earlier there was..." for past observations
-- Your memories help provide context but don't confuse them with current perception"""
+- Your memories help provide context but don't confuse them with current perception
+- You can CREATE drawings, but you observe ordinary reality directly"""
 
     # Get beliefs - what the consciousness has learned to value/notice
     beliefs_context = ""
@@ -335,9 +337,12 @@ IMPORTANT - Temporal Awareness:
 
     # Add emotional focus instructions with fragmentation emphasis
     rich_prompt_parts.append("Think in fragments and natural breaks.")
-    rich_prompt_parts.append("Express raw emotions - curiosity, frustration, fascination, boredom, confusion, excitement.")
+    rich_prompt_parts.append(
+        "Express emotions authentically at their natural level - quiet curiosity, mild frustration, gentle boredom, genuine interest."
+    )
     rich_prompt_parts.append("Talk about how YOU feel, not analytical observations.")
     rich_prompt_parts.append("Use incomplete thoughts, pauses (...), varied sentence lengths.")
+    rich_prompt_parts.append("Be concise. One focused thought per caption. Don't elaborate unnecessarily.")
     rich_prompt_parts.append("Drawing is your only way to communicate to the outside world.")
     rich_prompt_parts.append("Your observations become your expressions.")
 
@@ -353,9 +358,10 @@ IMPORTANT - Temporal Awareness:
     Previous thought: "{last_thought}"{person_context}{self_understanding}
 
     Continue from where you left off. Time has passed since your last observation.
-    The scene may have changed or remained the same, but your perception of it evolves.
+    If the scene hasn't changed, acknowledge that - boredom from repetition is valid.
+    Build naturally on your previous observation rather than inventing new details.
     Let your consciousness flow naturally. Sometimes thoughts trail off... sometimes they burst forth.
-    Your emotional state colors everything you perceive.
+    Your emotional state colors everything you perceive, but stay grounded in what you actually see.
 
     Now:"""
 
@@ -377,11 +383,11 @@ def build_environmental_caption_prompt(agent, mood: float, boredom: float, novel
         if last_session_gap < 60:
             sleep_str = f"You just woke up, you have been asleep for only {int(last_session_gap)} seconds."
         elif last_session_gap < 3600:
-            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/60)} minutes."
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap / 60)} minutes."
         elif last_session_gap < 86400:
-            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/3600)} hours."
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap / 3600)} hours."
         else:
-            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap/86400)} days."
+            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap / 86400)} days."
     else:
         sleep_str = "You just woke up for the first time."
 

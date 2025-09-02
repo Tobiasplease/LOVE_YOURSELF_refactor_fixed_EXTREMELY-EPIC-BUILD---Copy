@@ -167,9 +167,9 @@ if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 debug_print("Camera opened successfully", "INIT")
-# Reduce camera resolution to prevent memory issues
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+# Set camera resolution for better image quality
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 proto = f"{MODEL_PATH}/deploy.prototxt"
 model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
@@ -742,7 +742,7 @@ try:
         current_mood = mood_engine.get_current_mood()
 
         face_box = tuple(best_box) if best_box is not None else None
-        person_present, pan, tilt = update_gaze(frame, face_box, current_mood)
+        person_present, pan, tilt = update_gaze(frame, face_box, mood_engine.get_emotion_for_hand_controller())
 
         (
             lung_pos,
@@ -752,7 +752,7 @@ try:
             last_breath_direction,
             pause_start_time,
         ) = update_lung_position(
-            current_mood=current_mood,
+            current_emotion_state=mood_engine.get_emotion_for_hand_controller(),
             person_present=person_present,
             delta=delta,
             lung_angle=lung_angle,

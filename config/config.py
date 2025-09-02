@@ -28,13 +28,17 @@ CONFIDENCE_THRESHOLD = 0.6
 DEAD_ZONE = 10
 
 # === IDLE GAZE SETTINGS ===
-IDLE_AMPLITUDE_X = 10
-IDLE_AMPLITUDE_Y = 15
+IDLE_AMPLITUDE_X = 35  # Increased from 10 for more prominent horizontal movement
+IDLE_AMPLITUDE_Y = 30  # Increased from 15 for more prominent vertical movement
 IDLE_CENTER_X = 90
 IDLE_CENTER_Y = 90
-FACE_STABLE_TIMEOUT = 2.0
+FACE_STABLE_TIMEOUT = 3.0  # Time before going idle after losing face
 IDLE_SPEED_MIN = 0.15
 IDLE_SPEED_MAX = 0.30
+IDLE_PAUSE_MIN = 3.0  # Minimum pause between idle movements
+IDLE_PAUSE_MAX = 12.0  # Maximum pause between idle movements
+IDLE_EASING = 0.12  # Easing factor for idle movements
+SWEEP_PROBABILITY = 0.6  # Probability of doing a big sweep movement vs small movement
 
 
 # === BREATHING SETTINGS ===
