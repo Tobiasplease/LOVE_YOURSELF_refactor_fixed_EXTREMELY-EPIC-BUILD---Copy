@@ -10,7 +10,7 @@ import time
 
 import cv2
 
-from config.config import LIGHTBULB_SENSITIVITY, LIGHTBULB_SERIAL_PORT, USE_LIGHTBULB_PWM
+from config.config import USE_LIGHTBULB_PWM
 
 
 def parse_args():
@@ -65,7 +65,6 @@ from config.config import (
     REACTIVITY_PAUSE_COOLDOWN,
     REACTIVITY_PAUSE_DURATION,
     REACTIVITY_PAUSE_THRESHOLD,
-    SERIAL_PORT,
     USE_HAND_CONTROLLER,
     USE_SERVO,
 )
@@ -74,7 +73,7 @@ from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from image_monitor import ImageMonitor
 from mood.mood import MoodEngine
-from utils.continuity import describe_duration, get_temporal_feeling
+from utils.continuity import describe_duration
 from utils.error_tracking import get_failure_tracker
 from utils.state_manager import state_manager
 from vision.gaze import update_gaze
@@ -167,9 +166,9 @@ if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 debug_print("Camera opened successfully", "INIT")
-# Reduce camera resolution to prevent memory issues
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+# Set camera resolution for better image quality
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 proto = f"{MODEL_PATH}/deploy.prototxt"
 model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
@@ -255,7 +254,14 @@ def emergency_cleanup():
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                print("[🔧] GPU cache cleared")
+                # Only print debug if clean output is disabled
+                try:
+                    from config.config import CLEAN_LLM_OUTPUT
+
+                    if not CLEAN_LLM_OUTPUT:
+                        print("[🔧] GPU cache cleared")
+                except ImportError:
+                    print("[🔧] GPU cache cleared")
         except ImportError:
             pass  # PyTorch not available, skip
         except Exception as e:
@@ -283,7 +289,14 @@ def graceful_cleanup():
     # Save session state first (most important)
     if _global_captioner and _global_mood_engine and _global_state_manager:
         try:
-            print("[💾] Saving session state...")
+            # Only print debug if clean output is disabled
+            try:
+                from config.config import CLEAN_LLM_OUTPUT
+
+                if not CLEAN_LLM_OUTPUT:
+                    print("[💾] Saving session state...")
+            except ImportError:
+                print("[💾] Saving session state...")
             success = _global_state_manager.save_session_state(_global_captioner, _global_mood_engine)
             print("[SUCCESS] Session state saved successfully" if success else "[ERROR] Failed to save session state")
         except Exception as e:
@@ -345,7 +358,14 @@ def graceful_cleanup():
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            print("[🔧] GPU cache cleared")
+            # Only print debug if clean output is disabled
+            try:
+                from config.config import CLEAN_LLM_OUTPUT
+
+                if not CLEAN_LLM_OUTPUT:
+                    print("[🔧] GPU cache cleared")
+            except ImportError:
+                print("[🔧] GPU cache cleared")
     except ImportError:
         pass  # PyTorch not available, skip
     except Exception as e:
@@ -354,7 +374,14 @@ def graceful_cleanup():
     # Shutdown error tracker
     try:
         get_failure_tracker().shutdown()
-        print("[📊] Error tracker shutdown")
+        # Only print debug if clean output is disabled
+        try:
+            from config.config import CLEAN_LLM_OUTPUT
+
+            if not CLEAN_LLM_OUTPUT:
+                print("[📊] Error tracker shutdown")
+        except ImportError:
+            print("[📊] Error tracker shutdown")
     except Exception as e:
         print(f"[WARNING] Error shutting down error tracker: {e}")
 
@@ -377,12 +404,14 @@ signal.signal(signal.SIGTERM, signal_handler)
 atexit.register(emergency_cleanup)
 
 last_snapshot_time = 0
-debug_print("YOLO object detection disabled", "INIT")
-# object_detector = ObjectDetectionThread()
-# _global_object_detector = object_detector
-# object_detector.start()
-object_detector = None
-_global_object_detector = None
+mood_thread_running = False
+mood_thread_lock = threading.Lock()
+debug_print("YOLO person detection enabled", "INIT")
+from perception.object_detection import ObjectDetectionThread
+
+object_detector = ObjectDetectionThread()
+_global_object_detector = object_detector
+object_detector.start()
 
 # Start image monitoring
 debug_print("Starting image monitor", "INIT")
@@ -516,80 +545,82 @@ last_printed_caption_time = 0.0
 last_state_save_time = 0.0
 
 
+# Redundant functions removed - using existing MoodEngine functionality
+
+
 def mood_update_thread(frame, timestamp):
-    global last_snapshot_time, best_box, last_printed_caption_time, last_state_save_time
-    debug_print("Mood update thread started", "MOOD")
-    now = time.time()
-    if now - last_snapshot_time >= 10:
-        snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
-        cv2.imwrite(snapshot_path, frame)
-        debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
+    global last_snapshot_time, last_state_save_time, mood_thread_running
 
-        try:
-            # First: Update captioner to generate new captions
-            captioner.update(
-                frame=frame,
-                person_present=best_box is not None,
-                mood=mood_engine.get_current_mood(),
-                mood_vector=mood_engine.mood_vector,  # Pass 3D mood state
-                emotion_state=mood_engine.get_emotion_for_hand_controller(),  # Pass current emotion
-                reactivity_data=reactivity_metrics,
-            )
-            debug_print("Captioner updated successfully", "CAPTIONER")
+    # Set running flag at start
+    with mood_thread_lock:
+        mood_thread_running = True
 
-            # Second: Analyze mood from captioner's latest caption
-            if captioner.last_caption:
-                clean_caption = captioner.last_caption
-                if clean_caption.lower().startswith("caption:"):
-                    clean_caption = clean_caption[len("caption:") :].strip()
-                # Lightbulb flash on caption print
-                if USE_LIGHTBULB_PWM and lightbulb:
-                    try:
-                        lightbulb.caption_flash()
-                    except Exception as e:
-                        debug_print(f"Lightbulb caption flash failed: {e}", "ERROR")
+    try:
+        debug_print("Mood update thread started", "MOOD")
+        now = time.time()
+        if now - last_snapshot_time >= 10:
+            snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
+            cv2.imwrite(snapshot_path, frame)
+            debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
 
-                # PRINT_CLEAN_CAPTIONS? chuck into logging func?
-                # if captioner.last_caption_time > last_printed_caption_time:
-                #     print(f"\n{clean_caption}\n")
-                #     last_printed_caption_time = captioner.last_caption_time
-
-                # Generate embodied temporal feeling for mood analysis
+            try:
+                # Use existing MoodEngine for emotional state - single source of truth
                 current_emotion = mood_engine.get_emotion_for_hand_controller()
-                temporal_feeling = get_temporal_feeling(start_time, current_emotion, scene_stagnation=False)
+                current_mood = mood_engine.get_current_mood()
 
-                current_mood = mood_engine.analyze_mood(
-                    clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling
-                )
-                debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
+                debug_print(f"Current emotion: {current_emotion}, mood: {current_mood:.2f}", "EMOTION")
 
-                # SimpleLightbulbController doesn't have mood parameters - uses frame diff only
+                # Captioner is now updated in main loop - mood system just reads captions
+                debug_print("Captioner updated successfully", "CAPTIONER")
 
-                # Periodic state saving (every 2 minutes)
-                if now - last_state_save_time > 120:  # 2 minutes
-                    if _global_state_manager:
+                # Second: Process caption and update physical systems
+                if captioner.last_caption:
+                    clean_caption = captioner.last_caption
+                    if clean_caption.lower().startswith("caption:"):
+                        clean_caption = clean_caption[len("caption:") :].strip()
+                    # Lightbulb flash on caption print
+                    if USE_LIGHTBULB_PWM and lightbulb:
                         try:
-                            _global_state_manager.save_session_state(captioner, mood_engine)
-                            last_state_save_time = now
+                            lightbulb.caption_flash()
                         except Exception as e:
-                            print(f"[ERROR] Periodic state save failed: {e}")
+                            debug_print(f"Lightbulb caption flash failed: {e}", "ERROR")
 
-                # Update hand controller with new emotional state
-                emotion = mood_engine.get_emotion_for_hand_controller()
-                change_to_emotion(emotion)
-                debug_print(f"Updated hand controller emotion: {emotion}", "HAND")
+                    # PRINT_CLEAN_CAPTIONS? chuck into logging func?
+                    # if captioner.last_caption_time > last_printed_caption_time:
+                    #     print(f"\n{clean_caption}\n")
+                    #     last_printed_caption_time = captioner.last_caption_time
 
-                # Third: Update captioner's mood state and pattern data for next cycle
-                captioner.current_mood = current_mood
-                pattern_data = mood_engine.get_pattern_data()
-                captioner.set_novelty_score(pattern_data["novelty_score"])
-                # Pass recent motifs to captioner for memory integration
-                captioner.current_motifs_from_mood = pattern_data["recent_motifs"]
+                    # SimpleLightbulbController doesn't have mood parameters - uses frame diff only
 
-        except Exception as e:
-            debug_print(f"Captioner update failed: {e}", "ERROR")
-        last_snapshot_time = now
-    debug_print("Mood update thread completed successfully", "MOOD")
+                    # Periodic state saving (every 2 minutes)
+                    if now - last_state_save_time > 120:  # 2 minutes
+                        if _global_state_manager:
+                            try:
+                                _global_state_manager.save_session_state(captioner, mood_engine)
+                                last_state_save_time = now
+                            except Exception as e:
+                                print(f"[ERROR] Periodic state save failed: {e}")
+
+                    # Update hand controller with new emotional state
+                    change_to_emotion(current_emotion)
+                    debug_print(f"Updated hand controller emotion: {current_emotion}", "HAND")
+
+                    # Third: Update captioner's mood state and pattern data for next cycle
+                    captioner.current_mood = current_mood
+                    pattern_data = mood_engine.get_pattern_data()
+                    captioner.set_novelty_score(pattern_data["novelty_score"])
+                    # Pass recent motifs to captioner for memory integration
+                    captioner.current_motifs_from_mood = pattern_data["recent_motifs"]
+
+            except Exception as e:
+                debug_print(f"Captioner update failed: {e}", "ERROR")
+            last_snapshot_time = now
+        debug_print("Mood update thread completed successfully", "MOOD")
+    finally:
+        # Always clear running flag when thread completes
+        with mood_thread_lock:
+            mood_thread_running = False
+        debug_print("Mood update thread flag cleared", "MOOD")
 
 
 # === REACTIVITY PAUSE SYSTEM STATE ===
@@ -616,7 +647,7 @@ try:
         if not ret:
             continue
 
-        # object_detector.set_frame(frame)  # YOLO disabled
+        object_detector.set_frame(frame)  # YOLO person detection enabled
 
         frame = cv2.resize(frame, (320, 240))
         frame = cv2.flip(frame, 1)
@@ -725,24 +756,50 @@ try:
                 best_box = box.astype("int")
                 best_conf = conf
 
+        # Also check YOLO person detections (if face detection didn't find anything)
+        if best_box is None:
+            from perception.detection_memory import DetectionMemory
+
+            labels = DetectionMemory.get_labels()
+            if "person" in labels:
+                # Person detected by YOLO - create a dummy box for person presence
+                best_box = [50, 50, 100, 100]  # Dummy box to indicate person present
+                best_conf = 0.8  # Dummy confidence for YOLO person detection
+                if int(now) % 5 == 0:  # Every 5 seconds
+                    debug_print("Person detected by YOLO", "PERSON")
+
         if best_box is not None:
-            # Suppress frequent face detection messages - only show occasionally
+            # Suppress frequent detection messages - only show occasionally
             if int(now) % 5 == 0:  # Every 5 seconds
-                debug_print(f"Face detected with confidence: {best_conf:.2f}", "FACE")
+                source = "Face" if best_conf < 0.7 else "Person"  # Distinguish source
+                debug_print(f"{source} detected with confidence: {best_conf:.2f}", "DETECTION")
         else:
-            # Only show "no face" occasionally to avoid spam
+            # Only show "no person" occasionally to avoid spam
             if int(now) % 10 == 0:  # Every 10 seconds
-                debug_print("No face detected", "FACE")
+                debug_print("No person detected", "DETECTION")
+
+        # Update captioner with every frame (decoupled from mood system)
+        captioner.update(
+            frame=frame,
+            person_present=best_box is not None,
+            mood=mood_engine.get_current_mood() if mood_engine else 0.5,
+            reactivity_data=reactivity_metrics,
+        )
 
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:
-            debug_print(f"Starting mood update thread - interval: {MOOD_EVALUATION_INTERVAL}s", "MOOD")
-            threading.Thread(target=mood_update_thread, args=(frame.copy(), int(now)), daemon=True).start()
-            last_mood_time = now
+            # Check if mood analysis is already running to prevent overlapping threads
+            with mood_thread_lock:
+                if not mood_thread_running:
+                    debug_print(f"Starting mood update thread - interval: {MOOD_EVALUATION_INTERVAL}s", "MOOD")
+                    threading.Thread(target=mood_update_thread, args=(frame.copy(), int(now)), daemon=True).start()
+                    last_mood_time = now
+                else:
+                    debug_print("Mood analysis already running - skipping this interval", "MOOD")
 
         current_mood = mood_engine.get_current_mood()
 
         face_box = tuple(best_box) if best_box is not None else None
-        person_present, pan, tilt = update_gaze(frame, face_box, current_mood)
+        person_present, pan, tilt = update_gaze(frame, face_box, mood_engine.get_emotion_for_hand_controller())
 
         (
             lung_pos,
@@ -752,7 +809,7 @@ try:
             last_breath_direction,
             pause_start_time,
         ) = update_lung_position(
-            current_mood=current_mood,
+            current_emotion_state=mood_engine.get_emotion_for_hand_controller(),
             person_present=person_present,
             delta=delta,
             lung_angle=lung_angle,

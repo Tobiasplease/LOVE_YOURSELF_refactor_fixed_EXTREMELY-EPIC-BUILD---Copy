@@ -180,7 +180,17 @@ def log_json_entry(
     if log_type_str.lower() in LOG_TYPES_TO_PRINT or ("all" in LOG_TYPES_TO_PRINT and log_type_str.lower() != "debug"):
         if print_message:
             elapsed = get_elapsed_time()
-            print(f"[{elapsed}] {print_message}")
+            # Check for clean output mode and add empty line for captions
+            try:
+                from config.config import CLEAN_LLM_OUTPUT
+
+                if CLEAN_LLM_OUTPUT and log_type_str.lower() in ["caption", "ollama_api_call"]:
+                    print(f"[{elapsed}] {print_message}")
+                    print()  # Add empty line after captions/ollama responses for clean formatting
+                else:
+                    print(f"[{elapsed}] {print_message}")
+            except ImportError:
+                print(f"[{elapsed}] {print_message}")
 
     return filepath
 

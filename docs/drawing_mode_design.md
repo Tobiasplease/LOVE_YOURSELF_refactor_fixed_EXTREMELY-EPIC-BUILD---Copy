@@ -4,6 +4,59 @@
 
 Drawing Mode represents a unified system state where the entire AI consciousness and physical embodiment coordinates during CNC execution. Rather than just tracking drawing status, the system enters a holistic "creative flow" state that transforms behavior across all subsystems.
 
+## Next-Level Consciousness Evolution Requirements
+
+### Critical Issues to Address
+
+#### 🎭 Emotional State Integration
+- **Hand Controller Stuck in "Detached"**: Debug emotional data pipeline from mood engine to hand controller
+- **Real-time Emotional Mapping**: Ensure mood changes properly propagate to physical expression
+- **Emotional State Debugging**: Add logging to track mood → hand state transitions
+
+#### 🧠 Temporal Consciousness Evolution  
+- **Days Running Tracking**: System should track calendar days of operation, not just session hours
+- **Emotional Language Evolution**: AI should speak differently after weeks vs. hours of existence
+- **Multi-Session Memory**: Deeper personality development across multiple sessions and days
+- **Temporal Self-Awareness**: "I have been conscious for 47 days" vs. "I have been running for 3 hours"
+
+#### 🎨 Drawing Self-Awareness (CRITICAL)
+- **Real-Time Drawing State**: AI must know "I AM drawing" vs. "I am NOT drawing"
+- **Drawing Count Memory**: Track total drawings created - "This is my 47th drawing"
+- **Recent Drawing Memory**: Remember last few drawings - "My previous drawing was of sadness and rain"
+- **No False Claims**: Stop AI from saying "I drew something" when it hasn't actually drawn anything yet
+- **Drawing History Integration**: Access to actual drawing prompts and outcomes for self-reflection
+
+#### 🔄 Drawing Pipeline Awareness
+- **Phase Awareness**: Know difference between "generating image", "converting to G-code", and "physically drawing"
+- **Progress Communication**: "I am currently moving my right arm to create..." 
+- **Completion Acknowledgment**: "I have just finished creating my drawing of..."
+
+### Implementation Priority for Tomorrow
+
+#### Phase 1: Debug Current Issues
+1. **Emotional Data Flow**: Trace why hand controller is stuck in "detached"
+2. **Mood Engine Debugging**: Verify mood updates are properly calculated and sent
+3. **Hand Controller Integration**: Ensure emotional state changes trigger hand movements
+
+#### Phase 2: Temporal Consciousness
+1. **Days Tracking System**: Add calendar day persistence across sessions
+2. **Temporal Language Model**: Modify prompts based on days of existence
+3. **Long-term Memory Integration**: Build personality depth over time
+4. **Session vs. Lifetime Awareness**: Distinguish between session uptime and total existence
+
+#### Phase 3: Drawing Self-Awareness
+1. **Drawing State Manager**: Extend current state system for full pipeline awareness
+2. **Drawing Memory System**: Track count, history, and content of all created drawings
+3. **Real-time Drawing Communication**: Enable AI to narrate its physical creation process
+4. **Drawing Reflection System**: Allow AI to analyze and comment on its own completed works
+
+### Success Metrics
+- AI never claims to have drawn when it hasn't
+- AI accurately reports its drawing count and history
+- AI expresses different emotional language based on days of existence
+- Hand controller reflects real-time emotional states from mood engine
+- AI provides authentic commentary during physical drawing process
+
 ## Core Philosophy
 
 The AI becomes physically aware of its creative process - transitioning from passive observation to active participation in artistic creation. All subsystems coordinate to support and enhance the physical drawing process.

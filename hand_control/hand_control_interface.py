@@ -454,7 +454,14 @@ class CleanCursorInterface:
         #     self.markov_chains.clear()
 
         print(f"🧹 Startup cleanup complete: Cleared {total_points_before} old recording points")
-        print(f"💾 Memory reset: Fresh session with max {self.max_recording_points} points per segment (20s each)")
+        # Only print debug if clean output is disabled
+        try:
+            from config.config import CLEAN_LLM_OUTPUT
+
+            if not CLEAN_LLM_OUTPUT:
+                print(f"💾 Memory reset: Fresh session with max {self.max_recording_points} points per segment (20s each)")
+        except ImportError:
+            print(f"💾 Memory reset: Fresh session with max {self.max_recording_points} points per segment (20s each)")
 
         print("🎯 Clean Emotional Hand Control initialized")
         print("🎮 Direct wave-based cursor→servo control ready")
@@ -1424,7 +1431,14 @@ class CleanCursorInterface:
         else:
             print(f"WARNING No datasets available for {target_emotion} - emotion will switch but no dataset selected")
 
-        print(f"🌊 Starting smooth transition to {target_emotion}")
+        # Only print debug if clean output is disabled
+        try:
+            from config.config import CLEAN_LLM_OUTPUT
+
+            if not CLEAN_LLM_OUTPUT:
+                print(f"🌊 Starting smooth transition to {target_emotion}")
+        except ImportError:
+            print(f"🌊 Starting smooth transition to {target_emotion}")
 
     def update_emotion_transition(self):
         """Update smooth emotion transition progress."""
@@ -1512,7 +1526,14 @@ class CleanCursorInterface:
             # Fallback to current positions if no recordings
             self.transition_target_positions = self.finger_positions.copy()
 
-        print(f"🌊 Starting smooth transition to {target_dataset} (1.5s ease)")
+        # Only print debug if clean output is disabled
+        try:
+            from config.config import CLEAN_LLM_OUTPUT
+
+            if not CLEAN_LLM_OUTPUT:
+                print(f"🌊 Starting smooth transition to {target_dataset} (1.5s ease)")
+        except ImportError:
+            print(f"🌊 Starting smooth transition to {target_dataset} (1.5s ease)")
         print(f"🎯 Transition: {self.transition_start_positions} → {self.transition_target_positions}")
 
         # DON'T load new chain yet - keep current generation running
@@ -3717,7 +3738,14 @@ class CleanCursorInterface:
                     # Use closest state if found, otherwise fallback to random
                     if closest_state:
                         self.current_markov_state = closest_state
-                        print(f"🌊 Smooth transition: starting with closest state {closest_state} (distance: {min_distance:.1f})")
+                        # Only print debug if clean output is disabled
+                        try:
+                            from config.config import CLEAN_LLM_OUTPUT
+
+                            if not CLEAN_LLM_OUTPUT:
+                                print(f"🌊 Smooth transition: starting with closest state {closest_state} (distance: {min_distance:.1f})")
+                        except ImportError:
+                            print(f"🌊 Smooth transition: starting with closest state {closest_state} (distance: {min_distance:.1f})")
                     else:
                         import random
 
@@ -4692,7 +4720,14 @@ File: {dataset['filename']}
                         weights = [1.0 / (1.0 + dist * 0.1) for _, dist in candidate_states]  # Inverse distance weighting
                         selected_state, distance = random.choices(candidate_states, weights=weights)[0]
                         next_state_key = selected_state
-                        print(f"🌊 Gentle diversity drift (avg Δ={distance:.1f}°): {next_state_key}")
+                        # Only print debug if clean output is disabled
+                        try:
+                            from config.config import CLEAN_LLM_OUTPUT
+
+                            if not CLEAN_LLM_OUTPUT:
+                                print(f"🌊 Gentle diversity drift (avg Δ={distance:.1f}°): {next_state_key}")
+                        except ImportError:
+                            print(f"🌊 Gentle diversity drift (avg Δ={distance:.1f}°): {next_state_key}")
 
                         # Reset repetition counter since we're moving to a new state
                         self._state_repetition_count = 0
@@ -4731,7 +4766,14 @@ File: {dataset['filename']}
                 if hasattr(self, "_is_diversity_jump") and self._is_diversity_jump:
                     # Much gentler easing for diversity jumps to avoid jarring movement
                     easing_factor = 0.08  # Very gentle 8% easing for smooth diversity transitions
-                    print(f"🌊 Applying gentle diversity easing: {easing_factor}")
+                    # Only print debug if clean output is disabled
+                    try:
+                        from config.config import CLEAN_LLM_OUTPUT
+
+                        if not CLEAN_LLM_OUTPUT:
+                            print(f"🌊 Applying gentle diversity easing: {easing_factor}")
+                    except ImportError:
+                        print(f"🌊 Applying gentle diversity easing: {easing_factor}")
                 else:
                     # Use the intelligent easing factor calculated from movement data
                     if hasattr(self, "_intelligent_easing_factor"):

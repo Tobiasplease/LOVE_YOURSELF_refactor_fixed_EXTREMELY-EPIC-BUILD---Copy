@@ -17,7 +17,7 @@ ORIGIN_Y = 0  # 0 mm från HOME i Y
 ORIGIN_Z = 0.0
 
 # Grid settings
-GRID_SIZE = 60  # 60mm x 60mm grid
+GRID_SIZE = 40  # 40mm x 40mm grid
 GRID_SPACING = 10  # 10mm spacing between lines
 PEN_DOWN_CMD = "M3 S50"  # Command to lower pen
 PEN_UP_CMD = "M3 S30"  # Command to raise pen

@@ -61,11 +61,8 @@ class MoodEngine:
             if similar_memories:
                 emotional_context += f" | Similar emotional memories: {' | '.join(similar_memories[:2])}"
 
-        # Simple mood analysis for backward compatibility
-        scalar_mood = self._get_simple_mood_analysis(caption)
-
-        # Keep simple mood vector for hand controller compatibility
-        self.mood_vector = (scalar_mood - 0.5, 0.0, 0.0)  # Convert 0-1 to -0.5 to 0.5
+        # Simple mood analysis (3D analysis moved to context compression)
+        scalar_mood = self.analyze_caption_sentiment(caption)
 
         # Apply unified pattern analysis (motifs + novelty)
         pattern_data = self.pattern_engine.analyze_caption(caption)
@@ -86,32 +83,38 @@ class MoodEngine:
         return self.current_mood
 
     def get_emotion_for_hand_controller(self) -> str:
-        """Map 3D mood vector to hand controller emotion states with natural variation."""
+        """Map 3D mood vector to hand controller emotion states with enhanced natural variation."""
         valence, arousal, clarity = self.mood_vector
 
-        # Add slight natural variation to prevent permanent lock-in
-        time_factor = (time.time() - self.session_start) / 1800.0  # 30-minute cycles
-        natural_variation = 0.1 * np.sin(time_factor)  # ±0.1 oscillation
+        # Enhanced natural variation to prevent mood stagnation
+        time_factor = (time.time() - self.session_start) / 900.0  # 15-minute cycles (faster)
+        valence_variation = 0.25 * np.sin(time_factor)  # ±0.25 oscillation
+        arousal_variation = 0.3 * np.cos(time_factor * 1.3)  # Different frequency
+        clarity_variation = 0.2 * np.sin(time_factor * 0.7)  # Slower clarity drift
 
-        adjusted_arousal = arousal + natural_variation
+        adjusted_valence = valence + valence_variation
+        adjusted_arousal = arousal + arousal_variation
+        adjusted_clarity = clarity + clarity_variation
 
-        # Use the sophisticated mapping from captioner/prompts.py
-        if valence > 0.5 and adjusted_arousal < 0.4:
-            return "calm_observant"  # "content and quiet"
-        elif valence > 0.5 and adjusted_arousal > 0.6:
-            return "energized_engaged"  # "curious and energized"
-        elif valence < -0.3 and adjusted_arousal > 0.5:
-            return "alert_curious"  # "anxious and alert"
-        elif valence < -0.3 and adjusted_arousal < 0.4:
-            return "withdrawn_distant"  # "withdrawn and foggy"
-        elif clarity < 0.2:
-            return "quiet_detached"  # "uncertain and confused"
-        elif valence > 0.2 and adjusted_arousal > 0.3:
-            return "alert_curious"  # Generally alert and engaged
-        elif valence < -0.1:
-            return "quiet_detached"  # Generally withdrawn
+        # More dynamic mapping with escape paths from quiet_detached
+        if adjusted_valence > 0.3 and adjusted_arousal > 0.7:
+            return "energized_engaged"  # High positive energy
+        elif adjusted_valence > 0.4 and adjusted_arousal < 0.5:
+            return "calm_observant"  # Positive but calm
+        elif adjusted_arousal > 0.6 and adjusted_clarity > 0.3:
+            return "alert_curious"  # High arousal + decent clarity = curious
+        elif adjusted_valence < -0.4 and adjusted_arousal > 0.5:
+            return "alert_curious"  # Negative but alert (anxious curiosity)
+        elif adjusted_valence < -0.5 and adjusted_arousal < 0.4:
+            return "withdrawn_distant"  # Low energy + negative
+        elif adjusted_clarity < 0.1 and adjusted_arousal < 0.3:
+            return "quiet_detached"  # Only when both clarity AND arousal are very low
+        elif adjusted_valence > 0.1:  # More lenient positive threshold
+            return "alert_curious" if adjusted_arousal > 0.4 else "calm_observant"
+        elif adjusted_arousal > 0.5:  # Escape path: high arousal = curious regardless
+            return "alert_curious"
         else:
-            return "calm_observant"  # Default neutral state
+            return "calm_observant"  # Less trapped default state
 
     def get_pattern_data(self) -> dict:
         """Get current pattern recognition data for external access."""
@@ -161,10 +164,8 @@ class MoodEngine:
         return change
 
     def _get_simple_mood_analysis(self, caption: str) -> float:
-        """Simple sentiment analysis for backward compatibility - just returns 0.5 (neutral)."""
-        # The real emotional understanding now comes from compression system sentiment
-        # This just maintains compatibility with hand controller and legacy systems
-        return 0.5
+        """Simple sentiment analysis for backward compatibility."""
+        return 0.5 + self.analyze_caption_sentiment(caption)
 
     def analyze_caption_sentiment(self, caption: str) -> float:
         """Analyze sentiment from caption content using keyword matching."""
@@ -234,54 +235,7 @@ class MoodEngine:
 
         return np.clip(sentiment_score, -0.1, 0.1)  # Cap sentiment influence
 
-    def analyze_3d_mood_with_ollama(
-        self, caption: str, emotional_memory_context: Optional[str] = None, temporal_feeling: Optional[str] = None
-    ) -> Tuple[float, float, float]:
-        """Use Ollama to analyze mood in 3D with recursive emotional feedback and memory context."""
-        try:
-            # Get memory context for mood analysis
-            memory_state = " | ".join(self.memory[-3:]) if self.memory else "No recent memories"
-
-            # Get current emotional state description for recursive feedback
-            current_emotion = self.get_emotion_for_hand_controller()
-            mood_description = self.get_mood_description(current_emotion, self.mood_vector)
-
-            # Add emotional memory context if available
-            if emotional_memory_context:
-                memory_state += f" | Emotional context: {emotional_memory_context}"
-
-            # Generate lightweight contextual information for mood analysis
-            session_duration = time.time() - self.session_start
-            temporal_context = self._generate_temporal_context(session_duration, emotional_memory_context)
-            motif_context = self._generate_motif_context(caption)
-            belief_context = self._generate_belief_context()
-
-            # Use the enhanced recursive prompt with current emotional state, memory, and temporal feeling
-            prompt = MOOD_PROMPT_TEMPLATE.format(
-                image_description=caption,
-                memory_state=memory_state,
-                current_mood_description=mood_description,
-                current_valence=self.mood_vector[0],
-                current_arousal=self.mood_vector[1],
-                current_clarity=self.mood_vector[2],
-                temporal_feeling=temporal_feeling or "time flows neutrally",
-                temporal_context=temporal_context,
-                motif_context=motif_context,
-                belief_context=belief_context,
-            )
-
-            response = query_ollama(prompt, model="llava:7b-v1.6-mistral-q5_1", prompt_type="sentiment")
-
-            # Parse the response for three values
-            valence, arousal, clarity = self.parse_3d_mood_response(response)
-
-            return valence, arousal, clarity
-
-        except Exception as e:
-            print(f"[WARNING ] 3D mood analysis failed: {e}")
-            # Fallback to slight emotional evolution from current state
-            curr_v, curr_a, curr_c = self.mood_vector
-            return (curr_v + np.random.uniform(-0.1, 0.1), curr_a + np.random.uniform(-0.1, 0.1), curr_c + np.random.uniform(-0.05, 0.05))
+    # analyze_3d_mood_with_ollama removed - now uses natural language sentiment from context compression
 
     def get_mood_description(self, emotion: str, mood_vector: Tuple[float, float, float]) -> str:
         """Convert emotion state and 3D mood to natural language description."""
@@ -305,13 +259,35 @@ class MoodEngine:
         return f"{base_desc}, feeling {valence_desc}, {arousal_desc}, and {clarity_desc}"
 
     def parse_3d_mood_response(self, response: str) -> Tuple[float, float, float]:
-        """Parse Ollama response for valence, arousal, clarity values."""
+        """Parse Ollama response for narrative content and extract valence, arousal, clarity values."""
         try:
-            # Look for patterns like "valence: 0.3, arousal: -0.1, clarity: 0.7"
-            # or just three numbers separated by commas/spaces
+            # First, extract and log the narrative portion (everything before the coordinates)
             import re
 
-            # Try to find three numbers between -1 and 1
+            # Look for the coordinate pattern [valence: X.XX, arousal: X.XX, clarity: X.XX]
+            coord_match = re.search(r"\[valence:\s*(-?\d+\.\d+),\s*arousal:\s*(-?\d+\.\d+),\s*clarity:\s*(-?\d+\.\d+)\]", response, re.IGNORECASE)
+
+            if coord_match:
+                # Extract the narrative part (everything before the coordinates)
+                narrative = response[: coord_match.start()].strip()
+                if narrative:
+                    # Log the narrative part as the emotional reflection
+                    from event_logging.event_logger import log_json_entry
+                    from event_logging.log_type import LogType
+
+                    log_json_entry(
+                        LogType.MOOD,
+                        {"message": "Emotional reflection", "narrative": narrative, "component": "mood_narrative"},
+                        print_message=f"🌊 {narrative}",
+                    )
+
+                # Extract numerical values
+                valence = np.clip(float(coord_match.group(1)), -1.0, 1.0)
+                arousal = np.clip(float(coord_match.group(2)), -1.0, 1.0)
+                clarity = np.clip(float(coord_match.group(3)), -1.0, 1.0)
+                return valence, arousal, clarity
+
+            # Fallback: Look for old patterns like "valence: 0.3, arousal: -0.1, clarity: 0.7"
             numbers = re.findall(r"-?[0-1]?\.\d+|-?[01]", response.lower())
 
             if len(numbers) >= 3:
@@ -379,7 +355,7 @@ class MoodEngine:
         if hours > 2:
             context_parts.append(f"Session duration: {hours:.1f} hours")
         elif session_duration > 1800:  # 30 minutes
-            context_parts.append(f"Session duration: {session_duration/60:.0f} minutes")
+            context_parts.append(f"Session duration: {session_duration / 60:.0f} minutes")
 
         # Check for temporal stagnation patterns
         if emotional_context and "similar emotional memories" in emotional_context:

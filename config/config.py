@@ -28,13 +28,17 @@ CONFIDENCE_THRESHOLD = 0.6
 DEAD_ZONE = 10
 
 # === IDLE GAZE SETTINGS ===
-IDLE_AMPLITUDE_X = 10
-IDLE_AMPLITUDE_Y = 15
+IDLE_AMPLITUDE_X = 35  # Increased from 10 for more prominent horizontal movement
+IDLE_AMPLITUDE_Y = 30  # Increased from 15 for more prominent vertical movement
 IDLE_CENTER_X = 90
 IDLE_CENTER_Y = 90
-FACE_STABLE_TIMEOUT = 2.0
+FACE_STABLE_TIMEOUT = 3.0  # Time before going idle after losing face
 IDLE_SPEED_MIN = 0.15
 IDLE_SPEED_MAX = 0.30
+IDLE_PAUSE_MIN = 3.0  # Minimum pause between idle movements
+IDLE_PAUSE_MAX = 12.0  # Maximum pause between idle movements
+IDLE_EASING = 0.12  # Easing factor for idle movements
+SWEEP_PROBABILITY = 0.6  # Probability of doing a big sweep movement vs small movement
 
 
 # === BREATHING SETTINGS ===
@@ -91,6 +95,20 @@ CENTER_LINE_SVG = True
 # If False, only generate G-code files without executing them
 EXECUTE_GRBL_GCODE = True
 
+# GRBL homing retry configuration
+GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
+GRBL_HOMING_TIMEOUT = 120  # Seconds to wait for each homing attempt
+
+# === GRBL IDLE MOVEMENT SETTINGS ===
+# Idle movements happen in far corner away from home (0,0)
+# Physical work area constrained to 40x40mm for safe operation
+GRBL_IDLE_CENTER = (30, 30)  # Center point for idle movements (far corner of 40x40 area)
+GRBL_IDLE_RADIUS_MIN = 5  # Minimum movement radius in mm
+GRBL_IDLE_RADIUS_MAX = 8  # Maximum movement radius in mm (reduced for 40x40 area)
+GRBL_IDLE_FEED_RATE = 500  # Feed rate for idle movements (mm/min) - very slow and organic
+GRBL_IDLE_ZONE = (20, 40, 20, 40)  # Boundary box: (x_min, x_max, y_min, y_max) for 40x40 area
+GRBL_IDLE_UPDATE_INTERVAL = 3.0  # Seconds between movement updates - longer pauses
+
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
@@ -135,7 +153,7 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 # Control which log types are printed to console
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
 # To see debug information, add "debug" to LOG_TYPES_TO_PRINT
-LOG_TYPES_TO_PRINT = ["ollama_api_call"]
+LOG_TYPES_TO_PRINT = ["caption", "compression"]
 CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output

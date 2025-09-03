@@ -15,7 +15,7 @@ mode_timer = time.time() + 6  # Birth mode lasts ~6s
 
 
 def update_lung_position(
-    current_mood,
+    current_emotion_state,  # Now takes 5-state emotion instead of scalar mood
     person_present,
     delta,
     lung_angle,
@@ -30,37 +30,70 @@ def update_lung_position(
 
     now = time.time()
 
-    # === Normalize mood to 0..1 range for scaling ===
-    mood_clamped = max(0.0, min(1.0, (current_mood + 1.0) / 2.0))
+    # === 5-State Emotional Breathing Patterns ===
+    breathing_patterns = {
+        "energized_engaged": {
+            "base_speed": 0.8,      # Fast, excited breathing
+            "amplitude": 1.4,       # Deep breaths
+            "pause_scale": 0.4,     # Short pauses
+            "special_modes": ["FAST_BURST", "EXCITED_PANTING"]
+        },
+        "alert_curious": {
+            "base_speed": 1.2,      # Quick, attentive breathing
+            "amplitude": 1.1,       # Slightly deeper
+            "pause_scale": 0.7,     # Quick pauses for attention
+            "special_modes": ["FAST_BURST", "ALERT_HOLD"]
+        },
+        "calm_observant": {
+            "base_speed": 4.0,      # Slow, meditative breathing
+            "amplitude": 1.0,       # Normal depth
+            "pause_scale": 1.2,     # Contemplative pauses
+            "special_modes": ["SLOW_SIGH", "NORMAL"]
+        },
+        "quiet_detached": {
+            "base_speed": 6.0,      # Shallow, minimal breathing
+            "amplitude": 0.6,       # Shallow breaths
+            "pause_scale": 2.0,     # Long hesitant pauses
+            "special_modes": ["SHALLOW", "NORMAL"]
+        },
+        "withdrawn_distant": {
+            "base_speed": 8.0,      # Very slow, listless breathing
+            "amplitude": 0.8,       # Somewhat shallow
+            "pause_scale": 2.5,     # Very long pauses
+            "special_modes": ["SLOW_SIGH", "DEPRESSED_HOLD"]
+        }
+    }
+    
+    # Get current emotional pattern (fallback to calm if unknown)
+    pattern = breathing_patterns.get(current_emotion_state, breathing_patterns["calm_observant"])
+    base_speed = pattern["base_speed"]
 
-    # === Determine base breathing speed from mood ===
-    mood_factor = 1.0 - mood_clamped  # high mood = 0, low mood = 1
-    base_speed = MIN_LUNG_SPEED + (MAX_LUNG_SPEED - MIN_LUNG_SPEED) * mood_factor
-
-    # === Breathing mode transitions ===
+    # === Breathing mode transitions based on emotion ===
     if now > mode_timer:
         if breath_mode == "BIRTH_WAKE":
             breath_mode = "NORMAL"
             mode_timer = now + random.uniform(3, 5)
-        elif abs(current_mood) > 0.7 and random.random() < 0.2:
-            breath_mode = "FAST_BURST"
-            mode_timer = now + random.uniform(2, 4)
-        elif random.random() < 0.05:
-            breath_mode = "SLOW_SIGH"
-            mode_timer = now + random.uniform(4, 6)
+        elif random.random() < 0.15:  # 15% chance of special breathing
+            breath_mode = random.choice(pattern["special_modes"])
+            mode_timer = now + random.uniform(2, 6)
         else:
             breath_mode = "NORMAL"
-            mode_timer = now + random.uniform(3, 5)
+            mode_timer = now + random.uniform(3, 8)
 
     # === Apply breathing mode multiplier ===
-    if breath_mode == "FAST_BURST":
-        target_breath_speed = max(0.5, base_speed * 0.25)
-    elif breath_mode == "SLOW_SIGH":
-        target_breath_speed = base_speed * 2.2
-    elif breath_mode == "BIRTH_WAKE":
-        target_breath_speed = 0.4  # SPARKLE Extra fast startup
-    else:
-        target_breath_speed = base_speed
+    mode_multipliers = {
+        "FAST_BURST": 0.25,
+        "EXCITED_PANTING": 0.15,
+        "ALERT_HOLD": 1.0,
+        "SLOW_SIGH": 2.2, 
+        "SHALLOW": 1.5,
+        "DEPRESSED_HOLD": 3.0,
+        "BIRTH_WAKE": 0.4,
+        "NORMAL": 1.0
+    }
+    
+    multiplier = mode_multipliers.get(breath_mode, 1.0)
+    target_breath_speed = max(0.3, base_speed * multiplier)
 
     effective_speed = breath_speed
     breath_speed = breath_speed * 0.85 + target_breath_speed * 0.15
@@ -70,11 +103,20 @@ def update_lung_position(
     # === Breathing phase movement ===
     breath_phase = math.sin(lung_angle)
 
-    # SPARKLE Mood-scaled dynamic pause modulation ===
-    pause_mood_scale = 1.5 - mood_clamped  # low mood = longer pause
-    mode_modifier = {"FAST_BURST": 0.2, "SLOW_SIGH": 1.6, "BIRTH_WAKE": 0.1, "NORMAL": 1.0}.get(breath_mode, 1.0)
+    # === Emotion-based pause modulation ===
+    pause_scale = pattern["pause_scale"]
+    mode_pause_modifier = {
+        "FAST_BURST": 0.2, 
+        "EXCITED_PANTING": 0.1,
+        "ALERT_HOLD": 0.8,
+        "SLOW_SIGH": 1.8, 
+        "SHALLOW": 1.4,
+        "DEPRESSED_HOLD": 2.5,
+        "BIRTH_WAKE": 0.1, 
+        "NORMAL": 1.0
+    }.get(breath_mode, 1.0)
 
-    dynamic_pause = pause_duration * pause_mood_scale * mode_modifier
+    dynamic_pause = pause_duration * pause_scale * mode_pause_modifier
 
     if not breath_paused:
         if breath_phase > 0.98 and last_breath_direction != "up":
@@ -91,18 +133,24 @@ def update_lung_position(
         if time.time() - pause_start_time > dynamic_pause:
             breath_paused = False
 
-    # === Offset and amplitude modulation ===
-    offset = 0.2 * current_mood
+    # === Emotion-based amplitude modulation ===
+    base_amplitude = pattern["amplitude"]
+    
+    mode_amplitude_modifier = {
+        "FAST_BURST": 1.3,
+        "EXCITED_PANTING": 1.1, 
+        "ALERT_HOLD": 1.0,
+        "SLOW_SIGH": 1.4,
+        "SHALLOW": 0.7,
+        "DEPRESSED_HOLD": 0.9,
+        "BIRTH_WAKE": 0.4,
+        "NORMAL": 1.0
+    }.get(breath_mode, 1.0)
 
-    amplitude_multiplier = 1.0 + (0.8 * (1.0 - mood_clamped))
+    amplitude_multiplier = base_amplitude * mode_amplitude_modifier
 
-    if breath_mode == "FAST_BURST":
-        amplitude_multiplier *= 1.3
-    elif breath_mode == "SLOW_SIGH":
-        amplitude_multiplier *= 1.4
-    elif breath_mode == "BIRTH_WAKE":
-        amplitude_multiplier *= 0.4
-
+    # Small phase offset for natural variation
+    offset = 0.1  
     raw_lung = (math.sin(lung_angle + offset) * amplitude_multiplier + 1) / 2
     raw_lung = max(0.0, min(1.0, raw_lung))
 

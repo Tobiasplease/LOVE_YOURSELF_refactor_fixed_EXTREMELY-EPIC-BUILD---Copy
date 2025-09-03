@@ -18,7 +18,7 @@ DEFAULT_STATUS_POLL = 0.1
 DEFAULT_HOME_TIMEOUT = 120  # seconds
 DEFAULT_MOVE_TIMEOUT = 15  # seconds
 DEFAULT_CMD_TIMEOUT = 5.0  # seconds
-DEFAULT_FEED_RATE = 5000
+DEFAULT_FEED_RATE = 12000  # Balanced speed for clean drawing
 
 PEN_DOWN_CMD = "M3 S50 ; PEN DOWN"  # Command to lower pen
 PEN_UP_CMD = "M3 S30 ; PEN UP"  # Command to raise pen
@@ -180,55 +180,147 @@ def wait_until_idle(ser, max_wait, poll_interval=DEFAULT_STATUS_POLL):
     raise TimeoutError("Did not become Idle within timeout")
 
 
-def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT):
-    """Ensure GRBL is homed and setup coordinate system"""
-    status = get_status(ser)
-    if parse_state(status) == "Alarm":
-        log_json_entry(
-            LogType.GRBL,
-            {"message": "Clearing alarm state", "action": "clear_alarm", "command": "$X", "status": status},
-            print_message="[⚠️] Clearing alarm state with $X",
-        )
-        send_cmd(ser, "$X", wait_ok=True)
-        time.sleep(0.2)
+def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
+    """Ensure GRBL is homed and setup coordinate system with retry logic"""
 
-    log_json_entry(
-        LogType.GRBL,
-        {"message": "Running homing cycle", "action": "homing_start", "command": "$H", "timeout": home_timeout},
-        print_message="[🏠] Running homing cycle ($H)...",
-    )
-    send_cmd(ser, "$H", wait_ok=False)
-
-    start = time.time()
-    while time.time() - start < home_timeout:
-        status = get_status(ser)
-        state = parse_state(status)
-        if state == "Idle":
-            log_json_entry(
-                LogType.GRBL,
-                {"message": "Homing complete", "action": "homing_complete", "final_status": status, "duration": time.time() - start},
-                print_message="[✅] Homing complete",
-            )
-            send_cmd(ser, "G54")
-            wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
-            send_cmd(ser, "G10 L20 P1 X0 Y0 Z0")
-            wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
+    for attempt in range(max_retries):
+        try:
             log_json_entry(
                 LogType.GRBL,
                 {
-                    "message": "Work coordinate system setup complete",
-                    "action": "coordinate_system_setup",
-                    "coordinate_system": "G54",
-                    "origin": "0,0,0",
+                    "message": "Starting homing attempt",
+                    "action": "homing_attempt_start",
+                    "attempt": attempt + 1,
+                    "max_retries": max_retries,
+                    "timeout": home_timeout,
                 },
-                print_message="[📍] Work coordinate system G54 set to 0,0,0 at home position",
+                print_message=f"[🏠] Homing attempt {attempt + 1}/{max_retries}...",
             )
-            return
-        if state == "Alarm":
-            raise RuntimeError(f"Homing failed: {status}")
-        time.sleep(DEFAULT_STATUS_POLL)
 
-    raise TimeoutError("Homing took too long")
+            # Clear any existing alarm state
+            status = get_status(ser)
+            if parse_state(status) == "Alarm":
+                log_json_entry(
+                    LogType.GRBL,
+                    {"message": "Clearing alarm state", "action": "clear_alarm", "command": "$X", "status": status, "attempt": attempt + 1},
+                    print_message="[⚠️] Clearing alarm state with $X",
+                )
+                send_cmd(ser, "$X", wait_ok=True)
+                time.sleep(0.5)  # Give more time after clearing alarm
+
+            # Soft reset before homing to ensure clean state
+            if attempt > 0:  # Only on retries
+                log_json_entry(
+                    LogType.GRBL,
+                    {"message": "Performing soft reset before retry", "action": "soft_reset", "attempt": attempt + 1},
+                    print_message="[🔄] Performing soft reset before retry...",
+                )
+                ser.write(b"\x18")  # Send Ctrl-X (soft reset)
+                time.sleep(2.0)  # Wait for reset to complete
+                ser.reset_input_buffer()
+
+            log_json_entry(
+                LogType.GRBL,
+                {"message": "Running homing cycle", "action": "homing_start", "command": "$H", "timeout": home_timeout, "attempt": attempt + 1},
+                print_message="[🏠] Running homing cycle ($H)...",
+            )
+            send_cmd(ser, "$H", wait_ok=False)
+
+            # Wait for homing to complete
+            start = time.time()
+            while time.time() - start < home_timeout:
+                status = get_status(ser)
+                state = parse_state(status)
+
+                if state == "Idle":
+                    # Homing successful - setup coordinate system
+                    log_json_entry(
+                        LogType.GRBL,
+                        {
+                            "message": "Homing complete",
+                            "action": "homing_complete",
+                            "final_status": status,
+                            "duration": time.time() - start,
+                            "attempt": attempt + 1,
+                        },
+                        print_message="[✅] Homing complete",
+                    )
+
+                    # Setup coordinate system
+                    send_cmd(ser, "G54")
+                    wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
+                    send_cmd(ser, "G10 L20 P1 X0 Y0 Z0")
+                    wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
+
+                    log_json_entry(
+                        LogType.GRBL,
+                        {
+                            "message": "Work coordinate system setup complete",
+                            "action": "coordinate_system_setup",
+                            "coordinate_system": "G54",
+                            "origin": "0,0,0",
+                            "successful_attempt": attempt + 1,
+                        },
+                        print_message="[📍] Work coordinate system G54 set to 0,0,0 at home position",
+                    )
+                    return  # Success!
+
+                if state == "Alarm":
+                    error_msg = f"Homing failed with alarm: {status}"
+                    log_json_entry(
+                        LogType.ERROR,
+                        {"message": error_msg, "action": "homing_alarm", "status": status, "attempt": attempt + 1, "component": "grbl"},
+                        print_message=f"[❌] {error_msg}",
+                    )
+                    break  # Break inner loop to try again
+
+                time.sleep(DEFAULT_STATUS_POLL)
+            else:
+                # Timeout occurred
+                error_msg = f"Homing timeout after {home_timeout}s"
+                log_json_entry(
+                    LogType.ERROR,
+                    {"message": error_msg, "action": "homing_timeout", "timeout": home_timeout, "attempt": attempt + 1, "component": "grbl"},
+                    print_message=f"[❌] {error_msg}",
+                )
+
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {
+                    "message": f"Homing attempt failed with exception: {e}",
+                    "action": "homing_exception",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "attempt": attempt + 1,
+                    "component": "grbl",
+                },
+                print_message=f"[❌] Homing attempt {attempt + 1} failed: {e}",
+            )
+
+        # If we get here, this attempt failed
+        if attempt < max_retries - 1:
+            retry_delay = 2 + attempt  # Increasing delay: 2s, 3s, 4s
+            log_json_entry(
+                LogType.GRBL,
+                {
+                    "message": f"Homing attempt {attempt + 1} failed, retrying in {retry_delay}s",
+                    "action": "homing_retry_delay",
+                    "delay": retry_delay,
+                    "attempt": attempt + 1,
+                },
+                print_message=f"[⏳] Homing failed, retrying in {retry_delay}s...",
+            )
+            time.sleep(retry_delay)
+
+    # All attempts failed
+    error_msg = f"All {max_retries} homing attempts failed"
+    log_json_entry(
+        LogType.ERROR,
+        {"message": error_msg, "action": "homing_all_attempts_failed", "max_retries": max_retries, "component": "grbl"},
+        print_message=f"[❌] {error_msg}",
+    )
+    raise RuntimeError(error_msg)
 
 
 def convert_with_vpype(svg_file, output_file, scale_to=None):
@@ -373,7 +465,7 @@ def set_work_origin_and_offset(ser, origin, origin_offset, move_timeout=DEFAULT_
         wait_until_idle(ser, move_timeout)
         send_cmd(ser, "G55")
         wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
-        send_cmd(ser, f"G10 L20 P2 X0 Y0 Z0")
+        send_cmd(ser, "G10 L20 P2 X0 Y0 Z0")
         wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
         log_json_entry(
             LogType.GRBL,
@@ -413,50 +505,72 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     executed_lines = 0
 
     lines = lines[3:]  # Skip first three lines (G20, G17, G90), from vpype inject somehow
-    for line_num, line in enumerate(lines, 1):
-        line = line.strip()
 
-        # Skip empty lines and comments
-        if not line or line.startswith(";") or line.startswith("%"):
-            continue
+    try:
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
 
-        try:
-            # Determine timeout based on command type
-            if line.startswith(("G0", "G1", "G00", "G01")):
-                timeout = move_timeout
-            else:
-                timeout = DEFAULT_CMD_TIMEOUT
+            # Skip empty lines and comments
+            if not line or line.startswith(";") or line.startswith("%"):
+                continue
 
-            send_cmd(ser, line, timeout=timeout)
-            executed_lines += 1
+            try:
+                # Determine timeout based on command type
+                if line.startswith(("G0", "G1", "G00", "G01")):
+                    timeout = move_timeout
+                else:
+                    timeout = DEFAULT_CMD_TIMEOUT
 
-            if executed_lines % 10 == 0:  # Progress update every 10 commands
+                send_cmd(ser, line, timeout=timeout)
+                executed_lines += 1
+
+                if executed_lines % 10 == 0:  # Progress update every 10 commands
+                    log_json_entry(
+                        LogType.GRBL,
+                        {
+                            "message": "G-code execution progress",
+                            "action": "execution_progress",
+                            "executed_lines": executed_lines,
+                            "total_lines": total_lines,
+                            "progress_percent": (executed_lines / total_lines) * 100,
+                        },
+                        print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed",
+                    )
+
+            except Exception as e:
                 log_json_entry(
-                    LogType.GRBL,
+                    LogType.ERROR,
                     {
-                        "message": "G-code execution progress",
-                        "action": "execution_progress",
-                        "executed_lines": executed_lines,
-                        "total_lines": total_lines,
-                        "progress_percent": (executed_lines / total_lines) * 100,
+                        "message": "Failed to execute G-code line",
+                        "component": "grbl",
+                        "line_number": line_num,
+                        "command": line,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
                     },
-                    print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed",
+                    print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
                 )
+                raise
 
-        except Exception as e:
-            log_json_entry(
-                LogType.ERROR,
-                {
-                    "message": "Failed to execute G-code line",
-                    "component": "grbl",
-                    "line_number": line_num,
-                    "command": line,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                },
-                print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
-            )
-            raise
+    except KeyboardInterrupt:
+        log_json_entry(
+            LogType.GRBL,
+            {
+                "message": "G-code execution interrupted by user",
+                "action": "execution_interrupted",
+                "executed_lines": executed_lines,
+                "total_lines": total_lines,
+                "progress_percent": (executed_lines / total_lines) * 100 if total_lines > 0 else 0,
+            },
+            print_message=f"[⚠️] G-code execution interrupted! Executed {executed_lines}/{total_lines} lines",
+        )
+        # Send any emergency stops or cleanup commands if needed
+        try:
+            send_cmd(ser, "M3 S30", wait_ok=False)  # Pen up
+            send_cmd(ser, "!", wait_ok=False)  # Emergency stop
+        except Exception:
+            pass
+        raise
 
     log_json_entry(
         LogType.GRBL,
@@ -471,8 +585,10 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     )
 
 
-def initialize_grbl_for_drawing(ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False):
-    """Complete GRBL initialization sequence for drawing"""
+def initialize_grbl_for_drawing(
+    ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False, max_homing_retries=3
+):
+    """Complete GRBL initialization sequence for drawing with robust error handling"""
     log_json_entry(
         LogType.GRBL,
         {
@@ -482,20 +598,43 @@ def initialize_grbl_for_drawing(ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), 
             "origin_offset": origin_offset,
             "feed_rate": feed_rate,
             "absolute_positioning": use_absolute_positioning,
+            "max_homing_retries": max_homing_retries,
         },
         print_message="[🎨] Initializing GRBL for drawing...",
     )
 
-    ensure_homed(ser)
-    setup_basic_grbl(ser, feed_rate, use_absolute_positioning=use_absolute_positioning)
-    set_work_origin_and_offset(ser, origin, origin_offset)
-    pen_control(ser, pen_down=False)
+    try:
+        # Step 1: Homing with retry logic
+        ensure_homed(ser, max_retries=max_homing_retries)
 
-    log_json_entry(
-        LogType.GRBL,
-        {"message": "GRBL initialization complete", "action": "initialization_complete"},
-        print_message="[✅] GRBL initialization complete",
-    )
+        # Step 2: Basic GRBL setup
+        setup_basic_grbl(ser, feed_rate, use_absolute_positioning=use_absolute_positioning)
+
+        # Step 3: Work coordinate setup
+        set_work_origin_and_offset(ser, origin, origin_offset)
+
+        # Step 4: Pen control initialization
+        pen_control(ser, pen_down=False)
+
+        log_json_entry(
+            LogType.GRBL,
+            {"message": "GRBL initialization complete", "action": "initialization_complete"},
+            print_message="[✅] GRBL initialization complete",
+        )
+
+    except Exception as e:
+        log_json_entry(
+            LogType.ERROR,
+            {
+                "message": f"GRBL initialization failed: {e}",
+                "action": "initialization_failed",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "component": "grbl",
+            },
+            print_message=f"[❌] GRBL initialization failed: {e}",
+        )
+        raise  # Re-raise the exception
 
 
 def process_svg_to_grbl(
@@ -573,14 +712,23 @@ def process_svg_to_grbl(
                 print_message="[🚀] Executing on GRBL...",
             )
             try:
+                # Get GRBL configuration
                 try:
-                    from config.config import GRBL_CNC_PORT
+                    from config.config import GRBL_CNC_PORT, GRBL_HOMING_MAX_RETRIES
 
                     ser = find_grbl_port(preferred_port=GRBL_CNC_PORT)
+                    max_retries = GRBL_HOMING_MAX_RETRIES
                 except ImportError:
                     ser = find_grbl_port()
+                    max_retries = 3  # Default fallback
+
                 initialize_grbl_for_drawing(
-                    ser, origin=origin, origin_offset=origin_offset, feed_rate=feed_rate, use_absolute_positioning=use_absolute_positioning
+                    ser,
+                    origin=origin,
+                    origin_offset=origin_offset,
+                    feed_rate=feed_rate,
+                    use_absolute_positioning=use_absolute_positioning,
+                    max_homing_retries=max_retries,
                 )
                 execute_gcode_file(ser, output_file_adjusted)
                 log_json_entry(
@@ -590,6 +738,17 @@ def process_svg_to_grbl(
                 )
                 ser.close()
             except Exception as e:
+                # Categorize the error for better debugging
+                error_category = "unknown"
+                if "homing" in str(e).lower() or "home" in str(e).lower():
+                    error_category = "homing_failure"
+                elif "timeout" in str(e).lower():
+                    error_category = "timeout"
+                elif "alarm" in str(e).lower():
+                    error_category = "grbl_alarm"
+                elif "port" in str(e).lower() or "serial" in str(e).lower():
+                    error_category = "connection_error"
+
                 log_json_entry(
                     LogType.ERROR,
                     {
@@ -597,13 +756,19 @@ def process_svg_to_grbl(
                         "component": "grbl",
                         "error": str(e),
                         "error_type": type(e).__name__,
+                        "error_category": error_category,
                         "gcode_file": output_file_adjusted,
                     },
-                    print_message=f"[❌] GRBL execution failed: {e}",
+                    print_message=f"[❌] GRBL execution failed ({error_category}): {e}",
                 )
                 log_json_entry(
                     LogType.GRBL,
-                    {"message": "G-code file saved (execution failed)", "action": "gcode_file_saved", "file_path": output_file_adjusted},
+                    {
+                        "message": "G-code file saved (execution failed)",
+                        "action": "gcode_file_saved",
+                        "file_path": output_file_adjusted,
+                        "error_category": error_category,
+                    },
                     print_message=f"[💾] G-code file saved at: {output_file_adjusted}",
                 )
         else:
