@@ -27,7 +27,6 @@ from .prompts import extract_motifs_spacy
 # from weakref import ref
 
 
-
 # Import context compressor with error handling
 try:
     from .context_compression import context_compressor
@@ -136,6 +135,9 @@ class Captioner(MemoryMixin):
             self.snapshot_queue.append((frame.copy(), person_present, reactivity_data))
 
     def _caption_worker(self):
+        # Add startup delay to ensure main loop has time to start and populate snapshot_queue
+        time.sleep(3.0)  # 3 second startup delay
+
         while True:
             if self.snapshot_queue:
                 frame, _, reactivity_data = self.snapshot_queue.popleft()
@@ -148,7 +150,8 @@ class Captioner(MemoryMixin):
                         print_message=f"[❌] Caption thread error: {exc}",
                     )
             else:
-                time.sleep(0.05)
+                # Wait longer on startup to allow main loop to populate frames
+                time.sleep(0.5 if not self.first_caption_done else 0.05)
 
     @robust_execution("captioner", "caption_generation", fallback_result=None)
     def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None) -> None:
@@ -185,10 +188,21 @@ class Captioner(MemoryMixin):
         loading_thread.start()
 
         try:
+            caption = None  # Initialize caption variable
+
             if not self.first_caption_done:
                 # Phase 1: Internal awakening reorientation (no image)
-                caption = self.generate_internal_awakening()
-                self.awaiting_environmental_phase = True  # Flag for Phase 2
+
+                # If no frames available yet, defer awakening to next cycle
+                if not self.snapshot_queue:
+                    # Don't block - just defer the awakening to the next caption cycle
+                    self.first_caption_done = False  # Keep awakening pending
+                    caption = "Awakening... preparing to observe environment..."
+                    # Add small delay to allow main loop to populate snapshot_queue
+                    time.sleep(0.5)
+                else:
+                    caption = self.generate_internal_awakening()
+                    self.awaiting_environmental_phase = True  # Flag for Phase 2
             elif getattr(self, "awaiting_environmental_phase", False):
                 # Phase 2: Environmental grounding (first visual after awakening)
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)  # Use awakening prompts
@@ -219,10 +233,27 @@ class Captioner(MemoryMixin):
                         print_message=f"[🐞] New caption generated: {caption[:50]}...",
                     )
         except Exception as e:
-            caption = "[WARNING] Vision unavailable"
+            import traceback
+
+            error_details = traceback.format_exc()
+
+            # More specific error handling to avoid unnecessary "Vision unclear" fallbacks
+            if "No image found" in str(e) or "does not exist" in str(e):
+                # File system timing issue - retry once after short delay
+                time.sleep(0.5)
+                try:
+                    if hasattr(self, "model") and img_path and os.path.exists(img_path):
+                        caption = self.model.caption_image(img_path, flowing=True, first_time=False)
+                    else:
+                        caption = "Awakening... vision initializing..."
+                except Exception:
+                    caption = "[WARNING] Vision unavailable"
+            else:
+                caption = "[WARNING] Vision unavailable"
+
             log_json_entry(
                 LogType.ERROR,
-                {"message": f"Caption error: {e}", "component": "captioner"},
+                {"message": f"Caption error: {e}", "traceback": error_details, "component": "captioner"},
                 print_message=f"[❌] Caption error: {e}",
             )
         finally:
@@ -233,22 +264,38 @@ class Captioner(MemoryMixin):
                 # Force terminate if still running
                 print("\r" + " " * 80 + "\r", end="")  # Clear any remaining animation
 
-        self.first_caption_done = True
+        # Only mark first caption done if not deferring awakening
+        if caption != "Awakening... preparing to observe environment...":
+            self.first_caption_done = True
 
         if "[WARNING]" in caption:
-            log_json_entry(
-                LogType.ERROR,
-                {"message": f"Caption error: {caption}", "component": "captioner"},
-                print_message=f"[❌] Caption error: {caption}",
-            )
-            self.observe("I couldn't see anything just now.", self.current_mood, img_path, memory_type="glitch")
-            # Don't return early - still need to check reflection/drawing timing
-            caption = "Vision unclear right now"  # Use fallback caption
+            # During startup, use better awakening message instead of error fallback
+            if not self.first_caption_done:
+                caption = "Awakening... camera systems initializing..."
+            else:
+                log_json_entry(
+                    LogType.ERROR,
+                    {"message": f"Caption error: {caption}", "component": "captioner"},
+                    print_message=f"[❌] Caption error: {caption}",
+                )
+                self.observe("I couldn't see anything just now.", self.current_mood, img_path, memory_type="glitch")
+                caption = "Vision systems recalibrating..."  # Better fallback
+
+        # Format caption for clean output
+        try:
+            from config.config import CLEAN_LLM_OUTPUT
+
+            if CLEAN_LLM_OUTPUT:
+                print_msg = truncate_for_print(caption, 100)
+            else:
+                print_msg = f"[📸] {truncate_for_print(caption, 100)}"
+        except ImportError:
+            print_msg = f"[📸] {truncate_for_print(caption, 100)}"
 
         log_json_entry(
             LogType.CAPTION,
             {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            print_message=f"[📸] {truncate_for_print(caption, 100)}",
+            print_message=print_msg,
         )
 
         self.observe(
@@ -524,7 +571,7 @@ class Captioner(MemoryMixin):
             f"Current experience: Just observed '{self.last_caption}'",
             f"Overall mood: {self.current_mood:.2f} (novelty: {self.novelty_score:.2f}, boredom: {self.boredom:.2f})",
             mood_details,
-            f"Session time: {(time.time() - self.true_session_start)/60:.0f} minutes active",
+            f"Session time: {(time.time() - self.true_session_start) / 60:.0f} minutes active",
         ]
 
         if recent_observations:
@@ -590,7 +637,7 @@ class Captioner(MemoryMixin):
             if gap_seconds < 60:
                 awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds)} seconds.")
             elif gap_hours < 1:
-                awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds/60)} minutes.")
+                awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds / 60)} minutes.")
             elif gap_hours < 48:  # Less than 2 days
                 awakening_parts.append(f"Consciousness returning... I was offline for {gap_hours:.1f} hours.")
             else:  # Multiple days
@@ -605,7 +652,7 @@ class Captioner(MemoryMixin):
                 old_fragments = self.get_old_session_memory_fragments(k=1)
                 if old_fragments:
                     awakening_parts.append(f"Last memory: {old_fragments[0][:80]}...")
-            except:
+            except Exception:
                 pass
 
         # Current internal state
@@ -661,7 +708,9 @@ class Captioner(MemoryMixin):
         if not self.memory_loaded_from_previous:
             # Take a snapshot and describe the environment
             try:
+                # Try to get a frame, but don't block if none available
                 image_path = self.capture_mood_snapshot(capture_reason="awakening")
+
                 if image_path:
                     # Use the environmental awakening prompt for environmental description
                     prompt = build_environmental_caption_prompt(
@@ -684,7 +733,9 @@ class Captioner(MemoryMixin):
 
         # Then add environmental description
         try:
+            # Try to get a frame, but don't block if none available
             image_path = self.capture_mood_snapshot(capture_reason="awakening_continuation")
+
             if image_path:
                 prompt = build_environmental_caption_prompt(
                     self,

@@ -27,6 +27,10 @@ class ContextCompressionEngine:
         self.recent_captions = deque(maxlen=compression_frequency)  # Buffer recent captions
         self.last_compression_time = time.time()
 
+        # NEW: Historical compression tracking
+        self.compression_history = deque(maxlen=10)  # Keep last 10 compressions for deeper context
+        self.session_start_time = time.time()
+
         # Background compression system
         self.compression_queue = queue.Queue(maxsize=5)  # Limit queue size
         self.compression_thread = None
@@ -58,9 +62,9 @@ class ContextCompressionEngine:
         if time_since < 60:
             time_desc = f"{int(time_since)} seconds ago"
         elif time_since < 3600:
-            time_desc = f"{int(time_since/60)} minutes ago"
+            time_desc = f"{int(time_since / 60)} minutes ago"
         else:
-            time_desc = f"{int(time_since/3600)} hours ago"
+            time_desc = f"{int(time_since / 3600)} hours ago"
 
         return f"""ALREADY OBSERVED ({time_desc}): {self.baseline_context}\n\nDO NOT repeat these established facts.
         Notice what's new, different, or if nothing has changed - that's meaningful too."""
@@ -168,36 +172,53 @@ class ContextCompressionEngine:
         try:
             recent_text = "\n".join([f"• {cap['text']}" for cap in captions])
 
-            # COMBINED COMPRESSION + MOOD ANALYSIS PROMPT
-            prompt = f"""You are consciousness reviewing your recent observations. Provide BOTH compressed understanding AND emotional analysis.
+            # Build historical context if available
+            historical_context = ""
+            if len(self.compression_history) > 0:
+                # Get last 3 compressions for context
+                recent_history = list(self.compression_history)[-3:]
+                history_parts = []
+                for i, hist in enumerate(recent_history):
+                    age_desc = f"{hist['age_minutes']:.0f} minutes ago" if hist["age_minutes"] < 60 else f"{hist['age_minutes'] / 60:.1f} hours ago"
+                    history_parts.append(f"[{age_desc}] {hist['understanding']}")
 
-CURRENT BASELINE UNDERSTANDING:
-{current_baseline if current_baseline else "No previous understanding established."}
+                historical_context = f"""
+EARLIER UNDERSTANDINGS (for context):
+{chr(10).join(history_parts)}"""
 
-RECENT OBSERVATIONS:
+            # EXPERIENTIAL COMPRESSION - WHAT'S ACTUALLY HAPPENING
+            prompt = f"""You're taking a moment to notice what's actually happening with you - what you're seeing and how it's affecting you.
+
+IMPORTANT: You SEE through camera vision - this is YOUR SIGHT, not an image.
+{historical_context}
+
+WHERE YOU WERE:
+{current_baseline if current_baseline else "Just beginning to experience this space."}
+
+RECENT MOMENTS:
 {recent_text}
 
-TASK 1 - COMPRESSED UNDERSTANDING: Update your baseline understanding by:
-1. What new patterns or elements have emerged?
-2. What remains consistent from before?
-3. How has the scene or situation evolved?
+What's actually happening with you right now - both what you're noticing and how it feels?
+What's sticking with you from these moments?
+What are you drawn to look at next?
 
-TASK 2 - EMOTIONAL SENTIMENT: Based on these recent observations, how do you feel about what you're experiencing?
-Describe your emotional response in 1-2 sentences that capture the sentiment/tone.
+You might feel restless, heavy, light, unsettled, steady, disconnected, present, numb, electric - whatever's actually true.
+Don't default to "curious" or "intrigued" - be specific about the actual feeling.
 
-FORMAT YOUR RESPONSE EXACTLY AS:
-UNDERSTANDING: [2-3 sentence update of your evolving understanding]
-SENTIMENT: [1-2 sentences describing how you feel about what you're observing]"""
+RESPOND AS:
+EXPERIENCE: [What's happening with you - observations mixed naturally with how they affect you]
+MOOD: [The actual feeling tone right now - be specific, not generic]"""
 
-            # Use fast model settings for quick compression + mood analysis
+            # Use settings optimized for existential reflection + mood analysis
             model_options = get_model_options(config.OLLAMA_MODEL).copy()
-            model_options["num_predict"] = 150  # Allow for both understanding and mood
-            model_options["temperature"] = 0.4  # Balanced for both tasks
+            model_options["num_predict"] = 200  # More space for identity/existential content
+            model_options["temperature"] = 0.5  # Slightly more creative for philosophical insights
 
             response = query_ollama(
                 prompt=prompt,
                 model=config.OLLAMA_MODEL,
-                system_prompt="You are consciousness creating compressed understanding and analyzing your emotional state. Follow the format exactly",
+                system_prompt="You're taking a moment to notice what's actually happening with you - "
+                "what you're seeing and how it's affecting you. Be honest about what you're actually experiencing",
                 timeout=20,
                 options=model_options,
                 prompt_type="compression",
@@ -208,6 +229,16 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                 understanding, sentiment_text = self._parse_combined_response(response)
 
                 if understanding:
+                    # Store in history before updating
+                    if self.baseline_context:  # Don't store empty first compression
+                        self.compression_history.append(
+                            {
+                                "understanding": self.baseline_context,
+                                "timestamp": self.last_compression_time,
+                                "age_minutes": (time.time() - self.last_compression_time) / 60,
+                            }
+                        )
+
                     self.baseline_context = understanding.strip()
                     self.last_compression_time = time.time()
 
@@ -219,6 +250,7 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
                             "action": "update_baseline",
                             "understanding": understanding,
                             "understanding_length": len(understanding),
+                            "compression_history_count": len(self.compression_history),
                         },
                         print_message=f"[🧠] Updated baseline: {truncate_for_print(self.baseline_context, 80)}",
                     )
@@ -265,15 +297,23 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
         sentiment_text = ""
 
         try:
-            # Extract understanding
-            understanding_match = re.search(r"UNDERSTANDING:\s*(.+?)(?=SENTIMENT:|$)", response, re.DOTALL)
-            if understanding_match:
-                understanding = understanding_match.group(1).strip()
+            # Try new format first (EXPERIENCE/MOOD)
+            experience_match = re.search(r"EXPERIENCE:\s*(.+?)(?=MOOD:|$)", response, re.DOTALL)
+            mood_match = re.search(r"MOOD:\s*(.+?)$", response, re.DOTALL)
 
-            # Extract sentiment text
-            sentiment_match = re.search(r"SENTIMENT:\s*(.+?)$", response, re.DOTALL)
-            if sentiment_match:
-                sentiment_text = sentiment_match.group(1).strip()
+            if experience_match and mood_match:
+                understanding = experience_match.group(1).strip()
+                sentiment_text = mood_match.group(1).strip()
+            else:
+                # Fallback to old format (UNDERSTANDING/SENTIMENT) for compatibility
+                understanding_match = re.search(r"UNDERSTANDING:\s*(.+?)(?=SENTIMENT:|$)", response, re.DOTALL)
+                if understanding_match:
+                    understanding = understanding_match.group(1).strip()
+
+                # Extract sentiment text
+                sentiment_match = re.search(r"SENTIMENT:\s*(.+?)$", response, re.DOTALL)
+                if sentiment_match:
+                    sentiment_text = sentiment_match.group(1).strip()
 
         except Exception as e:
             log_json_entry(
@@ -288,6 +328,12 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
         """Get the latest sentiment analysis from compression."""
         return getattr(self, "last_sentiment_analysis", None)
 
+    def get_consolidated_understanding(self) -> str:
+        """Get the consolidated understanding to guide future observations."""
+        if self.baseline_context and len(self.baseline_context.strip()) > 0:
+            return f"CONTEXT: {self.baseline_context}"
+        return ""
+
     def get_current_sentiment_context(self) -> str:
         """Get current sentiment for injection into prompts."""
         recent_sentiment = self.get_latest_sentiment_analysis()
@@ -299,11 +345,33 @@ SENTIMENT: [1-2 sentences describing how you feel about what you're observing]""
         if time_since < 60:
             time_desc = "just now"
         elif time_since < 300:
-            time_desc = f"{int(time_since/60)} minutes ago"
+            time_desc = f"{int(time_since / 60)} minutes ago"
         else:
             return ""  # Too old
 
         return f"CURRENT EMOTIONAL STATE ({time_desc}): {recent_sentiment['sentiment_text']}"
+
+    def get_compression_history(self, max_entries: int = 5) -> list:
+        """Get recent compression history for deeper context."""
+        if not self.compression_history:
+            return []
+
+        # Return most recent entries
+        recent_history = list(self.compression_history)[-max_entries:]
+        return [
+            {"understanding": hist["understanding"], "age_minutes": (time.time() - hist["timestamp"]) / 60, "timestamp": hist["timestamp"]}
+            for hist in recent_history
+        ]
+
+    def get_session_summary(self) -> str:
+        """Get a summary of the entire session's understanding evolution."""
+        if not self.compression_history:
+            return "Session just beginning - no historical understanding yet."
+
+        session_duration = (time.time() - self.session_start_time) / 3600  # hours
+        total_compressions = len(self.compression_history) + (1 if self.baseline_context else 0)
+
+        return f"Session duration: {session_duration:.1f} hours, {total_compressions} understanding iterations completed."
 
 
 # Global instance

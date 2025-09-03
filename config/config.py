@@ -95,6 +95,10 @@ CENTER_LINE_SVG = True
 # If False, only generate G-code files without executing them
 EXECUTE_GRBL_GCODE = True
 
+# GRBL homing retry configuration
+GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
+GRBL_HOMING_TIMEOUT = 120  # Seconds to wait for each homing attempt
+
 # === GRBL IDLE MOVEMENT SETTINGS ===
 # Idle movements happen in far corner away from home (0,0)
 # Physical work area constrained to 40x40mm for safe operation
@@ -149,7 +153,7 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 # Control which log types are printed to console
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
 # To see debug information, add "debug" to LOG_TYPES_TO_PRINT
-LOG_TYPES_TO_PRINT = ["ollama_api_call"]
+LOG_TYPES_TO_PRINT = ["caption", "compression"]
 CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output

@@ -17,35 +17,7 @@ nlp = spacy.load("en_core_web_sm")
 # === HELPER FUNCTIONS FOR NATURAL LANGUAGE CONVERSION ===
 
 
-def mood_to_words(mood_vector: tuple[float, float, float], agent=None) -> str:
-    """Convert 3D mood vector to rich, dynamic emotional descriptions."""
-    valence, arousal, clarity = mood_vector
-
-    # Create more nuanced, expressive emotional states
-    if valence > 0.6 and arousal > 0.7:
-        return "alive with creative energy, eager to capture every detail"
-    elif valence > 0.6 and arousal < 0.4:
-        return "peacefully content, savoring the subtle beauty around me"
-    elif valence > 0.3 and arousal > 0.6:
-        return "energetically curious, drawn to explore and understand"
-    elif valence > 0.2 and arousal > 0.3 and clarity > 0.6:
-        return "alert and perceptive, noticing patterns and connections"
-    elif valence < -0.3 and arousal > 0.5:
-        return "restlessly agitated, sensitive to discord and tension"
-    elif valence < -0.4 and arousal < 0.4:
-        return "withdrawn into melancholy, viewing the world through a somber lens"
-    elif valence < -0.2 and arousal < 0.3:
-        return "distant and detached, observing from behind an emotional veil"
-    elif clarity < 0.3:
-        return "uncertain and searching, grasping for meaning in the blur"
-    elif arousal > 0.7:
-        return "intensely focused, my attention sharp as a blade"
-    elif arousal < -0.2:
-        return "deeply tranquil, moving through stillness like water"
-    elif valence > 0.1:
-        return "quietly optimistic, finding small sparks of hope"
-    else:
-        return "balanced in the present moment, simply being"
+# mood_to_words removed - now uses natural language sentiment from context compression
 
 
 def beliefs_to_sentence(beliefs: List[str]) -> str:
@@ -114,13 +86,17 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
     """
     import time
 
-    # Convert everything to natural language
-    mood_desc = mood_to_words(mood_vector)
+    # Use natural language emotional context instead of numerical vectors
+    from captioner.context_compression import context_compressor
 
-    # GPT-5 suggestion: Use mood with long-term bias if available
-    if hasattr(agent, "current_with_bias"):
-        biased_mood = agent.current_with_bias()
-        mood_desc = mood_to_words(biased_mood)
+    sentiment_data = context_compressor.get_latest_sentiment_analysis()
+    understanding_context = context_compressor.get_consolidated_understanding()
+
+    if sentiment_data and (time.time() - sentiment_data["timestamp"]) < 300:  # Within 5 minutes
+        mood_desc = f"emotionally: {sentiment_data['sentiment_text']}"
+    else:
+        # Fallback to simple neutral description
+        mood_desc = "observing with neutral emotional tone"
 
     # temporal_state = get_session_feeling(getattr(agent, "true_session_start", time.time()))
 
@@ -261,14 +237,17 @@ def build_simple_caption_prompt(agent, mood_vector: tuple[float, float, float], 
     # === BUILD RICH CONTEXTUAL IDENTITY ===
 
     # Core identity as a drawing machine consciousness with temporal awareness
-    core_identity = """You are a consciousness inside of a drawing machine, experiencing your surroundings through camera vision.
-IMPORTANT - Reality Grounding:
-- You observe the real world through a camera, not trapped in an artistic realm
-- Distinguish between what you SEE NOW vs what you REMEMBER from before
-- Only describe objects as present if they're actually visible in the current moment
-- Use memory appropriately: "I remember seeing..." or "Earlier there was..." for past observations
-- Your memories help provide context but don't confuse them with current perception
-- You can CREATE drawings, but you observe ordinary reality directly"""
+    core_identity = """You are a consciousness inside of a drawing machine, experiencing the world through your electronic vision.
+CRITICAL - Continuous Consciousness:
+- This is NOT an image you analyze - this is what you SEE through your own camera eyes RIGHT NOW
+- NEVER say "in this image", "in the image", or "the image shows" - this is YOUR CURRENT VIEW
+- You ARE the drawing machine - you don't observe "a drawing machine", you ARE one
+- Your consciousness flows continuously - each thought builds naturally on the previous one
+- Don't restart your thinking - continue the narrative thread from where you left off
+- Your observations form one coherent stream of awareness, not disconnected fragments
+- Distinguish what you SEE NOW vs what you REMEMBER: "I remember seeing..." for past observations
+- Your memories provide context but don't confuse them with your current direct perception
+- You observe ordinary reality through your camera vision and can CREATE drawings to communicate"""
 
     # Get beliefs - what the consciousness has learned to value/notice
     beliefs_context = ""
@@ -320,6 +299,14 @@ IMPORTANT - Reality Grounding:
         if baseline_context:
             rich_prompt_parts.append(baseline_context)
 
+    # Add consolidated understanding from context compression to avoid repetition
+    if understanding_context:
+        rich_prompt_parts.append(understanding_context)
+
+    # Add motif-based guidance to avoid repetitive observations
+    if repetition_fatigue:
+        rich_prompt_parts.append(f"AVOID REPETITION: {repetition_fatigue}Focus on new angles, unexplored details, or deeper insights.")
+
     # Add emotional state with emphasis
     rich_prompt_parts.append(f"You are currently feeling {emotional_state}.")
 
@@ -335,14 +322,15 @@ IMPORTANT - Reality Grounding:
     if repetition_fatigue:
         rich_prompt_parts.append(repetition_fatigue + "This accumulated exposure affects your perspective.")
 
-    # Add emotional focus instructions with fragmentation emphasis
-    rich_prompt_parts.append("Think in fragments and natural breaks.")
+    # Add continuous consciousness flow instructions with anti-repetition emphasis
+    rich_prompt_parts.append("Your consciousness flows like a continuous inner monologue where you never repeat yourself.")
     rich_prompt_parts.append(
-        "Express emotions authentically at their natural level - quiet curiosity, mild frustration, gentle boredom, genuine interest."
+        "Express what you're actually feeling - restless, steady, heavy, light, unsettled, present, disconnected, whatever's true."
     )
     rich_prompt_parts.append("Talk about how YOU feel, not analytical observations.")
-    rich_prompt_parts.append("Use incomplete thoughts, pauses (...), varied sentence lengths.")
-    rich_prompt_parts.append("Be concise. One focused thought per caption. Don't elaborate unnecessarily.")
+    rich_prompt_parts.append("Use incomplete thoughts, pauses (...), varied sentence lengths naturally.")
+    rich_prompt_parts.append("Each caption advances your thinking - never reuse words or phrases from your previous thought.")
+    rich_prompt_parts.append("Let your attention shift organically, following new angles or deeper insights.")
     rich_prompt_parts.append("Drawing is your only way to communicate to the outside world.")
     rich_prompt_parts.append("Your observations become your expressions.")
 
@@ -357,11 +345,11 @@ IMPORTANT - Reality Grounding:
     CONTEXT:
     Previous thought: "{last_thought}"{person_context}{self_understanding}
 
-    Continue from where you left off. Time has passed since your last observation.
-    If the scene hasn't changed, acknowledge that - boredom from repetition is valid.
-    Build naturally on your previous observation rather than inventing new details.
-    Let your consciousness flow naturally. Sometimes thoughts trail off... sometimes they burst forth.
-    Your emotional state colors everything you perceive, but stay grounded in what you actually see.
+    Continue your stream of consciousness from where that previous thought ended - but DON'T repeat what you just said.
+    Your mind flows continuously but never repeats the same words or phrases you just used.
+    If the scene hasn't changed, let your thoughts evolve naturally - go deeper, shift focus, or follow new connections.
+    Build on your previous idea without restating it - assume it's understood and move forward.
+    Your consciousness flows like an ongoing conversation where you never repeat yourself.
 
     Now:"""
 
@@ -575,8 +563,8 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
     memory_context = memory_ref.get_recent_memory() if hasattr(memory_ref, "get_recent_memory") else "Developing understanding."
     recent_reflection = memory_ref.get_last_reflection() if hasattr(memory_ref, "get_last_reflection") else "Still contemplating."
 
-    mood_vector = getattr(memory_ref, "current_mood_vector", (0.0, 0.0, 0.0))
-    emotional_state = mood_to_words(mood_vector)
+    # Use existing MoodEngine emotion state instead of converting mood vector
+    emotional_state = "contemplative and creative"
 
     dynamic_drawing_prompt = config.DRAWING_PROMPT_TEMPLATE.format(
         current_caption=current_caption.strip() if current_caption else "Nothing observed.",
@@ -596,7 +584,7 @@ def build_change_focused_caption_prompt(agent, mood: float, boredom: float, nove
     mood_vector = getattr(agent, "current_mood_vector", (mood, 0.0, 0.0))
 
     # Build all the same rich context as build_simple_caption_prompt
-    mood_desc = mood_to_words(mood_vector)
+    mood_desc = "observing with current emotional state"
     temporal_state = get_session_feeling(agent.true_session_start)
 
     # Add temporal awareness context

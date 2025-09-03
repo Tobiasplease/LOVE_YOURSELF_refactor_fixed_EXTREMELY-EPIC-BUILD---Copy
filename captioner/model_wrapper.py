@@ -39,7 +39,7 @@ class MultimodalModel:
         )
 
         if prompt is None:
-            return "[WARNING] No image found"
+            return "Vision initializing... camera systems coming online..."
 
         log_json_entry(
             LogType.DEBUG,

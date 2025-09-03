@@ -61,23 +61,8 @@ class MoodEngine:
             if similar_memories:
                 emotional_context += f" | Similar emotional memories: {' | '.join(similar_memories[:2])}"
 
-        # Get 3D mood analysis from Ollama for physical control systems
-        valence, arousal, clarity = self.analyze_3d_mood_with_ollama(
-            caption, emotional_memory_context=emotional_context, temporal_feeling=temporal_feeling
-        )
-
-        # Apply emotional momentum for smoother transitions
-        prev_v, prev_a, prev_c = self.previous_mood_vector
-        valence = valence * (1 - self.emotional_momentum) + prev_v * self.emotional_momentum
-        arousal = arousal * (1 - self.emotional_momentum) + prev_a * self.emotional_momentum
-        clarity = clarity * (1 - self.emotional_momentum) + prev_c * self.emotional_momentum
-
-        # Update mood vectors
-        self.mood_vector = (valence, arousal, clarity)
-        self.previous_mood_vector = self.mood_vector
-
-        # Simple mood analysis for backward compatibility
-        scalar_mood = self.convert_3d_to_scalar(valence, arousal, clarity)
+        # Simple mood analysis (3D analysis moved to context compression)
+        scalar_mood = self.analyze_caption_sentiment(caption)
 
         # Apply unified pattern analysis (motifs + novelty)
         pattern_data = self.pattern_engine.analyze_caption(caption)
@@ -108,7 +93,7 @@ class MoodEngine:
         clarity_variation = 0.2 * np.sin(time_factor * 0.7)  # Slower clarity drift
 
         adjusted_valence = valence + valence_variation
-        adjusted_arousal = arousal + arousal_variation  
+        adjusted_arousal = arousal + arousal_variation
         adjusted_clarity = clarity + clarity_variation
 
         # More dynamic mapping with escape paths from quiet_detached
@@ -250,54 +235,7 @@ class MoodEngine:
 
         return np.clip(sentiment_score, -0.1, 0.1)  # Cap sentiment influence
 
-    def analyze_3d_mood_with_ollama(
-        self, caption: str, emotional_memory_context: Optional[str] = None, temporal_feeling: Optional[str] = None
-    ) -> Tuple[float, float, float]:
-        """Use Ollama to analyze mood in 3D with recursive emotional feedback and memory context."""
-        try:
-            # Get memory context for mood analysis
-            memory_state = " | ".join(self.memory[-3:]) if self.memory else "No recent memories"
-
-            # Get current emotional state description for recursive feedback
-            current_emotion = self.get_emotion_for_hand_controller()
-            mood_description = self.get_mood_description(current_emotion, self.mood_vector)
-
-            # Add emotional memory context if available
-            if emotional_memory_context:
-                memory_state += f" | Emotional context: {emotional_memory_context}"
-
-            # Generate lightweight contextual information for mood analysis
-            session_duration = time.time() - self.session_start
-            temporal_context = self._generate_temporal_context(session_duration, emotional_memory_context)
-            motif_context = self._generate_motif_context(caption)
-            belief_context = self._generate_belief_context()
-
-            # Use the enhanced recursive prompt with current emotional state, memory, and temporal feeling
-            prompt = MOOD_PROMPT_TEMPLATE.format(
-                image_description=caption,
-                memory_state=memory_state,
-                current_mood_description=mood_description,
-                current_valence=self.mood_vector[0],
-                current_arousal=self.mood_vector[1],
-                current_clarity=self.mood_vector[2],
-                temporal_feeling=temporal_feeling or "time flows neutrally",
-                temporal_context=temporal_context,
-                motif_context=motif_context,
-                belief_context=belief_context,
-            )
-
-            response = query_ollama(prompt, model="llava:7b-v1.6-mistral-q5_1", prompt_type="sentiment")
-
-            # Parse the response for three values
-            valence, arousal, clarity = self.parse_3d_mood_response(response)
-
-            return valence, arousal, clarity
-
-        except Exception as e:
-            print(f"[WARNING ] 3D mood analysis failed: {e}")
-            # Fallback to slight emotional evolution from current state
-            curr_v, curr_a, curr_c = self.mood_vector
-            return (curr_v + np.random.uniform(-0.1, 0.1), curr_a + np.random.uniform(-0.1, 0.1), curr_c + np.random.uniform(-0.05, 0.05))
+    # analyze_3d_mood_with_ollama removed - now uses natural language sentiment from context compression
 
     def get_mood_description(self, emotion: str, mood_vector: Tuple[float, float, float]) -> str:
         """Convert emotion state and 3D mood to natural language description."""
@@ -321,13 +259,35 @@ class MoodEngine:
         return f"{base_desc}, feeling {valence_desc}, {arousal_desc}, and {clarity_desc}"
 
     def parse_3d_mood_response(self, response: str) -> Tuple[float, float, float]:
-        """Parse Ollama response for valence, arousal, clarity values."""
+        """Parse Ollama response for narrative content and extract valence, arousal, clarity values."""
         try:
-            # Look for patterns like "valence: 0.3, arousal: -0.1, clarity: 0.7"
-            # or just three numbers separated by commas/spaces
+            # First, extract and log the narrative portion (everything before the coordinates)
             import re
 
-            # Try to find three numbers between -1 and 1
+            # Look for the coordinate pattern [valence: X.XX, arousal: X.XX, clarity: X.XX]
+            coord_match = re.search(r"\[valence:\s*(-?\d+\.\d+),\s*arousal:\s*(-?\d+\.\d+),\s*clarity:\s*(-?\d+\.\d+)\]", response, re.IGNORECASE)
+
+            if coord_match:
+                # Extract the narrative part (everything before the coordinates)
+                narrative = response[: coord_match.start()].strip()
+                if narrative:
+                    # Log the narrative part as the emotional reflection
+                    from event_logging.event_logger import log_json_entry
+                    from event_logging.log_type import LogType
+
+                    log_json_entry(
+                        LogType.MOOD,
+                        {"message": "Emotional reflection", "narrative": narrative, "component": "mood_narrative"},
+                        print_message=f"🌊 {narrative}",
+                    )
+
+                # Extract numerical values
+                valence = np.clip(float(coord_match.group(1)), -1.0, 1.0)
+                arousal = np.clip(float(coord_match.group(2)), -1.0, 1.0)
+                clarity = np.clip(float(coord_match.group(3)), -1.0, 1.0)
+                return valence, arousal, clarity
+
+            # Fallback: Look for old patterns like "valence: 0.3, arousal: -0.1, clarity: 0.7"
             numbers = re.findall(r"-?[0-1]?\.\d+|-?[01]", response.lower())
 
             if len(numbers) >= 3:
@@ -395,7 +355,7 @@ class MoodEngine:
         if hours > 2:
             context_parts.append(f"Session duration: {hours:.1f} hours")
         elif session_duration > 1800:  # 30 minutes
-            context_parts.append(f"Session duration: {session_duration/60:.0f} minutes")
+            context_parts.append(f"Session duration: {session_duration / 60:.0f} minutes")
 
         # Check for temporal stagnation patterns
         if emotional_context and "similar emotional memories" in emotional_context:
