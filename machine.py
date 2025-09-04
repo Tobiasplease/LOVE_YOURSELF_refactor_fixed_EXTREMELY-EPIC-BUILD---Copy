@@ -72,6 +72,7 @@ from event_logging.event_logger import get_current_run_id, log_json_entry, set_s
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from image_monitor import ImageMonitor
+from grbl.idle_movement_manager import start_idle_movements, stop_idle_movements, update_emotion
 from mood.mood import MoodEngine
 from utils.continuity import describe_duration
 from utils.error_tracking import get_failure_tracker
@@ -245,6 +246,12 @@ def emergency_cleanup():
             stop_hand_controller()
         except Exception:
             pass
+            
+        # Stop idle movements on shutdown
+        try:
+            stop_idle_movements()
+        except Exception as e:
+            print(f"[WARNING] Failed to stop idle movements: {e}")
 
         cv2.destroyAllWindows()
 
@@ -418,6 +425,8 @@ debug_print("Starting image monitor", "INIT")
 image_monitor = ImageMonitor(log_folder=MOOD_SNAPSHOT_FOLDER)
 _global_image_monitor = image_monitor
 
+# Idle movements manager will start after emotion state is determined
+
 # Initialize run ID and start time for this session
 start_time = time.time()
 _global_start_time = start_time
@@ -503,6 +512,12 @@ if previous_state:
     change_to_emotion(emotion)
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
+    
+    # Start idle CNC movements with restored emotion
+    if start_idle_movements(emotion):
+        debug_print(f"Idle CNC movements started with emotion: {emotion}", "INIT")
+    else:
+        debug_print("Failed to start idle CNC movements", "WARN")
 
     # Reset last_caption so remnants from previous session are not printed
     captioner.last_caption = ""
@@ -535,6 +550,13 @@ else:
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
+    
+    # Start idle CNC movements with default emotion
+    default_emotion = "calm_observant" 
+    if start_idle_movements(default_emotion):
+        debug_print(f"Idle CNC movements started with default emotion: {default_emotion}", "INIT")
+    else:
+        debug_print("Failed to start idle CNC movements", "WARN")
 
 debug_print("System initialization complete", "INIT")
 
@@ -604,6 +626,10 @@ def mood_update_thread(frame, timestamp):
                     # Update hand controller with new emotional state
                     change_to_emotion(current_emotion)
                     debug_print(f"Updated hand controller emotion: {current_emotion}", "HAND")
+                    
+                    # Update CNC idle movements with new emotional state
+                    update_emotion(current_emotion)
+                    debug_print(f"Updated CNC emotion: {current_emotion}", "CNC")
 
                     # Third: Update captioner's mood state and pattern data for next cycle
                     captioner.current_mood = current_mood

@@ -19,13 +19,13 @@ try:
         GRBL_IDLE_ZONE,
     )
 except ImportError:
-    # Fallback defaults if config not available
-    GRBL_IDLE_CENTER = (170, 170)
+    # Safe fallback defaults matching your calibrated system
+    GRBL_IDLE_CENTER = (30, 30)
     GRBL_IDLE_RADIUS_MIN = 5
-    GRBL_IDLE_RADIUS_MAX = 15
-    GRBL_IDLE_FEED_RATE = 2000
-    GRBL_IDLE_ZONE = (150, 190, 150, 190)
-    GRBL_IDLE_UPDATE_INTERVAL = 1.0
+    GRBL_IDLE_RADIUS_MAX = 8
+    GRBL_IDLE_FEED_RATE = 500
+    GRBL_IDLE_ZONE = (20, 40, 20, 40)
+    GRBL_IDLE_UPDATE_INTERVAL = 3.0
 
 
 class IdleMovementController:
@@ -58,7 +58,7 @@ class IdleMovementController:
         # Variation parameters for organic feel
         self.freq_variation = 0.0
         self.phase_variation = 0.0
-        
+
         # Cycle management for longer movement sequences
         self.current_cycle_duration = 0
         self.cycle_start_time = 0
@@ -125,11 +125,11 @@ class IdleMovementController:
         # Add more randomness for organic feel
         self.freq_variation = random.uniform(-variation_amount, variation_amount)
         self.phase_variation = random.uniform(-variation_amount, variation_amount)
-        
+
         # Random frequency drift for less predictable patterns
         self.freq_drift_x = random.uniform(-0.1, 0.1)
         self.freq_drift_y = random.uniform(-0.1, 0.1)
-        
+
         # Start new movement cycle with random duration
         self.start_new_cycle()
 
@@ -181,23 +181,21 @@ class IdleMovementController:
     def start_new_cycle(self):
         """Start a new movement cycle with random duration"""
         import time
+
         # Cycle durations: mostly short, occasionally much longer
-        cycle_type = random.choice([
-            'short',     # 50% - 30-90 seconds  
-            'medium',    # 30% - 2-4 minutes
-            'long',      # 15% - 5-8 minutes
-            'extended'   # 5% - 10-20 minutes
-        ])
-        
-        if cycle_type == 'short':
+        cycle_type = random.choice(
+            ["short", "medium", "long", "extended"]  # 50% - 30-90 seconds  # 30% - 2-4 minutes  # 15% - 5-8 minutes  # 5% - 10-20 minutes
+        )
+
+        if cycle_type == "short":
             self.current_cycle_duration = random.uniform(30, 90)
-        elif cycle_type == 'medium':
+        elif cycle_type == "medium":
             self.current_cycle_duration = random.uniform(120, 240)
-        elif cycle_type == 'long':
+        elif cycle_type == "long":
             self.current_cycle_duration = random.uniform(300, 480)
         else:  # extended
             self.current_cycle_duration = random.uniform(600, 1200)
-            
+
         self.cycle_start_time = time.time()
         self.movements_in_cycle = 0
         print(f"[🌊] Starting new {cycle_type} cycle ({self.current_cycle_duration/60:.1f} minutes)")
@@ -205,6 +203,7 @@ class IdleMovementController:
     def should_start_new_cycle(self) -> bool:
         """Check if current cycle is complete"""
         import time
+
         return (time.time() - self.cycle_start_time) > self.current_cycle_duration
 
     def get_pen_height_command(self) -> str:
@@ -212,49 +211,51 @@ class IdleMovementController:
         # Pen heights: S10-S25 = safe up range, S50 = down (never use S50)
         # Create subtle breathing-like height variations well above paper
         base_height = 15  # Much higher base position
-        height_variation = random.choice([
-            0,     # 40% - stay at base height (S15)
-            2,     # 25% - slightly lower (S17)
-            4,     # 20% - bit more lower (S19)  
-            6,     # 10% - noticeably lower but still safe (S21)
-            8      # 5% - lowest safe height (S23)
-        ])
-        
+        height_variation = random.choice(
+            [
+                0,  # 40% - stay at base height (S15)
+                2,  # 25% - slightly lower (S17)
+                4,  # 20% - bit more lower (S19)
+                6,  # 10% - noticeably lower but still safe (S21)
+                8,  # 5% - lowest safe height (S23)
+            ]
+        )
+
         height = base_height + height_variation
         return f"M3 S{height}"
-    
+
     def generate_micro_movement(self, current_x: float, current_y: float) -> Tuple[float, float]:
         """Generate tiny movements for contemplative moments instead of stopping"""
         # Very small movements (1-3mm) around current position
         micro_radius = random.uniform(0.5, 2.5)
         angle = random.uniform(0, 2 * math.pi)
-        
+
         # Add tiny shift with boundary checking
         new_x = current_x + micro_radius * math.cos(angle)
         new_y = current_y + micro_radius * math.sin(angle)
-        
+
         # Keep within boundaries
         new_x = max(self.boundary[0], min(self.boundary[1], new_x))
         new_y = max(self.boundary[2], min(self.boundary[3], new_y))
-        
+
         return new_x, new_y
-    
+
     def generate_contemplation_sequence(self, start_x: float, start_y: float, duration_seconds: float) -> list:
         """Generate a sequence of micro-movements for contemplative moments"""
         sequence = []
         num_micros = random.randint(3, 8)  # 3-8 tiny movements
-        
+
         current_x, current_y = start_x, start_y
-        
+
         for i in range(num_micros):
             # Generate next micro position
             current_x, current_y = self.generate_micro_movement(current_x, current_y)
-            
+
             # Very slow feed rate for contemplative micro-movements
             micro_feed_rate = random.randint(150, 300)  # Very slow and gentle
-            
+
             sequence.append((current_x, current_y, micro_feed_rate))
-        
+
         return sequence
 
     def reset(self):

@@ -10,6 +10,7 @@ from config.config import CENTER_LINE_SVG, COMFY_OUTPUT_FOLDER, EXECUTE_GRBL_GCO
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from grbl import svg_to_grbl
+from grbl.idle_movement_manager import pause_for_drawing, resume_after_drawing
 from utils.state_manager import state_manager
 
 
@@ -25,6 +26,7 @@ class ImageMonitor:
         self.running = False
         self.thread = None
         self.on_image_complete = on_image_complete
+        self.session_start_time = time.time()  # Track when this session started
 
     def start(self):
         """Start the image monitoring thread."""
@@ -88,6 +90,9 @@ class ImageMonitor:
 
     def _process_png_to_gcode(self, png_path):
         """Process a PNG file to G-code based on CENTER_LINE_SVG config."""
+        # Pause idle movements to free the serial port
+        pause_for_drawing()
+        
         try:
             base_name = os.path.splitext(os.path.basename(png_path))[0]
             output_folder = os.path.dirname(png_path)
@@ -114,7 +119,14 @@ class ImageMonitor:
                     scale=1.0,  # SVG-skalning
                 )
 
+                # Start CNC execution tracking
+                original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
+                state_manager.start_cnc_execution(gcode_path, original_prompt)
+
                 svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
+
+                # Finish CNC execution tracking
+                state_manager.finish_cnc_execution(png_path, gcode_path)
 
                 log_json_entry(
                     LogType.INFO,
@@ -136,8 +148,15 @@ class ImageMonitor:
                         print_message=f"[🔄] Converting latest SVG to G-code: {os.path.basename(latest_svg)}",
                     )
 
+                    # Start CNC execution tracking
+                    original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
+                    state_manager.start_cnc_execution(gcode_path, original_prompt)
+
                     # Convert SVG to G-code
                     svg_to_grbl(svg_input=latest_svg, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
+
+                    # Finish CNC execution tracking
+                    state_manager.finish_cnc_execution(png_path, gcode_path)
 
                     log_json_entry(
                         LogType.INFO,
@@ -157,11 +176,33 @@ class ImageMonitor:
                 {"error": f"PNG to G-code conversion failed: {str(e)}"},
                 print_message=f"[❌] PNG to G-code conversion failed: {str(e)}",
             )
+        finally:
+            # Always resume idle movements after drawing
+            resume_after_drawing()
 
     def _log_new_image(self, image_path):
         """Log a newly detected image."""
         filename = os.path.basename(image_path)
         file_size = os.path.getsize(image_path)
+
+        # Only process images created after this session started
+        try:
+            file_creation_time = os.path.getmtime(image_path)
+            if file_creation_time < self.session_start_time:
+                log_json_entry(
+                    LogType.INFO,
+                    {"message": f"Skipping old image from previous session: {filename}"},
+                    print_message=f"[⏭️] Skipping old image: {filename}",
+                )
+                return
+        except OSError:
+            # If we can't get file time, assume it's old and skip
+            log_json_entry(
+                LogType.WARNING,
+                {"message": f"Could not get creation time for {filename}, skipping"},
+                print_message=f"[⚠️] Cannot check age of {filename}, skipping",
+            )
+            return
 
         log_json_entry(
             LogType.NEW_DRAWING,
