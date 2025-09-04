@@ -1854,6 +1854,15 @@ class CleanCursorInterface:
         state = self.emotional_states[emotion_name]
         params = state.get_movement_params()
 
+        # Send mood command to Arduino for left arm autonomous movement
+        if self.hand_controller and self.hand_controller.serial_connection:
+            try:
+                mood_command = f"MOOD,{emotion_name}\n"
+                self.hand_controller.serial_connection.write(mood_command.encode())
+                print(f"📤 Sent mood to Arduino: {emotion_name}")
+            except Exception as e:
+                print(f"WARNING: Failed to send mood to Arduino: {e}")
+
         if hasattr(self, "cursor_sensitivity"):
             self.cursor_sensitivity.set(params["cursor_sensitivity"])
 
