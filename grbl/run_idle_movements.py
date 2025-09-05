@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from grbl.grbl_utils import (
     DEFAULT_FEED_RATE,
+    PEN_UP_CMD,
     ensure_homed,
     find_grbl_port,
     get_status,
@@ -94,7 +95,7 @@ def run_idle_movements(emotion_state="calm_observant", duration=None):
         
         # Pen up for all idle movements - higher position to avoid paper contact
         print("[✏️] Pen up for idle movements...")
-        send_cmd(ser, "M3 S15")
+        send_cmd(ser, PEN_UP_CMD)
         wait_until_idle(ser, 5)
         
         # Move to idle zone center (40x40mm work area)

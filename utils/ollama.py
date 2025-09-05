@@ -118,8 +118,11 @@ def log_ollama_call(
         call_details.append("\nResponse: " + truncate_for_print(response, 1000))
 
     if CLEAN_LLM_OUTPUT and response:
-        # Clean output: just the LLM response text with no metadata
-        print_message = truncate_for_print(response, 1000)
+        # Clean output: prefer caller-owned printing for text types to avoid duplicates
+        if prompt_type in ("caption", "reflection", "drawing"):
+            print_message = None  # Suppress here; higher-level modules print cleanly
+        else:
+            print_message = truncate_for_print(response, 1000)
     elif DEBUG_OLLAMA_PROMPTS:
         debug_details = [f"\n[🤖{type_emoji}] {prompt_type.title()} PROMPT:\n{'-' * 50}", truncate_for_print(prompt, 1000), "-" * 50]
 

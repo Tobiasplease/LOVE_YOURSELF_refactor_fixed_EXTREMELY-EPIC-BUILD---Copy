@@ -34,6 +34,7 @@ from utils.ollama import query_ollama, truncate_for_print
 from utils.state_manager import state_manager
 
 from .comfy import create_impostor_controller
+from grbl.idle_movement_manager import pause_for_drawing
 
 if TYPE_CHECKING:
     from captioner.captioner import Captioner
@@ -104,6 +105,19 @@ class DrawingController:
                 print_message=f"[🎯] Self-critique: {truncate_for_print(critique_response, 100)}",
             )
 
+            # Store concise reflection for drawing memory
+            try:
+                from config.config import INCLUDE_DRAWING_HISTORY
+                if INCLUDE_DRAWING_HISTORY:
+                    one_liner = critique_response.strip().split("\n")[0]
+                    if len(one_liner) > 160:
+                        one_liner = one_liner[:157] + "..."
+                    # We don't have direct agent reference here; try to import a global captioner if available
+                    # Fallback: log as an event in state manager timeline if exposed later
+                
+            except Exception:
+                pass
+
         except Exception as exc:
             log_json_entry(
                 LogType.ERROR,
@@ -148,6 +162,19 @@ class DrawingController:
 
             self.register_drawing(drawing_prompt)
 
+            # Record a concise drawing intent into memory for future reference
+            try:
+                from config.config import INCLUDE_DRAWING_HISTORY
+
+                if INCLUDE_DRAWING_HISTORY and hasattr(agent, "observe"):
+                    intent = drawing_prompt.strip().split("\n")[0]
+                    # Trim to a short one-liner
+                    if len(intent) > 160:
+                        intent = intent[:157] + "..."
+                    agent.observe(f"Drawing intent: {intent}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
+            except Exception:
+                pass
+
             log_json_entry(
                 LogType.DECISION,
                 {
@@ -159,8 +186,13 @@ class DrawingController:
                     "drawing_prompt": drawing_prompt,
                     "reflection": (reflection or "").strip(),
                 },
-                print_message=f"[🎨] Inspired! Creating artwork...",
+                print_message=f"[🎨] Drawing prompt:\n{drawing_prompt}",
             )
+            # Always echo full drawing prompt to console regardless of log filters
+            try:
+                print("[🖼️ Drawing Prompt]\n" + drawing_prompt)
+            except Exception:
+                pass
 
             if latest_image and os.path.exists(latest_image):
                 self._invoke_comfyui_drawing(drawing_prompt, latest_image)
@@ -183,6 +215,12 @@ class DrawingController:
     # ------------------------------------------------------------------
     def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str) -> None:
         try:
+            # Enter drawing mode early: pause idle movements to avoid serial contention and keep pipeline contiguous
+            try:
+                pause_for_drawing()
+            except Exception:
+                pass
+
             if os.path.exists(latest_image):
                 image_path = latest_image
             else:
@@ -193,11 +231,12 @@ class DrawingController:
                     f.write(image_data)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename_prefix = f"impostor-{timestamp}"
             controller = create_impostor_controller(
                 load_image_path=image_path,
                 override_prompt=drawing_prompt,
                 primitive_string=TRIGGER_PROMPT,
-                filename_prefix=f"impostor-{timestamp}",
+                filename_prefix=filename_prefix,
                 latent_width=COMFY_LATENT_WIDTH,
                 latent_height=COMFY_LATENT_HEIGHT,
                 cnet_strength=COMFY_CNET_STRENGTH,
@@ -206,12 +245,32 @@ class DrawingController:
                 lora_strength=COMFY_LORA_STRENGTH,
             )
             if controller.queue_prompt():
+                # Track expected output so the monitor only processes this job's image
+                try:
+                    state_manager.set_expected_output_prefix(filename_prefix)
+                except Exception:
+                    pass
                 state_manager.start_drawing_generation(drawing_prompt)
                 log_json_entry(
                     LogType.COMFY_PROMPT,
                     {"message": "ComfyUI drawing queued successfully", "drawing_prompt": drawing_prompt},
-                    print_message="[🎨] ComfyUI drawing queued successfully",
+                    print_message=f"[🎨] Queued to ComfyUI with prompt:\n{drawing_prompt}",
                 )
+                # Always echo queued prompt to console as well
+                try:
+                    print("[🖼️ Queued Prompt]\n" + drawing_prompt)
+                except Exception:
+                    pass
+                # Store an immediate post-queue note for drawing history
+                try:
+                    from config.config import INCLUDE_DRAWING_HISTORY
+                    if INCLUDE_DRAWING_HISTORY:
+                        note = drawing_prompt.strip().split("\n")[-1]
+                        if len(note) > 160:
+                            note = note[:157] + "..."
+                        # We don't have the agent here; rely on state manager after image completes
+                except Exception:
+                    pass
             else:
                 log_json_entry(
                     LogType.ERROR,

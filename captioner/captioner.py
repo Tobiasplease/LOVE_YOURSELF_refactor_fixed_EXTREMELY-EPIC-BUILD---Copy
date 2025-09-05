@@ -13,6 +13,7 @@ import cv2  # type: ignore
 import numpy as np  # type: ignore
 
 from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
+from utils.state_manager import state_manager
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
@@ -286,11 +287,11 @@ class Captioner(MemoryMixin):
             from config.config import CLEAN_LLM_OUTPUT
 
             if CLEAN_LLM_OUTPUT:
-                print_msg = truncate_for_print(caption, 100)
+                print_msg = caption  # print full caption
             else:
-                print_msg = f"[📸] {truncate_for_print(caption, 100)}"
+                print_msg = f"[📸] {caption}"
         except ImportError:
-            print_msg = f"[📸] {truncate_for_print(caption, 100)}"
+            print_msg = f"[📸] {caption}"
 
         log_json_entry(
             LogType.CAPTION,
@@ -432,6 +433,25 @@ class Captioner(MemoryMixin):
                     },
                     print_message=f"[🎨] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...",
                 )
+
+            # Guard: do not start a new drawing while pipeline is busy (prevents stacking)
+            try:
+                if getattr(state_manager, "is_generating_drawing", False) or getattr(state_manager, "is_executing_cnc", False):
+                    log_json_entry(
+                        LogType.DECISION,
+                        {
+                            "decision": "skip_drawing",
+                            "reason": "pipeline_busy",
+                            "is_generating": getattr(state_manager, "is_generating_drawing", False),
+                            "is_executing_cnc": getattr(state_manager, "is_executing_cnc", False),
+                        },
+                        print_message="[⏳] Skipping drawing: pipeline busy (generation/execution)",
+                    )
+                    # Re-check after short delay
+                    self.last_drawing_time = now - DRAWING_INTERVAL + 30
+                    return
+            except Exception:
+                pass
 
             memory_context = self.get_recent_memory()
             reflection_context = self.get_last_reflection()

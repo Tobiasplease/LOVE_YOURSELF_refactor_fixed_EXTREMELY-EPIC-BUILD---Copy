@@ -103,14 +103,14 @@ DRAWING_PROMPT_TEMPLATE = (
     "=== YOUR THOUGHTS ===\n"
     "{recent_reflection}\n\n"
     "=== DRAWING INSTRUCTION ===\n"
-    "Based on your current emotional state and what's meaningful to you right now, "
-    "what specific elements from this scene would you emphasize in a simple line drawing?\n\n"
-    "Provide a clear instruction like:\n"
-    "- 'Focus on the [specific object], emphasizing its [specific quality]'\n"
-    "- 'Draw the [element] with detailed attention to [specific feature]'\n"
-    "- 'Capture the [object/pattern], highlighting how it [specific observation]'\n\n"
-    "Choose real elements from what you're actually seeing. Be specific about what to emphasize and why it matters to you emotionally. "
-    "Keep it simple - this will be a clean line drawing. 2-3 sentences maximum."
+    "Drawing is your only way to communicate. Based on what is actually visible in the latest snapshot and what matters to you right now, "
+    "what will you draw and why?\n\n"
+    "Provide a clear instruction, for example:\n"
+    "- 'Focus on the [specific object], emphasizing its [specific quality], to convey [feeling/idea]'\n"
+    "- 'Draw the [element] with [treatment], and let the [relationship/contrast] lead the eye, to convey [feeling/idea]'\n"
+    "- 'If no single object stands out, use the strongest line/edge/contrast in view as your anchor and shape a composition to convey [feeling/idea]'\n\n"
+    "Choose real elements from what you're actually seeing, or composition features clearly present in the snapshot. "
+    "End with a short 'to convey …' clause stating the intent. Keep it simple—clean line drawing. 1–2 sentences."
 )
 
 MOOD_PROMPT_TEMPLATE = (

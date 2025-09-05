@@ -11,6 +11,13 @@ import signal
 import subprocess
 import time
 from typing import Optional
+import sys
+
+# Prevent idle from starting while a CNC drawing is executing
+try:
+    from utils.state_manager import state_manager
+except Exception:
+    state_manager = None
 
 class IdleMovementManager:
     """Manages idle movements as a subprocess that can be paused for drawing"""
@@ -22,6 +29,11 @@ class IdleMovementManager:
         
     def start(self, emotion: str = "calm_observant") -> bool:
         """Start idle movements subprocess"""
+        # Do not start if a CNC drawing is currently executing
+        if state_manager and getattr(state_manager, "is_executing_cnc", False):
+            print("[INFO] Skipping idle start: CNC execution in progress")
+            self.is_paused = True
+            return False
         # Always stop any existing process first to avoid conflicts
         if self.process and self.process.poll() is None:
             print("[INFO] Stopping existing idle movements before starting new ones")
@@ -42,10 +54,11 @@ class IdleMovementManager:
         )
         
         try:
+            # Use the same Python interpreter as the parent process (respects virtualenv)
             self.process = subprocess.Popen(
-                ["python", script_path, "--emotion", emotion],
+                [sys.executable, script_path, "--emotion", emotion],
                 stdout=None,
-                stderr=None
+                stderr=None,
             )
             print(f"[🌊] Started idle movements with emotion: {emotion}")
             return True
@@ -81,13 +94,31 @@ class IdleMovementManager:
     
     def resume_after_drawing(self) -> bool:
         """Resume idle movements after drawing completes"""
+        # If CNC is still executing, do not resume yet
+        if state_manager and getattr(state_manager, "is_executing_cnc", False):
+            print("[INFO] Not resuming idle: CNC execution still active")
+            return False
+
+        # If process not running, start regardless of paused flag (self-heal)
+        proc_running = self.process is not None and self.process.poll() is None
+        if not proc_running:
+            time.sleep(1.0)  # allow port release
+            success = self.start(self.emotion)
+            if success:
+                self.is_paused = False
+                print("[▶️] Idle movements resumed")
+            return success
+
+        # Process is running already
         if not self.is_paused:
             return True
-            
-        # Wait a moment for serial port to be fully released
+
+        # Paused flag set but process still running (edge) — restart cleanly
+        try:
+            self.stop()
+        except Exception:
+            pass
         time.sleep(1.0)
-        
-        # Restart with same emotion
         success = self.start(self.emotion)
         if success:
             self.is_paused = False

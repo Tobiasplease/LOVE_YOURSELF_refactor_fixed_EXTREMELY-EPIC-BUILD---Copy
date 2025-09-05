@@ -177,20 +177,30 @@ def log_json_entry(
 
     update_all_run_log(log_dir, entry)
 
-    if log_type_str.lower() in LOG_TYPES_TO_PRINT or ("all" in LOG_TYPES_TO_PRINT and log_type_str.lower() != "debug"):
-        if print_message:
-            elapsed = get_elapsed_time()
-            # Check for clean output mode and add empty line for captions
-            try:
-                from config.config import CLEAN_LLM_OUTPUT
+    # Decide whether to print based on config and clean LLM output policy
+    should_print = False
+    try:
+        from config.config import CLEAN_LLM_OUTPUT
+    except ImportError:
+        CLEAN_LLM_OUTPUT = False  # type: ignore
 
-                if CLEAN_LLM_OUTPUT and log_type_str.lower() in ["caption", "ollama_api_call"]:
-                    print(f"[{elapsed}] {print_message}")
-                    print()  # Add empty line after captions/ollama responses for clean formatting
-                else:
-                    print(f"[{elapsed}] {print_message}")
-            except ImportError:
-                print(f"[{elapsed}] {print_message}")
+    lt = log_type_str.lower()
+    # Always-print LLM text categories when CLEAN_LLM_OUTPUT is enabled
+    llm_always_print = {"caption", "reflection", "comfy_prompt", "ollama_api_call"}
+
+    if lt in LOG_TYPES_TO_PRINT or ("all" in LOG_TYPES_TO_PRINT and lt != "debug"):
+        should_print = True
+    elif CLEAN_LLM_OUTPUT and lt in llm_always_print:
+        should_print = True
+
+    if should_print and print_message:
+        elapsed = get_elapsed_time()
+        # Clean formatting for LLM text types
+        if CLEAN_LLM_OUTPUT and lt in llm_always_print:
+            print(f"[{elapsed}] {print_message}")
+            print()  # extra line for readability
+        else:
+            print(f"[{elapsed}] {print_message}")
 
     return filepath
 
