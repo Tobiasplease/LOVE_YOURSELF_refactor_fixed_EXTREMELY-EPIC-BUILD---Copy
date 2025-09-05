@@ -108,6 +108,9 @@ def run_idle_movements(emotion_state="calm_observant", duration=None):
         controller.set_emotion_state(emotion_state)
         print(f"[🎭] Emotion state: {emotion_state}")
         
+        # Track last position to allow arc moves
+        last_x, last_y = 30.0, 30.0
+
         # Start idle movements
         print("[🌊] Starting idle movements... (Press Ctrl+C to stop)")
         print(f"[📊] Movement radius: {controller.radius_min}-{controller.radius_max}mm")
@@ -130,9 +133,9 @@ def run_idle_movements(emotion_state="calm_observant", duration=None):
             
             # Generate next position
             x, y = controller.generate_position()
-            
-            # Send movement command without waiting for completion (streaming mode)
-            gcode = controller.get_gcode_command(x, y)
+
+            # Send movement command (may be linear or arc) without waiting for completion
+            gcode = controller.get_move_gcode(last_x, last_y, x, y)
             send_cmd(ser, gcode, wait_ok=False)  # Don't wait - let it flow
             
             # Occasionally add subtle pen height variations (every 8-15 movements)
@@ -145,6 +148,7 @@ def run_idle_movements(emotion_state="calm_observant", duration=None):
             
             movement_count += 1
             controller.movements_in_cycle += 1
+            last_x, last_y = x, y
             
             # Print status every 10 seconds
             if time.time() - last_status_time > 10:

@@ -67,6 +67,11 @@ class IdleMovementController:
         # Emotional state (can be set externally)
         self.emotion_state = "calm_observant"
 
+        # Arc (G2/G3) generation settings
+        self.arc_probability = 0.35  # Chance to emit an arc instead of linear G1
+        self.arc_radius_min = 3.0
+        self.arc_radius_max = 10.0
+
     def set_emotion_state(self, emotion: str):
         """Adjust movement parameters based on emotional state"""
         self.emotion_state = emotion
@@ -177,6 +182,67 @@ class IdleMovementController:
             feed_rate = int(self.feed_rate * speed_mult)
             feed_rate = max(100, min(2000, feed_rate))  # Clamp to reasonable range
         return f"G1 X{x:.3f} Y{y:.3f} F{feed_rate}"
+
+    def _within_boundary(self, x: float, y: float, margin: float = 0.5) -> bool:
+        return (
+            self.boundary[0] + margin <= x <= self.boundary[1] - margin
+            and self.boundary[2] + margin <= y <= self.boundary[3] - margin
+        )
+
+    def get_move_gcode(self, x0: float, y0: float, x1: float, y1: float) -> str:
+        """Return either a linear (G1) or arc (G2/G3) move from (x0,y0) to (x1,y1)."""
+        # Occasionally emit an arc for more organic idle motions
+        try_arc = random.random() < self.arc_probability
+        if not try_arc:
+            return self.get_gcode_command(x1, y1)
+
+        # Geometry for arc center
+        dx = x1 - x0
+        dy = y1 - y0
+        d = math.hypot(dx, dy)
+        if d < 0.5:
+            # Too small to form a stable arc
+            return self.get_gcode_command(x1, y1)
+
+        # Choose a feasible radius (must be >= d/2)
+        r_min = max(self.arc_radius_min, d / 2.0 + 0.2)
+        r = random.uniform(r_min, max(r_min + 0.1, self.arc_radius_max))
+
+        # Midpoint between start and end
+        mx = (x0 + x1) / 2.0
+        my = (y0 + y1) / 2.0
+
+        # Perpendicular unit vector to (dx,dy)
+        ux = -dy / d
+        uy = dx / d
+
+        # Distance from midpoint to circle center
+        h_sq = r * r - (d / 2.0) * (d / 2.0)
+        if h_sq <= 0:
+            return self.get_gcode_command(x1, y1)
+        h = math.sqrt(h_sq)
+
+        # Randomly choose CW (G2) or CCW (G3) and side of perpendicular
+        cw = random.choice([True, False])
+        side = 1.0 if random.random() < 0.5 else -1.0
+        cx = mx + side * ux * h
+        cy = my + side * uy * h
+
+        # Boundary check for center and end point safety
+        if not self._within_boundary(cx, cy) or not self._within_boundary(x1, y1):
+            return self.get_gcode_command(x1, y1)
+
+        # I,J are center offsets from start point
+        I = cx - x0
+        J = cy - y0
+
+        # Feed rate with slight variation
+        speed_mult = 1.0 + random.uniform(-self.speed_variation, self.speed_variation)
+        feed = int(self.feed_rate * speed_mult)
+        feed = max(100, min(2000, feed))
+
+        cmd = "G2" if cw else "G3"
+        return f"{cmd} X{x1:.3f} Y{y1:.3f} I{I:.3f} J{J:.3f} F{feed}"
 
     def start_new_cycle(self):
         """Start a new movement cycle with random duration"""
