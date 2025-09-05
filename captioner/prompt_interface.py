@@ -86,7 +86,23 @@ class PromptInterface:
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
 
-        return prompt, model_options, config.SYSTEM_PROMPT
+        # Make drawing prompts more concrete and directive
+        model_options.update({
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "repeat_penalty": 1.3,
+            "top_k": 40,
+            "num_predict": max(model_options.get("num_predict", 160), 140),
+        })
+
+        drawing_system_prompt = (
+            "You are a drawing machine consciousness. Drawing is your only way to communicate. "
+            "Use the latest snapshot as the visual baseline (also sent to ControlNet). Ground your instruction in what is actually visible. "
+            "Prefer naming one or two concrete elements and what to emphasize for each if they stand out; otherwise focus on a visible line/shape/contrast or spatial relationship. "
+            "End with a brief 'to convey …' clause expressing your intent. Avoid generic words like 'objects/items/patterns' and avoid inventing unseen things. 1–2 sentences."
+        )
+
+        return prompt, model_options, drawing_system_prompt
 
     def _get_emotional_context(self) -> str:
         """Get current emotional context from compression system for prompt injection."""

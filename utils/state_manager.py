@@ -27,6 +27,13 @@ class StateManager:
         self.drawing_start_time = None
         self.current_drawing_prompt = None
         self.timeout_timer = None
+        # Minimal CNC execution tracking (added for idle/drawing handoff)
+        self.is_executing_cnc = False
+        self.cnc_start_time = None
+        self.current_gcode_file = None
+        self.current_drawing_phase = None  # "executing" when active
+        # Expected output from ComfyUI for current job (filename prefix)
+        self.expected_output_prefix: Optional[str] = None
 
     def save_session_state(self, captioner, mood_engine, timekeeper=None) -> bool:
         """Save current session state for next startup."""
@@ -351,6 +358,43 @@ class StateManager:
             "prompt": self.current_drawing_prompt,
             "duration": time.time() - self.drawing_start_time if self.drawing_start_time else None,
         }
+
+    # --- Coordination helpers for ComfyUI output tracking ---
+    def set_expected_output_prefix(self, prefix: str) -> None:
+        self.expected_output_prefix = prefix
+
+    def clear_expected_output_prefix(self) -> None:
+        self.expected_output_prefix = None
+
+    def get_expected_output_prefix(self) -> Optional[str]:
+        return self.expected_output_prefix
+
+    # --- Minimal CNC execution API for coordination with idle manager ---
+    def start_cnc_execution(self, gcode_file: str, original_prompt: str) -> None:
+        """Enter Drawing Mode - used to block idle movements during CNC execution."""
+        self.is_executing_cnc = True
+        self.cnc_start_time = time.time()
+        self.current_gcode_file = gcode_file
+        self.current_drawing_phase = "executing"
+
+        log_json_entry(
+            LogType.INFO,
+            {"message": "CNC execution started", "gcode_file": gcode_file, "prompt": original_prompt},
+            print_message="[🎨] Physical drawing started",
+        )
+
+    def finish_cnc_execution(self, image_path: str = None, gcode_path: str = None) -> None:
+        """Exit Drawing Mode - allow idle movements to resume."""
+        self.is_executing_cnc = False
+        self.cnc_start_time = None
+        self.current_gcode_file = None
+        self.current_drawing_phase = None
+
+        log_json_entry(
+            LogType.INFO,
+            {"message": "CNC execution completed", "image_path": image_path, "gcode_path": gcode_path},
+            print_message="[✅] Physical drawing completed",
+        )
 
 
 # Global instance

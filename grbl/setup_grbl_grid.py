@@ -111,6 +111,13 @@ def ensure_homed(ser):
         print("[INFO] Alarm-läge före homing: $X.")
         send_cmd(ser, "$X", wait_ok=True)
         time.sleep(0.2)
+    # Always raise pen before homing
+    try:
+        send_cmd(ser, PEN_UP_CMD)
+        wait_until_idle(ser, 5.0)
+        print("[INFO] Pen raised before homing")
+    except Exception:
+        pass
     print("[INFO] Kör homing ($H)...")
     send_cmd(ser, "$H", wait_ok=False)
 
@@ -120,6 +127,12 @@ def ensure_homed(ser):
         st = parse_state(s)
         if st == "Idle":
             print("[INFO] Homing klart.")
+            # Keep pen raised after homing
+            try:
+                send_cmd(ser, PEN_UP_CMD)
+                wait_until_idle(ser, 5.0)
+            except Exception:
+                pass
             send_cmd(ser, "G54")
             wait_until_idle(ser, 5.0)
             send_cmd(ser, "G10 L20 P1 X0 Y0 Z0")

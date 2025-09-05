@@ -71,7 +71,8 @@ CONTROLNET_NET_PATH = os.getenv("CONTROLNET_NET_PATH", "flux-dev-controlnet-unio
 COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot-svg.json")
 COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
 TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black and white sketch line art ")
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1))
+# Force single-image generation for stability (do not override via env)
+BATCH_SIZE = 1
 
 # === COMFY CONTROLLER SETTINGS ===
 COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
@@ -99,6 +100,15 @@ EXECUTE_GRBL_GCODE = True
 GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
 GRBL_HOMING_TIMEOUT = 120  # Seconds to wait for each homing attempt
 
+# === PEN SERVO (via GRBL spindle PWM) ===
+# Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.
+GRBL_SPINDLE_MAX_S = int(os.getenv("GRBL_SPINDLE_MAX_S", 255))  # -> $30
+GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))    # -> $31
+
+# Pen up/down S values (relative to $30 scale). Tune for your linkage.
+GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 30))
+GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 50))
+
 # === GRBL IDLE MOVEMENT SETTINGS ===
 # Idle movements happen in far corner away from home (0,0)
 # Physical work area constrained to 40x40mm for safe operation
@@ -114,11 +124,16 @@ MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
 REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
-DRAWING_INTERVAL = 420  # seconds between drawing triggers (10 minutes)
-DRAWING_COOLDOWN = 180  # seconds between drawings
+DRAWING_INTERVAL = 60  # seconds between drawing triggers (debug: ~1 minute)
+DRAWING_COOLDOWN = 60  # minimum seconds between drawings (debug)
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
+# Use a lightweight model by default (person-only use case)
+YOLO_MODEL_PATH = os.getenv(
+    "YOLO_MODEL_PATH",
+    os.path.join(MODEL_PATH, "yolov8n.pt"),  # nano model for low VRAM use
+)
 
 # === CAPTIONER MEMORY CONTROL ===
 MOOD_DECAY_RATE = 0.03  # how much mood fades when nothing new happens
@@ -153,7 +168,7 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 # Control which log types are printed to console
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
 # To see debug information, add "debug" to LOG_TYPES_TO_PRINT
-LOG_TYPES_TO_PRINT = ["caption", "compression"]
+LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_drawing"]
 CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
@@ -167,6 +182,11 @@ NO_HANDS = False
 REACTIVITY_PAUSE_THRESHOLD = 0.30  # Activity level to trigger pause
 REACTIVITY_PAUSE_DURATION = 4.0  # Seconds to pause Markov generation
 REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
+
+# === DRAWING MEMORY SETTINGS ===
+# Store concise summaries of drawing intents and reflections for future prompts
+INCLUDE_DRAWING_HISTORY = True
+DRAWING_HISTORY_LIMIT = 3  # how many recent drawing entries to surface in prompts
 # === ARDUINO DEVICE CONFIGURATION ===
 # Configure each Arduino with its specific Linux serial port
 # Use debug/identify_arduinos.py to help identify which device is on which port

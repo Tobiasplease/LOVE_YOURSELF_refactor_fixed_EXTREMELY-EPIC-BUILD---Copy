@@ -10,6 +10,7 @@ from config.config import CENTER_LINE_SVG, COMFY_OUTPUT_FOLDER, EXECUTE_GRBL_GCO
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from grbl import svg_to_grbl
+from grbl.idle_movement_manager import pause_for_drawing, resume_after_drawing
 from utils.state_manager import state_manager
 
 
@@ -25,6 +26,7 @@ class ImageMonitor:
         self.running = False
         self.thread = None
         self.on_image_complete = on_image_complete
+        self.session_start_time = time.time()  # Track when this session started
 
     def start(self):
         """Start the image monitoring thread."""
@@ -88,6 +90,9 @@ class ImageMonitor:
 
     def _process_png_to_gcode(self, png_path):
         """Process a PNG file to G-code based on CENTER_LINE_SVG config."""
+        # Pause idle movements to free the serial port
+        pause_for_drawing()
+
         try:
             base_name = os.path.splitext(os.path.basename(png_path))[0]
             output_folder = os.path.dirname(png_path)
@@ -114,13 +119,32 @@ class ImageMonitor:
                     scale=1.0,  # SVG-skalning
                 )
 
-                svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
+                # Start CNC execution tracking
+                original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
+                state_manager.start_cnc_execution(gcode_path, original_prompt)
 
-                log_json_entry(
-                    LogType.INFO,
-                    {"message": f"G-code generated: {gcode_path}"},
-                    print_message=f"[🔧] G-code generated: {os.path.basename(gcode_path)}",
-                )
+                result_path = svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
+
+                if result_path:
+                    # Finish CNC execution tracking (success)
+                    state_manager.finish_cnc_execution(png_path, gcode_path)
+
+                    log_json_entry(
+                        LogType.INFO,
+                        {"message": f"G-code generated: {gcode_path}"},
+                        print_message=f"[🔧] G-code generated: {os.path.basename(gcode_path)}",
+                    )
+                    
+                    # Trigger self-critique AFTER physical drawing completes
+                    if self.on_image_complete:
+                        self.on_image_complete(png_path)
+                else:
+                    # Execution failed; don't mark as finished
+                    log_json_entry(
+                        LogType.ERROR,
+                        {"message": "CNC execution failed; not marking as complete", "gcode_path": gcode_path},
+                        print_message="[❌] CNC execution failed; not marking as complete",
+                    )
 
             else:
                 # Find latest SVG in output folder and convert to G-code
@@ -136,14 +160,33 @@ class ImageMonitor:
                         print_message=f"[🔄] Converting latest SVG to G-code: {os.path.basename(latest_svg)}",
                     )
 
-                    # Convert SVG to G-code
-                    svg_to_grbl(svg_input=latest_svg, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
+                    # Start CNC execution tracking
+                    original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
+                    state_manager.start_cnc_execution(gcode_path, original_prompt)
 
-                    log_json_entry(
-                        LogType.INFO,
-                        {"message": f"G-code generated: {gcode_path}"},
-                        print_message=f"[🔧] G-code generated: {os.path.basename(gcode_path)}",
-                    )
+                    # Convert SVG to G-code and execute
+                    result_path = svg_to_grbl(svg_input=latest_svg, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
+
+                    if result_path:
+                        # Finish CNC execution tracking (success)
+                        state_manager.finish_cnc_execution(png_path, gcode_path)
+
+                        log_json_entry(
+                            LogType.INFO,
+                            {"message": f"G-code generated: {gcode_path}"},
+                            print_message=f"[🔧] G-code generated: {os.path.basename(gcode_path)}",
+                        )
+                        
+                        # Trigger self-critique AFTER physical drawing completes
+                        if self.on_image_complete:
+                            self.on_image_complete(png_path)
+                    else:
+                        # Execution failed; don't mark as finished
+                        log_json_entry(
+                            LogType.ERROR,
+                            {"message": "CNC execution failed; not marking as complete", "gcode_path": gcode_path},
+                            print_message="[❌] CNC execution failed; not marking as complete",
+                        )
                 else:
                     log_json_entry(
                         LogType.ERROR,
@@ -157,11 +200,48 @@ class ImageMonitor:
                 {"error": f"PNG to G-code conversion failed: {str(e)}"},
                 print_message=f"[❌] PNG to G-code conversion failed: {str(e)}",
             )
+        finally:
+            # Resume idle movements after execution attempt completes (success or failure)
+            resume_after_drawing()
 
-    def _log_new_image(self, image_path):
-        """Log a newly detected image."""
+    def _log_new_image(self, image_path) -> bool:
+        """Log a newly detected image and return True if processed/accepted.
+
+        Returns False when the drawing pipeline is busy so the monitor can retry later.
+        """
         filename = os.path.basename(image_path)
         file_size = os.path.getsize(image_path)
+
+        # Skip only if CNC is actively executing (avoid stacking physical draws)
+        try:
+            if getattr(state_manager, "is_executing_cnc", False):
+                log_json_entry(
+                    LogType.DECISION,
+                    {"message": "Skipping new image while CNC executing", "filename": filename, "is_executing_cnc": True},
+                    print_message=f"[⏳] Skipping {filename}: CNC busy",
+                )
+                return False
+        except Exception:
+            pass
+
+        # Only process images created after this session started
+        try:
+            file_creation_time = os.path.getmtime(image_path)
+            if file_creation_time < self.session_start_time:
+                log_json_entry(
+                    LogType.INFO,
+                    {"message": f"Skipping old image from previous session: {filename}"},
+                    print_message=f"[⏭️] Skipping old image: {filename}",
+                )
+                return False
+        except OSError:
+            # If we can't get file time, assume it's old and skip
+            log_json_entry(
+                LogType.WARNING,
+                {"message": f"Could not get creation time for {filename}, skipping"},
+                print_message=f"[⚠️] Cannot check age of {filename}, skipping",
+            )
+            return False
 
         log_json_entry(
             LogType.NEW_DRAWING,
@@ -171,6 +251,38 @@ class ImageMonitor:
 
         # Process PNG to G-code and execute it (if configured)
         if image_path.lower().endswith(".png"):
+            # Strict gating: only process when a drawing job is active AND prefix matches
+            try:
+                expected = state_manager.get_expected_output_prefix()
+                generating = getattr(state_manager, "is_generating_drawing", False)
+            except Exception:
+                expected = None
+                generating = False
+
+            if not generating:
+                log_json_entry(
+                    LogType.DECISION,
+                    {"message": "Ignoring PNG: no active drawing generation", "filename": filename},
+                    print_message=f"[⏭️] Ignoring {filename}: no active drawing",
+                )
+                return False
+
+            if not expected:
+                log_json_entry(
+                    LogType.DECISION,
+                    {"message": "Ignoring PNG: no expected output prefix set", "filename": filename},
+                    print_message=f"[⏭️] Ignoring {filename}: no expected prefix",
+                )
+                return False
+
+            if not os.path.basename(image_path).startswith(expected):
+                log_json_entry(
+                    LogType.DECISION,
+                    {"message": "Ignoring PNG that does not match expected prefix", "expected_prefix": expected, "filename": filename},
+                    print_message=f"[⏭️] Ignoring {filename}: does not match expected prefix",
+                )
+                return False
+
             self._process_png_to_gcode(image_path)
 
         if state_manager.is_generating_drawing:
@@ -182,6 +294,12 @@ class ImageMonitor:
             )
         if self.on_image_complete:
             self.on_image_complete(image_path)
+        # Clear the expected prefix after accepting one matching image
+        try:
+            state_manager.clear_expected_output_prefix()
+        except Exception:
+            pass
+        return True
 
     def _monitor_loop(self):
         """Main monitoring loop that runs in the background thread."""
@@ -193,8 +311,8 @@ class ImageMonitor:
                 new_images = current_images - self.monitored_images
 
                 for new_image in new_images:
-                    self._log_new_image(new_image)
-                    self.monitored_images.add(new_image)
+                    if self._log_new_image(new_image):
+                        self.monitored_images.add(new_image)
 
                 time.sleep(self.check_interval)
 

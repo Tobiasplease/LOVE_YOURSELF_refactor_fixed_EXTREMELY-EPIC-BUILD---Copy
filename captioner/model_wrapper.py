@@ -116,6 +116,22 @@ class MultimodalModel:
         if prompt is None:
             return "[WARNING] No memory available for drawing prompt"
 
+        # Log the exact input we send to the LLM for drawing prompt generation
+        try:
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "Drawing LLM input prepared",
+                    "action": "llm_input",
+                    "prompt_preview": truncate_for_print(prompt, 400),
+                    "prompt_length": len(prompt),
+                    "options": {k: model_options.get(k) for k in ("temperature", "top_p", "repeat_penalty", "top_k", "num_predict", "seed")},
+                },
+                print_message=f"[🐞] Drawing LLM input: {truncate_for_print(prompt, 220)}",
+            )
+        except Exception:
+            pass
+
         return self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options, prompt_type="drawing")
 
     def query_tinyllama(self, prompt: str) -> str:

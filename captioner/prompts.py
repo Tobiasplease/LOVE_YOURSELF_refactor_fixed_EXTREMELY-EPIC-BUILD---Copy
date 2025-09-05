@@ -557,14 +557,42 @@ def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Op
 
 # === DRAWING PROMPT ===
 def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
-    """Build model-aware drawing prompt."""
+    """Build model-aware drawing prompt with concrete anchors.
+
+    - Uses last caption, recent memory, last reflection, and a concrete emotional description
+    - Injects candidate concrete elements (motifs) to force specificity
+    - Optionally appends extra recent context
+    """
 
     current_caption = getattr(memory_ref, "last_caption", None) or "Nothing specific observed."
     memory_context = memory_ref.get_recent_memory() if hasattr(memory_ref, "get_recent_memory") else "Developing understanding."
     recent_reflection = memory_ref.get_last_reflection() if hasattr(memory_ref, "get_last_reflection") else "Still contemplating."
 
-    # Use existing MoodEngine emotion state instead of converting mood vector
-    emotional_state = "contemplative and creative"
+    # Prefer a concrete, session-aware mood description if available
+    try:
+        if hasattr(memory_ref, "describe_current_mood") and callable(memory_ref.describe_current_mood):
+            emotional_state = memory_ref.describe_current_mood()
+        else:
+            emotional_state = "aware and focused"
+    except Exception:
+        emotional_state = "aware and focused"
+
+    # Collect candidate concrete elements from motif memory
+    candidate_elements: list[str] = []
+    try:
+        if hasattr(memory_ref, "get_top_motifs"):
+            candidate_elements = [m for m in memory_ref.get_top_motifs(6) if isinstance(m, str) and len(m) > 2]
+    except Exception:
+        candidate_elements = []
+
+    # Fallback to nouns hinted in caption text if motifs are empty
+    if not candidate_elements and isinstance(current_caption, str):
+        import re
+
+        words = re.findall(r"\b[a-zA-Z][a-zA-Z0-9_-]{2,}\b", current_caption.lower())
+        # crude filter to skip generic words
+        blacklist = {"objects", "patterns", "things", "items", "space", "place", "area", "scene"}
+        candidate_elements = [w for w in words if w not in blacklist][:5]
 
     dynamic_drawing_prompt = config.DRAWING_PROMPT_TEMPLATE.format(
         current_caption=current_caption.strip() if current_caption else "Nothing observed.",
@@ -572,7 +600,35 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
         recent_reflection=recent_reflection.strip() if recent_reflection else "No recent reflection.",
         emotional_state=emotional_state,
     )
-    return f"{dynamic_drawing_prompt}"
+
+    # Append candidate elements and stricter instruction for specificity
+    if candidate_elements:
+        elements_block = "\n".join(f"- {e}" for e in candidate_elements)
+        dynamic_drawing_prompt += (
+            "\n\n=== SUGGESTED ANCHORS (optional) ===\n"
+            f"{elements_block}\n\n"
+            "Prefer naming one or two concrete elements that are actually visible and meaningful. "
+            "If nothing stands out, focus on a prominent line, edge, contrast, or spatial relationship instead. "
+            "Avoid generic words like 'objects', 'items', or 'patterns'."
+        )
+
+    if extra and isinstance(extra, str) and extra.strip():
+        dynamic_drawing_prompt = f"{dynamic_drawing_prompt}\n\n=== RECENT CONTEXT ===\n{extra.strip()}"
+
+    # Add brief drawing history to guide variation and intent continuity
+    try:
+        from config import config as _cfg
+        include_hist = getattr(_cfg, "INCLUDE_DRAWING_HISTORY", True)
+        hist_limit = getattr(_cfg, "DRAWING_HISTORY_LIMIT", 3)
+        if include_hist and hasattr(memory_ref, "get_memory_entries_by_type"):
+            intents = memory_ref.get_memory_entries_by_type("drawing_intent", limit=hist_limit)
+            lines = [f"- {e.get('text','')[:160]}" for e in intents if isinstance(e, dict) and e.get("text")]
+            if lines:
+                dynamic_drawing_prompt += "\n\n=== PREVIOUS DRAWING INTENTS ===\n" + "\n".join(lines)
+    except Exception:
+        pass
+
+    return dynamic_drawing_prompt
 
 
 # === CHANGE-FOCUSED PROMPT ===

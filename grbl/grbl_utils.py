@@ -12,6 +12,12 @@ from serial.tools import list_ports
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 
+# Import pen servo configuration
+try:
+    from config.config import GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S
+except Exception:
+    GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S = 30, 50, 255, 0
+
 # Default configuration
 DEFAULT_BAUD = 115200
 DEFAULT_STATUS_POLL = 0.1
@@ -20,8 +26,8 @@ DEFAULT_MOVE_TIMEOUT = 15  # seconds
 DEFAULT_CMD_TIMEOUT = 5.0  # seconds
 DEFAULT_FEED_RATE = 12000  # Balanced speed for clean drawing
 
-PEN_DOWN_CMD = "M3 S50 ; PEN DOWN"  # Command to lower pen
-PEN_UP_CMD = "M3 S30 ; PEN UP"  # Command to raise pen
+PEN_DOWN_CMD = f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN"  # Command to lower pen
+PEN_UP_CMD = f"M3 S{GRBL_PEN_UP_S} ; PEN UP"  # Command to raise pen
 
 
 def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
@@ -185,6 +191,17 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
 
     for attempt in range(max_retries):
         try:
+            # Always force pen up before any homing activity for safety
+            try:
+                log_json_entry(
+                    LogType.GRBL,
+                    {"message": "Raising pen before homing", "action": "pen_up_pre_homing", "attempt": attempt + 1, "command": PEN_UP_CMD},
+                    print_message="[✏️⬆️] Pen UP (safety) before homing",
+                )
+                send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                time.sleep(0.2)
+            except Exception:
+                pass
             log_json_entry(
                 LogType.GRBL,
                 {
@@ -207,6 +224,12 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
                 )
                 send_cmd(ser, "$X", wait_ok=True)
                 time.sleep(0.5)  # Give more time after clearing alarm
+                # Raise pen again after clearing alarm, in case prior command was ignored
+                try:
+                    send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                    time.sleep(0.2)
+                except Exception:
+                    pass
 
             # Soft reset before homing to ensure clean state
             if attempt > 0:  # Only on retries
@@ -245,6 +268,14 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
                         },
                         print_message="[✅] Homing complete",
                     )
+
+                    # Ensure pen is up after homing completes (double-assert with dwell for servo to catch)
+                    try:
+                        send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                        send_cmd(ser, "G4 P0.2", wait_ok=False)  # short dwell
+                        send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                    except Exception:
+                        pass
 
                     # Setup coordinate system
                     send_cmd(ser, "G54")
@@ -438,6 +469,19 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
 
 def setup_basic_grbl(ser, feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False):
     """Setup basic GRBL configuration"""
+    # Ensure laser mode is OFF so GRBL doesn't auto-zero spindle PWM on rapids (which would drop pen signal)
+    try:
+        send_cmd(ser, "$32=0")  # disable laser mode
+        time.sleep(0.1)
+    except Exception:
+        pass
+    # Align spindle scaling to servo expectations
+    try:
+        send_cmd(ser, f"$30={GRBL_SPINDLE_MAX_S}")
+        send_cmd(ser, f"$31={GRBL_SPINDLE_MIN_S}")
+        time.sleep(0.1)
+    except Exception:
+        pass
     send_cmd(ser, "G21")  # mm units
     wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
 
@@ -736,7 +780,12 @@ def process_svg_to_grbl(
                     {"message": "Drawing complete", "action": "drawing_complete", "gcode_file": output_file_adjusted},
                     print_message="[✅] Drawing complete!",
                 )
-                ser.close()
+                try:
+                    ser.close()
+                except Exception:
+                    pass
+                # Success – return the path
+                return output_file_adjusted
             except Exception as e:
                 # Categorize the error for better debugging
                 error_category = "unknown"
@@ -771,13 +820,21 @@ def process_svg_to_grbl(
                     },
                     print_message=f"[💾] G-code file saved at: {output_file_adjusted}",
                 )
+                # Return None explicitly on failure so callers can avoid marking success
+                try:
+                    if 'ser' in locals():
+                        ser.close()
+                except Exception:
+                    pass
+                return None
         else:
             log_json_entry(
                 LogType.GRBL,
                 {"message": "G-code generation complete (no execution)", "action": "gcode_generation_only", "file_path": output_file_adjusted},
                 print_message=f"[💾] G-code generation complete but will not be executed. File saved: {output_file_adjusted}",
             )
-
+        # If we get here with execute_grbl=True, success already returned above.
+        # For generation-only, return the path.
         return output_file_adjusted
 
     except Exception as e:
