@@ -60,7 +60,8 @@
       "Read(//tmp/**)",
       "Bash(stty:*)",
       "Bash(source:*)",
-      "Bash(do echo \"=== $file ===\")"
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

@@ -915,10 +915,14 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
             print_message=f"[❌] Completion ritual failed: {e}",
         )
     
-    # NOTE: CNC execution state is cleared by image_monitor after successful completion
-    # We don't clear it here to avoid timing issues
+    # Step 5: Clear CNC execution state to allow idle movements to resume
+    try:
+        from utils.state_manager import state_manager
+        state_manager.finish_cnc_execution()
+    except Exception as e:
+        print(f"[⚠️] Could not clear CNC execution state: {e}")
     
-    # Step 5: Resume idle movements after completion ritual
+    # Step 6: Resume idle movements after completion ritual
     try:
         from grbl.idle_movement_manager import resume_after_drawing
         try:
