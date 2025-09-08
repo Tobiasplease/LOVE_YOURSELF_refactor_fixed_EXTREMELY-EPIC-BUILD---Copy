@@ -43,6 +43,7 @@ class PromptInterface:
             # Inject contexts from compression system
             emotional_context = self._get_emotional_context()
             baseline_context = self._get_baseline_context()
+            drawing_context = self._get_drawing_context()
 
             prompt = build_simple_caption_prompt(
                 memory_ref, getattr(memory_ref, "current_mood_vector", (0.5, 0.0, 0.0)), getattr(memory_ref, "last_caption", None)
@@ -50,6 +51,10 @@ class PromptInterface:
 
             # Add contexts if available
             context_parts = []
+            if drawing_context:
+                # Make drawing context VERY explicit
+                explicit_drawing = f"===IMPORTANT===\n{drawing_context}\nYou MUST acknowledge and describe what you observe while drawing.\n===END IMPORTANT==="
+                context_parts.append(explicit_drawing)  # Drawing context first - most immediate
             if baseline_context:
                 context_parts.append(baseline_context)
             if emotional_context:
@@ -57,7 +62,11 @@ class PromptInterface:
 
             if context_parts:
                 context_string = "\n\n".join(context_parts)
-                prompt = f"{context_string}\n\n{prompt}"
+                # Put context at the beginning AND end for emphasis
+                if drawing_context:
+                    prompt = f"{context_string}\n\n{prompt}\n\nREMEMBER: {drawing_context}"
+                else:
+                    prompt = f"{context_string}\n\n{prompt}"
         else:
             prompt = "Describe this image."
 
@@ -87,13 +96,15 @@ class PromptInterface:
         model_options["seed"] = random.randint(1, 1000000)
 
         # Make drawing prompts more concrete and directive
-        model_options.update({
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "repeat_penalty": 1.3,
-            "top_k": 40,
-            "num_predict": max(model_options.get("num_predict", 160), 140),
-        })
+        model_options.update(
+            {
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "repeat_penalty": 1.3,
+                "top_k": 40,
+                "num_predict": max(model_options.get("num_predict", 160), 140),
+            }
+        )
 
         drawing_system_prompt = (
             "You are a drawing machine consciousness. Drawing is your only way to communicate. "
@@ -122,6 +133,19 @@ class PromptInterface:
             return context_compressor.get_baseline_context()
         except Exception as e:
             print(f"[PROMPT] Could not get baseline context: {e}")
+            return ""
+
+    def _get_drawing_context(self) -> str:
+        """Get current drawing state context for prompt injection."""
+        try:
+            from utils.drawing_state import DrawingState
+            
+            drawing_context = DrawingState.get_drawing_context_for_caption()
+            if drawing_context:
+                return f"CURRENT SITUATION: {drawing_context}"
+            return ""
+        except Exception as e:
+            print(f"[PROMPT] Could not get drawing context: {e}")
             return ""
 
     def _get_base_model_options(self):

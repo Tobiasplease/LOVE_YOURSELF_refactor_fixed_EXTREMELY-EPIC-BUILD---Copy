@@ -1,7 +1,6 @@
 import argparse
 import atexit
-
-# import subprocess
+import glob
 import os
 import signal
 import sys
@@ -10,7 +9,42 @@ import time
 
 import cv2
 
-from config.config import USE_LIGHTBULB_PWM
+try:
+    import torch
+except ImportError:
+    torch = None
+
+from breathing.breathing import update_lung_position
+from captioner.captioner import Captioner
+from config.config import (
+    BAUD_RATE,
+    CAMERA_INDEX,
+    CONFIDENCE_THRESHOLD,
+    DEBUG_REACTIVITY_PAUSE,
+    MODEL_PATH,
+    MOOD_EVALUATION_INTERVAL,
+    MOOD_SNAPSHOT_FOLDER,
+    PAUSE_DURATION,
+    REACTIVITY_PAUSE_COOLDOWN,
+    REACTIVITY_PAUSE_DURATION,
+    REACTIVITY_PAUSE_THRESHOLD,
+    USE_HAND_CONTROLLER,
+    USE_LIGHTBULB_PWM,
+    USE_SERVO,
+)
+from event_logging.event_logger import get_current_run_id, log_json_entry, set_start_time
+from event_logging.log_type import LogType
+from event_logging.run_manager import get_run_image_path
+from grbl.idle_movement_manager import start_idle_movements, stop_idle_movements, update_emotion
+from image_monitor import ImageMonitor
+from mood.mood import MoodEngine
+from perception.detection_memory import DetectionMemory
+from perception.object_detection import ObjectDetectionThread
+from reactivity.camera_reactive import CameraReactivityEngine
+from utils.continuity import describe_duration
+from utils.error_tracking import get_failure_tracker
+from utils.state_manager import state_manager
+from vision.gaze import update_gaze
 
 
 def parse_args():
@@ -49,35 +83,7 @@ if args.config_override:
         sys.exit(1)
 
 
-from breathing.breathing import update_lung_position
-
-# from perception.object_detection import ObjectDetectionThread
-from captioner.captioner import Captioner
-from config.config import (
-    BAUD_RATE,
-    CAMERA_INDEX,
-    CONFIDENCE_THRESHOLD,
-    DEBUG_REACTIVITY_PAUSE,
-    MODEL_PATH,
-    MOOD_EVALUATION_INTERVAL,
-    MOOD_SNAPSHOT_FOLDER,
-    PAUSE_DURATION,
-    REACTIVITY_PAUSE_COOLDOWN,
-    REACTIVITY_PAUSE_DURATION,
-    REACTIVITY_PAUSE_THRESHOLD,
-    USE_HAND_CONTROLLER,
-    USE_SERVO,
-)
-from event_logging.event_logger import get_current_run_id, log_json_entry, set_start_time
-from event_logging.log_type import LogType
-from event_logging.run_manager import get_run_image_path
-from image_monitor import ImageMonitor
-from grbl.idle_movement_manager import start_idle_movements, stop_idle_movements, update_emotion
-from mood.mood import MoodEngine
-from utils.continuity import describe_duration
-from utils.error_tracking import get_failure_tracker
-from utils.state_manager import state_manager
-from vision.gaze import update_gaze
+# Imports moved to top of file
 
 try:
     import config.config as config_module
@@ -106,20 +112,20 @@ except ImportError:
     def stop_hand_controller():
         pass
 
-    def send_reactivity_data(*args, **kwargs):
+    def send_reactivity_data(*stub_args, **stub_kwargs):
         pass
 
     def get_status():
         return "disabled"
 
-    def change_to_emotion(*args, **kwargs):
+    def change_to_emotion(*stub_args, **stub_kwargs):
         pass
 
-    def start_autonomous_mode(*args, **kwargs):
+    def start_autonomous_mode(*stub_args, **stub_kwargs):
         pass
 
 
-from reactivity.camera_reactive import CameraReactivityEngine
+# Moved to top
 
 if USE_SERVO:
     from servo_control.servo_control import ServoController
@@ -183,6 +189,19 @@ if USE_SERVO:
         try:
             servos = ServoController(port=servo_port, baudrate=BAUD_RATE)
             debug_print(f"Servo controller initialized on {servo_port}", "INIT")
+            
+            # Perform startup movement sequence in background thread
+            from vision.gaze import startup_movement_sequence
+            import threading
+            startup_thread = threading.Thread(
+                target=startup_movement_sequence,
+                args=(servos, 5.0),
+                daemon=True,
+                name="StartupMovement"
+            )
+            startup_thread.start()
+            debug_print("Startup movement sequence running in background", "INIT")
+            
         except Exception as e:
             print(f"ERROR: Servo controller init failed on {servo_port}: {e}")
             print("  Device may not be ready or firmware mismatch")
@@ -246,7 +265,7 @@ def emergency_cleanup():
             stop_hand_controller()
         except Exception:
             pass
-            
+
         # Stop idle movements on shutdown
         try:
             stop_idle_movements()
@@ -396,7 +415,7 @@ def graceful_cleanup():
     print("[SUCCESS] Graceful shutdown completed")
 
 
-def signal_handler(signum, frame):
+def signal_handler(signum, signal_frame):
     """Handle interrupt signals."""
     print(f"\n[🔄] Received signal {signum}")
     graceful_cleanup()
@@ -414,7 +433,7 @@ last_snapshot_time = 0
 mood_thread_running = False
 mood_thread_lock = threading.Lock()
 debug_print("YOLO person detection enabled", "INIT")
-from perception.object_detection import ObjectDetectionThread
+# Import moved to top
 
 object_detector = ObjectDetectionThread()
 _global_object_detector = object_detector
@@ -512,7 +531,7 @@ if previous_state:
     change_to_emotion(emotion)
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
-    
+
     # Start idle CNC movements with restored emotion
     if start_idle_movements(emotion):
         debug_print(f"Idle CNC movements started with emotion: {emotion}", "INIT")
@@ -550,9 +569,9 @@ else:
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
-    
+
     # Start idle CNC movements with default emotion
-    default_emotion = "calm_observant" 
+    default_emotion = "calm_observant"
     if start_idle_movements(default_emotion):
         debug_print(f"Idle CNC movements started with default emotion: {default_emotion}", "INIT")
     else:
@@ -570,7 +589,7 @@ last_state_save_time = 0.0
 # Redundant functions removed - using existing MoodEngine functionality
 
 
-def mood_update_thread(frame, timestamp):
+def mood_update_thread(mood_frame, timestamp):
     global last_snapshot_time, last_state_save_time, mood_thread_running
 
     # Set running flag at start
@@ -579,18 +598,18 @@ def mood_update_thread(frame, timestamp):
 
     try:
         debug_print("Mood update thread started", "MOOD")
-        now = time.time()
-        if now - last_snapshot_time >= 10:
-            snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
-            cv2.imwrite(snapshot_path, frame)
+        thread_now = time.time()
+        if thread_now - last_snapshot_time >= 10:
+            snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(thread_now)}.jpg")
+            cv2.imwrite(snapshot_path, mood_frame)
             debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
 
             try:
                 # Use existing MoodEngine for emotional state - single source of truth
-                current_emotion = mood_engine.get_emotion_for_hand_controller()
-                current_mood = mood_engine.get_current_mood()
+                thread_emotion = mood_engine.get_emotion_for_hand_controller()
+                thread_mood = mood_engine.get_current_mood()
 
-                debug_print(f"Current emotion: {current_emotion}, mood: {current_mood:.2f}", "EMOTION")
+                debug_print(f"Current emotion: {thread_emotion}, mood: {thread_mood:.2f}", "EMOTION")
 
                 # Captioner is now updated in main loop - mood system just reads captions
                 debug_print("Captioner updated successfully", "CAPTIONER")
@@ -615,24 +634,24 @@ def mood_update_thread(frame, timestamp):
                     # SimpleLightbulbController doesn't have mood parameters - uses frame diff only
 
                     # Periodic state saving (every 2 minutes)
-                    if now - last_state_save_time > 120:  # 2 minutes
+                    if thread_now - last_state_save_time > 120:  # 2 minutes
                         if _global_state_manager:
                             try:
                                 _global_state_manager.save_session_state(captioner, mood_engine)
-                                last_state_save_time = now
+                                last_state_save_time = thread_now
                             except Exception as e:
                                 print(f"[ERROR] Periodic state save failed: {e}")
 
                     # Update hand controller with new emotional state
-                    change_to_emotion(current_emotion)
-                    debug_print(f"Updated hand controller emotion: {current_emotion}", "HAND")
-                    
+                    change_to_emotion(thread_emotion)
+                    debug_print(f"Updated hand controller emotion: {thread_emotion}", "HAND")
+
                     # Update CNC idle movements with new emotional state
-                    update_emotion(current_emotion)
-                    debug_print(f"Updated CNC emotion: {current_emotion}", "CNC")
+                    update_emotion(thread_emotion)
+                    debug_print(f"Updated CNC emotion: {thread_emotion}", "CNC")
 
                     # Third: Update captioner's mood state and pattern data for next cycle
-                    captioner.current_mood = current_mood
+                    captioner.current_mood = thread_mood
                     pattern_data = mood_engine.get_pattern_data()
                     captioner.set_novelty_score(pattern_data["novelty_score"])
                     # Pass recent motifs to captioner for memory integration
@@ -640,7 +659,7 @@ def mood_update_thread(frame, timestamp):
 
             except Exception as e:
                 debug_print(f"Captioner update failed: {e}", "ERROR")
-            last_snapshot_time = now
+            last_snapshot_time = thread_now
         debug_print("Mood update thread completed successfully", "MOOD")
     finally:
         # Always clear running flag when thread completes
@@ -782,17 +801,15 @@ try:
                 best_box = box.astype("int")
                 best_conf = conf
 
-        # Also check YOLO person detections (if face detection didn't find anything)
-        if best_box is None:
-            from perception.detection_memory import DetectionMemory
-
-            labels = DetectionMemory.get_labels()
-            if "person" in labels:
-                # Person detected by YOLO - create a dummy box for person presence
-                best_box = [50, 50, 100, 100]  # Dummy box to indicate person present
-                best_conf = 0.8  # Dummy confidence for YOLO person detection
-                if int(now) % 5 == 0:  # Every 5 seconds
-                    debug_print("Person detected by YOLO", "PERSON")
+        # Disable YOLO person fallback to rely only on high-confidence face detection
+        # This prevents false positives from YOLO detecting "persons" in walls/objects
+        # if best_box is None:
+        #     labels = DetectionMemory.get_labels()
+        #     if "person" in labels:
+        #         best_box = [50, 50, 100, 100]  # Dummy box to indicate person present
+        #         best_conf = 0.8  # Dummy confidence for YOLO person detection
+        #         if int(now) % 5 == 0:  # Every 5 seconds
+        #             debug_print("Person detected by YOLO", "PERSON")
 
         if best_box is not None:
             # Suppress frequent detection messages - only show occasionally
@@ -849,11 +866,20 @@ try:
 
         if USE_SERVO and servos:
             try:
+                if DEBUG_MODE and frame_count % 30 == 0:
+                    debug_print(f"Sending PAN/TILT: {pan}/{tilt}", "SERVO")
+                # Check servo controller health
+                if frame_count % 150 == 0:  # Every 5 seconds at 30fps
+                    servo_health = "OK" if (servos.ser and servos.ser.is_open) else "DISCONNECTED"
+                    debug_print(f"Servo controller health: {servo_health}", "SERVO")
                 servos.set_pan(pan)  # type: ignore
                 servos.set_tilt(tilt)  # type: ignore
             except Exception as e:
                 debug_print(f"Servo command failed: {e}", "ERROR")
+                print(f"[SERVO ERROR] Exception details: {type(e).__name__}: {e}")
                 # Don't crash the whole system for servo errors
+        elif USE_SERVO and not servos and frame_count % 120 == 0:
+            debug_print("Servo controller not initialized; skipping PAN/TILT/LUNG sends", "WARN")
 
         if face_box:
             (x1, y1, x2, y2) = face_box
@@ -862,8 +888,6 @@ try:
         # === DISPLAY OVERLAYS ===
         debug = f"Mood: {current_mood:.2f} | Lung: {lung_pos} | Pan/Tilt: {pan}/{tilt}"
         cv2.putText(frame, debug, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-        from perception.detection_memory import DetectionMemory
 
         labels = DetectionMemory.get_labels()
         label_text = ", ".join(labels) if labels else "no objects"

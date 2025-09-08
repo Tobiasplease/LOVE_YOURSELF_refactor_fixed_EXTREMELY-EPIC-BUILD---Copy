@@ -126,24 +126,24 @@ class ImageMonitor:
                 result_path = svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
                 if result_path:
-                    # Finish CNC execution tracking (success)
-                    state_manager.finish_cnc_execution(png_path, gcode_path)
-
                     log_json_entry(
                         LogType.INFO,
                         {"message": f"G-code generated: {gcode_path}"},
                         print_message=f"[🔧] G-code generated: {os.path.basename(gcode_path)}",
                     )
-                    
+
                     # Trigger self-critique AFTER physical drawing completes
                     if self.on_image_complete:
                         self.on_image_complete(png_path)
+                    
+                    # Note: CNC execution state is cleared by grbl_utils.py after physical drawing completes
                 else:
-                    # Execution failed; don't mark as finished
+                    # Execution failed - must clear execution state to allow recovery
+                    state_manager.finish_cnc_execution()
                     log_json_entry(
                         LogType.ERROR,
-                        {"message": "CNC execution failed; not marking as complete", "gcode_path": gcode_path},
-                        print_message="[❌] CNC execution failed; not marking as complete",
+                        {"message": "CNC execution failed; clearing execution state for retry", "gcode_path": gcode_path},
+                        print_message="[❌] CNC execution failed; clearing state for retry",
                     )
 
             else:
@@ -168,24 +168,24 @@ class ImageMonitor:
                     result_path = svg_to_grbl(svg_input=latest_svg, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
                     if result_path:
-                        # Finish CNC execution tracking (success)
-                        state_manager.finish_cnc_execution(png_path, gcode_path)
-
                         log_json_entry(
                             LogType.INFO,
                             {"message": f"G-code generated: {gcode_path}"},
                             print_message=f"[🔧] G-code generated: {os.path.basename(gcode_path)}",
                         )
-                        
+
                         # Trigger self-critique AFTER physical drawing completes
                         if self.on_image_complete:
                             self.on_image_complete(png_path)
+                        
+                        # Note: CNC execution state is cleared by grbl_utils.py after physical drawing completes
                     else:
-                        # Execution failed; don't mark as finished
+                        # Execution failed - must clear execution state to allow recovery
+                        state_manager.finish_cnc_execution()
                         log_json_entry(
                             LogType.ERROR,
-                            {"message": "CNC execution failed; not marking as complete", "gcode_path": gcode_path},
-                            print_message="[❌] CNC execution failed; not marking as complete",
+                            {"message": "CNC execution failed; clearing execution state for retry", "gcode_path": gcode_path},
+                            print_message="[❌] CNC execution failed; clearing state for retry",
                         )
                 else:
                     log_json_entry(
@@ -283,15 +283,16 @@ class ImageMonitor:
                 )
                 return False
 
-            self._process_png_to_gcode(image_path)
+            # Stop the generation timer BEFORE starting CNC execution
+            if state_manager.is_generating_drawing:
+                state_manager.finish_drawing_generation()
+                log_json_entry(
+                    LogType.INFO,
+                    {"message": "Drawing generation completed", "image_path": image_path},
+                    print_message="[✅] Drawing generation completed",
+                )
 
-        if state_manager.is_generating_drawing:
-            state_manager.finish_drawing_generation()
-            log_json_entry(
-                LogType.INFO,
-                {"message": "Drawing generation completed", "image_path": image_path},
-                print_message="[✅] Drawing generation completed",
-            )
+            self._process_png_to_gcode(image_path)
         if self.on_image_complete:
             self.on_image_complete(image_path)
         # Clear the expected prefix after accepting one matching image

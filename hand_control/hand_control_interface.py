@@ -407,9 +407,10 @@ class CleanCursorInterface:
             # First check if we have any markov chains loaded
             print(f"🔍 Available Markov chains: {list(self.markov_chains.keys())}")
             if self.current_emotional_state in self.markov_chains:
-                print(f"🔗 Markov chain found for {self.current_emotional_state}")
+                # Suppress verbose Markov generation messages
+                # print(f"🔗 Markov chain found for {self.current_emotional_state}")
                 self.start_markov_generation()
-                print(f"SUCCESS Markov generation started successfully")
+                # print(f"SUCCESS Markov generation started successfully")
             else:
                 print(f"ERROR No Markov chain available for {self.current_emotional_state}")
                 print(f"🔄 Attempting to load datasets for {self.current_emotional_state}...")
@@ -420,7 +421,7 @@ class CleanCursorInterface:
                         print(f"🔗 Loading first available dataset: {datasets[0]['display_name']}")
                         self.load_markov_chain_from_dataset(datasets[0], self.current_emotional_state)
                         self.start_markov_generation()
-                        print(f"SUCCESS Markov generation started with loaded dataset")
+                        # print(f"SUCCESS Markov generation started with loaded dataset")
         except Exception as e:
             print(f"ERROR Failed to start Markov generation: {e}")
             import traceback
@@ -5355,9 +5356,10 @@ File: {dataset['filename']}
 
                         # IMMEDIATELY load the Markov chain for this emotion
                         if "markov_chain" in data:
-                            print(f"🔗 Pre-loading Markov chain for {emotion} from {filename}")
+                            # Suppress verbose Markov loading messages
+                            # print(f"🔗 Pre-loading Markov chain for {emotion} from {filename}")
                             self.markov_chains[emotion] = data["markov_chain"]
-                            print(f"SUCCESS Markov chain loaded for {emotion}: {data['markov_chain'].get('unique_states', 0)} states")
+                            # print(f"SUCCESS Markov chain loaded for {emotion}: {data['markov_chain'].get('unique_states', 0)} states")
 
                 except Exception as e:
                     print(f"ERROR Error loading {filename}: {e}")

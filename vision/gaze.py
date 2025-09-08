@@ -1,5 +1,6 @@
 import random
 import time
+import math
 
 from config.config import (
     DEAD_ZONE,
@@ -14,8 +15,10 @@ from config.config import (
     IDLE_EASING,
     IDLE_PAUSE_MAX,
     IDLE_PAUSE_MIN,
-    SERVO_MAX,
-    SERVO_MIN,
+    PAN_MIN,
+    PAN_MAX,
+    TILT_MIN,
+    TILT_MAX,
     SWEEP_PROBABILITY,
 )
 
@@ -27,6 +30,8 @@ target_y = 90
 last_seen_time = time.time() - 10  # Start as if we've been idle for 10 seconds
 state = "idle"
 idle_next_move_time = 0  # Trigger immediate movement
+startup_sequence_active = False  # Flag to prevent conflicts during startup
+drawing_sequence_active = False  # Flag to prevent conflicts during CNC drawing
 
 
 def clamp(val, min_val, max_val):
@@ -34,7 +39,15 @@ def clamp(val, min_val, max_val):
 
 
 def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
-    global servo_x, servo_y, target_x, target_y, last_seen_time, state, idle_next_move_time
+    global servo_x, servo_y, target_x, target_y, last_seen_time, state, idle_next_move_time, startup_sequence_active, drawing_sequence_active
+    
+    # Skip gaze updates during startup sequence to prevent conflicts
+    if startup_sequence_active:
+        return False, int(servo_x + 0.5), int(servo_y + 0.5)
+    
+    # Skip gaze updates during drawing sequence - maintain drawing position
+    if drawing_sequence_active:
+        return False, int(servo_x + 0.5), int(servo_y + 0.5)
 
     h, w = frame.shape[:2]
     person_present = face_box is not None
@@ -59,9 +72,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
         face_x_norm = face_center_x / w  # 0.0 to 1.0
         face_y_norm = face_center_y / h  # 0.0 to 1.0
 
-        # Direct servo position calculation
-        target_x = SERVO_MIN + (SERVO_MAX - SERVO_MIN) * face_x_norm
-        target_y = SERVO_MIN + (SERVO_MAX - SERVO_MIN) * face_y_norm
+        # Natural head movement mapping
+        target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * face_x_norm
+        target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * face_y_norm
 
         # Apply dead zone only for small movements
         dx = abs(target_x - servo_x)
@@ -83,71 +96,71 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
 
     elif state == "idle":
         # Dynamic idle behavior with 5-state emotional modulation
-        
+
         # 5-State Emotional Gaze Patterns (define outside to ensure scope)
         gaze_patterns = {
             "energized_engaged": {
-                "amplitude_scale": 1.6,   # Large, expressive movements
-                "sweep_prob": 0.9,        # Lots of dramatic sweeps
-                "pause_scale": 0.3,       # Very short pauses (hyperactive)
-                "easing_scale": 1.4       # Faster movement
+                "amplitude_scale": 1.6,  # Large, expressive movements
+                "sweep_prob": 0.9,  # Lots of dramatic sweeps
+                "pause_scale": 0.3,  # Very short pauses (hyperactive)
+                "easing_scale": 1.4,  # Faster movement
             },
             "alert_curious": {
-                "amplitude_scale": 1.3,   # Quick, darting movements
-                "sweep_prob": 0.7,        # Frequent scanning sweeps
-                "pause_scale": 0.6,       # Quick pauses for attention
-                "easing_scale": 1.2       # Responsive movement
+                "amplitude_scale": 1.3,  # Quick, darting movements
+                "sweep_prob": 0.7,  # Frequent scanning sweeps
+                "pause_scale": 0.6,  # Quick pauses for attention
+                "easing_scale": 1.2,  # Responsive movement
             },
             "calm_observant": {
-                "amplitude_scale": 1.0,   # Smooth, contemplative
-                "sweep_prob": 0.5,        # Balanced movement
-                "pause_scale": 1.0,       # Normal contemplative pauses
-                "easing_scale": 1.0       # Steady movement
+                "amplitude_scale": 1.0,  # Smooth, contemplative
+                "sweep_prob": 0.5,  # Balanced movement
+                "pause_scale": 1.0,  # Normal contemplative pauses
+                "easing_scale": 1.0,  # Steady movement
             },
             "quiet_detached": {
-                "amplitude_scale": 0.5,   # Small, hesitant movements
-                "sweep_prob": 0.2,        # Mostly local, minimal
-                "pause_scale": 2.2,       # Long hesitant pauses
-                "easing_scale": 0.8       # Slower, uncertain
+                "amplitude_scale": 0.5,  # Small, hesitant movements
+                "sweep_prob": 0.2,  # Mostly local, minimal
+                "pause_scale": 2.2,  # Long hesitant pauses
+                "easing_scale": 0.8,  # Slower, uncertain
             },
             "withdrawn_distant": {
-                "amplitude_scale": 0.3,   # Very small, listless
-                "sweep_prob": 0.1,        # Almost no sweeps
-                "pause_scale": 3.0,       # Very long pauses
-                "easing_scale": 0.6       # Slow, disengaged
-            }
+                "amplitude_scale": 0.3,  # Very small, listless
+                "sweep_prob": 0.1,  # Almost no sweeps
+                "pause_scale": 3.0,  # Very long pauses
+                "easing_scale": 0.6,  # Slow, disengaged
+            },
         }
-        
+
         # Get current emotional pattern (fallback to calm)
         pattern = gaze_patterns.get(current_emotion_state, gaze_patterns["calm_observant"])
-        
+
         if now >= idle_next_move_time:
-            
-            # Apply emotional amplitude scaling
+
+            # Apply emotional amplitude scaling with natural head limits
             emotion_amp_x = int(IDLE_AMPLITUDE_X * pattern["amplitude_scale"])
             emotion_amp_y = int(IDLE_AMPLITUDE_Y * pattern["amplitude_scale"])
-            
+
             # Decide between small local movement or big sweep
             if random.random() < pattern["sweep_prob"]:
-                # Big sweeping movement with emotional scaling
+                # Big sweeping movement with natural head constraints
                 if random.choice([True, False]):
-                    # Horizontal sweep
-                    target_x = random.choice([SERVO_MIN + 10, SERVO_MAX - 10])
-                    target_y = clamp(IDLE_CENTER_Y + random.randint(-emotion_amp_y//2, emotion_amp_y//2), SERVO_MIN, SERVO_MAX)
+                    # Horizontal sweep within natural pan range
+                    target_x = random.choice([PAN_MIN + 5, PAN_MAX - 5])
+                    target_y = clamp(IDLE_CENTER_Y + random.randint(-emotion_amp_y // 2, emotion_amp_y // 2), TILT_MIN, TILT_MAX)
                 else:
-                    # Vertical sweep
-                    target_y = random.choice([SERVO_MIN + 10, SERVO_MAX - 10])
-                    target_x = clamp(IDLE_CENTER_X + random.randint(-emotion_amp_x//2, emotion_amp_x//2), SERVO_MIN, SERVO_MAX)
+                    # Vertical sweep within natural tilt range  
+                    target_y = random.choice([TILT_MIN + 5, TILT_MAX - 5])
+                    target_x = clamp(IDLE_CENTER_X + random.randint(-emotion_amp_x // 2, emotion_amp_x // 2), PAN_MIN, PAN_MAX)
 
                 # Emotionally-scaled pause after big movements
                 base_pause = random.uniform(IDLE_PAUSE_MAX * 1.5, IDLE_PAUSE_MAX * 2.5)
                 idle_next_move_time = now + base_pause * pattern["pause_scale"]
             else:
-                # Smaller local movements with emotional scaling
+                # Smaller local movements with natural head constraints
                 jitter_x = random.randint(-emotion_amp_x, emotion_amp_x)
                 jitter_y = random.randint(-emotion_amp_y, emotion_amp_y)
-                target_x = clamp(IDLE_CENTER_X + jitter_x, SERVO_MIN, SERVO_MAX)
-                target_y = clamp(IDLE_CENTER_Y + jitter_y, SERVO_MIN, SERVO_MAX)
+                target_x = clamp(IDLE_CENTER_X + jitter_x, PAN_MIN, PAN_MAX)
+                target_y = clamp(IDLE_CENTER_Y + jitter_y, TILT_MIN, TILT_MAX)
 
                 # Emotionally-scaled pause for small movements
                 base_pause = random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
@@ -173,3 +186,90 @@ def smooth_step(current, target, factor):
         return target
 
     return current + step
+
+
+def set_drawing_mode(active: bool, drawing_pan: int = 90, drawing_tilt: int = None):
+    """Control drawing sequence mode to lock gaze during CNC drawing"""
+    global drawing_sequence_active, servo_x, servo_y, target_x, target_y
+    from config.config import TILT_MIN
+    
+    drawing_sequence_active = active
+    
+    if active:
+        # Lock gaze to drawing position
+        drawing_tilt = drawing_tilt or (TILT_MIN + 2)  # Lowest safe position
+        servo_x = drawing_pan
+        servo_y = drawing_tilt
+        target_x = drawing_pan  
+        target_y = drawing_tilt
+        print(f"[👁️] Gaze locked for drawing: pan={drawing_pan}°, tilt={drawing_tilt}°")
+    else:
+        # Release drawing lock - gaze will return to normal operation
+        print("[👁️] Gaze drawing lock released")
+
+
+def startup_movement_sequence(servos, duration=5.0):
+    """Perform single figure-8 startup sequence to establish presence
+    
+    Args:
+        servos: ServoController instance
+        duration: Total duration of the sequence in seconds
+    """
+    global startup_sequence_active, servo_x, servo_y, target_x, target_y
+    
+    startup_sequence_active = True  # Block normal gaze updates
+    print("🌟 Performing startup movement sequence...")
+    
+    # Much finer interpolation for ultra-smooth movement
+    steps = 100  # Many more steps for smoothness
+    center_x, center_y = 90, 90
+    amplitude_x = 18  # Horizontal amplitude within natural limits
+    amplitude_y = 12  # Vertical amplitude within natural limits
+    
+    step_duration = duration / steps
+    
+    # Track current positions for smooth interpolation
+    current_pan = 90.0
+    current_tilt = 90.0
+    
+    for i in range(steps):
+        # Single figure-8 parametric equations
+        t = (i / steps) * 2 * math.pi  # One complete cycle
+        
+        # Calculate target figure-8 positions
+        target_x_local = center_x + amplitude_x * math.sin(t)
+        target_y_local = center_y + amplitude_y * math.sin(2 * t)
+        
+        # Constrain to natural limits
+        target_x_local = max(PAN_MIN, min(PAN_MAX, target_x_local))
+        target_y_local = max(TILT_MIN, min(TILT_MAX, target_y_local))
+        
+        # Smooth interpolation toward target (smaller steps)
+        easing = 0.3  # Slower easing for smoother motion
+        current_pan += (target_x_local - current_pan) * easing
+        current_tilt += (target_y_local - current_tilt) * easing
+        
+        # Update global state to prevent conflicts
+        servo_x = current_pan
+        servo_y = current_tilt
+        target_x = current_pan
+        target_y = current_tilt
+        
+        # Send commands
+        servos.set_pan(int(current_pan + 0.5))
+        time.sleep(0.01)  # Very small delay
+        servos.set_tilt(int(current_tilt + 0.5))
+        
+        time.sleep(step_duration - 0.01 if step_duration > 0.01 else 0.01)
+    
+    # Final return to center
+    servos.set_pan(90)
+    time.sleep(0.05)
+    servos.set_tilt(90)
+    time.sleep(0.3)
+    
+    # Update global state and release control
+    servo_x = servo_y = target_x = target_y = 90
+    startup_sequence_active = False
+    
+    print("✅ Startup sequence complete")

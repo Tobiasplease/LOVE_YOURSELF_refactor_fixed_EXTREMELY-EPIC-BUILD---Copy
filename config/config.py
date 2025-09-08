@@ -15,17 +15,23 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 # === SERVO SETTINGS ===
 USE_SERVO = True
 USE_HAND_CONTROLLER = True  # Enable hand controller system
-SERVO_MIN = 45
-SERVO_MAX = 135
-EASING_FACTOR = 0.09
+# Natural head movement limits for realistic gaze
+PAN_MIN = 65   # Left limit (±25° from center)
+PAN_MAX = 115  # Right limit (±25° from center)  
+TILT_MIN = 70  # Down limit (±20° from center)
+TILT_MAX = 110 # Up limit (±20° from center)
+# Legacy values for backwards compatibility
+SERVO_MIN = PAN_MIN  # Use PAN_MIN as default
+SERVO_MAX = PAN_MAX  # Use PAN_MAX as default
+EASING_FACTOR = 0.15  # Slightly faster for more responsive movement
 
 # === SERVO FLIPPING ===
-FLIP_X = False
+FLIP_X = False  # Pan servo direction is correct
 FLIP_Y = True
 
 # === FACE DETECTION ===
-CONFIDENCE_THRESHOLD = 0.6
-DEAD_ZONE = 10
+CONFIDENCE_THRESHOLD = 0.8  # Higher threshold to distinguish real faces from pareidolia
+DEAD_ZONE = 3  # Smaller dead zone for more precise centering
 
 # === IDLE GAZE SETTINGS ===
 IDLE_AMPLITUDE_X = 35  # Increased from 10 for more prominent horizontal movement
@@ -35,9 +41,9 @@ IDLE_CENTER_Y = 90
 FACE_STABLE_TIMEOUT = 3.0  # Time before going idle after losing face
 IDLE_SPEED_MIN = 0.15
 IDLE_SPEED_MAX = 0.30
-IDLE_PAUSE_MIN = 3.0  # Minimum pause between idle movements
-IDLE_PAUSE_MAX = 12.0  # Maximum pause between idle movements
-IDLE_EASING = 0.12  # Easing factor for idle movements
+IDLE_PAUSE_MIN = 1.5  # Minimum pause between idle movements (more organic)
+IDLE_PAUSE_MAX = 6.0  # Maximum pause between idle movements (more frequent)
+IDLE_EASING = 0.18  # Easing factor for idle movements (more responsive)
 SWEEP_PROBABILITY = 0.6  # Probability of doing a big sweep movement vs small movement
 
 
@@ -103,7 +109,7 @@ GRBL_HOMING_TIMEOUT = 120  # Seconds to wait for each homing attempt
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.
 GRBL_SPINDLE_MAX_S = int(os.getenv("GRBL_SPINDLE_MAX_S", 255))  # -> $30
-GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))    # -> $31
+GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))  # -> $31
 
 # Pen up/down S values (relative to $30 scale). Tune for your linkage.
 GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 30))
@@ -170,6 +176,7 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 # To see debug information, add "debug" to LOG_TYPES_TO_PRINT
 LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_drawing"]
 CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
+PRINT_CLEAN_CAPTIONS = True  # Suppress verbose runtime messages, show only LLM captions
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages

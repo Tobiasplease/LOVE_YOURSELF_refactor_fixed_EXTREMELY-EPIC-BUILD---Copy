@@ -67,14 +67,14 @@ class ObjectDetectionThread(threading.Thread):
                 cls_id = int(box.cls[0])
                 label = self.model.names[cls_id]
                 conf = float(box.conf[0])
-                
+
                 # Only process person detections (class ID 0 in COCO dataset)
                 if cls_id != 0:  # 0 = person in YOLO COCO classes
                     continue
-                    
+
                 if conf < YOLO_CONFIDENCE_THRESHOLD:
                     continue
-                    
+
                 detected.add(label)
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)

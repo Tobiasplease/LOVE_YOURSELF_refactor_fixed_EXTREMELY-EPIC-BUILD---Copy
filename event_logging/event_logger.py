@@ -180,9 +180,10 @@ def log_json_entry(
     # Decide whether to print based on config and clean LLM output policy
     should_print = False
     try:
-        from config.config import CLEAN_LLM_OUTPUT
+        from config.config import CLEAN_LLM_OUTPUT, PRINT_CLEAN_CAPTIONS
     except ImportError:
         CLEAN_LLM_OUTPUT = False  # type: ignore
+        PRINT_CLEAN_CAPTIONS = False  # type: ignore
 
     lt = log_type_str.lower()
     # Always-print LLM text categories when CLEAN_LLM_OUTPUT is enabled
@@ -192,6 +193,10 @@ def log_json_entry(
         should_print = True
     elif CLEAN_LLM_OUTPUT and lt in llm_always_print:
         should_print = True
+    
+    # If PRINT_CLEAN_CAPTIONS is enabled, suppress non-LLM messages
+    if PRINT_CLEAN_CAPTIONS and lt not in llm_always_print:
+        should_print = False
 
     if should_print and print_message:
         elapsed = get_elapsed_time()

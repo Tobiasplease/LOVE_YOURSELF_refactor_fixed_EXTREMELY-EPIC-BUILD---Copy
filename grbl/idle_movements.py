@@ -117,6 +117,15 @@ class IdleMovementController:
                 "variation": 0.1,
                 "speed_variation": 0.1,
             },
+            "generating": {
+                # Continuous circular movements while generating drawing
+                "radius": self.radius_max * 0.7,
+                "freq_x": 1.0,  # Equal frequencies for circular motion
+                "freq_y": 1.0,  # Equal frequencies for circular motion
+                "feed_rate": 400,
+                "variation": 0.05,  # Very low variation for consistent circles
+                "speed_variation": 0.05,  # Consistent speed
+            },
         }
 
         params = emotion_params.get(emotion, emotion_params["calm_observant"])
@@ -184,10 +193,7 @@ class IdleMovementController:
         return f"G1 X{x:.3f} Y{y:.3f} F{feed_rate}"
 
     def _within_boundary(self, x: float, y: float, margin: float = 0.5) -> bool:
-        return (
-            self.boundary[0] + margin <= x <= self.boundary[1] - margin
-            and self.boundary[2] + margin <= y <= self.boundary[3] - margin
-        )
+        return self.boundary[0] + margin <= x <= self.boundary[1] - margin and self.boundary[2] + margin <= y <= self.boundary[3] - margin
 
     def get_move_gcode(self, x0: float, y0: float, x1: float, y1: float) -> str:
         """Return either a linear (G1) or arc (G2/G3) move from (x0,y0) to (x1,y1)."""
@@ -264,7 +270,12 @@ class IdleMovementController:
 
         self.cycle_start_time = time.time()
         self.movements_in_cycle = 0
-        print(f"[🌊] Starting new {cycle_type} cycle ({self.current_cycle_duration/60:.1f} minutes)")
+        try:
+            from config.config import PRINT_CLEAN_CAPTIONS
+            if not PRINT_CLEAN_CAPTIONS:
+                print(f"[🌊] Starting new {cycle_type} cycle ({self.current_cycle_duration/60:.1f} minutes)")
+        except ImportError:
+            print(f"[🌊] Starting new {cycle_type} cycle ({self.current_cycle_duration/60:.1f} minutes)")
 
     def should_start_new_cycle(self) -> bool:
         """Check if current cycle is complete"""

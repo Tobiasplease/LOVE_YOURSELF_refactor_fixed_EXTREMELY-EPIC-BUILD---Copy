@@ -3,8 +3,9 @@ import time
 
 import serial
 
-ANGLE_THRESHOLD = 2  # degrees — for gaze only
-MIN_COMMAND_INTERVAL = 0.08  # Minimum 80ms between commands (~12Hz) - Matches Arduino timing
+# Smooth movement settings for natural head motion
+ANGLE_THRESHOLD = 0.5  # Much smaller threshold for smooth movement
+MIN_COMMAND_INTERVAL = 0.02  # 20ms between commands (50Hz) for silky smooth motion
 
 
 class ServoController:

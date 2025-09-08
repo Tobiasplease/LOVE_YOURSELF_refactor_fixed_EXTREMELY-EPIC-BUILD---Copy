@@ -14,7 +14,7 @@ from event_logging.log_type import LogType
 
 # Import pen servo configuration
 try:
-    from config.config import GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S
+    from config.config import GRBL_PEN_DOWN_S, GRBL_PEN_UP_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S
 except Exception:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S = 30, 50, 255, 0
 
@@ -30,8 +30,8 @@ PEN_DOWN_CMD = f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN"  # Command to lower pen
 PEN_UP_CMD = f"M3 S{GRBL_PEN_UP_S} ; PEN UP"  # Command to raise pen
 
 
-def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
-    """Find and connect to GRBL controller port"""
+def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None, continuous_retry=False):
+    """Find and connect to GRBL controller port with optional continuous retry"""
 
     # Try preferred port first if specified
     if preferred_port:
@@ -74,17 +74,35 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
                 print_message=f"[⚠️] Preferred port {preferred_port} failed, trying auto-discovery...",
             )
 
+    # Ports to exclude from GRBL scanning (other Arduino devices)
+    excluded_ports = {
+        "/dev/arduino_lunggaze",  # Servo controller - DO NOT SCAN
+        "/dev/arduino_lightbulb",  # Lightbulb controller
+        "/dev/arduino_lefthand",  # Hand gesture controller
+        "/dev/arduino_uarm",  # uArm controller
+    }
+
     ports = list(list_ports.comports())
     if not ports:
         raise RuntimeError("No serial ports found")
 
+    # Filter out excluded ports to prevent interference
+    filtered_ports = [p for p in ports if p.device not in excluded_ports]
+    
     log_json_entry(
         LogType.GRBL,
-        {"message": "Available serial ports", "action": "port_discovery", "available_ports": [p.device for p in ports], "port_count": len(ports)},
-        print_message=f"[🔌] Available ports: {', '.join(p.device for p in ports)}",
+        {
+            "message": "Available serial ports for GRBL scanning", 
+            "action": "port_discovery", 
+            "all_ports": [p.device for p in ports],
+            "excluded_ports": list(excluded_ports),
+            "scannable_ports": [p.device for p in filtered_ports], 
+            "port_count": len(filtered_ports)
+        },
+        print_message=f"[🔌] Scannable ports for GRBL: {', '.join(p.device for p in filtered_ports)}",
     )
 
-    for p in ports:
+    for p in filtered_ports:
         try:
             log_json_entry(
                 LogType.GRBL,
@@ -112,7 +130,16 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None):
                 print_message=f"[❌] {p.device} failed ({e})",
             )
 
-    raise RuntimeError("No GRBL port found")
+    if continuous_retry:
+        log_json_entry(
+            LogType.GRBL,
+            {"message": "No GRBL port found, retrying in 5s (continuous mode)", "action": "port_retry"},
+            print_message="[⏳] No GRBL port found, retrying in 5s...",
+        )
+        time.sleep(5)
+        return find_grbl_port(baud, timeout, preferred_port, continuous_retry)
+    else:
+        raise RuntimeError("No GRBL port found")
 
 
 def read_until_ok_or_error(ser, timeout=DEFAULT_CMD_TIMEOUT):
@@ -135,7 +162,13 @@ def read_until_ok_or_error(ser, timeout=DEFAULT_CMD_TIMEOUT):
 
 def send_cmd(ser, cmd, wait_ok=True, timeout=DEFAULT_CMD_TIMEOUT):
     """Send command to GRBL and optionally wait for OK"""
-    print(f"[📤] {cmd}")
+    # Only print GRBL commands if verbose mode is enabled
+    try:
+        from config.config import PRINT_CLEAN_CAPTIONS
+        if not PRINT_CLEAN_CAPTIONS:
+            print(f"[📤] {cmd}")
+    except ImportError:
+        pass  # Default to quiet if config unavailable
     ser.write((cmd + "\n").encode())
     ser.flush()
 
@@ -186,10 +219,11 @@ def wait_until_idle(ser, max_wait, poll_interval=DEFAULT_STATUS_POLL):
     raise TimeoutError("Did not become Idle within timeout")
 
 
-def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
-    """Ensure GRBL is homed and setup coordinate system with retry logic"""
+def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
+    """Ensure GRBL is homed and setup coordinate system with continuous retry logic"""
 
-    for attempt in range(max_retries):
+    attempt = 0
+    while max_retries == -1 or attempt < max_retries:
         try:
             # Always force pen up before any homing activity for safety
             try:
@@ -202,6 +236,7 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
                 time.sleep(0.2)
             except Exception:
                 pass
+            retry_msg = "∞" if max_retries == -1 else str(max_retries)
             log_json_entry(
                 LogType.GRBL,
                 {
@@ -211,7 +246,7 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
                     "max_retries": max_retries,
                     "timeout": home_timeout,
                 },
-                print_message=f"[🏠] Homing attempt {attempt + 1}/{max_retries}...",
+                print_message=f"[🏠] Homing attempt {attempt + 1}/{retry_msg}...",
             )
 
             # Clear any existing alarm state
@@ -255,7 +290,15 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
                 status = get_status(ser)
                 state = parse_state(status)
 
-                if state == "Idle":
+                # Debug: Log what state GRBL is actually reporting
+                if time.time() - start > 1.0:  # After initial startup
+                    log_json_entry(
+                        LogType.GRBL,
+                        {"message": f"Homing status check", "raw_status": status, "parsed_state": state, "elapsed": time.time() - start},
+                        print_message=f"[🔍] GRBL state: '{state}' (raw: {status})",
+                    )
+
+                if state == "Idle" or state == "Home":
                     # Homing successful - setup coordinate system
                     log_json_entry(
                         LogType.GRBL,
@@ -330,28 +373,47 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=3):
             )
 
         # If we get here, this attempt failed
-        if attempt < max_retries - 1:
+        attempt += 1
+
+        # For infinite retry, never give up
+        if max_retries == -1:
+            retry_delay = min(30, 2 + (attempt * 2))  # Cap at 30s delay
+            log_json_entry(
+                LogType.GRBL,
+                {
+                    "message": f"Homing attempt {attempt} failed, retrying in {retry_delay}s (continuous retry mode)",
+                    "action": "homing_retry_delay",
+                    "delay": retry_delay,
+                    "attempt": attempt,
+                },
+                print_message=f"[⏳] Homing failed, retrying in {retry_delay}s... (continuous retry mode)",
+            )
+            time.sleep(retry_delay)
+            continue
+
+        # For limited retries, check if we should continue
+        if attempt < max_retries:
             retry_delay = 2 + attempt  # Increasing delay: 2s, 3s, 4s
             log_json_entry(
                 LogType.GRBL,
                 {
-                    "message": f"Homing attempt {attempt + 1} failed, retrying in {retry_delay}s",
+                    "message": f"Homing attempt {attempt} failed, retrying in {retry_delay}s",
                     "action": "homing_retry_delay",
                     "delay": retry_delay,
-                    "attempt": attempt + 1,
+                    "attempt": attempt,
                 },
                 print_message=f"[⏳] Homing failed, retrying in {retry_delay}s...",
             )
             time.sleep(retry_delay)
-
-    # All attempts failed
-    error_msg = f"All {max_retries} homing attempts failed"
-    log_json_entry(
-        LogType.ERROR,
-        {"message": error_msg, "action": "homing_all_attempts_failed", "max_retries": max_retries, "component": "grbl"},
-        print_message=f"[❌] {error_msg}",
-    )
-    raise RuntimeError(error_msg)
+        else:
+            # All limited attempts failed
+            error_msg = f"All {max_retries} homing attempts failed"
+            log_json_entry(
+                LogType.ERROR,
+                {"message": error_msg, "action": "homing_all_attempts_failed", "max_retries": max_retries, "component": "grbl"},
+                print_message=f"[❌] {error_msg}",
+            )
+            raise RuntimeError(error_msg)
 
 
 def convert_with_vpype(svg_file, output_file, scale_to=None):
@@ -538,6 +600,56 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         {"message": "Starting G-code file execution", "action": "gcode_execution_start", "file": gcode_file, "timeout": move_timeout},
         print_message=f"[🚀] Executing G-code file: {gcode_file}",
     )
+    
+    
+    # Pause idle movements NOW for actual drawing execution
+    try:
+        from grbl.idle_movement_manager import pause_for_drawing
+        try:
+            from config.config import PRINT_CLEAN_CAPTIONS
+            if not PRINT_CLEAN_CAPTIONS:
+                print("[🌊] Pausing idle movements for drawing execution...")
+        except ImportError:
+            print("[🌊] Pausing idle movements for drawing execution...")
+        pause_for_drawing()
+    except Exception as e:
+        print(f"[⚠️] Could not pause idle movements: {e}")
+    
+    # Notify drawing state manager with actual drawing prompt
+    try:
+        from utils.drawing_state import DrawingState
+        from utils.state_manager import state_manager
+        import os
+        
+        # Get the actual drawing prompt from state manager
+        current_prompt = state_manager.current_drawing_prompt if hasattr(state_manager, 'current_drawing_prompt') else None
+        
+        if current_prompt:
+            # Intelligently compress the drawing prompt using TinyLlama
+            from utils.prompt_compression import compress_drawing_prompt
+            description = compress_drawing_prompt(current_prompt)
+        else:
+            # Fallback to generic description
+            description = "drawing based on recent observations"
+        
+        DrawingState.start_drawing(
+            drawing_file=gcode_file,
+            description=description,
+            intent=current_prompt  # Store full prompt too
+        )
+    except Exception as e:
+        print(f"[⚠️] Could not update drawing state: {e}")
+    
+    # Lock gaze system to drawing position during execution
+    try:
+        from config.config import USE_SERVO, TILT_MIN
+        from vision.gaze import set_drawing_mode
+        if USE_SERVO:
+            print("[👁️] Locking gaze to drawing surface...")
+            set_drawing_mode(active=True, drawing_pan=90, drawing_tilt=TILT_MIN + 2)
+            time.sleep(1.0)  # Allow servos to reach position before drawing
+    except Exception as e:
+        print(f"[⚠️] Could not lock gaze for drawing observation: {e}")
 
     try:
         with open(gcode_file, "r") as f:
@@ -614,6 +726,8 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             send_cmd(ser, "!", wait_ok=False)  # Emergency stop
         except Exception:
             pass
+        
+        
         raise
 
     log_json_entry(
@@ -627,10 +741,31 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         },
         print_message=f"[✅] G-code execution complete: {executed_lines} lines executed",
     )
+    
+    
+    # Notify drawing state manager that drawing is complete
+    try:
+        from utils.drawing_state import DrawingState
+        DrawingState.end_drawing()
+    except Exception as e:
+        print(f"[⚠️] Could not update drawing state: {e}")
+    
+    # Resume idle movements after drawing
+    try:
+        from grbl.idle_movement_manager import resume_after_drawing
+        try:
+            from config.config import PRINT_CLEAN_CAPTIONS
+            if not PRINT_CLEAN_CAPTIONS:
+                print("[🌊] Resuming idle movements after drawing...")
+        except ImportError:
+            print("[🌊] Resuming idle movements after drawing...")
+        resume_after_drawing()
+    except Exception as e:
+        print(f"[⚠️] Could not resume idle movements: {e}")
 
 
 def initialize_grbl_for_drawing(
-    ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False, max_homing_retries=3
+    ser, origin=(0, 0, 0), origin_offset=(0, 0, 0), feed_rate=DEFAULT_FEED_RATE, use_absolute_positioning=False, max_homing_retries=-1
 ):
     """Complete GRBL initialization sequence for drawing with robust error handling"""
     log_json_entry(
@@ -760,11 +895,11 @@ def process_svg_to_grbl(
                 try:
                     from config.config import GRBL_CNC_PORT, GRBL_HOMING_MAX_RETRIES
 
-                    ser = find_grbl_port(preferred_port=GRBL_CNC_PORT)
-                    max_retries = GRBL_HOMING_MAX_RETRIES
+                    ser = find_grbl_port(preferred_port=GRBL_CNC_PORT, continuous_retry=True)
+                    max_retries = GRBL_HOMING_MAX_RETRIES if GRBL_HOMING_MAX_RETRIES != -1 else -1
                 except ImportError:
-                    ser = find_grbl_port()
-                    max_retries = 3  # Default fallback
+                    ser = find_grbl_port(continuous_retry=True)
+                    max_retries = -1  # Continuous retry by default
 
                 initialize_grbl_for_drawing(
                     ser,
@@ -774,7 +909,34 @@ def process_svg_to_grbl(
                     use_absolute_positioning=use_absolute_positioning,
                     max_homing_retries=max_retries,
                 )
-                execute_gcode_file(ser, output_file_adjusted)
+                
+                # Execute G-code in a separate thread to prevent blocking captions
+                import threading
+                import time
+                
+                gcode_complete = threading.Event()
+                gcode_error = None
+                
+                def execute_gcode_threaded():
+                    """Execute G-code in background thread."""
+                    nonlocal gcode_error
+                    try:
+                        execute_gcode_file(ser, output_file_adjusted)
+                    except Exception as e:
+                        gcode_error = e
+                    finally:
+                        gcode_complete.set()
+                
+                gcode_thread = threading.Thread(target=execute_gcode_threaded, daemon=False)
+                gcode_thread.start()
+                
+                # Wait for completion with periodic checks (allows captions to continue)
+                while not gcode_complete.is_set():
+                    time.sleep(0.1)  # Short sleep allows other threads to run
+                
+                # Re-raise any errors that occurred in the thread
+                if gcode_error:
+                    raise gcode_error
                 log_json_entry(
                     LogType.GRBL,
                     {"message": "Drawing complete", "action": "drawing_complete", "gcode_file": output_file_adjusted},
@@ -822,7 +984,7 @@ def process_svg_to_grbl(
                 )
                 # Return None explicitly on failure so callers can avoid marking success
                 try:
-                    if 'ser' in locals():
+                    if "ser" in locals():
                         ser.close()
                 except Exception:
                     pass

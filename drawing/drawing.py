@@ -30,11 +30,11 @@ from config.prompt_templates import SELF_CRITIQUE_PROMPT
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
+from grbl.idle_movement_manager import pause_for_drawing
 from utils.ollama import query_ollama, truncate_for_print
 from utils.state_manager import state_manager
 
 from .comfy import create_impostor_controller
-from grbl.idle_movement_manager import pause_for_drawing
 
 if TYPE_CHECKING:
     from captioner.captioner import Captioner
@@ -108,13 +108,14 @@ class DrawingController:
             # Store concise reflection for drawing memory
             try:
                 from config.config import INCLUDE_DRAWING_HISTORY
+
                 if INCLUDE_DRAWING_HISTORY:
                     one_liner = critique_response.strip().split("\n")[0]
                     if len(one_liner) > 160:
                         one_liner = one_liner[:157] + "..."
                     # We don't have direct agent reference here; try to import a global captioner if available
                     # Fallback: log as an event in state manager timeline if exposed later
-                
+
             except Exception:
                 pass
 
@@ -215,11 +216,14 @@ class DrawingController:
     # ------------------------------------------------------------------
     def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str) -> None:
         try:
-            # Enter drawing mode early: pause idle movements to avoid serial contention and keep pipeline contiguous
+            # Don't pause idle movements yet - let them continue with "generating" pattern
+            # We'll only pause when actual G-code execution starts
             try:
-                pause_for_drawing()
-            except Exception:
-                pass
+                from grbl.idle_movement_manager import update_emotion
+                # Switch to "generating" pattern - continuous circular movements
+                update_emotion("generating")
+            except Exception as e:
+                print(f"[⚠️] Could not switch to generating pattern: {e}")
 
             if os.path.exists(latest_image):
                 image_path = latest_image
@@ -264,6 +268,7 @@ class DrawingController:
                 # Store an immediate post-queue note for drawing history
                 try:
                     from config.config import INCLUDE_DRAWING_HISTORY
+
                     if INCLUDE_DRAWING_HISTORY:
                         note = drawing_prompt.strip().split("\n")[-1]
                         if len(note) > 160:

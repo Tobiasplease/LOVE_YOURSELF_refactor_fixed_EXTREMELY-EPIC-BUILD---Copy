@@ -13,13 +13,13 @@ import cv2  # type: ignore
 import numpy as np  # type: ignore
 
 from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
-from utils.state_manager import state_manager
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from utils.error_tracking import robust_execution, track_component_health
 from utils.ollama import truncate_for_print
+from utils.state_manager import state_manager
 
 from .memory import MemoryMixin
 from .model_wrapper import MultimodalModel
