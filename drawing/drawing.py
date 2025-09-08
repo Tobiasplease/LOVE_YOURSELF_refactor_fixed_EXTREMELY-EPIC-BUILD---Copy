@@ -26,7 +26,7 @@ from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     TRIGGER_PROMPT,
 )
-from config.prompt_templates import SELF_CRITIQUE_PROMPT
+from captioner.prompts import SELF_CRITIQUE_PROMPT, SELF_CRITIQUE_SYSTEM_PROMPT
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
@@ -89,7 +89,7 @@ class DrawingController:
                 prompt=critique_prompt,
                 image=image_path,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
-                system_prompt="You are critiquing your own artwork. Be honest and constructive.",
+                system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
                 prompt_type="reflection",
             )
 

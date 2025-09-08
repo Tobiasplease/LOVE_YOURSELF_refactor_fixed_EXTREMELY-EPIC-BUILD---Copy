@@ -214,12 +214,14 @@ MOOD: [The actual feeling tone right now - be specific, not generic]"""
             model_options["num_predict"] = 200  # More space for identity/existential content
             model_options["temperature"] = 0.5  # Slightly more creative for philosophical insights
 
+            # Import consolidated system prompt
+            from captioner.prompts import STATIC_SYSTEM_PROMPT
+
             # Use a longer timeout for background compression to avoid spurious timeouts under load
             response = query_ollama(
                 prompt=prompt,
                 model=config.OLLAMA_MODEL,
-                system_prompt="You're taking a moment to notice what's actually happening with you - "
-                "what you're seeing and how it's affecting you. Be honest about what you're actually experiencing",
+                system_prompt=STATIC_SYSTEM_PROMPT,
                 timeout=config.OLLAMA_TIMEOUT_EVAL if hasattr(config, "OLLAMA_TIMEOUT_EVAL") else 90,
                 options=model_options,
                 prompt_type="compression",

@@ -59,14 +59,19 @@ Compressed description:"""
     model_options = {
         "temperature": TINYLLAMA_TEMPERATURE,
         "top_p": TINYLLAMA_TOP_P,
-        "num_predict": TINYLLAMA_NUM_PREDICT * 2,  # Allow a bit more for this task
+        "num_predict": TINYLLAMA_NUM_PREDICT * 3,  # Allow a bit more for this task (15 tokens)
     }
     
     try:
+        # Import consolidated system prompt for compression
+        from captioner.prompts import NUMBER_GENERATOR_SYSTEM_PROMPT
+        compression_system_prompt = "You compress drawing prompts into short, natural descriptions. Be concise and specific."
+        
         response = query_ollama(
             prompt=compression_prompt,
             model=MOTIF_MODEL,
             timeout=TINYLLAMA_TIMEOUT,
+            system_prompt=compression_system_prompt,
             options=model_options,
             prompt_type="compression"
         )

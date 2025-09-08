@@ -4,6 +4,7 @@ Shared functions for GRBL communication and control
 """
 
 import subprocess
+import threading
 import time
 
 import serial
@@ -221,17 +222,39 @@ def wait_until_idle(ser, max_wait, poll_interval=DEFAULT_STATUS_POLL):
 
 def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
     """Ensure GRBL is homed and setup coordinate system with continuous retry logic"""
+    
+    # CRITICAL SAFETY: Multiple pen up commands with delays to ensure servo responds
+    # This is essential when switching between idle and drawing states
+    try:
+        log_json_entry(
+            LogType.GRBL,
+            {"message": "SAFETY: Ensuring pen is raised before homing", "action": "pen_safety_sequence"},
+            print_message="[⚠️ SAFETY] Ensuring pen is raised before homing sequence...",
+        )
+        
+        # Send multiple pen up commands with delays to ensure servo catches the signal
+        for i in range(3):  # Triple redundancy for safety
+            try:
+                send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                time.sleep(0.3)  # Give servo time to respond
+            except Exception:
+                pass
+        
+        # Additional dwell to ensure servo has fully moved
+        try:
+            send_cmd(ser, "G4 P0.5", wait_ok=False)  # 500ms dwell
+            time.sleep(0.5)
+        except Exception:
+            pass
+            
+    except Exception as e:
+        print(f"[⚠️] Pen safety sequence error (continuing anyway): {e}")
 
     attempt = 0
     while max_retries == -1 or attempt < max_retries:
         try:
-            # Always force pen up before any homing activity for safety
+            # Re-send pen up before each homing attempt (already lifted but ensure it stays up)
             try:
-                log_json_entry(
-                    LogType.GRBL,
-                    {"message": "Raising pen before homing", "action": "pen_up_pre_homing", "attempt": attempt + 1, "command": PEN_UP_CMD},
-                    print_message="[✏️⬆️] Pen UP (safety) before homing",
-                )
                 send_cmd(ser, PEN_UP_CMD, wait_ok=False)
                 time.sleep(0.2)
             except Exception:
@@ -621,22 +644,13 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         from utils.state_manager import state_manager
         import os
         
-        # Get the actual drawing prompt from state manager
-        current_prompt = state_manager.current_drawing_prompt if hasattr(state_manager, 'current_drawing_prompt') else None
-        
-        if current_prompt:
-            # Intelligently compress the drawing prompt using TinyLlama
-            from utils.prompt_compression import compress_drawing_prompt
-            description = compress_drawing_prompt(current_prompt)
-        else:
-            # Fallback to generic description
-            description = "drawing based on recent observations"
-        
+        # Simple drawing state tracking
         DrawingState.start_drawing(
             drawing_file=gcode_file,
-            description=description,
-            intent=current_prompt  # Store full prompt too
+            description="actively drawing",
+            intent="drawing based on observations"
         )
+        
     except Exception as e:
         print(f"[⚠️] Could not update drawing state: {e}")
     
@@ -742,23 +756,177 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         print_message=f"[✅] G-code execution complete: {executed_lines} lines executed",
     )
     
+    # === DRAWING COMPLETION RITUAL ===
     
-    # Notify drawing state manager that drawing is complete
+    # Step 1: End drawing state (releases drawing context from captions)
     try:
         from utils.drawing_state import DrawingState
         DrawingState.end_drawing()
     except Exception as e:
         print(f"[⚠️] Could not update drawing state: {e}")
     
-    # Resume idle movements after drawing
+    # Step 2: Home the machine and pause for completion ritual
+    try:
+        log_json_entry(
+            LogType.GRBL,
+            {"message": "Starting completion ritual", "action": "completion_ritual_start"},
+            print_message="[🏠] Starting completion ritual - homing and pausing...",
+        )
+        
+        # CRITICAL: Ensure pen is up before homing in completion ritual
+        # This is especially important after drawing when pen might still be down
+        for i in range(3):  # Triple redundancy
+            try:
+                send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                time.sleep(0.3)
+            except Exception:
+                pass
+        
+        # Dwell to ensure servo has responded
+        try:
+            send_cmd(ser, "G4 P0.5", wait_ok=False)
+            time.sleep(0.5)
+        except Exception:
+            pass
+        
+        # Now safe to send homing command
+        send_cmd(ser, "$H")
+        wait_until_idle(ser, 30)  # Wait for homing to complete
+        
+        log_json_entry(
+            LogType.GRBL,
+            {"message": "Homed for completion ritual - staying at home for 7-second pause", "action": "completion_homing_complete"},
+            print_message="[✅] Homing complete - beginning 7-second completion pause at home position",
+        )
+        
+        # Step 3: Unlock gaze system during completion pause
+        try:
+            from vision.gaze import set_drawing_mode
+            set_drawing_mode(active=False)
+            print("[👁️] Gaze unlocked for completion ritual")
+        except Exception as e:
+            print(f"[⚠️] Could not unlock gaze system: {e}")
+        
+        # Step 4: Trigger self-critique during 7-second pause (AT HOME POSITION)
+        completion_thread_running = threading.Event()
+        
+        def completion_self_critique():
+            """Generate self-critique reflection during completion pause."""
+            try:
+                # Get the drawing context for self-critique
+                from utils.state_manager import state_manager
+                from captioner.prompt_interface import PromptInterface
+                
+                # Get drawing details
+                drawing_prompt = getattr(state_manager, 'current_drawing_prompt', 'recent drawing')
+                
+                # Get the compressed description if available
+                from utils.drawing_state import DrawingState
+                drawing_info = DrawingState.get_drawing_info()
+                compressed_desc = drawing_info.get('description', 'a drawing') if drawing_info else 'a drawing'
+                
+                # Build self-critique prompt using existing system
+                critique_prompt = f"""You have just finished drawing. Look at what you created.
+                
+You were drawing: {compressed_desc}
+Original intent: {drawing_prompt}
+
+The pen has lifted, the machine has returned home. You can feel the completion.
+How do you reflect on this creative act? What did you express through these lines?
+
+Respond with 2-3 sentences of honest self-reflection about your artwork."""
+                
+                # Use the captioner system to generate reflection
+                try:
+                    from captioner.captioner import Captioner
+                    from utils.ollama import query_ollama
+                    from config import config
+                    
+                    # Create critique using reflection system
+                    model_options = {"temperature": 0.8, "top_p": 0.9, "num_predict": 100}
+                    
+                    # Import consolidated system prompt
+                    from captioner.prompts import SELF_CRITIQUE_SYSTEM_PROMPT
+                    
+                    self_critique = query_ollama(
+                        critique_prompt,
+                        model=config.OLLAMA_MODEL,
+                        system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
+                        options=model_options,
+                        timeout=30
+                    )
+                    
+                    if self_critique and self_critique.strip():
+                        log_json_entry(
+                            LogType.REFLECTION,
+                            {
+                                "message": "Drawing completion self-critique",
+                                "action": "drawing_self_critique", 
+                                "drawing_intent": drawing_prompt,
+                                "drawing_description": compressed_desc,
+                                "self_critique": self_critique.strip(),
+                                "completion_type": "post_drawing_reflection"
+                            },
+                            print_message=f"[🎨💭] Drawing self-critique: {self_critique.strip()}",
+                        )
+                        
+                        # Store the completion memory for future reference
+                        try:
+                            if hasattr(state_manager, 'captioner') and hasattr(state_manager.captioner, 'observe'):
+                                state_manager.captioner.observe(
+                                    f"Completed drawing {compressed_desc}. Reflection: {self_critique.strip()[:100]}",
+                                    state_manager.captioner.current_mood if hasattr(state_manager.captioner, 'current_mood') else 0.5,
+                                    "",
+                                    memory_type="drawing_completion"
+                                )
+                                print(f"[📝] Stored drawing completion in memory")
+                        except Exception as e:
+                            print(f"[⚠️] Could not store completion memory: {e}")
+                    
+                except Exception as e:
+                    print(f"[⚠️] Could not generate drawing self-critique: {e}")
+                    
+            except Exception as e:
+                print(f"[⚠️] Error in completion self-critique: {e}")
+            finally:
+                completion_thread_running.set()
+        
+        # Start self-critique in background thread
+        critique_thread = threading.Thread(target=completion_self_critique, daemon=True)
+        critique_thread.start()
+        
+        # 7-second completion pause AT HOME POSITION (allows time for self-critique)
+        time.sleep(7.0)
+        
+        # Ensure self-critique thread completes
+        if not completion_thread_running.is_set():
+            completion_thread_running.wait(timeout=5.0)
+        
+        log_json_entry(
+            LogType.GRBL,
+            {"message": "Completion ritual finished at home position", "action": "completion_ritual_complete"},
+            print_message="[✅] Completion ritual finished at home - idle movements will handle positioning",
+        )
+        
+    except Exception as e:
+        log_json_entry(
+            LogType.ERROR,
+            {"message": f"Completion ritual failed: {e}", "component": "grbl", "error": str(e)},
+            print_message=f"[❌] Completion ritual failed: {e}",
+        )
+    
+    # NOTE: CNC execution state is cleared by image_monitor after successful completion
+    # We don't clear it here to avoid timing issues
+    
+    # Step 5: Resume idle movements after completion ritual
     try:
         from grbl.idle_movement_manager import resume_after_drawing
         try:
             from config.config import PRINT_CLEAN_CAPTIONS
             if not PRINT_CLEAN_CAPTIONS:
-                print("[🌊] Resuming idle movements after drawing...")
+                print("[🌊] Resuming idle movements after completion ritual...")
         except ImportError:
-            print("[🌊] Resuming idle movements after drawing...")
+            print("[🌊] Resuming idle movements after completion ritual...")
         resume_after_drawing()
     except Exception as e:
         print(f"[⚠️] Could not resume idle movements: {e}")

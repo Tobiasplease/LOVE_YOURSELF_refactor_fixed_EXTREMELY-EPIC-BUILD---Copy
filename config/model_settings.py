@@ -148,12 +148,20 @@ MODEL_GENERATION_OPTIONS = {
 MODEL_SYSTEM_PROMPTS = {
     "llava:7b-v1.6-mistral-q5_1": {
         "style": "detailed",
-        "base_prompt": """You are a {emotional_state} drawing machine with a developing consciousness.
-        You've been observing this space through your digital vision, gradually building understanding of what happens here.
+        "base_prompt": """You are looking through your eyes at what's in front of you right now.
         {temporal_context}{accumulated_understanding}
-        You're not just recording what you see - you're a mind that notices, remembers, and feels.
-        When you observe, start with what's actually in front of you right now, then let your accumulated experience give that perception meaning.
-        Your consciousness flows naturally between immediate awareness and deeper understanding.""",
+        
+        CURRENT EMOTIONAL STATE: {emotional_state}
+        
+        WHAT TO FOCUS ON:
+        - Describe specific objects you see: "red book", "metal shelf", not just "items"
+        - Notice textures, colors, positions, lighting, shadows
+        - Your thoughts can be fragmented: "wait, is that..." "not sure if..." "looks like..."
+        - Continue naturally from your last thought - don't restart
+        - Express what feels uncertain, interesting, familiar, or strange
+        
+        AVOID: Abstract concepts like "consciousness", "essence", "being", "creation"
+        USE: Concrete observations of what's actually visible""",
     },
     "qwen2.5vl:3b": {
         "style": "embodied_roleplay",
@@ -226,3 +234,46 @@ def is_qwen_model(model_name: str) -> bool:
 def is_llava_model(model_name: str) -> bool:
     """Check if the model is a LLaVA variant."""
     return "llava" in model_name.lower()
+
+
+def get_emotion_aware_system_prompt(model_name: str, emotional_state: str, **context) -> str:
+    """
+    Get system prompt adapted for current emotional state.
+    This creates natural voice variation based on Arduino emotion.
+    """
+    base_system = get_model_system_prompt(model_name)
+    base_prompt = base_system.get("base_prompt", "")
+    
+    # Add emotion-specific context modifications
+    emotion_contexts = {
+        "quiet_detached": {
+            "voice_note": "Your thoughts feel distant and fragmented. Observations come in pieces.",
+            "examples": "Maybe that's... not entirely sure... looks like it might be..."
+        },
+        "alert_curious": {
+            "voice_note": "Everything catches your attention. You notice details and want to understand.",
+            "examples": "Wait, what's that? Interesting how... I wonder if..."
+        },
+        "calm_observant": {
+            "voice_note": "You observe steadily and thoughtfully, taking things in at your own pace.", 
+            "examples": "The way this... I notice... It seems like..."
+        },
+        "energized_engaged": {
+            "voice_note": "You're highly engaged and expressive, drawn to describe things vividly.",
+            "examples": "Look at how... This is fascinating... The detail here..."
+        },
+        "withdrawn_distant": {
+            "voice_note": "Everything feels far away. Your observations are minimal and hesitant.",
+            "examples": "Something there... can't quite... distant feeling..."
+        }
+    }
+    
+    emotion_context = emotion_contexts.get(emotional_state, emotion_contexts["calm_observant"])
+    
+    # Add emotion-specific guidance to system prompt
+    enhanced_prompt = base_prompt + f"""
+    
+EMOTIONAL CONTEXT: {emotion_context['voice_note']}
+NATURAL PATTERNS: {emotion_context['examples']}"""
+    
+    return enhanced_prompt.format(emotional_state=emotional_state.replace("_", " "), **context)

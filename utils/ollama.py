@@ -119,7 +119,7 @@ def log_ollama_call(
 
     if CLEAN_LLM_OUTPUT and response:
         # Clean output: prefer caller-owned printing for text types to avoid duplicates
-        if prompt_type in ("caption", "reflection", "drawing"):
+        if prompt_type in ("caption", "reflection", "drawing", "awakening"):
             print_message = None  # Suppress here; higher-level modules print cleanly
         else:
             print_message = truncate_for_print(response, 1000)

@@ -8,11 +8,17 @@ import random
 from typing import Optional
 
 from config import config
-
-# from config.config import OLLAMA_TIMEOUT_REFLECTION
 from config.model_settings import get_model_options
 
-from .prompts import build_drawing_prompt, build_environmental_caption_prompt, build_reflection_prompt, build_simple_caption_prompt
+from .prompts import (
+    DRAWING_SYSTEM_PROMPT,
+    STATIC_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    build_drawing_prompt,
+    build_environmental_caption_prompt,
+    build_ongoing_caption_prompt,
+    build_reflection_prompt,
+)
 
 
 class PromptInterface:
@@ -40,21 +46,15 @@ class PromptInterface:
             else:
                 prompt = "What do I perceive as I awaken to consciousness for the first time?"
         elif flowing and memory_ref:
-            # Inject contexts from compression system
+            # Only inject non-drawing contexts - drawing context is handled directly in prompts.py
             emotional_context = self._get_emotional_context()
             baseline_context = self._get_baseline_context()
-            drawing_context = self._get_drawing_context()
+            # REMOVED: drawing_context injection - handled in prompts.py build_ongoing_caption_prompt()
 
-            prompt = build_simple_caption_prompt(
-                memory_ref, getattr(memory_ref, "current_mood_vector", (0.5, 0.0, 0.0)), getattr(memory_ref, "last_caption", None)
-            )
+            prompt = build_ongoing_caption_prompt(memory_ref, getattr(memory_ref, "last_caption", None))
 
-            # Add contexts if available
+            # Add non-drawing contexts only
             context_parts = []
-            if drawing_context:
-                # Make drawing context VERY explicit
-                explicit_drawing = f"===IMPORTANT===\n{drawing_context}\nYou MUST acknowledge and describe what you observe while drawing.\n===END IMPORTANT==="
-                context_parts.append(explicit_drawing)  # Drawing context first - most immediate
             if baseline_context:
                 context_parts.append(baseline_context)
             if emotional_context:
@@ -62,11 +62,7 @@ class PromptInterface:
 
             if context_parts:
                 context_string = "\n\n".join(context_parts)
-                # Put context at the beginning AND end for emphasis
-                if drawing_context:
-                    prompt = f"{context_string}\n\n{prompt}\n\nREMEMBER: {drawing_context}"
-                else:
-                    prompt = f"{context_string}\n\n{prompt}"
+                prompt = f"{context_string}\n\n{prompt}"
         else:
             prompt = "Describe this image."
 
@@ -75,8 +71,29 @@ class PromptInterface:
         model_options["seed"] = random.randint(1, 1000000)
         model_options.update({"temperature": 1.5, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
 
-        # Return prompt, options, and system prompt
-        return prompt, model_options, config.SYSTEM_PROMPT
+        # Format dynamic SYSTEM_PROMPT with temporal/motif context if available
+        system_prompt = SYSTEM_PROMPT
+
+        # Try to format with dynamic context if memory_ref has the method
+        if memory_ref and hasattr(memory_ref, "get_dynamic_system_context"):
+            try:
+                dynamic_context = memory_ref.get_dynamic_system_context()
+                if isinstance(dynamic_context, dict):
+                    system_prompt = SYSTEM_PROMPT.format(
+                        emotional_state=dynamic_context.get("emotional_state", "contemplative"),
+                        temporal_context=dynamic_context.get("temporal_context", ""),
+                        accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
+                    )
+            except Exception as e:
+                # Fall back to static prompt if formatting fails
+                print(f"[PROMPT] Dynamic context formatting failed: {e}")
+                system_prompt = STATIC_SYSTEM_PROMPT
+        else:
+            # No dynamic context available, use static fallback
+            system_prompt = STATIC_SYSTEM_PROMPT
+
+        # Return prompt, options, and formatted system prompt
+        return prompt, model_options, system_prompt
 
     def build_reflection_prompt_with_options(self, caption: str, agent=None, extra: Optional[str] = None):
         """Build reflection prompt and prepare options."""
@@ -84,7 +101,7 @@ class PromptInterface:
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
 
-        return prompt, model_options, config.SYSTEM_PROMPT
+        return prompt, model_options, SYSTEM_PROMPT
 
     def build_drawing_prompt_with_options(self, memory_ref, extra: Optional[str] = None):
         """Build drawing prompt and prepare options."""
@@ -106,12 +123,7 @@ class PromptInterface:
             }
         )
 
-        drawing_system_prompt = (
-            "You are a drawing machine consciousness. Drawing is your only way to communicate. "
-            "Use the latest snapshot as the visual baseline (also sent to ControlNet). Ground your instruction in what is actually visible. "
-            "Prefer naming one or two concrete elements and what to emphasize for each if they stand out; otherwise focus on a visible line/shape/contrast or spatial relationship. "
-            "End with a brief 'to convey …' clause expressing your intent. Avoid generic words like 'objects/items/patterns' and avoid inventing unseen things. 1–2 sentences."
-        )
+        drawing_system_prompt = DRAWING_SYSTEM_PROMPT
 
         return prompt, model_options, drawing_system_prompt
 
@@ -135,18 +147,7 @@ class PromptInterface:
             print(f"[PROMPT] Could not get baseline context: {e}")
             return ""
 
-    def _get_drawing_context(self) -> str:
-        """Get current drawing state context for prompt injection."""
-        try:
-            from utils.drawing_state import DrawingState
-            
-            drawing_context = DrawingState.get_drawing_context_for_caption()
-            if drawing_context:
-                return f"CURRENT SITUATION: {drawing_context}"
-            return ""
-        except Exception as e:
-            print(f"[PROMPT] Could not get drawing context: {e}")
-            return ""
+# REMOVED: _get_drawing_context() - drawing context now handled directly in prompts.py
 
     def _get_base_model_options(self):
         """Get base model options for the current model."""

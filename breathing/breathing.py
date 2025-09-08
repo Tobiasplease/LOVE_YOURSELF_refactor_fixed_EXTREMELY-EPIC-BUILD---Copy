@@ -33,33 +33,33 @@ def update_lung_position(
     # === 5-State Emotional Breathing Patterns ===
     breathing_patterns = {
         "energized_engaged": {
-            "base_speed": 0.8,  # Fast, excited breathing
+            "base_speed": 0.5,  # Fast, excited breathing
             "amplitude": 1.4,  # Deep breaths
-            "pause_scale": 0.4,  # Short pauses
+            "pause_scale": 0.2,  # Very short pauses
             "special_modes": ["FAST_BURST", "EXCITED_PANTING"],
         },
         "alert_curious": {
-            "base_speed": 1.2,  # Quick, attentive breathing
+            "base_speed": 0.8,  # Quick, attentive breathing
             "amplitude": 1.1,  # Slightly deeper
-            "pause_scale": 0.7,  # Quick pauses for attention
+            "pause_scale": 0.4,  # Quick pauses for attention
             "special_modes": ["FAST_BURST", "ALERT_HOLD"],
         },
         "calm_observant": {
-            "base_speed": 4.0,  # Slow, meditative breathing
+            "base_speed": 2.5,  # Slow, meditative breathing
             "amplitude": 1.0,  # Normal depth
-            "pause_scale": 1.2,  # Contemplative pauses
+            "pause_scale": 0.7,  # Contemplative pauses
             "special_modes": ["SLOW_SIGH", "NORMAL"],
         },
         "quiet_detached": {
-            "base_speed": 6.0,  # Shallow, minimal breathing
+            "base_speed": 3.5,  # Shallow, minimal breathing
             "amplitude": 0.6,  # Shallow breaths
-            "pause_scale": 2.0,  # Long hesitant pauses
+            "pause_scale": 1.0,  # Moderate hesitant pauses
             "special_modes": ["SHALLOW", "NORMAL"],
         },
         "withdrawn_distant": {
-            "base_speed": 8.0,  # Very slow, listless breathing
+            "base_speed": 5.0,  # Very slow, listless breathing
             "amplitude": 0.8,  # Somewhat shallow
-            "pause_scale": 2.5,  # Very long pauses
+            "pause_scale": 1.5,  # Longer pauses but not excessive
             "special_modes": ["SLOW_SIGH", "DEPRESSED_HOLD"],
         },
     }

@@ -1,7 +1,7 @@
 LIGHTBULB_SENSITIVITY = 1.5  # Default sensitivity for frame diff to PWM mapping
 import os
 
-from config.prompt_templates import *  # noqa: F401
+# All prompts now imported from captioner.prompts
 
 # === SERIAL SETTINGS ===
 # === ARDUINO SERIAL PORT CONFIGURATION (Linux) ===
@@ -50,7 +50,7 @@ SWEEP_PROBABILITY = 0.6  # Probability of doing a big sweep movement vs small mo
 # === BREATHING SETTINGS ===
 LUNG_MIN = 60
 LUNG_MAX = 110
-PAUSE_DURATION = 3.0
+PAUSE_DURATION = 1.5
 LUNG_OFFSET_SCALE = -0.10
 
 # === MOOD SYSTEM ===

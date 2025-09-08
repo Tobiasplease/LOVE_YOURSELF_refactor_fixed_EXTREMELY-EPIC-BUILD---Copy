@@ -59,7 +59,8 @@
       "Bash(PYTHONPATH=/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy python grbl/svg_to_grbl.py /home/impostor/ComfyUI/output/impostor-20250901_213326_00001__center_lined.svg --scale-to 50x50mm)",
       "Read(//tmp/**)",
       "Bash(stty:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(do echo \"=== $file ===\")"
     ],
     "deny": [],
     "ask": []

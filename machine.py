@@ -553,7 +553,6 @@ if previous_state:
     log_json_entry(
         LogType.INFO,
         {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
-        print_message=f'"{awakening_msg}"',
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
@@ -565,7 +564,6 @@ else:
     log_json_entry(
         LogType.INFO,
         {"message": awakening_msg, "continuity": False},
-        print_message=f'"{awakening_msg}"',
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()

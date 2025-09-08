@@ -33,12 +33,12 @@ float leftArmSpeed[LEFT_ARM_COUNT];     // Individual movement speeds
 // Movement speed - consistent for mechanical safety
 const int LEFT_ARM_SAFE_SPEED = 50;  // Smooth fluid movement timing
 
-// Pause durations (time between movements - much longer for contemplative feel)
-const unsigned long PAUSE_ENERGIZED_MIN = 5000;   const unsigned long PAUSE_ENERGIZED_MAX = 15000;   // 5-15s
-const unsigned long PAUSE_ALERT_MIN = 10000;      const unsigned long PAUSE_ALERT_MAX = 25000;      // 10-25s  
-const unsigned long PAUSE_CALM_MIN = 20000;       const unsigned long PAUSE_CALM_MAX = 45000;       // 20-45s
-const unsigned long PAUSE_QUIET_MIN = 30000;      const unsigned long PAUSE_QUIET_MAX = 60000;      // 30-60s
-const unsigned long PAUSE_WITHDRAWN_MIN = 45000;  const unsigned long PAUSE_WITHDRAWN_MAX = 90000;   // 45-90s
+// Pause durations (time between movements - longer pauses for more contemplative feel)
+const unsigned long PAUSE_ENERGIZED_MIN = 15000;  const unsigned long PAUSE_ENERGIZED_MAX = 30000;   // 15-30s
+const unsigned long PAUSE_ALERT_MIN = 25000;      const unsigned long PAUSE_ALERT_MAX = 45000;      // 25-45s  
+const unsigned long PAUSE_CALM_MIN = 45000;       const unsigned long PAUSE_CALM_MAX = 90000;       // 45-90s
+const unsigned long PAUSE_QUIET_MIN = 60000;      const unsigned long PAUSE_QUIET_MAX = 120000;     // 60-120s (1-2m)
+const unsigned long PAUSE_WITHDRAWN_MIN = 90000;  const unsigned long PAUSE_WITHDRAWN_MAX = 180000;  // 90-180s (1.5-3m)
 
 // EXPANDED SERVO RANGE - now matches Python interface (0-180)
 const int minAngle = 0;   // Increased from 40 to 0

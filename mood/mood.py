@@ -9,7 +9,6 @@ from typing import List, Optional, Tuple
 import numpy as np  # type: ignore
 
 from config.config import MOOD_SNAPSHOT_FOLDER
-from config.prompt_templates import MOOD_PROMPT_TEMPLATE
 from event_logging.event_logger import log_json_entry, read_json_logs
 from event_logging.log_type import LogType
 from utils.ollama import query_ollama

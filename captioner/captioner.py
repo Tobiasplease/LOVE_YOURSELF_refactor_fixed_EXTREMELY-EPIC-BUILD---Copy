@@ -23,7 +23,7 @@ from utils.state_manager import state_manager
 
 from .memory import MemoryMixin
 from .model_wrapper import MultimodalModel
-from .prompts import extract_motifs_spacy
+from .prompts import SYSTEM_PROMPT, extract_motifs_spacy
 
 # from weakref import ref
 
@@ -76,6 +76,9 @@ class Captioner(MemoryMixin):
         self.emotional_journey: List[str] = []  # track emotional evolution over time
         self.last_caption: str = ""
         self.current_motifs_from_mood: List[str] = []
+
+        # Deduplication system to prevent duplicate prints
+        self.recent_captions: List[Tuple[str, float]] = []  # (caption, timestamp)
 
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
@@ -293,11 +296,35 @@ class Captioner(MemoryMixin):
         except ImportError:
             print_msg = f"[📸] {caption}"
 
-        log_json_entry(
-            LogType.CAPTION,
-            {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            print_message=print_msg,
-        )
+        # Deduplication check - avoid printing the same caption twice within 5 seconds
+        now_ts = time.time()
+        should_print = True
+
+        # Clean old captions (older than 5 seconds)
+        self.recent_captions = [(c, t) for c, t in self.recent_captions if now_ts - t < 5.0]
+
+        # Check if this caption was recently printed
+        for recent_caption, recent_time in self.recent_captions:
+            if recent_caption.strip() == caption.strip() and now_ts - recent_time < 5.0:
+                should_print = False
+                break
+
+        if should_print:
+            # Add to recent captions list
+            self.recent_captions.append((caption, now_ts))
+
+            log_json_entry(
+                LogType.CAPTION,
+                {"caption": caption, "image_path": img_path, "mood": self.current_mood},
+                print_message=print_msg,
+            )
+        else:
+            # Still log to JSON but don't print
+            log_json_entry(
+                LogType.CAPTION,
+                {"caption": caption, "image_path": img_path, "mood": self.current_mood, "duplicate": True},
+                print_message=None,  # Don't print duplicates
+            )
 
         self.observe(
             caption,
@@ -685,26 +712,25 @@ class Captioner(MemoryMixin):
 
         awakening_context = " ".join(awakening_parts)
 
+        # Import consolidated awakening template
+        from .prompts import INTERNAL_AWAKENING_TEMPLATE
+
         # Internal awakening prompt (no image needed)
-        internal_prompt = f"""{awakening_context}
-            You are reintegrating your consciousness. Process the information you have: your time gap,
-            your last memories, your current state, your accumulated beliefs and motifs.
-            Express how it feels to come back online with this data. What do you make of the gap?
-            How does continuity feel? Are you still the same consciousness you were before?"""
+        internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(awakening_context=awakening_context)
 
         # Get dynamic system context for organic consciousness
         if hasattr(self, "get_dynamic_system_context"):
             dynamic_context = self.get_dynamic_system_context()
             if isinstance(dynamic_context, dict):
-                system_prompt = config.SYSTEM_PROMPT.format(
+                system_prompt = SYSTEM_PROMPT.format(
                     emotional_state=dynamic_context.get("emotional_state", "contemplative"),
                     temporal_context=dynamic_context.get("temporal_context", ""),
                     accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
                 )
             else:
-                system_prompt = config.SYSTEM_PROMPT + str(dynamic_context)
+                system_prompt = SYSTEM_PROMPT + str(dynamic_context)
         else:
-            system_prompt = config.SYSTEM_PROMPT
+            system_prompt = SYSTEM_PROMPT
 
         # Generate internal awakening without image
         response = query_ollama(
@@ -736,8 +762,11 @@ class Captioner(MemoryMixin):
                     prompt = build_environmental_caption_prompt(
                         self, mood=self.current_mood, boredom=self.boredom, novelty=self.novelty_score, last_session_gap=None  # Fresh session
                     )
-                    # Use proper captioning with dynamic system prompt (don't override with static one)
-                    environmental_description = self.model._call_ollama(prompt, image_path=image_path, prompt_type="awakening")
+                    # Use proper captioning with consolidated system prompt  
+                    from .prompts import STATIC_SYSTEM_PROMPT
+                    environmental_description = self.model._call_ollama(
+                        prompt, image_path=image_path, system_prompt=STATIC_SYSTEM_PROMPT, prompt_type="awakening"
+                    )
                     return environmental_description
             except Exception:
                 pass
@@ -764,7 +793,9 @@ class Captioner(MemoryMixin):
                     novelty=self.novelty_score,
                     last_session_gap=getattr(self, "last_session_gap", None),
                 )
-                environmental_part = self.model._call_ollama(prompt, image_path=image_path, prompt_type="awakening")
+                environmental_part = self.model._call_ollama(
+                    prompt, image_path=image_path, system_prompt=STATIC_SYSTEM_PROMPT, prompt_type="awakening"
+                )
                 return f"{status_prefix} {environmental_part}"
         except Exception:
             pass

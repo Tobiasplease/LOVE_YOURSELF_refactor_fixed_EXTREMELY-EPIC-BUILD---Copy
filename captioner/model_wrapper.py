@@ -21,6 +21,7 @@ from event_logging.log_type import LogType
 from utils.ollama import query_ollama, truncate_for_print
 
 from .prompt_interface import PromptInterface
+from .prompts import NUMBER_GENERATOR_SYSTEM_PROMPT
 
 
 class MultimodalModel:
@@ -148,7 +149,7 @@ class MultimodalModel:
                 model=MOTIF_MODEL,
                 timeout=TINYLLAMA_TIMEOUT,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
-                system_prompt="You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number.",
+                system_prompt=NUMBER_GENERATOR_SYSTEM_PROMPT,
                 options=tinyllama_options,
                 prompt_type="motif_scoring",
             )
