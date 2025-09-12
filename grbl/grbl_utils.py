@@ -12,6 +12,7 @@ from serial.tools import list_ports
 
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+from .warp_transform import warp_transform_line
 
 # Import pen servo configuration
 try:
@@ -685,8 +686,9 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                 continue
 
             try:
-                # Determine timeout based on command type
+                # Determine timeout and transform based on command type
                 if line.startswith(("G0", "G1", "G00", "G01")):
+                    line = warp_transform_line(line)  # warp transform line coords
                     timeout = move_timeout
                 else:
                     timeout = DEFAULT_CMD_TIMEOUT
