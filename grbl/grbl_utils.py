@@ -11,6 +11,7 @@ from serial.tools import list_ports
 
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+from warp_transform import warp_transform_line
 
 # Default configuration
 DEFAULT_BAUD = 115200
@@ -413,7 +414,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     executed_lines = 0
 
     lines = lines[3:]  # Skip first three lines (G20, G17, G90), from vpype inject somehow
-    
+
     try:
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
@@ -423,8 +424,9 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                 continue
 
             try:
-                # Determine timeout based on command type
+                # Determine timeout and transform based on command type
                 if line.startswith(("G0", "G1", "G00", "G01")):
+                    line = warp_transform_line(line)  # warp transform line coords
                     timeout = move_timeout
                 else:
                     timeout = DEFAULT_CMD_TIMEOUT
@@ -459,7 +461,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                     print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
                 )
                 raise
-                
+
     except KeyboardInterrupt:
         log_json_entry(
             LogType.GRBL,
@@ -475,7 +477,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         # Send any emergency stops or cleanup commands if needed
         try:
             send_cmd(ser, "M3 S30", wait_ok=False)  # Pen up
-            send_cmd(ser, "!", wait_ok=False)       # Emergency stop
+            send_cmd(ser, "!", wait_ok=False)  # Emergency stop
         except:
             pass
         raise
