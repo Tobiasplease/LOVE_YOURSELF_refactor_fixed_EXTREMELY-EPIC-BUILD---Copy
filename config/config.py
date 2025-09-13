@@ -105,7 +105,7 @@ EXECUTE_GRBL_GCODE = True
 # === GRBL WARP TRANSFORM ===
 # If True, apply JBE's warp transform to correct robot arm distortion
 # If False, use raw coordinates without distortion correction
-GRBL_WARP_TRANSFORM = True
+GRBL_WARP_TRANSFORM = False
 
 # GRBL homing retry configuration
 GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
@@ -168,6 +168,14 @@ CAMERA_INDEX = 0  # or whichever index your camera uses
 # === CAMERA RESOLUTION ===
 CAMERA_WIDTH = 1920   # Full HD width for high quality image processing
 CAMERA_HEIGHT = 1080  # Full HD height for high quality image processing
+
+# === CAMERA IMAGE QUALITY ===
+CAMERA_SHARPNESS = 50      # Sharpness (0-100, -1 for auto/default)
+CAMERA_SATURATION = 30     # Color saturation (0-100, lower = less colorful)
+CAMERA_CONTRAST = 50       # Contrast (0-100, 50 = normal)
+CAMERA_BRIGHTNESS = 50     # Brightness (0-100, 50 = normal)
+CAMERA_EXPOSURE = -1       # Exposure (-1 for auto, or manual value)
+CAMERA_AUTO_FOCUS = True   # Enable autofocus if available
 
 # --- Mistral LLM settings ---
 # MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts

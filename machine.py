@@ -21,6 +21,12 @@ from config.config import (
     CAMERA_INDEX,
     CAMERA_WIDTH,
     CAMERA_HEIGHT,
+    CAMERA_SHARPNESS,
+    CAMERA_SATURATION,
+    CAMERA_CONTRAST,
+    CAMERA_BRIGHTNESS,
+    CAMERA_EXPOSURE,
+    CAMERA_AUTO_FOCUS,
     CONFIDENCE_THRESHOLD,
     DEBUG_REACTIVITY_PAUSE,
     MODEL_PATH,
@@ -178,6 +184,27 @@ debug_print("Camera opened successfully", "INIT")
 # Set camera resolution for better image quality
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+
+# Set camera image quality properties
+def set_camera_property_safe(cap, prop, value, name):
+    """Safely set camera property with error handling"""
+    if value != -1:  # -1 means use default/auto
+        try:
+            result = cap.set(prop, value)
+            if result:
+                debug_print(f"Camera {name} set to {value}", "INIT")
+            else:
+                debug_print(f"Camera {name} setting failed (not supported)", "WARN")
+        except Exception as e:
+            debug_print(f"Camera {name} error: {e}", "ERROR")
+
+# Apply camera quality settings
+set_camera_property_safe(cap, cv2.CAP_PROP_SHARPNESS, CAMERA_SHARPNESS, "sharpness")
+set_camera_property_safe(cap, cv2.CAP_PROP_SATURATION, CAMERA_SATURATION, "saturation")
+set_camera_property_safe(cap, cv2.CAP_PROP_CONTRAST, CAMERA_CONTRAST, "contrast")
+set_camera_property_safe(cap, cv2.CAP_PROP_BRIGHTNESS, CAMERA_BRIGHTNESS, "brightness")
+set_camera_property_safe(cap, cv2.CAP_PROP_EXPOSURE, CAMERA_EXPOSURE, "exposure")
+set_camera_property_safe(cap, cv2.CAP_PROP_AUTOFOCUS, 1 if CAMERA_AUTO_FOCUS else 0, "autofocus")
 
 proto = f"{MODEL_PATH}/deploy.prototxt"
 model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
