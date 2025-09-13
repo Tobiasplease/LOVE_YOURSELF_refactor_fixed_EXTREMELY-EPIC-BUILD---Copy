@@ -19,6 +19,8 @@ from captioner.captioner import Captioner
 from config.config import (
     BAUD_RATE,
     CAMERA_INDEX,
+    CAMERA_WIDTH,
+    CAMERA_HEIGHT,
     CONFIDENCE_THRESHOLD,
     DEBUG_REACTIVITY_PAUSE,
     MODEL_PATH,
@@ -174,8 +176,8 @@ if not cap.isOpened():
     exit()
 debug_print("Camera opened successfully", "INIT")
 # Set camera resolution for better image quality
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
 
 proto = f"{MODEL_PATH}/deploy.prototxt"
 model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"

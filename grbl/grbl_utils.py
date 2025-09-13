@@ -16,9 +16,10 @@ from .warp_transform import warp_transform_line
 
 # Import pen servo configuration
 try:
-    from config.config import GRBL_PEN_DOWN_S, GRBL_PEN_UP_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S
+    from config.config import GRBL_PEN_DOWN_S, GRBL_PEN_UP_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S, GRBL_WARP_TRANSFORM
 except Exception:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S = 30, 50, 255, 0
+    GRBL_WARP_TRANSFORM = True
 
 # Default configuration
 DEFAULT_BAUD = 115200
@@ -688,7 +689,8 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             try:
                 # Determine timeout and transform based on command type
                 if line.startswith(("G0", "G1", "G00", "G01")):
-                    line = warp_transform_line(line)  # warp transform line coords
+                    if GRBL_WARP_TRANSFORM:
+                        line = warp_transform_line(line)  # warp transform line coords
                     timeout = move_timeout
                 else:
                     timeout = DEFAULT_CMD_TIMEOUT

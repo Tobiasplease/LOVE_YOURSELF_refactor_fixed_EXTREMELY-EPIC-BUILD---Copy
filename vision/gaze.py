@@ -33,9 +33,50 @@ idle_next_move_time = 0  # Trigger immediate movement
 startup_sequence_active = False  # Flag to prevent conflicts during startup
 drawing_sequence_active = False  # Flag to prevent conflicts during CNC drawing
 
+# === ORGANIC MOVEMENT DECOUPLING ===
+# Independent timing and curves for pan/tilt
+pan_offset_time = random.uniform(0, 2.0)  # Random phase offset for pan
+tilt_offset_time = random.uniform(0, 2.0)  # Random phase offset for tilt
+pan_micro_target = 90  # Intermediate target for curved movement
+tilt_micro_target = 90  # Intermediate target for curved movement
+pan_easing_variance = 1.0  # Dynamic easing multiplier for pan
+tilt_easing_variance = 1.0  # Dynamic easing multiplier for tilt
+
 
 def clamp(val, min_val, max_val):
     return max(min_val, min(max_val, val))
+
+
+def update_organic_variance(now):
+    """Update pan/tilt easing variance for organic movement"""
+    global pan_easing_variance, tilt_easing_variance, pan_offset_time, tilt_offset_time
+
+    # Create organic variance with different frequencies for pan/tilt
+    pan_wave = math.sin((now + pan_offset_time) * 0.3) * 0.3 + 1.0  # 0.7 to 1.3 multiplier
+    tilt_wave = math.cos((now + tilt_offset_time) * 0.4) * 0.2 + 1.0  # 0.8 to 1.2 multiplier
+
+    pan_easing_variance = max(0.5, min(1.5, pan_wave))
+    tilt_easing_variance = max(0.5, min(1.5, tilt_wave))
+
+
+def create_micro_targets(target_x, target_y, now):
+    """Create intermediate curved movement targets for organic motion"""
+    global pan_micro_target, tilt_micro_target
+
+    # Add slight curved paths using offset sine waves
+    curve_intensity = 2.0  # Maximum deviation in degrees
+
+    # Pan gets horizontal curves, tilt gets vertical curves
+    pan_curve = math.sin((now + pan_offset_time) * 0.8) * curve_intensity
+    tilt_curve = math.cos((now + tilt_offset_time) * 0.6) * curve_intensity
+
+    # Update micro targets with curves
+    pan_micro_target = target_x + pan_curve
+    tilt_micro_target = target_y + tilt_curve
+
+    # Keep within bounds
+    pan_micro_target = clamp(pan_micro_target, PAN_MIN, PAN_MAX)
+    tilt_micro_target = clamp(tilt_micro_target, TILT_MIN, TILT_MAX)
 
 
 def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
@@ -76,14 +117,21 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
         target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * face_x_norm
         target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * face_y_norm
 
-        # Apply dead zone only for small movements
-        dx = abs(target_x - servo_x)
-        dy = abs(target_y - servo_y)
+        # Update organic movement patterns
+        update_organic_variance(now)
+        create_micro_targets(target_x, target_y, now)
 
+        # Apply dead zone only for small movements - but use decoupled easing
+        dx = abs(pan_micro_target - servo_x)
+        dy = abs(tilt_micro_target - servo_y)
+
+        # Independent pan/tilt movement with organic variance
         if dx > DEAD_ZONE:
-            servo_x = smooth_step(servo_x, target_x, EASING_FACTOR)
+            pan_easing = EASING_FACTOR * pan_easing_variance
+            servo_x = smooth_step(servo_x, pan_micro_target, pan_easing)
         if dy > DEAD_ZONE:
-            servo_y = smooth_step(servo_y, target_y, EASING_FACTOR)
+            tilt_easing = EASING_FACTOR * tilt_easing_variance
+            servo_y = smooth_step(servo_y, tilt_micro_target, tilt_easing)
 
     elif state == "tracking" and now - last_seen_time < FACE_STABLE_TIMEOUT:
         # Grace period - hold position
@@ -166,10 +214,19 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
                 base_pause = random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
                 idle_next_move_time = now + base_pause * pattern["pause_scale"]
 
-        # Movement toward targets with emotional easing
+        # Update organic movement patterns for idle state
+        update_organic_variance(now)
+        create_micro_targets(target_x, target_y, now)
+
+        # Movement toward targets with emotional easing and organic decoupling
         emotional_easing = IDLE_EASING * pattern["easing_scale"]
-        servo_x = smooth_step(servo_x, target_x, emotional_easing)
-        servo_y = smooth_step(servo_y, target_y, emotional_easing)
+
+        # Apply independent pan/tilt easing with organic variance
+        pan_easing = emotional_easing * pan_easing_variance
+        tilt_easing = emotional_easing * tilt_easing_variance
+
+        servo_x = smooth_step(servo_x, pan_micro_target, pan_easing)
+        servo_y = smooth_step(servo_y, tilt_micro_target, tilt_easing)
 
     # Keep decimal precision for smoother movement - only round at final output
     return person_present, int(servo_x + 0.5), int(servo_y + 0.5)

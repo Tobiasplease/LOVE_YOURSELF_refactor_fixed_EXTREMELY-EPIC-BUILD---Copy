@@ -102,6 +102,11 @@ CENTER_LINE_SVG = True
 # If False, only generate G-code files without executing them
 EXECUTE_GRBL_GCODE = True
 
+# === GRBL WARP TRANSFORM ===
+# If True, apply JBE's warp transform to correct robot arm distortion
+# If False, use raw coordinates without distortion correction
+GRBL_WARP_TRANSFORM = True
+
 # GRBL homing retry configuration
 GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
 GRBL_HOMING_TIMEOUT = 120  # Seconds to wait for each homing attempt
@@ -159,6 +164,10 @@ TINYLLAMA_NUM_PREDICT = 5  # Very short - just a number like "0.7"
 TINYLLAMA_TIMEOUT = 20  # Timeout in seconds for TinyLlama queries
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
+
+# === CAMERA RESOLUTION ===
+CAMERA_WIDTH = 1920   # Full HD width for high quality image processing
+CAMERA_HEIGHT = 1080  # Full HD height for high quality image processing
 
 # --- Mistral LLM settings ---
 # MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts
