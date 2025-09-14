@@ -60,11 +60,14 @@ def translate(x, y, x_delta, y_delta):
 # DET HÄR är funktionen som ska konvertera tillbaka skjuvningen
 # koppla in den där koordinater för g-code skapas
 def inverse(x, y):
-    x = mirror * x
+    # Mathematician's new origin translation - flytta origo
+    (x, y) = translate(x, y, 60, 60)
+
     cos_phi = (biceps**2 + underarm**2 - (x**2 + y**2)) / (2 * biceps * underarm)
     l = tendon_underarm * cos_phi + math.sqrt((tendon_underarm * cos_phi) ** 2 - (tendon_underarm**2 - tendon_biceps**2))
     theta = theta_calc(x, y)
-    return mirror * theta, l  # type: ignore
+
+    return theta, l
 
 
 # inställningar för utplottningen
