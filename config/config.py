@@ -57,13 +57,10 @@ LUNG_OFFSET_SCALE = -0.10
 
 OLLAMA_MODEL = "llava:7b-v1.6-mistral-q5_1"
 
-# Tested and Available Models:
-# - "llava:7b-v1.6-mistral-q5_1" (good - rich detailed responses, most engaging, needs work)
-# - "qwen2.5vl:3b" (experimental - scene-beat structure, more concise but can be repetitive)
-# - "qwen2.5vl:7b" (testing - better roleplay than 3b, balanced approach)
+# Active model:
+# - "llava:7b-v1.6-mistral-q5_1"
 #
-# To switch models, change OLLAMA_MODEL above or set environment variable:
-# set OLLAMA_MODEL=qwen2.5vl:7b
+# To switch models, change OLLAMA_MODEL above (no alternative presets maintained).
 
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log"))
 

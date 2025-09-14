@@ -1,0 +1,359 @@
+{
+  "name": "test_angles",
+  "type": "angle_based_sequence",
+  "description": "Angle-based recorded motion at 6.2Hz",
+  "recorded_at": "2025-09-14T15:12:54.297787",
+  "total_duration": 5.012784004211426,
+  "actual_frequency": 6.184188262242249,
+  "target_frequency": 100,
+  "sample_count": 31,
+  "total_angle_change": 0.0,
+  "sequence": [
+    {
+      "time": 0.031271934509277344,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 0,
+      "button_event": false
+    },
+    {
+      "time": 0.19512367248535156,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 5,
+      "button_event": false
+    },
+    {
+      "time": 0.3587007522583008,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 10,
+      "button_event": false
+    },
+    {
+      "time": 0.5244622230529785,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 15,
+      "button_event": false
+    },
+    {
+      "time": 0.6879990100860596,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 20,
+      "button_event": false
+    },
+    {
+      "time": 0.8521742820739746,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 25,
+      "button_event": false
+    },
+    {
+      "time": 1.0140376091003418,
+      "angles": [
+        36.21,
+        97.91,
+        66.12
+      ],
+      "suction": false,
+      "sample": 30,
+      "button_event": false
+    },
+    {
+      "time": 1.1782381534576416,
+      "angles": [
+        36.21,
+        97.91,
+        66.12
+      ],
+      "suction": false,
+      "sample": 35,
+      "button_event": false
+    },
+    {
+      "time": 1.3417396545410156,
+      "angles": [
+        36.21,
+        97.91,
+        66.12
+      ],
+      "suction": false,
+      "sample": 40,
+      "button_event": false
+    },
+    {
+      "time": 1.505624771118164,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 45,
+      "button_event": false
+    },
+    {
+      "time": 1.6695842742919922,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 50,
+      "button_event": false
+    },
+    {
+      "time": 1.8333766460418701,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 55,
+      "button_event": false
+    },
+    {
+      "time": 1.9971399307250977,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 60,
+      "button_event": false
+    },
+    {
+      "time": 2.1629395484924316,
+      "angles": [
+        36.21,
+        97.91,
+        66.12
+      ],
+      "suction": false,
+      "sample": 65,
+      "button_event": false
+    },
+    {
+      "time": 2.324836492538452,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 70,
+      "button_event": false
+    },
+    {
+      "time": 2.4889345169067383,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 75,
+      "button_event": false
+    },
+    {
+      "time": 2.6526095867156982,
+      "angles": [
+        36.21,
+        97.91,
+        66.12
+      ],
+      "suction": false,
+      "sample": 80,
+      "button_event": false
+    },
+    {
+      "time": 2.8165462017059326,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 85,
+      "button_event": false
+    },
+    {
+      "time": 2.980421304702759,
+      "angles": [
+        36.21,
+        97.91,
+        66.12
+      ],
+      "suction": false,
+      "sample": 90,
+      "button_event": false
+    },
+    {
+      "time": 3.144700050354004,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 95,
+      "button_event": false
+    },
+    {
+      "time": 3.3083760738372803,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 100,
+      "button_event": false
+    },
+    {
+      "time": 3.4723706245422363,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 105,
+      "button_event": false
+    },
+    {
+      "time": 3.6359994411468506,
+      "angles": [
+        36.21,
+        97.91,
+        66.12
+      ],
+      "suction": false,
+      "sample": 110,
+      "button_event": false
+    },
+    {
+      "time": 3.8007118701934814,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 115,
+      "button_event": false
+    },
+    {
+      "time": 3.9647247791290283,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 120,
+      "button_event": false
+    },
+    {
+      "time": 4.127797365188599,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 125,
+      "button_event": false
+    },
+    {
+      "time": 4.291571140289307,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 130,
+      "button_event": false
+    },
+    {
+      "time": 4.45536994934082,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 135,
+      "button_event": false
+    },
+    {
+      "time": 4.619187116622925,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 140,
+      "button_event": false
+    },
+    {
+      "time": 4.782699823379517,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 145,
+      "button_event": false
+    },
+    {
+      "time": 4.946462869644165,
+      "angles": [
+        36.21,
+        97.91,
+        66.21
+      ],
+      "suction": false,
+      "sample": 150,
+      "button_event": false
+    }
+  ],
+  "metadata": {
+    "recording_method": "servo_angles",
+    "sample_interval": 0.01,
+    "recording_quality": "medium"
+  }
+}

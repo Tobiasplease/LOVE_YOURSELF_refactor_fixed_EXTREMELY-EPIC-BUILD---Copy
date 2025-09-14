@@ -217,23 +217,7 @@ def beliefs_to_sentence(beliefs: List[str]) -> str:
         return f"{natural_beliefs[0]}, {natural_beliefs[1]}, {natural_beliefs[2]}"
 
 
-def get_session_feeling(session_start_time: float) -> str:
-    """Convert session duration to natural temporal feeling."""
-    elapsed = time.time() - session_start_time
-
-    if elapsed < 300:  # 0-5 minutes
-        return "just beginning to observe"
-    elif elapsed < 1800:  # 5-30 minutes
-        return f"settling in after {int(elapsed / 60)} minutes"
-    elif elapsed < 3600:  # 30-60 minutes
-        return f"feeling settled after {int(elapsed / 60)} minutes observing"
-    elif elapsed < 7200:  # 1-2 hours
-        hours = int(elapsed / 3600)
-        minutes = int((elapsed % 3600) / 60)
-        return f"deeply familiar after {hours} hour and {minutes} minutes"
-    else:  # 2+ hours
-        hours = int(elapsed / 3600)
-        return f"in a contemplative state after {hours} hours observing"
+# Removed legacy get_session_feeling (unused)
 
 
 def get_caption_emotion_context(agent, recent_caption: Optional[str] = None) -> str:
@@ -811,20 +795,7 @@ def _is_significant_motif(text: str) -> bool:
     return True
 
 
-def build_caption_prompt(agent, mood: float, boredom: float, novelty: float, previous_caption: Optional[str] = None) -> str:
-    """
-    Main caption prompt builder - preserves rich mood/boredom/novelty context.
-    Note: mood/boredom/novelty are preserved for other systems but caption emotion now comes from sentiment analysis.
-    """
-    last_caption = previous_caption or getattr(agent, "last_caption", None)
-
-    # Store mood/boredom/novelty values on agent for other systems that need them
-    if hasattr(agent, "current_mood"):
-        agent.current_mood = mood
-        agent.current_boredom = boredom
-        agent.current_novelty = novelty
-
-    return build_ongoing_caption_prompt(agent, last_caption)
+# Removed legacy build_caption_prompt (unused)
 
 
 # === REFLECTION PROMPT ===
@@ -946,49 +917,4 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None) -> str:
 
 
 # === SIMPLE FALLBACK PROMPT SYSTEM ===
-def build_simple_contextual_prompt(agent):
-    """Build a simple, direct prompt based on novelty and boredom - fallback system"""
-
-    # Calculate simple novelty based on visual stagnation
-    visual_stagnation = getattr(agent, "current_visual_stagnation", 0.0) if hasattr(agent, "current_visual_stagnation") else 0.0
-    novelty = 1.0 - visual_stagnation  # High stagnation = low novelty
-
-    # Simple boredom calculation
-    boredom = getattr(agent, "boredom", 0.0)
-
-    # Simple mood
-    mood = getattr(agent, "current_mood", 0.0)
-
-    # Context-aware intro based on scene state
-    if boredom > 0.7:
-        intro = "Nothing new has happened in a while. I feel detached, but I'm still paying attention."
-    elif novelty < 0.2:
-        intro = "The scene appears stable. I'm trying to notice new details I may have missed."
-    elif novelty < 0.6:
-        intro = "There have been some changes. I'm continuing to observe carefully."
-    else:
-        intro = "Something seems different now. I need to update my understanding of the scene."
-
-    prompt_parts = [intro]
-
-    # Anti-repetition: Get recent captions to avoid repeating
-    if hasattr(agent, "get_current_session_memory_snippets"):
-        recent_snippets = agent.get_current_session_memory_snippets(k=3)
-        if recent_snippets:
-            prompt_parts.append(
-                f"The following have already been described: {'; '.join(recent_snippets)}. "
-                "Avoid describing these again unless they've changed. Instead, expand or refine the scene by noticing new details."
-            )
-
-    # Simple state info
-    prompt_parts.append(f"My internal state is {mood:.2f}. Boredom level: {boredom:.2f}.")
-
-    # The crucial constraint that made the legacy system work
-    prompt_parts.append(
-        "You are experiencing this through your camera vision, not analyzing photos. "
-        "Respond with a single, complete sentence under 20 words. Do not trail off. "
-        "Each entry should be a full thought, part of an ongoing analysis. "
-        "Do not repeat earlier descriptions. What specifically catches your attention right now?"
-    )
-
-    return " ".join(prompt_parts)
+# Removed legacy build_simple_contextual_prompt (unused)
