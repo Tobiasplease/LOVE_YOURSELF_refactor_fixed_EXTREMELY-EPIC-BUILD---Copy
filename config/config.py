@@ -102,7 +102,7 @@ EXECUTE_GRBL_GCODE = True
 # === GRBL WARP TRANSFORM ===
 # If True, apply JBE's warp transform to correct robot arm distortion
 # If False, use raw coordinates without distortion correction
-GRBL_WARP_TRANSFORM = True
+GRBL_WARP_TRANSFORM = False
 
 # GRBL homing retry configuration
 GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up

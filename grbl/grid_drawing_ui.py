@@ -15,7 +15,7 @@ from serial.tools import list_ports
 
 # Import warp transform
 try:
-    from warp_transform import warp_transform_line
+    from warp_transform import inverse, trans
     WARP_AVAILABLE = True
 except ImportError:
     WARP_AVAILABLE = False
@@ -32,7 +32,8 @@ class GridDrawingUI:
         self.is_drawing = False
 
         # Configuration variables
-        self.use_warp_transform = tk.BooleanVar(value=True)
+        self.use_warp_transform = tk.BooleanVar(value=False)
+        self.use_corrected_warp = tk.BooleanVar(value=True)
         self.grid_size = tk.IntVar(value=40)
         self.grid_spacing = tk.IntVar(value=10)
         self.feed_rate = tk.IntVar(value=3000)
@@ -70,13 +71,18 @@ class GridDrawingUI:
         warp_frame = ttk.Frame(config_frame)
         warp_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
-        warp_check = ttk.Checkbutton(warp_frame, text="Enable Warp Transform Correction",
+        warp_check = ttk.Checkbutton(warp_frame, text="Enable Original Warp Transform",
                                     variable=self.use_warp_transform,
                                     command=self.on_warp_toggle)
         warp_check.grid(row=0, column=0)
 
+        corrected_warp_check = ttk.Checkbutton(warp_frame, text="Enable Corrected Warp Transform",
+                                              variable=self.use_corrected_warp,
+                                              command=self.on_warp_toggle)
+        corrected_warp_check.grid(row=1, column=0)
+
         self.warp_status = ttk.Label(warp_frame, text="", font=('Arial', 10, 'italic'))
-        self.warp_status.grid(row=0, column=1, padx=(20, 0))
+        self.warp_status.grid(row=0, column=1, rowspan=2, padx=(20, 0))
 
         # Grid settings
         ttk.Label(config_frame, text="Grid Size (mm):").grid(row=1, column=0, sticky=tk.W)
@@ -149,14 +155,28 @@ class GridDrawingUI:
 
     def on_warp_toggle(self):
         """Handle warp transform toggle"""
-        enabled = self.use_warp_transform.get()
-        if enabled and not WARP_AVAILABLE:
+        original_enabled = self.use_warp_transform.get()
+        corrected_enabled = self.use_corrected_warp.get()
+
+        if (original_enabled or corrected_enabled) and not WARP_AVAILABLE:
             self.warp_status.config(text="❌ Warp transform not available!", foreground="red")
             messagebox.showwarning("Warning", "Warp transform module not available!")
             self.use_warp_transform.set(False)
+            self.use_corrected_warp.set(False)
         else:
-            status = "✅ Enabled" if enabled else "⭕ Disabled"
-            color = "green" if enabled else "orange"
+            # Ensure only one is enabled at a time
+            if original_enabled and corrected_enabled:
+                # If both were enabled, prefer corrected and disable original
+                self.use_warp_transform.set(False)
+                status = "✅ Corrected Enabled"
+            elif corrected_enabled:
+                status = "✅ Corrected Enabled"
+            elif original_enabled:
+                status = "✅ Original Enabled"
+            else:
+                status = "⭕ Disabled"
+
+            color = "green" if (original_enabled or corrected_enabled) else "orange"
             self.warp_status.config(text=status, foreground=color)
 
     def update_status(self):
@@ -223,6 +243,69 @@ class GridDrawingUI:
 
         self.update_status()
 
+    def corrected_warp_transform_line(self, gcode_line):
+        """Apply corrected warp transform that outputs proper GRBL coordinates"""
+        import re
+
+        # Andreas's A4 corner coordinates (proven safe)
+        ANDREAS_A4_CORNERS = [
+            (66, -2),    # bottom_left  → A4 (0, 0)
+            (111, -1),   # bottom_right → A4 (210, 0)
+            (-2, 67),    # top_left     → A4 (0, 297)
+            (24, 67)     # top_right    → A4 (210, 297)
+        ]
+
+        def bilinear_interpolation(x, y, corner_values):
+            """Convert from A4 coordinates to Andreas's GRBL coordinates"""
+            # Normalize coordinates to [0,1] range for A4
+            u = max(0, min(1, x / 210.0))  # A4 width
+            v = max(0, min(1, y / 297.0))  # A4 height
+
+            # Get corner values
+            bottom_left, bottom_right, top_left, top_right = corner_values
+
+            # Bilinear interpolation
+            bottom = ((1 - u) * bottom_left[0] + u * bottom_right[0],
+                     (1 - u) * bottom_left[1] + u * bottom_right[1])
+            top = ((1 - u) * top_left[0] + u * top_right[0],
+                  (1 - u) * top_left[1] + u * top_right[1])
+
+            result_x = (1 - v) * bottom[0] + v * top[0]
+            result_y = (1 - v) * bottom[1] + v * top[1]
+
+            return result_x, result_y
+
+        # Extract coordinates from G-code line
+        x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
+        y_match = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
+
+        if x_match and y_match:
+            # Get original coordinates
+            original_x = float(x_match.group(1))
+            original_y = float(y_match.group(1))
+
+            try:
+                # Step 1: Apply inverse kinematics to get robot parameters
+                theta, l = inverse(original_x, original_y)
+
+               
+                # Step 3: Convert from theoretical coordinates to GRBL coordinates
+                # Clamp to A4 range for safety
+                safe_x = max(0, min(210, theta))
+                safe_y = max(0, min(297, l))
+                grbl_x, grbl_y = bilinear_interpolation(safe_x, safe_y, ANDREAS_A4_CORNERS)
+
+                # Update G-code line with corrected coordinates
+                gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{grbl_x:.4f}", gcode_line, flags=re.IGNORECASE)
+                gcode_line = re.sub(r"Y[-+]?\d*\.?\d+", f"Y{grbl_y:.4f}", gcode_line, flags=re.IGNORECASE)
+
+            except Exception as e:
+                # If warp transform fails, return original line
+                self.log(f"⚠️  Warp transform failed: {e}", "error")
+                return gcode_line
+
+        return gcode_line
+
     def send_cmd(self, cmd, wait_ok=True, timeout=5.0):
         """Send command to GRBL with optional warp transform"""
         if not self.ser:
@@ -231,11 +314,22 @@ class GridDrawingUI:
         original_cmd = cmd
 
         # Apply warp transform if enabled
-        if (self.use_warp_transform.get() and WARP_AVAILABLE and
+        if (WARP_AVAILABLE and
             cmd.startswith(("G0", "G1", "G00", "G01")) and
             ("X" in cmd or "Y" in cmd)):
-            cmd = warp_transform_line(cmd)
-            self.log(f"🔄 {original_cmd} -> {cmd}", "warp")
+
+            if self.use_corrected_warp.get():
+                # Use corrected warp transform
+                cmd = self.corrected_warp_transform_line(cmd)
+                self.log(f"🔄 CORRECTED {original_cmd} -> {cmd}", "warp")
+            elif self.use_warp_transform.get():
+                # Use original warp transform
+                from warp_transform import warp_transform_line
+                cmd = warp_transform_line(cmd)
+                self.log(f"🔄 ORIGINAL {original_cmd} -> {cmd}", "warp")
+            else:
+                # No warp transform
+                self.log(f"📤 {cmd}")
         else:
             self.log(f"📤 {cmd}")
 

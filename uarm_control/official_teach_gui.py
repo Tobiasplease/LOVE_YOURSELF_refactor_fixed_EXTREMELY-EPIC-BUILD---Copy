@@ -231,31 +231,49 @@ Official uArm Teach & Play with Duration Control:
             return
 
         try:
-            teach = self.teach_systems[slot_id]
+            # Recreate a fresh Teach bound to this slot's file each time
+            slot_file = self.motion_slots[slot_id]['file']
+            teach = Teach(slot_file, self.swift)
+            self.teach_systems[slot_id] = teach
+
             if not teach.is_recording() and not teach.is_playing():
                 duration = self.duration_var.get()
 
-                # Start recording
-                teach.start_record(interval=0.02)  # Higher frequency for smoother capture
+                # Ensure standby mode (limp) is ON for manual guidance during record
+                try:
+                    teach.start_standby_mode()
+                except Exception:
+                    pass
 
-                # Auto-stop recording after duration
-                def auto_stop():
+                # Start recording at higher frequency for smoother capture
+                teach.start_record(interval=0.02)
+
+                # Update status label immediately
+                status_label = getattr(self, f"slot_{slot_id}_status")
+                status_label.config(text=f"Recording... ({duration}s)")
+
+                # Auto-stop in a background thread to avoid blocking Tk loop
+                def auto_stop_thread():
                     try:
+                        time.sleep(duration)
                         if teach.is_recording():
                             teach.stop_record()
-                            messagebox.showinfo("Recording Complete",
-                                f"Recording completed for {self.motion_slots[slot_id]['name']} ({duration}s)")
-                            self.update_slot_status(slot_id)
+                        # Keep standby ON after record
+                        try:
+                            teach.start_standby_mode()
+                        except Exception:
+                            pass
+                        # UI updates back on main thread
+                        self.root.after(0, lambda: status_label.config(text="Recording available"))
+                        self.root.after(0, lambda: self.update_slot_status(slot_id))
+                        self.root.after(0, lambda: messagebox.showinfo(
+                            "Recording Complete",
+                            f"Recording completed for {self.motion_slots[slot_id]['name']} ({duration}s)"
+                        ))
                     except Exception as e:
                         print(f"Auto-stop error: {e}")
 
-                # Schedule auto-stop
-                self.root.after(duration * 1000, auto_stop)
-
-                messagebox.showinfo("Recording Started",
-                    f"Recording {self.motion_slots[slot_id]['name']} for {duration} seconds\n\n"
-                    f"Robot is now limp - move it at your desired speed!\n"
-                    f"Will automatically stop in {duration} seconds")
+                threading.Thread(target=auto_stop_thread, daemon=True).start()
             else:
                 messagebox.showwarning("Warning", "Already recording or playing")
 
@@ -274,6 +292,10 @@ Official uArm Teach & Play with Duration Control:
             teach = self.teach_systems[slot_id]
             if teach.is_recording():
                 teach.stop_record()
+                try:
+                    teach.start_standby_mode()
+                except Exception:
+                    pass
                 messagebox.showinfo("Recording", f"Recording stopped and saved for {self.motion_slots[slot_id]['name']}")
             else:
                 messagebox.showwarning("Warning", "Not currently recording")
@@ -284,8 +306,8 @@ Official uArm Teach & Play with Duration Control:
         self.update_slot_status(slot_id)
 
     def play_motion(self, slot_id):
-        """Play recorded motion for slot using direct G-code execution"""
-        if not self.connected or not self.swift:
+        """Play recorded motion using official uArm SDK Teach class"""
+        if not self.connected or slot_id not in self.teach_systems:
             messagebox.showerror("Error", "Not connected to uArm")
             return
 
@@ -295,61 +317,56 @@ Official uArm Teach & Play with Duration Control:
             return
 
         try:
-            # Read the G-code file directly
-            with open(slot_info['file'], 'r') as f:
-                gcode_lines = f.readlines()
+            # Recreate a fresh Teach bound to this slot's file each time
+            slot_file = self.motion_slots[slot_id]['file']
+            teach = Teach(slot_file, self.swift)
+            self.teach_systems[slot_id] = teach
 
-            # Filter out empty lines and parse G-code
-            waypoints = []
-            for line in gcode_lines:
-                line = line.strip()
-                if line and line.startswith('G0,'):
-                    # Parse G0,x,y,z,calculated_speed,time_interval_ms format
-                    parts = line.split(',')
-                    if len(parts) >= 5:
-                        try:
-                            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
-                            calculated_speed = float(parts[4])  # Speed calculated by SDK
-                            time_interval_ms = int(parts[5]) if len(parts) > 5 else 100
-                            waypoints.append((x, y, z, calculated_speed, time_interval_ms))
-                        except ValueError:
-                            continue
-
-            if not waypoints:
-                messagebox.showerror("Error", "No valid waypoints found in recording")
-                return
-
-            print(f"DEBUG: Found {len(waypoints)} waypoints")
-
-            # Start playback in separate thread - FAST AND SIMPLE
-            def execute_playback():
+            if not teach.is_playing() and not teach.is_recording():
+                # Ensure standby (limp) mode is OFF and servos are attached before playback
                 try:
-                    import time as time_module
+                    teach.stop_standby_mode()
+                except Exception:
+                    pass
+                try:
+                    if self.swift:
+                        # Attach all servos to ensure active control during playback
+                        self.swift.set_servo_attach()
+                except Exception:
+                    pass
 
-                    # Use SDK-calculated speed and timing for perfect organic replication
-                    for i, (x, y, z, calculated_speed, interval_ms) in enumerate(waypoints):
-                        # Update progress occasionally
-                        if i % 20 == 0:
-                            progress = (i / len(waypoints)) * 100
-                            self.root.after(0, lambda p=progress: getattr(self, f"slot_{slot_id}_status").config(text=f"Playing {p:.1f}%"))
+                # Use the official SDK playback - this should work!
+                teach.start_play()
 
-                        # Use the SDK-calculated speed directly (it's already correct!)
-                        speed = max(50, min(2000, int(calculated_speed)))  # Direct use with safety bounds
-                        self.swift.set_position(x=x, y=y, z=z, speed=speed, wait=False)
+                # Monitor playback in separate thread
+                def monitor_playback():
+                    try:
+                        self.root.after(0, lambda: getattr(self, f"slot_{slot_id}_status").config(text="Playing..."))
 
-                        # Use the actual recorded timing intervals (this is the key!)
-                        time_module.sleep(interval_ms / 1000.0)
+                        # Wait for playback to complete
+                        while teach.is_playing():
+                            time.sleep(0.1)
 
-                    # Playback complete
-                    self.root.after(0, lambda: getattr(self, f"slot_{slot_id}_status").config(text="Recording available"))
-                    self.root.after(0, lambda: messagebox.showinfo("Complete", f"Playback of {slot_info['name']} completed"))
+                        # Playback complete - restore standby (limp) mode for safety/teach readiness
+                        try:
+                            teach.start_standby_mode()
+                        except Exception:
+                            pass
+                        self.root.after(0, lambda: getattr(self, f"slot_{slot_id}_status").config(text="Recording available"))
+                        self.root.after(0, lambda: messagebox.showinfo("Complete", f"Playback of {slot_info['name']} completed"))
 
-                except Exception as e:
-                    self.root.after(0, lambda: getattr(self, f"slot_{slot_id}_status").config(text="Recording available"))
-                    self.root.after(0, lambda e=e: messagebox.showerror("Playback Error", f"Failed during playback: {e}"))
+                    except Exception as e:
+                        # On error, attempt to restore standby mode too
+                        try:
+                            teach.start_standby_mode()
+                        except Exception:
+                            pass
+                        self.root.after(0, lambda: getattr(self, f"slot_{slot_id}_status").config(text="Recording available"))
+                        self.root.after(0, lambda e=e: messagebox.showerror("Playback Error", f"Failed during playback: {e}"))
 
-            threading.Thread(target=execute_playback, daemon=True).start()
-            messagebox.showinfo("Playback", f"Playing {len(waypoints)} waypoints from {slot_info['name']}")
+                threading.Thread(target=monitor_playback, daemon=True).start()
+            else:
+                messagebox.showwarning("Warning", "Already recording or playing")
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to start playback: {e}")
