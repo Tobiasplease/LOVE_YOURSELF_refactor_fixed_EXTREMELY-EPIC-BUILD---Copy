@@ -52,6 +52,11 @@ def theta_calc(x, y):
         return alpha + x_y_angle + math.pi / 2
 
 
+# Används för att flytta koordinatsystemets origo
+def translate(x, y, x_delta, y_delta):
+    return (x + x_delta, y + y_delta)
+
+
 # DET HÄR är funktionen som ska konvertera tillbaka skjuvningen
 # koppla in den där koordinater för g-code skapas
 def inverse(x, y):

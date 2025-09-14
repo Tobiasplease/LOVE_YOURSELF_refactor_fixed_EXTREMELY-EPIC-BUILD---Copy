@@ -489,16 +489,7 @@ Your camera is looking down at paper. The pen is moving. Lines are appearing.
     # Combine all context into rich system prompt with emotional emphasis
     rich_prompt_parts = [core_identity]
 
-    # Add egocentric view orientation if available
-    try:
-        view_pan = getattr(agent, "view_pan", None)
-        view_tilt = getattr(agent, "view_tilt", None)
-        if isinstance(view_pan, (int, float)) and isinstance(view_tilt, (int, float)):
-            orientation = describe_view_orientation(view_pan, view_tilt)
-            if orientation:
-                rich_prompt_parts.append(f"View orientation: {orientation} (egocentric)")
-    except Exception:
-        pass
+    # Orientation is now implicit via system prompt, not injected here
 
     # Add temporal context
     if time_context and time_context != "You just woke up.":
@@ -721,23 +712,11 @@ This moment of reawakening - seeing your environment again after the gap - is si
 
     environmental_grounding = " - ".join(environmental_context)
 
-    # Add egocentric view orientation if available
-    orientation_line = ""
-    try:
-        view_pan = getattr(agent, "view_pan", None)
-        view_tilt = getattr(agent, "view_tilt", None)
-        if isinstance(view_pan, (int, float)) and isinstance(view_tilt, (int, float)):
-            orientation = describe_view_orientation(view_pan, view_tilt)
-            if orientation:
-                orientation_line = f"\nView orientation: {orientation} (egocentric)"
-    except Exception:
-        pass
-
     # === Build final rich awakening prompt ===
     return f"""{rich_awakening_identity}
 
 === VISUAL AWAKENING ===
-{environmental_grounding}.{orientation_line}
+{environmental_grounding}.
 
 Your electronic vision is now active. Observe and naturally describe what you see through your eyes.
 Express the feeling of visual consciousness returning - the moment of seeing again after the gap.

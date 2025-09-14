@@ -19,6 +19,7 @@ from .prompts import (
     build_ongoing_caption_prompt,
     build_reflection_prompt,
 )
+from utils.view_orientation import describe_view_orientation
 
 
 class PromptInterface:
@@ -91,6 +92,17 @@ class PromptInterface:
         else:
             # No dynamic context available, use static fallback
             system_prompt = STATIC_SYSTEM_PROMPT
+
+        # Subtle egocentric head orientation guidance (implicit context only)
+        try:
+            vp = getattr(memory_ref, "view_pan", None)
+            vt = getattr(memory_ref, "view_tilt", None)
+            if isinstance(vp, (int, float)) and isinstance(vt, (int, float)):
+                orientation = describe_view_orientation(vp, vt)
+                if orientation:
+                    system_prompt = f"{system_prompt}\n\nHEAD ORIENTATION (implicit): {orientation}"
+        except Exception:
+            pass
 
         # Return prompt, options, and formatted system prompt
         return prompt, model_options, system_prompt
