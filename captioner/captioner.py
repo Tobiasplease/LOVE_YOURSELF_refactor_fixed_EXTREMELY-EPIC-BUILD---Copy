@@ -133,6 +133,16 @@ class Captioner(MemoryMixin):
                     if len(self.emotional_journey) > 10:  # Keep last 10 emotional states
                         self.emotional_journey.pop(0)
                 self.current_emotion_state = emotion_state
+            # Persist latest egocentric view orientation if provided
+            try:
+                if reactivity_data:
+                    pan = reactivity_data.get("pan")
+                    tilt = reactivity_data.get("tilt")
+                    if isinstance(pan, (int, float)) and isinstance(tilt, (int, float)):
+                        self.view_pan = float(pan)
+                        self.view_tilt = float(tilt)
+            except Exception:
+                pass
             if len(self.snapshot_queue) > 1:
                 self.snapshot_queue.pop()
             # Store reactivity data with the frame for processing

@@ -2,9 +2,9 @@
   "motion_slots": {
     "1": {
       "name": "pickup",
-      "description": "GUI recorded motion for slot 1",
-      "recorded_at": "2025-09-14T15:00:13.633747",
-      "file_path": "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/movement_recordings/uarm/pickup.json"
+      "description": "Primary pickup motion",
+      "recorded_at": "2025-09-14T15:52:47.853204",
+      "file_path": "movement_recordings/uarm/pickup_angles.json"
     },
     "2": {
       "name": "place",
@@ -29,6 +29,6 @@
       "description": "Gestural expression motion"
     }
   },
-  "last_updated": "2025-09-14T15:00:13.633758",
-  "version": "1.0"
+  "last_updated": "2025-09-14T15:52:47.853211",
+  "version": "2.0"
 }

@@ -40,6 +40,9 @@ class UarmController:
         self.button_events = []  # Store button press events
         self.callbacks_registered = False
 
+        # Suction pump state tracking
+        self.suction_enabled = False
+
         if connect_on_init and UARM_AVAILABLE:
             self.connect()
 
@@ -87,9 +90,13 @@ class UarmController:
                     # Release button callbacks first
                     self._release_button_callbacks()
 
-                    # Move to safe position before disconnecting
-                    self.home()
-                    time.sleep(1)
+                    # Only move to safe position if auto_home was enabled
+                    if self.auto_home_on_connect:
+                        print("[UarmController] Moving to safe position before disconnect")
+                        self.home()
+                        time.sleep(1)
+                    else:
+                        print("[UarmController] Skipping safe disconnect movement (auto_home disabled)")
                 except Exception as e:
                     print(f"[WARNING] Error during safe disconnect: {e}")
 
@@ -178,6 +185,7 @@ class UarmController:
         try:
             # Original uFactory API method
             self.robot.set_pump(on)
+            self.suction_enabled = on  # Track state
             action = "activated" if on else "deactivated"
             print(f"[UarmController] Suction pump {action}")
             return True
@@ -185,6 +193,14 @@ class UarmController:
             self.last_error = f"Pump control failed: {e}"
             print(f"[ERROR] UarmController pump control failed: {e}")
             return False
+
+    def toggle_pump(self) -> bool:
+        """Toggle suction pump state"""
+        return self.set_pump(not self.suction_enabled)
+
+    def move_to_home(self) -> bool:
+        """Move to home position"""
+        return self.home()
 
     def set_gripper(self, catch: bool) -> bool:
         if not self.is_connected():

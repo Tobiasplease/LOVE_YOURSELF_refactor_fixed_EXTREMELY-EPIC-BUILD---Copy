@@ -915,14 +915,6 @@ try:
             if int(now) % 10 == 0:  # Every 10 seconds
                 debug_print("No person detected", "DETECTION")
 
-        # Update captioner with every frame (decoupled from mood system)
-        captioner.update(
-            frame=frame,
-            person_present=best_box is not None,
-            mood=mood_engine.get_current_mood() if mood_engine else 0.5,
-            reactivity_data=reactivity_metrics,
-        )
-
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:
             # Check if mood analysis is already running to prevent overlapping threads
             with mood_thread_lock:
@@ -937,6 +929,24 @@ try:
 
         face_box = tuple(best_box) if best_box is not None else None
         person_present, pan, tilt = update_gaze(frame, face_box, mood_engine.get_emotion_for_hand_controller())
+
+        # Attach egocentric orientation and face hint to reactivity data
+        reactivity_with_view = dict(reactivity_metrics)
+        reactivity_with_view["pan"] = float(pan)
+        reactivity_with_view["tilt"] = float(tilt)
+        if face_box is not None:
+            x1, y1, x2, y2 = face_box
+            cx = (x1 + x2) / 2.0
+            cy = (y1 + y2) / 2.0
+            reactivity_with_view["face_pos"] = {"x": cx / w, "y": cy / h}
+
+        # Update captioner with every frame (decoupled from mood system)
+        captioner.update(
+            frame=frame,
+            person_present=best_box is not None,
+            mood=mood_engine.get_current_mood() if mood_engine else 0.5,
+            reactivity_data=reactivity_with_view,
+        )
 
         (
             lung_pos,

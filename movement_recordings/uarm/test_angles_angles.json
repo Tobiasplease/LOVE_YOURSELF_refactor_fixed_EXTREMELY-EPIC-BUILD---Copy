@@ -1,359 +1,1052 @@
 {
   "name": "test_angles",
   "type": "angle_based_sequence",
-  "description": "Angle-based recorded motion at 6.2Hz",
-  "recorded_at": "2025-09-14T15:12:54.297787",
-  "total_duration": 5.012784004211426,
-  "actual_frequency": 6.184188262242249,
-  "target_frequency": 100,
-  "sample_count": 31,
-  "total_angle_change": 0.0,
+  "description": "Angle-based recorded motion at 15.6Hz",
+  "recorded_at": "2025-09-14T15:32:21.828506",
+  "total_duration": 6.038132429122925,
+  "actual_frequency": 15.567727456029656,
+  "target_frequency": 50,
+  "sample_count": 94,
+  "total_angle_change": 12.659999999999997,
   "sequence": [
     {
-      "time": 0.031271934509277344,
+      "time": 0.03336691856384277,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        51.97
       ],
       "suction": false,
       "sample": 0,
       "button_event": false
     },
     {
-      "time": 0.19512367248535156,
+      "time": 0.08690118789672852,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        52.67
+      ],
+      "suction": false,
+      "sample": 1,
+      "button_event": false
+    },
+    {
+      "time": 0.14039254188537598,
+      "angles": [
+        37.79,
+        101.17,
+        54.17
+      ],
+      "suction": false,
+      "sample": 2,
+      "button_event": false
+    },
+    {
+      "time": 0.19389724731445312,
+      "angles": [
+        37.79,
+        101.17,
+        56.45
+      ],
+      "suction": false,
+      "sample": 3,
+      "button_event": false
+    },
+    {
+      "time": 0.24741172790527344,
+      "angles": [
+        37.79,
+        101.17,
+        58.83
+      ],
+      "suction": false,
+      "sample": 4,
+      "button_event": false
+    },
+    {
+      "time": 0.29892396926879883,
+      "angles": [
+        37.79,
+        101.17,
+        61.11
       ],
       "suction": false,
       "sample": 5,
       "button_event": false
     },
     {
-      "time": 0.3587007522583008,
+      "time": 0.352158784866333,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        62.96
+      ],
+      "suction": false,
+      "sample": 6,
+      "button_event": false
+    },
+    {
+      "time": 0.4055051803588867,
+      "angles": [
+        37.79,
+        101.17,
+        64.19
+      ],
+      "suction": false,
+      "sample": 7,
+      "button_event": false
+    },
+    {
+      "time": 0.45875000953674316,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 8,
+      "button_event": false
+    },
+    {
+      "time": 0.5119974613189697,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 9,
+      "button_event": false
+    },
+    {
+      "time": 0.5652344226837158,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 10,
       "button_event": false
     },
     {
-      "time": 0.5244622230529785,
+      "time": 0.6184823513031006,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 11,
+      "button_event": false
+    },
+    {
+      "time": 0.6716437339782715,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 12,
+      "button_event": false
+    },
+    {
+      "time": 0.7248730659484863,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 13,
+      "button_event": false
+    },
+    {
+      "time": 0.7781076431274414,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 14,
+      "button_event": false
+    },
+    {
+      "time": 0.8313324451446533,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 15,
       "button_event": false
     },
     {
-      "time": 0.6879990100860596,
+      "time": 0.8846452236175537,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 16,
+      "button_event": false
+    },
+    {
+      "time": 0.9379546642303467,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 17,
+      "button_event": false
+    },
+    {
+      "time": 0.9911859035491943,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 18,
+      "button_event": false
+    },
+    {
+      "time": 1.0444552898406982,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 19,
+      "button_event": false
+    },
+    {
+      "time": 1.0976970195770264,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 20,
       "button_event": false
     },
     {
-      "time": 0.8521742820739746,
+      "time": 1.1509056091308594,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 21,
+      "button_event": false
+    },
+    {
+      "time": 1.204103946685791,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 22,
+      "button_event": false
+    },
+    {
+      "time": 1.2576074600219727,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 23,
+      "button_event": false
+    },
+    {
+      "time": 1.310910701751709,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 24,
+      "button_event": false
+    },
+    {
+      "time": 1.3640830516815186,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 25,
       "button_event": false
     },
     {
-      "time": 1.0140376091003418,
+      "time": 1.4172720909118652,
       "angles": [
-        36.21,
-        97.91,
-        66.12
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 26,
+      "button_event": false
+    },
+    {
+      "time": 1.470487356185913,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 27,
+      "button_event": false
+    },
+    {
+      "time": 1.5237641334533691,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 28,
+      "button_event": false
+    },
+    {
+      "time": 1.5770893096923828,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 29,
+      "button_event": false
+    },
+    {
+      "time": 1.6303491592407227,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 30,
       "button_event": false
     },
     {
-      "time": 1.1782381534576416,
+      "time": 1.6835784912109375,
       "angles": [
-        36.21,
-        97.91,
-        66.12
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 31,
+      "button_event": false
+    },
+    {
+      "time": 1.7367804050445557,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 32,
+      "button_event": false
+    },
+    {
+      "time": 1.7900285720825195,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 33,
+      "button_event": false
+    },
+    {
+      "time": 1.8432707786560059,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 34,
+      "button_event": false
+    },
+    {
+      "time": 1.8965067863464355,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 35,
       "button_event": false
     },
     {
-      "time": 1.3417396545410156,
+      "time": 1.9497690200805664,
       "angles": [
-        36.21,
-        97.91,
-        66.12
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 36,
+      "button_event": false
+    },
+    {
+      "time": 2.0030159950256348,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 37,
+      "button_event": false
+    },
+    {
+      "time": 2.056253433227539,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 38,
+      "button_event": false
+    },
+    {
+      "time": 2.109515905380249,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 39,
+      "button_event": false
+    },
+    {
+      "time": 2.1627273559570312,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 40,
       "button_event": false
     },
     {
-      "time": 1.505624771118164,
+      "time": 2.2160215377807617,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 41,
+      "button_event": false
+    },
+    {
+      "time": 2.2692110538482666,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 42,
+      "button_event": false
+    },
+    {
+      "time": 2.3223724365234375,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 43,
+      "button_event": false
+    },
+    {
+      "time": 2.3755698204040527,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 44,
+      "button_event": false
+    },
+    {
+      "time": 2.4287662506103516,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 45,
       "button_event": false
     },
     {
-      "time": 1.6695842742919922,
+      "time": 2.482062578201294,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 46,
+      "button_event": false
+    },
+    {
+      "time": 2.5352766513824463,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 47,
+      "button_event": false
+    },
+    {
+      "time": 2.5885508060455322,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 48,
+      "button_event": false
+    },
+    {
+      "time": 2.641896963119507,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 49,
+      "button_event": false
+    },
+    {
+      "time": 2.6951775550842285,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 50,
       "button_event": false
     },
     {
-      "time": 1.8333766460418701,
+      "time": 2.748412609100342,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 51,
+      "button_event": false
+    },
+    {
+      "time": 2.8016293048858643,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 52,
+      "button_event": false
+    },
+    {
+      "time": 2.8548600673675537,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 53,
+      "button_event": false
+    },
+    {
+      "time": 2.9081056118011475,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 54,
+      "button_event": false
+    },
+    {
+      "time": 2.9613187313079834,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 55,
       "button_event": false
     },
     {
-      "time": 1.9971399307250977,
+      "time": 3.014571189880371,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 56,
+      "button_event": false
+    },
+    {
+      "time": 3.067819118499756,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 57,
+      "button_event": false
+    },
+    {
+      "time": 3.1211814880371094,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 58,
+      "button_event": false
+    },
+    {
+      "time": 3.17439866065979,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 59,
+      "button_event": false
+    },
+    {
+      "time": 3.2279210090637207,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 60,
       "button_event": false
     },
     {
-      "time": 2.1629395484924316,
+      "time": 3.2814409732818604,
       "angles": [
-        36.21,
-        97.91,
-        66.12
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 61,
+      "button_event": false
+    },
+    {
+      "time": 3.3349242210388184,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 62,
+      "button_event": false
+    },
+    {
+      "time": 3.3885762691497803,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 63,
+      "button_event": false
+    },
+    {
+      "time": 3.441817283630371,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 64,
+      "button_event": false
+    },
+    {
+      "time": 3.495299816131592,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 65,
       "button_event": false
     },
     {
-      "time": 2.324836492538452,
+      "time": 3.548809051513672,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 66,
+      "button_event": false
+    },
+    {
+      "time": 3.602299928665161,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 67,
+      "button_event": false
+    },
+    {
+      "time": 3.653779983520508,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 68,
+      "button_event": false
+    },
+    {
+      "time": 3.7071545124053955,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 69,
+      "button_event": false
+    },
+    {
+      "time": 3.760366916656494,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 70,
       "button_event": false
     },
     {
-      "time": 2.4889345169067383,
+      "time": 3.8137097358703613,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 71,
+      "button_event": false
+    },
+    {
+      "time": 3.8670413494110107,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 72,
+      "button_event": false
+    },
+    {
+      "time": 3.920297861099243,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 73,
+      "button_event": false
+    },
+    {
+      "time": 3.9735944271087646,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 74,
+      "button_event": false
+    },
+    {
+      "time": 4.026891231536865,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 75,
       "button_event": false
     },
     {
-      "time": 2.6526095867156982,
+      "time": 4.08020281791687,
       "angles": [
-        36.21,
-        97.91,
-        66.12
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 76,
+      "button_event": false
+    },
+    {
+      "time": 4.133519172668457,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 77,
+      "button_event": false
+    },
+    {
+      "time": 4.186790466308594,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 78,
+      "button_event": false
+    },
+    {
+      "time": 4.240009069442749,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 79,
+      "button_event": false
+    },
+    {
+      "time": 4.293276071548462,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 80,
       "button_event": false
     },
     {
-      "time": 2.8165462017059326,
+      "time": 4.346566915512085,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 81,
+      "button_event": false
+    },
+    {
+      "time": 4.3997962474823,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 82,
+      "button_event": false
+    },
+    {
+      "time": 4.453355073928833,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 83,
+      "button_event": false
+    },
+    {
+      "time": 4.506579875946045,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 84,
+      "button_event": false
+    },
+    {
+      "time": 4.559817790985107,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 85,
       "button_event": false
     },
     {
-      "time": 2.980421304702759,
+      "time": 4.613046884536743,
       "angles": [
-        36.21,
-        97.91,
-        66.12
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 86,
+      "button_event": false
+    },
+    {
+      "time": 4.666381597518921,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 87,
+      "button_event": false
+    },
+    {
+      "time": 4.7196455001831055,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 88,
+      "button_event": false
+    },
+    {
+      "time": 4.77289605140686,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
+      ],
+      "suction": false,
+      "sample": 89,
+      "button_event": false
+    },
+    {
+      "time": 4.826184988021851,
+      "angles": [
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
       "sample": 90,
       "button_event": false
     },
     {
-      "time": 3.144700050354004,
+      "time": 4.8794331550598145,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
-      "sample": 95,
+      "sample": 91,
       "button_event": false
     },
     {
-      "time": 3.3083760738372803,
+      "time": 4.9328062534332275,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
-      "sample": 100,
+      "sample": 92,
       "button_event": false
     },
     {
-      "time": 3.4723706245422363,
+      "time": 4.986127614974976,
       "angles": [
-        36.21,
-        97.91,
-        66.21
+        37.79,
+        101.17,
+        64.63
       ],
       "suction": false,
-      "sample": 105,
-      "button_event": false
-    },
-    {
-      "time": 3.6359994411468506,
-      "angles": [
-        36.21,
-        97.91,
-        66.12
-      ],
-      "suction": false,
-      "sample": 110,
-      "button_event": false
-    },
-    {
-      "time": 3.8007118701934814,
-      "angles": [
-        36.21,
-        97.91,
-        66.21
-      ],
-      "suction": false,
-      "sample": 115,
-      "button_event": false
-    },
-    {
-      "time": 3.9647247791290283,
-      "angles": [
-        36.21,
-        97.91,
-        66.21
-      ],
-      "suction": false,
-      "sample": 120,
-      "button_event": false
-    },
-    {
-      "time": 4.127797365188599,
-      "angles": [
-        36.21,
-        97.91,
-        66.21
-      ],
-      "suction": false,
-      "sample": 125,
-      "button_event": false
-    },
-    {
-      "time": 4.291571140289307,
-      "angles": [
-        36.21,
-        97.91,
-        66.21
-      ],
-      "suction": false,
-      "sample": 130,
-      "button_event": false
-    },
-    {
-      "time": 4.45536994934082,
-      "angles": [
-        36.21,
-        97.91,
-        66.21
-      ],
-      "suction": false,
-      "sample": 135,
-      "button_event": false
-    },
-    {
-      "time": 4.619187116622925,
-      "angles": [
-        36.21,
-        97.91,
-        66.21
-      ],
-      "suction": false,
-      "sample": 140,
-      "button_event": false
-    },
-    {
-      "time": 4.782699823379517,
-      "angles": [
-        36.21,
-        97.91,
-        66.21
-      ],
-      "suction": false,
-      "sample": 145,
-      "button_event": false
-    },
-    {
-      "time": 4.946462869644165,
-      "angles": [
-        36.21,
-        97.91,
-        66.21
-      ],
-      "suction": false,
-      "sample": 150,
+      "sample": 93,
       "button_event": false
     }
   ],
   "metadata": {
     "recording_method": "servo_angles",
-    "sample_interval": 0.01,
+    "sample_interval": 0.02,
     "recording_quality": "medium"
   }
 }
