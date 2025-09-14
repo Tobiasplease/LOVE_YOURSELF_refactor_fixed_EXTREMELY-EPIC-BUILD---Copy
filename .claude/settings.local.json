@@ -61,7 +61,10 @@
       "Bash(stty:*)",
       "Bash(source:*)",
       "Bash(do echo \"=== $file ===\")",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Read(//dev/**)"
     ],
     "deny": [],
     "ask": []

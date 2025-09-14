@@ -1,0 +1,1331 @@
+{
+  "name": "pickup",
+  "description": "GUI recorded motion for slot 1",
+  "sequence": [
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.010615110397338867,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.11746573448181152,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.22415375709533691,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.33073878288269043,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.4374732971191406,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.5475895404815674,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.6546146869659424,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.7637622356414795,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.8707740306854248,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 0.977785587310791,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.084726333618164,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.1938107013702393,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.3024404048919678,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.411684274673462,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.5186607837677002,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.625746488571167,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.732236385345459,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.8409557342529297,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 1.9497039318084717,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.0587563514709473,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.1657016277313232,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.272935152053833,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.3795082569122314,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.488264799118042,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.5969557762145996,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.706547975540161,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.813021659851074,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 2.9196369647979736,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.0270426273345947,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.1360535621643066,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.2427189350128174,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.3496861457824707,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.4564132690429688,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.5630857944488525,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.672412157058716,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.7790446281433105,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.8859965801239014,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 3.9929497241973877,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.09959864616394,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.208728075027466,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.3155481815338135,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.422518253326416,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.529296159744263,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.636286735534668,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.74535608291626,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.85203742980957,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 4.958980560302734,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.066053867340088,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.172664403915405,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.280021905899048,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.389081001281738,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.496102809906006,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.603046178817749,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.712104082107544,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.818783760070801,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 5.9254162311553955,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.03216028213501,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.138938665390015,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.2455549240112305,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.352477073669434,
+      "suction": true,
+      "button_events": [
+        {
+          "button": "play",
+          "pressed": true,
+          "time": 1757854805.7881706
+        }
+      ]
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.465611934661865,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.5742106437683105,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.6840434074401855,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.79076886177063,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 6.899797677993774,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.006721258163452,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.113431692123413,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.22048544883728,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.328236818313599,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.436981678009033,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.543916940689087,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.650552749633789,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.761934041976929,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.870982646942139,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 7.9782304763793945,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.085439682006836,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.194565773010254,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.3011634349823,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.408378839492798,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.516050577163696,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.624765157699585,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.731414318084717,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.838619709014893,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 8.94559907913208,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.055058002471924,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.161662817001343,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.268268346786499,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.375603914260864,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.486342668533325,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.595273971557617,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.702480792999268,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.809428215026855,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 9.916098833084106,
+      "suction": true,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.02555513381958,
+      "suction": false,
+      "button_events": [
+        {
+          "button": "play",
+          "pressed": true,
+          "time": 1757854809.4419153
+        }
+      ]
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.137378454208374,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.246530771255493,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.353469371795654,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.460495948791504,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.567485570907593,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.678293466567993,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.787347555160522,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 10.894476890563965,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.002180099487305,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.111544132232666,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.218326330184937,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.325280904769897,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.43432354927063,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.541475534439087,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.648114442825317,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.754855871200562,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.861796617507935,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 11.970782995223999,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.079610109329224,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.188661098480225,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.295686721801758,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.406863689422607,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.51573133468628,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.623481512069702,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.73348069190979,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.840173721313477,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 12.947123050689697,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.05644416809082,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.163410902023315,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.270833969116211,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.381768703460693,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.490875005722046,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.59744906425476,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.7044198513031,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.811372995376587,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 13.918030023574829,
+      "suction": false,
+      "button_events": []
+    },
+    {
+      "position": [
+        90.0,
+        -120.0,
+        50.0
+      ],
+      "time": 14.029099702835083,
+      "suction": false,
+      "button_events": []
+    }
+  ],
+  "total_duration": 14.129408836364746,
+  "recorded_at": "2025-09-14T15:00:13.632500",
+  "type": "full_sequence"
+}

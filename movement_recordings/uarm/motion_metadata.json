@@ -1,0 +1,34 @@
+{
+  "motion_slots": {
+    "1": {
+      "name": "pickup",
+      "description": "GUI recorded motion for slot 1",
+      "recorded_at": "2025-09-14T15:00:13.633747",
+      "file_path": "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/movement_recordings/uarm/pickup.json"
+    },
+    "2": {
+      "name": "place",
+      "description": "Primary placement motion"
+    },
+    "3": {
+      "name": "gesture",
+      "description": "Gestural expression motion"
+    },
+    "1": {
+      "name": "pickup",
+      "description": "GUI recorded motion for slot 1",
+      "recorded_at": "2025-09-14T14:59:29.729295",
+      "file_path": "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/movement_recordings/uarm/pickup.json"
+    },
+    "2": {
+      "name": "place",
+      "description": "Primary placement motion"
+    },
+    "3": {
+      "name": "gesture",
+      "description": "Gestural expression motion"
+    }
+  },
+  "last_updated": "2025-09-14T15:00:13.633758",
+  "version": "1.0"
+}

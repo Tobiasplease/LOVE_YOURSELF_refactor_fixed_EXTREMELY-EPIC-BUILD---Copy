@@ -1,9 +1,18 @@
 # setup_grbl_grid.py
 
 import time
+import sys
 
 import serial
 from serial.tools import list_ports
+
+# Import warp transform
+try:
+    from warp_transform import warp_transform_line
+    WARP_AVAILABLE = True
+except ImportError:
+    print("[WARN] Warp transform not available")
+    WARP_AVAILABLE = False
 
 # ======= Konfiguration =======
 BAUD = 115200
@@ -22,6 +31,9 @@ GRID_SPACING = 10  # 10mm spacing between lines
 PEN_DOWN_CMD = "M3 S50"  # Command to lower pen
 PEN_UP_CMD = "M3 S30"  # Command to raise pen
 FEED_RATE = 3000
+
+# === WARP TRANSFORM TOGGLE ===
+USE_WARP_TRANSFORM = True  # Set to False to draw without warp correction
 # =============================
 
 
@@ -64,7 +76,16 @@ def read_until_ok_or_error(ser, timeout=5.0):
 
 
 def send_cmd(ser, cmd, wait_ok=True, timeout=5.0):
-    print(f"[SEND] {cmd}")
+    # Apply warp transform to movement commands if enabled
+    original_cmd = cmd
+    if (USE_WARP_TRANSFORM and WARP_AVAILABLE and
+        cmd.startswith(("G0", "G1", "G00", "G01")) and
+        ("X" in cmd or "Y" in cmd)):
+        cmd = warp_transform_line(cmd)
+        print(f"[WARP] {original_cmd} -> {cmd}")
+    else:
+        print(f"[SEND] {cmd}")
+
     ser.write((cmd + "\n").encode())
     ser.flush()
     if not wait_ok:
@@ -197,6 +218,34 @@ def draw_grid(ser):
 
 
 def main():
+    global USE_WARP_TRANSFORM
+
+    # Command line argument parsing
+    if len(sys.argv) > 1:
+        arg = sys.argv[1].lower()
+        if arg in ['--no-warp', '--nowarp', 'false', '0']:
+            USE_WARP_TRANSFORM = False
+        elif arg in ['--warp', 'true', '1']:
+            USE_WARP_TRANSFORM = True
+        elif arg in ['--help', '-h']:
+            print("Usage: python setup_grbl_grid.py [--warp|--no-warp]")
+            print("  --warp     : Enable warp transform correction (default)")
+            print("  --no-warp  : Disable warp transform correction")
+            return
+
+    # Display configuration
+    print("=" * 50)
+    print("GRBL GRID DRAWING WITH WARP TRANSFORM TOGGLE")
+    print("=" * 50)
+    print(f"Grid size: {GRID_SIZE}x{GRID_SIZE}mm")
+    print(f"Grid spacing: {GRID_SPACING}mm")
+    print(f"Warp transform available: {WARP_AVAILABLE}")
+    print(f"Warp transform enabled: {USE_WARP_TRANSFORM}")
+    if USE_WARP_TRANSFORM and not WARP_AVAILABLE:
+        print("[ERROR] Warp transform requested but not available!")
+        return
+    print("=" * 50)
+
     ser = find_grbl_port()
     try:
         # 1) HOME and set G54 coordinate system

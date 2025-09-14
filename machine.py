@@ -39,6 +39,12 @@ from config.config import (
     USE_HAND_CONTROLLER,
     USE_LIGHTBULB_PWM,
     USE_SERVO,
+    USE_UARM,
+    UARM_PORT,
+    UARM_CONNECT_ON_STARTUP,
+    UARM_HOME_ON_CONNECT,
+    UARM_DEFAULT_SPEED,
+    UARM_MOTION_STORAGE,
 )
 from event_logging.event_logger import get_current_run_id, log_json_entry, set_start_time
 from event_logging.log_type import LogType
@@ -141,6 +147,12 @@ if USE_SERVO:
 if USE_LIGHTBULB_PWM:
     from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
 
+if USE_UARM:
+    from uarm_control.uarm_controller import UarmController
+    from uarm_control.motion_manager import MotionManager
+    from uarm_control.simple_api import UarmSimpleAPI
+    import uarm_control.simple_api as uarm_api
+
 VERBOSE = False
 
 # Fixed udev device paths for each Arduino
@@ -242,6 +254,53 @@ if USE_SERVO:
 else:
     debug_print("Servo control disabled in config", "INIT")
     servos = None
+
+# Initialize uArm Swift Pro robotic arm (separate from servos)
+uarm_controller = None
+motion_manager = None
+if USE_UARM:
+    try:
+        uarm_port = ARDUINO_DEVICES["UARM"]  # Use the same symlink approach as other controllers
+        debug_print(f"Initializing uArm Swift Pro controller on {uarm_port}", "INIT")
+
+        if os.path.exists(uarm_port):
+            uarm_controller = UarmController(port=uarm_port, connect_on_init=UARM_CONNECT_ON_STARTUP)
+        else:
+            print(f"WARNING: uArm controller not found at {uarm_port}")
+            print("  Device may not be connected or udev rule not set up")
+            uarm_controller = None
+
+        if uarm_controller and uarm_controller.is_connected():
+            debug_print("uArm connected successfully", "INIT")
+
+            # Initialize motion manager for teach and play functionality
+            motion_manager = MotionManager(
+                storage_path=UARM_MOTION_STORAGE,
+                controller=uarm_controller
+            )
+            debug_print("uArm motion manager initialized", "INIT")
+
+            # Initialize simple API for easy access
+            simple_api = UarmSimpleAPI(controller=uarm_controller, motion_manager=motion_manager)
+            uarm_api.uarm_api = simple_api  # Set global API instance
+            debug_print("uArm simple API initialized", "INIT")
+
+            if UARM_HOME_ON_CONNECT:
+                debug_print("Performing uArm homing sequence", "INIT")
+                uarm_controller.home()
+        elif uarm_controller:
+            debug_print("uArm connection failed - check USB connection and firmware", "WARN")
+            if uarm_controller.last_error:
+                debug_print(f"uArm error: {uarm_controller.last_error}", "WARN")
+        else:
+            debug_print("uArm controller not available - check device connection", "WARN")
+
+    except Exception as e:
+        debug_print(f"uArm initialization failed: {e}", "ERROR")
+        uarm_controller = None
+        motion_manager = None
+else:
+    debug_print("uArm control disabled in config", "INIT")
 
 # Initialize breathing variables regardless of servo setting
 lung_angle = 0.0
@@ -394,6 +453,14 @@ def graceful_cleanup():
         stop_hand_controller()
     except Exception as e:
         print(f"[ERROR] Error stopping hand controller: {e}")
+
+    # Stop uArm controller
+    if uarm_controller:
+        try:
+            debug_print("Disconnecting uArm controller", "CLEANUP")
+            uarm_controller.disconnect()
+        except Exception as e:
+            print(f"[ERROR] Error stopping uArm controller: {e}")
 
     # Release camera
     if _global_cap:

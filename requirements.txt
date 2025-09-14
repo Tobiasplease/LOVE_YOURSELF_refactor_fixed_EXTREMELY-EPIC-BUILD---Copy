@@ -14,6 +14,9 @@ requests>=2.31.0
 # Serial Communication (for Arduino/servo control)
 pyserial>=3.5
 
+# uArm Swift Pro robotic arm control (original uFactory SDK)
+git+https://github.com/uArm-Developer/pyuf.git
+
 # Additional utilities that might be needed
 Pillow>=10.0.0
 matplotlib>=3.7.0

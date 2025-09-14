@@ -130,6 +130,19 @@ GRBL_IDLE_FEED_RATE = 500  # Feed rate for idle movements (mm/min) - very slow a
 GRBL_IDLE_ZONE = (20, 40, 20, 40)  # Boundary box: (x_min, x_max, y_min, y_max) for 40x40 area
 GRBL_IDLE_UPDATE_INTERVAL = 3.0  # Seconds between movement updates - longer pauses
 
+# === UARM SWIFT PRO SETTINGS ===
+USE_UARM = True  # Enable uArm Swift Pro robotic arm integration
+UARM_PORT = "/dev/arduino_uarm"  # Fixed udev symlink (matches ARDUINO_DEVICES)
+UARM_MOVEMENT_NAMES = {
+    1: "pickup",    # Primary pickup motion
+    2: "place",     # Primary placement motion
+    3: "gesture"    # Gestural expression motion
+}
+UARM_MOTION_STORAGE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "movement_recordings", "uarm")
+UARM_CONNECT_ON_STARTUP = True  # Connect to uArm during system initialization
+UARM_HOME_ON_CONNECT = True     # Perform homing sequence when connecting
+UARM_DEFAULT_SPEED = 100        # Default movement speed (1-250)
+
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles

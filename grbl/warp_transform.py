@@ -2,53 +2,12 @@
 import math
 import re
 
-# Load robot arm dimensions from config file
-import json
-import os
-
-def load_warp_config():
-    """Load warp transform configuration from JSON file"""
-    config_path = os.path.join(os.path.dirname(__file__), "warp_config.json")
-    try:
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-        return config
-    except FileNotFoundError:
-        print(f"[WARN] Warp config not found at {config_path}, using default values")
-        return None
-
-# Load configuration or use defaults
-warp_config = load_warp_config()
-if warp_config and "robot_arm_dimensions" in warp_config:
-    arm_dims = warp_config["robot_arm_dimensions"]
-    biceps = arm_dims.get("biceps", 100)
-    underarm = arm_dims.get("underarm", 100)
-    tendon_biceps = arm_dims.get("tendon_biceps", 50)
-    tendon_underarm = arm_dims.get("tendon_underarm", 4)
-    mirror = arm_dims.get("mirror", -1)
-
-    # Apply coordinate system adjustments if available
-    if "coordinate_system" in warp_config:
-        coord_sys = warp_config["coordinate_system"]
-        origin_offset_x = coord_sys.get("origin_offset_x", 0)
-        origin_offset_y = coord_sys.get("origin_offset_y", 0)
-        scale_factor = coord_sys.get("scale_factor", 1.0)
-    else:
-        origin_offset_x = origin_offset_y = 0
-        scale_factor = 1.0
-
-    if warp_config.get("debug_settings", {}).get("enable_debug_output", False):
-        print(f"[WARP] Loaded config: biceps={biceps}, underarm={underarm}, tendons={tendon_biceps}/{tendon_underarm}, mirror={mirror}")
-        print(f"[WARP] Coordinate system: offset=({origin_offset_x},{origin_offset_y}), scale={scale_factor}")
-else:
-    # Default values (JBE's original Swedish mathematician values)
-    biceps = 100
-    underarm = 100
-    tendon_biceps = 50
-    tendon_underarm = 4
-    mirror = -1
-    origin_offset_x = origin_offset_y = 0
-    scale_factor = 1.0
+# Robot arm dimensions - adjust these for your actual robot arm
+biceps = 295  # Upper arm length (mm) - your actual robot arm
+underarm = 325  # Lower arm length (mm) - your actual robot arm
+tendon_biceps = 160  # Tendon length from biceps to elbow (mm)
+tendon_underarm = 50  # Tendon length from elbow to attachment (mm)
+mirror = -1  # Mirror factor (-1 or 1 depending on orientation)
 
 # det här är bara för utplottningen
 # min_l = abs(tendon_underarm - tendon_biceps) + 1
@@ -120,6 +79,7 @@ def inverse(x, y):
 
 
 def warp_transform_line(gcode_line):
+    """Apply inverse warp transform to G-code coordinates"""
     x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
     y_match = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
 
@@ -128,24 +88,12 @@ def warp_transform_line(gcode_line):
         original_x = float(x_match.group(1))
         original_y = float(y_match.group(1))
 
-        # Apply scale factor and origin offset before warp transform
-        scaled_x = (original_x * scale_factor) + origin_offset_x
-        scaled_y = (original_y * scale_factor) + origin_offset_y
-
-        # Apply JBE's inverse warp transform
-        transformed_x, transformed_y = inverse(scaled_x, scaled_y)
-
-        # Debug output if enabled
-        debug_enabled = warp_config and warp_config.get("debug_settings", {}).get("log_transformations", False)
-        if debug_enabled:
-            print(f"[WARP] {original_x:.2f},{original_y:.2f} -> {scaled_x:.2f},{scaled_y:.2f} -> {transformed_x:.4f},{transformed_y:.4f}")
+        # Apply JBE's inverse warp transform directly
+        transformed_x, transformed_y = inverse(original_x, original_y)
 
         # Update G-code line with transformed coordinates
         gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{transformed_x:.4f}", gcode_line, flags=re.IGNORECASE)
         gcode_line = re.sub(r"Y[-+]?\d*\.?\d+", f"Y{transformed_y:.4f}", gcode_line, flags=re.IGNORECASE)
-    else:
-        if warp_config and warp_config.get("debug_settings", {}).get("enable_debug_output", False):
-            print("[WARN] No X or Y found in line, skipping transformation.")
 
     return gcode_line
 
