@@ -64,7 +64,12 @@
       "Bash(git log:*)",
       "WebFetch(domain:github.com)",
       "WebSearch",
-      "Read(//dev/**)"
+      "Read(//dev/**)",
+      "Read(//home/impostor/Pictures/Screenshots/**)",
+      "Bash(pip show:*)",
+      "Bash(pip search:*)",
+      "Bash(pip index versions:*)",
+      "WebFetch(domain:stackoverflow.com)"
     ],
     "deny": [],
     "ask": []
