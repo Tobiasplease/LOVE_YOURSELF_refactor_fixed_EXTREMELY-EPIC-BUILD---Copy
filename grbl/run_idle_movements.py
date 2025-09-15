@@ -46,7 +46,7 @@ def signal_handler(sig, frame):
             time.sleep(0.5)
 
             # Pen up to safe height
-            send_cmd(ser, "M3 S15", wait_ok=False)
+            send_cmd(ser, PEN_UP_CMD, wait_ok=False)
             time.sleep(0.5)
 
             # Return to safe position (center of idle zone)
@@ -231,7 +231,7 @@ def run_idle_movements(emotion_state="calm_observant", duration=None):
         print(f"[❌] Error: {e}")
         if ser:
             try:
-                send_cmd(ser, "M3 S30", wait_ok=False)  # Pen up
+                send_cmd(ser, PEN_UP_CMD, wait_ok=False)  # Pen up
                 send_cmd(ser, "!", wait_ok=False)  # Feed hold
                 ser.close()
             except:
@@ -239,6 +239,10 @@ def run_idle_movements(emotion_state="calm_observant", duration=None):
         sys.exit(1)
     finally:
         if ser and ser.is_open:
+            try:
+                send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+            except Exception:
+                pass
             ser.close()
 
 

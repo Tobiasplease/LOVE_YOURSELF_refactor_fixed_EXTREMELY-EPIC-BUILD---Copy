@@ -121,6 +121,14 @@ GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 50))
 GRBL_PEN_UP_REPEATS = int(os.getenv("GRBL_PEN_UP_REPEATS", 5))   # How many times to assert M3 S{UP} before homing
 GRBL_PEN_UP_DWELL_S = float(os.getenv("GRBL_PEN_UP_DWELL_S", 1.5))  # Dwell seconds after asserting UP before $H
 
+# If True, the pen-up position corresponds to a HIGHER S value; if False, pen-up is a LOWER S value.
+# Default assumes up=low (many servo forks use lower PWM as retracted).
+GRBL_PEN_UP_IS_HIGH = os.getenv("GRBL_PEN_UP_IS_HIGH", "false").lower() in ("1", "true", "yes")
+
+# Force using the absolute extreme S value for pen-up during homing (extra safety).
+# Uses GRBL_SPINDLE_MAX_S when GRBL_PEN_UP_IS_HIGH is True, otherwise GRBL_SPINDLE_MIN_S.
+GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING = os.getenv("GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING", "true").lower() in ("1", "true", "yes")
+
 # === GRBL IDLE MOVEMENT SETTINGS ===
 # Idle movements happen in far corner away from home (0,0)
 # Physical work area constrained to 40x40mm for safe operation

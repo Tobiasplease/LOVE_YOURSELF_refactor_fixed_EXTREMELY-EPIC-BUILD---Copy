@@ -94,6 +94,39 @@ class MultimodalModel:
             else:
                 # Prefer brevity/stability
                 best = min(candidates, key=lambda c: 0.1 * _overlap(c, last_caption) + 0.01 * len(c))
+
+            # Affective stance gating: rare, state-driven selection preference
+            try:
+                mv = getattr(self.memory_ref, "current_mood_vector", (0.0, 0.0, 0.0)) if self.memory_ref else (0.0, 0.0, 0.0)
+                val = float(mv[0]) if isinstance(mv, (tuple, list)) and len(mv) >= 1 else 0.0
+                top_aff = []
+                if hasattr(self.memory_ref, "get_top_affective_motifs"):
+                    top_aff = self.memory_ref.get_top_affective_motifs(1)  # type: ignore
+                last_ts = getattr(self.memory_ref, "_last_affect_utter_ts", 0.0)
+                import time
+                cooldown_ok = (time.time() - last_ts) > 180.0  # 3 min cooldown
+                if top_aff and cooldown_ok:
+                    m, mval, mfix = top_aff[0]
+                    strength = abs(mval) * mfix
+                    if strength > 0.35 and abs(val) > 0.4:
+                        neg = val < 0
+                        pos_tokens = ["glad", "relieved", "open", "clear"]
+                        neg_tokens = ["tired", "can’t stand", "can not stand", "sick of", "clutter", "again", "still"]
+                        def has_token(s: str, toks: list[str]) -> bool:
+                            low = s.lower()
+                            return any(t in low for t in toks)
+                        if neg:
+                            cand = next((c for c in candidates if has_token(c, neg_tokens)), None)
+                        else:
+                            cand = next((c for c in candidates if has_token(c, pos_tokens)), None)
+                        if cand:
+                            best = cand
+                            try:
+                                setattr(self.memory_ref, "_last_affect_utter_ts", time.time())
+                            except Exception:
+                                pass
+            except Exception:
+                pass
             result = best
 
         log_json_entry(

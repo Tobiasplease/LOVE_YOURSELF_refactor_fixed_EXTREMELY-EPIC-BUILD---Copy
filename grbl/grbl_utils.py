@@ -6,6 +6,7 @@ Shared functions for GRBL communication and control
 import subprocess
 import threading
 import time
+import math
 
 import serial
 from serial.tools import list_ports
@@ -16,10 +17,20 @@ from .warp_transform import warp_transform_line
 
 # Import pen servo configuration
 try:
-    from config.config import GRBL_PEN_DOWN_S, GRBL_PEN_UP_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S, GRBL_WARP_TRANSFORM
+    from config.config import (
+        GRBL_PEN_DOWN_S,
+        GRBL_PEN_UP_S,
+        GRBL_SPINDLE_MAX_S,
+        GRBL_SPINDLE_MIN_S,
+        GRBL_WARP_TRANSFORM,
+        GRBL_PEN_UP_REPEATS,
+        GRBL_PEN_UP_DWELL_S,
+    )
 except Exception:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S = 30, 50, 255, 0
     GRBL_WARP_TRANSFORM = True
+    GRBL_PEN_UP_REPEATS = 5
+    GRBL_PEN_UP_DWELL_S = 1.5
 
 # Default configuration
 DEFAULT_BAUD = 115200
@@ -31,6 +42,80 @@ DEFAULT_FEED_RATE = 12000  # Balanced speed for clean drawing
 
 PEN_DOWN_CMD = f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN"  # Command to lower pen
 PEN_UP_CMD = f"M3 S{GRBL_PEN_UP_S} ; PEN UP"  # Command to raise pen
+
+
+class DrawingLightbulbFluctuation:
+    """Smooth lightbulb fluctuation during drawing operations."""
+
+    def __init__(self, min_brightness=40, max_brightness=200, period_seconds=3.0):
+        self.min_brightness = min_brightness
+        self.max_brightness = max_brightness
+        self.period_seconds = period_seconds
+        self.running = False
+        self.thread = None
+        self.lightbulb_controller = None
+
+    def start_fluctuation(self):
+        """Start the smooth brightness fluctuation."""
+        if self.running:
+            return
+
+        # Try to get lightbulb controller instance
+        try:
+            from utils.state_manager import state_manager
+            if hasattr(state_manager, 'lightbulb') and state_manager.lightbulb:
+                self.lightbulb_controller = state_manager.lightbulb
+            else:
+                # Try to import and create if not available
+                from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
+                from config.config import USE_LIGHTBULB_PWM
+                if USE_LIGHTBULB_PWM:
+                    self.lightbulb_controller = NonBlockingLightbulbController("/dev/arduino_lightbulb", debug=False)
+        except Exception as e:
+            print(f"[⚠️] Could not get lightbulb controller for drawing fluctuation: {e}")
+            return
+
+        if not self.lightbulb_controller:
+            return
+
+        self.running = True
+        self.thread = threading.Thread(target=self._fluctuation_loop, daemon=True)
+        self.thread.start()
+        print(f"[💡] Started smooth lightbulb fluctuation during drawing (range: {self.min_brightness}-{self.max_brightness}, period: {self.period_seconds}s)")
+
+    def stop_fluctuation(self):
+        """Stop the brightness fluctuation."""
+        if not self.running:
+            return
+
+        self.running = False
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=1.0)
+        print("[💡] Stopped lightbulb fluctuation")
+
+    def _fluctuation_loop(self):
+        """Main fluctuation loop running in background thread."""
+        start_time = time.time()
+
+        while self.running:
+            try:
+                elapsed = time.time() - start_time
+                # Create smooth sine wave oscillation
+                phase = (elapsed % self.period_seconds) / self.period_seconds * 2 * math.pi
+                brightness_factor = (math.sin(phase) + 1) / 2  # Normalize to 0-1
+
+                # Map to brightness range
+                brightness = int(self.min_brightness + (self.max_brightness - self.min_brightness) * brightness_factor)
+
+                # Send brightness command
+                if self.lightbulb_controller:
+                    self.lightbulb_controller.set_frame_diff_brightness(brightness)
+
+                time.sleep(0.05)  # 20Hz update rate for smooth transitions
+
+            except Exception as e:
+                print(f"[⚠️] Error in lightbulb fluctuation: {e}")
+                break
 
 
 def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None, continuous_retry=False):
@@ -225,30 +310,51 @@ def wait_until_idle(ser, max_wait, poll_interval=DEFAULT_STATUS_POLL):
 def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
     """Ensure GRBL is homed and setup coordinate system with continuous retry logic"""
     
-    # CRITICAL SAFETY: Multiple pen up commands with delays to ensure servo responds
-    # This is essential when switching between idle and drawing states
+    # PREP: Clear ALARM first and set minimal spindle config so pen-up will be accepted
     try:
+        status = get_status(ser)
+        if parse_state(status) == "Alarm":
+            log_json_entry(
+                LogType.GRBL,
+                {"message": "Clearing alarm state before safety pen-up", "action": "clear_alarm_pre_safety", "command": "$X", "status": status},
+                print_message="[⚠️] Clearing alarm state before pen-up",
+            )
+            send_cmd(ser, "$X", wait_ok=True)
+            time.sleep(0.4)
+        # Ensure laser mode is OFF and spindle scale is known before pen-up
+        try:
+            send_cmd(ser, "$32=0", wait_ok=True)
+            send_cmd(ser, f"$30={GRBL_SPINDLE_MAX_S}", wait_ok=True)
+            send_cmd(ser, f"$31={GRBL_SPINDLE_MIN_S}", wait_ok=True)
+            time.sleep(0.2)
+        except Exception:
+            pass
+        # CRITICAL SAFETY: Multiple pen up commands with dwell
         log_json_entry(
             LogType.GRBL,
             {"message": "SAFETY: Ensuring pen is raised before homing", "action": "pen_safety_sequence", "repeats": GRBL_PEN_UP_REPEATS, "dwell_s": GRBL_PEN_UP_DWELL_S},
             print_message="[⚠️ SAFETY] Ensuring pen is raised before homing sequence...",
         )
-        
-        # Send multiple pen up commands with delays to ensure servo catches the signal
-        for i in range(int(GRBL_PEN_UP_REPEATS)):
+        # Optional absolute extreme UP before repeats
+        try:
+            from config.config import GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING, GRBL_PEN_UP_IS_HIGH
+            if GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING:
+                sup = GRBL_SPINDLE_MAX_S if GRBL_PEN_UP_IS_HIGH else GRBL_SPINDLE_MIN_S
+                send_cmd(ser, f"M3 S{sup}", wait_ok=False)
+                time.sleep(0.3)
+        except Exception:
+            pass
+        for _ in range(int(GRBL_PEN_UP_REPEATS)):
             try:
                 send_cmd(ser, PEN_UP_CMD, wait_ok=False)
-                time.sleep(0.25)  # Give servo time to respond
+                time.sleep(0.25)
             except Exception:
                 pass
-        
-        # Additional dwell to ensure servo has fully moved
         try:
             send_cmd(ser, f"G4 P{GRBL_PEN_UP_DWELL_S}", wait_ok=False)
             time.sleep(float(GRBL_PEN_UP_DWELL_S))
         except Exception:
             pass
-            
     except Exception as e:
         print(f"[⚠️] Pen safety sequence error (continuing anyway): {e}")
 
@@ -274,7 +380,7 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                 print_message=f"[🏠] Homing attempt {attempt + 1}/{retry_msg}...",
             )
 
-            # Clear any existing alarm state
+            # Clear any existing alarm state again (belt-and-suspenders)
             status = get_status(ser)
             if parse_state(status) == "Alarm":
                 log_json_entry(
@@ -283,11 +389,10 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                     print_message="[⚠️] Clearing alarm state with $X",
                 )
                 send_cmd(ser, "$X", wait_ok=True)
-                time.sleep(0.5)  # Give more time after clearing alarm
-                # Raise pen again after clearing alarm, in case prior command was ignored
+                time.sleep(0.5)
                 try:
                     send_cmd(ser, PEN_UP_CMD, wait_ok=False)
-                    time.sleep(0.2)
+                    time.sleep(0.25)
                 except Exception:
                     pass
 
@@ -526,6 +631,12 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
                     # Pass through other commands (G17, G20, G21, G90, etc.)
                     f.write(f"{line}\n")
 
+            # Ensure pen is up at the end of the file for safety
+            try:
+                f.write(f"\n{PEN_UP_CMD}\n")
+            except Exception:
+                pass
+
         log_json_entry(
             LogType.GRBL,
             {
@@ -667,6 +778,19 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     except Exception as e:
         print(f"[⚠️] Could not lock gaze for drawing observation: {e}")
 
+    # Start smooth lightbulb fluctuation during drawing
+    lightbulb_fluctuation = DrawingLightbulbFluctuation(
+        min_brightness=40,
+        max_brightness=200,
+        period_seconds=3.0
+    )
+    try:
+        from config.config import USE_LIGHTBULB_PWM
+        if USE_LIGHTBULB_PWM:
+            lightbulb_fluctuation.start_fluctuation()
+    except Exception as e:
+        print(f"[⚠️] Could not start lightbulb fluctuation: {e}")
+
     try:
         with open(gcode_file, "r") as f:
             lines = f.readlines()
@@ -744,8 +868,13 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             send_cmd(ser, "!", wait_ok=False)  # Emergency stop
         except Exception:
             pass
-        
-        
+
+        # Stop lightbulb fluctuation on interruption
+        try:
+            lightbulb_fluctuation.stop_fluctuation()
+        except Exception:
+            pass
+
         raise
 
     log_json_entry(
@@ -939,7 +1068,13 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
     except Exception as e:
         print(f"[⚠️] Could not clear CNC execution state: {e}")
     
-    # Step 6: Resume idle movements after completion ritual (and uArm action)
+    # Step 6: Stop lightbulb fluctuation after completion ritual
+    try:
+        lightbulb_fluctuation.stop_fluctuation()
+    except Exception as e:
+        print(f"[⚠️] Could not stop lightbulb fluctuation: {e}")
+
+    # Step 7: Resume idle movements after completion ritual (and uArm action)
     try:
         from grbl.idle_movement_manager import resume_after_drawing
         try:

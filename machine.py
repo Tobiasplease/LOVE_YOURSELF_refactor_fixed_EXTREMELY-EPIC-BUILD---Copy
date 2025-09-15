@@ -866,6 +866,140 @@ frame_count = 0
 last_display_time = 0
 DISPLAY_THROTTLE_INTERVAL = 0.1  # Show camera feed max 10 FPS to save memory
 
+# Real-time camera controls with persistence
+import json
+
+CAMERA_SETTINGS_FILE = "camera_settings.json"
+
+default_brightness = CAMERA_BRIGHTNESS if CAMERA_BRIGHTNESS != -1 else 50
+default_contrast = CAMERA_CONTRAST if CAMERA_CONTRAST != -1 else 50
+default_saturation = CAMERA_SATURATION if CAMERA_SATURATION != -1 else 50
+default_sharpness = CAMERA_SHARPNESS if CAMERA_SHARPNESS != -1 else 50
+
+def load_camera_settings():
+    """Load camera settings from file, return defaults if file doesn't exist"""
+    try:
+        with open(CAMERA_SETTINGS_FILE, 'r') as f:
+            settings = json.load(f)
+            return {
+                'brightness': settings.get('brightness', default_brightness),
+                'contrast': settings.get('contrast', default_contrast),
+                'saturation': settings.get('saturation', default_saturation),
+                'sharpness': settings.get('sharpness', default_sharpness)
+            }
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {
+            'brightness': default_brightness,
+            'contrast': default_contrast,
+            'saturation': default_saturation,
+            'sharpness': default_sharpness
+        }
+
+def save_camera_settings(brightness, contrast, saturation, sharpness):
+    """Save current camera settings to file"""
+    try:
+        settings = {
+            'brightness': brightness,
+            'contrast': contrast,
+            'saturation': saturation,
+            'sharpness': sharpness
+        }
+        with open(CAMERA_SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=2)
+        if DEBUG_MODE:
+            debug_print("Camera settings saved", "CAMERA")
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Failed to save camera settings: {e}", "CAMERA")
+
+# Load saved settings
+saved_settings = load_camera_settings()
+current_brightness = saved_settings['brightness']
+current_contrast = saved_settings['contrast']
+current_saturation = saved_settings['saturation']
+current_sharpness = saved_settings['sharpness']
+
+def on_brightness_change(val):
+    global current_brightness
+    current_brightness = val
+    try:
+        result = cap.set(cv2.CAP_PROP_BRIGHTNESS, val)
+        if not result and DEBUG_MODE:
+            debug_print(f"Brightness setting to {val} failed (not supported)", "CAMERA")
+        save_camera_settings(current_brightness, current_contrast, current_saturation, current_sharpness)
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Brightness adjustment error: {e}", "CAMERA")
+
+def on_contrast_change(val):
+    global current_contrast
+    current_contrast = val
+    try:
+        result = cap.set(cv2.CAP_PROP_CONTRAST, val)
+        if not result and DEBUG_MODE:
+            debug_print(f"Contrast setting to {val} failed (not supported)", "CAMERA")
+        save_camera_settings(current_brightness, current_contrast, current_saturation, current_sharpness)
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Contrast adjustment error: {e}", "CAMERA")
+
+def on_saturation_change(val):
+    global current_saturation
+    current_saturation = val
+    try:
+        result = cap.set(cv2.CAP_PROP_SATURATION, val)
+        if not result and DEBUG_MODE:
+            debug_print(f"Saturation setting to {val} failed (not supported)", "CAMERA")
+        save_camera_settings(current_brightness, current_contrast, current_saturation, current_sharpness)
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Saturation adjustment error: {e}", "CAMERA")
+
+def on_sharpness_change(val):
+    global current_sharpness
+    current_sharpness = val
+    try:
+        result = cap.set(cv2.CAP_PROP_SHARPNESS, val)
+        if not result and DEBUG_MODE:
+            debug_print(f"Sharpness setting to {val} failed (not supported)", "CAMERA")
+        save_camera_settings(current_brightness, current_contrast, current_saturation, current_sharpness)
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Sharpness adjustment error: {e}", "CAMERA")
+
+def reset_camera_controls():
+    """Reset all camera controls to default values"""
+    global current_brightness, current_contrast, current_saturation, current_sharpness
+    current_brightness = default_brightness
+    current_contrast = default_contrast
+    current_saturation = default_saturation
+    current_sharpness = default_sharpness
+
+    cv2.setTrackbarPos("Brightness", "mslint camera", default_brightness)
+    cv2.setTrackbarPos("Contrast", "mslint camera", default_contrast)
+    cv2.setTrackbarPos("Saturation", "mslint camera", default_saturation)
+    cv2.setTrackbarPos("Sharpness", "mslint camera", default_sharpness)
+
+    # Apply defaults to camera
+    cap.set(cv2.CAP_PROP_BRIGHTNESS, default_brightness)
+    cap.set(cv2.CAP_PROP_CONTRAST, default_contrast)
+    cap.set(cv2.CAP_PROP_SATURATION, default_saturation)
+    cap.set(cv2.CAP_PROP_SHARPNESS, default_sharpness)
+
+    save_camera_settings(default_brightness, default_contrast, default_saturation, default_sharpness)
+    if DEBUG_MODE:
+        debug_print("Camera controls reset to defaults", "CAMERA")
+
+# Create trackbars for real-time camera adjustment
+cv2.namedWindow("mslint camera")
+cv2.createTrackbar("Brightness", "mslint camera", current_brightness, 100, on_brightness_change)
+cv2.createTrackbar("Contrast", "mslint camera", current_contrast, 100, on_contrast_change)
+cv2.createTrackbar("Saturation", "mslint camera", current_saturation, 100, on_saturation_change)
+cv2.createTrackbar("Sharpness", "mslint camera", current_sharpness, 100, on_sharpness_change)
+
+debug_print("Camera controls initialized - use trackbars in preview window to adjust in real-time", "INIT")
+debug_print("Press 'r' in camera window to reset controls to defaults", "INIT")
+
 try:
     prev_gray = None
     smoothed_pwm = 0
@@ -1162,8 +1296,11 @@ try:
         # Hand controller now runs completely autonomously in its own thread
         # No GUI updates needed from machine.py
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
             break
+        elif key == ord("r"):
+            reset_camera_controls()
 
 except KeyboardInterrupt:
     graceful_cleanup()
