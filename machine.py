@@ -148,10 +148,20 @@ if USE_LIGHTBULB_PWM:
     from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
 
 if USE_UARM:
-    from uarm_control.uarm_controller import UarmController
-    from uarm_control.motion_manager import MotionManager
-    from uarm_control.simple_api import UarmSimpleAPI
-    import uarm_control.simple_api as uarm_api
+    # Try native controller API; if unavailable, fall back to official Teach API
+    UARM_BACKEND = "controller"
+    try:
+        from uarm_control.uarm_controller import UarmController
+        from uarm_control.motion_manager import MotionManager
+        from uarm_control.simple_api import UarmSimpleAPI
+        import uarm_control.simple_api as uarm_api
+    except Exception:
+        UARM_BACKEND = "teach"
+        try:
+            from uarm_control.teach_menu import UArmTeachApp  # Official SDK path
+        except Exception as e:
+            print(f"Warning: uArm controller imports unavailable: {e}")
+            UARM_BACKEND = None
 
 VERBOSE = False
 
@@ -258,42 +268,67 @@ else:
 # Initialize uArm Swift Pro robotic arm (separate from servos)
 uarm_controller = None
 motion_manager = None
-if USE_UARM:
+uarm_teach_app = None
+if USE_UARM and UARM_BACKEND:
     try:
-        uarm_port = ARDUINO_DEVICES["UARM"]  # Use the same symlink approach as other controllers
-        debug_print(f"Initializing uArm Swift Pro controller on {uarm_port}", "INIT")
+        uarm_port = ARDUINO_DEVICES["UARM"]
+        debug_print(f"Initializing uArm on {uarm_port} using backend={UARM_BACKEND}", "INIT")
 
-        if os.path.exists(uarm_port):
-            uarm_controller = UarmController(port=uarm_port, connect_on_init=UARM_CONNECT_ON_STARTUP)
+        if not os.path.exists(uarm_port):
+            print(f"WARNING: uArm device not found at {uarm_port}")
+            print("  Check USB connection or udev symlink")
         else:
-            print(f"WARNING: uArm controller not found at {uarm_port}")
-            print("  Device may not be connected or udev rule not set up")
-            uarm_controller = None
+            if UARM_BACKEND == "controller":
+                uarm_controller = UarmController(port=uarm_port, connect_on_init=UARM_CONNECT_ON_STARTUP)
+                if uarm_controller and uarm_controller.is_connected():
+                    debug_print("uArm connected successfully", "INIT")
+                    motion_manager = MotionManager(storage_path=UARM_MOTION_STORAGE, controller=uarm_controller)
+                    debug_print("uArm motion manager initialized", "INIT")
+                    simple_api = UarmSimpleAPI(controller=uarm_controller, motion_manager=motion_manager)
+                    uarm_api.uarm_api = simple_api
+                    debug_print("uArm simple API initialized", "INIT")
+                    if UARM_HOME_ON_CONNECT:
+                        debug_print("Performing uArm homing sequence", "INIT")
+                        uarm_controller.home()
+                else:
+                    debug_print("uArm connection failed - check USB connection and firmware", "WARN")
+                    if uarm_controller and uarm_controller.last_error:
+                        debug_print(f"uArm error: {uarm_controller.last_error}", "WARN")
+            elif UARM_BACKEND == "teach":
+                try:
+                    uarm_teach_app = UArmTeachApp()
+                    uarm_teach_app.connect()
+                    debug_print("uArm (Teach API) connected", "INIT")
+                    # Startup reassurance play (non-blocking)
+                    try:
+                        from config.config import UARM_PLAY_ON_START, UARM_START_PLAY_FILE
+                        if UARM_PLAY_ON_START:
+                            import threading
 
-        if uarm_controller and uarm_controller.is_connected():
-            debug_print("uArm connected successfully", "INIT")
+                            def _uarm_start_play():
+                                try:
+                                    target = UARM_START_PLAY_FILE
+                                    # Fast playback; avoid homing around play
+                                    try:
+                                        uarm_teach_app.smoothing_enabled = False
+                                        uarm_teach_app.use_home_before_play = False
+                                        uarm_teach_app.use_home_after_play = False
+                                    except Exception:
+                                        pass
+                                    if os.path.exists(target):
+                                        uarm_teach_app.play_file = target
+                                    print(f"[uArm] Startup play: {os.path.basename(getattr(uarm_teach_app, 'play_file', target))}")
+                                    uarm_teach_app.play()
+                                except Exception as e:
+                                    print(f"[uArm] Startup play failed: {e}")
 
-            # Initialize motion manager for teach and play functionality
-            motion_manager = MotionManager(
-                storage_path=UARM_MOTION_STORAGE,
-                controller=uarm_controller
-            )
-            debug_print("uArm motion manager initialized", "INIT")
-
-            # Initialize simple API for easy access
-            simple_api = UarmSimpleAPI(controller=uarm_controller, motion_manager=motion_manager)
-            uarm_api.uarm_api = simple_api  # Set global API instance
-            debug_print("uArm simple API initialized", "INIT")
-
-            if UARM_HOME_ON_CONNECT:
-                debug_print("Performing uArm homing sequence", "INIT")
-                uarm_controller.home()
-        elif uarm_controller:
-            debug_print("uArm connection failed - check USB connection and firmware", "WARN")
-            if uarm_controller.last_error:
-                debug_print(f"uArm error: {uarm_controller.last_error}", "WARN")
-        else:
-            debug_print("uArm controller not available - check device connection", "WARN")
+                            threading.Thread(target=_uarm_start_play, daemon=True, name="UArmStartupPlay").start()
+                    except Exception:
+                        pass
+                except Exception as e:
+                    print(f"WARNING: Failed to init uArm Teach API: {e}")
+            else:
+                debug_print("uArm backend not available", "WARN")
 
     except Exception as e:
         debug_print(f"uArm initialization failed: {e}", "ERROR")
@@ -461,6 +496,12 @@ def graceful_cleanup():
             uarm_controller.disconnect()
         except Exception as e:
             print(f"[ERROR] Error stopping uArm controller: {e}")
+    elif 'uarm_teach_app' in globals() and uarm_teach_app:
+        try:
+            debug_print("Disconnecting uArm (Teach API)", "CLEANUP")
+            uarm_teach_app.disconnect()
+        except Exception as e:
+            print(f"[ERROR] Error stopping uArm (Teach API): {e}")
 
     # Release camera
     if _global_cap:
@@ -604,12 +645,66 @@ debug_print("Camera reactivity enabled - hand will respond to environmental chan
 
 # Set up image monitor with self-critique callback
 def on_drawing_complete(image_path: str):
-    """Handle drawing completion with self-critique."""
+    """Handle drawing completion with self-critique only (uArm handled via GRBL hook)."""
     captioner.drawing.critique_drawing(image_path)
 
 
 image_monitor.on_image_complete = on_drawing_complete
 image_monitor.start()
+
+# Register GRBL-complete hook to trigger uArm after actual G-code completion
+try:
+    import utils.hooks as _hooks
+    from config.config import UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+    if USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE:
+        def _normalize_smooth(path: str) -> str:
+            base, ext = os.path.splitext(path)
+            while base.lower().endswith('.smooth'):
+                base = base[:-7]
+            return f"{base}{ext or '.txt'}"
+
+        def _uarm_after_grbl():
+            def _run():
+                try:
+                    from grbl.idle_movement_manager import pause_for_drawing, resume_after_drawing
+                    pause_for_drawing()
+                    target = _normalize_smooth(UARM_PLAY_FILE)
+                    app = None
+                    try:
+                        if 'uarm_teach_app' in globals() and uarm_teach_app:
+                            app = uarm_teach_app
+                    except Exception:
+                        app = None
+                    if app is None:
+                        from uarm_control.teach_menu import UArmTeachApp
+                        app = UArmTeachApp()
+                        app.connect()
+                    try:
+                        app.smoothing_enabled = False
+                        app.use_home_before_play = False
+                        app.use_home_after_play = False
+                    except Exception:
+                        pass
+                    if os.path.exists(target):
+                        app.play_file = target
+                    print(f"[uArm] Post-GRBL play: {os.path.basename(getattr(app, 'play_file', target))}")
+                    app.play()
+                except Exception as e:
+                    print(f"[uArm] Post-GRBL play failed: {e}")
+                finally:
+                    try:
+                        time.sleep(30.0)
+                    except Exception:
+                        pass
+                    try:
+                        resume_after_drawing()
+                    except Exception:
+                        pass
+            threading.Thread(target=_run, daemon=True, name="UArmAfterGRBL").start()
+
+        _hooks.on_grbl_drawing_complete = _uarm_after_grbl
+except Exception:
+    pass
 
 # Load previous session state if available
 debug_print("Loading previous session state", "INIT")

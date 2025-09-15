@@ -2,17 +2,24 @@
 import math
 import re
 
-# Robot arm dimensions - adjust these for your actual robot arm
-biceps = 295  # Upper arm length (mm) - your actual robot arm
-underarm = 325  # Lower arm length (mm) - your actual robot arm
-tendon_biceps = 160  # Tendon length from biceps to elbow (mm)
-tendon_underarm = 50  # Tendon length from elbow to attachment (mm)
-mirror = -1  # Mirror factor (-1 or 1 depending on orientation)
+# DET HÄR är måtten på armen som ni vill korrigera. Det viktigaste är (nog) att relationerna mellan måtten stämmer
+biceps = 295  # robotens överarnm
+underarm = 320  # robotens underarm
+tendon_biceps = 50  # längden på senan från biceps till armbågen
+tendon_underarm = 4  # längden till fästet på underarmen från armbågen
+mirror = 1  # om det skulle råka bli spegelvänt så ändrar ni detta till 1
 
 # det här är bara för utplottningen
 # min_l = abs(tendon_underarm - tendon_biceps) + 1
 # max_l = tendon_biceps + tendon_underarm - 1
+def translate(x, y, x_delta, y_delta):
+    return (x + x_delta, y + y_delta)
 
+def scale_x(p, k):
+    return (p[0]*k, p[1])
+
+def scale_y(p, k):
+    return (p[0], p[1]*k)
 
 # hjälpfunktion
 def add_vectors(p1, p2):
@@ -52,22 +59,14 @@ def theta_calc(x, y):
         return alpha + x_y_angle + math.pi / 2
 
 
-# Används för att flytta koordinatsystemets origo
-def translate(x, y, x_delta, y_delta):
-    return (x + x_delta, y + y_delta)
-
-
 # DET HÄR är funktionen som ska konvertera tillbaka skjuvningen
 # koppla in den där koordinater för g-code skapas
 def inverse(x, y):
-    # Mathematician's new origin translation - flytta origo
-    (x, y) = translate(x, y, 60, 60)
-
+    (x,y) = translate(x, y, 60, 60)
     cos_phi = (biceps**2 + underarm**2 - (x**2 + y**2)) / (2 * biceps * underarm)
-    l = tendon_underarm * cos_phi + math.sqrt((tendon_underarm * cos_phi) ** 2 - (tendon_underarm**2 - tendon_biceps**2))
+    l = tendon_underarm * cos_phi + math.sqrt((tendon_underarm * cos_phi)**2 - (tendon_underarm**2 - tendon_biceps**2))
     theta = theta_calc(x, y)
-
-    return theta, l
+    return  theta, l
 
 
 # inställningar för utplottningen
@@ -87,21 +86,20 @@ def inverse(x, y):
 
 
 def warp_transform_line(gcode_line):
-    """Apply inverse warp transform to G-code coordinates"""
     x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
     y_match = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
 
     if x_match and y_match:
-        # Extract original coordinates
+        # G01 X31.3986 Y14.1119
         original_x = float(x_match.group(1))
         original_y = float(y_match.group(1))
-
-        # Apply JBE's inverse warp transform directly
+        # G01 X-2.5462 Y53.7446
         transformed_x, transformed_y = inverse(original_x, original_y)
-
-        # Update G-code line with transformed coordinates
+        # print("[FNC] ", transformed_x, transformed_y)
         gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{transformed_x:.4f}", gcode_line, flags=re.IGNORECASE)
         gcode_line = re.sub(r"Y[-+]?\d*\.?\d+", f"Y{transformed_y:.4f}", gcode_line, flags=re.IGNORECASE)
+    else:
+        print("[WARN] No X or Y found in line, skipping transformation.")
 
     return gcode_line
 

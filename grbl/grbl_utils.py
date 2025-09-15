@@ -230,22 +230,22 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
     try:
         log_json_entry(
             LogType.GRBL,
-            {"message": "SAFETY: Ensuring pen is raised before homing", "action": "pen_safety_sequence"},
+            {"message": "SAFETY: Ensuring pen is raised before homing", "action": "pen_safety_sequence", "repeats": GRBL_PEN_UP_REPEATS, "dwell_s": GRBL_PEN_UP_DWELL_S},
             print_message="[⚠️ SAFETY] Ensuring pen is raised before homing sequence...",
         )
         
         # Send multiple pen up commands with delays to ensure servo catches the signal
-        for i in range(3):  # Triple redundancy for safety
+        for i in range(int(GRBL_PEN_UP_REPEATS)):
             try:
                 send_cmd(ser, PEN_UP_CMD, wait_ok=False)
-                time.sleep(0.3)  # Give servo time to respond
+                time.sleep(0.25)  # Give servo time to respond
             except Exception:
                 pass
         
         # Additional dwell to ensure servo has fully moved
         try:
-            send_cmd(ser, "G4 P0.5", wait_ok=False)  # 500ms dwell
-            time.sleep(0.5)
+            send_cmd(ser, f"G4 P{GRBL_PEN_UP_DWELL_S}", wait_ok=False)
+            time.sleep(float(GRBL_PEN_UP_DWELL_S))
         except Exception:
             pass
             
@@ -779,23 +779,29 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         
         # CRITICAL: Ensure pen is up before homing in completion ritual
         # This is especially important after drawing when pen might still be down
-        for i in range(3):  # Triple redundancy
+        for i in range(int(GRBL_PEN_UP_REPEATS)):
             try:
                 send_cmd(ser, PEN_UP_CMD, wait_ok=False)
-                time.sleep(0.3)
+                time.sleep(0.25)
             except Exception:
                 pass
         
         # Dwell to ensure servo has responded
         try:
-            send_cmd(ser, "G4 P0.5", wait_ok=False)
-            time.sleep(0.5)
+            send_cmd(ser, f"G4 P{GRBL_PEN_UP_DWELL_S}", wait_ok=False)
+            time.sleep(float(GRBL_PEN_UP_DWELL_S))
         except Exception:
             pass
         
         # Now safe to send homing command
         send_cmd(ser, "$H")
         wait_until_idle(ser, 30)  # Wait for homing to complete
+        # Reassert UP after homing in case PWM was reset during $H
+        try:
+            send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+            time.sleep(0.4)
+        except Exception:
+            pass
         
         log_json_entry(
             LogType.GRBL,
@@ -911,6 +917,13 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
             {"message": "Completion ritual finished at home position", "action": "completion_ritual_complete"},
             print_message="[✅] Completion ritual finished at home - idle movements will handle positioning",
         )
+        # Notify any runtime hook that GRBL drawing has finished
+        try:
+            from utils.hooks import on_grbl_drawing_complete
+            if callable(on_grbl_drawing_complete):
+                on_grbl_drawing_complete()
+        except Exception as e:
+            print(f"[hooks] on_grbl_drawing_complete error: {e}")
         
     except Exception as e:
         log_json_entry(
@@ -926,7 +939,7 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
     except Exception as e:
         print(f"[⚠️] Could not clear CNC execution state: {e}")
     
-    # Step 6: Resume idle movements after completion ritual
+    # Step 6: Resume idle movements after completion ritual (and uArm action)
     try:
         from grbl.idle_movement_manager import resume_after_drawing
         try:

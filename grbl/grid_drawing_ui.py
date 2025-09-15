@@ -6,19 +6,22 @@ Simple GUI for demonstrating warp transform effects on grid drawing.
 Perfect for showing the mathematician coordinate transformations in real-time.
 """
 
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
 import threading
 import time
+import tkinter as tk
+from tkinter import messagebox, scrolledtext, ttk
+
 import serial
 from serial.tools import list_ports
 
 # Import warp transform
 try:
-    from warp_transform import inverse, trans
+    from warp_transform import inverse, scale_x, scale_y, translate
+
     WARP_AVAILABLE = True
 except ImportError:
     WARP_AVAILABLE = False
+
 
 class GridDrawingUI:
     def __init__(self, root):
@@ -49,8 +52,7 @@ class GridDrawingUI:
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Title
-        title_label = ttk.Label(main_frame, text="GRBL Grid Drawing with Warp Transform",
-                               font=('Arial', 14, 'bold'))
+        title_label = ttk.Label(main_frame, text="GRBL Grid Drawing with Warp Transform", font=("Arial", 14, "bold"))
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
 
         # Connection section
@@ -71,17 +73,15 @@ class GridDrawingUI:
         warp_frame = ttk.Frame(config_frame)
         warp_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
-        warp_check = ttk.Checkbutton(warp_frame, text="Enable Original Warp Transform",
-                                    variable=self.use_warp_transform,
-                                    command=self.on_warp_toggle)
+        warp_check = ttk.Checkbutton(warp_frame, text="Enable Original Warp Transform", variable=self.use_warp_transform, command=self.on_warp_toggle)
         warp_check.grid(row=0, column=0)
 
-        corrected_warp_check = ttk.Checkbutton(warp_frame, text="Enable Corrected Warp Transform",
-                                              variable=self.use_corrected_warp,
-                                              command=self.on_warp_toggle)
+        corrected_warp_check = ttk.Checkbutton(
+            warp_frame, text="Enable Corrected Warp Transform", variable=self.use_corrected_warp, command=self.on_warp_toggle
+        )
         corrected_warp_check.grid(row=1, column=0)
 
-        self.warp_status = ttk.Label(warp_frame, text="", font=('Arial', 10, 'italic'))
+        self.warp_status = ttk.Label(warp_frame, text="", font=("Arial", 10, "italic"))
         self.warp_status.grid(row=0, column=1, rowspan=2, padx=(20, 0))
 
         # Grid settings
@@ -121,7 +121,7 @@ class GridDrawingUI:
         log_frame = ttk.LabelFrame(main_frame, text="Output Log", padding="10")
         log_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
 
-        self.log_text = scrolledtext.ScrolledText(log_frame, width=70, height=15, font=('Courier', 9))
+        self.log_text = scrolledtext.ScrolledText(log_frame, width=70, height=15, font=("Courier", 9))
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Clear log button
@@ -154,7 +154,7 @@ class GridDrawingUI:
         self.log_text.delete(1.0, tk.END)
 
     def on_warp_toggle(self):
-        """Handle warp transform toggle"""
+        """Handle warp transform toggle with mutual exclusion"""
         original_enabled = self.use_warp_transform.get()
         corrected_enabled = self.use_corrected_warp.get()
 
@@ -249,10 +249,10 @@ class GridDrawingUI:
 
         # Andreas's A4 corner coordinates (proven safe)
         ANDREAS_A4_CORNERS = [
-            (66, -2),    # bottom_left  → A4 (0, 0)
-            (111, -1),   # bottom_right → A4 (210, 0)
-            (-2, 67),    # top_left     → A4 (0, 297)
-            (24, 67)     # top_right    → A4 (210, 297)
+            (66, -2),  # bottom_left  → A4 (0, 0)
+            (111, -1),  # bottom_right → A4 (210, 0)
+            (-2, 67),  # top_left     → A4 (0, 297)
+            (24, 67),  # top_right    → A4 (210, 297)
         ]
 
         def bilinear_interpolation(x, y, corner_values):
@@ -265,10 +265,8 @@ class GridDrawingUI:
             bottom_left, bottom_right, top_left, top_right = corner_values
 
             # Bilinear interpolation
-            bottom = ((1 - u) * bottom_left[0] + u * bottom_right[0],
-                     (1 - u) * bottom_left[1] + u * bottom_right[1])
-            top = ((1 - u) * top_left[0] + u * top_right[0],
-                  (1 - u) * top_left[1] + u * top_right[1])
+            bottom = ((1 - u) * bottom_left[0] + u * bottom_right[0], (1 - u) * bottom_left[1] + u * bottom_right[1])
+            top = ((1 - u) * top_left[0] + u * top_right[0], (1 - u) * top_left[1] + u * top_right[1])
 
             result_x = (1 - v) * bottom[0] + v * top[0]
             result_y = (1 - v) * bottom[1] + v * top[1]
@@ -286,15 +284,18 @@ class GridDrawingUI:
 
             try:
                 # Step 1: Apply inverse kinematics to get robot parameters
-                theta, l = inverse(original_x, original_y)
-
-               
+                # p = (original_x, original_y)
+                p = inverse(original_x, original_y)
+                # p = inverse(theta, l)
+                # p = scale_x(p, 80)
+                # p = scale_y(p, 7)
+                p = translate(p[0], p[1], 0, -52)
                 # Step 3: Convert from theoretical coordinates to GRBL coordinates
                 # Clamp to A4 range for safety
-                safe_x = max(0, min(210, theta))
-                safe_y = max(0, min(297, l))
+                safe_x = max(0, min(210, p[0]))
+                safe_y = max(0, min(297, p[1]))
                 grbl_x, grbl_y = bilinear_interpolation(safe_x, safe_y, ANDREAS_A4_CORNERS)
-
+                # grbl_x, grbl_y = p
                 # Update G-code line with corrected coordinates
                 gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{grbl_x:.4f}", gcode_line, flags=re.IGNORECASE)
                 gcode_line = re.sub(r"Y[-+]?\d*\.?\d+", f"Y{grbl_y:.4f}", gcode_line, flags=re.IGNORECASE)
@@ -314,9 +315,7 @@ class GridDrawingUI:
         original_cmd = cmd
 
         # Apply warp transform if enabled
-        if (WARP_AVAILABLE and
-            cmd.startswith(("G0", "G1", "G00", "G01")) and
-            ("X" in cmd or "Y" in cmd)):
+        if WARP_AVAILABLE and cmd.startswith(("G0", "G1", "G00", "G01")) and ("X" in cmd or "Y" in cmd):
 
             if self.use_corrected_warp.get():
                 # Use corrected warp transform
@@ -325,6 +324,7 @@ class GridDrawingUI:
             elif self.use_warp_transform.get():
                 # Use original warp transform
                 from warp_transform import warp_transform_line
+
                 cmd = warp_transform_line(cmd)
                 self.log(f"🔄 ORIGINAL {original_cmd} -> {cmd}", "warp")
             else:
@@ -365,6 +365,7 @@ class GridDrawingUI:
 
     def home_machine(self):
         """Home the machine and set up coordinate system"""
+
         def home_thread():
             try:
                 self.log("🏠 Starting homing sequence...", "info")
@@ -417,6 +418,7 @@ class GridDrawingUI:
 
     def draw_grid(self):
         """Draw the grid with current settings"""
+
         def draw_thread():
             try:
                 self.is_drawing = True

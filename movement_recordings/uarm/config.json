@@ -1,0 +1,18 @@
+{
+  "port": "/dev/arduino_uarm",
+  "record_duration": 20.0,
+  "record_interval": 0.02,
+  "limp_mode": "standby",
+  "home_x": 150.0,
+  "home_y": 0.0,
+  "home_z": 90.0,
+  "home_speed": 50.0,
+  "use_home_before_record": true,
+  "use_home_before_play": false,
+  "use_home_after_play": false,
+  "home_mode": "xyz",
+  "home_stretch": 70.0,
+  "home_rotation": 0.0,
+  "smoothing_enabled": true,
+  "smoothing_window": 3
+}

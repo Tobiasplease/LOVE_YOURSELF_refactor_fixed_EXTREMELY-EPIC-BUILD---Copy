@@ -24,8 +24,12 @@ class ServoController:
         self.last_sent = {}
         self.last_send_time = 0
         self.send_lock = threading.Lock()
+        self.disabled = False  # Permanently disable sends after hard errors
+        self.last_error_log = 0.0  # Throttle error logs
 
     def send(self, message: str, key=None):
+        if self.disabled:
+            return
         if not self.ser or not self.ser.is_open:
             return
         if key and self.last_sent.get(key) == message:
@@ -48,12 +52,29 @@ class ServoController:
                     self.last_sent[key] = message
 
             except Exception as e:
-                print(f"[ERROR] Servo send failed: {e}")
-                # Try to recover
+                # Throttle flooding and disable on hard I/O errors
+                now = time.time()
+                if now - self.last_error_log >= 2.0:
+                    print(f"[ERROR] Servo send failed: {e}")
+                    self.last_error_log = now
+                # Disable further traffic on I/O errors to prevent log floods
                 try:
-                    self.ser.reset_output_buffer()
-                except:
+                    msg = str(e).lower()
+                    if "input/output error" in msg or "i/o error" in msg or isinstance(e, serial.SerialException):
+                        self.disabled = True
+                        try:
+                            self.ser.close()
+                        except Exception:
+                            pass
+                        print("[WARN] Servo serial disabled after I/O error; suppressing further logs.")
+                except Exception:
                     pass
+                # Try to recover minimal buffers if not disabled yet
+                if not self.disabled:
+                    try:
+                        self.ser.reset_output_buffer()
+                    except Exception:
+                        pass
 
     def set_pan(self, angle: int):
         if self._should_send("pan", angle):

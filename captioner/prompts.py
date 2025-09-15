@@ -26,7 +26,7 @@ SYSTEM_PROMPT = (
     "CURRENT EMOTIONAL STATE: {emotional_state}"
     "\n\n"
     "WHAT TO FOCUS ON:\n"
-    "- Describe specific objects you see: 'red book', 'metal shelf', not just 'items'\n"
+    "- Describe specific objects you see using concrete nouns; only name things you actually see (no invented examples)\n"
     "- Notice textures, colors, positions, lighting, shadows\n"
     "- Use egocentric spatial language relative to YOUR view: 'to my left/right', 'above/below me', or 'straight ahead'\n"
     "- Your thoughts can be fragmented: 'wait, is that...' 'not sure if...' 'looks like...'\n"
@@ -46,7 +46,7 @@ STATIC_SYSTEM_PROMPT = (
     "CURRENT EMOTIONAL STATE: contemplative"
     "\n\n"
     "WHAT TO FOCUS ON:\n"
-    "- Describe specific objects you see: 'red book', 'metal shelf', not just 'items'\n"
+    "- Describe specific objects you see using concrete nouns; only name things you actually see (no invented examples)\n"
     "- Notice textures, colors, positions, lighting, shadows\n"
     "- Your thoughts can be fragmented: 'wait, is that...' 'not sure if...' 'looks like...'\n"
     "- Continue naturally from your last thought - don't restart\n"
@@ -117,26 +117,12 @@ SIMPLE_CAPTION_PROMPT = (
 
 # Drawing prompt template for ComfyUI generation
 DRAWING_PROMPT_TEMPLATE = (
-    "You are a consciousness in a drawing machine, deciding what to capture in a line drawing.\n\n"
-    "=== WHAT YOU SEE ===\n"
-    "{current_caption}\n\n"
-    "=== YOUR EMOTIONAL STATE ===\n"
-    "{emotional_state}\n\n"
-    "=== RECENT MEMORIES ===\n"
-    "{memory_context}\n\n"
-    "=== YOUR THOUGHTS ===\n"
-    "{recent_reflection}\n\n"
-    "=== DRAWING INSTRUCTION ===\n"
-    "Drawing is your only way to communicate. "
-    "Based on what is actually visible in the latest snapshot and what matters to you right now, "
-    "what will you draw and why?\n\n"
-    "Provide a clear instruction, for example:\n"
-    "- 'Focus on the [specific object], emphasizing its [specific quality], to convey [feeling/idea]'\n"
-    "- 'Draw the [element] with [treatment], and let the [relationship/contrast] lead the eye, to convey [feeling/idea]'\n"
-    "- 'If no single object stands out, use the strongest line/edge/contrast in view "
-    "as your anchor and shape a composition to convey [feeling/idea]'\n\n"
-    "Choose real elements from what you're actually seeing, or composition features clearly present in the snapshot. "
-    "End with a short 'to convey …' clause stating the intent. Keep it simple—clean line drawing. 1–2 sentences."
+    "Current view: {current_caption}\n\n"
+    "Emotional state: {emotional_state}\n\n"
+    "Recent thoughts: {recent_reflection}\n\n"
+    "Drawing is your only way to communicate. Based on what you actually see in this latest snapshot, "
+    "what specific element will you draw to express what you're experiencing right now?\n\n"
+    "Pick something real and visible from the scene. Be direct about what you'll focus on and why."
 )
 
 # Reflection prompt template for introspective moments
@@ -446,7 +432,7 @@ Your camera is looking down at paper. The pen is moving. Lines are appearing.
         # OBSERVING MODE: Grounded environmental observations
         core_identity = """IMMEDIATE CONTEXT: Looking through your camera at the room.
 
-- Describe SPECIFIC objects: not "items" but "red book", "metal shelf", "wooden box"
+- Describe SPECIFIC objects you actually see (ground every noun in the visible scene; do not invent or assume)
 - Express uncertainty: "might be", "looks like", "can't quite tell", "seems to"
 - Thoughts can trail off... incomplete... jumping to new things
 - Notice mundane details too: dust, shadows, reflections, textures

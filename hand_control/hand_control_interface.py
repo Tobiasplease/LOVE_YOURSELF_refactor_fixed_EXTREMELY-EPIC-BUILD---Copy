@@ -2121,6 +2121,8 @@ class CleanCursorInterface:
                 if self.hand_controller.serial_connection:
                     # Enable manual override to ensure our commands are processed
                     self.hand_controller.enable_manual_override()
+                    # Enable left arm autonomous movement
+                    self.hand_controller.enable_left_arm_movement()
                     self.connected = True
                     self.status_label.config(text=f"SUCCESS Connected ({port})")
                     self.connect_btn.config(text="Disconnect")
@@ -2137,6 +2139,8 @@ class CleanCursorInterface:
             if self.hand_controller:
                 if hasattr(self.hand_controller, "disable_manual_override"):
                     self.hand_controller.disable_manual_override()
+                if hasattr(self.hand_controller, "disable_left_arm_movement"):
+                    self.hand_controller.disable_left_arm_movement()
                 if hasattr(self.hand_controller, "cleanup"):
                     self.hand_controller.cleanup()
             self.hand_controller = None
@@ -2166,6 +2170,8 @@ class CleanCursorInterface:
 
             if self.hand_controller.serial_connection:
                 self.hand_controller.enable_manual_override()
+                # Enable left arm autonomous movement
+                self.hand_controller.enable_left_arm_movement()
                 self.connected = True
                 self.status_label.config(text=f"SUCCESS Auto-connected ({hand_controller_port})")
                 self.connect_btn.config(text="Disconnect")

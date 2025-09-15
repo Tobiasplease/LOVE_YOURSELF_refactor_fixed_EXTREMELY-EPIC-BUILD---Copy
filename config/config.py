@@ -117,6 +117,10 @@ GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))  # -> $31
 GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 30))
 GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 50))
 
+# Extra safety to ensure pen is fully UP before any homing ($H)
+GRBL_PEN_UP_REPEATS = int(os.getenv("GRBL_PEN_UP_REPEATS", 5))   # How many times to assert M3 S{UP} before homing
+GRBL_PEN_UP_DWELL_S = float(os.getenv("GRBL_PEN_UP_DWELL_S", 1.5))  # Dwell seconds after asserting UP before $H
+
 # === GRBL IDLE MOVEMENT SETTINGS ===
 # Idle movements happen in far corner away from home (0,0)
 # Physical work area constrained to 40x40mm for safe operation
@@ -137,8 +141,28 @@ UARM_MOVEMENT_NAMES = {
 }
 UARM_MOTION_STORAGE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "movement_recordings", "uarm")
 UARM_CONNECT_ON_STARTUP = True  # Connect to uArm during system initialization
-UARM_HOME_ON_CONNECT = True     # Perform homing sequence when connecting
+UARM_HOME_ON_CONNECT = False    # Avoid blocking/slow homing on connect; handled by Teach flow
 UARM_DEFAULT_SPEED = 100        # Default movement speed (1-250)
+
+# --- uArm post-drawing playback ---
+# If True, after a drawing fully completes AND GRBL has homed, the uArm
+# will play a specified Teach movement once, then the system will wait
+# (up to 30s) for completion before resuming CNC idle movements.
+UARM_PLAY_AFTER_DRAW = True
+UARM_PLAY_FILE = os.path.join(
+    UARM_MOTION_STORAGE,
+    "1_20250915_005939.smooth.txt",  # normalized to a single .smooth.txt
+)
+
+# --- uArm play-on-start (connectivity reassurance) ---
+UARM_PLAY_ON_START = True
+UARM_START_PLAY_FILE = os.path.join(
+    UARM_MOTION_STORAGE,
+    "startup_20250915_183943.smooth.txt",
+)
+
+# --- uArm play-on-start (connectivity reassurance) ---
+# (reverted) No uArm play-on-start configuration
 
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
@@ -180,10 +204,10 @@ CAMERA_WIDTH = 1920   # Full HD width for high quality image processing
 CAMERA_HEIGHT = 1080  # Full HD height for high quality image processing
 
 # === CAMERA IMAGE QUALITY ===
-CAMERA_SHARPNESS = 50      # Sharpness (0-100, -1 for auto/default)
-CAMERA_SATURATION = 30     # Color saturation (0-100, lower = less colorful)
+CAMERA_SHARPNESS = -1      # Sharpness (0-100, -1 for auto/default)
+CAMERA_SATURATION = 0    # Color saturation (0-100, lower = less colorful)
 CAMERA_CONTRAST = 50       # Contrast (0-100, 50 = normal)
-CAMERA_BRIGHTNESS = 50     # Brightness (0-100, 50 = normal)
+CAMERA_BRIGHTNESS = 100     # Brightness (0-100, 50 = normal)
 CAMERA_EXPOSURE = -1       # Exposure (-1 for auto, or manual value)
 CAMERA_AUTO_FOCUS = True   # Enable autofocus if available
 

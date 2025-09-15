@@ -1,7 +1,7 @@
 #include <Servo.h>
 
 const int NUM_SERVOS = 6;  // Expanded to include 2 left arm servos
-const int pins[NUM_SERVOS] = {8, 9, 10, 11, 4, 5};  // Added pins 4, 5 for left arm
+const int pins[NUM_SERVOS] = {8, 9, 10, 11, 4, 5};  // Added pins 4, 5 for left arm (D4, D5)
 const bool isMirrored[NUM_SERVOS] = {false, false, true, true, false, false};  // Left arm servos not inverted
 
 Servo servos[NUM_SERVOS];
@@ -23,6 +23,7 @@ unsigned long leftArmLastMove[LEFT_ARM_COUNT];
 unsigned long leftArmPauseDuration[LEFT_ARM_COUNT];
 bool leftArmInPause[LEFT_ARM_COUNT];
 String currentMood = "calm_observant";
+bool leftArmMovementEnabled = false;  // NEW: Control flag - starts disabled
 
 // Continuous movement state
 float leftArmPosition[LEFT_ARM_COUNT];  // Current floating point position for smooth movement
@@ -61,11 +62,12 @@ void setup() {
     writeMapped(i, currentAngles[i]);
   }
   
-  // Initialize left arm autonomous movement system
+  // Initialize left arm autonomous movement system (but don't start moving yet)
   initializeLeftArm();
  
   delay(1000);
-  Serial.println("Ready for consciousness commands (0-180 degree range) + left arm autonomous movement");
+  Serial.println("Ready for consciousness commands (0-180 degree range)");
+  Serial.println("Left arm movement DISABLED - waiting for Python enable command");
 }
 
 void loop() {
@@ -173,6 +175,16 @@ void processCommand(String command) {
     // This is purely for Python's peace of mind
     Serial.println("Heartbeat acknowledged");
   }
+  else if (command.startsWith("LEFT_ARM_ENABLE")) {
+    // Enable left arm autonomous movement
+    leftArmMovementEnabled = true;
+    Serial.println("Left arm movement ENABLED");
+  }
+  else if (command.startsWith("LEFT_ARM_DISABLE")) {
+    // Disable left arm autonomous movement
+    leftArmMovementEnabled = false;
+    Serial.println("Left arm movement DISABLED");
+  }
 }
 
 void updateServoPositions(unsigned long now) {
@@ -239,6 +251,11 @@ void writeMapped(int i, int angle) {
 }
 
 void updateLeftArmMovement(unsigned long now) {
+  // Only move if enabled by Python script
+  if (!leftArmMovementEnabled) {
+    return;
+  }
+
   // Continuous breathing-like movement for left arm servos
   for (int i = 0; i < LEFT_ARM_COUNT; i++) {
     int servoIndex = LEFT_ARM_START + i;

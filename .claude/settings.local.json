@@ -69,7 +69,8 @@
       "Bash(pip show:*)",
       "Bash(pip search:*)",
       "Bash(pip index versions:*)",
-      "WebFetch(domain:stackoverflow.com)"
+      "WebFetch(domain:stackoverflow.com)",
+      "Bash(PYTHONPATH=/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy python /home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/debug/test_warp_math_consistency.py)"
     ],
     "deny": [],
     "ask": []

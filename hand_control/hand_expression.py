@@ -164,6 +164,32 @@ class HandExpressionController:
         if not self.clean_output:
             print("🤖 Manual override DISABLED")
 
+    def enable_left_arm_movement(self):
+        """Enable autonomous left arm movement."""
+        if self.serial_connection:
+            try:
+                command = "LEFT_ARM_ENABLE\n"
+                self.serial_connection.write(command.encode())
+                self.serial_connection.flush()
+                if not self.clean_output:
+                    print("🤖 Left arm movement ENABLED")
+            except Exception as e:
+                if not self.clean_output:
+                    print(f"ERROR Failed to enable left arm movement: {e}")
+
+    def disable_left_arm_movement(self):
+        """Disable autonomous left arm movement."""
+        if self.serial_connection:
+            try:
+                command = "LEFT_ARM_DISABLE\n"
+                self.serial_connection.write(command.encode())
+                self.serial_connection.flush()
+                if not self.clean_output:
+                    print("🤖 Left arm movement DISABLED")
+            except Exception as e:
+                if not self.clean_output:
+                    print(f"ERROR Failed to disable left arm movement: {e}")
+
     def cleanup(self):
         """Clean shutdown of hand controller."""
         if self.serial_connection:
