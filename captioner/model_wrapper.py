@@ -55,7 +55,46 @@ class MultimodalModel:
             print_message=f"[🐞] Prompt hash: {hash(prompt)}, preview: {truncate_for_print(prompt, 200)}",
         )
 
-        result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="caption")
+        # Mood-aware candidate sampling (selection, not instruction)
+        n_candidates = 1
+        try:
+            mv = getattr(self.memory_ref, "current_mood_vector", (0.0, 0.0, 0.0)) if self.memory_ref else (0.0, 0.0, 0.0)
+            arousal = float(mv[1]) if isinstance(mv, (tuple, list)) and len(mv) >= 2 else 0.0
+            if abs(arousal) > 0.3:
+                n_candidates = 2
+        except Exception:
+            n_candidates = 1
+
+        if n_candidates == 1:
+            result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="caption")
+        else:
+            import copy, random
+            candidates: list[str] = []
+            options_list = []
+            for _ in range(n_candidates):
+                opts = copy.deepcopy(model_options)
+                opts["seed"] = random.randint(1, 1000000)
+                options_list.append(opts)
+            for opts in options_list:
+                candidates.append(self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=opts, prompt_type="caption"))
+
+            # Simple selector: prefer lower overlap with last caption when arousal is high; shorter when arousal is low
+            last_caption = getattr(self.memory_ref, "last_caption", "") if self.memory_ref else ""
+            def _overlap(a: str, b: str) -> float:
+                sa = set([w.lower() for w in a.split() if len(w) > 3])
+                sb = set([w.lower() for w in b.split() if len(w) > 3])
+                if not sa or not sb:
+                    return 0.0
+                return len(sa & sb) / max(1, len(sa | sb))
+
+            best = candidates[0]
+            if abs(arousal) > 0.3:
+                # Prefer novelty when arousal is high
+                best = min(candidates, key=lambda c: _overlap(c, last_caption) - 0.05 * len(c))
+            else:
+                # Prefer brevity/stability
+                best = min(candidates, key=lambda c: 0.1 * _overlap(c, last_caption) + 0.01 * len(c))
+            result = best
 
         log_json_entry(
             LogType.DEBUG,
