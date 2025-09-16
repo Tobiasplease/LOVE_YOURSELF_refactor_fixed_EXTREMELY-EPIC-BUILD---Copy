@@ -129,6 +129,9 @@ GRBL_PEN_UP_IS_HIGH = os.getenv("GRBL_PEN_UP_IS_HIGH", "false").lower() in ("1",
 # Uses GRBL_SPINDLE_MAX_S when GRBL_PEN_UP_IS_HIGH is True, otherwise GRBL_SPINDLE_MIN_S.
 GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING = os.getenv("GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING", "true").lower() in ("1", "true", "yes")
 
+# Use centralized pen-up safety function (disabled by default for conservative rollout)
+GRBL_USE_CENTRALIZED_PEN_UP = os.getenv("GRBL_USE_CENTRALIZED_PEN_UP", "false").lower() in ("1", "true", "yes")
+
 # === GRBL IDLE MOVEMENT SETTINGS ===
 # Idle movements happen in far corner away from home (0,0)
 # Physical work area constrained to 40x40mm for safe operation

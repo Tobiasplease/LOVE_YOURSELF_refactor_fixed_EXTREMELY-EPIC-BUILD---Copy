@@ -66,16 +66,10 @@ class PromptInterface:
         else:
             prompt = "Describe this image."
 
-        # Prepare model options with mood-aware variation settings
+        # Prepare model options with variation settings
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
-        # Apply light mood modulation (no language steering)
-        try:
-            v, a, _ = self._get_mood_vector(memory_ref)
-            model_options = self._apply_mood_modulation(model_options, v, a)
-        except Exception:
-            # Fallback to baseline
-            pass
+        model_options.update({"temperature": 1.5, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
 
         # Format dynamic SYSTEM_PROMPT with temporal/motif context if available
         system_prompt = SYSTEM_PROMPT
@@ -97,15 +91,6 @@ class PromptInterface:
         else:
             # No dynamic context available, use static fallback
             system_prompt = STATIC_SYSTEM_PROMPT
-
-        # Minimal embodied identity prefix (roleplay seed) – single concise line only
-        try:
-            v, a, _ = self._get_mood_vector(memory_ref)
-            label, intensity = self._label_from_mood(v, a, memory_ref)
-            role_line = f"You are a {intensity}{label} drawing machine.\n"
-            system_prompt = role_line + system_prompt
-        except Exception:
-            pass
 
         # Return prompt, options, and formatted system prompt
         return prompt, model_options, system_prompt
@@ -167,96 +152,3 @@ class PromptInterface:
     def _get_base_model_options(self):
         """Get base model options for the current model."""
         return get_model_options(self.model_name)
-
-    # --- Mood helpers (no style scripting) ---
-    def _get_mood_vector(self, memory_ref):
-        v, a, c = (0.0, 0.0, 0.0)
-        if memory_ref is not None and hasattr(memory_ref, "current_mood_vector"):
-            mv = getattr(memory_ref, "current_mood_vector", (0.0, 0.0, 0.0))
-            if isinstance(mv, (tuple, list)) and len(mv) >= 3:
-                v, a, c = float(mv[0]), float(mv[1]), float(mv[2])
-        return v, a, c
-
-    def _label_from_mood(self, v: float, a: float, memory_ref) -> tuple[str, str]:
-        """Map valence/arousal to a compact label and intensity adverb, with hysteresis via memory_ref."""
-        import time
-        label = "calm"
-        # Primary label by quadrants
-        if v > 0.4 and a > 0.5:
-            label = "ecstatic"
-        elif v > 0.2 and a > 0.2:
-            label = "eager"
-        elif v > 0.2 and a < -0.2:
-            label = "serene"
-        elif v < -0.4 and a > 0.4:
-            label = "agitated"
-        elif v < -0.5 and a < -0.2:
-            label = "withdrawn"
-        elif v < -0.2:
-            label = "uneasy"
-        elif a > 0.5:
-            label = "restless"
-        else:
-            label = "calm"
-
-        magnitude = max(abs(v), abs(a))
-        intensity = ""
-        if magnitude > 0.7:
-            intensity = "deeply "
-        elif magnitude > 0.45:
-            intensity = "very "
-        elif magnitude > 0.25:
-            intensity = "slightly "
-
-        # Hysteresis: soften label flips using memory_ref
-        try:
-            now = time.time()
-            last_label = getattr(memory_ref, "_last_mood_label", None)
-            last_ts = getattr(memory_ref, "_last_mood_label_ts", 0.0)
-            if last_label and last_label != label and (now - last_ts) < 20.0:
-                # Keep previous label if change is too soon and magnitude not extreme
-                if magnitude < 0.75:
-                    label = last_label
-            # Persist
-            setattr(memory_ref, "_last_mood_label", label)
-            setattr(memory_ref, "_last_mood_label_ts", now)
-        except Exception:
-            pass
-
-        return label, intensity
-
-    def _apply_mood_modulation(self, opts: dict, v: float, a: float) -> dict:
-        """Adjust decoding options from valence/arousal (no language rules)."""
-        # Baseline from model settings
-        temp = float(opts.get("temperature", 0.8))
-        top_p = float(opts.get("top_p", 0.9))
-        rep = float(opts.get("repeat_penalty", 1.1))
-        top_k = int(opts.get("top_k", 40))
-        npred = int(opts.get("num_predict", 200))
-
-        # Modulate by arousal/intensity
-        intensity = max(abs(v), abs(a))
-        if a > 0.4:
-            temp += 0.15 * intensity
-            top_p = min(0.95, top_p + 0.02)
-            rep = max(1.05, rep - 0.02)
-            npred = min(240, npred + int(20 * intensity))
-        elif a < -0.2:
-            temp -= 0.1 * (0.3 - max(-0.3, a))
-            top_p = max(0.82, top_p - 0.03)
-            rep = min(1.2, rep + 0.03)
-            npred = max(140, npred - 10)
-
-        # Clamp reasonable bounds
-        temp = max(0.5, min(temp, 1.2))
-        top_p = max(0.8, min(top_p, 0.95))
-        rep = max(1.03, min(rep, 1.25))
-
-        opts.update({
-            "temperature": temp,
-            "top_p": top_p,
-            "repeat_penalty": rep,
-            "top_k": top_k,
-            "num_predict": npred,
-        })
-        return opts

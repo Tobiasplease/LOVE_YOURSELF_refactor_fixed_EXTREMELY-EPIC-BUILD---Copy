@@ -25,12 +25,18 @@ try:
         GRBL_WARP_TRANSFORM,
         GRBL_PEN_UP_REPEATS,
         GRBL_PEN_UP_DWELL_S,
+        GRBL_USE_CENTRALIZED_PEN_UP,
+        GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING,
+        GRBL_PEN_UP_IS_HIGH,
     )
 except Exception:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S = 30, 50, 255, 0
     GRBL_WARP_TRANSFORM = True
     GRBL_PEN_UP_REPEATS = 5
     GRBL_PEN_UP_DWELL_S = 1.5
+    GRBL_USE_CENTRALIZED_PEN_UP = False
+    GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING = True
+    GRBL_PEN_UP_IS_HIGH = False
 
 # Default configuration
 DEFAULT_BAUD = 115200
@@ -38,7 +44,7 @@ DEFAULT_STATUS_POLL = 0.1
 DEFAULT_HOME_TIMEOUT = 120  # seconds
 DEFAULT_MOVE_TIMEOUT = 15  # seconds
 DEFAULT_CMD_TIMEOUT = 5.0  # seconds
-DEFAULT_FEED_RATE = 12000  # Balanced speed for clean drawing
+DEFAULT_FEED_RATE = 24000  # Doubled from 12000 for faster drawing execution
 
 PEN_DOWN_CMD = f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN"  # Command to lower pen
 PEN_UP_CMD = f"M3 S{GRBL_PEN_UP_S} ; PEN UP"  # Command to raise pen
@@ -309,7 +315,8 @@ def wait_until_idle(ser, max_wait, poll_interval=DEFAULT_STATUS_POLL):
 
 def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
     """Ensure GRBL is homed and setup coordinate system with continuous retry logic"""
-    
+
+
     # PREP: Clear ALARM first and set minimal spindle config so pen-up will be accepted
     try:
         status = get_status(ser)
@@ -329,32 +336,42 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
             time.sleep(0.2)
         except Exception:
             pass
-        # CRITICAL SAFETY: Multiple pen up commands with dwell
+        # CRITICAL SAFETY: Centralized pen-up sequence before homing
         log_json_entry(
             LogType.GRBL,
-            {"message": "SAFETY: Ensuring pen is raised before homing", "action": "pen_safety_sequence", "repeats": GRBL_PEN_UP_REPEATS, "dwell_s": GRBL_PEN_UP_DWELL_S},
-            print_message="[⚠️ SAFETY] Ensuring pen is raised before homing sequence...",
+            {"message": "STARTUP SAFETY: Using centralized pen-up before homing", "action": "startup_centralized_pen_safety"},
+            print_message="[🚨 CRITICAL] Centralized pen-up sequence before homing...",
         )
-        # Optional absolute extreme UP before repeats
+
+        # Use centralized pen-up function for consistent, conflict-free operation
         try:
-            from config.config import GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING, GRBL_PEN_UP_IS_HIGH
-            if GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING:
-                sup = GRBL_SPINDLE_MAX_S if GRBL_PEN_UP_IS_HIGH else GRBL_SPINDLE_MIN_S
-                send_cmd(ser, f"M3 S{sup}", wait_ok=False)
-                time.sleep(0.3)
-        except Exception:
-            pass
-        for _ in range(int(GRBL_PEN_UP_REPEATS)):
+            ensure_pen_up_critical_safety(ser, context="startup_before_homing", use_repeats=True)
+        except Exception as e:
+            log_json_entry(
+                LogType.GRBL,
+                {"message": f"CRITICAL: Centralized startup pen-up failed, using emergency fallback", "action": "startup_pen_emergency_fallback", "error": str(e)},
+                print_message=f"[❌ CRITICAL] Centralized pen-up failed, emergency fallback: {e}",
+            )
+            # Emergency fallback: replicate the original logic exactly
             try:
-                send_cmd(ser, PEN_UP_CMD, wait_ok=False)
-                time.sleep(0.25)
+                from config.config import GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING, GRBL_PEN_UP_IS_HIGH
+                if GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING:
+                    sup = GRBL_SPINDLE_MAX_S if GRBL_PEN_UP_IS_HIGH else GRBL_SPINDLE_MIN_S
+                    send_cmd(ser, f"M3 S{sup}", wait_ok=False)
+                    time.sleep(0.3)
             except Exception:
                 pass
-        try:
-            send_cmd(ser, f"G4 P{GRBL_PEN_UP_DWELL_S}", wait_ok=False)
-            time.sleep(float(GRBL_PEN_UP_DWELL_S))
-        except Exception:
-            pass
+            for _ in range(int(GRBL_PEN_UP_REPEATS)):
+                try:
+                    send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                    time.sleep(0.25)
+                except Exception:
+                    pass
+            try:
+                send_cmd(ser, f"G4 P{GRBL_PEN_UP_DWELL_S}", wait_ok=False)
+                time.sleep(float(GRBL_PEN_UP_DWELL_S))
+            except Exception:
+                pass
     except Exception as e:
         print(f"[⚠️] Pen safety sequence error (continuing anyway): {e}")
 
@@ -362,11 +379,29 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
     while max_retries == -1 or attempt < max_retries:
         try:
             # Re-send pen up before each homing attempt (already lifted but ensure it stays up)
-            try:
-                send_cmd(ser, PEN_UP_CMD, wait_ok=False)
-                time.sleep(0.2)
-            except Exception:
-                pass
+            if GRBL_USE_CENTRALIZED_PEN_UP:
+                # Use centralized pen-up safety function
+                try:
+                    ensure_pen_up_critical_safety(ser, context=f"pre_homing_attempt_{attempt+1}", use_repeats=False)
+                except Exception as e:
+                    log_json_entry(
+                        LogType.GRBL,
+                        {"message": f"Centralized pen-up failed, falling back to legacy", "action": "centralized_fallback", "error": str(e)},
+                        print_message=f"[⚠️] Centralized pen-up failed, using legacy method: {e}",
+                    )
+                    # Fallback to original method if centralized fails
+                    try:
+                        send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                        time.sleep(0.2)
+                    except Exception:
+                        pass
+            else:
+                # Original legacy method (unchanged)
+                try:
+                    send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                    time.sleep(0.2)
+                except Exception:
+                    pass
             retry_msg = "∞" if max_retries == -1 else str(max_retries)
             log_json_entry(
                 LogType.GRBL,
@@ -727,6 +762,95 @@ def pen_control(ser, pen_down=True, pen_down_cmd=PEN_DOWN_CMD, pen_up_cmd=PEN_UP
     else:
         send_cmd(ser, pen_up_cmd)
     wait_until_idle(ser, DEFAULT_CMD_TIMEOUT)
+
+
+def ensure_pen_up_critical_safety(ser, context="general", use_repeats=True):
+    """
+    Centralized pen-up safety function with consistent timing and extensive logging.
+
+    Args:
+        ser: Serial connection to GRBL
+        context: String describing where this was called from (for debugging)
+        use_repeats: If True, uses GRBL_PEN_UP_REPEATS; if False, single command
+
+    This function consolidates all pen-up safety logic to prevent servo signal conflicts.
+    Uses existing config values to maintain backward compatibility.
+    """
+    start_time = time.time()
+
+    log_json_entry(
+        LogType.GRBL,
+        {
+            "message": f"CENTRALIZED PEN SAFETY: Starting pen-up sequence",
+            "action": "centralized_pen_up_start",
+            "context": context,
+            "use_repeats": use_repeats,
+            "config_repeats": GRBL_PEN_UP_REPEATS,
+            "config_dwell_s": GRBL_PEN_UP_DWELL_S,
+            "config_pen_up_s": GRBL_PEN_UP_S,
+        },
+        print_message=f"[🛡️ SAFETY] Centralized pen-up sequence ({context})",
+    )
+
+    try:
+        # Optional absolute extreme UP first (maintains existing behavior)
+        if GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING:
+            extreme_up_s = GRBL_SPINDLE_MAX_S if GRBL_PEN_UP_IS_HIGH else GRBL_SPINDLE_MIN_S
+            extreme_cmd = f"M3 S{extreme_up_s}"
+            log_json_entry(
+                LogType.GRBL,
+                {"message": "Sending absolute extreme UP", "action": "extreme_up", "command": extreme_cmd, "context": context},
+            )
+            send_cmd(ser, extreme_cmd, wait_ok=False)
+            time.sleep(0.3)  # Match existing timing
+
+        # Main pen-up sequence
+        repeat_count = int(GRBL_PEN_UP_REPEATS) if use_repeats else 1
+        for i in range(repeat_count):
+            try:
+                log_json_entry(
+                    LogType.GRBL,
+                    {"message": f"Pen-up command {i+1}/{repeat_count}", "action": "pen_up_command", "command": PEN_UP_CMD, "context": context},
+                )
+                send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                time.sleep(0.25)  # Consistent timing between commands
+            except Exception as cmd_error:
+                log_json_entry(
+                    LogType.GRBL,
+                    {"message": f"Pen-up command {i+1} failed", "action": "pen_up_error", "error": str(cmd_error), "context": context},
+                    print_message=f"[⚠️] Pen-up command {i+1} failed: {cmd_error}",
+                )
+
+        # Final dwell for servo to settle (maintains existing behavior)
+        if use_repeats and GRBL_PEN_UP_DWELL_S > 0:
+            dwell_cmd = f"G4 P{GRBL_PEN_UP_DWELL_S}"
+            log_json_entry(
+                LogType.GRBL,
+                {"message": "Final dwell for servo settling", "action": "pen_up_dwell", "command": dwell_cmd, "context": context},
+            )
+            send_cmd(ser, dwell_cmd, wait_ok=False)
+            time.sleep(float(GRBL_PEN_UP_DWELL_S))
+
+    except Exception as e:
+        log_json_entry(
+            LogType.GRBL,
+            {"message": f"Centralized pen-up failed", "action": "centralized_pen_up_error", "error": str(e), "context": context},
+            print_message=f"[❌] Centralized pen-up failed ({context}): {e}",
+        )
+        raise
+
+    total_time = time.time() - start_time
+    log_json_entry(
+        LogType.GRBL,
+        {
+            "message": f"CENTRALIZED PEN SAFETY: Completed pen-up sequence",
+            "action": "centralized_pen_up_complete",
+            "context": context,
+            "total_time_s": round(total_time, 3),
+            "commands_sent": repeat_count + (1 if GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING else 0),
+        },
+        print_message=f"[✅] Centralized pen-up complete ({context}) - {total_time:.2f}s",
+    )
 
 
 def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):

@@ -102,10 +102,6 @@ class MemoryMixin:
         self.current_motifs: Set[str] = set()
         self.motif_confidence: Dict[str, float] = {}  # NEW: confidence per motif
         self.motif_confirmed: Dict[str, bool] = {}  # NEW: confirmed status per motif
-        # Affective motif tracking (valence-aware)
-        self.motif_affect: Dict[str, float] = {}  # EMA of valence per motif (-1..1)
-        self.motif_fixation: Dict[str, float] = {}  # Decaying fixation score (0..1)
-        self._last_affect_utter_ts: float = 0.0  # cooldown for affective stance lines
 
         # Identity (core beliefs emerging from motif recurrence)
         self.beliefs: Dict[str, Dict[str, Any]] = {}
@@ -150,27 +146,6 @@ class MemoryMixin:
         for motif in self.current_motifs:
             self.update_motif_focus_streak(motif)
 
-        # Update affective motif memory (valence EMA and fixation)
-        try:
-            v = 0.0
-            if mood_vector and isinstance(mood_vector, (tuple, list)) and len(mood_vector) >= 1:
-                v = float(mood_vector[0])  # valence in [-1,1]
-            # Global decay for fixation (light)
-            for m in list(self.motif_fixation.keys()):
-                self.motif_fixation[m] *= 0.98
-                if self.motif_fixation[m] < 0.01:
-                    del self.motif_fixation[m]
-            # Update for currently observed motifs
-            for motif in list(self.current_motifs):
-                # EMA for valence
-                prev = self.motif_affect.get(motif, 0.0)
-                alpha = 0.15
-                self.motif_affect[motif] = (1 - alpha) * prev + alpha * v
-                # Increase fixation towards 1.0
-                self.motif_fixation[motif] = min(1.0, self.motif_fixation.get(motif, 0.0) * 0.9 + 0.1)
-        except Exception:
-            pass
-
         self.update_beliefs()
         self.estimate_novelty(reactivity_data)
         self.update_boredom()
@@ -185,17 +160,6 @@ class MemoryMixin:
             if hasattr(self, "current_mood"):
                 self.current_mood = entry["mood"]
         self.fade_old_beliefs()
-
-    def get_top_affective_motifs(self, k: int = 3) -> List[Tuple[str, float, float]]:
-        """Return top motifs by |valence| * fixation, as (motif, valence, fixation)."""
-        scored = []
-        for motif, val in self.motif_affect.items():
-            fix = self.motif_fixation.get(motif, 0.0)
-            score = abs(val) * fix
-            if score > 0.1:
-                scored.append((motif, val, fix))
-        scored.sort(key=lambda t: abs(t[1]) * t[2], reverse=True)
-        return scored[:k]
 
     def update_motif_focus_streak(self, motif: str) -> None:
         now_time = now()
@@ -858,18 +822,6 @@ class MemoryMixin:
             full_temporal_context = f"{lifetime_context}\n{temporal_system_addition}"
         
         accumulated_understanding = " ".join(understanding_fragments) if understanding_fragments else ""
-
-        # Append minimal numeric state lines (no style): top affective motif and fixation trend
-        try:
-            top_aff = self.get_top_affective_motifs(1)
-            if top_aff:
-                m, val, fix = top_aff[0]
-                # Only include when strong signal to avoid clutter
-                if abs(val) * fix > 0.25:
-                    state_line = f"\naffect_motif: {m} val={val:+.2f} fix={fix:.2f}"
-                    accumulated_understanding += state_line
-        except Exception:
-            pass
 
         # Add natural spacing if content exists
         if accumulated_understanding:

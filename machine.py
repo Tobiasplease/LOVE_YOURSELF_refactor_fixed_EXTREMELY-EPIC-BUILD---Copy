@@ -1301,7 +1301,6 @@ try:
             break
         elif key == ord("r"):
             reset_camera_controls()
-
 except KeyboardInterrupt:
     graceful_cleanup()
     sys.exit(0)

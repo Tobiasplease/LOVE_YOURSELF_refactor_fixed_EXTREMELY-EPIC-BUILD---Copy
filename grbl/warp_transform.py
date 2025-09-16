@@ -38,10 +38,24 @@ def map_to_quad(x, y, x_max=40, y_max=40):
     u = x / x_max
     v = y / y_max
 
-    Ax, Ay = 8, 18   # vänster närmast robot
-    Bx, By = 40, 0   # höger närmast robot
-    Cx, Cy = 33, 20  # höger längst från robot
-    Dx, Dy = 0, 40   # vänster längst från robot
+    # Professor's updated calibrated values (2025-09-16) with centering and scaling
+    X_OFFSET = 15  # Shift right to center better in drawing area
+    SCALE = 1.3    # Scale up the entire quadrilateral for larger drawings
+
+    # Apply offset and scaling to professor's coordinates
+    base_coords = [(5, 4), (40, 3), (-3, 40), (-28, 40)]
+    scaled_coords = [(x * SCALE + X_OFFSET, y * SCALE) for x, y in base_coords]
+
+    Ax, Ay = scaled_coords[0]  # vänster närmast robot
+    Bx, By = scaled_coords[1]  # höger närmast robot
+    Cx, Cy = scaled_coords[2]  # höger längst från robot
+    Dx, Dy = scaled_coords[3]  # vänster längst från robot
+
+    # Previous values (commented out for now)
+    # Ax, Ay = 8, 18   # vänster närmast robot
+    # Bx, By = 40, 0   # höger närmast robot
+    # Cx, Cy = 33, 20  # höger längst från robot
+    # Dx, Dy = 0, 40   # vänster längst från robot
 
     # Bilinear interpolation
     X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u)* v * Bx + u * v * Cx
@@ -67,15 +81,15 @@ def warp_transform_line(gcode_line, max_x, max_y):
         # Apply JBE's inverse warp transform directly
         transformed_x, transformed_y = map_to_quad(original_x, original_y, max_x, max_y)
 
-        # TEMPORARY: Apply scaling fix around center (remove this section when mathematician fixes it)
-        if SCALE_FACTOR != 1.0:
-            # Calculate center of quadrilateral
-            center_x = (8 + 40 + 33 + 0) / 4  # average of corner x-coords
-            center_y = (18 + 0 + 20 + 40) / 4  # average of corner y-coords
-
-            # Scale around center point
-            transformed_x = center_x + (transformed_x - center_x) * SCALE_FACTOR
-            transformed_y = center_y + (transformed_y - center_y) * SCALE_FACTOR
+        # TEMPORARY SCALING - COMMENTED OUT: Professor's calibrated coordinates should fix size issues
+        # if SCALE_FACTOR != 1.0:
+        #     # Calculate center of quadrilateral (updated for new coordinates)
+        #     center_x = (5 + 40 + (-3) + (-28)) / 4  # average of corner x-coords: 3.5
+        #     center_y = (4 + 3 + 40 + 40) / 4  # average of corner y-coords: 21.75
+        #
+        #     # Scale around center point
+        #     transformed_x = center_x + (transformed_x - center_x) * SCALE_FACTOR
+        #     transformed_y = center_y + (transformed_y - center_y) * SCALE_FACTOR
 
         # Update G-code line with transformed coordinates
         gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{transformed_x:.4f}", gcode_line, flags=re.IGNORECASE)

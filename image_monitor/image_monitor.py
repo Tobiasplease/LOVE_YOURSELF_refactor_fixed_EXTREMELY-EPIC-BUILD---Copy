@@ -90,9 +90,6 @@ class ImageMonitor:
 
     def _process_png_to_gcode(self, png_path):
         """Process a PNG file to G-code based on CENTER_LINE_SVG config."""
-        # Pause idle movements to free the serial port
-        pause_for_drawing()
-
         try:
             base_name = os.path.splitext(os.path.basename(png_path))[0]
             output_folder = os.path.dirname(png_path)
@@ -122,6 +119,10 @@ class ImageMonitor:
                 # Start CNC execution tracking
                 original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
                 state_manager.start_cnc_execution(gcode_path, original_prompt)
+
+                # Only pause idle movements if we're actually executing G-code
+                if EXECUTE_GRBL_GCODE:
+                    pause_for_drawing()
 
                 result_path = svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
@@ -164,6 +165,10 @@ class ImageMonitor:
                     original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
                     state_manager.start_cnc_execution(gcode_path, original_prompt)
 
+                    # Only pause idle movements if we're actually executing G-code
+                    if EXECUTE_GRBL_GCODE:
+                        pause_for_drawing()
+
                     # Convert SVG to G-code and execute
                     result_path = svg_to_grbl(svg_input=latest_svg, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
@@ -202,7 +207,9 @@ class ImageMonitor:
             )
         finally:
             # Resume idle movements after execution attempt completes (success or failure)
-            resume_after_drawing()
+            # Only resume if we actually execute G-code (and thus paused the movements)
+            if EXECUTE_GRBL_GCODE:
+                resume_after_drawing()
 
     def _log_new_image(self, image_path) -> bool:
         """Log a newly detected image and return True if processed/accepted.

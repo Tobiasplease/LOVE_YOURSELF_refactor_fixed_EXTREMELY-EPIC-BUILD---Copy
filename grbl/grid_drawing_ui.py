@@ -272,6 +272,27 @@ class GridDrawingUI:
             result_y = (1 - v) * bottom[1] + v * top[1]
 
             return result_x, result_y
+        # Den här ska in direkt efter bilinear interpolation i ui-filen
+        # Den mappar (x,y) from 40x40-rutan in i en skev rektangel som blir en kvadratish när man skriver ut den
+
+        def map_to_quad(x, y, x_max=40, y_max=40):
+            # Normalisera till [0, 1]
+            u = x / x_max
+            v = y / y_max
+
+            # Den skeva rektangelns hörn i 40x40-världen, uppskattade från rutnätet så de kan behöver putsas
+            Dx, Dy = 40, 0   # vänster längst från robot
+            Ax, Ay = 8, 18   # vänster närmast robot
+            Bx, By = 0, 40   # höger närmast robot
+            Cx, Cy = 33, 20  # höger längst från robot
+
+            # Bilinjär interpolation
+            X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u)* v * Bx + u * v * Cx
+            Y = (1 - u) * (1 - v) * Ay + u * (1 - v) * Dy + (1 - u) * v * By + u * v * Cy
+            translate(X,Y,10,10)
+            return X, Y
+
+
 
         # Extract coordinates from G-code line
         x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
@@ -283,18 +304,20 @@ class GridDrawingUI:
             original_y = float(y_match.group(1))
 
             try:
+                # Den här raden ska ersätta alla andra manipuleringar
+                grbl_x, grbl_y = map_to_quad(original_x, original_y, 40, 40)
                 # Step 1: Apply inverse kinematics to get robot parameters
                 # p = (original_x, original_y)
-                p = inverse(original_x, original_y)
+                # p = inverse(original_x, original_y)
                 # p = inverse(theta, l)
                 # p = scale_x(p, 80)
                 # p = scale_y(p, 7)
-                p = translate(p[0], p[1], 0, -52)
+                # p = translate(p[0], p[1], 0, -52)
                 # Step 3: Convert from theoretical coordinates to GRBL coordinates
                 # Clamp to A4 range for safety
-                safe_x = max(0, min(210, p[0]))
-                safe_y = max(0, min(297, p[1]))
-                grbl_x, grbl_y = bilinear_interpolation(safe_x, safe_y, ANDREAS_A4_CORNERS)
+                # safe_x = max(0, min(210, p[0]))
+                # safe_y = max(0, min(297, p[1]))
+                # grbl_x, grbl_y = bilinear_interpolation(safe_x, safe_y, ANDREAS_A4_CORNERS)
                 # grbl_x, grbl_y = p
                 # Update G-code line with corrected coordinates
                 gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{grbl_x:.4f}", gcode_line, flags=re.IGNORECASE)

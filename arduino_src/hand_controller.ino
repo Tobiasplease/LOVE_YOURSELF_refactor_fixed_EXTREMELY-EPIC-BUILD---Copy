@@ -36,7 +36,7 @@ const int LEFT_ARM_SAFE_SPEED = 50;  // Smooth fluid movement timing
 
 // Pause durations (time between movements - longer pauses for more contemplative feel)
 const unsigned long PAUSE_ENERGIZED_MIN = 15000;  const unsigned long PAUSE_ENERGIZED_MAX = 30000;   // 15-30s
-const unsigned long PAUSE_ALERT_MIN = 25000;      const unsigned long PAUSE_ALERT_MAX = 45000;      // 25-45s  
+const unsigned long PAUSE_ALERT_MIN = 25000;      const unsigned long PAUSE_ALERT_MAX = 45000;      // 25-45s
 const unsigned long PAUSE_CALM_MIN = 45000;       const unsigned long PAUSE_CALM_MAX = 90000;       // 45-90s
 const unsigned long PAUSE_QUIET_MIN = 60000;      const unsigned long PAUSE_QUIET_MAX = 120000;     // 60-120s (1-2m)
 const unsigned long PAUSE_WITHDRAWN_MIN = 90000;  const unsigned long PAUSE_WITHDRAWN_MAX = 180000;  // 90-180s (1.5-3m)
@@ -51,7 +51,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println("DEVICE_ID:HAND_CONTROLLER");
   Serial.println("Hand Controller Ready - Pure Consciousness Mode (EXPANDED RANGE)");
- 
+
   // Initialize servos
   for (int i = 0; i < NUM_SERVOS; i++) {
     servos[i].attach(pins[i]);
@@ -61,10 +61,10 @@ void setup() {
     speeds[i] = 15;  // Default speed
     writeMapped(i, currentAngles[i]);
   }
-  
+
   // Initialize left arm autonomous movement system (but don't start moving yet)
   initializeLeftArm();
- 
+
   delay(1000);
   Serial.println("Ready for consciousness commands (0-180 degree range)");
   Serial.println("Left arm movement DISABLED - waiting for Python enable command");
@@ -72,13 +72,13 @@ void setup() {
 
 void loop() {
   unsigned long now = millis();
- 
+
   // Handle serial commands for hand servos
   handleSerialInput();
- 
+
   // Update servo positions toward targets set by consciousness (hand servos)
   updateServoPositions(now);
-  
+
   // Update autonomous left arm movement (handles its own servo positioning)
   updateLeftArmMovement(now);
 }
@@ -100,11 +100,11 @@ void processCommand(String command) {
     // Parse consciousness command: "HAND,f0,f1,f2,f3"
     int commaIndex = command.indexOf(',');
     String fingerData = command.substring(commaIndex + 1);
-   
+
     int fingerPositions[4];
     int index = 0;
     int lastComma = -1;
-   
+
     for (int i = 0; i < 4 && index < 4; i++) {
       int nextComma = fingerData.indexOf(',', lastComma + 1);
       if (nextComma == -1 && i == 3) {
@@ -116,15 +116,15 @@ void processCommand(String command) {
       lastComma = nextComma;
       index++;
     }
-   
+
     // Set targets for pure consciousness control - EXCLUDE left arm servos
     for (int i = 0; i < NUM_SERVOS - LEFT_ARM_COUNT; i++) {  // Only control hand servos, not left arm
       int newTarget = constrain(fingerPositions[i], minAngle, maxAngle);
       targetAngles[i] = newTarget;
-     
+
       // Adaptive servo speeds based on movement distance
       int distance = abs(newTarget - currentAngles[i]);
-     
+
       // Check if this looks like a startle reaction (large simultaneous movement)
       bool isStartleMovement = false;
       if (distance > 25) {  // Increased threshold for larger range (was 15)
@@ -137,18 +137,18 @@ void processCommand(String command) {
           isStartleMovement = true;
         }
       }
-     
+
       if (isStartleMovement) {
         speeds[i] = 3;   // VERY fast for startle reactions - immediate response!
       } else if (distance > 30) {  // Adjusted for larger range (was 20)
         speeds[i] = 8;   // Fast for large movements
       } else if (distance > 10) {  // Adjusted for larger range (was 5)
-        speeds[i] = 12;  // Medium speed for medium movements  
+        speeds[i] = 12;  // Medium speed for medium movements
       } else {
         speeds[i] = 20;  // Slower for fine adjustments - prevents servo noise
       }
     }
-   
+
     // Optional: Echo command for debugging
     Serial.print("Consciousness: ");
     for (int i = 0; i < 4; i++) {
@@ -162,12 +162,12 @@ void processCommand(String command) {
     int commaIndex = command.indexOf(',');
     String moodState = command.substring(commaIndex + 1);
     moodState.trim();
-    
+
     // Update current mood for left arm movement parameters
     currentMood = moodState;
     Serial.print("Mood updated to: ");
     Serial.println(currentMood);
-    
+
     // Speed stays consistent for mechanical safety - only pause behavior changes
   }
   else if (command.startsWith("HEARTBEAT")) {
@@ -198,14 +198,14 @@ void updateServoPositions(unsigned long now) {
       } else if (speeds[i] <= 10) {
         stepSize = 4;   // Fast: 4 degrees per step (increased from 3)
       }
-     
+
       // Move toward target with variable step size
       if (currentAngles[i] < targetAngles[i]) {
         currentAngles[i] = min(currentAngles[i] + stepSize, targetAngles[i]);
       } else if (currentAngles[i] > targetAngles[i]) {
         currentAngles[i] = max(currentAngles[i] - stepSize, targetAngles[i]);
       }
-     
+
       writeMapped(i, currentAngles[i]);
       lastUpdate[i] = now;
     }
@@ -216,12 +216,12 @@ void updateLeftArmServoPositions(unsigned long now) {
   // Dedicated smooth eased movement for left arm servos only
   for (int i = 0; i < LEFT_ARM_COUNT; i++) {
     int servoIndex = LEFT_ARM_START + i;
-    
+
     if (now - lastUpdate[servoIndex] >= speeds[servoIndex]) {
       // Smooth movement with variable step size based on distance to target
       int distance = abs(targetAngles[servoIndex] - currentAngles[servoIndex]);
       int stepSize = 1;
-      
+
       // Use larger steps for smoother movement
       if (distance > 8) {
         stepSize = 3;  // Larger steps when far from target
@@ -230,7 +230,7 @@ void updateLeftArmServoPositions(unsigned long now) {
       } else {
         stepSize = 1;  // Small steps when close to target
       }
-      
+
       // Apply the movement step
       if (currentAngles[servoIndex] < targetAngles[servoIndex]) {
         currentAngles[servoIndex] = min(currentAngles[servoIndex] + stepSize, targetAngles[servoIndex]);
@@ -239,7 +239,7 @@ void updateLeftArmServoPositions(unsigned long now) {
         currentAngles[servoIndex] = max(currentAngles[servoIndex] - stepSize, targetAngles[servoIndex]);
         writeMapped(servoIndex, currentAngles[servoIndex]);
       }
-      
+
       lastUpdate[servoIndex] = now;
     }
   }
@@ -259,7 +259,7 @@ void updateLeftArmMovement(unsigned long now) {
   // Continuous breathing-like movement for left arm servos
   for (int i = 0; i < LEFT_ARM_COUNT; i++) {
     int servoIndex = LEFT_ARM_START + i;
-    
+
     if (leftArmInPause[i]) {
       // Check if pause is over
       if (now - leftArmLastMove[i] >= leftArmPauseDuration[i]) {
@@ -272,10 +272,10 @@ void updateLeftArmMovement(unsigned long now) {
     } else {
       // Continuous movement every update cycle
       if (now - leftArmLastMove[i] >= LEFT_ARM_SAFE_SPEED) {
-        
+
         // Move the floating point position
         leftArmPosition[i] += leftArmDirection[i] * leftArmSpeed[i];
-        
+
         // Check boundaries and reverse direction if needed
         if (leftArmPosition[i] >= LEFT_ARM_MAX) {
           leftArmPosition[i] = LEFT_ARM_MAX;
@@ -284,21 +284,21 @@ void updateLeftArmMovement(unsigned long now) {
           leftArmSpeed[i] = random(10, 30) / 100.0; // 0.1 to 0.3 degrees per step
         } else if (leftArmPosition[i] <= LEFT_ARM_MIN) {
           leftArmPosition[i] = LEFT_ARM_MIN;
-          leftArmDirection[i] = -leftArmDirection[i]; // Reverse direction  
+          leftArmDirection[i] = -leftArmDirection[i]; // Reverse direction
           leftArmSpeed[i] = random(10, 30) / 100.0; // 0.1 to 0.3 degrees per step
         }
-        
+
         // Convert to integer and apply to servo
         int newAngle = (int)(leftArmPosition[i] + 0.5); // Round to nearest integer
         newAngle = constrain(newAngle, LEFT_ARM_MIN, LEFT_ARM_MAX); // Safety constraint
-        
+
         if (newAngle != currentAngles[servoIndex]) {
           currentAngles[servoIndex] = newAngle;
           writeMapped(servoIndex, currentAngles[servoIndex]);
         }
-        
+
         leftArmLastMove[i] = now;
-        
+
         // Random chance to pause (much less frequent for continuous feel)
         int pauseChance = getPauseChance() / 10; // Divide by 10 for much less frequent pauses
         if (random(0, 10000) < pauseChance) { // Out of 10000 instead of 1000
@@ -324,7 +324,7 @@ int getPauseChance() {
   // Return pause probability (per 1000) - reduced for more subtle movement
   if (currentMood == "energized_engaged") return 2;    // 0.2% chance per cycle - very rarely pauses
   if (currentMood == "alert_curious") return 5;        // 0.5% chance per cycle
-  if (currentMood == "calm_observant") return 10;      // 1% chance per cycle  
+  if (currentMood == "calm_observant") return 10;      // 1% chance per cycle
   if (currentMood == "quiet_detached") return 20;      // 2% chance per cycle
   if (currentMood == "withdrawn_distant") return 40;   // 4% chance per cycle - more frequent pauses
   return 10; // Default to calm_observant
@@ -333,7 +333,7 @@ int getPauseChance() {
 unsigned long getMoodPauseDuration() {
   // Return pause duration based on current mood (uses configurable constants)
   if (currentMood == "energized_engaged") return random(PAUSE_ENERGIZED_MIN, PAUSE_ENERGIZED_MAX);
-  if (currentMood == "alert_curious") return random(PAUSE_ALERT_MIN, PAUSE_ALERT_MAX);  
+  if (currentMood == "alert_curious") return random(PAUSE_ALERT_MIN, PAUSE_ALERT_MAX);
   if (currentMood == "calm_observant") return random(PAUSE_CALM_MIN, PAUSE_CALM_MAX);
   if (currentMood == "quiet_detached") return random(PAUSE_QUIET_MIN, PAUSE_QUIET_MAX);
   if (currentMood == "withdrawn_distant") return random(PAUSE_WITHDRAWN_MIN, PAUSE_WITHDRAWN_MAX);
@@ -344,24 +344,24 @@ void initializeLeftArm() {
   // Initialize left arm servos for continuous breathing-like movement
   for (int i = 0; i < LEFT_ARM_COUNT; i++) {
     int servoIndex = LEFT_ARM_START + i;
-    
+
     // Start at random positions within safe range
     int startPosition = random(LEFT_ARM_MIN, LEFT_ARM_MAX + 1);
     currentAngles[servoIndex] = startPosition;
     leftArmPosition[i] = (float)startPosition; // Initialize floating point position
-    
+
     // Set random initial directions (one up, one down for variety)
     leftArmDirection[i] = (i % 2 == 0) ? 1.0 : -1.0; // Alternate directions
-    
+
     // Set random initial speeds
     leftArmSpeed[i] = random(15, 25) / 100.0; // 0.15 to 0.25 degrees per step
-    
+
     // Start with initial pause to prevent startup jolt
     leftArmInPause[i] = true;
     leftArmLastMove[i] = millis();
     leftArmPauseDuration[i] = random(3000, 6000); // Initial pause 3-6s
     speeds[servoIndex] = getLeftArmSafeSpeed();
-    
+
     Serial.print("Left arm servo ");
     Serial.print(i);
     Serial.print(" initialized at ");
