@@ -1,105 +1,85 @@
-# import matplotlib.pyplot as plt
-import math
 import re
 
-# DET HÄR är måtten på armen som ni vill korrigera. Det viktigaste är (nog) att relationerna mellan måtten stämmer
-biceps = 295  # robotens överarnm
-underarm = 320  # robotens underarm
-tendon_biceps = 50  # längden på senan från biceps till armbågen
-tendon_underarm = 4  # längden till fästet på underarmen från armbågen
-mirror = 1  # om det skulle råka bli spegelvänt så ändrar ni detta till 1
+def find_max_xy_from_lines(lines):
+    max_x = float('-inf')
+    max_y = float('-inf')
 
-# det här är bara för utplottningen
-# min_l = abs(tendon_underarm - tendon_biceps) + 1
-# max_l = tendon_biceps + tendon_underarm - 1
-def translate(x, y, x_delta, y_delta):
-    return (x + x_delta, y + y_delta)
+    for line in lines:
+        parts = line.strip().split()
+        for part in parts:
+            if part.startswith('X'):
+                try:
+                    x_val = float(part[1:])
+                    if x_val > max_x:
+                        max_x = x_val
+                except ValueError:
+                    pass
+            elif part.startswith('Y'):
+                try:
+                    y_val = float(part[1:])
+                    if y_val > max_y:
+                        max_y = y_val
+                except ValueError:
+                    pass
 
-def scale_x(p, k):
-    return (p[0]*k, p[1])
-
-def scale_y(p, k):
-    return (p[0], p[1]*k)
-
-# hjälpfunktion
-def add_vectors(p1, p2):
-    return (p1[0] + p2[0], p1[1] + p2[1])
-
-
-# hjälpfunktion
-def rotation(cos_v, sin_v):
-    def rotation_v(x, y):
-        return (x * cos_v - y * mirror * sin_v, x * mirror * sin_v + y * cos_v)
-
-    return rotation_v
-
-
-# det här simulerar felet som maskinen skapar
-def trans(theta, l):
-    cos_phi = (l**2 + tendon_underarm**2 - tendon_biceps**2) / (2 * l * tendon_underarm)
-    joint_tendon = (tendon_biceps + tendon_underarm + l) / 2
-    sin_phi = 2 * math.sqrt(l * (joint_tendon - tendon_underarm) * (joint_tendon - tendon_biceps) * (joint_tendon - l)) / (tendon_underarm * l)
-    rotation_v = rotation(cos_phi, sin_phi)
-    p = add_vectors(rotation_v(0, -underarm), (0, underarm))
-    rotation_v2 = rotation(math.cos(theta), math.sin(theta))
-    return rotation_v2(p[0], p[1])
-
-
-# DET HÄR är en hjälpfunktion för inversen
-# den behöver vara med i filen
-def theta_calc(x, y):
-    if x == 0:
-        return 0
-    cos_alpha = (biceps**2 + (x**2 + y**2) - underarm**2) / (2 * biceps * math.sqrt(x**2 + y**2))
-    alpha = math.acos(cos_alpha)
-    x_y_angle = math.atan(y / x)
-    if x > 0:
-        return alpha + x_y_angle - math.pi / 2
-    if x < 0:
-        return alpha + x_y_angle + math.pi / 2
-
+    return (
+        None if max_x == float('-inf') else max_x,
+        None if max_y == float('-inf') else max_y,
+    )
 
 # DET HÄR är funktionen som ska konvertera tillbaka skjuvningen
-# koppla in den där koordinater för g-code skapas
-def inverse(x, y):
-    (x,y) = translate(x, y, 60, 60)
-    cos_phi = (biceps**2 + underarm**2 - (x**2 + y**2)) / (2 * biceps * underarm)
-    l = tendon_underarm * cos_phi + math.sqrt((tendon_underarm * cos_phi)**2 - (tendon_underarm**2 - tendon_biceps**2))
-    theta = theta_calc(x, y)
-    return  theta, l
+# Den mappar (x,y) from 40x40-rutan in i en skev rektangel som blir en kvadratish när man skriver ut den
+def map_to_quad(x, y, x_max=40, y_max=40):
+    """
+    Map (x,y) from square [0, x_max]x[0, y_max] into the quadrilateral.
+    """
+
+    # Normalize to [0,1]
+    u = x / x_max
+    v = y / y_max
+
+    Ax, Ay = 8, 18   # vänster närmast robot
+    Bx, By = 40, 0   # höger närmast robot
+    Cx, Cy = 33, 20  # höger längst från robot
+    Dx, Dy = 0, 40   # vänster längst från robot
+
+    # Bilinear interpolation
+    X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u)* v * Bx + u * v * Cx
+    Y = (1 - u) * (1 - v) * Ay + u * (1 - v) * Dy + (1 - u) * v * By + u * v * Cy
+
+    return X, Y
 
 
-# inställningar för utplottningen
-# plt.scatter(0, 0, color="black", marker="x")
-# plt.gca().set_aspect("equal", adjustable="box")
-# plt.xlim(-300, 200)
-# plt.ylim(-80, 300)
 
-# for x in range(0, 15, 1):
-#     for y in range(min_l, max_l, 1):
-#         # p = (x* 0.1, y)
-#         p = trans(x * 0.1, y)
-#         # p = inverse(p[0], p[1]) # den här raden är bara för att testa inversen
-#         plt.scatter(p[0], p[1], color="blue", marker=".")
+def warp_transform_line(gcode_line, max_x, max_y):
+    """Apply inverse warp transform to G-code coordinates"""
+    # TEMPORARY SCALING FIX - easily reversible by setting to 1.0
+    SCALE_FACTOR = 2.5  # Increase output size (set to 1.0 to disable)
 
-# plt.show()
-
-
-def warp_transform_line(gcode_line):
     x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
     y_match = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
 
     if x_match and y_match:
-        # G01 X31.3986 Y14.1119
+        # Extract original coordinates
         original_x = float(x_match.group(1))
         original_y = float(y_match.group(1))
-        # G01 X-2.5462 Y53.7446
-        transformed_x, transformed_y = inverse(original_x, original_y)
-        # print("[FNC] ", transformed_x, transformed_y)
+
+        # Apply JBE's inverse warp transform directly
+        transformed_x, transformed_y = map_to_quad(original_x, original_y, max_x, max_y)
+
+        # TEMPORARY: Apply scaling fix around center (remove this section when mathematician fixes it)
+        if SCALE_FACTOR != 1.0:
+            # Calculate center of quadrilateral
+            center_x = (8 + 40 + 33 + 0) / 4  # average of corner x-coords
+            center_y = (18 + 0 + 20 + 40) / 4  # average of corner y-coords
+
+            # Scale around center point
+            transformed_x = center_x + (transformed_x - center_x) * SCALE_FACTOR
+            transformed_y = center_y + (transformed_y - center_y) * SCALE_FACTOR
+
+        # Update G-code line with transformed coordinates
         gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{transformed_x:.4f}", gcode_line, flags=re.IGNORECASE)
         gcode_line = re.sub(r"Y[-+]?\d*\.?\d+", f"Y{transformed_y:.4f}", gcode_line, flags=re.IGNORECASE)
-    else:
-        print("[WARN] No X or Y found in line, skipping transformation.")
 
     return gcode_line
 

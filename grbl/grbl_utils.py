@@ -13,7 +13,7 @@ from serial.tools import list_ports
 
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
-from .warp_transform import warp_transform_line
+from .warp_transform import warp_transform_line, find_max_xy_from_lines
 
 # Import pen servo configuration
 try:
@@ -791,76 +791,86 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     except Exception as e:
         print(f"[⚠️] Could not start lightbulb fluctuation: {e}")
 
-    try:
-        with open(gcode_file, "r") as f:
-            lines = f.readlines()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"G-code file not found: {gcode_file}")
+    # Execute G-code in a separate thread to avoid blocking other systems
+    gcode_complete = threading.Event()
+    gcode_error = None
 
-    total_lines = len(lines)
-    executed_lines = 0
+    def execute_gcode_threaded():
+        """Execute G-code in background thread."""
+        nonlocal gcode_error
+        try:
+            with open(gcode_file, "r") as f:
+                lines = f.readlines()
 
-    lines = lines[3:]  # Skip first three lines (G20, G17, G90), from vpype inject somehow
+            total_lines = len(lines)
+            executed_lines = 0
+            lines = lines[3:]  # Skip first three lines (G20, G17, G90), from vpype inject somehow
+            max_x, max_y = find_max_xy_from_lines(lines)
 
-    try:
-        for line_num, line in enumerate(lines, 1):
-            line = line.strip()
+            for line_num, line in enumerate(lines, 1):
+                line = line.strip()
 
-            # Skip empty lines and comments
-            if not line or line.startswith(";") or line.startswith("%"):
-                continue
+                # Skip empty lines and comments
+                if not line or line.startswith(";") or line.startswith("%"):
+                    continue
 
-            try:
-                # Determine timeout and transform based on command type
-                if line.startswith(("G0", "G1", "G00", "G01")):
-                    if GRBL_WARP_TRANSFORM:
-                        line = warp_transform_line(line)  # warp transform line coords
-                    timeout = move_timeout
-                else:
-                    timeout = DEFAULT_CMD_TIMEOUT
+                try:
+                    # Determine timeout and transform based on command type
+                    if line.startswith(("G0", "G1", "G00", "G01")):
+                        if GRBL_WARP_TRANSFORM:
+                            line = warp_transform_line(line, max_x, max_y)  # warp transform line coords
+                        timeout = move_timeout
+                    else:
+                        timeout = DEFAULT_CMD_TIMEOUT
 
-                send_cmd(ser, line, timeout=timeout)
-                executed_lines += 1
+                    send_cmd(ser, line, timeout=timeout)
+                    executed_lines += 1
 
-                if executed_lines % 10 == 0:  # Progress update every 10 commands
+                    if executed_lines % 10 == 0:  # Progress update every 10 commands
+                        log_json_entry(
+                            LogType.GRBL,
+                            {
+                                "message": "G-code execution progress",
+                                "action": "execution_progress",
+                                "executed_lines": executed_lines,
+                                "total_lines": total_lines,
+                                "progress_percent": (executed_lines / total_lines) * 100,
+                            },
+                            print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed",
+                        )
+
+                except Exception as e:
                     log_json_entry(
-                        LogType.GRBL,
+                        LogType.ERROR,
                         {
-                            "message": "G-code execution progress",
-                            "action": "execution_progress",
-                            "executed_lines": executed_lines,
-                            "total_lines": total_lines,
-                            "progress_percent": (executed_lines / total_lines) * 100,
+                            "message": "Failed to execute G-code line",
+                            "component": "grbl",
+                            "line_number": line_num,
+                            "command": line,
+                            "error": str(e),
+                            "error_type": type(e).__name__,
                         },
-                        print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed",
+                        print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
                     )
+                    raise
+        except Exception as e:
+            gcode_error = e
+        finally:
+            gcode_complete.set()
 
-            except Exception as e:
-                log_json_entry(
-                    LogType.ERROR,
-                    {
-                        "message": "Failed to execute G-code line",
-                        "component": "grbl",
-                        "line_number": line_num,
-                        "command": line,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
-                    print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
-                )
-                raise
+    # Start G-code execution in background thread
+    gcode_thread = threading.Thread(target=execute_gcode_threaded, daemon=False, name="GCodeExecution")
+    gcode_thread.start()
 
+    # Wait for completion with periodic checks (allows other threads to run)
+    try:
+        while not gcode_complete.is_set():
+            time.sleep(0.1)  # Short sleep allows other threads to continue
     except KeyboardInterrupt:
         log_json_entry(
             LogType.GRBL,
-            {
-                "message": "G-code execution interrupted by user",
-                "action": "execution_interrupted",
-                "executed_lines": executed_lines,
-                "total_lines": total_lines,
-                "progress_percent": (executed_lines / total_lines) * 100 if total_lines > 0 else 0,
-            },
-            print_message=f"[⚠️] G-code execution interrupted! Executed {executed_lines}/{total_lines} lines",
+            {"message": "G-code execution interrupted by user", "action": "execution_interrupted"},
+            print_message="[⚠️] G-code execution interrupted!",
         )
         # Send any emergency stops or cleanup commands if needed
         try:
@@ -876,6 +886,10 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             pass
 
         raise
+
+    # Re-raise any errors that occurred in the thread
+    if gcode_error:
+        raise gcode_error
 
     log_json_entry(
         LogType.GRBL,
