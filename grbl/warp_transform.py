@@ -38,24 +38,24 @@ def map_to_quad(x, y, x_max=40, y_max=40):
     u = x / x_max
     v = y / y_max
 
-    # Professor's updated calibrated values (2025-09-16) with centering and scaling
-    X_OFFSET = 15  # Shift right to center better in drawing area
-    SCALE = 1.3    # Scale up the entire quadrilateral for larger drawings
+    # Professor's calibrated values (2025-09-16) shifted 35mm right for optimal positioning
+    Ax, Ay = 40, 4   # vänster närmast robot (5 + 35)
+    Bx, By = 75, 3   # höger närmast robot (40 + 35)
+    Cx, Cy = 32, 40  # höger längst från robot (-3 + 35)
+    Dx, Dy = 7, 40   # vänster längst från robot (-28 + 35)
 
-    # Apply offset and scaling to professor's coordinates
-    base_coords = [(5, 4), (40, 3), (-3, 40), (-28, 40)]
-    scaled_coords = [(x * SCALE + X_OFFSET, y * SCALE) for x, y in base_coords]
-
-    Ax, Ay = scaled_coords[0]  # vänster närmast robot
-    Bx, By = scaled_coords[1]  # höger närmast robot
-    Cx, Cy = scaled_coords[2]  # höger längst från robot
-    Dx, Dy = scaled_coords[3]  # vänster längst från robot
-
-    # Previous values (commented out for now)
+    # Previous coordinate versions (for reference):
+    # Original values:
     # Ax, Ay = 8, 18   # vänster närmast robot
     # Bx, By = 40, 0   # höger närmast robot
     # Cx, Cy = 33, 20  # höger längst från robot
     # Dx, Dy = 0, 40   # vänster längst från robot
+
+    # Professor's original calibrated values (before translation):
+    # Ax, Ay = 5, 4   # vänster närmast robot
+    # Bx, By = 40, 3   # höger närmast robot
+    # Cx, Cy = -3, 40  # höger längst från robot
+    # Dx, Dy = -28, 40   # vänster längst från robot
 
     # Bilinear interpolation
     X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u)* v * Bx + u * v * Cx

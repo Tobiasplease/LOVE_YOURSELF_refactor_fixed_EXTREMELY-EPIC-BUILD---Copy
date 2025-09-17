@@ -27,8 +27,31 @@ import os
 
 from config.config import HAND_CONTROLLER_PORT
 
-# Use fixed udev symlink for hand controller
-HAND_CONTROLLER_PORT = "/dev/arduino_lefthand"
+# Safe hand controller port detection with fallback
+def detect_hand_controller_port():
+    """Safely detect hand controller port with specific fallbacks."""
+    # Primary: Use configured symlink
+    if os.path.exists(HAND_CONTROLLER_PORT):
+        return HAND_CONTROLLER_PORT
+
+    # Fallback: Check for alternative symlinks that might be hand controller
+    hand_controller_candidates = [
+        "/dev/arduino_lefthand",
+        "/dev/arduino_righthand",
+        "/dev/arduino_hand"
+    ]
+
+    for candidate in hand_controller_candidates:
+        if os.path.exists(candidate):
+            print(f"[WARNING] Using fallback hand controller port: {candidate}")
+            return candidate
+
+    # Final fallback: Return configured port (will fail gracefully if doesn't exist)
+    print(f"[WARNING] No hand controller symlinks found, using configured: {HAND_CONTROLLER_PORT}")
+    return HAND_CONTROLLER_PORT
+
+# Set the actual port to use
+HAND_CONTROLLER_PORT = detect_hand_controller_port()
 import datetime
 import glob
 import json

@@ -114,7 +114,7 @@ GRBL_SPINDLE_MAX_S = int(os.getenv("GRBL_SPINDLE_MAX_S", 255))  # -> $30
 GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))  # -> $31
 
 # Pen up/down S values (relative to $30 scale). Tune for your linkage.
-GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 30))
+GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 40))
 GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 50))
 
 # Extra safety to ensure pen is fully UP before any homing ($H)
@@ -141,6 +141,34 @@ GRBL_IDLE_RADIUS_MAX = 8  # Maximum movement radius in mm (reduced for 40x40 are
 GRBL_IDLE_FEED_RATE = 500  # Feed rate for idle movements (mm/min) - very slow and organic
 GRBL_IDLE_ZONE = (20, 40, 20, 40)  # Boundary box: (x_min, x_max, y_min, y_max) for 40x40 area
 GRBL_IDLE_UPDATE_INTERVAL = 3.0  # Seconds between movement updates - longer pauses
+
+# === GRBL G-CODE OPTIMIZATION SETTINGS ===
+# Intelligent feed rate and pen lift optimization for better drawing performance
+
+# Master optimization toggles
+GRBL_ENABLE_FEED_OPTIMIZATION = os.getenv("GRBL_ENABLE_FEED_OPTIMIZATION", "true").lower() in ("1", "true", "yes")
+GRBL_ENABLE_PEN_OPTIMIZATION = os.getenv("GRBL_ENABLE_PEN_OPTIMIZATION", "true").lower() in ("1", "true", "yes")
+
+# === FEED RATE OPTIMIZATION ===
+# Speed scaling for different movement types - adjust these to set your preferred overall speed range
+GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 500))     # Slowest speed for tiny detailed movements (mm/min)
+GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 20000))     # Fastest speed for large sweeping movements (mm/min)
+GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 8000))   # Default/medium speed (mm/min)
+
+# Distance thresholds for feed rate calculation (in mm)
+GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 1.0))   # Below this: use slower speeds
+GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 10.0))  # Above this: use max speed
+
+# === PEN LIFT OPTIMIZATION ===
+# Servo values for different pen operations - adjust these to tune pen lift timing
+GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 35))         # Normal pen up value (lowered from 40 for drawing)
+GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))   # Normal pen down value
+GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", max(25, GRBL_PEN_UP_S - 5)))       # Fast pen up for clusters
+GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", min(60, GRBL_PEN_DOWN_S + 5))) # Fast pen down for clusters
+
+# Cluster detection parameters
+GRBL_CLUSTER_DISTANCE_THRESHOLD = float(os.getenv("GRBL_CLUSTER_DISTANCE_THRESHOLD", 5.0))  # Max distance between clustered pen lifts (mm)
+GRBL_CLUSTER_SEQUENCE_MIN = int(os.getenv("GRBL_CLUSTER_SEQUENCE_MIN", 3))                  # Minimum pen lifts to consider a cluster
 
 # === UARM SWIFT PRO SETTINGS ===
 USE_UARM = True  # Enable uArm Swift Pro robotic arm integration
@@ -179,9 +207,11 @@ UARM_START_PLAY_FILE = os.path.join(
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
+# Drawing system intervals
+DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
 REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
-DRAWING_INTERVAL = 60  # seconds between drawing triggers (debug: ~1 minute)
-DRAWING_COOLDOWN = 60  # minimum seconds between drawings (debug)
+DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 60  # 1 minute debug vs 10 minutes normal
+DRAWING_COOLDOWN = 600 if DEBUG_FAST_DRAWING else 60  # 30 seconds debug vs 10 minutes normal
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
@@ -232,11 +262,18 @@ OLLAMA_TIMEOUT_EVAL = 90
 OLLAMA_TIMEOUT_REFLECTION = 120  # Timeout for reflection/reasoning calls
 OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API calls
 
+# === CAPTIONING TEMPERATURE SETTINGS ===
+# Control creativity and expressiveness in different types of responses
+CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 1.2))        # Regular observations (higher for more personality)
+DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.2))            # Drawing prompts (creative but focused)
+REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 1.1))      # Introspective moments (philosophical)
+ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) # First observations (slightly more grounded)
+
 # === OUTPUT SETTINGS ===
 # Control which log types are printed to console
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
 # To see debug information, add "debug" to LOG_TYPES_TO_PRINT
-LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_drawing"]
+LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_drawing", "debug"]
 CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
 PRINT_CLEAN_CAPTIONS = True  # Suppress verbose runtime messages, show only LLM captions
 

@@ -33,34 +33,34 @@ def update_lung_position(
     # === 5-State Emotional Breathing Patterns ===
     breathing_patterns = {
         "energized_engaged": {
-            "base_speed": 0.5,  # Fast, excited breathing
-            "amplitude": 1.4,  # Deep breaths
-            "pause_scale": 0.2,  # Very short pauses
-            "special_modes": ["FAST_BURST", "EXCITED_PANTING"],
+            "base_speed": 1.6,  # Energetic but not frantic (slowed from 1.0)
+            "amplitude": 1.2,  # Full breathing depth
+            "pause_scale": 0.2,  # Quick energy - shorter pauses
+            "special_modes": ["FAST_BURST", "NORMAL"],
         },
         "alert_curious": {
-            "base_speed": 0.8,  # Quick, attentive breathing
-            "amplitude": 1.1,  # Slightly deeper
-            "pause_scale": 0.4,  # Quick pauses for attention
-            "special_modes": ["FAST_BURST", "ALERT_HOLD"],
+            "base_speed": 2.0,  # Alert but controlled breathing (slowed from 1.3)
+            "amplitude": 1.0,  # Normal depth
+            "pause_scale": 0.4,  # Thoughtful micro-pauses
+            "special_modes": ["ALERT_HOLD", "NORMAL"],
         },
         "calm_observant": {
-            "base_speed": 2.5,  # Slow, meditative breathing
+            "base_speed": 2.8,  # Calm, contemplative breathing (slowed from 1.8)
             "amplitude": 1.0,  # Normal depth
-            "pause_scale": 0.7,  # Contemplative pauses
-            "special_modes": ["SLOW_SIGH", "NORMAL"],
+            "pause_scale": 1.2,  # Longer contemplative pauses
+            "special_modes": ["SLOW_SIGH", "CONTEMPLATIVE_PAUSE", "NORMAL"],
         },
         "quiet_detached": {
-            "base_speed": 3.5,  # Shallow, minimal breathing
-            "amplitude": 0.6,  # Shallow breaths
-            "pause_scale": 1.0,  # Moderate hesitant pauses
-            "special_modes": ["SHALLOW", "NORMAL"],
+            "base_speed": 3.5,  # Gentle, minimal breathing (slowed from 2.2)
+            "amplitude": 0.7,  # Reduced but visible depth
+            "pause_scale": 1.8,  # Extended hesitant pauses
+            "special_modes": ["SHALLOW", "HESITANT_PAUSE", "NORMAL"],
         },
         "withdrawn_distant": {
-            "base_speed": 5.0,  # Very slow, listless breathing
+            "base_speed": 4.2,  # Subdued breathing (slowed from 2.8)
             "amplitude": 0.8,  # Somewhat shallow
-            "pause_scale": 1.5,  # Longer pauses but not excessive
-            "special_modes": ["SLOW_SIGH", "DEPRESSED_HOLD"],
+            "pause_scale": 2.5,  # Long, listless pauses
+            "special_modes": ["SLOW_SIGH", "WITHDRAWN_PAUSE", "NORMAL"],
         },
     }
 
@@ -73,27 +73,28 @@ def update_lung_position(
         if breath_mode == "BIRTH_WAKE":
             breath_mode = "NORMAL"
             mode_timer = now + random.uniform(3, 5)
-        elif random.random() < 0.15:  # 15% chance of special breathing
+        elif random.random() < 0.05:  # 5% chance of special breathing (was 15%)
             breath_mode = random.choice(pattern["special_modes"])
-            mode_timer = now + random.uniform(2, 6)
+            mode_timer = now + random.uniform(3, 8)  # Shorter special breathing duration
         else:
             breath_mode = "NORMAL"
             mode_timer = now + random.uniform(3, 8)
 
     # === Apply breathing mode multiplier ===
     mode_multipliers = {
-        "FAST_BURST": 0.25,
-        "EXCITED_PANTING": 0.15,
-        "ALERT_HOLD": 1.0,
-        "SLOW_SIGH": 2.2,
-        "SHALLOW": 1.5,
-        "DEPRESSED_HOLD": 3.0,
+        "FAST_BURST": 0.4,  # Faster but still servo-friendly
+        "ALERT_HOLD": 1.0,  # Normal speed with pauses
+        "SLOW_SIGH": 1.8,   # Slower but smoother (was 2.2)
+        "SHALLOW": 1.3,     # Gentle, not choppy (was 1.5)
+        "CONTEMPLATIVE_PAUSE": 1.0,  # Normal speed with long pauses
+        "HESITANT_PAUSE": 1.2,       # Slightly slower with hesitation
+        "WITHDRAWN_PAUSE": 1.4,      # Subdued with long pauses
         "BIRTH_WAKE": 0.4,
         "NORMAL": 1.0,
     }
 
     multiplier = mode_multipliers.get(breath_mode, 1.0)
-    target_breath_speed = max(0.3, base_speed * multiplier)
+    target_breath_speed = max(0.6, base_speed * multiplier)  # Higher minimum for smoother servo movement
 
     effective_speed = breath_speed
     breath_speed = breath_speed * 0.85 + target_breath_speed * 0.15
@@ -106,12 +107,13 @@ def update_lung_position(
     # === Emotion-based pause modulation ===
     pause_scale = pattern["pause_scale"]
     mode_pause_modifier = {
-        "FAST_BURST": 0.2,
-        "EXCITED_PANTING": 0.1,
-        "ALERT_HOLD": 0.8,
-        "SLOW_SIGH": 1.8,
-        "SHALLOW": 1.4,
-        "DEPRESSED_HOLD": 2.5,
+        "FAST_BURST": 0.3,           # Quick energy pauses
+        "ALERT_HOLD": 1.2,           # Attentive pauses
+        "SLOW_SIGH": 1.6,            # Sighing pauses (reduced from 1.8)
+        "SHALLOW": 1.4,              # Gentle hesitation
+        "CONTEMPLATIVE_PAUSE": 2.2,  # Long thoughtful pauses
+        "HESITANT_PAUSE": 2.8,       # Extended hesitation
+        "WITHDRAWN_PAUSE": 3.5,      # Very long listless pauses
         "BIRTH_WAKE": 0.1,
         "NORMAL": 1.0,
     }.get(breath_mode, 1.0)

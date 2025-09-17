@@ -69,7 +69,19 @@ class PromptInterface:
         # Prepare model options with variation settings
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
-        model_options.update({"temperature": 1.5, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
+
+        # Use appropriate temperature based on caption type
+        try:
+            if first_time:
+                from config.config import ENVIRONMENTAL_TEMPERATURE
+                caption_temp = ENVIRONMENTAL_TEMPERATURE
+            else:
+                from config.config import CAPTIONER_TEMPERATURE
+                caption_temp = CAPTIONER_TEMPERATURE
+        except ImportError:
+            caption_temp = 1.2 if not first_time else 0.9  # Default fallback
+
+        model_options.update({"temperature": caption_temp, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
 
         # Format dynamic SYSTEM_PROMPT with temporal/motif context if available
         system_prompt = SYSTEM_PROMPT
@@ -101,6 +113,13 @@ class PromptInterface:
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
 
+        # Use configurable reflection temperature
+        try:
+            from config.config import REFLECTION_TEMPERATURE
+            model_options["temperature"] = REFLECTION_TEMPERATURE
+        except ImportError:
+            model_options["temperature"] = 1.1  # Default fallback
+
         return prompt, model_options, SYSTEM_PROMPT
 
     def build_drawing_prompt_with_options(self, memory_ref, extra: Optional[str] = None):
@@ -112,10 +131,16 @@ class PromptInterface:
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
 
-        # Make drawing prompts more concrete and directive
+        # Use configurable drawing temperature and make prompts more concrete and directive
+        try:
+            from config.config import DRAWING_TEMPERATURE
+            drawing_temp = DRAWING_TEMPERATURE
+        except ImportError:
+            drawing_temp = 1.0  # Default fallback
+
         model_options.update(
             {
-                "temperature": 0.7,
+                "temperature": drawing_temp,
                 "top_p": 0.9,
                 "repeat_penalty": 1.3,
                 "top_k": 40,

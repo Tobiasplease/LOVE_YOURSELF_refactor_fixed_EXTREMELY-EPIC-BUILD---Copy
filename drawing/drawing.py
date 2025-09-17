@@ -58,14 +58,29 @@ class DrawingController:
 
     def should_draw(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
         if not self.ready_to_draw():
+            cooldown_remaining = max(0, self.cooldown - (time.time() - self.last_drawing_time))
+            print(f"[🎨] Drawing conditions check: novelty={novelty:.3f}, boredom={boredom:.3f}, mood={mood:.3f} - BLOCKED by cooldown ({cooldown_remaining:.0f}s remaining)")
             return False
-        # More reasonable thresholds for drawing triggers
-        if novelty > 0.4 or boredom > 0.5 or mood < 0.4:
-            return True
+
+        # Check drawing trigger conditions with detailed logging
+        triggers = []
+        if novelty > 0.4:
+            triggers.append(f"novelty({novelty:.3f}>0.4)")
+        if boredom > 0.5:
+            triggers.append(f"boredom({boredom:.3f}>0.5)")
+        if mood < 0.4:
+            triggers.append(f"mood({mood:.3f}<0.4)")
+
         reflections = ("i feel stuck", "i need to express", "nothing is changing", "want to draw", "create something")
         if reflection and any(key in reflection.lower() for key in reflections):
+            triggers.append("reflection_keywords")
+
+        if triggers:
+            print(f"[🎨] ✨ DRAWING TRIGGERED by: {', '.join(triggers)}")
             return True
-        return False
+        else:
+            print(f"[🎨] Drawing conditions check: novelty={novelty:.3f}, boredom={boredom:.3f}, mood={mood:.3f} - no triggers met")
+            return False
 
     def register_drawing(self, prompt: str) -> None:
         self.last_drawing_time = time.time()

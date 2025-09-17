@@ -35,8 +35,8 @@ void loop() {
     Serial.println("Received: " + line);
 
     if (line.startsWith("PAN:")) {
-      // Natural head movement: ±25° from center (65-115°)
-      targetPan = constrain(line.substring(4).toInt(), 65, 115);
+      // Expanded natural head movement: ±45° from center (45-135°)
+      targetPan = constrain(line.substring(4).toInt(), 45, 135);
       if (!panAttached) {
         panServo.attach(9);
         panAttached = true;
@@ -44,8 +44,8 @@ void loop() {
     }
 
     else if (line.startsWith("TILT:")) {
-      // Natural head movement: ±20° from center (70-110°)
-      targetTilt = constrain(line.substring(5).toInt(), 70, 110);
+      // Expanded natural head movement: ±40° from center (50-130°)
+      targetTilt = constrain(line.substring(5).toInt(), 50, 130);
       if (!tiltAttached) {
         tiltServo.attach(10);
         tiltAttached = true;

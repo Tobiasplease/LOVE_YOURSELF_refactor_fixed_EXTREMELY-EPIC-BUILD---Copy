@@ -371,8 +371,8 @@ class PatternRecognitionEngine:
         # Convert to novelty (inverse relationship)
         novelty = 1.0 - avg_similarity
 
-        # Scale and cap novelty to prevent extreme values
-        return min(0.5, novelty * 0.7)
+        # Scale novelty to full range [0,1] for better discrimination
+        return min(1.0, novelty * 1.2)  # Allow full range with slight boost
 
     def _log_motif_temporality(self, timestamp: float, new_motifs: Set[str], recurring_motifs: Set[str], novelty: float):
         """Log motif temporal information for better memory/perception distinction."""

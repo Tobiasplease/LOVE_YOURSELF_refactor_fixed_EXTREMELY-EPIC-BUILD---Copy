@@ -74,7 +74,8 @@
       "Read(//etc/udev/rules.d/**)",
       "Bash(systemctl:*)",
       "Read(//home/impostor/Downloads/**)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "ask": []

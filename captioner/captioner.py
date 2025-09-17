@@ -82,7 +82,7 @@ class Captioner(MemoryMixin):
 
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
-        self.last_drawing_time: float = time.time()  # Stagger drawing
+        self.last_drawing_time: float = time.time() - DRAWING_INTERVAL - 10  # Allow immediate first drawing
 
         # Track session continuity
         self.sessions_since_boot = 0
@@ -167,7 +167,6 @@ class Captioner(MemoryMixin):
                 # Wait longer on startup to allow main loop to populate frames
                 time.sleep(0.5 if not self.first_caption_done else 0.05)
 
-    @robust_execution("captioner", "caption_generation", fallback_result=None)
     def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None) -> None:
         now = time.time()
         if now - self.last_caption_time < CAPTION_INTERVAL:
@@ -357,6 +356,19 @@ class Captioner(MemoryMixin):
         except Exception as e:
             print(f"[CAPTIONER] Context compression failed: {e}")
 
+        # CRITICAL FIX: Add caption to memory system for motif tracking and repetition fatigue
+        try:
+            if caption and caption.strip():
+                self.observe(
+                    text=caption,
+                    mood=self.current_mood,
+                    memory_type="caption",
+                    mood_vector=getattr(self, "current_mood_vector", (0.0, 0.0, 0.5)),
+                    emotion_state=getattr(self, "current_emotion_state", "calm_observant")
+                )
+        except Exception as e:
+            print(f"[CAPTIONER] Memory system failed: {e}")
+
         # Process emotional drift
         # environmental_factors = {
         #     "scene_static": getattr(self, "_scene_static", False),  # Will be tracked by semantic memory
@@ -457,23 +469,37 @@ class Captioner(MemoryMixin):
 
         # Debug: Check drawing interval condition
         time_since_last_drawing = now - self.last_drawing_time
+        print(f"[DEBUG] Drawing check: {time_since_last_drawing:.1f}s elapsed, need {DRAWING_INTERVAL}s")
         if time_since_last_drawing > DRAWING_INTERVAL:
-            with self.print_lock:
-                print("\r" + " " * 80 + "\r", end="")
-                log_json_entry(
-                    LogType.DEBUG,
-                    {
-                        "message": "Drawing interval reached",
-                        "action": "drawing_trigger",
-                        "time_since_last_drawing": time_since_last_drawing,
-                        "drawing_interval": DRAWING_INTERVAL,
-                    },
-                    print_message=f"[🎨] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...",
-                )
+            print(f"[DEBUG] DRAWING TRIGGER ACTIVATED! Starting drawing generation...")
+            print(f"[DEBUG] Step 1: About to start drawing generation process")
+            try:
+                print(f"[DEBUG] Step 2: Attempting log_json_entry...")
+                with self.print_lock:
+                    print("\r" + " " * 80 + "\r", end="")
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {
+                            "message": "Drawing interval reached",
+                            "action": "drawing_trigger",
+                            "time_since_last_drawing": time_since_last_drawing,
+                            "drawing_interval": DRAWING_INTERVAL,
+                        },
+                        print_message=f"[🎨] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...",
+                    )
+                print(f"[DEBUG] Step 3: log_json_entry completed successfully")
+            except Exception as e:
+                print(f"[DEBUG] EXCEPTION in log_json_entry: {e}")
+                import traceback
+                traceback.print_exc()
 
+            print(f"[DEBUG] Step 4: About to check pipeline state...")
             # Guard: do not start a new drawing while pipeline is busy (prevents stacking)
             try:
-                if getattr(state_manager, "is_generating_drawing", False) or getattr(state_manager, "is_executing_cnc", False):
+                is_generating = getattr(state_manager, "is_generating_drawing", False)
+                is_executing = getattr(state_manager, "is_executing_cnc", False)
+                print(f"[DEBUG] Pipeline state - generating: {is_generating}, executing: {is_executing}")
+                if is_generating or is_executing:
                     log_json_entry(
                         LogType.DECISION,
                         {
@@ -487,12 +513,15 @@ class Captioner(MemoryMixin):
                     # Re-check after short delay
                     self.last_drawing_time = now - DRAWING_INTERVAL + 30
                     return
-            except Exception:
+            except Exception as e:
+                print(f"[DEBUG] Exception checking pipeline state: {e}")
                 pass
 
+            print(f"[DEBUG] Step 5: Pipeline check passed, building context...")
             memory_context = self.get_recent_memory()
             reflection_context = self.get_last_reflection()
             extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
+            print(f"[DEBUG] Step 6: Context built, starting drawing generation...")
 
             # Start loading animation for drawing prompt
             loading_stop = threading.Event()
@@ -839,6 +868,31 @@ class Captioner(MemoryMixin):
     def set_novelty_score(self, score: float) -> None:
         """Set the novelty score from mood engine pattern data."""
         self._novelty_score = score
+
+        # Update boredom based on low novelty over time
+        self._update_boredom(score)
+
+    def _update_boredom(self, novelty: float) -> None:
+        """Calculate boredom based on sustained low novelty."""
+        if not hasattr(self, "_boredom"):
+            self._boredom = 0.0
+        if not hasattr(self, "_low_novelty_duration"):
+            self._low_novelty_duration = 0.0
+        if not hasattr(self, "_last_boredom_update"):
+            self._last_boredom_update = time.time()
+
+        now = time.time()
+        delta = now - self._last_boredom_update
+        self._last_boredom_update = now
+
+        # Track sustained low novelty
+        if novelty < 0.3:  # Low novelty threshold
+            self._low_novelty_duration += delta
+        else:
+            self._low_novelty_duration = max(0, self._low_novelty_duration - delta * 0.5)  # Slow decay
+
+        # Convert to boredom (peaks at ~10 minutes of low novelty)
+        self._boredom = min(1.0, self._low_novelty_duration / 600.0)  # 10 minutes = max boredom
 
     @property
     def boredom(self) -> float:

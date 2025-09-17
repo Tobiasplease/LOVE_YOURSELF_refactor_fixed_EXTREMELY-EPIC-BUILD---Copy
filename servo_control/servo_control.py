@@ -4,8 +4,8 @@ import time
 import serial
 
 # Smooth movement settings for natural head motion
-ANGLE_THRESHOLD = 0.5  # Much smaller threshold for smooth movement
-MIN_COMMAND_INTERVAL = 0.02  # 20ms between commands (50Hz) for silky smooth motion
+ANGLE_THRESHOLD = 0.3  # Even smaller threshold for ultra-smooth movement
+MIN_COMMAND_INTERVAL = 0.01  # 10ms between commands (100Hz) for ultra-silky smooth motion
 
 
 class ServoController:

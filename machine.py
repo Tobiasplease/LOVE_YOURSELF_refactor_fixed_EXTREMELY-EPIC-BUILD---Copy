@@ -808,6 +808,16 @@ def mood_update_thread(mood_frame, timestamp):
                     clean_caption = captioner.last_caption
                     if clean_caption.lower().startswith("caption:"):
                         clean_caption = clean_caption[len("caption:") :].strip()
+
+                    # CRITICAL: Process caption through mood analysis (was missing!)
+                    mood_engine.analyze_mood(
+                        clean_caption,
+                        saw_person=best_box is not None,
+                        image_path=snapshot_path if 'snapshot_path' in locals() else None,
+                        memory_context=captioner.memory_manager if hasattr(captioner, 'memory_manager') else None
+                    )
+                    debug_print(f"Processed caption through mood analysis: {clean_caption[:100]}...", "MOOD")
+
                     # Lightbulb flash on caption print
                     if USE_LIGHTBULB_PWM and lightbulb:
                         try:

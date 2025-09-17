@@ -289,7 +289,6 @@ class GridDrawingUI:
             # Bilinjär interpolation
             X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u)* v * Bx + u * v * Cx
             Y = (1 - u) * (1 - v) * Ay + u * (1 - v) * Dy + (1 - u) * v * By + u * v * Cy
-            translate(X,Y,10,10)
             return X, Y
 
 

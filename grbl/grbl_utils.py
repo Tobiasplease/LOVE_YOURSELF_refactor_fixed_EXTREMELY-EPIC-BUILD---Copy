@@ -13,7 +13,10 @@ from serial.tools import list_ports
 
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
-from .warp_transform import warp_transform_line, find_max_xy_from_lines
+try:
+    from .warp_transform import warp_transform_line, find_max_xy_from_lines
+except ImportError:
+    from warp_transform import warp_transform_line, find_max_xy_from_lines
 
 # Import pen servo configuration
 try:
@@ -634,43 +637,108 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
 
 
 def convert_gcode_to_servo_format(input_gcode, output_gcode):
-    """Convert vpype-generated G-code to servo format"""
+    """Convert vpype-generated G-code to servo format with optional optimization"""
     try:
         with open(input_gcode, "r") as f:
             lines = f.readlines()
 
-        with open(output_gcode, "w") as f:
+        # Apply G-code optimization if enabled
+        try:
+            from config.config import GRBL_ENABLE_FEED_OPTIMIZATION, GRBL_ENABLE_PEN_OPTIMIZATION
 
-            pen_down = False
-            for line in lines:
-                line = line.strip()
+            # Only use optimizer if at least one optimization is enabled
+            if GRBL_ENABLE_FEED_OPTIMIZATION or GRBL_ENABLE_PEN_OPTIMIZATION:
+                try:
+                    from .gcode_optimizer import create_optimizer_from_config
+                except ImportError:
+                    from gcode_optimizer import create_optimizer_from_config
+                optimizer = create_optimizer_from_config()
 
-                # Skip vpype headers and comments
-                if line.startswith(";") or line.startswith("%") or not line:
-                    continue
+                # Convert lines to strings for processing
+                line_strings = [line.rstrip() for line in lines]
 
-                # Handle movement commands (check G01 first to avoid G0 matching G01)
-                if line.startswith("G01") or (line.startswith("G1 ") and " " in line and not line.startswith("G17")):
-                    # Linear move - pen should be down
-                    if not pen_down:
-                        f.write(f"{PEN_DOWN_CMD}\n")
-                        pen_down = True
-                    f.write(f"{line}\n")
-                elif line.startswith("G00") or (line.startswith("G0") and " " in line):
-                    # Rapid move - pen should be up
-                    if pen_down:
-                        f.write(f"{PEN_UP_CMD}\n")
-                        pen_down = False
-                    f.write(f"{line}\n")
-                else:
-                    # Pass through other commands (G17, G20, G21, G90, etc.)
-                    f.write(f"{line}\n")
+                # First pass: convert to servo format
+                servo_lines = []
+                pen_down = False
 
-            # Ensure pen is up at the end of the file for safety
-            try:
-                f.write(f"\n{PEN_UP_CMD}\n")
-            except Exception:
-                pass
+                for line in line_strings:
+                    line = line.strip()
+
+                    # Skip vpype headers and comments
+                    if line.startswith(";") or line.startswith("%") or not line:
+                        continue
+
+                    # Handle movement commands (check G01 first to avoid G0 matching G01)
+                    if line.startswith("G01") or (line.startswith("G1 ") and " " in line and not line.startswith("G17")):
+                        # Linear move - pen should be down
+                        if not pen_down:
+                            servo_lines.append(f"{PEN_DOWN_CMD}")
+                            pen_down = True
+                        servo_lines.append(line)
+                    elif line.startswith("G00") or (line.startswith("G0") and " " in line):
+                        # Rapid move - pen should be up
+                        if pen_down:
+                            servo_lines.append(f"{PEN_UP_CMD}")
+                            pen_down = False
+                        servo_lines.append(line)
+                    else:
+                        # Pass through other commands (G17, G20, G21, G90, etc.)
+                        servo_lines.append(line)
+
+                # Ensure pen is up at the end for safety
+                servo_lines.append(f"{PEN_UP_CMD}")
+
+                # Second pass: apply optimization
+                optimized_lines = optimizer.optimize_gcode(servo_lines)
+
+                # Write optimized G-code
+                with open(output_gcode, "w") as f:
+                    for line in optimized_lines:
+                        f.write(line + '\n')
+
+            else:
+                # Skip optimization if both are disabled
+                raise ImportError("G-code optimization disabled in configuration")
+
+        except ImportError:
+            # Fallback to original method if optimization not available
+            log_json_entry(
+                LogType.GRBL,
+                {"message": "G-code optimization not available, using original method", "action": "optimization_fallback"},
+                print_message="[⚠️] G-code optimization not available"
+            )
+
+            with open(output_gcode, "w") as f:
+                pen_down = False
+                for line in lines:
+                    line = line.strip()
+
+                    # Skip vpype headers and comments
+                    if line.startswith(";") or line.startswith("%") or not line:
+                        continue
+
+                    # Handle movement commands (check G01 first to avoid G0 matching G01)
+                    if line.startswith("G01") or (line.startswith("G1 ") and " " in line and not line.startswith("G17")):
+                        # Linear move - pen should be down
+                        if not pen_down:
+                            f.write(f"{PEN_DOWN_CMD}\n")
+                            pen_down = True
+                        f.write(f"{line}\n")
+                    elif line.startswith("G00") or (line.startswith("G0") and " " in line):
+                        # Rapid move - pen should be up
+                        if pen_down:
+                            f.write(f"{PEN_UP_CMD}\n")
+                            pen_down = False
+                        f.write(f"{line}\n")
+                    else:
+                        # Pass through other commands (G17, G20, G21, G90, etc.)
+                        f.write(f"{line}\n")
+
+                # Ensure pen is up at the end of the file for safety
+                try:
+                    f.write(f"\n{PEN_UP_CMD}\n")
+                except Exception:
+                    pass
 
         log_json_entry(
             LogType.GRBL,
