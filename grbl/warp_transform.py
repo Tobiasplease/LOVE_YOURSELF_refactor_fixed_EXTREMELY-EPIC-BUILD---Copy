@@ -38,11 +38,11 @@ def map_to_quad(x, y, x_max=40, y_max=40):
     u = x / x_max
     v = y / y_max
 
-    # Professor's calibrated values (2025-09-16) shifted 35mm right for optimal positioning
-    Ax, Ay = 40, 4   # vänster närmast robot (5 + 35)
-    Bx, By = 75, 3   # höger närmast robot (40 + 35)
-    Cx, Cy = 32, 40  # höger längst från robot (-3 + 35)
-    Dx, Dy = 7, 40   # vänster längst från robot (-28 + 35)
+    # Professor's latest calibrated values (2025-09-17) - new rotation correction
+    Ax, Ay = 0, 40   # vänster längst från robot (top-left)
+    Bx, By = 35, 2   # vänster närmast robot (bottom-left)
+    Cx, Cy = 70, 3   # höger närmast robot (bottom-right)
+    Dx, Dy = 25, 40  # höger längst från robot (top-right)
 
     # Previous coordinate versions (for reference):
     # Original values:

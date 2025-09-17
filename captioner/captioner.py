@@ -529,7 +529,7 @@ class Captioner(MemoryMixin):
             loading_thread.start()
 
             try:
-                prompt = self.model.generate_drawing_prompt(extra=extra_context)
+                prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path)
                 log_json_entry(
                     LogType.DEBUG,
                     {

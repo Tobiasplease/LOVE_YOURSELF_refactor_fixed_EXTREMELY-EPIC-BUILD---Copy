@@ -110,9 +110,11 @@ class MultimodalModel:
             traceback.print_exc()
             return "[WARNING] Reflection generation failed"
 
-    def generate_drawing_prompt(self, *, extra: Optional[str] = None) -> str:
-        """Generate drawing prompt using centralized prompt interface."""
-        prompt, model_options, system_prompt = self.prompt_interface.build_drawing_prompt_with_options(self.memory_ref, extra=extra)
+    def generate_drawing_prompt(self, *, extra: Optional[str] = None, image_path: Optional[str] = None) -> str:
+        """Generate drawing prompt using centralized prompt interface with VISUAL GROUNDING."""
+        prompt, model_options, system_prompt = self.prompt_interface.build_drawing_prompt_with_options(
+            self.memory_ref, extra=extra, image_path=image_path
+        )
 
         if prompt is None:
             return "[WARNING] No memory available for drawing prompt"
@@ -122,18 +124,20 @@ class MultimodalModel:
             log_json_entry(
                 LogType.DEBUG,
                 {
-                    "message": "Drawing LLM input prepared",
+                    "message": "Visual drawing LLM input prepared",
                     "action": "llm_input",
                     "prompt_preview": truncate_for_print(prompt, 400),
                     "prompt_length": len(prompt),
+                    "image_provided": image_path is not None,
+                    "image_path": image_path,
                     "options": {k: model_options.get(k) for k in ("temperature", "top_p", "repeat_penalty", "top_k", "num_predict", "seed")},
                 },
-                print_message=f"[🐞] Drawing LLM input: {truncate_for_print(prompt, 220)}",
+                print_message=f"[🎨] Visual drawing prompt generation {'WITH IMAGE' if image_path else 'TEXT ONLY'}: {truncate_for_print(prompt, 220)}",
             )
         except Exception:
             pass
 
-        return self._call_ollama(prompt, system_prompt=system_prompt, model_options=model_options, prompt_type="drawing")
+        return self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="drawing")
 
     def query_tinyllama(self, prompt: str) -> str:
         """Query TinyLlama model for motif scoring and emotional analysis."""

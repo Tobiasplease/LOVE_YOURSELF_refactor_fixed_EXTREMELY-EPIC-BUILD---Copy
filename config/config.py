@@ -114,7 +114,7 @@ GRBL_SPINDLE_MAX_S = int(os.getenv("GRBL_SPINDLE_MAX_S", 255))  # -> $30
 GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))  # -> $31
 
 # Pen up/down S values (relative to $30 scale). Tune for your linkage.
-GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 40))
+GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 20))  # Lowered for faster operation
 GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 50))
 
 # Extra safety to ensure pen is fully UP before any homing ($H)
@@ -131,6 +131,9 @@ GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING = os.getenv("GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING
 
 # Use centralized pen-up safety function (disabled by default for conservative rollout)
 GRBL_USE_CENTRALIZED_PEN_UP = os.getenv("GRBL_USE_CENTRALIZED_PEN_UP", "false").lower() in ("1", "true", "yes")
+
+# Safety pen up value for homing and critical operations (higher than drawing)
+GRBL_SAFETY_PEN_UP = int(os.getenv("GRBL_SAFETY_PEN_UP", 30))  # Higher for safety during homing
 
 # === GRBL IDLE MOVEMENT SETTINGS ===
 # Idle movements happen in far corner away from home (0,0)
@@ -152,19 +155,19 @@ GRBL_ENABLE_STROKE_FILTERING = os.getenv("GRBL_ENABLE_STROKE_FILTERING", "true")
 
 # === FEED RATE OPTIMIZATION ===
 # Speed scaling for different movement types - adjust these to set your preferred overall speed range
-GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 4000))     # Slowest speed for tiny detailed movements (mm/min) - increased for faster micro-strokes
-GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 40000))     # Fastest speed for large sweeping movements (mm/min)
-GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 7000))   # Default/medium speed (mm/min)
+GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 6000))     # Slowest speed for tiny detailed movements (mm/min) - increased for faster micro-strokes
+GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 15000))     # Fastest speed for large sweeping movements (mm/min) - realistic limit for GRBL
+GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 10000))   # Default/medium speed (mm/min)
 
 # Distance thresholds for feed rate calculation (in mm)
-GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 1.0))   # Below this: use slower speeds
+GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 0.3))   # Below this: use slower speeds (reduced from 1.0mm)
 GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 6.0))  # Above this: use max speed
 
 # === PEN LIFT OPTIMIZATION ===
 # Servo values for different pen operations - adjust these to tune pen lift timing
-GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 30))         # Normal pen up value (lowered from 40 for drawing)
+GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 8))         # Drawing pen up value (very low for speed)
 GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))   # Normal pen down value
-GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", max(25, GRBL_PEN_UP_S - 5)))       # Fast pen up for clusters
+GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 5))       # Ultra-fast pen up for clusters (minimum safe height)
 GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", min(60, GRBL_PEN_DOWN_S + 5))) # Fast pen down for clusters
 
 # Cluster detection parameters
@@ -191,14 +194,14 @@ UARM_DEFAULT_SPEED = 100        # Default movement speed (1-250)
 UARM_PLAY_AFTER_DRAW = True
 UARM_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "1_20250915_005939.smooth.txt",  # normalized to a single .smooth.txt
+    "papermove_20250917_230951.txt",  # Paper movement after GRBL completion
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
 UARM_PLAY_ON_START = True
 UARM_START_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "startup_20250915_183943.smooth.txt",
+    "startup_20250917_231133.txt",
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---

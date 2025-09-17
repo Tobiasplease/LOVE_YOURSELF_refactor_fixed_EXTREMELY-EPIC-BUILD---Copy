@@ -122,12 +122,12 @@ class PromptInterface:
 
         return prompt, model_options, SYSTEM_PROMPT
 
-    def build_drawing_prompt_with_options(self, memory_ref, extra: Optional[str] = None):
-        """Build drawing prompt and prepare options."""
+    def build_drawing_prompt_with_options(self, memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None):
+        """Build drawing prompt and prepare options with visual grounding support."""
         if not memory_ref:
             return None, None, None
 
-        prompt = build_drawing_prompt(memory_ref, extra=extra)
+        prompt = build_drawing_prompt(memory_ref, extra=extra, image_path=image_path)
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
 
