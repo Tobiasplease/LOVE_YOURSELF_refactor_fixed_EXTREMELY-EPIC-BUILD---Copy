@@ -30,6 +30,7 @@ class GCodeOptimizer:
     def __init__(self,
                  enable_feed_optimization=True,
                  enable_pen_optimization=True,
+                 enable_stroke_filtering=True,
                  base_feed_rate=5000,
                  min_feed_rate=1500,
                  max_feed_rate=8000,
@@ -37,6 +38,8 @@ class GCodeOptimizer:
                  large_move_threshold=10.0,
                  cluster_distance_threshold=5.0,
                  cluster_sequence_min=3,
+                 micro_stroke_threshold=0.15,
+                 continuous_path_threshold=2.0,
                  normal_pen_up=None,
                  normal_pen_down=None,
                  fast_pen_up=None,
@@ -44,6 +47,7 @@ class GCodeOptimizer:
 
         self.enable_feed_optimization = enable_feed_optimization
         self.enable_pen_optimization = enable_pen_optimization
+        self.enable_stroke_filtering = enable_stroke_filtering
 
         # Feed rate optimization parameters
         self.base_feed_rate = base_feed_rate
@@ -55,6 +59,10 @@ class GCodeOptimizer:
         # Pen lift optimization parameters
         self.cluster_distance_threshold = cluster_distance_threshold
         self.cluster_sequence_min = cluster_sequence_min
+
+        # Micro-stroke filtering parameters
+        self.micro_stroke_threshold = micro_stroke_threshold
+        self.continuous_path_threshold = continuous_path_threshold
 
         # Pen lift values (configurable via parameters or config settings)
         self.normal_pen_up = normal_pen_up if normal_pen_up is not None else GRBL_NORMAL_PEN_UP
@@ -94,10 +102,16 @@ class GCodeOptimizer:
         if not self.enable_feed_optimization:
             return self.base_feed_rate
 
+        # For micro-movements, use a reasonable minimum speed instead of scaling down
+        if distance < self.micro_stroke_threshold:
+            return max(self.min_feed_rate, 3000)  # Minimum 3000 mm/min for micro-strokes
+
         if distance <= self.small_move_threshold:
-            # Small movements: use slower feed rate
+            # Small movements: use slower feed rate but not too slow
             factor = distance / self.small_move_threshold
             feed_rate = self.min_feed_rate + (self.base_feed_rate - self.min_feed_rate) * factor
+            # Ensure minimum reasonable speed
+            feed_rate = max(feed_rate, 2500)
         elif distance >= self.large_move_threshold:
             # Large movements: use faster feed rate
             feed_rate = self.max_feed_rate
@@ -157,15 +171,115 @@ class GCodeOptimizer:
 
         return clusters
 
+    def filter_micro_strokes(self, lines: List[str]) -> List[str]:
+        """Filter out pen lifts for micro-strokes and connect nearby movements"""
+        if not self.enable_stroke_filtering:
+            return lines
+
+        filtered_lines = []
+        i = 0
+        pen_is_down = False
+        last_x, last_y = 0.0, 0.0
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # Skip empty lines and comments
+            if not line or line.startswith(";") or line.startswith("%"):
+                filtered_lines.append(line)
+                i += 1
+                continue
+
+            # Track pen state
+            if "PEN DOWN" in line:
+                pen_is_down = True
+                filtered_lines.append(line)
+                i += 1
+                continue
+            elif "PEN UP" in line:
+                # Check if the next stroke is a micro-movement that should stay connected
+                if self._should_skip_pen_lift(lines, i, last_x, last_y):
+                    # Skip this pen up and the following pen down
+                    i = self._skip_to_next_movement(lines, i)
+                    continue
+                else:
+                    pen_is_down = False
+                    filtered_lines.append(line)
+                    i += 1
+                    continue
+
+            # Handle movement commands
+            if line.startswith(("G01", "G1", "G00", "G0")):
+                x, y = self.parse_coordinates(line)
+                if x is not None and y is not None:
+                    last_x, last_y = x, y
+                filtered_lines.append(line)
+                i += 1
+                continue
+
+            # Pass through other commands
+            filtered_lines.append(line)
+            i += 1
+
+        return filtered_lines
+
+    def _should_skip_pen_lift(self, lines: List[str], pen_up_index: int, last_x: float, last_y: float) -> bool:
+        """Determine if pen lift should be skipped for micro-stroke optimization"""
+        # Look ahead to find the next drawing movement
+        next_move_index = self._find_next_drawing_movement(lines, pen_up_index)
+        if next_move_index == -1:
+            return False
+
+        # Get coordinates of next movement
+        next_line = lines[next_move_index]
+        next_x, next_y = self.parse_coordinates(next_line)
+        if next_x is None or next_y is None:
+            return False
+
+        # Calculate distance to next movement
+        distance = self.calculate_distance(last_x, last_y, next_x, next_y)
+
+        # Skip pen lift if movement is smaller than threshold
+        return distance < self.micro_stroke_threshold
+
+    def _find_next_drawing_movement(self, lines: List[str], start_index: int) -> int:
+        """Find the next G01 movement after pen down"""
+        i = start_index + 1
+        found_pen_down = False
+
+        while i < len(lines):
+            line = lines[i].strip()
+            if "PEN DOWN" in line:
+                found_pen_down = True
+            elif found_pen_down and line.startswith(("G01", "G1")):
+                return i
+            i += 1
+
+        return -1
+
+    def _skip_to_next_movement(self, lines: List[str], pen_up_index: int) -> int:
+        """Skip past pen up/down sequence to next movement"""
+        i = pen_up_index + 1
+        while i < len(lines):
+            line = lines[i].strip()
+            if line.startswith(("G01", "G1")):
+                return i
+            i += 1
+        return len(lines)
+
     def optimize_gcode(self, lines: List[str]) -> List[str]:
         """Apply optimizations to G-code lines"""
-        if not self.enable_feed_optimization and not self.enable_pen_optimization:
+        if not self.enable_feed_optimization and not self.enable_pen_optimization and not self.enable_stroke_filtering:
             log_json_entry(
                 LogType.GRBL,
                 {"message": "G-code optimization skipped (disabled)", "action": "optimization_skipped"},
                 print_message="[🎯] G-code optimization disabled"
             )
             return lines
+
+        # First pass: filter micro-strokes
+        if self.enable_stroke_filtering:
+            lines = self.filter_micro_strokes(lines)
 
         optimized_lines = []
         last_x, last_y = 0.0, 0.0
@@ -315,17 +429,26 @@ def create_optimizer_from_config() -> GCodeOptimizer:
             GRBL_CLUSTER_SEQUENCE_MIN
         )
 
+        # Try to get stroke filtering config, default to True
+        try:
+            GRBL_ENABLE_STROKE_FILTERING = getattr(__import__('config.config', fromlist=['GRBL_ENABLE_STROKE_FILTERING']), 'GRBL_ENABLE_STROKE_FILTERING', True)
+        except:
+            GRBL_ENABLE_STROKE_FILTERING = True
+
         return GCodeOptimizer(
             enable_feed_optimization=GRBL_ENABLE_FEED_OPTIMIZATION,
             enable_pen_optimization=GRBL_ENABLE_PEN_OPTIMIZATION,
+            enable_stroke_filtering=GRBL_ENABLE_STROKE_FILTERING,
             min_feed_rate=GRBL_FEED_RATE_MIN,
             max_feed_rate=GRBL_FEED_RATE_MAX,
             small_move_threshold=GRBL_SMALL_MOVE_THRESHOLD,
             large_move_threshold=GRBL_LARGE_MOVE_THRESHOLD,
             cluster_distance_threshold=GRBL_CLUSTER_DISTANCE_THRESHOLD,
-            cluster_sequence_min=GRBL_CLUSTER_SEQUENCE_MIN
+            cluster_sequence_min=GRBL_CLUSTER_SEQUENCE_MIN,
+            micro_stroke_threshold=0.25,  # Skip pen lifts for moves < 0.25mm
+            continuous_path_threshold=2.0
         )
 
     except ImportError:
         # Fallback to defaults if config values not available
-        return GCodeOptimizer()
+        return GCodeOptimizer(enable_stroke_filtering=True)

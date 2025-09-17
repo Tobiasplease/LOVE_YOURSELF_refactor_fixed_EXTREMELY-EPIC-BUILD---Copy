@@ -148,20 +148,21 @@ GRBL_IDLE_UPDATE_INTERVAL = 3.0  # Seconds between movement updates - longer pau
 # Master optimization toggles
 GRBL_ENABLE_FEED_OPTIMIZATION = os.getenv("GRBL_ENABLE_FEED_OPTIMIZATION", "true").lower() in ("1", "true", "yes")
 GRBL_ENABLE_PEN_OPTIMIZATION = os.getenv("GRBL_ENABLE_PEN_OPTIMIZATION", "true").lower() in ("1", "true", "yes")
+GRBL_ENABLE_STROKE_FILTERING = os.getenv("GRBL_ENABLE_STROKE_FILTERING", "true").lower() in ("1", "true", "yes")
 
 # === FEED RATE OPTIMIZATION ===
 # Speed scaling for different movement types - adjust these to set your preferred overall speed range
-GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 500))     # Slowest speed for tiny detailed movements (mm/min)
-GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 20000))     # Fastest speed for large sweeping movements (mm/min)
-GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 8000))   # Default/medium speed (mm/min)
+GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 4000))     # Slowest speed for tiny detailed movements (mm/min) - increased for faster micro-strokes
+GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 40000))     # Fastest speed for large sweeping movements (mm/min)
+GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 7000))   # Default/medium speed (mm/min)
 
 # Distance thresholds for feed rate calculation (in mm)
 GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 1.0))   # Below this: use slower speeds
-GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 10.0))  # Above this: use max speed
+GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 6.0))  # Above this: use max speed
 
 # === PEN LIFT OPTIMIZATION ===
 # Servo values for different pen operations - adjust these to tune pen lift timing
-GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 35))         # Normal pen up value (lowered from 40 for drawing)
+GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 30))         # Normal pen up value (lowered from 40 for drawing)
 GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))   # Normal pen down value
 GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", max(25, GRBL_PEN_UP_S - 5)))       # Fast pen up for clusters
 GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", min(60, GRBL_PEN_DOWN_S + 5))) # Fast pen down for clusters
@@ -293,6 +294,17 @@ REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 # Store concise summaries of drawing intents and reflections for future prompts
 INCLUDE_DRAWING_HISTORY = True
 DRAWING_HISTORY_LIMIT = 3  # how many recent drawing entries to surface in prompts
+
+# === PAPER DETECTION SAFETY SYSTEM ===
+# Prevent drawing on bare surfaces by checking for paper before execution
+ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
+PAPER_CHECK_METHOD = "reference"  # "reference" (compare to reference image) or "direct" (ask LLM directly)
+PAPER_DETECTION_CONFIDENCE_THRESHOLD = 0.8  # LLM confidence requirement (0.0-1.0)
+PAPER_REFERENCE_IMAGE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_reference.jpg")
+PAPER_DETECTION_GAZE_PAN = 90  # Pan angle for looking down at drawing area
+PAPER_DETECTION_GAZE_TILT = 50  # Tilt angle for looking down at drawing area (lowest safe position)
+PAPER_CHECK_TIMEOUT = 10.0  # Maximum seconds to wait for paper detection
+ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
 # === ARDUINO DEVICE CONFIGURATION ===
 # Configure each Arduino with its specific Linux serial port
 # Use debug/identify_arduinos.py to help identify which device is on which port
