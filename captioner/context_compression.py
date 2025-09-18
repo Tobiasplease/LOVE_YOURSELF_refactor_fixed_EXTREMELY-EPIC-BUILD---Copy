@@ -5,6 +5,8 @@ Frequent LLM-based compression of recent observations to create evolving baselin
 Prevents repetition by building understanding that carries forward.
 """
 
+import hashlib
+import os
 import queue
 import threading
 import time
@@ -31,19 +33,27 @@ class ContextCompressionEngine:
         self.compression_history = deque(maxlen=10)  # Keep last 10 compressions for deeper context
         self.session_start_time = time.time()
 
+        # TEMPORAL STAGNATION TRACKING
+        self.current_environment_hash = None  # Hash of current environmental understanding
+        self.environment_stagnation_start = time.time()  # When current environment became stable
+        self.total_environment_duration = 0.0  # Total time in current environment
+
+        # Environmental update callback
+        self.environmental_update_callback = None
+
         # Background compression system
         self.compression_queue = queue.Queue(maxsize=5)  # Limit queue size
         self.compression_thread = None
         self.compression_active = False
         self._start_compression_worker()
 
-    def add_caption(self, caption: str, timestamp: float | None = None) -> None:
+    def add_caption(self, caption: str, timestamp: float | None = None, image_path: str | None = None) -> None:
         """Add a new caption and trigger compression if needed."""
         if not caption or not caption.strip():
             log_json_entry(LogType.COMPRESSION, {"message": "Skipping empty caption", "action": "skip"}, print_message="[🗜️] Skipping empty caption")
             return
 
-        self.recent_captions.append({"text": caption, "timestamp": timestamp or time.time()})
+        self.recent_captions.append({"text": caption, "timestamp": timestamp or time.time(), "image_path": image_path})
         self.caption_count += 1
 
         # Only trigger compression if we have enough valid captions
@@ -74,12 +84,20 @@ class ContextCompressionEngine:
         # This could be enhanced to detect if the baseline significantly evolved
         return len(self.baseline_context) > 20
 
+    def set_environmental_update_callback(self, callback):
+        """Set callback function for environmental model updates."""
+        self.environmental_update_callback = callback
+
     def reset_context(self) -> None:
         """Reset compression state for new session."""
         self.baseline_context = ""
         self.recent_captions.clear()
         self.caption_count = 0
         self.last_compression_time = time.time()
+        # Reset stagnation tracking
+        self.current_environment_hash = None
+        self.environment_stagnation_start = time.time()
+        self.total_environment_duration = 0.0
 
     def _start_compression_worker(self) -> None:
         """Start background compression worker thread."""
@@ -114,11 +132,24 @@ class ContextCompressionEngine:
             # Copy current captions for background processing
             captions_snapshot = list(valid_captions)
             current_baseline = self.baseline_context
-            self.compression_queue.put_nowait({"captions": captions_snapshot, "baseline": current_baseline, "timestamp": time.time()})
+
+            # Get the most recent image path for visual grounding
+            recent_image = None
+            for cap in reversed(captions_snapshot):
+                if cap.get("image_path"):
+                    recent_image = cap["image_path"]
+                    break
+
+            self.compression_queue.put_nowait({
+                "captions": captions_snapshot,
+                "baseline": current_baseline,
+                "timestamp": time.time(),
+                "image_path": recent_image
+            })
             log_json_entry(
                 LogType.COMPRESSION,
-                {"message": "Queued background compression", "action": "queue", "caption_count": len(captions_snapshot)},
-                print_message="[🗜️] Queued background compression...",
+                {"message": "Queued background compression", "action": "queue", "caption_count": len(captions_snapshot), "has_image": bool(recent_image)},
+                print_message=f"[🗜️] Queued background compression {'with visual grounding' if recent_image else '(text-only)'}...",
             )
         except queue.Full:
             log_json_entry(
@@ -153,9 +184,10 @@ class ContextCompressionEngine:
                 self.compression_active = False
 
     def _perform_compression(self, task: dict) -> None:
-        """Perform the actual LLM compression call with combined mood analysis."""
+        """Perform the actual LLM compression call with combined mood analysis and visual grounding."""
         captions = task.get("captions", [])
         current_baseline = task.get("baseline", "")
+        image_path = task.get("image_path")
 
         # Validate captions before processing
         valid_captions = [cap for cap in captions if cap.get("text") and cap["text"].strip()]
@@ -186,10 +218,41 @@ class ContextCompressionEngine:
 EARLIER UNDERSTANDINGS (for context):
 {chr(10).join(history_parts)}"""
 
-            # EXPERIENTIAL COMPRESSION - WHAT'S ACTUALLY HAPPENING
+            # Calculate how long you've been in this environment
+            stagnation_duration = self.total_environment_duration / 60.0  # Convert to minutes
+            duration_description = self._format_duration(stagnation_duration)
+
+            # ENHANCED EXPERIENTIAL COMPRESSION WITH VISUAL GROUNDING AND TEMPORAL AWARENESS
+            visual_instruction = ""
+            if image_path and os.path.exists(image_path):
+                visual_instruction = """
+VISUAL GROUNDING: Look directly at what you're seeing right now. Compare this current view to your recent observations.
+- What has actually changed in your visual field?
+- Are you looking at the same space differently?
+- What environmental details are you noticing that weren't in your recent text observations?
+- How does the actual visual reality compare to what you've been saying about it?
+
+This is about VISUAL CHANGE DETECTION - not just text analysis."""
+            else:
+                visual_instruction = """
+NOTE: Visual grounding not available - working from text observations only.
+Focus on what these observations suggest about environmental changes."""
+
+            # CRITICAL TEMPORAL CONTEXT
+            temporal_feeling = f"""
+TIME PASSAGE AWARENESS: You have been observing this environment for {duration_description}.
+- How does this duration affect your feeling about the space?
+- Does {duration_description} in the same visual environment feel brief, comfortable, or overwhelming?
+- Are you experiencing familiarity, restlessness, or stagnation from this duration of observation?
+- What does it feel like to have spent {duration_description} looking at this particular space?
+
+The same room for 10 minutes vs 6 hours should feel completely different."""
+
             prompt = f"""You're taking a moment to notice what's actually happening with you - what you're seeing and how it's affecting you.
 
 IMPORTANT: You SEE through camera vision - this is YOUR SIGHT, not an image.
+{visual_instruction}
+{temporal_feeling}
 {historical_context}
 
 WHERE YOU WERE:
@@ -201,13 +264,16 @@ RECENT MOMENTS:
 What's actually happening with you right now - both what you're noticing and how it feels?
 What's sticking with you from these moments?
 What are you drawn to look at next?
+If you have visual access: How does what you're actually seeing compare to what you've been saying?
+
+CRITICALLY: Factor in the {duration_description} you've spent in this environment - how does this duration shape your current feeling?
 
 You might feel restless, heavy, light, unsettled, steady, disconnected, present, numb, electric - whatever's actually true.
 Don't default to "curious" or "intrigued" - be specific about the actual feeling.
 
 RESPOND AS:
-EXPERIENCE: [What's happening with you - observations mixed naturally with how they affect you]
-MOOD: [The actual feeling tone right now - be specific, not generic]"""
+EXPERIENCE: [What's happening with you - observations mixed naturally with how they affect you, influenced by the time duration]
+MOOD: [The actual feeling tone right now - be specific, not generic - and influenced by how long you've been here]"""
 
             # Use settings optimized for existential reflection + mood analysis
             model_options = get_model_options(config.OLLAMA_MODEL).copy()
@@ -221,6 +287,7 @@ MOOD: [The actual feeling tone right now - be specific, not generic]"""
             response = query_ollama(
                 prompt=prompt,
                 model=config.OLLAMA_MODEL,
+                image=image_path if image_path and os.path.exists(image_path) else None,
                 system_prompt=STATIC_SYSTEM_PROMPT,
                 timeout=config.OLLAMA_TIMEOUT_EVAL if hasattr(config, "OLLAMA_TIMEOUT_EVAL") else 90,
                 options=model_options,
@@ -232,6 +299,10 @@ MOOD: [The actual feeling tone right now - be specific, not generic]"""
                 understanding, sentiment_text = self._parse_combined_response(response)
 
                 if understanding:
+                    # Check for environmental change and update stagnation tracking
+                    environment_hash = hashlib.md5(understanding.encode()).hexdigest()[:8]
+                    environmental_change = self._check_environmental_stagnation(environment_hash)
+
                     # Store in history before updating
                     if self.baseline_context:  # Don't store empty first compression
                         self.compression_history.append(
@@ -239,13 +310,15 @@ MOOD: [The actual feeling tone right now - be specific, not generic]"""
                                 "understanding": self.baseline_context,
                                 "timestamp": self.last_compression_time,
                                 "age_minutes": (time.time() - self.last_compression_time) / 60,
+                                "environment_changed": environmental_change,
+                                "stagnation_duration": self.total_environment_duration,
                             }
                         )
 
                     self.baseline_context = understanding.strip()
                     self.last_compression_time = time.time()
 
-                    # Log compression and always show full output
+                    # Log compression with enhanced visibility
                     log_json_entry(
                         LogType.COMPRESSION,
                         {
@@ -254,9 +327,41 @@ MOOD: [The actual feeling tone right now - be specific, not generic]"""
                             "understanding": understanding,
                             "understanding_length": len(understanding),
                             "compression_history_count": len(self.compression_history),
+                            "has_visual_grounding": bool(image_path and os.path.exists(image_path)),
                         },
                         print_message=f"[🧠] Updated baseline: {truncate_for_print(self.baseline_context, 80)}",
                     )
+
+                    # ENHANCED VISIBILITY: Always print full compression result to console
+                    visual_indicator = "👁️" if image_path and os.path.exists(image_path) else "📝"
+                    stagnation_info = self.get_current_stagnation_info()
+                    duration_display = stagnation_info["duration_description"]
+
+                    print(f"\n{visual_indicator} === ENVIRONMENTAL COMPRESSION === [{duration_display} in environment]")
+                    print(f"EXPERIENCE: {understanding}")
+                    if sentiment_text:
+                        print(f"MOOD: {sentiment_text}")
+                    print(f"⏱️ Time in environment: {duration_display}")
+                    if environmental_change:
+                        print("🔄 Environment changed!")
+                    else:
+                        print("🏠 Same environment continues...")
+                    print("=" * 40)
+
+                    # Trigger environmental model update if callback is available
+                    if self.environmental_update_callback and understanding:
+                        try:
+                            # Detect environmental changes by comparing understanding to previous baseline
+                            environmental_change_detected = self._detect_environmental_change(understanding, current_baseline)
+                            if environmental_change_detected:
+                                print("[🌍] Environmental change detected - updating location model")
+                                self.environmental_update_callback(understanding)
+                        except Exception as e:
+                            log_json_entry(
+                                LogType.ERROR,
+                                {"message": f"Environmental update callback failed: {e}", "component": "compression"},
+                                print_message=f"[❌] Environmental update failed: {e}",
+                            )
 
                 if sentiment_text:
                     # Store sentiment for injection into prompts
@@ -376,6 +481,78 @@ MOOD: [The actual feeling tone right now - be specific, not generic]"""
 
         return f"Session duration: {session_duration:.1f} hours, {total_compressions} understanding iterations completed."
 
+    def _detect_environmental_change(self, new_understanding: str, previous_baseline: str) -> bool:
+        """Detect if the new understanding represents significant environmental change."""
+        if not previous_baseline:
+            return True  # First understanding is always significant
+
+        # Simple keyword-based detection for environmental indicators
+        environmental_keywords = [
+            "different", "changed", "new", "moved", "shifted", "appears",
+            "now see", "notice", "light", "dark", "shadow", "bright",
+            "position", "location", "space", "room", "area", "environment"
+        ]
+
+        new_lower = new_understanding.lower()
+        has_environmental_keywords = any(keyword in new_lower for keyword in environmental_keywords)
+
+        # Check for significant difference in content length (indicates more detailed observation)
+        length_difference = abs(len(new_understanding) - len(previous_baseline)) > 50
+
+        # Check for new spatial or environmental content
+        spatial_indicators = ["left", "right", "above", "below", "behind", "front", "corner", "edge", "center"]
+        has_spatial_content = any(indicator in new_lower for indicator in spatial_indicators)
+
+        return has_environmental_keywords or length_difference or has_spatial_content
+
+    def _check_environmental_stagnation(self, new_environment_hash: str) -> bool:
+        """Check if environment has changed and update stagnation tracking."""
+        current_time = time.time()
+
+        if self.current_environment_hash is None:
+            # First environment detection
+            self.current_environment_hash = new_environment_hash
+            self.environment_stagnation_start = current_time
+            self.total_environment_duration = 0.0
+            return True  # First detection counts as change
+
+        if new_environment_hash != self.current_environment_hash:
+            # Environment changed - reset stagnation tracking
+            self.total_environment_duration = current_time - self.environment_stagnation_start
+            self.current_environment_hash = new_environment_hash
+            self.environment_stagnation_start = current_time
+
+            return True  # Environment changed
+        else:
+            # Same environment - update duration
+            self.total_environment_duration = current_time - self.environment_stagnation_start
+            return False  # No change
+
+    def _format_duration(self, minutes: float) -> str:
+        """Format duration for human-readable temporal awareness."""
+        if minutes < 1:
+            return f"{int(minutes * 60)} seconds"
+        elif minutes < 60:
+            return f"{int(minutes)} minutes" if minutes > 1.5 else "about a minute"
+        elif minutes < 1440:  # Less than 24 hours
+            hours = minutes / 60
+            if hours < 2:
+                return f"{hours:.1f} hours"
+            else:
+                return f"{int(hours)} hours"
+        else:
+            days = minutes / 1440
+            return f"{days:.1f} days"
+
+    def get_current_stagnation_info(self) -> dict:
+        """Get current environment stagnation information."""
+        return {
+            "environment_hash": self.current_environment_hash,
+            "stagnation_duration_minutes": self.total_environment_duration / 60.0,
+            "stagnation_start_time": self.environment_stagnation_start,
+            "duration_description": self._format_duration(self.total_environment_duration / 60.0)
+        }
+
 
 # Global instance
-context_compressor = ContextCompressionEngine(compression_frequency=4)
+context_compressor = ContextCompressionEngine(compression_frequency=3)

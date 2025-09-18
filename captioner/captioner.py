@@ -40,6 +40,21 @@ class Captioner(MemoryMixin):
     def shutdown(self):
         self.save_session_time()
 
+    def _handle_environmental_update(self, understanding: str) -> None:
+        """Handle environmental updates from context compression system."""
+        try:
+            # Update location understanding based on compression insights
+            self.update_location_understanding(understanding)
+
+            # Also update environmental certainty based on compression frequency
+            if hasattr(self, 'self_model') and 'environmental_certainty' in self.self_model:
+                # Increase certainty as we get more compression-based understanding
+                current_certainty = self.self_model.get('environmental_certainty', 0.0)
+                self.self_model['environmental_certainty'] = min(1.0, current_certainty + 0.1)
+
+        except Exception as e:
+            print(f"[❌] Environmental update failed: {e}")
+
     def capture_mood_snapshot(self, capture_reason: str = "general") -> Optional[str]:
         """Capture a mood snapshot from current frame queue or latest frame."""
         if not self.snapshot_queue:
@@ -64,6 +79,10 @@ class Captioner(MemoryMixin):
         super().__init__()
         self.model = MultimodalModel(memory_ref=self)
         self.drawing = DrawingController()
+
+        # Set up environmental update callback for context compression
+        if context_compressor:
+            context_compressor.set_environmental_update_callback(self._handle_environmental_update)
 
         self.true_session_start = time.time()
         self.first_caption_done = False
@@ -352,7 +371,7 @@ class Captioner(MemoryMixin):
         # Add caption to context compression system (with error handling)
         try:
             if context_compressor and caption and caption.strip():
-                context_compressor.add_caption(caption, time.time())
+                context_compressor.add_caption(caption, time.time(), img_path)
         except Exception as e:
             print(f"[CAPTIONER] Context compression failed: {e}")
 
@@ -364,7 +383,7 @@ class Captioner(MemoryMixin):
                     mood=self.current_mood,
                     memory_type="caption",
                     mood_vector=getattr(self, "current_mood_vector", (0.0, 0.0, 0.5)),
-                    emotion_state=getattr(self, "current_emotion_state", "calm_observant")
+                    emotion_state=getattr(self, "current_emotion_state", "calm_observant"),
                 )
         except Exception as e:
             print(f"[CAPTIONER] Memory system failed: {e}")
@@ -491,6 +510,7 @@ class Captioner(MemoryMixin):
             except Exception as e:
                 print(f"[DEBUG] EXCEPTION in log_json_entry: {e}")
                 import traceback
+
                 traceback.print_exc()
 
             print(f"[DEBUG] Step 4: About to check pipeline state...")
@@ -801,8 +821,9 @@ class Captioner(MemoryMixin):
                     prompt = build_environmental_caption_prompt(
                         self, mood=self.current_mood, boredom=self.boredom, novelty=self.novelty_score, last_session_gap=None  # Fresh session
                     )
-                    # Use proper captioning with consolidated system prompt  
+                    # Use proper captioning with consolidated system prompt
                     from .prompts import STATIC_SYSTEM_PROMPT
+
                     environmental_description = self.model._call_ollama(
                         prompt, image_path=image_path, system_prompt=STATIC_SYSTEM_PROMPT, prompt_type="awakening"
                     )

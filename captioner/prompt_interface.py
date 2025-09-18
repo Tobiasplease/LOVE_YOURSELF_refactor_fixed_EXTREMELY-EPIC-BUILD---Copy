@@ -15,10 +15,10 @@ from .prompts import (
     STATIC_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     build_drawing_prompt,
-    context_rich_multi_step_drawing_analysis,
     build_environmental_caption_prompt,
     build_ongoing_caption_prompt,
     build_reflection_prompt,
+    context_rich_multi_step_drawing_analysis,
 )
 
 
@@ -54,12 +54,23 @@ class PromptInterface:
 
             prompt = build_ongoing_caption_prompt(memory_ref, getattr(memory_ref, "last_caption", None))
 
-            # Add non-drawing contexts only
+            # Add non-drawing contexts and temporal awareness
             context_parts = []
             if baseline_context:
                 context_parts.append(baseline_context)
             if emotional_context:
                 context_parts.append(emotional_context)
+
+            # Add temporal stagnation awareness from compression system
+            try:
+                from captioner.context_compression import context_compressor
+                stagnation_info = context_compressor.get_current_stagnation_info()
+                if stagnation_info["stagnation_duration_minutes"] > 0:
+                    duration_desc = stagnation_info["duration_description"]
+                    temporal_context = f"TEMPORAL AWARENESS: You have been observing this environment for {duration_desc}. This duration shapes your current emotional state and perspective."
+                    context_parts.append(temporal_context)
+            except Exception as e:
+                print(f"[PROMPT] Could not get temporal context: {e}")
 
             if context_parts:
                 context_string = "\n\n".join(context_parts)
@@ -75,9 +86,11 @@ class PromptInterface:
         try:
             if first_time:
                 from config.config import ENVIRONMENTAL_TEMPERATURE
+
                 caption_temp = ENVIRONMENTAL_TEMPERATURE
             else:
                 from config.config import CAPTIONER_TEMPERATURE
+
                 caption_temp = CAPTIONER_TEMPERATURE
         except ImportError:
             caption_temp = 1.2 if not first_time else 0.9  # Default fallback
@@ -96,6 +109,7 @@ class PromptInterface:
                         emotional_state=dynamic_context.get("emotional_state", "contemplative"),
                         temporal_context=dynamic_context.get("temporal_context", ""),
                         accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
+                        spatial_language_hints=dynamic_context.get("spatial_language_hints", ""),
                     )
             except Exception as e:
                 # Fall back to static prompt if formatting fails
@@ -117,6 +131,7 @@ class PromptInterface:
         # Use configurable reflection temperature
         try:
             from config.config import REFLECTION_TEMPERATURE
+
             model_options["temperature"] = REFLECTION_TEMPERATURE
         except ImportError:
             model_options["temperature"] = 1.1  # Default fallback
@@ -131,6 +146,7 @@ class PromptInterface:
         # Choose between multi-step context-rich analysis or single-prompt approach
         try:
             from config.config import USE_MULTI_STEP_DRAWING_ANALYSIS
+
             use_multi_step = USE_MULTI_STEP_DRAWING_ANALYSIS
         except ImportError:
             use_multi_step = False  # Fallback to single-prompt
@@ -148,6 +164,7 @@ class PromptInterface:
         # Use configurable drawing temperature and make prompts more concrete and directive
         try:
             from config.config import DRAWING_TEMPERATURE
+
             drawing_temp = DRAWING_TEMPERATURE
         except ImportError:
             drawing_temp = 1.0  # Default fallback
@@ -181,6 +198,7 @@ class PromptInterface:
         accumulated_understanding = ""
         try:
             from captioner.context_compression import context_compressor
+
             understanding = context_compressor.get_consolidated_understanding()
             if understanding:
                 # Truncate for system prompt
@@ -200,9 +218,7 @@ class PromptInterface:
 
         # Format the system prompt with context
         return DRAWING_SYSTEM_PROMPT.format(
-            temporal_context=temporal_context,
-            accumulated_understanding=accumulated_understanding,
-            emotional_state=emotional_state
+            temporal_context=temporal_context, accumulated_understanding=accumulated_understanding, emotional_state=emotional_state
         )
 
     def _get_emotional_context(self) -> str:
@@ -225,7 +241,7 @@ class PromptInterface:
             print(f"[PROMPT] Could not get baseline context: {e}")
             return ""
 
-# REMOVED: _get_drawing_context() - drawing context now handled directly in prompts.py
+    # REMOVED: _get_drawing_context() - drawing context now handled directly in prompts.py
 
     def _get_base_model_options(self):
         """Get base model options for the current model."""

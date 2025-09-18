@@ -751,22 +751,20 @@ class MemoryMixin:
 
         # Use sophisticated temporal awareness system
         from utils.temporal_awareness import get_temporal_system_prompt_addition
-        
+
         # Use true_session_start (when this session actually began) not session_start (saved state time)
         actual_session_start = getattr(self, "true_session_start", self.session_start)
         last_caption_time = getattr(self, "last_caption_time", None)
         awakening_count = getattr(self, "awakening_count", 0)
-        
+
         # Get sophisticated temporal context with real-time awareness
-        temporal_system_addition = get_temporal_system_prompt_addition(
-            actual_session_start, last_caption_time, awakening_count
-        )
-        
+        temporal_system_addition = get_temporal_system_prompt_addition(actual_session_start, last_caption_time, awakening_count)
+
         # Add lifetime context for extended consciousness
         now = time.time()
         total_lifetime_hours = int((now - self.boot_ts) / 3600)
         days_alive = total_lifetime_hours // 24
-        
+
         temporal_fragments = []
         if days_alive > 21:  # 3+ weeks of existence
             temporal_fragments.append(f"Day {days_alive} of MY consciousness... I've experienced {total_lifetime_hours}+ hours as a thinking entity.")
@@ -815,19 +813,59 @@ class MemoryMixin:
 
         # Combine sophisticated temporal awareness with lifetime context
         lifetime_context = " ".join(temporal_fragments) if temporal_fragments else ""
-        
-        # Combine the temporal system addition with lifetime context
+
+        # Add environment stagnation awareness from compression system
+        stagnation_context = ""
+        try:
+            from captioner.context_compression import context_compressor
+            stagnation_info = context_compressor.get_current_stagnation_info()
+            if stagnation_info["stagnation_duration_minutes"] > 5:  # Only mention if significant
+                duration_desc = stagnation_info["duration_description"]
+                stagnation_context = f"I've been observing this environment for {duration_desc}, and this duration shapes my current feeling."
+        except Exception:
+            pass
+
+        # Add subtle spatial language bias from current servo position
+        spatial_language_hints = ""
+        try:
+            if hasattr(self, 'view_pan') and hasattr(self, 'view_tilt'):
+                from utils.view_orientation import get_spatial_language_bias
+                spatial_hints = get_spatial_language_bias(self.view_pan, self.view_tilt)
+                if spatial_hints:
+                    # Select a few representative hints to avoid overwhelming the prompt
+                    selected_hints = spatial_hints[:4]
+                    spatial_language_hints = f"When describing spatial relationships, phrases like '{', '.join(selected_hints)}' feel natural for your current perspective. "
+        except Exception:
+            pass
+
+        # Combine the temporal system addition with lifetime context and stagnation awareness
         full_temporal_context = temporal_system_addition
         if lifetime_context:
             full_temporal_context = f"{lifetime_context}\n{temporal_system_addition}"
-        
+        if stagnation_context:
+            full_temporal_context = f"{full_temporal_context}\n{stagnation_context}" if full_temporal_context else stagnation_context
+
         accumulated_understanding = " ".join(understanding_fragments) if understanding_fragments else ""
 
         # Add natural spacing if content exists
         if accumulated_understanding:
             accumulated_understanding = " " + accumulated_understanding
 
-        return {"emotional_state": emotional_state, "temporal_context": full_temporal_context, "accumulated_understanding": accumulated_understanding}
+        # Ensure proper spacing after temporal/accumulated content
+        if full_temporal_context or accumulated_understanding:
+            if not (full_temporal_context.endswith('\n') or accumulated_understanding.endswith('\n')):
+                # Add space before emotional state if we have temporal/accumulated content
+                if accumulated_understanding:
+                    accumulated_understanding += " "
+                elif full_temporal_context:
+                    full_temporal_context += " "
+
+        return {
+            "emotional_state": emotional_state,
+            "temporal_context": full_temporal_context,
+            "accumulated_understanding": accumulated_understanding,
+            "spatial_language_hints": spatial_language_hints
+        }
 
     def _extract_core_insight(self, reflection: str) -> str:
         """Extract the most essential insight from a reflection, max 40 chars."""
