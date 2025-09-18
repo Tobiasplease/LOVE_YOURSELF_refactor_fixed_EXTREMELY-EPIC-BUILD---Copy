@@ -55,9 +55,11 @@ class UArmTeachApp:
         self.play_file = self.record_file
         self.current_play_name = None
         # Limp mode used during record: 'detach' (via Swift) or 'standby' (Teach standby mode)
-        # Default to 'standby' so base key1 pump toggles are embedded (ee,*) for perfect firmware-timed playback
-        self.limp_mode = "standby"
+        # Default to 'detach' to ensure key1 pump toggles work reliably during recording
+        self.limp_mode = "detach"
         self.teach = None
+        # Global pump state tracking for key1 button
+        self.pump_on = False
         # Home pose (compact/folded) settings
         self.home_x = 110.0
         self.home_y = 0.0
@@ -82,6 +84,40 @@ class UArmTeachApp:
         except Exception:
             pass
 
+    # --- Custom key1 callback for pump control ---
+    def _sync_pump_state(self):
+        """Sync our pump_on state with actual hardware state"""
+        try:
+            # Try to get actual pump state from hardware
+            pump_state = self.swift.get_pump()
+            if pump_state is not None:
+                if isinstance(pump_state, (tuple, list)):
+                    self.pump_on = bool(pump_state[0])
+                else:
+                    self.pump_on = bool(pump_state)
+        except Exception:
+            # If we can't read state, assume pump is off
+            self.pump_on = False
+
+    def _custom_key1_callback(self, ret):
+        """Custom key1 callback that toggles pump, overriding firmware play function"""
+        if ret == '1':  # Button pressed
+            try:
+                print(f"\nDEBUG: Button pressed, pump_on was: {self.pump_on}")
+                # Simple toggle - just flip the state
+                self.pump_on = not self.pump_on
+                print(f"DEBUG: After toggle, pump_on is: {self.pump_on}")
+                self.swift.set_pump(self.pump_on)
+                print(f"Hardware button: Pump {'ON' if self.pump_on else 'OFF'}")
+
+                # If we're recording, also add the ee command to the recording
+                if self.teach and hasattr(self.teach, '_Teach__is_recording') and self.teach._Teach__is_recording:
+                    if hasattr(self.teach, '_Teach__record_list'):
+                        self.teach._Teach__record_list.append(f'ee,{1 if self.pump_on else 0}')
+                        print("  (Recorded as ee command)")
+            except Exception as e:
+                print(f"\nHardware button pump toggle failed: {e}")
+
     # --- Connection management ---
     def connect(self):
         if self.connected:
@@ -104,6 +140,20 @@ class UArmTeachApp:
             ensure_dir(self.record_file)
             self.teach = Teach(self.record_file, self.swift)
             self.connected = True
+
+            # Override key1 callback to disable firmware play function and enable pump control
+            try:
+                self.swift.release_key1_callback()  # Remove any existing callbacks
+                self.swift.register_key1_callback(callback=self._custom_key1_callback)
+                self.swift.set_report_keys(on=True)
+                print("Key1 button overridden: now controls pump instead of firmware play function")
+            except Exception as e:
+                print(f"Warning: Could not override key1 callback: {e}")
+
+            # Sync pump state on connection
+            self._sync_pump_state()
+            print(f"Pump state synchronized: {'ON' if self.pump_on else 'OFF'}")
+
             # Default idle: detach servos so the arm is limp/discrete
             try:
                 self.swift.set_servo_detach()
@@ -165,6 +215,15 @@ class UArmTeachApp:
         # Bind Teach to current file
         self.teach = Teach(self.record_file, self.swift)
         print(f"Recording '{name}' to: {self.record_file}")
+
+        # Re-override key1 callback since Teach() may have registered its own
+        try:
+            self.swift.release_key1_callback()
+            self.swift.register_key1_callback(callback=self._custom_key1_callback)
+            self.swift.set_report_keys(on=True)
+        except Exception as e:
+            print(f"Warning: Could not re-override key1 callback: {e}")
+
         try:
             # Optionally go to home before recording so playback ends folded
             if self.use_home_before_record:
@@ -179,12 +238,27 @@ class UArmTeachApp:
                 print("Enabling Teach standby (limp) for manual guidance…")
                 try:
                     self.teach.start_standby_mode()
+                    # Re-override key1 callback immediately after standby mode starts
+                    self.swift.release_key1_callback()
+                    self.swift.register_key1_callback(callback=self._custom_key1_callback)
+                    self.swift.set_report_keys(on=True)
+                    print("Key1 callback re-overridden after standby mode")
                 except Exception as e:
                     print("Warn: start_standby_mode failed:", e)
 
             print(f"Starting record for {self.record_duration:.2f}s at interval {self.record_interval:.3f}s…")
-            print("Use base key1 to toggle pump (firmware-timed). 'm' toggles live but is NOT recorded.")
+            print("Use base key1 to toggle pump (recorded as ee commands). 'm' toggles live but is NOT recorded.")
             self.teach.start_record(interval=float(self.record_interval))
+
+            # CRITICAL: start_record() calls start_standby_mode() which re-registers Teach callbacks
+            # We must override them again immediately after start_record()
+            try:
+                self.swift.release_key1_callback()
+                self.swift.register_key1_callback(callback=self._custom_key1_callback)
+                self.swift.set_report_keys(on=True)
+                print("Key1 callback final override after start_record()")
+            except Exception as e:
+                print(f"Warning: Could not final-override key1 callback: {e}")
 
             # Non-blocking single-key input while recording
             # Prefer reading from controlling TTY to avoid stdin redirection issues
@@ -287,6 +361,11 @@ class UArmTeachApp:
             self.teach.stop_record()
             size = os.path.getsize(self.record_file) if os.path.exists(self.record_file) else 0
             print(f"Saved {size} bytes.")
+
+            # Sync pump state after recording to ensure clean state
+            self._sync_pump_state()
+            print(f"Post-recording pump state: {'ON' if self.pump_on else 'OFF'}")
+
             # Pump events are embedded as 'ee,*' inside the Teach file
             # Add to named index
             self._add_movement_index_entry(name=name, file=self.record_file)
@@ -348,6 +427,15 @@ class UArmTeachApp:
         display_name = os.path.basename(play_path)
         self.current_play_name = display_name
         print(f"Playing movement: {display_name}\n  File: {play_path}")
+
+        # Re-override key1 callback since Teach() may have registered its own
+        try:
+            self.swift.release_key1_callback()
+            self.swift.register_key1_callback(callback=self._custom_key1_callback)
+            self.swift.set_report_keys(on=True)
+        except Exception as e:
+            print(f"Warning: Could not re-override key1 callback: {e}")
+
         try:
             print("Disabling standby and attaching servos for playback…")
             try:
@@ -441,6 +529,18 @@ class UArmTeachApp:
             print("Servos DETACHED (limp)")
         except Exception as e:
             print("Detach failed:", e)
+
+    def toggle_pump_manual(self):
+        if not self.connected or not self.swift:
+            print("Not connected.")
+            return
+        try:
+            self._sync_pump_state()
+            self.pump_on = not self.pump_on
+            self.swift.set_pump(self.pump_on)
+            print(f"Pump manually toggled: {'ON' if self.pump_on else 'OFF'}")
+        except Exception as e:
+            print("Manual pump toggle failed:", e)
 
     def diagnostics(self):
         if not self.connected or not self.swift:
@@ -638,6 +738,8 @@ class UArmTeachApp:
             print("21) Move to home now")
             print(f"22) Toggle smoothing (now: {'ON' if self.smoothing_enabled else 'OFF'})")
             print("23) Clear all recordings (confirm)")
+            print("24) Delete individual recording")
+            print("25) Manual pump toggle (if stuck)")
             print("0) Exit")
             try:
                 choice = input("> ").strip()
@@ -754,6 +856,10 @@ class UArmTeachApp:
                     pass
             elif choice == "23":
                 self._clear_all_recordings()
+            elif choice == "24":
+                self.delete_individual_recording()
+            elif choice == "25":
+                self.toggle_pump_manual()
             elif choice == "0":
                 self.disconnect()
                 print("Bye.")
@@ -1106,7 +1212,107 @@ class UArmTeachApp:
         with open(out_path, "w", encoding="utf-8") as f:
             f.write("\n".join(out_lines))
 
-    # --- Clear recordings ---
+    # --- Recording management ---
+    def delete_individual_recording(self):
+        entries = self._load_index()
+        if not entries:
+            # Fallback to directory scan if no index
+            base = self.library_dir
+            if not os.path.exists(base):
+                print("No recordings directory found.")
+                return
+            files = [os.path.join(base, f) for f in os.listdir(base) if f.lower().endswith((".txt", ".teach", ".log")) and f != "index.json"]
+            if not files:
+                print("No recordings found.")
+                return
+            print("Available recordings:")
+            for i, path in enumerate(files, 1):
+                try:
+                    size = os.path.getsize(path)
+                except Exception:
+                    size = 0
+                print(f"  {i:2d}) {os.path.basename(path)}  ({size} bytes)")
+            sel = input("Select number to DELETE (or Enter to cancel): ").strip()
+            if not sel:
+                return
+            try:
+                idx = int(sel)
+                if 1 <= idx <= len(files):
+                    file_path = files[idx - 1]
+                    file_name = os.path.basename(file_path)
+                    confirm = input(f"Delete '{file_name}'? Type 'YES' to confirm: ").strip()
+                    if confirm == "YES":
+                        os.remove(file_path)
+                        print(f"Deleted: {file_name}")
+                        # Also remove any associated .smooth files
+                        base_name = os.path.splitext(file_path)[0]
+                        smooth_file = f"{base_name}.smooth.txt"
+                        if os.path.exists(smooth_file):
+                            os.remove(smooth_file)
+                            print(f"Also deleted: {os.path.basename(smooth_file)}")
+                    else:
+                        print("Cancelled.")
+                else:
+                    print("Invalid selection.")
+            except ValueError:
+                print("Invalid input.")
+            return
+
+        # Use named index
+        entries = sorted(entries, key=lambda e: e.get("created_at", ""), reverse=True)
+        print("Recorded movements:")
+        for i, e in enumerate(entries, 1):
+            name = e.get("name", "(unnamed)")
+            file = e.get("file", "?")
+            t = e.get("created_at", "")
+            try:
+                size = os.path.getsize(file)
+            except Exception:
+                size = 0
+            print(f"  {i:2d}) {name}  [{os.path.basename(file)}]  {t}  ({size} bytes)")
+
+        sel = input("Select movement number to DELETE (Enter to cancel): ").strip()
+        if not sel:
+            return
+        try:
+            idx = int(sel)
+            if 1 <= idx <= len(entries):
+                entry = entries[idx - 1]
+                name = entry.get("name", "(unnamed)")
+                file_path = entry.get("file")
+
+                confirm = input(f"Delete '{name}'? Type 'YES' to confirm: ").strip()
+                if confirm == "YES":
+                    # Remove the file
+                    if file_path and os.path.exists(file_path):
+                        os.remove(file_path)
+                        print(f"Deleted file: {os.path.basename(file_path)}")
+
+                    # Remove any associated .smooth files
+                    if file_path:
+                        base_name = os.path.splitext(file_path)[0]
+                        smooth_file = f"{base_name}.smooth.txt"
+                        if os.path.exists(smooth_file):
+                            os.remove(smooth_file)
+                            print(f"Also deleted: {os.path.basename(smooth_file)}")
+
+                    # Remove from index
+                    entries.pop(idx - 1)
+                    self._save_index(entries)
+                    print(f"Removed '{name}' from index.")
+
+                    # Clear play target if it was the deleted file
+                    if self.play_file == file_path:
+                        self.play_file = self.record_file
+                        self.current_play_name = None
+                        print("Play target reset.")
+                else:
+                    print("Cancelled.")
+            else:
+                print("Invalid selection.")
+        except ValueError:
+            print("Invalid input.")
+
     def _clear_all_recordings(self):
         print("This will delete all recordings and index in:", self.library_dir)
         print("Config will be kept.")

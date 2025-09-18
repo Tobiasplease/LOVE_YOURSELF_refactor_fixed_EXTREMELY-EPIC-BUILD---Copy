@@ -165,14 +165,21 @@ GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 6.0))  
 
 # === PEN LIFT OPTIMIZATION ===
 # Servo values for different pen operations - adjust these to tune pen lift timing
-GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 8))         # Drawing pen up value (very low for speed)
+GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 47))         # Drawing pen up value (barely clear paper)
 GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))   # Normal pen down value
-GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 5))       # Ultra-fast pen up for clusters (minimum safe height)
+GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 47))       # Cluster pen up (same minimal height)
 GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", min(60, GRBL_PEN_DOWN_S + 5))) # Fast pen down for clusters
 
 # Cluster detection parameters
 GRBL_CLUSTER_DISTANCE_THRESHOLD = float(os.getenv("GRBL_CLUSTER_DISTANCE_THRESHOLD", 5.0))  # Max distance between clustered pen lifts (mm)
 GRBL_CLUSTER_SEQUENCE_MIN = int(os.getenv("GRBL_CLUSTER_SEQUENCE_MIN", 3))                  # Minimum pen lifts to consider a cluster
+
+# === EXPERIMENTAL PATH SIMPLIFICATION ===
+# WARNING: These are experimental features that may affect drawing quality
+# Only enable for testing - disable for production artwork
+GRBL_EXPERIMENTAL_SIMPLIFICATION = os.getenv("GRBL_EXPERIMENTAL_SIMPLIFICATION", "true").lower() in ("1", "true", "yes")
+GRBL_SIMPLIFICATION_TOLERANCE = float(os.getenv("GRBL_SIMPLIFICATION_TOLERANCE", 0.02))  # Tolerance for path simplification (mm) - smaller = higher quality
+GRBL_MERGE_TOLERANCE = float(os.getenv("GRBL_MERGE_TOLERANCE", 0.05))  # Tolerance for line merging (mm)
 
 # === UARM SWIFT PRO SETTINGS ===
 USE_UARM = True  # Enable uArm Swift Pro robotic arm integration
@@ -194,14 +201,14 @@ UARM_DEFAULT_SPEED = 100        # Default movement speed (1-250)
 UARM_PLAY_AFTER_DRAW = True
 UARM_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "papermove_20250917_230951.txt",  # Paper movement after GRBL completion
+    "papermove_20250918_013415.txt",  # Paper movement after GRBL completion
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
 UARM_PLAY_ON_START = True
 UARM_START_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "startup_20250917_231133.txt",
+    "startup_20250918_013712.txt",
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
@@ -297,6 +304,10 @@ REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 # Store concise summaries of drawing intents and reflections for future prompts
 INCLUDE_DRAWING_HISTORY = True
 DRAWING_HISTORY_LIMIT = 3  # how many recent drawing entries to surface in prompts
+
+# === MULTI-STEP DRAWING ANALYSIS ===
+# Enable 5-step context-rich drawing analysis vs. single-prompt approach
+USE_MULTI_STEP_DRAWING_ANALYSIS = True  # Set to False for original single-prompt method
 
 # === PAPER DETECTION SAFETY SYSTEM ===
 # Prevent drawing on bare surfaces by checking for paper before execution

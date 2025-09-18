@@ -6,6 +6,11 @@ Shared functions for G-code processing and bCNC CLI operations
 import shutil
 import subprocess
 
+try:
+    from config.config import GRBL_PEN_UP_S, GRBL_PEN_DOWN_S
+except ImportError:
+    GRBL_PEN_UP_S, GRBL_PEN_DOWN_S = 20, 50
+
 
 def convert_z_to_servo(input_file, output_file):
     """Convert Z commands to servo commands for pen up/down control"""
@@ -17,12 +22,12 @@ def convert_z_to_servo(input_file, output_file):
                 clean = line.strip()
                 if clean.startswith("G0"):
                     if current_pen_state != "up":
-                        outfile.write("M3 S40 ; PEN UP\n")
+                        outfile.write(f"M3 S{GRBL_PEN_UP_S} ; PEN UP\n")
                         current_pen_state = "up"
                     outfile.write(line)
                 elif clean.startswith("G1"):
                     if current_pen_state != "down":
-                        outfile.write("M3 S50 ; PEN DOWN\n")
+                        outfile.write(f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN\n")
                         current_pen_state = "down"
                     outfile.write(line)
                 elif "Z" in clean:
@@ -31,10 +36,10 @@ def convert_z_to_servo(input_file, output_file):
                             try:
                                 z = float(part[1:])
                                 if z > 0 and current_pen_state != "up":
-                                    outfile.write("M3 S30 ; PEN UP\n")
+                                    outfile.write(f"M3 S{GRBL_PEN_UP_S} ; PEN UP\n")
                                     current_pen_state = "up"
                                 elif z <= 0 and current_pen_state != "down":
-                                    outfile.write("M3 S90 ; PEN DOWN\n")
+                                    outfile.write(f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN\n")
                                     current_pen_state = "down"
                             except ValueError:
                                 print(f"[FEL] Kunde inte konvertera Z-värde: {part}")
@@ -103,14 +108,14 @@ def get_servo_gcode_header():
         "G21 ; Set units to millimeters",
         "G90 ; Absolute positioning",
         "G28 ; Home all axes",
-        "M3 S30 ; PEN UP (initial state)",
+        f"M3 S{GRBL_PEN_UP_S} ; PEN UP (initial state)",
         "",
     ]
 
 
 def get_servo_gcode_footer():
     """Get standard G-code footer with servo cleanup"""
-    return ["", "M3 S30 ; PEN UP", "G28 ; Return home", "M30 ; Program end"]
+    return ["", f"M3 S{GRBL_PEN_UP_S} ; PEN UP", "G28 ; Return home", "M30 ; Program end"]
 
 
 def parse_svg_path_simple(d):
@@ -131,7 +136,7 @@ def parse_svg_path_simple(d):
             if len(coords) >= 2:
                 x, y = float(coords[0]), float(coords[1])
                 if pen_down:
-                    gcode.append("M3 S30 ; PEN UP")
+                    gcode.append(f"M3 S{GRBL_PEN_UP_S} ; PEN UP")
                     pen_down = False
                 gcode.append(f"G0 X{x} Y{y} ; Move to")
         elif cmd.startswith("L"):
@@ -139,12 +144,12 @@ def parse_svg_path_simple(d):
             if len(coords) >= 2:
                 x, y = float(coords[0]), float(coords[1])
                 if not pen_down:
-                    gcode.append("M3 S50 ; PEN DOWN")
+                    gcode.append(f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN")
                     pen_down = True
                 gcode.append(f"G1 X{x} Y{y} ; Draw to")
         elif cmd.startswith("Z"):
             if pen_down:
-                gcode.append("M3 S30 ; PEN UP")
+                gcode.append(f"M3 S{GRBL_PEN_UP_S} ; PEN UP")
                 pen_down = False
 
     return gcode
@@ -161,14 +166,14 @@ def parse_svg_points_simple(points_str):
         first_point = points[0].split(",")
         x, y = float(first_point[0]), float(first_point[1])
         gcode.append(f"G0 X{x} Y{y} ; Move to start")
-        gcode.append("M3 S50 ; PEN DOWN")
+        gcode.append(f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN")
 
         for point in points[1:]:
             coords = point.split(",")
             x, y = float(coords[0]), float(coords[1])
             gcode.append(f"G1 X{x} Y{y} ; Draw to")
 
-        gcode.append("M3 S30 ; PEN UP")
+        gcode.append(f"M3 S{GRBL_PEN_UP_S} ; PEN UP")
 
     return gcode
 
@@ -186,7 +191,7 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
             f.write("G90 ; Absolute positioning\n")
             f.write("G28 ; Home all axes\n")
             f.write(f"G92 X{origin[0]} Y{origin[1]} Z{origin[2]} ; Set origin offset\n")
-            f.write("M3 S30 ; PEN UP (initial state)\n")
+            f.write(f"M3 S{GRBL_PEN_UP_S} ; PEN UP (initial state)\n")
             f.write("\n")
 
             pen_down = False
@@ -201,13 +206,13 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
                 if line.startswith("G0") or line.startswith("G00"):
                     # Rapid move - pen should be up
                     if pen_down:
-                        f.write("M3 S30 ; PEN UP\n")
+                        f.write(f"M3 S{GRBL_PEN_UP_S} ; PEN UP\n")
                         pen_down = False
                     f.write(f"{line}\n")
                 elif line.startswith("G1") or line.startswith("G01"):
                     # Linear move - pen should be down
                     if not pen_down:
-                        f.write("M3 S50 ; PEN DOWN\n")
+                        f.write(f"M3 S{GRBL_PEN_DOWN_S} ; PEN DOWN\n")
                         pen_down = True
                     f.write(f"{line}\n")
                 else:
@@ -216,7 +221,7 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode, origin):
 
             # Write footer
             f.write("\n")
-            f.write("M3 S30 ; PEN UP\n")
+            f.write(f"M3 S{GRBL_PEN_UP_S} ; PEN UP\n")
             f.write("G28 ; Return home\n")
             f.write("M30 ; Program end\n")
 

@@ -35,10 +35,39 @@ class VpypeConverter:
     def convert(self, svg_file, output_file, origin=(0, 0, 0)):
         """Convert SVG to G-code using vpype with optimization"""
         try:
+            # Import experimental settings
+            try:
+                from config.config import (
+                    GRBL_EXPERIMENTAL_SIMPLIFICATION,
+                    GRBL_SIMPLIFICATION_TOLERANCE,
+                    GRBL_MERGE_TOLERANCE
+                )
+            except ImportError:
+                GRBL_EXPERIMENTAL_SIMPLIFICATION = False
+                GRBL_SIMPLIFICATION_TOLERANCE = 0.05
+                GRBL_MERGE_TOLERANCE = 0.1
+
             # Use built-in gcode profile, then post-process for servo commands
             temp_gcode = output_file + ".temp"
 
-            cmd = ["vpype", "read", svg_file, "linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcode", temp_gcode]
+            # Build command based on experimental settings
+            cmd = ["vpype", "read", svg_file]
+
+            if GRBL_EXPERIMENTAL_SIMPLIFICATION:
+                print(f"[EXPERIMENTAL] Using path simplification (tolerance: {GRBL_SIMPLIFICATION_TOLERANCE}mm)")
+                cmd.extend([
+                    "linemerge", "--tolerance", f"{GRBL_MERGE_TOLERANCE}mm",
+                    "linesimplify", "--tolerance", f"{GRBL_SIMPLIFICATION_TOLERANCE}mm",
+                    "linesort"
+                ])
+            else:
+                print("[STANDARD] Using high-quality mode (no simplification)")
+                cmd.extend([
+                    "linemerge", "--tolerance", "0.1mm",
+                    "linesort"
+                ])
+
+            cmd.extend(["gwrite", "--profile", "gcode", temp_gcode])
 
             print(f"[INFO] Kör vpype optimering: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)

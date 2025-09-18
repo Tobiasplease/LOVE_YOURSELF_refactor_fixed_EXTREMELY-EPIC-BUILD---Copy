@@ -923,6 +923,7 @@ def ensure_pen_up_critical_safety(ser, context="general", use_repeats=True):
 
 def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     """Execute G-code file line by line with proper waiting"""
+    print(f"🎨 [DEBUG] GRBL EXECUTION STARTING: {gcode_file}")
     log_json_entry(
         LogType.GRBL,
         {"message": "Starting G-code file execution", "action": "gcode_execution_start", "file": gcode_file, "timeout": move_timeout},
@@ -1179,6 +1180,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         print(f"[⚠️] Could not update drawing state: {e}")
     
     # Step 2: Home the machine and pause for completion ritual
+    print(f"🏠 [DEBUG] COMPLETION RITUAL STARTING")
     try:
         log_json_entry(
             LogType.GRBL,
@@ -1327,26 +1329,41 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
             print_message="[✅] Completion ritual finished at home - idle movements will handle positioning",
         )
         # Notify any runtime hook that GRBL drawing has finished
+        # CRITICAL: Hook must run BEFORE clearing CNC state to allow proper coordination
+        hook_completed_successfully = False
         try:
             from utils.hooks import on_grbl_drawing_complete
+            print(f"[DEBUG] GRBL completion hook check: callable={callable(on_grbl_drawing_complete)}")
             if callable(on_grbl_drawing_complete):
+                print(f"[DEBUG] Calling GRBL completion hook (BEFORE clearing CNC state)")
                 on_grbl_drawing_complete()
+                hook_completed_successfully = True
+                print(f"[DEBUG] GRBL completion hook finished successfully")
+            else:
+                print(f"[DEBUG] No GRBL completion hook registered")
+                hook_completed_successfully = True
         except Exception as e:
             print(f"[hooks] on_grbl_drawing_complete error: {e}")
-        
+            hook_completed_successfully = True  # Continue anyway
+
     except Exception as e:
         log_json_entry(
             LogType.ERROR,
             {"message": f"Completion ritual failed: {e}", "component": "grbl", "error": str(e)},
             print_message=f"[❌] Completion ritual failed: {e}",
         )
-    
-    # Step 5: Clear CNC execution state to allow idle movements to resume
-    try:
-        from utils.state_manager import state_manager
-        state_manager.finish_cnc_execution()
-    except Exception as e:
-        print(f"[⚠️] Could not clear CNC execution state: {e}")
+        hook_completed_successfully = True  # Continue anyway
+
+    # Step 5: Clear CNC execution state AFTER hook completes to allow proper coordination
+    if hook_completed_successfully:
+        try:
+            from utils.state_manager import state_manager
+            print(f"[DEBUG] Clearing CNC execution state AFTER hook completion")
+            state_manager.finish_cnc_execution()
+        except Exception as e:
+            print(f"[⚠️] Could not clear CNC execution state: {e}")
+    else:
+        print(f"[DEBUG] Skipping CNC state clear due to hook failure")
     
     # Step 6: Stop lightbulb fluctuation after completion ritual
     try:
@@ -1430,6 +1447,7 @@ def process_svg_to_grbl(
     feed_rate=DEFAULT_FEED_RATE,
     use_absolute_positioning=False,
 ):
+    print(f"🎯 [DEBUG] PROCESS_SVG_TO_GRBL CALLED: execute_grbl={execute_grbl}")
     """
     Process SVG to G-code and optionally execute on GRBL hardware
 
@@ -1540,12 +1558,25 @@ def process_svg_to_grbl(
                 
                 # Re-raise any errors that occurred in the thread
                 if gcode_error:
+                    print(f"🚨 [DEBUG] GCODE_ERROR OCCURRED: {gcode_error}")
                     raise gcode_error
+
+                print(f"🎯 [DEBUG] GCODE EXECUTION COMPLETED SUCCESSFULLY")
                 log_json_entry(
                     LogType.GRBL,
                     {"message": "Drawing complete", "action": "drawing_complete", "gcode_file": output_file_adjusted},
                     print_message="[✅] Drawing complete!",
                 )
+
+                # CRITICAL: Perform completion ritual after drawing finishes
+                # This homes the machine and triggers the uArm hook
+                print(f"🏁 [DEBUG] CALLING COMPLETION RITUAL AFTER DRAWING")
+                try:
+                    perform_completion_ritual_with_self_critique(ser, svg_input, output_file_adjusted)
+                except Exception as e:
+                    print(f"[WARNING] Completion ritual failed: {e}")
+                    # Don't fail the whole process if completion ritual fails
+
                 try:
                     ser.close()
                 except Exception:

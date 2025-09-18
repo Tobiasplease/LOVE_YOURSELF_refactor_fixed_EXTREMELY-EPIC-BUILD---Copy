@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+print("🚀 [DEBUG] MACHINE.PY STARTING UP")
+
 import argparse
 import atexit
 import glob
@@ -6,6 +9,8 @@ import signal
 import sys
 import threading
 import time
+
+print("🚀 [DEBUG] BASIC IMPORTS COMPLETE")
 
 import cv2
 
@@ -241,17 +246,8 @@ if USE_SERVO:
             servos = ServoController(port=servo_port, baudrate=BAUD_RATE)
             debug_print(f"Servo controller initialized on {servo_port}", "INIT")
             
-            # Perform startup movement sequence in background thread
-            from vision.gaze import startup_movement_sequence
-            import threading
-            startup_thread = threading.Thread(
-                target=startup_movement_sequence,
-                args=(servos, 5.0),
-                daemon=True,
-                name="StartupMovement"
-            )
-            startup_thread.start()
-            debug_print("Startup movement sequence running in background", "INIT")
+            # Startup movement sequence disabled to prevent timing conflicts
+            debug_print("Servo controller ready - skipping startup sequence", "INIT")
             
         except Exception as e:
             print(f"ERROR: Servo controller init failed on {servo_port}: {e}")
@@ -653,9 +649,11 @@ image_monitor.on_image_complete = on_drawing_complete
 image_monitor.start()
 
 # Register GRBL-complete hook to trigger uArm after actual G-code completion
+print("🔥 [DEBUG] STARTING HOOK REGISTRATION BLOCK")
 try:
     import utils.hooks as _hooks
-    from config.config import UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+    from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+    print(f"🔥 [DEBUG] Hook setup: USE_UARM={USE_UARM}, UARM_PLAY_AFTER_DRAW={UARM_PLAY_AFTER_DRAW}, UARM_PLAY_FILE={UARM_PLAY_FILE}")
     if USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE:
         def _normalize_smooth(path: str) -> str:
             base, ext = os.path.splitext(path)
@@ -664,10 +662,20 @@ try:
             return f"{base}{ext or '.txt'}"
 
         def _uarm_after_grbl():
+            print(f"[DEBUG] _uarm_after_grbl() called - starting papermove sequence")
             def _run():
                 try:
-                    from grbl.idle_movement_manager import pause_for_drawing, resume_after_drawing
-                    pause_for_drawing()
+                    from grbl.idle_movement_manager import pause_for_drawing, resume_after_drawing, get_manager
+
+                    # Force pause idle movements regardless of CNC state
+                    # (since we're in transition period between GRBL completion and uArm execution)
+                    manager = get_manager()
+                    if manager.process and manager.process.poll() is None:
+                        print("[DEBUG] Force pausing idle movements for uArm sequence")
+                        manager.pause_for_drawing()
+                    else:
+                        print("[DEBUG] No idle movements running to pause")
+
                     target = _normalize_smooth(UARM_PLAY_FILE)
                     app = None
                     try:
@@ -689,22 +697,51 @@ try:
                         app.play_file = target
                     print(f"[uArm] Post-GRBL play: {os.path.basename(getattr(app, 'play_file', target))}")
                     app.play()
+
+                    # Wait for actual movement completion instead of fixed 30s delay
+                    if hasattr(app, 'teach') and app.teach:
+                        print("[uArm] Waiting for movement completion...")
+                        timeout = 60.0  # Maximum wait time
+                        start_time = time.time()
+                        while (app.teach.is_playing() and
+                               (time.time() - start_time) < timeout):
+                            time.sleep(0.5)
+
+                        if app.teach.is_playing():
+                            print("[uArm] Movement timeout - forcing completion")
+                        else:
+                            print("[uArm] Movement completed successfully")
+                    else:
+                        # Fallback to shorter fixed delay if we can't track completion
+                        print("[uArm] Using fallback 15s delay")
+                        time.sleep(15.0)
+
                 except Exception as e:
                     print(f"[uArm] Post-GRBL play failed: {e}")
                 finally:
+                    # Brief pause to ensure arm settles before resuming CNC movements
                     try:
-                        time.sleep(30.0)
+                        time.sleep(2.0)
                     except Exception:
                         pass
                     try:
                         resume_after_drawing()
                     except Exception:
                         pass
-            threading.Thread(target=_run, daemon=True, name="UArmAfterGRBL").start()
+
+            # Run synchronously to ensure GRBL waits for uArm completion before clearing CNC state
+            print("[DEBUG] Running uArm sequence synchronously to coordinate with GRBL")
+            _run()
+            print("[DEBUG] uArm sequence completed, GRBL can now clear CNC state")
 
         _hooks.on_grbl_drawing_complete = _uarm_after_grbl
-except Exception:
-    pass
+        print(f"🔥 [DEBUG] GRBL hook registered successfully - uArm will trigger after drawing completion")
+    else:
+        print(f"[DEBUG] GRBL hook NOT registered - condition failed")
+except Exception as e:
+    print(f"[DEBUG] GRBL hook registration failed: {e}")
+    import traceback
+    traceback.print_exc()
 
 # Load previous session state if available
 debug_print("Loading previous session state", "INIT")

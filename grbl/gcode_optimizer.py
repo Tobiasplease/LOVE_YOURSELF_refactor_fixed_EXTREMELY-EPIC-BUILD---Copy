@@ -98,27 +98,29 @@ class GCodeOptimizer:
         return x, y
 
     def calculate_optimal_feed_rate(self, distance: float) -> int:
-        """Calculate optimal feed rate based on movement distance"""
+        """Calculate optimal feed rate based on movement distance - small movements should be FASTER"""
         if not self.enable_feed_optimization:
             return self.base_feed_rate
 
-        # For micro-movements, use a reasonable minimum speed instead of scaling down
+        # INVERTED LOGIC: Smaller movements = higher feed rates
+        # Complex drawings with tiny movements should go fast, not slow!
+
         if distance < self.micro_stroke_threshold:
-            return max(self.min_feed_rate, 3000)  # Minimum 3000 mm/min for micro-strokes
+            # Micro-movements get the highest speed - they're often in clusters
+            return self.max_feed_rate
 
         if distance <= self.small_move_threshold:
-            # Small movements: use slower feed rate but not too slow
-            factor = distance / self.small_move_threshold
-            feed_rate = self.min_feed_rate + (self.base_feed_rate - self.min_feed_rate) * factor
-            # Ensure minimum reasonable speed
-            feed_rate = max(feed_rate, 2500)
-        elif distance >= self.large_move_threshold:
-            # Large movements: use faster feed rate
-            feed_rate = self.max_feed_rate
-        else:
-            # Medium movements: interpolate between base and max
-            factor = (distance - self.small_move_threshold) / (self.large_move_threshold - self.small_move_threshold)
+            # Small movements get faster feed rates (inverted scaling)
+            factor = 1.0 - (distance / self.small_move_threshold)  # Inverted: smaller = higher factor
             feed_rate = self.base_feed_rate + (self.max_feed_rate - self.base_feed_rate) * factor
+            return int(feed_rate)
+        elif distance >= self.large_move_threshold:
+            # Large movements can be slower for better control
+            feed_rate = max(self.min_feed_rate, self.base_feed_rate * 0.8)
+        else:
+            # Medium movements: interpolate between base and slower for large moves
+            factor = (distance - self.small_move_threshold) / (self.large_move_threshold - self.small_move_threshold)
+            feed_rate = self.base_feed_rate - (self.base_feed_rate * 0.2 * factor)  # Gradually slower
 
         return int(feed_rate)
 
@@ -341,8 +343,12 @@ class GCodeOptimizer:
                         optimized_line = f"M3 S{self.fast_pen_down} ; PEN DOWN (fast)"
                     optimized_lines.append(optimized_line)
                 else:
-                    # Use normal pen values
-                    optimized_lines.append(line)
+                    # Use normal pen values (apply optimization to all pen commands)
+                    if "PEN UP" in line:
+                        optimized_line = f"M3 S{self.normal_pen_up} ; PEN UP"
+                    else:
+                        optimized_line = f"M3 S{self.normal_pen_down} ; PEN DOWN"
+                    optimized_lines.append(optimized_line)
 
             else:
                 # Pass through other commands unchanged

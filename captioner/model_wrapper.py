@@ -137,6 +137,15 @@ class MultimodalModel:
         except Exception:
             pass
 
+        # If using multi-step analysis, the prompt IS the final result, don't call LLM again
+        try:
+            from config.config import USE_MULTI_STEP_DRAWING_ANALYSIS
+            if USE_MULTI_STEP_DRAWING_ANALYSIS:
+                return prompt  # Multi-step analysis already returns the final drawing prompt
+        except ImportError:
+            pass
+
+        # For single-prompt approach, call LLM
         return self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="drawing")
 
     def query_tinyllama(self, prompt: str) -> str:

@@ -15,6 +15,7 @@ from .prompts import (
     STATIC_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     build_drawing_prompt,
+    context_rich_multi_step_drawing_analysis,
     build_environmental_caption_prompt,
     build_ongoing_caption_prompt,
     build_reflection_prompt,
@@ -127,7 +128,20 @@ class PromptInterface:
         if not memory_ref:
             return None, None, None
 
-        prompt = build_drawing_prompt(memory_ref, extra=extra, image_path=image_path)
+        # Choose between multi-step context-rich analysis or single-prompt approach
+        try:
+            from config.config import USE_MULTI_STEP_DRAWING_ANALYSIS
+            use_multi_step = USE_MULTI_STEP_DRAWING_ANALYSIS
+        except ImportError:
+            use_multi_step = False  # Fallback to single-prompt
+
+        if use_multi_step:
+            print("[🎨] Using context-rich multi-step drawing analysis")
+            prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
+        else:
+            print("[🎨] Using single-prompt drawing analysis")
+            prompt = build_drawing_prompt(memory_ref, extra=extra, image_path=image_path)
+
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
 
@@ -140,17 +154,56 @@ class PromptInterface:
 
         model_options.update(
             {
-                "temperature": drawing_temp,
+                "temperature": max(drawing_temp - 0.2, 0.8),  # Slightly lower temperature for more focused responses
                 "top_p": 0.9,
-                "repeat_penalty": 1.3,
+                "repeat_penalty": 1.2,  # Lower repeat penalty to allow detailed responses
                 "top_k": 40,
-                "num_predict": max(model_options.get("num_predict", 160), 140),
+                "num_predict": max(model_options.get("num_predict", 500), 400),  # Much longer responses for comprehensive analysis
             }
         )
 
-        drawing_system_prompt = DRAWING_SYSTEM_PROMPT
+        # Build rich contextual drawing system prompt with variables (like main SYSTEM_PROMPT)
+        drawing_system_prompt = self._build_drawing_system_prompt_with_context(memory_ref)
 
         return prompt, model_options, drawing_system_prompt
+
+    def _build_drawing_system_prompt_with_context(self, memory_ref) -> str:
+        """Build drawing system prompt with rich contextual variables like main SYSTEM_PROMPT."""
+
+        # Get temporal context
+        temporal_context = ""
+        if hasattr(memory_ref, "temporal_prompt_lines"):
+            tlines = memory_ref.temporal_prompt_lines()
+            if tlines:
+                temporal_context = " ".join(tlines[:2]) + ". "  # Keep it concise for system prompt
+
+        # Get accumulated understanding
+        accumulated_understanding = ""
+        try:
+            from captioner.context_compression import context_compressor
+            understanding = context_compressor.get_consolidated_understanding()
+            if understanding:
+                # Truncate for system prompt
+                accumulated_understanding = understanding[:200] + "... " if len(understanding) > 200 else understanding + " "
+        except Exception:
+            pass
+
+        # Get emotional state description
+        emotional_state = ""
+        try:
+            if hasattr(memory_ref, "describe_current_mood") and callable(memory_ref.describe_current_mood):
+                emotional_state = memory_ref.describe_current_mood()
+            else:
+                emotional_state = "aware and focused"
+        except Exception:
+            emotional_state = "aware and focused"
+
+        # Format the system prompt with context
+        return DRAWING_SYSTEM_PROMPT.format(
+            temporal_context=temporal_context,
+            accumulated_understanding=accumulated_understanding,
+            emotional_state=emotional_state
+        )
 
     def _get_emotional_context(self) -> str:
         """Get current emotional context from compression system for prompt injection."""
