@@ -204,12 +204,35 @@ def _build_structured_context(prompt_parts: List[str]) -> str:
 
 
 def _build_semantic_bridge(last_thought: str, social_context: str, agent) -> str:
-    """Build semantic continuity that flows from previous thought without textual repetition."""
+    """Build semantic continuity that flows from previous thought with subconscious guidance."""
     if not last_thought or len(last_thought.strip()) < 10:
         return "Your thoughts begin to form as you take in this space..."
 
-    # Instead of creating bridge statements, instruct for DIRECT continuation
-    return f"""CONTINUE YOUR PREVIOUS THOUGHT:
+    # Get subconscious contextual guidance
+    try:
+        from captioner.subconscious import subconscious_synthesizer
+
+        # Try to get reactivity data from the agent if available
+        reactivity_data = getattr(agent, '_current_reactivity_data', None)
+
+        subconscious_guidance = subconscious_synthesizer.synthesize_context_guidance(
+            agent=agent,
+            last_thought=last_thought,
+            reactivity_data=reactivity_data,
+            temporal_context=social_context
+        )
+
+        return f"""CONTINUE YOUR PREVIOUS THOUGHT:
+Your last thought was: "{last_thought[-100:]}..."
+
+{subconscious_guidance}
+
+Continue this thought naturally, staying grounded in what you actually see.
+Don't start fresh observations. Build on the previous thought while staying visual."""
+
+    except Exception as e:
+        # Fallback to original approach if subconscious layer fails
+        return f"""CONTINUE YOUR PREVIOUS THOUGHT:
 Your last thought was: "{last_thought[-100:]}..."
 
 Continue this thought naturally BUT stay grounded in what you actually see.

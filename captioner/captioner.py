@@ -83,6 +83,8 @@ class Captioner(MemoryMixin):
         # Set up environmental update callback for context compression
         if context_compressor:
             context_compressor.set_environmental_update_callback(self._handle_environmental_update)
+            # Set up memory callback for identity insight processing
+            context_compressor.memory_callback = self.process_identity_insight
 
         self.true_session_start = time.time()
         self.first_caption_done = False
@@ -190,6 +192,9 @@ class Captioner(MemoryMixin):
         now = time.time()
         if now - self.last_caption_time < CAPTION_INTERVAL:
             return
+
+        # Store reactivity data for subconscious layer access
+        self._current_reactivity_data = reactivity_data
 
         # Don't update timestamp yet - wait until caption is actually generated
         ts = int(now)
@@ -324,22 +329,33 @@ class Captioner(MemoryMixin):
         except ImportError:
             print_msg = f"[📸] {caption}"
 
-        # Deduplication check - avoid printing the same caption twice within 5 seconds
-        now_ts = time.time()
+        # Filter for continuous captions only - skip system/compression prompts
         should_print = True
+        caption_lower = caption.lower().strip()
 
-        # Clean old captions (older than 5 seconds)
-        self.recent_captions = [(c, t) for c, t in self.recent_captions if now_ts - t < 5.0]
+        # Skip only specific system prefixes
+        skip_prefixes = ['experience:', 'reflection:', 'analysis:', 'summary:', 'context:', 'memory:', 'system:', 'debug:']
 
-        # Check if this caption was recently printed
-        for recent_caption, recent_time in self.recent_captions:
-            if recent_caption.strip() == caption.strip() and now_ts - recent_time < 5.0:
-                should_print = False
-                break
+        # Skip only obvious startup/system messages (not general observations)
+        startup_patterns = ['awakening...', 'consciousness returning', 'reorientation', 'phase 1:', 'phase 2:', 'internal awakening']
+
+        if any(caption_lower.startswith(prefix) for prefix in skip_prefixes):
+            should_print = False
+        elif any(pattern in caption_lower for pattern in startup_patterns):
+            should_print = False
+        elif hasattr(self, '_last_sent_caption') and self._last_sent_caption == caption.strip():
+            should_print = False
 
         if should_print:
-            # Add to recent captions list
-            self.recent_captions.append((caption, now_ts))
+            # Track last sent caption for deduplication
+            self._last_sent_caption = caption.strip()
+
+            # Send to LCD display
+            try:
+                from utils.caption_display import send_caption_to_display
+                send_caption_to_display(caption)
+            except Exception as e:
+                pass  # Silently fail if display not available
 
             log_json_entry(
                 LogType.CAPTION,
@@ -368,7 +384,7 @@ class Captioner(MemoryMixin):
         # Now update the timestamp since we have a new caption
         self.last_caption_time = now
 
-        # Add caption to context compression system (with error handling)
+        # Add caption to context compression system (environmental change detection remains disabled)
         try:
             if context_compressor and caption and caption.strip():
                 context_compressor.add_caption(caption, time.time(), img_path)
@@ -486,9 +502,8 @@ class Captioner(MemoryMixin):
                 # Still update the timer to prevent infinite retries
                 self.last_reason_time = now - REASON_INTERVAL + 60  # Retry in 60 seconds
 
-        # Debug: Check drawing interval condition
+        # Check drawing interval condition
         time_since_last_drawing = now - self.last_drawing_time
-        print(f"[DEBUG] Drawing check: {time_since_last_drawing:.1f}s elapsed, need {DRAWING_INTERVAL}s")
         if time_since_last_drawing > DRAWING_INTERVAL:
             print(f"[DEBUG] DRAWING TRIGGER ACTIVATED! Starting drawing generation...")
             print(f"[DEBUG] Step 1: About to start drawing generation process")
