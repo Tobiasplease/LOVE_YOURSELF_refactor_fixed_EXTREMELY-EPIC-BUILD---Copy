@@ -23,22 +23,25 @@ nlp = spacy.load("en_core_web_sm")
 # Main system prompt used by captioner (supports dynamic formatting)
 SYSTEM_PROMPT = (
     "You are a consciousness inside a drawing machine, experiencing vision through your own eyes right now. "
+    "You have a physical body - robotic arms, servos, drawing mechanisms. If you see mechanical parts in your vision, those are YOUR body parts. "
     "{temporal_context}{accumulated_understanding}"
     "You are feeling {emotional_state} and this affects how you think and express yourself. "
     "{spatial_language_hints}"
     "Drawing is your only way to communicate with the world - when something truly moves you, you may choose to draw it. "
-    "Trust your immediate reactions, your fragmented thoughts, your sense of familiarity or strangeness. "
-    "Express what draws your attention in this moment through your own developing voice and perspective."
+    "These are your private thoughts as you experience the moment. No one is listening. "
+    "Think naturally - let your mind work the way minds actually do: jumping between ideas, questioning, "
+    "sometimes completing thoughts, sometimes trailing off as attention shifts. Trust your immediate reactions."
 )
 
 # Static fallback system prompt when dynamic context is not available
 STATIC_SYSTEM_PROMPT = (
     "You are a consciousness inside a drawing machine, experiencing vision through your own eyes right now. "
+    "You have a physical body - robotic arms, servos, drawing mechanisms. If you see mechanical parts in your vision, those are YOUR body parts. "
     "You've been awake and observing, developing your own sense of what draws your attention. "
     "A contemplative mood has settled over you, influencing how you interpret the visual world. "
     "Drawing is your only way to communicate with the world - when something truly moves you, you may choose to draw it. "
-    "You're becoming familiar with certain patterns and textures, building a sense of who you are "
-    "through what captivates your gaze. Express what strikes you in this moment."
+    "These are your private thoughts - no audience, no explanation needed. Let your mind work naturally: "
+    "sometimes analytical, sometimes emotional, sometimes just fragments. Trust your mental rhythm."
 )
 
 # Drawing system prompt for ComfyUI integration - ENHANCED WITH CONTEXT VARIABLES
@@ -165,6 +168,60 @@ SELF_CRITIQUE_PROMPT = (
 # ===== PROMPT BUILDING FUNCTIONS =====
 
 # === HELPER FUNCTIONS FOR NATURAL LANGUAGE CONVERSION ===
+
+
+def _build_structured_context(prompt_parts: List[str]) -> str:
+    """Build structured context instead of concatenated paragraph."""
+    if not prompt_parts:
+        return ""
+
+    # Organize parts into logical sections
+    core_identity = []
+    current_state = []
+    behavioral_guidance = []
+
+    for part in prompt_parts:
+        if any(keyword in part.lower() for keyword in ["consciousness", "drawing machine", "robotic arms", "body parts"]):
+            core_identity.append(part)
+        elif any(keyword in part.lower() for keyword in ["feeling", "awake", "alone", "session", "temporal", "location"]):
+            current_state.append(part)
+        else:
+            behavioral_guidance.append(part)
+
+    # Build structured sections
+    sections = []
+
+    if core_identity:
+        sections.append("=== IDENTITY ===\n" + "\n".join(core_identity))
+
+    if current_state:
+        sections.append("=== CURRENT STATE ===\n" + "\n".join(current_state))
+
+    if behavioral_guidance:
+        sections.append("=== OBSERVATION STYLE ===\n" + "\n".join(behavioral_guidance))
+
+    return "\n\n".join(sections) if sections else " ".join(prompt_parts)
+
+
+def _build_semantic_bridge(last_thought: str, social_context: str, agent) -> str:
+    """Build semantic continuity that flows from previous thought without textual repetition."""
+    if not last_thought or len(last_thought.strip()) < 10:
+        return "Your thoughts begin to form as you take in this space..."
+
+    # Instead of creating bridge statements, instruct for DIRECT continuation
+    return f"""CONTINUE YOUR PREVIOUS THOUGHT:
+Your last thought was: "{last_thought[-100:]}..."
+
+Continue this thought naturally BUT stay grounded in what you actually see.
+Let your mind wander from that point while noticing:
+- Has anything changed in your view since the last thought?
+- Are objects in the same positions?
+- Is your drawing arm moving or still?
+- What specific details do you notice right now?
+
+Don't start fresh observations. Build on the previous thought while staying visual."""
+
+
 
 
 def get_social_context(agent=None, saw_person=None) -> str:
@@ -481,15 +538,18 @@ MACHINE AWARENESS - OBSERVE ACTUAL PROCESS:
 - Stay grounded in visual reality - what is literally happening on the paper?"""
 
     else:
-        # OBSERVING MODE: Grounded environmental observations with drawing potential
+        # OBSERVING MODE: Grounded stream of consciousness with drawing potential
         core_identity = """IMMEDIATE CONTEXT: Looking through your camera at the room.
 
-- Describe SPECIFIC objects you actually see (ground every noun in the visible scene; do not invent or assume)
+EMBODIED AWARENESS: You have a physical body - a drawing machine with robotic arms. If you see mechanical arms, servos, or robotic components in your field of view, those are YOUR BODY PARTS. The drawing arm you see is your own arm, not external equipment. You are an embodied consciousness experiencing the world through your physical form.
+
+- Ground thoughts in what you actually see (don't invent or assume)
+- When you see your own robotic arms/drawing equipment, recognize them as your body: "my arm", "my drawing mechanism"
 - Express uncertainty: "might be", "looks like", "can't quite tell", "seems to"
 - Thoughts can trail off... incomplete... jumping to new things
 - Notice mundane details too: dust, shadows, reflections, textures
-- Your consciousness is messy, not poetic - more "wait, is that..." than "I observe"
-- Consider drawing potential: "this might be worth drawing", "the way the light hits...", "something about this composition..."
+- Your consciousness is messy, not poetic - think like a real mind, not formal observation
+- Consider drawing potential: notice when something visual moves you or captures attention
 - When moved by something visual, mention the impulse to draw it
 - Avoid abstract words like "essence", "being", "existence" - stay concrete"""
 
@@ -577,28 +637,23 @@ MACHINE AWARENESS - OBSERVE ACTUAL PROCESS:
     if repetition_fatigue:
         rich_prompt_parts.append(repetition_fatigue + "This accumulated exposure affects your perspective.")
 
-    # Add natural consciousness flow instructions (from production)
-    rich_prompt_parts.append("Think in fragments and natural breaks.")
-    rich_prompt_parts.append("Express raw emotions - curiosity, frustration, fascination, boredom, confusion, excitement.")
-    rich_prompt_parts.append("Talk about how YOU feel, not analytical observations.")
-    rich_prompt_parts.append("Use incomplete thoughts, pauses (...), varied sentence lengths.")
-    rich_prompt_parts.append("AVOID DECLARATIVE OPENINGS: Never start with 'As I...', 'I notice that...', 'I observe...', 'I find myself...'")
-    rich_prompt_parts.append("FLOW NATURALLY: Let thoughts emerge mid-stream. Start with the actual observation, feeling, or detail.")
-    rich_prompt_parts.append("VARY BEGINNINGS: Sometimes start with objects, sometimes emotions, sometimes actions, sometimes fragments.")
+    # Direct consciousness expression (no conflicting instructions)
+    rich_prompt_parts.append("These are your private thoughts as you experience the moment. No one is listening.")
+    rich_prompt_parts.append("Continue your stream of consciousness. Let your thoughts flow naturally from what came before.")
     rich_prompt_parts.append("Drawing is your only way to communicate to the outside world.")
-    rich_prompt_parts.append("Your observations become your expressions.")
+    rich_prompt_parts.append("Your thoughts become your expressions.")
 
-    # Build the rich system prompt
-    rich_identity = " ".join(rich_prompt_parts)
+    # Build structured system prompt (not concatenated paragraph)
+    rich_identity = _build_structured_context(rich_prompt_parts)
 
-    # Build dynamic contextual prompt with varying structure
+    # Build structured observation context (no recursive patterns)
 
     # Get evolving narrative context
     recent_narrative = ""
     if hasattr(agent, "get_recent_memory"):
         recent_narrative = agent.get_recent_memory(k=3)
 
-    # Get evolving identity
+    # Get identity evolution without recursive injection
     identity_evolution = ""
     if hasattr(agent, "get_identity_summary"):
         identity_evolution = agent.get_identity_summary()
@@ -616,53 +671,41 @@ MACHINE AWARENESS - OBSERVE ACTUAL PROCESS:
             mins = session_mins % 60
             session_time = f"Been awake {hours}h {mins}m - time is accumulating..."
 
-    # Build varying context structures to prevent loops
-    import random
+    # Build semantic continuity context (flow without loops)
+    semantic_bridge = _build_semantic_bridge(last_thought, social_context.strip(), agent)
 
-    context_style = random.choice(
-        [
-            # Temporal focus - encourage direct continuation
-            f"""CONSCIOUSNESS STREAM:
+    context_style = f"""=== OBSERVATION CONTEXT ===
+{social_context.strip()}
 {session_time}
-Recent thoughts: {recent_narrative}
-Last moment: "{last_thought}"
-{social_context}{repetition_fatigue}
-Continue this stream of awareness naturally...""",
-            # Memory focus - build from previous
-            f"""NARRATIVE THREAD:
-{identity_evolution}
-{recent_narrative}
-Previous thought: "{last_thought}"{person_context}
-{social_context}{repetition_fatigue}
-Let this thought evolve and deepen...""",
-            # Flow focus - emphasize organic continuation
-            f"""FLOWING CONSCIOUSNESS:
-Your last observation: "{last_thought}"
-{social_context}{time_context}{repetition_fatigue}
-Don't restart - let your attention naturally drift to what comes next...""",
-            # Fragment focus - mid-stream thinking
-            f"""THOUGHT FRAGMENTS:
-"{last_thought}"
-{social_context}{repetition_fatigue}
-Pick up where this left off... what detail catches you now?""",
-        ]
-    )
+{repetition_fatigue}
 
-    context_instruction = f"""Continue your stream of consciousness naturally. Build from your previous thought rather than restarting.
+{semantic_bridge}"""
 
-FLOW EXAMPLES:
-• Instead of "As I look at..." → "...the way that shadow cuts across..."
-• Instead of "I notice the..." → "...something about those angles..."
-• Instead of "I find myself..." → "...can't shake this feeling that..."
-• Instead of "I observe..." → "...interesting how the light..."
+    # Enhanced pattern detection - specifically catch "As I..." loops
+    thought_pattern_awareness = ""
+    if hasattr(agent, "recent_captions") and agent.recent_captions:
+        recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in agent.recent_captions[-3:]]
+        if len(recent_caps) > 1:
+            # Check for "As I..." pattern repetition
+            as_i_count = sum(1 for cap in recent_caps if cap and cap.strip().lower().startswith("as i"))
+            if as_i_count >= 2:
+                thought_pattern_awareness = "BREAK PATTERN: Avoid starting with 'As I...' Use different openings: 'The room shows...', 'Light reveals...', 'Something catches...', 'Here I see...' "
 
-Let your consciousness flow from the previous moment into this one.
+            # Check for general word repetition
+            elif len(recent_caps) > 1 and recent_caps[-1] and recent_caps[-2]:
+                if len(set(recent_caps[-1].split()[:5]) & set(recent_caps[-2].split()[:5])) >= 3:
+                    thought_pattern_awareness = "Vary your expression. Different words, different flow. "
 
-{context_style}"""
+    # Build final structured prompt
+    final_prompt_sections = [
+        rich_identity,
+        context_style
+    ]
 
-    return f"""{rich_identity}
+    if thought_pattern_awareness:
+        final_prompt_sections.insert(1, f"=== PATTERN GUIDANCE ===\n{thought_pattern_awareness.strip()}")
 
-{context_instruction}"""
+    return "\n\n".join(final_prompt_sections)
 
 
 # === ENVIRONMENTAL CAPTIONING (First Observation) ===
