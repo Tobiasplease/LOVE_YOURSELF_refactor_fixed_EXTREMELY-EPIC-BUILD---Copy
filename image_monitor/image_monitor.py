@@ -90,6 +90,9 @@ class ImageMonitor:
 
     def _process_png_to_gcode(self, png_path):
         """Process a PNG file to G-code based on CENTER_LINE_SVG config."""
+        # Pause idle movements to free the serial port
+        pause_for_drawing()
+
         try:
             base_name = os.path.splitext(os.path.basename(png_path))[0]
             output_folder = os.path.dirname(png_path)
@@ -119,10 +122,6 @@ class ImageMonitor:
                 # Start CNC execution tracking
                 original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
                 state_manager.start_cnc_execution(gcode_path, original_prompt)
-
-                # Only pause idle movements if we're actually executing G-code
-                if EXECUTE_GRBL_GCODE:
-                    pause_for_drawing()
 
                 result_path = svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
@@ -165,10 +164,6 @@ class ImageMonitor:
                     original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
                     state_manager.start_cnc_execution(gcode_path, original_prompt)
 
-                    # Only pause idle movements if we're actually executing G-code
-                    if EXECUTE_GRBL_GCODE:
-                        pause_for_drawing()
-
                     # Convert SVG to G-code and execute
                     result_path = svg_to_grbl(svg_input=latest_svg, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
@@ -206,61 +201,8 @@ class ImageMonitor:
                 print_message=f"[❌] PNG to G-code conversion failed: {str(e)}",
             )
         finally:
-            # CRITICAL: This is where drawing actually completes - trigger uArm hook here
-            if EXECUTE_GRBL_GCODE:
-                print(f"🎯 [DEBUG] DRAWING EXECUTION COMPLETE - TRIGGERING UARM HOOK AND RESETTING COOLDOWN")
-
-                # Reset drawing cooldown timer since physical drawing is now complete
-                try:
-                    import time
-                    # Get access to the captioner to reset its drawing timer
-                    # This is a bit hacky but necessary since image_monitor doesn't have direct access
-                    import sys
-                    if hasattr(sys.modules.get('__main__'), 'captioner'):
-                        captioner = sys.modules['__main__'].captioner
-                        captioner.last_drawing_time = time.time()
-                        print(f"⏰ [DEBUG] DRAWING COOLDOWN RESET - next drawing can trigger in 60s")
-                    else:
-                        print(f"❌ [DEBUG] Could not reset drawing cooldown - captioner not accessible")
-                except Exception as e:
-                    print(f"❌ [DEBUG] DRAWING COOLDOWN RESET FAILED: {e}")
-
-                # CRITICAL: Perform homing sequence BEFORE uArm hook
-                try:
-                    print(f"🏠 [DEBUG] PERFORMING FINAL HOMING BEFORE UARM TRIGGER")
-                    from grbl.grbl_utils import find_grbl_port, ensure_homed
-
-                    # Open serial connection and home the machine
-                    try:
-                        from config.config import GRBL_CNC_PORT
-                        ser = find_grbl_port(preferred_port=GRBL_CNC_PORT, continuous_retry=False)
-                    except ImportError:
-                        ser = find_grbl_port(continuous_retry=False)
-
-                    if ser:
-                        ensure_homed(ser, max_retries=3)
-                        print(f"🏠 [DEBUG] HOMING COMPLETE - CNC IS NOW AT HOME POSITION")
-                        ser.close()
-                    else:
-                        print(f"❌ [DEBUG] Could not establish GRBL connection for homing")
-
-                except Exception as e:
-                    print(f"❌ [DEBUG] FINAL HOMING FAILED: {e}")
-
-                # Now trigger uArm hook AFTER homing is complete
-                try:
-                    from utils.hooks import on_grbl_drawing_complete
-                    if callable(on_grbl_drawing_complete):
-                        print(f"🔥 [DEBUG] CALLING UARM HOOK FROM IMAGE MONITOR (AFTER HOMING)")
-                        on_grbl_drawing_complete()
-                        print(f"🔥 [DEBUG] UARM HOOK COMPLETED")
-                    else:
-                        print(f"❌ [DEBUG] NO UARM HOOK REGISTERED")
-                except Exception as e:
-                    print(f"❌ [DEBUG] UARM HOOK FAILED: {e}")
-
-                # Resume idle movements after uArm completes
-                resume_after_drawing()
+            # Resume idle movements after execution attempt completes (success or failure)
+            resume_after_drawing()
 
     def _log_new_image(self, image_path) -> bool:
         """Log a newly detected image and return True if processed/accepted.

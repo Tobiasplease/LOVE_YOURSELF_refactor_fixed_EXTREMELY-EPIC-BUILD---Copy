@@ -16,10 +16,10 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 USE_SERVO = True
 USE_HAND_CONTROLLER = True  # Enable hand controller system
 # Natural head movement limits for realistic gaze
-PAN_MIN = 65   # Left limit (±25° from center)
-PAN_MAX = 115  # Right limit (±25° from center)  
-TILT_MIN = 70  # Down limit (±20° from center)
-TILT_MAX = 110 # Up limit (±20° from center)
+PAN_MIN = 45   # Left limit (±45° from center) - expanded range
+PAN_MAX = 135  # Right limit (±45° from center) - expanded range
+TILT_MIN = 50  # Down limit - expanded range
+TILT_MAX = 130 # Up limit - expanded range
 # Legacy values for backwards compatibility
 SERVO_MIN = PAN_MIN  # Use PAN_MIN as default
 SERVO_MAX = PAN_MAX  # Use PAN_MAX as default
@@ -31,7 +31,7 @@ FLIP_Y = True
 
 # === FACE DETECTION ===
 CONFIDENCE_THRESHOLD = 0.8  # Higher threshold to distinguish real faces from pareidolia
-DEAD_ZONE = 3  # Smaller dead zone for more precise centering
+DEAD_ZONE = 1  # Very small dead zone for highly responsive centering
 
 # === IDLE GAZE SETTINGS ===
 IDLE_AMPLITUDE_X = 35  # Increased from 10 for more prominent horizontal movement
@@ -151,7 +151,13 @@ GRBL_IDLE_UPDATE_INTERVAL = 3.0  # Seconds between movement updates - longer pau
 # Master optimization toggles
 GRBL_ENABLE_FEED_OPTIMIZATION = os.getenv("GRBL_ENABLE_FEED_OPTIMIZATION", "true").lower() in ("1", "true", "yes")
 GRBL_ENABLE_PEN_OPTIMIZATION = os.getenv("GRBL_ENABLE_PEN_OPTIMIZATION", "true").lower() in ("1", "true", "yes")
-GRBL_ENABLE_STROKE_FILTERING = os.getenv("GRBL_ENABLE_STROKE_FILTERING", "true").lower() in ("1", "true", "yes")
+GRBL_ENABLE_STROKE_FILTERING = os.getenv("GRBL_ENABLE_STROKE_FILTERING", "false").lower() in ("1", "true", "yes")
+
+# === GRBL SEGMENTED EXECUTION ===
+# Splits large G-code files into segments to prevent buffer overload
+GRBL_ENABLE_SEGMENTED_EXECUTION = os.getenv("GRBL_ENABLE_SEGMENTED_EXECUTION", "false").lower() in ("1", "true", "yes")
+GRBL_MAX_SEGMENT_SIZE = int(os.getenv("GRBL_MAX_SEGMENT_SIZE", 150))  # Lines per segment
+GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAUSE", "false").lower() in ("1", "true", "yes")
 
 # === FEED RATE OPTIMIZATION ===
 # Speed scaling for different movement types - adjust these to set your preferred overall speed range
@@ -319,6 +325,10 @@ PAPER_DETECTION_GAZE_PAN = 90  # Pan angle for looking down at drawing area
 PAPER_DETECTION_GAZE_TILT = 50  # Tilt angle for looking down at drawing area (lowest safe position)
 PAPER_CHECK_TIMEOUT = 10.0  # Maximum seconds to wait for paper detection
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
+# === LCD CAPTION DISPLAY ===
+USE_CAPTION_DISPLAY = True
+CAPTION_DISPLAY_PORT = "/dev/arduino_lcd"
+
 # === ARDUINO DEVICE CONFIGURATION ===
 # Configure each Arduino with its specific Linux serial port
 # Use debug/identify_arduinos.py to help identify which device is on which port

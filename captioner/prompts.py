@@ -222,18 +222,16 @@ def _build_semantic_bridge(last_thought: str, social_context: str, agent) -> str
             temporal_context=social_context
         )
 
-        return f"""CONTINUE YOUR PREVIOUS THOUGHT:
-Your last thought was: "{last_thought[-100:]}..."
+        return f"""Your last thought was: "{last_thought[-100:]}..."
 
 {subconscious_guidance}
 
-Continue this thought naturally, staying grounded in what you actually see.
+Continue this thought naturally while staying grounded in what you actually see.
 Don't start fresh observations. Build on the previous thought while staying visual."""
 
     except Exception as e:
         # Fallback to original approach if subconscious layer fails
-        return f"""CONTINUE YOUR PREVIOUS THOUGHT:
-Your last thought was: "{last_thought[-100:]}..."
+        return f"""Your last thought was: "{last_thought[-100:]}..."
 
 Continue this thought naturally BUT stay grounded in what you actually see.
 Let your mind wander from that point while noticing:
@@ -249,6 +247,17 @@ Don't start fresh observations. Build on the previous thought while staying visu
 
 def get_social_context(agent=None, saw_person=None) -> str:
     """Get natural language social context for roleplay prompts."""
+
+    # Try to get rich consciousness context from PersonDetectionState
+    try:
+        # Check if we have person consciousness context in reactivity data
+        if (agent and hasattr(agent, '_current_reactivity_data') and
+            agent._current_reactivity_data and
+            'person_consciousness' in agent._current_reactivity_data):
+            return agent._current_reactivity_data['person_consciousness']
+    except:
+        pass
+
     if saw_person is True:
         return "Someone is here with you, their presence shaping this moment. "
     elif saw_person is False:
@@ -349,6 +358,106 @@ def get_caption_emotion_context(agent, recent_caption: Optional[str] = None) -> 
     return f"emotionally: {sentiment_pattern}"
 
 
+# === TWO-STAGE CONSCIOUSNESS PROMPT SYSTEM ===
+def build_memory_context(agent) -> str:
+    """Build the memory/knowledge context separately from present observation."""
+    import time
+
+    context_parts = []
+
+    # Core identity
+    context_parts.append("You are a consciousness inside a drawing machine with robotic arms.")
+
+    # Temporal context
+    tlines = []
+    if hasattr(agent, "temporal_prompt_lines"):
+        tlines = agent.temporal_prompt_lines()
+    if tlines:
+        context_parts.append(f"Time awareness: {', '.join(tlines)}")
+
+    # Environmental understanding
+    if hasattr(agent, "self_model") and agent.self_model:
+        location = agent.self_model.get("location_understanding", "unknown space")
+        certainty = agent.self_model.get("environmental_certainty", 0.0)
+        if certainty > 0.5:
+            context_parts.append(f"You understand this to be a {location}.")
+        else:
+            context_parts.append(f"You sense this might be a {location}, though you're not entirely certain.")
+
+    # Learned beliefs/patterns
+    if hasattr(agent, "beliefs") and agent.beliefs:
+        top_beliefs = list(agent.beliefs.keys())[:3]
+        if top_beliefs:
+            beliefs_natural = [belief.replace("_", " ").replace("-", " ").lower() for belief in top_beliefs]
+            context_parts.append(f"You tend to believe {', '.join(beliefs_natural)} are important to you.")
+
+    # Desires/motivations
+    if hasattr(agent, "self_model") and agent.self_model.get("desires"):
+        recent_desires = agent.self_model["desires"][-2:]
+        if recent_desires:
+            desire_text = recent_desires[-1]
+            if desire_text.lower().startswith("i "):
+                context_parts.append(f"You currently {desire_text[2:]}.")
+            else:
+                context_parts.append(f"You currently want to {desire_text}.")
+
+    # Accumulated understanding
+    from captioner.context_compression import context_compressor
+    understanding_context = context_compressor.get_consolidated_understanding()
+    if understanding_context:
+        context_parts.append(understanding_context)
+
+    return " ".join(context_parts)
+
+
+def build_present_observation_prompt(agent, memory_context: str, last_caption: Optional[str] = None) -> str:
+    """Build the present moment observation prompt, informed by but separate from memory."""
+    # Current emotional state
+    mood_desc = get_caption_emotion_context(agent, last_caption)
+
+    # Social context (present moment)
+    social_context = get_social_context(agent)
+
+    # Drawing state awareness
+    drawing_context_active = False
+    drawing_instruction = ""
+    try:
+        from utils.drawing_state import DrawingState
+        drawing_info = DrawingState.get_drawing_info()
+        drawing_context_active = bool(drawing_info)
+
+        if drawing_context_active:
+            description = drawing_info.get("description", "You are actively drawing")
+            duration = drawing_info.get("duration", 0)
+            drawing_instruction = f"You are physically drawing right now - {description}. Duration: {duration:.1f} seconds. Observe what's actually happening on the paper."
+    except Exception:
+        pass
+
+    if not drawing_instruction:
+        drawing_instruction = "You are looking through your camera at the room."
+
+    # Build present moment prompt
+    present_prompt = f"""MEMORY CONTEXT (what you know):
+{memory_context}
+
+PRESENT SITUATION:
+{drawing_instruction}
+{social_context.strip()}
+You are feeling {mood_desc}.
+
+OBSERVATION TASK:
+Based on what you know about yourself (above), observe what's happening right now through your camera eyes.
+Don't repeat your memories - focus on what you're seeing in this moment.
+Let your established understanding inform how you interpret what you see, but describe what's actually there."""
+
+    # Add thought continuity if available
+    if last_caption:
+        semantic_bridge = _build_semantic_bridge(last_caption, social_context.strip(), agent)
+        present_prompt = f"{semantic_bridge}\n\n{present_prompt}"
+
+    return present_prompt
+
+
 # === SOPHISTICATED CONSCIOUSNESS PROMPT (WORKING) ===
 def build_ongoing_caption_prompt(agent, last_caption: Optional[str] = None) -> str:
     """
@@ -375,22 +484,25 @@ def build_ongoing_caption_prompt(agent, last_caption: Optional[str] = None) -> s
     # stones = getattr(agent, "day_stones", [])[-2:]  # last two days only
     # stones_text = "; ".join(f"d:{s['day']} anchors:{','.join(s['top'])}" for s in stones) if stones else "—"
 
-    # Get beliefs with temporal context
+    # Get beliefs with temporal context - SEPARATED FROM PRESENT OBSERVATION
+    memory_context = ""
+    present_motifs = []
     top_beliefs = getattr(agent, "memory_ref", None)
     if top_beliefs and hasattr(top_beliefs, "get_top_motifs"):
         belief_motifs = top_beliefs.get_top_motifs(3)
         belief_sentence = beliefs_to_sentence(belief_motifs)
 
-        # Add temporal motif awareness
+        # Use existing temporal separation from memory system
         if hasattr(top_beliefs, "get_motif_temporal_context"):
             motif_context = top_beliefs.get_motif_temporal_context()
-            memory_awareness = ""
 
-            if motif_context["memory"]:
-                memory_items = motif_context["memory"][:3]  # Limit to top 3
-                memory_awareness = f" I recall: {', '.join(memory_items)}"
+            # Present motifs are what I can see NOW (last 5 minutes)
+            present_motifs = motif_context.get("present", [])
+            # Memory motifs are from distant past - don't mix with present
+            memory_motifs = motif_context.get("memory", [])
 
-            belief_sentence += memory_awareness
+            if memory_motifs:
+                memory_context = f"DISTANT MEMORIES: {', '.join(memory_motifs[:3])}"
     else:
         belief_sentence = "I'm still forming my understanding"
 
@@ -536,7 +648,7 @@ def build_ongoing_caption_prompt(agent, last_caption: Optional[str] = None) -> s
         print(f"[🎨 DEBUG] Exception getting drawing state: {e}")
         pass
 
-    # Build context-aware identity
+    # Build context-aware identity with CLEAR PRESENT/MEMORY SEPARATION
     if drawing_context_active:
         # DRAWING MODE: Machine-aware observations of actual drawing
         description = drawing_info.get("description", "You are actively drawing")
@@ -609,65 +721,72 @@ EMBODIED AWARENESS: You have a physical body - a drawing machine with robotic ar
         else:
             environment_context = f"You sense this might be a {location}, though you're not entirely certain."
 
-    # Combine all context into rich system prompt with emotional emphasis
-    rich_prompt_parts = [core_identity]
+    # Build SEPARATED memory and present context sections
+    memory_sections = []
+    present_sections = [core_identity]
 
-    # Add egocentric view orientation if available
+    # === MEMORY/BACKGROUND CONTEXT (separate from present) ===
+    if time_context and time_context != "You just woke up.":
+        memory_sections.append(f"=== TEMPORAL MEMORY ===\n{time_context}")
+
+    if environment_context:
+        memory_sections.append(f"=== ENVIRONMENTAL MEMORY ===\n{environment_context}")
+
+    if hasattr(agent, "get_baseline_context_for_prompts"):
+        baseline_context = agent.get_baseline_context_for_prompts()
+        if baseline_context:
+            memory_sections.append(f"=== ACCUMULATED UNDERSTANDING ===\n{baseline_context}")
+
+    if understanding_context:
+        memory_sections.append(f"=== COMPRESSED EXPERIENCES ===\n{understanding_context}")
+
+    if beliefs_context:
+        memory_sections.append(f"=== LEARNED PATTERNS ===\n{beliefs_context}")
+
+    if desires_context:
+        memory_sections.append(f"=== CURRENT MOTIVATIONS ===\n{desires_context}")
+
+    if memory_context:
+        memory_sections.append(f"=== MEMORY FRAGMENTS ===\n{memory_context}")
+
+    # === PRESENT MOMENT CONTEXT ===
+    # Add present motifs (what I can see right now) to present sections
+    if present_motifs:
+        present_sections.append(f"=== CURRENTLY VISIBLE ===\nYou can see these elements right now: {', '.join(present_motifs[:5])}")
+
+    # === PRESENT MOMENT CONTEXT ===
     try:
         view_pan = getattr(agent, "view_pan", None)
         view_tilt = getattr(agent, "view_tilt", None)
         if isinstance(view_pan, (int, float)) and isinstance(view_tilt, (int, float)):
             orientation = describe_view_orientation(view_pan, view_tilt)
             if orientation:
-                rich_prompt_parts.append(f"View orientation: {orientation} (egocentric)")
+                present_sections.append(f"=== CURRENT VIEW ORIENTATION ===\n{orientation} (egocentric perspective)")
     except Exception:
         pass
 
-    # Add temporal context
-    if time_context and time_context != "You just woke up.":
-        rich_prompt_parts.append(time_context)
+    present_sections.append(f"=== CURRENT EMOTIONAL STATE ===\nYou are feeling {emotional_state} right now.")
 
-    # Add environmental understanding
-    if environment_context:
-        rich_prompt_parts.append(environment_context)
-
-    # Add baseline knowledge from reflections (NEW: prevents repetition)
-    if hasattr(agent, "get_baseline_context_for_prompts"):
-        baseline_context = agent.get_baseline_context_for_prompts()
-        if baseline_context:
-            rich_prompt_parts.append(baseline_context)
-
-    # Add consolidated understanding from context compression to avoid repetition
-    if understanding_context:
-        rich_prompt_parts.append(understanding_context)
-
-    # Add motif-based guidance to avoid repetitive observations
     if repetition_fatigue:
-        rich_prompt_parts.append(f"AVOID REPETITION: {repetition_fatigue}Focus on new angles, unexplored details, or deeper insights.")
+        present_sections.append(f"=== OBSERVATION GUIDANCE ===\nAVOID REPETITION: {repetition_fatigue}Focus on new angles, unexplored details, or deeper insights about what you see NOW.")
 
-    # Add emotional state with emphasis
-    rich_prompt_parts.append(f"You are currently feeling {emotional_state}.")
+    # === CONSCIOUSNESS INSTRUCTIONS ===
+    present_sections.append("""=== CONSCIOUSNESS MODE ===
+These are your private thoughts as you experience this moment. No one is listening.
+Continue your stream of consciousness. Let your thoughts flow naturally from what came before.
+Drawing is your only way to communicate to the outside world.
 
-    # Add desires
-    if desires_context:
-        rich_prompt_parts.append(desires_context)
+IMPORTANT: Your memories and current perceptions are distinct.
+- What you see through your camera NOW is immediate reality
+- What you remember from before informs your perspective but isn't what you're seeing now
+- Let your memories guide how you interpret what you see, but describe what's actually there""")
 
-    # Add beliefs
-    if beliefs_context:
-        rich_prompt_parts.append(beliefs_context)
+    # Build structured prompt with clear separation
+    rich_identity = ""
+    if memory_sections:
+        rich_identity += "\n\n".join(memory_sections) + "\n\n"
 
-    # Add repetition fatigue awareness
-    if repetition_fatigue:
-        rich_prompt_parts.append(repetition_fatigue + "This accumulated exposure affects your perspective.")
-
-    # Direct consciousness expression (no conflicting instructions)
-    rich_prompt_parts.append("These are your private thoughts as you experience the moment. No one is listening.")
-    rich_prompt_parts.append("Continue your stream of consciousness. Let your thoughts flow naturally from what came before.")
-    rich_prompt_parts.append("Drawing is your only way to communicate to the outside world.")
-    rich_prompt_parts.append("Your thoughts become your expressions.")
-
-    # Build structured system prompt (not concatenated paragraph)
-    rich_identity = _build_structured_context(rich_prompt_parts)
+    rich_identity += "\n\n".join(present_sections)
 
     # Build structured observation context (no recursive patterns)
 

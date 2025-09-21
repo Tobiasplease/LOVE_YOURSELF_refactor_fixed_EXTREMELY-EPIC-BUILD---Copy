@@ -183,13 +183,26 @@ class DrawingController:
                 from config.config import INCLUDE_DRAWING_HISTORY
 
                 if INCLUDE_DRAWING_HISTORY and hasattr(agent, "observe"):
-                    intent = drawing_prompt.strip().split("\n")[0]
-                    # Trim to a short one-liner
-                    if len(intent) > 160:
-                        intent = intent[:157] + "..."
-                    agent.observe(f"Drawing intent: {intent}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
-            except Exception:
-                pass
+                    # Use prompt compression system for better storage
+                    try:
+                        from utils.prompt_compression import compress_drawing_prompt
+                        compressed_intent = compress_drawing_prompt(drawing_prompt)
+                        print(f"[🗜️] Compressed drawing intent: {drawing_prompt[:50]}... -> {compressed_intent}")
+                    except Exception as e:
+                        print(f"[⚠️] Intent compression failed: {e}")
+                        # Fallback to simple truncation
+                        compressed_intent = drawing_prompt.strip().split("\n")[0]
+                        if len(compressed_intent) > 160:
+                            compressed_intent = compressed_intent[:157] + "..."
+
+                    agent.observe(f"Drawing intent: {compressed_intent}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
+                    print(f"[📝] Stored drawing intent in memory: {compressed_intent}")
+                else:
+                    print(f"[⚠️] Drawing intent not stored: INCLUDE_DRAWING_HISTORY={INCLUDE_DRAWING_HISTORY}, agent.observe exists={hasattr(agent, 'observe')}")
+            except Exception as e:
+                print(f"[❌] Failed to store drawing intent: {e}")
+                import traceback
+                traceback.print_exc()
 
             log_json_entry(
                 LogType.DECISION,

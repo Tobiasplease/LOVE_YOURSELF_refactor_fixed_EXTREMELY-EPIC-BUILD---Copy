@@ -31,6 +31,9 @@ try:
         GRBL_USE_CENTRALIZED_PEN_UP,
         GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING,
         GRBL_PEN_UP_IS_HIGH,
+        GRBL_ENABLE_SEGMENTED_EXECUTION,
+        GRBL_MAX_SEGMENT_SIZE,
+        GRBL_ENABLE_PERSON_DETECTION_PAUSE,
     )
 except Exception:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S = 30, 50, 255, 0
@@ -40,6 +43,9 @@ except Exception:
     GRBL_USE_CENTRALIZED_PEN_UP = False
     GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING = True
     GRBL_PEN_UP_IS_HIGH = False
+    GRBL_ENABLE_SEGMENTED_EXECUTION = True
+    GRBL_MAX_SEGMENT_SIZE = 150
+    GRBL_ENABLE_PERSON_DETECTION_PAUSE = False
 
 # Default configuration
 DEFAULT_BAUD = 115200
@@ -1024,11 +1030,26 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         from utils.state_manager import state_manager
         import os
         
-        # Simple drawing state tracking
+        # Get drawing description from state_manager and compress it
+        drawing_prompt = getattr(state_manager, 'current_drawing_prompt', 'recent drawing')
+
+        # Use prompt compression system
+        compressed_description = "actively drawing"
+        try:
+            from utils.prompt_compression import compress_drawing_prompt
+            if drawing_prompt and drawing_prompt != 'recent drawing':
+                compressed_description = compress_drawing_prompt(drawing_prompt)
+                print(f"[🗜️] Compressed drawing prompt: {drawing_prompt[:50]}... -> {compressed_description}")
+            else:
+                print(f"[⚠️] No valid drawing prompt to compress, using fallback")
+        except Exception as e:
+            print(f"[⚠️] Prompt compression failed: {e}")
+
+        # Drawing state tracking with compressed description
         DrawingState.start_drawing(
             drawing_file=gcode_file,
-            description="actively drawing",
-            intent="drawing based on observations"
+            description=compressed_description,
+            intent=drawing_prompt[:100] if drawing_prompt else "drawing based on observations"
         )
         
     except Exception as e:
@@ -1294,15 +1315,20 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
                         # Store the completion memory for future reference
                         try:
                             if hasattr(state_manager, 'captioner') and hasattr(state_manager.captioner, 'observe'):
+                                completion_text = f"Completed drawing {compressed_desc}. Reflection: {self_critique.strip()[:100]}"
                                 state_manager.captioner.observe(
-                                    f"Completed drawing {compressed_desc}. Reflection: {self_critique.strip()[:100]}",
+                                    completion_text,
                                     state_manager.captioner.current_mood if hasattr(state_manager.captioner, 'current_mood') else 0.5,
                                     "",
                                     memory_type="drawing_completion"
                                 )
-                                print(f"[📝] Stored drawing completion in memory")
+                                print(f"[📝] Stored drawing completion in memory: {completion_text[:50]}...")
+                            else:
+                                print(f"[⚠️] Drawing completion not stored: state_manager.captioner exists={hasattr(state_manager, 'captioner')}, observe method exists={hasattr(state_manager.captioner, 'observe') if hasattr(state_manager, 'captioner') else False}")
                         except Exception as e:
-                            print(f"[⚠️] Could not store completion memory: {e}")
+                            print(f"[❌] Failed to store drawing completion: {e}")
+                            import traceback
+                            traceback.print_exc()
                     
                 except Exception as e:
                     print(f"[⚠️] Could not generate drawing self-critique: {e}")

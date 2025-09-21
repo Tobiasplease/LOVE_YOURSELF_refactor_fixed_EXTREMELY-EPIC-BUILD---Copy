@@ -24,10 +24,10 @@ from config.config import (
 )
 
 # === VELOCITY LIMITING CONSTANTS ===
-# Face tracking - slightly more conservative for smooth, natural tracking
-FACE_PAN_VELOCITY = 6.0   # Maximum degrees per update during face tracking (responsive but smooth)
-FACE_TILT_VELOCITY = 5.0  # Maximum degrees per update during face tracking (responsive but smooth)
-FACE_VELOCITY_SMOOTHING = 0.5  # Less smoothing for face tracking (more responsive)
+# Face tracking - increased for more reactive tracking
+FACE_PAN_VELOCITY = 8.0   # Maximum degrees per update during face tracking (more reactive)
+FACE_TILT_VELOCITY = 7.0  # Maximum degrees per update during face tracking (more reactive)
+FACE_VELOCITY_SMOOTHING = 0.4  # Even less smoothing for face tracking (more responsive)
 
 # General movement - higher limits for idle movement
 MAX_PAN_VELOCITY = 8.0   # Maximum degrees per update for pan servo (prevents hard lock-ins)
@@ -39,7 +39,7 @@ IDLE_PAUSE_LONG = 8.0  # Occasional longer contemplative pauses
 IDLE_LONG_PAUSE_CHANCE = 0.15  # 15% chance for a longer pause
 
 # Override dead zone for precise face tracking
-PRECISE_DEAD_ZONE = 1.0  # Very small dead zone for precise face tracking (overrides config DEAD_ZONE)
+PRECISE_DEAD_ZONE = 0.2  # Ultra-small dead zone for highly responsive face tracking (overrides config DEAD_ZONE)
 
 # === SIMPLIFIED STATE MANAGEMENT ===
 servo_x = 90
@@ -51,6 +51,9 @@ state = "idle"
 idle_next_move_time = 0  # Trigger immediate movement
 startup_sequence_active = False  # Flag to prevent conflicts during startup
 drawing_sequence_active = False  # Flag to prevent conflicts during CNC drawing
+drawing_target_x = 90  # Target position for drawing mode
+drawing_target_y = 90  # Target position for drawing mode
+drawing_transition_active = False  # Flag for smooth transition to/from drawing position
 
 # === ORGANIC MOVEMENT DECOUPLING ===
 # Independent timing and curves for pan/tilt
@@ -141,14 +144,33 @@ def update_organic_movement(now):
 def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
     global servo_x, servo_y, target_x, target_y, last_seen_time, state, idle_next_move_time
     global startup_sequence_active, drawing_sequence_active, last_state_change
+    global drawing_target_x, drawing_target_y, drawing_transition_active
 
     # Skip gaze updates during startup sequence to prevent conflicts
     if startup_sequence_active:
         return False, int(servo_x + 0.5), int(servo_y + 0.5)
 
-    # Skip gaze updates during drawing sequence - maintain drawing position
+    # Handle drawing sequence with smooth transitions
     if drawing_sequence_active:
+        # Actively locked - smooth transition to drawing position
+        dx = abs(servo_x - drawing_target_x)
+        dy = abs(servo_y - drawing_target_y)
+
+        # Use slower easing for smooth drawing transitions
+        drawing_easing = 0.08  # Slower for very smooth movement
+        servo_x = velocity_limited_step(servo_x, drawing_target_x, drawing_easing, FACE_PAN_VELOCITY * 0.6, "pan")
+        servo_y = velocity_limited_step(servo_y, drawing_target_y, drawing_easing, FACE_TILT_VELOCITY * 0.6, "tilt")
+
+        # Stop transition when close enough
+        if dx < 1.0 and dy < 1.0:
+            drawing_transition_active = False
+
         return False, int(servo_x + 0.5), int(servo_y + 0.5)
+
+    elif drawing_transition_active:
+        # Transitioning out of drawing mode - just clear the flag and resume normal operation
+        drawing_transition_active = False
+        print("[👁️] Drawing transition complete - resuming normal gaze")
 
     h, w = frame.shape[:2]
     person_present = face_box is not None
@@ -331,23 +353,23 @@ def smooth_step(current, target, factor):
 
 
 def set_drawing_mode(active: bool, drawing_pan: int = 90, drawing_tilt: int = None):
-    """Control drawing sequence mode to lock gaze during CNC drawing"""
-    global drawing_sequence_active, servo_x, servo_y, target_x, target_y
+    """Control drawing sequence mode with smooth transitions"""
+    global drawing_sequence_active, drawing_target_x, drawing_target_y, drawing_transition_active
     from config.config import TILT_MIN
-    
-    drawing_sequence_active = active
-    
+
     if active:
-        # Lock gaze to drawing position
+        # Set targets and begin smooth transition to drawing position
         drawing_tilt = drawing_tilt or (TILT_MIN + 2)  # Lowest safe position
-        servo_x = drawing_pan
-        servo_y = drawing_tilt
-        target_x = drawing_pan  
-        target_y = drawing_tilt
-        print(f"[👁️] Gaze locked for drawing: pan={drawing_pan}°, tilt={drawing_tilt}°")
+        drawing_target_x = drawing_pan
+        drawing_target_y = drawing_tilt
+        drawing_transition_active = True
+        drawing_sequence_active = True
+        print(f"[👁️] Smoothly transitioning to drawing position: pan={drawing_pan}°, tilt={drawing_tilt}°")
     else:
-        # Release drawing lock - gaze will return to normal operation
-        print("[👁️] Gaze drawing lock released")
+        # Release drawing lock immediately - no transition delay
+        drawing_sequence_active = False
+        drawing_transition_active = False
+        print("[👁️] Gaze drawing lock released - resuming normal operation immediately")
 
 
 def startup_movement_sequence(servos, duration=5.0):

@@ -50,16 +50,16 @@ def compress_drawing_prompt(drawing_prompt: str) -> str:
 def _compress_with_tinyllama(drawing_prompt: str) -> Optional[str]:
     """Use TinyLlama to compress the drawing prompt intelligently."""
     
-    compression_prompt = f"""Compress this drawing prompt into a short phrase (5-10 words max) that captures what is being drawn:
+    compression_prompt = f"""Extract the core subject/theme of this drawing prompt in 8-15 words. Focus on what is actually being drawn, not the emotions or process:
 
-"{drawing_prompt}"
+PROMPT: "{drawing_prompt}"
 
-Compressed description:"""
+CORE SUBJECT (8-15 words):"""
     
     model_options = {
         "temperature": TINYLLAMA_TEMPERATURE,
         "top_p": TINYLLAMA_TOP_P,
-        "num_predict": TINYLLAMA_NUM_PREDICT * 3,  # Allow a bit more for this task (15 tokens)
+        "num_predict": max(50, TINYLLAMA_NUM_PREDICT * 10),  # Allow enough tokens for meaningful compression (50+ tokens)
     }
     
     try:
@@ -67,12 +67,18 @@ Compressed description:"""
         from captioner.prompts import NUMBER_GENERATOR_SYSTEM_PROMPT
         compression_system_prompt = "You compress drawing prompts into short, natural descriptions. Be concise and specific."
         
+        # Use main model instead of TinyLlama for better text comprehension
+        from config.config import OLLAMA_MODEL
         response = query_ollama(
             prompt=compression_prompt,
-            model=MOTIF_MODEL,
-            timeout=TINYLLAMA_TIMEOUT,
+            model=OLLAMA_MODEL,  # Use main model instead of MOTIF_MODEL (TinyLlama)
+            timeout=30,  # Longer timeout for main model
             system_prompt=compression_system_prompt,
-            options=model_options,
+            options={
+                "temperature": 0.3,  # Low temperature for consistent compression
+                "top_p": 0.8,
+                "num_predict": 30,  # Enough for 8-15 words
+            },
             prompt_type="compression"
         )
         

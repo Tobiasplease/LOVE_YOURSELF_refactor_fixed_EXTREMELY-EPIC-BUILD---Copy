@@ -209,14 +209,10 @@ class PaperDetector:
 
     def _position_gaze_for_detection(self, servos):
         """Position servos to look down at drawing area."""
-        try:
-            from vision.gaze import set_drawing_mode
-            set_drawing_mode(True, PAPER_DETECTION_GAZE_PAN, PAPER_DETECTION_GAZE_TILT)
-        except ImportError:
-            # Fallback: direct servo control
-            servos.set_pan(PAPER_DETECTION_GAZE_PAN)
-            time.sleep(0.1)
-            servos.set_tilt(PAPER_DETECTION_GAZE_TILT)
+        # Use direct servo control instead of gaze locking to prevent stuck states
+        servos.set_pan(PAPER_DETECTION_GAZE_PAN)
+        time.sleep(0.1)
+        servos.set_tilt(PAPER_DETECTION_GAZE_TILT)
 
     def _check_with_reference_image(self, check_image_path: str, captioner=None) -> PaperCheckResult:
         """Check paper presence by comparing to reference image."""

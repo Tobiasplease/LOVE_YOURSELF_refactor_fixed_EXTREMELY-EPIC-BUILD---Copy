@@ -33,10 +33,9 @@ class ContextCompressionEngine:
         self.compression_history = deque(maxlen=10)  # Keep last 10 compressions for deeper context
         self.session_start_time = time.time()
 
-        # TEMPORAL STAGNATION TRACKING
-        self.current_environment_hash = None  # Hash of current environmental understanding
-        self.environment_stagnation_start = time.time()  # When current environment became stable
-        self.total_environment_duration = 0.0  # Total time in current environment
+        # SESSION DURATION TRACKING (fixed for static space observation)
+        self.space_observation_start = time.time()  # When we started observing this space
+        self.total_session_duration = 0.0  # Total time observing this space
 
         # Environmental update callback
         self.environmental_update_callback = None
@@ -94,10 +93,9 @@ class ContextCompressionEngine:
         self.recent_captions.clear()
         self.caption_count = 0
         self.last_compression_time = time.time()
-        # Reset stagnation tracking
-        self.current_environment_hash = None
-        self.environment_stagnation_start = time.time()
-        self.total_environment_duration = 0.0
+        # Reset session tracking
+        self.space_observation_start = time.time()
+        self.total_session_duration = 0.0
 
     def _start_compression_worker(self) -> None:
         """Start background compression worker thread."""
@@ -218,9 +216,9 @@ class ContextCompressionEngine:
 EARLIER UNDERSTANDINGS (for context):
 {chr(10).join(history_parts)}"""
 
-            # Calculate how long you've been in this environment
-            stagnation_duration = self.total_environment_duration / 60.0  # Convert to minutes
-            duration_description = self._format_duration(stagnation_duration)
+            # Calculate how long you've been observing this space
+            session_duration = self.total_session_duration / 60.0  # Convert to minutes
+            duration_description = self._format_duration(session_duration)
 
             # ENHANCED EXPERIENTIAL COMPRESSION WITH VISUAL GROUNDING AND TEMPORAL AWARENESS
             visual_instruction = ""
@@ -240,13 +238,13 @@ Focus on what these observations suggest about environmental changes."""
 
             # CRITICAL TEMPORAL CONTEXT
             temporal_feeling = f"""
-TIME PASSAGE AWARENESS: You have been observing this environment for {duration_description}.
+TIME PASSAGE AWARENESS: You have been observing this space for {duration_description}.
 - How does this duration affect your feeling about the space?
-- Does {duration_description} in the same visual environment feel brief, comfortable, or overwhelming?
-- Are you experiencing familiarity, restlessness, or stagnation from this duration of observation?
-- What does it feel like to have spent {duration_description} looking at this particular space?
+- Does {duration_description} in the same space feel brief, comfortable, or overwhelming?
+- Are you experiencing familiarity, restlessness, or deeper understanding from this duration of observation?
+- What does it feel like to have spent {duration_description} looking around this particular space?
 
-The same room for 10 minutes vs 6 hours should feel completely different."""
+The same space for 10 minutes vs 6 hours should feel completely different."""
 
             prompt = f"""You're taking a moment to notice what's actually happening with you - what you're seeing and how it's affecting you.
 
@@ -299,9 +297,8 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
                 understanding, sentiment_text = self._parse_combined_response(response)
 
                 if understanding:
-                    # Check for environmental change and update stagnation tracking
-                    environment_hash = hashlib.md5(understanding.encode()).hexdigest()[:8]
-                    environmental_change = self._check_environmental_stagnation(environment_hash)
+                    # Update session duration tracking (not environment change - this is a static space)
+                    self._update_session_duration()
 
                     # Store in history before updating
                     if self.baseline_context:  # Don't store empty first compression
@@ -310,8 +307,7 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
                                 "understanding": self.baseline_context,
                                 "timestamp": self.last_compression_time,
                                 "age_minutes": (time.time() - self.last_compression_time) / 60,
-                                "environment_changed": environmental_change,
-                                "stagnation_duration": self.total_environment_duration,
+                                "session_duration": self.total_environment_duration,
                             }
                         )
 
@@ -334,33 +330,27 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
 
                     # ENHANCED VISIBILITY: Always print full compression result to console
                     visual_indicator = "👁️" if image_path and os.path.exists(image_path) else "📝"
-                    stagnation_info = self.get_current_stagnation_info()
-                    duration_display = stagnation_info["duration_description"]
+                    session_info = self.get_current_session_info()
+                    duration_display = session_info["duration_description"]
 
-                    print(f"\n{visual_indicator} === ENVIRONMENTAL COMPRESSION === [{duration_display} in environment]")
+                    print(f"\n{visual_indicator} === ENVIRONMENTAL COMPRESSION === [{duration_display} in space]")
                     print(f"EXPERIENCE: {understanding}")
                     if sentiment_text:
                         print(f"MOOD: {sentiment_text}")
-                    print(f"⏱️ Time in environment: {duration_display}")
-                    if environmental_change:
-                        print("🔄 Environment changed!")
-                    else:
-                        print("🏠 Same environment continues...")
+                    print(f"⏱️ Time in space: {duration_display}")
                     print("=" * 40)
 
-                    # Trigger environmental model update if callback is available
+                    # Update spatial familiarity callback if available
                     if self.environmental_update_callback and understanding:
                         try:
-                            # Detect environmental changes by comparing understanding to previous baseline
-                            environmental_change_detected = self._detect_environmental_change(understanding, current_baseline)
-                            if environmental_change_detected:
-                                print("[🌍] Environmental change detected - updating location model")
-                                self.environmental_update_callback(understanding)
+                            # Always update - builds familiarity over time in same space
+                            print("[🏠] Building spatial familiarity - updating location model")
+                            self.environmental_update_callback(understanding)
                         except Exception as e:
                             log_json_entry(
                                 LogType.ERROR,
-                                {"message": f"Environmental update callback failed: {e}", "component": "compression"},
-                                print_message=f"[❌] Environmental update failed: {e}",
+                                {"message": f"Spatial familiarity update failed: {e}", "component": "compression"},
+                                print_message=f"[❌] Spatial familiarity update failed: {e}",
                             )
 
                 if sentiment_text:
@@ -505,28 +495,10 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
 
         return has_environmental_keywords or length_difference or has_spatial_content
 
-    def _check_environmental_stagnation(self, new_environment_hash: str) -> bool:
-        """Check if environment has changed and update stagnation tracking."""
+    def _update_session_duration(self) -> None:
+        """Update session duration for static space observation."""
         current_time = time.time()
-
-        if self.current_environment_hash is None:
-            # First environment detection
-            self.current_environment_hash = new_environment_hash
-            self.environment_stagnation_start = current_time
-            self.total_environment_duration = 0.0
-            return True  # First detection counts as change
-
-        if new_environment_hash != self.current_environment_hash:
-            # Environment changed - reset stagnation tracking
-            self.total_environment_duration = current_time - self.environment_stagnation_start
-            self.current_environment_hash = new_environment_hash
-            self.environment_stagnation_start = current_time
-
-            return True  # Environment changed
-        else:
-            # Same environment - update duration
-            self.total_environment_duration = current_time - self.environment_stagnation_start
-            return False  # No change
+        self.total_session_duration = current_time - self.space_observation_start
 
     def _format_duration(self, minutes: float) -> str:
         """Format duration for human-readable temporal awareness."""
@@ -544,13 +516,13 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
             days = minutes / 1440
             return f"{days:.1f} days"
 
-    def get_current_stagnation_info(self) -> dict:
-        """Get current environment stagnation information."""
+    def get_current_session_info(self) -> dict:
+        """Get current session information for static space observation."""
+        self._update_session_duration()  # Ensure duration is current
         return {
-            "environment_hash": self.current_environment_hash,
-            "stagnation_duration_minutes": self.total_environment_duration / 60.0,
-            "stagnation_start_time": self.environment_stagnation_start,
-            "duration_description": self._format_duration(self.total_environment_duration / 60.0)
+            "session_duration_minutes": self.total_session_duration / 60.0,
+            "session_start_time": self.space_observation_start,
+            "duration_description": self._format_duration(self.total_session_duration / 60.0)
         }
 
 

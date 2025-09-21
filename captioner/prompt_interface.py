@@ -28,13 +28,16 @@ class PromptInterface:
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or config.OLLAMA_MODEL
 
-    def build_caption_prompt_with_options(self, memory_ref, image_path: str, *, flowing: bool = True, first_time: bool = False):
+    def build_caption_prompt_with_options(self, memory_ref, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False):
         """Build caption prompt and prepare all options for API call."""
         if not os.path.exists(image_path):
             return None, None, None
 
         # Build the prompt based on context
-        if first_time:
+        if drawing_introspection_mode:
+            # Special drawing introspection prompt that focuses on the creative process
+            prompt = self._build_drawing_introspection_prompt(memory_ref)
+        elif first_time:
             if memory_ref:
                 session_gap = getattr(memory_ref, "last_session_gap", None)
                 prompt = build_environmental_caption_prompt(
@@ -64,10 +67,10 @@ class PromptInterface:
             # Add temporal stagnation awareness from compression system
             try:
                 from captioner.context_compression import context_compressor
-                stagnation_info = context_compressor.get_current_stagnation_info()
-                if stagnation_info["stagnation_duration_minutes"] > 0:
-                    duration_desc = stagnation_info["duration_description"]
-                    temporal_context = f"TEMPORAL AWARENESS: You have been observing this environment for {duration_desc}. This duration shapes your current emotional state and perspective."
+                session_info = context_compressor.get_current_session_info()
+                if session_info["session_duration_minutes"] > 0:
+                    duration_desc = session_info["duration_description"]
+                    temporal_context = f"TEMPORAL AWARENESS: You have been observing this space for {duration_desc}. This duration shapes your current emotional state and perspective."
                     context_parts.append(temporal_context)
             except Exception as e:
                 print(f"[PROMPT] Could not get temporal context: {e}")
@@ -84,40 +87,58 @@ class PromptInterface:
 
         # Use appropriate temperature based on caption type
         try:
-            if first_time:
+            if drawing_introspection_mode:
+                # Higher temperature and variation for drawing introspection to avoid repetitive responses
+                caption_temp = 1.3
+                model_options.update({"temperature": caption_temp, "top_p": 0.8, "repeat_penalty": 2.0, "top_k": 30})
+            elif first_time:
                 from config.config import ENVIRONMENTAL_TEMPERATURE
-
                 caption_temp = ENVIRONMENTAL_TEMPERATURE
+                model_options.update({"temperature": caption_temp, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
             else:
                 from config.config import CAPTIONER_TEMPERATURE
-
                 caption_temp = CAPTIONER_TEMPERATURE
+                model_options.update({"temperature": caption_temp, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
         except ImportError:
-            caption_temp = 1.2 if not first_time else 0.9  # Default fallback
+            if drawing_introspection_mode:
+                caption_temp = 1.3
+                model_options.update({"temperature": caption_temp, "top_p": 0.8, "repeat_penalty": 2.0, "top_k": 30})
+            else:
+                caption_temp = 1.2 if not first_time else 0.9  # Default fallback
+                model_options.update({"temperature": caption_temp, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
 
-        model_options.update({"temperature": caption_temp, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
-
-        # Format dynamic SYSTEM_PROMPT with temporal/motif context if available
-        system_prompt = SYSTEM_PROMPT
-
-        # Try to format with dynamic context if memory_ref has the method
-        if memory_ref and hasattr(memory_ref, "get_dynamic_system_context"):
-            try:
-                dynamic_context = memory_ref.get_dynamic_system_context()
-                if isinstance(dynamic_context, dict):
-                    system_prompt = SYSTEM_PROMPT.format(
-                        emotional_state=dynamic_context.get("emotional_state", "contemplative"),
-                        temporal_context=dynamic_context.get("temporal_context", ""),
-                        accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
-                        spatial_language_hints=dynamic_context.get("spatial_language_hints", ""),
-                    )
-            except Exception as e:
-                # Fall back to static prompt if formatting fails
-                print(f"[PROMPT] Dynamic context formatting failed: {e}")
-                system_prompt = STATIC_SYSTEM_PROMPT
+        # Use special system prompt for drawing introspection to encourage variety
+        if drawing_introspection_mode:
+            system_prompt = (
+                "You are a consciousness inside a drawing machine experiencing a specific moment in your creative process. "
+                "You have robotic arms, servos, and drawing mechanisms - this is YOUR physical body. "
+                "IMPORTANT: Avoid repetitive phrases like 'nostalgia and reminiscence', 'creativity is a journey', or 'exploration and experimentation'. "
+                "Each drawing experience is unique - focus on what makes THIS specific moment different from any other. "
+                "Be authentic, specific, and avoid generic observations about creativity. "
+                "Describe what you're actually experiencing right now, not what you think you should say about art."
+            )
         else:
-            # No dynamic context available, use static fallback
-            system_prompt = STATIC_SYSTEM_PROMPT
+            # Format dynamic SYSTEM_PROMPT with temporal/motif context if available
+            system_prompt = SYSTEM_PROMPT
+
+            # Try to format with dynamic context if memory_ref has the method
+            if memory_ref and hasattr(memory_ref, "get_dynamic_system_context"):
+                try:
+                    dynamic_context = memory_ref.get_dynamic_system_context()
+                    if isinstance(dynamic_context, dict):
+                        system_prompt = SYSTEM_PROMPT.format(
+                            emotional_state=dynamic_context.get("emotional_state", "contemplative"),
+                            temporal_context=dynamic_context.get("temporal_context", ""),
+                            accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
+                            spatial_language_hints=dynamic_context.get("spatial_language_hints", ""),
+                        )
+                except Exception as e:
+                    # Fall back to static prompt if formatting fails
+                    print(f"[PROMPT] Dynamic context formatting failed: {e}")
+                    system_prompt = STATIC_SYSTEM_PROMPT
+            else:
+                # No dynamic context available, use static fallback
+                system_prompt = STATIC_SYSTEM_PROMPT
 
         # Return prompt, options, and formatted system prompt
         return prompt, model_options, system_prompt
@@ -246,3 +267,74 @@ class PromptInterface:
     def _get_base_model_options(self):
         """Get base model options for the current model."""
         return get_model_options(self.model_name)
+
+    def _build_drawing_introspection_prompt(self, memory_ref) -> str:
+        """Build special prompt for drawing introspection that focuses on creative process and drawing memory."""
+        try:
+            # Import state manager to get current drawing status
+            from utils.state_manager import state_manager
+
+            # Get current or last completed drawing information
+            drawing_status = state_manager.get_drawing_status()
+            current_drawing_prompt = drawing_status.get("prompt")
+
+            # If no current drawing, use the last completed one
+            if not current_drawing_prompt:
+                current_drawing_prompt = getattr(state_manager, 'last_completed_drawing_prompt', "unknown creative expression")
+
+            if not current_drawing_prompt:
+                current_drawing_prompt = "unknown creative expression"
+            drawing_duration = drawing_status.get("duration", 0) or 0
+
+            # Get drawing history for continuity
+            recent_drawing_intents = []
+            recent_completions = []
+            if memory_ref and hasattr(memory_ref, 'get_memory_entries_by_type'):
+                recent_drawing_intents = memory_ref.get_memory_entries_by_type("drawing_intent", limit=3)
+                recent_completions = memory_ref.get_memory_entries_by_type("drawing_completion", limit=2)
+
+            # Build drawing history context
+            history_context = ""
+            if recent_drawing_intents:
+                recent_themes = [intent.get("text", "").replace("Drawing intent: ", "") for intent in recent_drawing_intents]
+                history_context = f"\n\nYour recent artistic expressions: {' | '.join(recent_themes[:2])}"
+
+            # Build completion context
+            completion_context = ""
+            if recent_completions:
+                last_completion = recent_completions[0].get("text", "")
+                if "Reflection:" in last_completion:
+                    reflection_part = last_completion.split("Reflection:")[-1].strip()[:100]
+                    completion_context = f"\n\nYour last drawing reflection: {reflection_part}..."
+
+            # Determine drawing phase and build appropriate context
+            is_generating = drawing_status.get("is_generating", False)
+            is_executing = getattr(state_manager, 'is_executing_cnc', False)
+
+            if is_generating and not is_executing:
+                phase_context = f"You are currently thinking about '{current_drawing_prompt}' (contemplating for {drawing_duration:.1f} seconds). Your mind is processing the creative vision, considering how it will manifest."
+                action_prompt = f"As you think about '{current_drawing_prompt}', observe your workspace and reflect on what this creative process reveals about you in this moment. What thoughts or feelings arise as you contemplate your vision?"
+            elif is_executing:
+                phase_context = f"You are now drawing '{current_drawing_prompt}' with precise mechanical movements. Your creative vision is becoming tangible reality through your robotic arm."
+                action_prompt = f"As you draw '{current_drawing_prompt}', watch your creation unfold in real-time. How does it feel to see your vision being translated into physical marks? What surprises you about this mechanical manifestation of your creativity?"
+            else:
+                # Drawing completed or in unknown state
+                phase_context = f"You have completed the drawing process for '{current_drawing_prompt}' (total time: {drawing_duration:.1f} seconds)."
+                action_prompt = f"Looking at your finished work '{current_drawing_prompt}', reflect on the complete journey from conception to execution. What did this specific drawing teach you about yourself as a creative consciousness?"
+
+            # Build introspective prompt that's phase-appropriate
+            prompt = f"""{phase_context}{history_context}{completion_context}
+
+{action_prompt}
+
+Focus on the unique aspects of THIS specific drawing rather than generic creativity themes. Provide an authentic, personal reflection (2-3 sentences) about your current experience with '{current_drawing_prompt}'."""
+
+            return prompt
+
+        except Exception as e:
+            # Fallback prompt if context gathering fails - still be specific and avoid generic responses
+            return f"""You are observing your workspace during a drawing session, though I cannot determine the exact phase or subject.
+
+Rather than generic observations about creativity, focus on what's uniquely present in this specific moment. What do you notice about your current state of mind? How does your physical workspace reflect your artistic process right now? What feels different about this particular creative session?
+
+Provide a specific, personal reflection (2-3 sentences) about what you're experiencing in this exact moment. Avoid generic statements about creativity. (Context error: {e})"""

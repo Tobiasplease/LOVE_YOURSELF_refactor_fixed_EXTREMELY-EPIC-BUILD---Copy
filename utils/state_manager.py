@@ -26,6 +26,7 @@ class StateManager:
         self.is_generating_drawing = False
         self.drawing_start_time = None
         self.current_drawing_prompt = None
+        self.last_completed_drawing_prompt = None
         self.timeout_timer = None
         # Minimal CNC execution tracking (added for idle/drawing handoff)
         self.is_executing_cnc = False
@@ -345,6 +346,10 @@ class StateManager:
         if self.timeout_timer:
             self.timeout_timer.cancel()
             self.timeout_timer = None
+
+        # Store the completed drawing prompt for introspection
+        if self.current_drawing_prompt:
+            self.last_completed_drawing_prompt = self.current_drawing_prompt
 
         self.is_generating_drawing = False
         self.drawing_start_time = None

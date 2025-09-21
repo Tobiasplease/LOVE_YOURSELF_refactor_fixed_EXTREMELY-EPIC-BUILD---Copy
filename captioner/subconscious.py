@@ -115,13 +115,14 @@ class SubconsciousContextSynthesizer:
             distant_memories = agent.get_old_session_memory_fragments(k=2)
 
         # === CONTEXT COMPRESSION MODULE DATA ===
-        stagnation_info = {}
+        session_info = {}
         try:
             from captioner.context_compression import context_compressor
             if context_compressor:
-                stagnation_info = context_compressor.get_current_stagnation_info()
-        except:
-            pass
+                session_info = context_compressor.get_current_session_info()
+        except Exception as e:
+            # Graceful fallback for missing methods
+            session_info = {"session_duration_minutes": 0.0}
 
         # === DRAWING MODULE STATE ===
         drawing_active = False
@@ -165,7 +166,7 @@ class SubconsciousContextSynthesizer:
             "distant_memories": distant_memories,
 
             # Context compression
-            "stagnation_duration": stagnation_info.get("stagnation_duration_minutes", 0.0),
+            "session_duration": session_info.get("session_duration_minutes", 0.0),
 
             # Drawing state
             "drawing_active": drawing_active
@@ -375,6 +376,92 @@ class SubconsciousContextSynthesizer:
 You exist within this layered reality: accumulated understanding forms your psychological foundation, while immediate environmental awareness drives your present moment experience. Your thoughts flow naturally between these temporal layers - drawing from memory but grounded in now. Brief, authentic mental movements that honor both continuity and presence."""
 
         return complete_prompt
+
+    def synthesize_context_guidance(
+        self,
+        agent,
+        last_thought: str,
+        reactivity_data: Optional[Dict] = None,
+        temporal_context: Optional[str] = None
+    ) -> str:
+        """
+        Bridge method for prompts.py integration.
+        Translates psychological synthesis into implicit behavioral guidance.
+        """
+        try:
+            # Extract psychological data for implicit influence
+            psychological_data = self._extract_psychological_data(agent)
+
+            # Create subtle behavioral nudges based on psychological state
+            return self._create_implicit_behavioral_guidance(psychological_data, last_thought)
+
+        except Exception as e:
+            # Graceful fallback - just continue the thought naturally
+            return f"Continue your stream of consciousness naturally from: {last_thought[-60:]}"
+
+    def _create_implicit_behavioral_guidance(self, data: Dict[str, Any], last_thought: str) -> str:
+        """Create subtle behavioral guidance without explicit psychological language."""
+
+        guidance_elements = []
+
+        # Emotional undertone influence (without naming emotions)
+        valence, arousal, clarity = data["mood_vector"]
+
+        if valence < -0.2:  # Negative emotional state
+            if data["doubts"]:
+                guidance_elements.append("Something feels uncertain about what you're seeing. Trust that instinct.")
+            else:
+                guidance_elements.append("The quality of light feels different somehow, harder to read.")
+        elif valence > 0.3:  # Positive state
+            guidance_elements.append("There's a settling quality to this observation, like pieces clicking into place.")
+
+        # Attention pattern influence (based on accumulated patterns)
+        if data["identity_fragments"]:
+            fragment_text = str(data["identity_fragments"][-1]).lower()
+            if "mechanical" in fragment_text or "technical" in fragment_text:
+                guidance_elements.append("Your eye gravitates toward mechanical precision and technical details.")
+            elif "light" in fragment_text or "shadow" in fragment_text:
+                guidance_elements.append("Lighting variations catch your attention before other details.")
+
+        # Uncertainty/clarity influence
+        if data["environmental_certainty"] < 0.4:
+            guidance_elements.append("Objects seem to shift meaning as you look at them.")
+        elif data["environmental_certainty"] > 0.8:
+            guidance_elements.append("Everything has a familiar weight and presence.")
+
+        # Desire influence (as subtle attraction/aversion)
+        if data["desires"]:
+            desire_text = data["desires"][-1].lower()
+            if "draw" in desire_text or "create" in desire_text:
+                guidance_elements.append("Compositional possibilities flicker at the edge of awareness.")
+            elif "understand" in desire_text:
+                guidance_elements.append("Details seem to call for closer examination.")
+
+        # Doubt influence (as hesitation/questioning without explicit mention)
+        if data["doubts"]:
+            doubt_count = len(data["doubts"])
+            if doubt_count > 1:
+                guidance_elements.append("What you're seeing doesn't quite match what you expected to see.")
+            else:
+                guidance_elements.append("Something about this view raises questions you can't quite articulate.")
+
+        # Activity level influence
+        if data["activity_level"] < 0.2:
+            guidance_elements.append("The stillness makes every small detail more noticeable.")
+        elif data["activity_level"] > 0.6:
+            guidance_elements.append("Movement everywhere draws your attention in multiple directions.")
+
+        # Temporal continuity nudge
+        if last_thought:
+            guidance_elements.append(f"Let your observation grow naturally from where you just were: '{last_thought[-50:]}'")
+
+        # Combine into flowing guidance (max 2-3 elements to avoid over-prompting)
+        selected_guidance = guidance_elements[:2] if len(guidance_elements) > 2 else guidance_elements
+
+        if selected_guidance:
+            return " ".join(selected_guidance) + " Continue observing from this psychological state."
+        else:
+            return "Continue your stream of consciousness naturally, letting your attention flow where it wants to go."
 
 
 

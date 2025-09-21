@@ -818,10 +818,10 @@ class MemoryMixin:
         stagnation_context = ""
         try:
             from captioner.context_compression import context_compressor
-            stagnation_info = context_compressor.get_current_stagnation_info()
-            if stagnation_info["stagnation_duration_minutes"] > 5:  # Only mention if significant
-                duration_desc = stagnation_info["duration_description"]
-                stagnation_context = f"I've been observing this environment for {duration_desc}, and this duration shapes my current feeling."
+            session_info = context_compressor.get_current_session_info()
+            if session_info["session_duration_minutes"] > 5:  # Only mention if significant
+                duration_desc = session_info["duration_description"]
+                stagnation_context = f"I've been observing this space for {duration_desc}, and this duration shapes my current feeling."
         except Exception:
             pass
 

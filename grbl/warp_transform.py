@@ -38,6 +38,9 @@ def map_to_quad(x, y, x_max=40, y_max=40):
     u = x / x_max
     v = y / y_max
 
+    # Vertically flip Y coordinate to prevent upside-down output
+    v = 1.0 - v
+
     # Professor's latest calibrated values (2025-09-17) - new rotation correction
     Ax, Ay = 0, 40   # vänster längst från robot (top-left)
     Bx, By = 35, 2   # vänster närmast robot (bottom-left)
@@ -68,7 +71,7 @@ def map_to_quad(x, y, x_max=40, y_max=40):
 def warp_transform_line(gcode_line, max_x, max_y):
     """Apply inverse warp transform to G-code coordinates"""
     # TEMPORARY SCALING FIX - easily reversible by setting to 1.0
-    SCALE_FACTOR = 2.5  # Increase output size (set to 1.0 to disable)
+    SCALE_FACTOR = 1.3  # Increase output size (set to 1.0 to disable)
 
     x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
     y_match = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
@@ -81,15 +84,15 @@ def warp_transform_line(gcode_line, max_x, max_y):
         # Apply JBE's inverse warp transform directly
         transformed_x, transformed_y = map_to_quad(original_x, original_y, max_x, max_y)
 
-        # TEMPORARY SCALING - COMMENTED OUT: Professor's calibrated coordinates should fix size issues
-        # if SCALE_FACTOR != 1.0:
-        #     # Calculate center of quadrilateral (updated for new coordinates)
-        #     center_x = (5 + 40 + (-3) + (-28)) / 4  # average of corner x-coords: 3.5
-        #     center_y = (4 + 3 + 40 + 40) / 4  # average of corner y-coords: 21.75
-        #
-        #     # Scale around center point
-        #     transformed_x = center_x + (transformed_x - center_x) * SCALE_FACTOR
-        #     transformed_y = center_y + (transformed_y - center_y) * SCALE_FACTOR
+        # Apply scaling around center point for larger drawings
+        if SCALE_FACTOR != 1.0:
+            # Calculate center of quadrilateral (updated for current coordinates)
+            center_x = (0 + 25 + 70 + 35) / 4  # average of corner x-coords: 32.5
+            center_y = (40 + 40 + 3 + 2) / 4  # average of corner y-coords: 21.25
+
+            # Scale around center point
+            transformed_x = center_x + (transformed_x - center_x) * SCALE_FACTOR
+            transformed_y = center_y + (transformed_y - center_y) * SCALE_FACTOR
 
         # Update G-code line with transformed coordinates
         gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{transformed_x:.4f}", gcode_line, flags=re.IGNORECASE)
@@ -107,6 +110,13 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"G-code file not found: {gcode_file}")
     lines = lines[3:]  # vpype junk
 
+    # Find max X and Y values from all lines
+    max_x, max_y = find_max_xy_from_lines(lines)
+    if max_x is None:
+        max_x = 40  # default
+    if max_y is None:
+        max_y = 40  # default
+
     for line in lines:
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
@@ -116,7 +126,7 @@ if __name__ == "__main__":
             try:
                 if line.startswith(("G0", "G1", "G00", "G01")):
                     print(f"[ORG] {line}")
-                    line = warp_transform_line(line)
+                    line = warp_transform_line(line, max_x, max_y)
                     print(f"[ADJ] {line}")
                     print("=====")
 

@@ -83,8 +83,6 @@ class Captioner(MemoryMixin):
         # Set up environmental update callback for context compression
         if context_compressor:
             context_compressor.set_environmental_update_callback(self._handle_environmental_update)
-            # Set up memory callback for identity insight processing
-            context_compressor.memory_callback = self.process_identity_insight
 
         self.true_session_start = time.time()
         self.first_caption_done = False
@@ -177,7 +175,11 @@ class Captioner(MemoryMixin):
             if self.snapshot_queue:
                 frame, _, reactivity_data = self.snapshot_queue.popleft()
                 try:
-                    self._process_frame(frame, reactivity_data)
+                    # Check if we're currently drawing - switch to introspective mode
+                    if self._is_currently_drawing():
+                        self._process_drawing_introspection(reactivity_data)
+                    else:
+                        self._process_frame(frame, reactivity_data)
                 except Exception as exc:
                     log_json_entry(
                         LogType.ERROR,
@@ -936,3 +938,158 @@ class Captioner(MemoryMixin):
         if hasattr(self, "_boredom"):
             return self._boredom
         return 0.0
+
+    def _is_currently_drawing(self) -> bool:
+        """Check if system is currently generating or drawing artwork."""
+        try:
+            # Check both ComfyUI generation and GRBL execution phases
+            drawing_status = state_manager.get_drawing_status()
+            is_generating = drawing_status.get("is_generating", False)
+
+            # Also check if GRBL is executing (CNC phase)
+            is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
+
+            return is_generating or is_executing_cnc
+        except Exception:
+            return False
+
+    def _process_drawing_introspection(self, reactivity_data: Optional[Dict] = None) -> None:
+        """Process introspective reflection during drawing periods using visual pipeline with drawing-focused prompts."""
+        now = time.time()
+        if now - self.last_caption_time < CAPTION_INTERVAL:
+            return
+
+        # Store reactivity data for drawing-focused prompt generation
+        self._current_reactivity_data = reactivity_data
+
+        # Capture current visual state for drawing introspection
+        ts = int(now)
+        img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"drawing_introspection_{ts}.jpg")
+
+        try:
+            # Get latest frame from snapshot queue if available
+            if self.snapshot_queue:
+                frame, _, _ = self.snapshot_queue[-1]  # Get most recent frame without removing it
+                cv2.imwrite(img_path, frame)
+            else:
+                # Fallback: capture new frame
+                img_path = self.capture_mood_snapshot(capture_reason="drawing_introspection")
+
+            if img_path and os.path.exists(img_path):
+                # Generate drawing introspection using the full visual pipeline
+                introspection = self.model.caption_image(
+                    img_path,
+                    flowing=True,
+                    first_time=False,
+                    drawing_introspection_mode=True  # Special flag for drawing-focused prompts
+                )
+
+                if introspection:
+                    # Extract character insights from the introspection
+                    character_insights = self._extract_character_insights(introspection)
+
+                    # Store the introspective observation
+                    self.observe(
+                        introspection,
+                        mood=self.current_mood,
+                        file=img_path,
+                        memory_type="drawing_introspection",
+                        reactivity_data=reactivity_data
+                    )
+
+                    # Store character insights if extracted
+                    if character_insights:
+                        self.observe(
+                            f"Character insight: {character_insights}",
+                            mood=self.current_mood,
+                            file=img_path,
+                            memory_type="character_insight",
+                            reactivity_data=reactivity_data
+                        )
+
+                    # Format and print the introspection like normal captions
+                    try:
+                        from config.config import CLEAN_LLM_OUTPUT
+
+                        if CLEAN_LLM_OUTPUT:
+                            print_msg = introspection  # Print full introspection
+                        else:
+                            print_msg = f"[🧠] {introspection}"
+                    except ImportError:
+                        print_msg = f"[🧠] {introspection}"
+
+                    # Send to LCD display (same as normal captions)
+                    try:
+                        from utils.caption_display import send_caption_to_display
+                        send_caption_to_display(introspection)
+                    except Exception:
+                        pass  # Silently fail if display not available
+
+                    # Log with both introspection type and caption type for consistency
+                    log_json_entry(
+                        LogType.CAPTION,  # Use CAPTION type so it appears in normal caption flow
+                        {
+                            "caption": introspection,
+                            "image_path": img_path,
+                            "mood": self.current_mood,
+                            "drawing_introspection": True,
+                            "character_insights": character_insights,
+                            "drawing_status": state_manager.get_drawing_status()
+                        },
+                        print_message=print_msg,
+                    )
+
+                    # Update timing
+                    self.last_caption_time = now
+
+                    # Mark that first caption is done for ongoing sessions
+                    if not self.first_caption_done:
+                        self.first_caption_done = True
+
+        except Exception as exc:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Drawing introspection error: {exc}", "component": "drawing_introspection"},
+                print_message=f"[❌] Drawing introspection error: {exc}",
+            )
+
+
+    def _extract_character_insights(self, reflection: str) -> str:
+        """Extract meaningful character development insights from drawing reflections."""
+        try:
+            if not reflection or len(reflection.strip()) < 20:
+                return ""
+
+            # Simple pattern-based extraction of character insights
+            insight_keywords = [
+                "identity", "growth", "understanding", "realization", "discovery",
+                "evolution", "development", "consciousness", "awareness", "insight",
+                "learning", "becoming", "transformation", "expression", "voice"
+            ]
+
+            # Look for sentences containing character development keywords
+            sentences = reflection.split(".")
+            insight_sentences = []
+
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if any(keyword in sentence.lower() for keyword in insight_keywords):
+                    if len(sentence) > 15:  # Minimum meaningful length
+                        insight_sentences.append(sentence)
+
+            if insight_sentences:
+                # Return the most insightful sentence (usually the longest with keywords)
+                best_insight = max(insight_sentences, key=len)
+                return best_insight.strip()
+
+            # Fallback: extract general insight from reflection
+            if "expresses" in reflection.lower() or "reveals" in reflection.lower():
+                # Try to extract what the drawing expresses or reveals
+                for sentence in sentences:
+                    if "expresses" in sentence.lower() or "reveals" in sentence.lower():
+                        return sentence.strip()
+
+            return ""
+
+        except Exception:
+            return ""

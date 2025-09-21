@@ -45,6 +45,8 @@ from config.config import (
     USE_LIGHTBULB_PWM,
     USE_SERVO,
     USE_UARM,
+    USE_CAPTION_DISPLAY,
+    CAPTION_DISPLAY_PORT,
     UARM_PORT,
     UARM_CONNECT_ON_STARTUP,
     UARM_HOME_ON_CONNECT,
@@ -59,6 +61,7 @@ from image_monitor import ImageMonitor
 from mood.mood import MoodEngine
 from perception.detection_memory import DetectionMemory
 from perception.object_detection import ObjectDetectionThread
+from perception.person_detection_state import get_person_detection_state
 from reactivity.camera_reactive import CameraReactivityEngine
 from utils.continuity import describe_duration
 from utils.error_tracking import get_failure_tracker
@@ -239,6 +242,10 @@ model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
 debug_print("Loading face detection model", "INIT")
 net = cv2.dnn.readNetFromCaffe(proto, model)
 debug_print("Face detection model loaded", "INIT")
+
+# Initialize person detection state for consciousness context
+person_detection = get_person_detection_state()
+debug_print("Person detection state initialized", "INIT")
 if USE_SERVO:
     servo_port = ARDUINO_DEVICES["LUNGGAZE"]  # Gaze pan/tilt and breath controller
     if os.path.exists(servo_port):
@@ -357,6 +364,7 @@ _global_mood_engine = None
 _global_state_manager = None
 _global_start_time = None
 _global_run_id = None
+organic_left_arm = None
 
 
 def emergency_cleanup():
@@ -382,6 +390,13 @@ def emergency_cleanup():
         # Emergency hand controller stop
         try:
             stop_hand_controller()
+        except Exception:
+            pass
+
+        # Emergency organic left arm stop
+        try:
+            if 'organic_left_arm' in globals() and organic_left_arm:
+                organic_left_arm.shutdown()
         except Exception:
             pass
 
@@ -485,6 +500,14 @@ def graceful_cleanup():
     except Exception as e:
         print(f"[ERROR] Error stopping hand controller: {e}")
 
+    # Stop organic left arm controller
+    try:
+        if 'organic_left_arm' in globals() and organic_left_arm:
+            organic_left_arm.shutdown()
+            print("[🦾] Organic left arm controller shutdown")
+    except Exception as e:
+        print(f"[ERROR] Error stopping organic left arm: {e}")
+
     # Stop uArm controller
     if uarm_controller:
         try:
@@ -543,6 +566,15 @@ def graceful_cleanup():
             print("[📊] Error tracker shutdown")
     except Exception as e:
         print(f"[WARNING] Error shutting down error tracker: {e}")
+
+    # Close LCD caption display
+    if USE_CAPTION_DISPLAY:
+        try:
+            from utils.caption_display import close_caption_display
+            close_caption_display()
+            print("[📟] LCD caption display closed")
+        except Exception as e:
+            print(f"[WARNING] Error closing LCD caption display: {e}")
 
     cleanup_completed = True
     print("[SUCCESS] Graceful shutdown completed")
@@ -611,6 +643,26 @@ captioner = Captioner()
 _global_captioner = captioner
 _global_state_manager = state_manager
 
+# Initialize LCD caption display
+if USE_CAPTION_DISPLAY:
+    debug_print("Initializing LCD caption display", "INIT")
+    try:
+        from utils.caption_display import init_caption_display
+        init_caption_display(CAPTION_DISPLAY_PORT)
+        log_json_entry(
+            LogType.INFO,
+            {"message": f"LCD caption display initialized on {CAPTION_DISPLAY_PORT}"},
+            print_message=f"📟 LCD caption display initialized on {CAPTION_DISPLAY_PORT}",
+        )
+    except Exception as e:
+        log_json_entry(
+            LogType.ERROR,
+            {"message": f"Failed to initialize LCD caption display: {e}"},
+            print_message=f"❌ Failed to initialize LCD caption display: {e}",
+        )
+else:
+    debug_print("LCD caption display disabled in config", "INIT")
+
 # Initialize direct hand controller integration
 if USE_HAND_CONTROLLER:
     debug_print("Initializing direct hand controller integration", "INIT")
@@ -630,8 +682,39 @@ if hand_controller_started:
         debug_print("Failed to start autonomous mode", "INIT")
     status = get_status()
     debug_print(f"Hand controller status: {status}", "INIT")
+
+    # Initialize organic left arm controller for servo pins 4 and 5
+    debug_print("Initializing organic left arm controller", "INIT")
+    try:
+        from hand_control.organic_left_arm import OrganicLeftArmController
+        import serial
+
+        # Create serial connection to left hand Arduino
+        left_arm_serial = serial.Serial(ARDUINO_DEVICES["LEFTHAND"], 9600, timeout=1)
+        time.sleep(2)  # Allow Arduino to reset
+
+        # Initialize organic controller
+        organic_left_arm = OrganicLeftArmController(serial_connection=left_arm_serial)
+        organic_left_arm.enable()
+
+        debug_print("Organic left arm controller started successfully", "INIT")
+        log_json_entry(
+            LogType.INFO,
+            {"message": "Organic left arm controller initialized", "port": ARDUINO_DEVICES["LEFTHAND"]},
+            print_message=f"🦾 Organic left arm controller initialized on {ARDUINO_DEVICES['LEFTHAND']}",
+        )
+    except Exception as e:
+        debug_print(f"Failed to initialize organic left arm controller: {e}", "ERROR")
+        log_json_entry(
+            LogType.ERROR,
+            {"message": f"Failed to initialize organic left arm: {e}"},
+            print_message=f"❌ Failed to initialize organic left arm: {e}",
+        )
+        organic_left_arm = None
+
 else:
     debug_print("Hand controller failed to start", "WARN")
+    organic_left_arm = None
 
 # Initialize camera reactivity engine
 debug_print("Initializing camera reactivity engine", "INIT")
@@ -665,7 +748,7 @@ try:
             print(f"[DEBUG] _uarm_after_grbl() called - starting papermove sequence")
             def _run():
                 try:
-                    from grbl.idle_movement_manager import pause_for_drawing, resume_after_drawing, get_manager
+                    from grbl.idle_movement_manager import pause_for_drawing, get_manager
 
                     # Force pause idle movements regardless of CNC state
                     # (since we're in transition period between GRBL completion and uArm execution)
@@ -724,10 +807,8 @@ try:
                         time.sleep(2.0)
                     except Exception:
                         pass
-                    try:
-                        resume_after_drawing()
-                    except Exception:
-                        pass
+                    # Note: idle movement resumption is handled by the completion ritual
+                    # after CNC state is properly cleared, so we don't need to do it here
 
             # Run synchronously to ensure GRBL waits for uArm completion before clearing CNC state
             print("[DEBUG] Running uArm sequence synchronously to coordinate with GRBL")
@@ -1171,6 +1252,14 @@ try:
                 best_box = box.astype("int")
                 best_conf = conf
 
+        # Update person detection state for consciousness context
+        if best_box is not None:
+            # Convert box to (x1, y1, x2, y2) format
+            x1, y1, x2, y2 = best_box
+            person_detection.update_face_detection(best_conf, (x1, y1, x2, y2))
+        else:
+            person_detection.update_face_detection(0.0)
+
         # Disable YOLO person fallback to rely only on high-confidence face detection
         # This prevents false positives from YOLO detecting "persons" in walls/objects
         # if best_box is None:
@@ -1215,6 +1304,10 @@ try:
             cx = (x1 + x2) / 2.0
             cy = (y1 + y2) / 2.0
             reactivity_with_view["face_pos"] = {"x": cx / w, "y": cy / h}
+
+        # Add person consciousness context for rich social awareness
+        person_context = person_detection.get_consciousness_context()
+        reactivity_with_view["person_consciousness"] = person_context
 
         # Update captioner with every frame (decoupled from mood system)
         captioner.update(
