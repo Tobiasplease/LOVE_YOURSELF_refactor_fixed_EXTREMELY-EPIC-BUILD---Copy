@@ -75,7 +75,9 @@
       "Bash(systemctl:*)",
       "Read(//home/impostor/Downloads/**)",
       "Bash(cat:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(git stash show:*)",
+      "Bash(PYTHONPATH=/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy python debug/test_caption_display.py)"
     ],
     "deny": [],
     "ask": []

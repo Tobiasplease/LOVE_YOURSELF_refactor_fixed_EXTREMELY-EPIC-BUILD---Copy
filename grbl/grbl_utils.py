@@ -936,79 +936,8 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         print_message=f"[🚀] Executing G-code file: {gcode_file}",
     )
 
-    # SAFETY CHECK: Verify paper is present before execution
-    try:
-        from safety.paper_detection import check_paper_before_drawing
-        from config.config import ENABLE_PAPER_DETECTION, ALLOW_PAPER_DETECTION_OVERRIDE
-
-        if ENABLE_PAPER_DETECTION:
-            # Try to get camera and servo instances from the system
-            camera = None
-            servos = None
-            captioner = None
-
-            # Attempt to get instances from machine.py globals
-            try:
-                import machine
-                camera = getattr(machine, 'camera', None)
-                servos = getattr(machine, 'servos', None)
-                captioner = getattr(machine, 'captioner', None)
-            except:
-                pass
-
-            if camera and servos:
-                log_json_entry(
-                    LogType.DEBUG,
-                    {"action": "paper_check_before_execution", "component": "grbl_safety"},
-                    print_message="[📄] Checking for paper before drawing execution..."
-                )
-
-                paper_present = check_paper_before_drawing(camera, servos, captioner)
-
-                if not paper_present:
-                    error_msg = "Paper not detected - aborting drawing for safety"
-                    log_json_entry(
-                        LogType.ERROR,
-                        {
-                            "action": "drawing_aborted",
-                            "reason": "no_paper_detected",
-                            "file": gcode_file,
-                            "safety_system": "paper_detection"
-                        },
-                        print_message=f"[📄] ✗ {error_msg}"
-                    )
-
-                    if ALLOW_PAPER_DETECTION_OVERRIDE:
-                        log_json_entry(
-                            LogType.DEBUG,
-                            {"action": "paper_override_available", "component": "grbl_safety"},
-                            print_message="[📄] Manual override available - check paper and restart drawing if needed"
-                        )
-
-                    raise Exception(error_msg)
-                else:
-                    log_json_entry(
-                        LogType.DEBUG,
-                        {"action": "paper_check_passed", "component": "grbl_safety"},
-                        print_message="[📄] ✓ Paper detected - proceeding with drawing"
-                    )
-            else:
-                log_json_entry(
-                    LogType.DEBUG,
-                    {"action": "paper_check_skipped", "reason": "camera_servos_unavailable"},
-                    print_message="[📄] Paper check skipped - camera/servos not available"
-                )
-
-    except Exception as e:
-        if "Paper not detected" in str(e):
-            raise  # Re-raise paper detection failures
-        else:
-            # Log but don't abort for other paper detection system errors
-            log_json_entry(
-                LogType.ERROR,
-                {"action": "paper_check_error", "error": str(e), "component": "grbl_safety"},
-                print_message=f"[📄] Paper detection error (continuing): {e}"
-            )
+    # SAFETY CHECK: Paper detection DISABLED for now
+    # (Paper detection was causing gaze system to stay locked after drawing)
     
     
     # Pause idle movements NOW for actual drawing execution

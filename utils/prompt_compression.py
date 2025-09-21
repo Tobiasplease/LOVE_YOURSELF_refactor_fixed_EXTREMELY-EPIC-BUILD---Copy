@@ -50,11 +50,11 @@ def compress_drawing_prompt(drawing_prompt: str) -> str:
 def _compress_with_tinyllama(drawing_prompt: str) -> Optional[str]:
     """Use TinyLlama to compress the drawing prompt intelligently."""
     
-    compression_prompt = f"""Extract the core subject/theme of this drawing prompt in 8-15 words. Focus on what is actually being drawn, not the emotions or process:
+    compression_prompt = f"""What is being drawn? Answer in 3-6 words only.
 
 PROMPT: "{drawing_prompt}"
 
-CORE SUBJECT (8-15 words):"""
+WHAT'S BEING DRAWN:"""
     
     model_options = {
         "temperature": TINYLLAMA_TEMPERATURE,
