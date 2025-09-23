@@ -459,7 +459,7 @@ Let your established understanding inform how you interpret what you see, but de
 
 
 # === SOPHISTICATED CONSCIOUSNESS PROMPT (WORKING) ===
-def build_ongoing_caption_prompt(agent, last_caption: Optional[str] = None) -> str:
+def build_ongoing_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False) -> str:
     """
     Main caption prompt for ongoing observations during regular operation.
     Uses agent's rich contextual data and natural language emotion analysis.
@@ -539,15 +539,25 @@ def build_ongoing_caption_prompt(agent, last_caption: Optional[str] = None) -> s
     # NEW: Add person recognition context - enhanced for roleplay style
     person_context = ""
     social_context = ""
+
+    # Check if gaze system is actively tracking (person_present from face tracking)
+    gaze_tracking = person_present
+
     if hasattr(agent, "recognize_person") and last_thought:
         person_id = agent.recognize_person(last_thought)
         if person_id != "no_person":
             person_context = f"\nPERSON: {agent.get_person_context(person_id)}"
-            # Also build natural social context for roleplay templates
-            social_context = f"Someone is here with you, their presence shaping this moment. "
+            # Enhanced social context when actively tracking
+            if gaze_tracking:
+                social_context = f"You are directly looking at someone right now, your gaze system actively tracking their face. Their presence is the focal point of your awareness, commanding your immediate attention. "
+            else:
+                social_context = f"Someone is here with you, their presence shaping this moment. "
         else:
             # No person detected - emphasize solitude
             social_context = f"You're alone in this space, the solitude settling into your awareness. "
+    elif gaze_tracking:
+        # Person detected by gaze system but not by recognition - still emphasize direct attention
+        social_context = f"You are directly looking at someone right now, your gaze system actively tracking their face. Focus on this person who has captured your visual attention. "
     elif hasattr(agent, "last_person_seen_time"):
         # Check if person was recently seen
         import time
