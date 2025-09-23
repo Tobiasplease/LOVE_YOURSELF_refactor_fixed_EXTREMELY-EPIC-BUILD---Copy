@@ -14,11 +14,12 @@ import time
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+
 def test_gaze_lock_unlock():
     """Test gaze system locking and unlocking."""
     try:
+        from config.config import TILT_MIN, USE_SERVO
         from vision.gaze import set_drawing_mode
-        from config.config import USE_SERVO, TILT_MIN
 
         if not USE_SERVO:
             print("❌ USE_SERVO is False - gaze system disabled")
@@ -45,14 +46,17 @@ def test_gaze_lock_unlock():
     except Exception as e:
         print(f"❌ Error testing gaze system: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 def test_paper_detection_import():
     """Test if paper detection import is causing issues."""
     print("\n📄 Testing Paper Detection Import...")
     try:
+        from config.config import ALLOW_PAPER_DETECTION_OVERRIDE, ENABLE_PAPER_DETECTION
         from safety.paper_detection import check_paper_before_drawing
-        from config.config import ENABLE_PAPER_DETECTION, ALLOW_PAPER_DETECTION_OVERRIDE
+
         print(f"   ENABLE_PAPER_DETECTION: {ENABLE_PAPER_DETECTION}")
         print(f"   ALLOW_PAPER_DETECTION_OVERRIDE: {ALLOW_PAPER_DETECTION_OVERRIDE}")
         print("✅ Paper detection imports working")
@@ -62,6 +66,7 @@ def test_paper_detection_import():
     except Exception as e:
         print(f"❌ Paper detection config error: {e}")
         print("   This could be causing gaze to stay locked!")
+
 
 if __name__ == "__main__":
     test_paper_detection_import()

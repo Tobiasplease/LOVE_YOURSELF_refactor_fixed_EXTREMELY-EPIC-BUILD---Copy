@@ -6,12 +6,13 @@ Tests the hook system without requiring a full drawing to complete.
 
 import os
 import sys
-import time
 import threading
+import time
 
 # Add the project root to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
+
 
 def test_hook_registration():
     """Test if the GRBL hook gets registered properly"""
@@ -19,8 +20,8 @@ def test_hook_registration():
 
     try:
         # Import the same way machine.py does
-        from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
         import utils.hooks as _hooks
+        from config.config import UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE, USE_UARM
 
         print(f"USE_UARM: {USE_UARM}")
         print(f"UARM_PLAY_AFTER_DRAW: {UARM_PLAY_AFTER_DRAW}")
@@ -53,8 +54,10 @@ def test_hook_registration():
     except Exception as e:
         print(f"❌ Hook registration failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_hook_trigger():
     """Test triggering the hook manually"""
@@ -75,15 +78,17 @@ def test_hook_trigger():
     except Exception as e:
         print(f"❌ Hook trigger failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_uarm_functionality():
     """Test uArm connection and papermove file"""
     print("\n=== Testing uArm Functionality ===")
 
     try:
-        from config.config import UARM_PLAY_FILE, UARM_MOTION_STORAGE
+        from config.config import UARM_MOTION_STORAGE, UARM_PLAY_FILE
 
         print(f"Motion storage directory: {UARM_MOTION_STORAGE}")
         print(f"Papermove file: {UARM_PLAY_FILE}")
@@ -99,6 +104,7 @@ def test_uarm_functionality():
         # Test uArm connection
         try:
             from uarm_control.teach_menu import UArmTeachApp
+
             app = UArmTeachApp()
 
             print("🔌 Testing uArm connection...")
@@ -125,8 +131,10 @@ def test_uarm_functionality():
     except Exception as e:
         print(f"❌ uArm functionality test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_full_integration():
     """Test the complete integration by simulating GRBL completion"""
@@ -134,8 +142,8 @@ def test_full_integration():
 
     try:
         # Set up the real hook like machine.py does
-        from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
         import utils.hooks as _hooks
+        from config.config import UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE, USE_UARM
 
         if not (USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE):
             print("❌ Integration conditions not met")
@@ -143,12 +151,13 @@ def test_full_integration():
 
         def _normalize_smooth(path: str) -> str:
             base, ext = os.path.splitext(path)
-            while base.lower().endswith('.smooth'):
+            while base.lower().endswith(".smooth"):
                 base = base[:-7]
             return f"{base}{ext or '.txt'}"
 
         def _uarm_after_grbl():
             print("🎯 _uarm_after_grbl() called - starting papermove sequence")
+
             def _run():
                 try:
                     # Skip the GRBL idle manager pause for this test
@@ -159,6 +168,7 @@ def test_full_integration():
 
                     # Test uArm app setup
                     from uarm_control.teach_menu import UArmTeachApp
+
                     app = UArmTeachApp()
                     app.connect()
 
@@ -189,6 +199,7 @@ def test_full_integration():
                 except Exception as e:
                     print(f"❌ Integration test failed: {e}")
                     import traceback
+
                     traceback.print_exc()
 
             threading.Thread(target=_run, daemon=True, name="TestUArmAfterGRBL").start()
@@ -211,8 +222,10 @@ def test_full_integration():
     except Exception as e:
         print(f"❌ Full integration test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def main():
     """Run all tests"""
@@ -246,6 +259,7 @@ def main():
         print("🎉 All tests passed! Hook system should work correctly.")
     else:
         print("⚠️  Some tests failed. Check the output above for details.")
+
 
 if __name__ == "__main__":
     main()

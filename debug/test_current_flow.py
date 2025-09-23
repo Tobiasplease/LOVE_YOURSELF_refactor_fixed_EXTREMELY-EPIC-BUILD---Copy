@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.prompts import build_ongoing_caption_prompt
 
+
 class MockAgent:
     def __init__(self):
         self.current_emotion_state = "calm_observant"
@@ -23,22 +24,21 @@ class MockAgent:
         ]
 
         self.beliefs = {"workspace_lighting": 0.8, "drawing_focus": 0.7}
-        self.self_model = {
-            "drawing_preference": 0.9,
-            "technical_interest": 0.8,
-            "emotional_sensitivity": 0.6
-        }
+        self.self_model = {"drawing_preference": 0.9, "technical_interest": 0.8, "emotional_sensitivity": 0.6}
 
         # Mock memory ref with motif counter
         self.memory_ref = MockMemoryRef()
 
+
 class MockMemoryRef:
     def __init__(self):
         from collections import Counter
+
         self.motif_counter = Counter({"workspace": 15, "lighting": 12, "mechanical": 8})
 
     def get_top_motifs(self, n):
         return ["workspace focus", "lighting patterns", "mechanical precision"]
+
 
 def main():
     print("🔍 Testing Current Flow with 'As I...' Pattern Detection")
@@ -75,6 +75,7 @@ def main():
         print("✅ Last thought snippet included")
     else:
         print("❌ Last thought snippet not found")
+
 
 if __name__ == "__main__":
     main()

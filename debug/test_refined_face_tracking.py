@@ -12,7 +12,7 @@ import numpy as np
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from vision.gaze import update_gaze, FACE_PAN_VELOCITY, FACE_TILT_VELOCITY, FACE_VELOCITY_SMOOTHING, PRECISE_DEAD_ZONE
+from vision.gaze import FACE_PAN_VELOCITY, FACE_TILT_VELOCITY, FACE_VELOCITY_SMOOTHING, PRECISE_DEAD_ZONE, update_gaze
 
 
 def test_precision_tracking():

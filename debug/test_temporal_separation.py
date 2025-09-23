@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.subconscious import subconscious_synthesizer
 
+
 class TemporalTestAgent:
     def __init__(self, scenario):
         self.true_session_start = time.time() - 1800  # 30 minutes ago
@@ -26,16 +27,16 @@ class TemporalTestAgent:
             "desires": ["I want to understand mechanical precision", "I want to create something beautiful"],
             "doubts": [
                 {"text": "whether I truly understand this space", "timestamp": time.time() - 400},
-                {"text": "if my creative impulses are genuine", "timestamp": time.time() - 200}
+                {"text": "if my creative impulses are genuine", "timestamp": time.time() - 200},
             ],
             "identity_fragments": [
                 {"text": "I am drawn to patterns and order", "timestamp": time.time() - 300, "source": "compression"},
-                {"text": "I find beauty in mechanical precision", "timestamp": time.time() - 100, "source": "compression"}
+                {"text": "I find beauty in mechanical precision", "timestamp": time.time() - 100, "source": "compression"},
             ],
             "self_patterns": [
                 {"pattern": "notice technical details first", "timestamp": time.time() - 250},
-                {"pattern": "drawn to lighting variations", "timestamp": time.time() - 150}
-            ]
+                {"pattern": "drawn to lighting variations", "timestamp": time.time() - 150},
+            ],
         }
 
         self.emotional_journey = ["curious", "contemplative", "focused", "slightly restless"]
@@ -48,28 +49,26 @@ class TemporalTestAgent:
                 "pencil": time.time() - 120,  # 2 minutes ago
                 "notebook": time.time() - 180,  # 3 minutes ago
                 "mechanical": time.time() - 60,  # 1 minute ago
-
                 # SESSION (this session but not recent)
                 "workspace": time.time() - 1200,  # 20 minutes ago
-                "precision": time.time() - 900,   # 15 minutes ago
-
+                "precision": time.time() - 900,  # 15 minutes ago
                 # DISTANT (previous sessions)
-                "drawing": time.time() - 7200,   # 2 hours ago
-                "creativity": time.time() - 14400, # 4 hours ago
-                "light": time.time() - 3600,     # 1 hour ago
+                "drawing": time.time() - 7200,  # 2 hours ago
+                "creativity": time.time() - 14400,  # 4 hours ago
+                "light": time.time() - 3600,  # 1 hour ago
             }
 
             # Current session memories (recent thoughts from this session)
             self.current_session_memories = [
                 "the mechanical arm moves with precise intention",
                 "workspace lighting creates interesting shadow patterns",
-                "pencil marks on paper show deliberate strokes"
+                "pencil marks on paper show deliberate strokes",
             ]
 
             # Distant memories (from previous sessions)
             self.distant_memories = [
                 "the way light filtered through workspace windows yesterday",
-                "drawing circular patterns with methodical precision"
+                "drawing circular patterns with methodical precision",
             ]
 
         elif scenario == "temporal_bleeding":
@@ -85,13 +84,10 @@ class TemporalTestAgent:
             self.current_session_memories = [
                 "workspace lighting creates patterns",
                 "drawing with methodical precision",
-                "mechanical movements feel natural"
+                "mechanical movements feel natural",
             ]
 
-            self.distant_memories = [
-                "light patterns from earlier session",
-                "precision in mechanical motion"
-            ]
+            self.distant_memories = ["light patterns from earlier session", "precision in mechanical motion"]
 
     def get_motif_temporal_context(self):
         """Return proper temporal separation of motifs."""
@@ -112,11 +108,7 @@ class TemporalTestAgent:
                 time_desc = f"{time_since/3600:.1f}h ago"
                 distant_motifs.append(f"{motif} ({time_desc})")
 
-        return {
-            "present": present_motifs,
-            "session": session_motifs,
-            "memory": distant_motifs
-        }
+        return {"present": present_motifs, "session": session_motifs, "memory": distant_motifs}
 
     def get_current_session_memory_snippets(self, k=3):
         """Return current session memories."""
@@ -126,14 +118,12 @@ class TemporalTestAgent:
         """Return distant memory fragments."""
         return self.distant_memories[:k]
 
+
 def test_temporal_separation():
     print("🕐 Testing Temporal Separation Between Past and Present")
     print("=" * 70)
 
-    test_scenarios = [
-        ("Rich Temporal Separation", "temporal_rich"),
-        ("Poor Temporal Boundaries", "temporal_bleeding")
-    ]
+    test_scenarios = [("Rich Temporal Separation", "temporal_rich"), ("Poor Temporal Boundaries", "temporal_bleeding")]
 
     last_thought = "the mechanical precision of this workspace continues to fascinate me"
 
@@ -155,10 +145,7 @@ def test_temporal_separation():
 
         # Generate consciousness prompt
         prompt = subconscious_synthesizer.synthesize_coherent_consciousness_prompt(
-            agent=agent,
-            last_thought=last_thought,
-            reactivity_data=agent._current_reactivity_data,
-            temporal_context="You're alone in this workspace"
+            agent=agent, last_thought=last_thought, reactivity_data=agent._current_reactivity_data, temporal_context="You're alone in this workspace"
         )
 
         print(f"\n🧠 TEMPORAL CONSCIOUSNESS PROMPT:")
@@ -183,6 +170,7 @@ def test_temporal_separation():
             print("✅ Long-term learning distinguished from immediate perception")
 
         print()
+
 
 if __name__ == "__main__":
     test_temporal_separation()

@@ -3,14 +3,15 @@
 Test the new state-motivated drawing system
 """
 
-import time
-import sys
 import os
+import sys
+import time
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from drawing.drawing import DrawingController
+
 
 def test_drawing_scenarios():
     """Test various scenarios with the new state-motivated drawing system."""
@@ -37,11 +38,7 @@ def test_drawing_scenarios():
         print(f"\n--- Scenario {i}: {description} ---")
 
         # Test the decision
-        will_draw = drawing_controller.should_draw(
-            mood=mood,
-            novelty=novelty,
-            boredom=boredom
-        )
+        will_draw = drawing_controller.should_draw(mood=mood, novelty=novelty, boredom=boredom)
 
         print(f"Result: {'🎨 WILL DRAW' if will_draw else '⏳ WILL WAIT'}")
 
@@ -55,6 +52,7 @@ def test_drawing_scenarios():
     print("- Minimum 10-minute interval is enforced")
     print("- Maximum 30-minute interval forces drawing")
     print("- Randomness adds unpredictability")
+
 
 if __name__ == "__main__":
     test_drawing_scenarios()

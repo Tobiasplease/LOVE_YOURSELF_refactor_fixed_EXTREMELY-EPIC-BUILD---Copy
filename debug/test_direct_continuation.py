@@ -11,19 +11,20 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.prompts import build_ongoing_caption_prompt
 
+
 class MockAgent:
     def __init__(self):
         self.current_emotion_state = "calm_observant"
         self.true_session_start = time.time() - 300  # 5 minutes ago
         self.recent_captions = [
-            ("The mechanical workspace spreads before me, cluttered with servo motors and drawing equipment that sparks my technical curiosity. There's something overwhelming about all these components demanding attention at once.", time.time() - 60),
+            (
+                "The mechanical workspace spreads before me, cluttered with servo motors and drawing equipment that sparks my technical curiosity. There's something overwhelming about all these components demanding attention at once.",
+                time.time() - 60,
+            ),
         ]
         self.beliefs = {"workspace_lighting": 0.8, "drawing_focus": 0.7}
-        self.self_model = {
-            "drawing_preference": 0.9,
-            "technical_interest": 0.8,
-            "emotional_sensitivity": 0.6
-        }
+        self.self_model = {"drawing_preference": 0.9, "technical_interest": 0.8, "emotional_sensitivity": 0.6}
+
 
 def main():
     print("🔄 Testing Direct Continuation Approach")
@@ -59,6 +60,7 @@ def main():
         print("✅ Stream of consciousness instruction found")
     else:
         print("❌ No stream of consciousness instruction")
+
 
 if __name__ == "__main__":
     main()

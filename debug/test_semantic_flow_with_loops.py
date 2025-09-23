@@ -15,6 +15,7 @@ from captioner.prompts import build_ongoing_caption_prompt
 
 class LoopTestAgent:
     """Agent that simulates "As I..." loop scenarios."""
+
     def __init__(self):
         self.current_emotion_state = "calm_observant"
         self.true_session_start = time.time() - 300
@@ -23,14 +24,14 @@ class LoopTestAgent:
         self.recent_captions = [
             ("As I observe the mechanical components, their purpose becomes clearer...", time.time() - 90),
             ("As I continue watching the robotic arm move, I notice new details...", time.time() - 60),
-            ("As I delve deeper into understanding this workspace...", time.time() - 30)
+            ("As I delve deeper into understanding this workspace...", time.time() - 30),
         ]
 
         self.beliefs = {"workspace_lighting": 0.8, "mechanical_understanding": 0.9}
         self.self_model = {
             "location_understanding": "robotics workshop",
             "environmental_certainty": 0.8,
-            "desires": ["understand mechanical systems", "explore robotic functions"]
+            "desires": ["understand mechanical systems", "explore robotic functions"],
         }
 
     def describe_current_mood(self):
@@ -109,7 +110,7 @@ def test_loop_prevention_with_semantic_flow():
     scenarios = [
         "As I watch the servo motors adjust their positions...",
         "The mechanical precision here suggests deeper engineering principles...",
-        "Light casting shadows reveals the three-dimensional complexity of these components..."
+        "Light casting shadows reveals the three-dimensional complexity of these components...",
     ]
 
     for i, scenario in enumerate(scenarios, 1):
@@ -121,7 +122,7 @@ def test_loop_prevention_with_semantic_flow():
         prompt = build_ongoing_caption_prompt(agent, scenario)
 
         # Extract just the observation context
-        lines = prompt.split('\n')
+        lines = prompt.split("\n")
         context_found = False
         for line in lines:
             if "OBSERVATION CONTEXT" in line:

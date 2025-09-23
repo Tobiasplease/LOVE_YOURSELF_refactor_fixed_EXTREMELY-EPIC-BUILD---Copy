@@ -12,8 +12,8 @@ import numpy as np
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from vision.gaze import update_gaze
 from config.config import MAX_PAN_VELOCITY, MAX_TILT_VELOCITY
+from vision.gaze import update_gaze
 
 
 def test_hard_lockIn_protection():
@@ -163,7 +163,9 @@ def test_velocity_smoothing():
                 tilt_accel = abs(tilt_velocity - last_tilt_velocity)
                 accelerations.append((pan_accel, tilt_accel))
 
-                print(f"Step {step:2d}: PAN {servo_x:3d}° (v={pan_velocity:+5.1f}, a={pan_accel:4.1f}), TILT {servo_y:3d}° (v={tilt_velocity:+5.1f}, a={tilt_accel:4.1f})")
+                print(
+                    f"Step {step:2d}: PAN {servo_x:3d}° (v={pan_velocity:+5.1f}, a={pan_accel:4.1f}), TILT {servo_y:3d}° (v={tilt_velocity:+5.1f}, a={tilt_accel:4.1f})"
+                )
 
             last_pan_velocity = pan_velocity
             last_tilt_velocity = tilt_velocity

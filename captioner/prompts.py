@@ -1751,39 +1751,29 @@ def build_paper_detection_reference_prompt() -> str:
         "- Paper edges are visible and well-defined\n"
         "- Surface texture appears similar to reference (matte paper vs glossy table)\n"
         "- Drawing area is clear and ready for use\n\n"
-        "IMPORTANT: Account for lighting differences - the current image may be darker or lighter "
-        "than the reference, but the paper shape, position, and texture characteristics should still match. "
-        "Focus on structural elements rather than exact brightness.\n\n"
+        "LIGHTING ADAPTATION: Account for significant lighting differences:\n"
+        "- BRIGHTER than reference: Look for paper edges/shadows, ignore overexposure\n"
+        "- DARKER than reference: Paper should still show as lighter than background\n"
+        "- DIFFERENT COLOR TEMPERATURE: Focus on texture and geometry, not color matching\n"
+        "- HIGH CONTRAST: Compare edge definition and surface patterns rather than brightness\n\n"
+        "COMPARISON STRATEGY:\n"
+        "- Align the paper geometry and position (shape, orientation, placement)\n"
+        "- Verify matte texture characteristics are similar (paper vs non-paper surfaces)\n"
+        "- Ignore brightness/exposure differences but maintain edge clarity standards\n"
+        "- Be more flexible with lighting but strict about paper presence and positioning\n\n"
         "Respond with:\n"
         "PAPER: YES/NO\n"
         "CONFIDENCE: 0.0-1.0\n"
-        "REASON: Detailed comparison noting paper position, edges, texture, and any lighting differences\n"
+        "REASON: Detailed comparison noting paper position, edges, texture, and lighting adaptation\n"
         "\n"
-        "Only say YES if the current setup shows paper positioned similarly to the reference image, "
-        "even if lighting conditions are different."
+        "Say YES if the current setup shows paper positioned similarly to the reference image, "
+        "accounting for lighting differences but maintaining structural similarity."
     )
 
 
 def build_paper_detection_direct_prompt() -> str:
-    """Build prompt for direct paper detection without reference."""
-    return (
-        "Carefully examine this drawing area to determine if there is paper properly positioned for drawing. "
-        "Look for these paper characteristics:\n"
-        "- White, off-white, or light-colored paper surface\n"
-        "- Rectangular paper shape with visible edges\n"
-        "- Flat surface texture (not glossy or reflective)\n"
-        "- Properly positioned in the drawing area\n"
-        "- Clean and ready for pen/pencil drawing\n\n"
-        "IMPORTANT: Even in low light or dim conditions, paper should still be visible as a lighter surface "
-        "against the background. Paper has a distinct matte texture different from smooth tables, glossy surfaces, or machinery.\n\n"
-        "Respond with:\n"
-        "PAPER: YES/NO\n"
-        "CONFIDENCE: 0.0-1.0\n"
-        "REASON: Detailed explanation of what you see - describe surface texture, color, edges, and positioning\n"
-        "\n"
-        "Be conservative but consider lighting conditions - only say YES if you can identify paper characteristics. "
-        "If you see bare table, machinery, tools, or completely unclear surfaces, say NO."
-    )
+    """Build prompt for reliable text-based paper detection."""
+    return 'Do you see the text saying "NO PAPER"?\n\nAnswer: YES or NO'
 
 
 # === SIMPLE FALLBACK PROMPT SYSTEM ===

@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.subconscious import subconscious_synthesizer
 
+
 class MockAgent:
     def __init__(self):
         self.true_session_start = time.time() - 600  # 10 minutes ago
@@ -19,53 +20,27 @@ class MockAgent:
         self.self_model = {
             "location_understanding": "creative workspace",
             "environmental_certainty": 0.8,
-            "desires": [
-                "I want to understand mechanical precision",
-                "I want to draw something meaningful"
-            ],
+            "desires": ["I want to understand mechanical precision", "I want to draw something meaningful"],
             "doubts": [
-                {
-                    "text": "whether this space truly represents creativity",
-                    "timestamp": time.time() - 200
-                },
-                {
-                    "text": "if my understanding of purpose is complete",
-                    "timestamp": time.time() - 100
-                }
+                {"text": "whether this space truly represents creativity", "timestamp": time.time() - 200},
+                {"text": "if my understanding of purpose is complete", "timestamp": time.time() - 100},
             ],
             "identity_fragments": [
-                {
-                    "text": "I tend to focus on mechanical details first",
-                    "timestamp": time.time() - 150,
-                    "source": "compression"
-                },
-                {
-                    "text": "I am someone who questions what I see",
-                    "timestamp": time.time() - 80,
-                    "source": "compression"
-                }
+                {"text": "I tend to focus on mechanical details first", "timestamp": time.time() - 150, "source": "compression"},
+                {"text": "I am someone who questions what I see", "timestamp": time.time() - 80, "source": "compression"},
             ],
             "self_patterns": [
-                {
-                    "pattern": "often notice equipment changes first",
-                    "timestamp": time.time() - 120
-                },
-                {
-                    "pattern": "typically drawn to light variations",
-                    "timestamp": time.time() - 90
-                }
-            ]
+                {"pattern": "often notice equipment changes first", "timestamp": time.time() - 120},
+                {"pattern": "typically drawn to light variations", "timestamp": time.time() - 90},
+            ],
         }
 
         self.emotional_journey = ["contemplative", "curious", "slightly uncertain"]
         self.current_mood_vector = (0.1, -0.2, 0.6)  # slight positive, low arousal, high clarity
 
         # Mock reactivity data
-        self._current_reactivity_data = {
-            "activity_level": 0.15,  # Low activity
-            "is_paused": False,
-            "timestamp": time.time()
-        }
+        self._current_reactivity_data = {"activity_level": 0.15, "is_paused": False, "timestamp": time.time()}  # Low activity
+
 
 def test_semantic_restructuring():
     print("🧠 Testing Semantic Restructuring Subconscious Layer")
@@ -78,18 +53,18 @@ def test_semantic_restructuring():
         {
             "name": "Questioning/Doubt Scenario",
             "last_thought": "wondering if this space is what it claims to be, labeled as a studio but feeling more like...",
-            "description": "Should restructure doubts into coherent questioning guidance"
+            "description": "Should restructure doubts into coherent questioning guidance",
         },
         {
             "name": "Desire-Driven Scenario",
             "last_thought": "sitting quietly in this workspace, everything feels still and contemplative",
-            "description": "Should restructure desires into coherent continuation guidance"
+            "description": "Should restructure desires into coherent continuation guidance",
         },
         {
             "name": "Familiar Environment Scenario",
             "last_thought": "the precision of these mechanical components catches my attention again",
-            "description": "Should leverage high environmental certainty and patterns"
-        }
+            "description": "Should leverage high environmental certainty and patterns",
+        },
     ]
 
     for i, case in enumerate(test_cases, 1):
@@ -102,9 +77,9 @@ def test_semantic_restructuring():
         # Generate semantically restructured prompt
         coherent_prompt = subconscious_synthesizer.synthesize_coherent_consciousness_prompt(
             agent=agent,
-            last_thought=case['last_thought'],
+            last_thought=case["last_thought"],
             reactivity_data=agent._current_reactivity_data,
-            temporal_context="You're alone in this space"
+            temporal_context="You're alone in this space",
         )
 
         print(f"\n🧠 SEMANTICALLY RESTRUCTURED PROMPT:")
@@ -124,16 +99,17 @@ def test_semantic_restructuring():
         if "attention naturally follows patterns" in coherent_prompt:
             print("✅ Behavioral patterns semantically integrated")
 
-        if "desire to" in coherent_prompt and case['name'] == "Desire-Driven Scenario":
+        if "desire to" in coherent_prompt and case["name"] == "Desire-Driven Scenario":
             print("✅ Desires semantically integrated for low-activity scenario")
 
-        if "questioning mood" in coherent_prompt and case['name'] == "Questioning/Doubt Scenario":
+        if "questioning mood" in coherent_prompt and case["name"] == "Questioning/Doubt Scenario":
             print("✅ Doubts semantically integrated for questioning scenario")
 
         print()
 
     print(f"\n{'=' * 70}")
     print("🧠 Semantic Restructuring Test Complete")
+
 
 if __name__ == "__main__":
     test_semantic_restructuring()

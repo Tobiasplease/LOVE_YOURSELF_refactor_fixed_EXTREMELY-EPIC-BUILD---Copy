@@ -2,14 +2,16 @@
 """
 Direct test of left arm servo control via SERVO commands
 """
-import serial
 import time
+
+import serial
+
 
 def test_left_arm_servos():
     """Test direct SERVO commands to left arm."""
     try:
         # Connect to Arduino
-        ser = serial.Serial('/dev/arduino_lefthand', 9600, timeout=1)
+        ser = serial.Serial("/dev/arduino_lefthand", 9600, timeout=1)
         time.sleep(2)  # Wait for Arduino to initialize
 
         print("Testing direct SERVO commands...")
@@ -58,6 +60,7 @@ def test_left_arm_servos():
 
     except Exception as e:
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     test_left_arm_servos()

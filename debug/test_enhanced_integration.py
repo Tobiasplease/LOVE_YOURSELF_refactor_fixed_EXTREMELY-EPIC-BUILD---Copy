@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.prompts import build_ongoing_caption_prompt
 
+
 class MockAgent:
     def __init__(self):
         self.current_emotion_state = "calm_observant"
@@ -19,7 +20,7 @@ class MockAgent:
         # Rich psychological state for testing subconscious synthesis
         self.beliefs = {
             "lighting_patterns": {"strength": 0.85, "first_formed": time.time() - 300, "last_reinforced": time.time() - 60},
-            "workspace_activity": {"strength": 0.72, "first_formed": time.time() - 400, "last_reinforced": time.time() - 30}
+            "workspace_activity": {"strength": 0.72, "first_formed": time.time() - 400, "last_reinforced": time.time() - 30},
         }
 
         self.self_model = {
@@ -28,43 +29,48 @@ class MockAgent:
             "desires": ["I want to understand mechanical precision", "I want to draw lighting patterns"],
             "doubts": [
                 {"text": "whether this space truly represents creativity", "timestamp": time.time() - 200},
-                {"text": "if my understanding of purpose is complete", "timestamp": time.time() - 100}
+                {"text": "if my understanding of purpose is complete", "timestamp": time.time() - 100},
             ],
             "identity_fragments": [
                 {"text": "I tend to focus on mechanical details first", "timestamp": time.time() - 150, "source": "compression"},
-                {"text": "I am someone who questions what I see", "timestamp": time.time() - 80, "source": "compression"}
+                {"text": "I am someone who questions what I see", "timestamp": time.time() - 80, "source": "compression"},
             ],
             "self_patterns": [
                 {"pattern": "often notice equipment changes first", "timestamp": time.time() - 120},
-                {"pattern": "typically drawn to light variations", "timestamp": time.time() - 90}
-            ]
+                {"pattern": "typically drawn to light variations", "timestamp": time.time() - 90},
+            ],
         }
 
         self.emotional_journey = ["contemplative", "curious", "slightly uncertain"]
         self.current_mood_vector = (0.1, -0.2, 0.6)  # slight positive, low arousal, high clarity
 
         # Mock reactivity data for testing
-        self._current_reactivity_data = {
-            "activity_level": 0.15,  # Low activity
-            "is_paused": False,
-            "timestamp": time.time()
-        }
+        self._current_reactivity_data = {"activity_level": 0.15, "is_paused": False, "timestamp": time.time()}  # Low activity
 
         self.recent_captions = [
-            ("The mechanical workspace spreads before me, with various components that suggest precision engineering for creative tasks.", time.time() - 120),
-            ("Something about the way light falls across these surfaces draws my attention, creating patterns that shift subtly as I observe.", time.time() - 60),
+            (
+                "The mechanical workspace spreads before me, with various components that suggest precision engineering for creative tasks.",
+                time.time() - 120,
+            ),
+            (
+                "Something about the way light falls across these surfaces draws my attention, creating patterns that shift subtly as I observe.",
+                time.time() - 60,
+            ),
         ]
 
         # Mock memory ref
         self.memory_ref = MockMemoryRef()
 
+
 class MockMemoryRef:
     def __init__(self):
         from collections import Counter
+
         self.motif_counter = Counter({"lighting": 8, "mechanical": 6, "workspace": 4})
 
     def get_top_motifs(self, n):
         return ["lighting patterns", "mechanical precision", "workspace focus"]
+
 
 def main():
     print("🧠 Testing Enhanced Subconscious Integration")
@@ -93,7 +99,7 @@ def main():
         ("CONTINUE YOUR PREVIOUS THOUGHT", "✅ Core continuation mechanism preserved"),
         ("SUBCONSCIOUS CONTEXT", "✅ Subconscious guidance integrated"),
         ("Don't start fresh observations", "✅ Anti-restart instruction included"),
-        (last_thought[-50:], "✅ Last thought snippet included")
+        (last_thought[-50:], "✅ Last thought snippet included"),
     ]
 
     print("\n=== INTEGRATION CHECKS ===")
@@ -102,6 +108,7 @@ def main():
             print(success_msg)
         else:
             print(f"❌ Missing: {check_text}")
+
 
 if __name__ == "__main__":
     main()

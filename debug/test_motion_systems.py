@@ -13,19 +13,20 @@ Validates smooth playback, timing accuracy, and error handling.
 
 import os
 import sys
-import time
 import threading
+import time
 from datetime import datetime
 
 # Add uarm_control to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'uarm_control'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "uarm_control"))
 
-from uarm_controller import UarmController
-from motion_manager import MotionManager
 from high_frequency_motion_manager import HighFrequencyMotionManager
+from motion_manager import MotionManager
+from uarm_controller import UarmController
 
 try:
     from uarm.swift.teach import Teach
+
     OFFICIAL_SDK_AVAILABLE = True
 except ImportError:
     print("Warning: Official uArm SDK not available")
@@ -42,9 +43,9 @@ class MotionSystemTester:
 
     def setup(self):
         """Setup test environment"""
-        print("="*60)
+        print("=" * 60)
         print("🔧 MOTION SYSTEMS TEST SUITE")
-        print("="*60)
+        print("=" * 60)
 
         # Connect to uArm
         print("\n📡 Connecting to uArm...")
@@ -103,7 +104,7 @@ class MotionSystemTester:
                 while self.official_teach.is_playing():
                     progress = self.official_teach.get_progress(wait=False)
                     if progress:
-                        print(f"  Progress: {progress[1]:.1f}%", end='\r')
+                        print(f"  Progress: {progress[1]:.1f}%", end="\r")
                     time.sleep(0.1)
 
                 duration = time.time() - start_time
@@ -114,7 +115,7 @@ class MotionSystemTester:
                     "actual_duration": duration,
                     "expected_duration": expected_duration,
                     "timing_accuracy": timing_accuracy,
-                    "smooth": timing_accuracy < 0.2  # Within 20%
+                    "smooth": timing_accuracy < 0.2,  # Within 20%
                 }
 
                 print(f"\n  Duration: {duration:.1f}s (expected {expected_duration:.1f}s)")
@@ -202,11 +203,7 @@ class MotionSystemTester:
                     continue
 
                 duration = time.time() - start_time
-                smoothness_results[speed] = {
-                    "status": "passed",
-                    "duration": duration,
-                    "speed_multiplier": speed
-                }
+                smoothness_results[speed] = {"status": "passed", "duration": duration, "speed_multiplier": speed}
 
                 print(f"  Completed in {duration:.1f}s")
 
@@ -259,7 +256,7 @@ class MotionSystemTester:
         timing_results = {}
 
         # Test consistent timing across multiple playbacks
-        if hasattr(self, 'official_teach') and self.official_teach:
+        if hasattr(self, "official_teach") and self.official_teach:
             print("📊 Testing official SDK timing consistency...")
 
             durations = []
@@ -280,7 +277,7 @@ class MotionSystemTester:
                 timing_results["official_sdk"] = {
                     "average_duration": avg_duration,
                     "max_deviation": max_deviation,
-                    "consistency": "good" if max_deviation < 0.5 else "poor"
+                    "consistency": "good" if max_deviation < 0.5 else "poor",
                 }
 
         return {"status": "completed", "details": timing_results}
@@ -295,7 +292,7 @@ class MotionSystemTester:
             ("MotionManager Coordination", self.test_motion_manager_coordination),
             ("High-Frequency Smoothness", self.test_hf_motion_manager_smoothness),
             ("Error Handling", self.test_error_handling),
-            ("Timing Precision", self.test_timing_precision)
+            ("Timing Precision", self.test_timing_precision),
         ]
 
         print(f"\n🚀 Running {len(tests)} motion system tests...")
@@ -325,9 +322,9 @@ class MotionSystemTester:
 
     def print_summary(self):
         """Print test results summary"""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("📊 TEST RESULTS SUMMARY")
-        print("="*60)
+        print("=" * 60)
 
         passed = sum(1 for r in self.test_results.values() if r.get("status") == "passed")
         failed = sum(1 for r in self.test_results.values() if r.get("status") == "failed")
@@ -339,21 +336,26 @@ class MotionSystemTester:
         print(f"⏭️ Skipped: {skipped}")
         print(f"💥 Crashed: {crashed}")
 
-        print(f"\n📈 Overall Success Rate: {passed/(passed+failed+crashed)*100:.1f}%" if (passed+failed+crashed) > 0 else "No conclusive tests")
+        print(f"\n📈 Overall Success Rate: {passed/(passed+failed+crashed)*100:.1f}%" if (passed + failed + crashed) > 0 else "No conclusive tests")
 
         # Save results to file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results_file = f"movement_recordings/uarm/test_results_{timestamp}.json"
 
         import json
+
         try:
             os.makedirs(os.path.dirname(results_file), exist_ok=True)
-            with open(results_file, 'w') as f:
-                json.dump({
-                    "timestamp": timestamp,
-                    "summary": {"passed": passed, "failed": failed, "skipped": skipped, "crashed": crashed},
-                    "details": self.test_results
-                }, f, indent=2)
+            with open(results_file, "w") as f:
+                json.dump(
+                    {
+                        "timestamp": timestamp,
+                        "summary": {"passed": passed, "failed": failed, "skipped": skipped, "crashed": crashed},
+                        "details": self.test_results,
+                    },
+                    f,
+                    indent=2,
+                )
             print(f"\n💾 Results saved to: {results_file}")
         except Exception as e:
             print(f"⚠️ Could not save results: {e}")

@@ -31,6 +31,7 @@ print("\n=== SIMULATING GRBL COMPLETION ===")
 
 try:
     from utils.hooks import on_grbl_drawing_complete
+
     print(f"GRBL perspective - hook = {on_grbl_drawing_complete}")
 
     if callable(on_grbl_drawing_complete):
@@ -44,6 +45,7 @@ try:
 except Exception as e:
     print(f"❌ GRBL hook call failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 print("\n=== TEST COMPLETE ===")

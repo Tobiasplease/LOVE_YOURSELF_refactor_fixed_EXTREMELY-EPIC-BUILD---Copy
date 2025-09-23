@@ -24,8 +24,8 @@ import sys
 import time
 
 try:
-    from uarm.wrapper.swift_api import SwiftAPI
     from uarm.swift.teach import Teach
+    from uarm.wrapper.swift_api import SwiftAPI
 except Exception as e:
     print("Error: uArm SDK not available. Ensure pyuf is installed.")
     print(f"Details: {e}")
@@ -38,7 +38,7 @@ def connect_uarm(port: str | None) -> SwiftAPI:
         swift = SwiftAPI(port=port)
     else:
         print("Connecting to uArm via USB VID/PID filter (2341:0042)…")
-        swift = SwiftAPI(filters={'hwid': 'USB VID:PID=2341:0042'})
+        swift = SwiftAPI(filters={"hwid": "USB VID:PID=2341:0042"})
     swift.waiting_ready(timeout=10)
     print("Connected. Firmware:", swift.get_device_info())
     return swift
@@ -51,7 +51,7 @@ def ensure_dir(path: str):
 
 
 def cmd_record(args):
-    port = args.port or os.getenv('UARM_PORT')
+    port = args.port or os.getenv("UARM_PORT")
     swift = connect_uarm(port)
     teach = Teach(args.file, swift)
     try:
@@ -86,7 +86,7 @@ def cmd_play(args):
         print(f"Error: file not found: {args.file}")
         sys.exit(1)
 
-    port = args.port or os.getenv('UARM_PORT')
+    port = args.port or os.getenv("UARM_PORT")
     swift = connect_uarm(port)
     teach = Teach(args.file, swift)
 
@@ -152,4 +152,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

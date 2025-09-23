@@ -45,6 +45,7 @@ def test_character_insight_extraction():
     # Import here to avoid issues if captioner has dependencies
     try:
         from captioner.captioner import Captioner
+
         captioner = Captioner()
 
         # Test with meaningful reflection
@@ -85,6 +86,7 @@ def main():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

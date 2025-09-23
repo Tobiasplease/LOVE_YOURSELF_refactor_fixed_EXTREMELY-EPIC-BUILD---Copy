@@ -12,12 +12,14 @@ import time
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+
 def main():
     print("📄 CAPTURING PAPER REFERENCE IMAGE")
     print("=" * 50)
 
     try:
         from safety.paper_detection import capture_paper_reference
+
         print("✅ Paper detection module imported")
     except ImportError as e:
         print(f"❌ Error importing paper detection: {e}")
@@ -28,10 +30,12 @@ def main():
         print("[📄] Initializing camera and servos...")
 
         from reactivity.camera_reactive import CameraReactivityEngine
+
         camera = CameraReactivityEngine()
         print("[✅] Camera initialized")
 
         from servo_control.servo_control import ServoController
+
         servos = ServoController()
         print("[✅] Servos initialized")
 
@@ -68,6 +72,7 @@ def main():
     except Exception as e:
         print(f"\n❌ ERROR during capture: {e}")
         return False
+
 
 if __name__ == "__main__":
     success = main()

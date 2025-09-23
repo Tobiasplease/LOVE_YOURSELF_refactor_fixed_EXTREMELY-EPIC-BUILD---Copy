@@ -11,7 +11,6 @@ Let's debug step by step what's going wrong.
 
 import math
 
-
 # === COPIED FUNCTIONS ===
 biceps = 295  # Upper arm length (mm)
 underarm = 325  # Lower arm length (mm)
@@ -27,6 +26,7 @@ def add_vectors(p1, p2):
 def rotation(cos_v, sin_v):
     def rotation_v(x, y):
         return (x * cos_v - y * mirror * sin_v, x * mirror * sin_v + y * cos_v)
+
     return rotation_v
 
 
@@ -67,6 +67,7 @@ def inverse(x, y):
 
 
 # === DEBUG FUNCTIONS ===
+
 
 def debug_single_case(x, y):
     """Debug a single test case step by step"""

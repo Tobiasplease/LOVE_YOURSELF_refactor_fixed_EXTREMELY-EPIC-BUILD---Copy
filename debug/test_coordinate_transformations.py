@@ -13,7 +13,6 @@ The mathematician said: "Man kan t ex behöva transponera/spegla/rotera inversen
 
 import math
 
-
 # === ORIGINAL FUNCTIONS (assume these are mathematically correct) ===
 biceps = 295  # Upper arm length (mm)
 underarm = 325  # Lower arm length (mm)
@@ -29,6 +28,7 @@ def add_vectors(p1, p2):
 def rotation(cos_v, sin_v):
     def rotation_v(x, y):
         return (x * cos_v - y * mirror * sin_v, x * mirror * sin_v + y * cos_v)
+
     return rotation_v
 
 
@@ -71,6 +71,7 @@ def inverse_original(x, y):
 
 
 # === COORDINATE SYSTEM VARIATIONS ===
+
 
 def inverse_transposed(x, y):
     """Try swapping X and Y coordinates"""
@@ -118,18 +119,13 @@ def inverse_different_origin(x, y, offset_x=0, offset_y=0):
 
 # === ANDREAS'S WORKING A4 COORDINATES ===
 ANDREAS_A4_CORNERS = {
-    "bottom_left": (66, -2),    # Should map to A4 (0, 0)
+    "bottom_left": (66, -2),  # Should map to A4 (0, 0)
     "bottom_right": (111, -1),  # Should map to A4 (210, 0)
-    "top_left": (-2, 67),       # Should map to A4 (0, 297)
-    "top_right": (24, 67)       # Should map to A4 (210, 297)
+    "top_left": (-2, 67),  # Should map to A4 (0, 297)
+    "top_right": (24, 67),  # Should map to A4 (210, 297)
 }
 
-A4_CORNERS = {
-    "bottom_left": (0, 0),
-    "bottom_right": (210, 0),
-    "top_left": (0, 297),
-    "top_right": (210, 297)
-}
+A4_CORNERS = {"bottom_left": (0, 0), "bottom_right": (210, 0), "top_left": (0, 297), "top_right": (210, 297)}
 
 
 def test_coordinate_transformations():
@@ -149,7 +145,7 @@ def test_coordinate_transformations():
         ("Mirrored Both", inverse_mirrored_both),
         ("Rotated 90°", inverse_rotated_90),
         ("Rotated 180°", inverse_rotated_180),
-        ("Rotated 270°", inverse_rotated_270)
+        ("Rotated 270°", inverse_rotated_270),
     ]
 
     print(f"{'Transform':<15} {'Point':<10} {'→ Robot Params':<20} {'Status'}")
@@ -189,13 +185,13 @@ def test_origin_variations():
 
     test_point = (50, 50)
     offsets = [
-        (0, 0),      # No offset
-        (30, 30),    # Half of current
-        (60, 60),    # Current offset
+        (0, 0),  # No offset
+        (30, 30),  # Half of current
+        (60, 60),  # Current offset
         (120, 120),  # Double current
         (-60, -60),  # Negative offset
-        (100, 0),    # X only
-        (0, 100)     # Y only
+        (100, 0),  # X only
+        (0, 100),  # Y only
     ]
 
     print(f"{'Offset':<12} {'Point':<10} {'→ Robot Params':<20} {'Distance':<10} {'Status'}")
@@ -240,17 +236,15 @@ def analyze_andreas_coordinates():
     top_left_grbl = ANDREAS_A4_CORNERS["top_left"]
 
     # Calculate vectors
-    width_vector = (bottom_right_grbl[0] - bottom_left_grbl[0],
-                   bottom_right_grbl[1] - bottom_left_grbl[1])
-    height_vector = (top_left_grbl[0] - bottom_left_grbl[0],
-                    top_left_grbl[1] - bottom_left_grbl[1])
+    width_vector = (bottom_right_grbl[0] - bottom_left_grbl[0], bottom_right_grbl[1] - bottom_left_grbl[1])
+    height_vector = (top_left_grbl[0] - bottom_left_grbl[0], top_left_grbl[1] - bottom_left_grbl[1])
 
     print(f"  Width vector (210mm A4):  {width_vector}")
     print(f"  Height vector (297mm A4): {height_vector}")
 
     # Calculate scaling
-    width_scale = math.sqrt(width_vector[0]**2 + width_vector[1]**2) / 210
-    height_scale = math.sqrt(height_vector[0]**2 + height_vector[1]**2) / 297
+    width_scale = math.sqrt(width_vector[0] ** 2 + width_vector[1] ** 2) / 210
+    height_scale = math.sqrt(height_vector[0] ** 2 + height_vector[1] ** 2) / 297
 
     print(f"  Width scaling: {width_scale:.3f}")
     print(f"  Height scaling: {height_scale:.3f}")

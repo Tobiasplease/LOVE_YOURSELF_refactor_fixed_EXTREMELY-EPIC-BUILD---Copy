@@ -10,6 +10,7 @@ import sys
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+
 def test_clean_caption_formatting():
     """Test the drawing introspection printing logic with clean captions."""
     print("🧪 Testing drawing introspection printing with clean captions...")
@@ -20,6 +21,7 @@ def test_clean_caption_formatting():
     # Simulate clean caption logic
     try:
         from config.config import CLEAN_LLM_OUTPUT
+
         print(f"   CLEAN_LLM_OUTPUT setting: {CLEAN_LLM_OUTPUT}")
 
         if CLEAN_LLM_OUTPUT:
@@ -34,10 +36,10 @@ def test_clean_caption_formatting():
     print(f"   Clean output (no prefix): {CLEAN_LLM_OUTPUT and '[🧠]' not in print_msg}")
 
     if CLEAN_LLM_OUTPUT:
-        assert '[🧠]' not in print_msg, "Should not have prefix with clean captions"
+        assert "[🧠]" not in print_msg, "Should not have prefix with clean captions"
         assert print_msg == test_introspection, "Should be exact introspection text"
     else:
-        assert '[🧠]' in print_msg, "Should have prefix without clean captions"
+        assert "[🧠]" in print_msg, "Should have prefix without clean captions"
 
     print("✅ Drawing introspection printing logic working correctly")
 
@@ -75,6 +77,7 @@ def main():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

@@ -4,23 +4,25 @@ Test person-responsive CNC drawing functionality - pause and resume based on fac
 """
 import os
 import sys
-import time
 import threading
+import time
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from perception.person_detection_state import get_person_detection_state
 from grbl.segmented_executor import SegmentedExecutor
+from perception.person_detection_state import get_person_detection_state
+
 
 class MockSerial:
     """Mock serial interface for testing without actual GRBL connection"""
+
     def __init__(self):
         self.sent_commands = []
         self.is_open = True
 
     def write(self, data):
-        command = data.decode('utf-8').strip()
+        command = data.decode("utf-8").strip()
         self.sent_commands.append(command)
         print(f"[GRBL] -> {command}")
 
@@ -30,6 +32,7 @@ class MockSerial:
 
     def close(self):
         self.is_open = False
+
 
 def create_test_gcode_file():
     """Create a test G-code file for demonstration"""
@@ -64,10 +67,11 @@ G0 X0 Y0 Z10
 M30 ; end program
 """
 
-    with open(test_file, 'w') as f:
+    with open(test_file, "w") as f:
         f.write(gcode_content.strip())
 
     return test_file
+
 
 def simulate_person_detection_sequence():
     """Simulate a person detection sequence in a separate thread"""
@@ -95,6 +99,7 @@ def simulate_person_detection_sequence():
 
     print("👤 [SIMULATION] Person leaves for good...")
     person_detection.update_face_detection(0.0)
+
 
 def test_person_responsive_cnc():
     print("🎨 Testing Person-Responsive CNC Drawing")
@@ -155,6 +160,7 @@ def test_person_responsive_cnc():
 
     print(f"\n✅ Person-responsive CNC test complete!")
 
+
 def test_person_detection_states():
     """Test different person detection scenarios"""
     print("\n🧪 Testing Person Detection State Scenarios")
@@ -173,8 +179,8 @@ def test_person_detection_states():
         print(f"\n📊 Scenario: {scenario['name']}")
 
         # Update detection
-        if scenario['confidence'] > 0:
-            person_detection.update_face_detection(scenario['confidence'], (100, 100, 200, 200))
+        if scenario["confidence"] > 0:
+            person_detection.update_face_detection(scenario["confidence"], (100, 100, 200, 200))
         else:
             person_detection.update_face_detection(0.0)
 
@@ -187,8 +193,10 @@ def test_person_detection_states():
 
         # Test breathing response
         from breathing.breathing import update_lung_position
+
         breath_mod, pause_mod = person_detection.get_breathing_modifiers("alert_curious")
         print(f"   Breathing modifiers: speed={breath_mod:.2f}, pause={pause_mod:.2f}")
+
 
 if __name__ == "__main__":
     # Test person detection states first

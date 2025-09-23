@@ -15,6 +15,7 @@ print("=== DIRECT HOOK TEST ===")
 # 1. Check if hook module can be imported
 try:
     import utils.hooks as hooks
+
     print(f"✅ utils.hooks imported successfully")
     print(f"   on_grbl_drawing_complete = {hooks.on_grbl_drawing_complete}")
 except Exception as e:
@@ -23,7 +24,8 @@ except Exception as e:
 
 # 2. Check config values
 try:
-    from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+    from config.config import UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE, USE_UARM
+
     print(f"✅ Config imported successfully")
     print(f"   USE_UARM = {USE_UARM}")
     print(f"   UARM_PLAY_AFTER_DRAW = {UARM_PLAY_AFTER_DRAW}")
@@ -35,8 +37,11 @@ except Exception as e:
 
 # 3. Test setting a simple hook
 print("\n=== TESTING HOOK SETTING ===")
+
+
 def test_hook():
     print("🔥 TEST HOOK WAS CALLED!")
+
 
 hooks.on_grbl_drawing_complete = test_hook
 print(f"✅ Hook set to: {hooks.on_grbl_drawing_complete}")
@@ -65,6 +70,7 @@ else:
 print("\n=== SIMULATING GRBL HOOK CALL ===")
 try:
     from utils.hooks import on_grbl_drawing_complete
+
     print(f"Imported hook: {on_grbl_drawing_complete}")
     if callable(on_grbl_drawing_complete):
         print("🎯 CALLING HOOK LIKE GRBL DOES...")
@@ -75,6 +81,7 @@ try:
 except Exception as e:
     print(f"❌ GRBL hook call failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 print("\n=== TEST COMPLETE ===")

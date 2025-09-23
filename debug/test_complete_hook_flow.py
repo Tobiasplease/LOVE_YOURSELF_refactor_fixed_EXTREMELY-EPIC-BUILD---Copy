@@ -16,12 +16,13 @@ print("=== TESTING COMPLETE HOOK FLOW ===")
 print("\n1. Testing hook registration...")
 try:
     import utils.hooks as _hooks
-    from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+    from config.config import UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE, USE_UARM
 
     print(f"Config values: USE_UARM={USE_UARM}, UARM_PLAY_AFTER_DRAW={UARM_PLAY_AFTER_DRAW}")
     print(f"UARM_PLAY_FILE exists: {os.path.exists(UARM_PLAY_FILE) if UARM_PLAY_FILE else False}")
 
     if USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE:
+
         def test_uarm_hook():
             print("🎯 [SIMULATION] uArm papermove would execute here!")
             print(f"   Would play: {UARM_PLAY_FILE}")
@@ -35,6 +36,7 @@ try:
 except Exception as e:
     print(f"❌ Hook registration failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -42,8 +44,8 @@ except Exception as e:
 print("\n2. Testing image monitor hook call...")
 try:
     # This simulates the exact code in image_monitor.py finally block
-    from utils.hooks import on_grbl_drawing_complete
     from config.config import EXECUTE_GRBL_GCODE
+    from utils.hooks import on_grbl_drawing_complete
 
     # Simulate EXECUTE_GRBL_GCODE being True
     if True:  # Simulating EXECUTE_GRBL_GCODE
@@ -65,6 +67,7 @@ try:
 except Exception as e:
     print(f"❌ Image monitor hook call failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 print("\n=== COMPLETE FLOW TEST SUCCESSFUL ===")

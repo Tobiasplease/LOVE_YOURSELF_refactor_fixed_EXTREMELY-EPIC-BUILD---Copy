@@ -12,7 +12,7 @@ from typing import Deque, Dict, List, Optional, Tuple
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 
-from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
+from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, DRAWING_STARTUP_DELAY, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
@@ -339,11 +339,16 @@ class Captioner(MemoryMixin):
             # Track last sent caption for deduplication
             self._last_sent_caption = caption.strip()
 
-            # Send to LCD display
+            # Send to LCD display (skip during GRBL execution to show drawing title)
             try:
-                from utils.caption_display import send_caption_to_display
-                send_caption_to_display(caption)
-                print(f"[LCD] Sent: {caption[:40]}...")
+                from utils.state_manager import state_manager
+                is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
+                if not is_executing_cnc:
+                    from utils.caption_display import send_caption_to_display
+                    send_caption_to_display(caption)
+                    print(f"[LCD] Sent: {caption[:40]}...")
+                else:
+                    print(f"[LCD] Skipped during drawing: {caption[:40]}...")
             except Exception as e:
                 print(f"[LCD] Failed to send caption: {e}")
             # Track last sent caption for deduplication
@@ -508,6 +513,13 @@ class Captioner(MemoryMixin):
         print(f"  Time since last check: {time_since_last_check:.1f}s (interval: {DRAWING_INTERVAL}s)")
         print(f"  Time since last drawing: {time_since_last_drawing:.1f}s (cooldown: {self.drawing.cooldown}s)")
         print(f"  Drawing system ready: {self.drawing.ready_to_draw()}")
+
+        # Check minimum startup delay to ensure camera has initialized and system is stable
+        time_since_startup = now - self.true_session_start
+        if time_since_startup < DRAWING_STARTUP_DELAY:
+            startup_remaining = DRAWING_STARTUP_DELAY - time_since_startup
+            print(f"[DEBUG] Drawing blocked: startup delay ({startup_remaining:.1f}s remaining, need {DRAWING_STARTUP_DELAY}s total)")
+            return
 
         # Check if drawing system is ready (this handles cooldown logic)
         if not self.drawing.ready_to_draw():
@@ -1010,11 +1022,16 @@ class Captioner(MemoryMixin):
                     except ImportError:
                         print_msg = f"[🧠] {introspection}"
 
-                    # Send to LCD display (same as normal captions)
+                    # Send to LCD display (skip during GRBL execution to show drawing title)
                     try:
-                        from utils.caption_display import send_caption_to_display
-                        send_caption_to_display(introspection)
-                        print(f"[LCD] Sent introspection: {introspection[:40]}...")
+                        from utils.state_manager import state_manager
+                        is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
+                        if not is_executing_cnc:
+                            from utils.caption_display import send_caption_to_display
+                            send_caption_to_display(introspection)
+                            print(f"[LCD] Sent introspection: {introspection[:40]}...")
+                        else:
+                            print(f"[LCD] Skipped introspection during drawing: {introspection[:40]}...")
                     except Exception as e:
                         print(f"[LCD] Failed to send introspection: {e}")
 

@@ -11,15 +11,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.prompts import _build_semantic_bridge
 
+
 class MockAgent:
     def __init__(self):
         self.true_session_start = time.time() - 600  # 10 minutes ago
         self.beliefs = {"lighting_patterns": {"strength": 0.85}}
-        self.self_model = {
-            "desires": ["I want to understand light"],
-            "doubts": [{"text": "whether this is real", "timestamp": time.time()}]
-        }
+        self.self_model = {"desires": ["I want to understand light"], "doubts": [{"text": "whether this is real", "timestamp": time.time()}]}
         self._current_reactivity_data = {"activity_level": 0.15}
+
 
 def main():
     print("✨ Testing Simple Enhanced Integration")
@@ -45,6 +44,7 @@ def main():
         print("✅ Subconscious guidance added")
     else:
         print("❌ Subconscious guidance missing")
+
 
 if __name__ == "__main__":
     main()

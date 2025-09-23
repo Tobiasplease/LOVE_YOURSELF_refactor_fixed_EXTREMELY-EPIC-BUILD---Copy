@@ -3,8 +3,8 @@
 Test script to verify the new visual-grounded drawing prompt system works.
 """
 
-import sys
 import os
+import sys
 import time
 
 # Add project root to path
@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.captioner import Captioner
 from captioner.prompts import build_drawing_prompt
+
 
 def test_visual_grounded_drawing():
     """Test drawing prompt generation with actual image."""
@@ -25,7 +26,9 @@ def test_visual_grounded_drawing():
 
     # Add some fake drawing history
     captioner.observe("Drawing intent: Captured the interplay of shadows and light across the desk surface", 0.6, "", memory_type="drawing_intent")
-    captioner.observe("Drawing intent: Focused on the organic curves of scattered papers against geometric monitor edges", 0.8, "", memory_type="drawing_intent")
+    captioner.observe(
+        "Drawing intent: Focused on the organic curves of scattered papers against geometric monitor edges", 0.8, "", memory_type="drawing_intent"
+    )
 
     # Test with image
     test_image = "./.venv/lib/python3.12/site-packages/ultralytics/assets/bus.jpg"
@@ -69,6 +72,7 @@ def test_visual_grounded_drawing():
         print(f"\n--- TEXT-ONLY PROMPT ---")
         print(prompt)
         print("--- END PROMPT ---")
+
 
 if __name__ == "__main__":
     test_visual_grounded_drawing()

@@ -3,14 +3,15 @@
 Test script to verify drawing state integration in prompts.
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.drawing_state import DrawingState
 from captioner.captioner import Captioner
+from utils.drawing_state import DrawingState
+
 
 def test_drawing_state_integration():
     """Test drawing state awareness in prompts."""
@@ -25,9 +26,7 @@ def test_drawing_state_integration():
 
     # Get normal prompt (use existing test image)
     test_image = "./.venv/lib/python3.12/site-packages/ultralytics/assets/bus.jpg"
-    normal_prompt, _, _ = captioner.model.prompt_interface.build_caption_prompt_with_options(
-        captioner, test_image, flowing=True, first_time=False
-    )
+    normal_prompt, _, _ = captioner.model.prompt_interface.build_caption_prompt_with_options(captioner, test_image, flowing=True, first_time=False)
 
     if normal_prompt:
         print("✓ Normal prompt generated")
@@ -40,15 +39,11 @@ def test_drawing_state_integration():
 
     # Simulate active drawing
     DrawingState.start_drawing(
-        intent="Testing line quality and composition",
-        description="Creating precise geometric forms",
-        drawing_file="test_drawing.gcode"
+        intent="Testing line quality and composition", description="Creating precise geometric forms", drawing_file="test_drawing.gcode"
     )
 
     # Get drawing-aware prompt
-    drawing_prompt, _, _ = captioner.model.prompt_interface.build_caption_prompt_with_options(
-        captioner, test_image, flowing=True, first_time=False
-    )
+    drawing_prompt, _, _ = captioner.model.prompt_interface.build_caption_prompt_with_options(captioner, test_image, flowing=True, first_time=False)
 
     if drawing_prompt:
         print("✓ Drawing-aware prompt generated")
@@ -61,6 +56,7 @@ def test_drawing_state_integration():
 
     # Clean up
     DrawingState.end_drawing()
+
 
 if __name__ == "__main__":
     test_drawing_state_integration()

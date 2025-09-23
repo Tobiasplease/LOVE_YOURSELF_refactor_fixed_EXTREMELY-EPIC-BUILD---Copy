@@ -287,6 +287,11 @@ class DrawingController:
                         ).strip()
 
                         print(f"[📝] Model-generated drawing summary: {drawing_summary}")
+
+                        # Update state_manager's current_drawing_prompt with the concise summary
+                        # so introspection references the summary instead of the full ComfyUI prompt
+                        state_manager.current_drawing_prompt = drawing_summary
+
                     except Exception as e:
                         print(f"[⚠️] Summary generation failed: {e}")
                         drawing_summary = "drawing based on current observations"

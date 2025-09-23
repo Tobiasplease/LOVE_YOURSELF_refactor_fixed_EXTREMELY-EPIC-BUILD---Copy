@@ -17,7 +17,8 @@ print("This is SAFE - only testing configuration and imports")
 # Test 1: Configuration imports
 print("\n1. Testing configuration imports...")
 try:
-    from config.config import GRBL_USE_SEGMENTED_EXECUTION, GRBL_MAX_SEGMENT_SIZE
+    from config.config import GRBL_MAX_SEGMENT_SIZE, GRBL_USE_SEGMENTED_EXECUTION
+
     print(f"✅ Configuration imported successfully")
     print(f"   GRBL_USE_SEGMENTED_EXECUTION: {GRBL_USE_SEGMENTED_EXECUTION}")
     print(f"   GRBL_MAX_SEGMENT_SIZE: {GRBL_MAX_SEGMENT_SIZE}")
@@ -29,6 +30,7 @@ except Exception as e:
 print("\n2. Testing segmented executor imports...")
 try:
     from grbl.segmented_executor import SegmentedExecutor
+
     executor = SegmentedExecutor(max_segment_size=150)
     print(f"✅ SegmentedExecutor imported and created successfully")
 except Exception as e:
@@ -59,6 +61,7 @@ except Exception as e:
 print("\n4. Testing dry run on recent G-code file...")
 try:
     import glob
+
     output_dir = "/home/impostor/ComfyUI/output"
     gcode_files = glob.glob(os.path.join(output_dir, "*.gcode"))
 

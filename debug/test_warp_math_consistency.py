@@ -10,7 +10,6 @@ If not, then the mathematical functions themselves have bugs.
 
 import math
 
-
 # === COPIED FROM warp_transform.py ===
 # Robot arm dimensions - verified correct by user
 biceps = 295  # Upper arm length (mm)
@@ -27,8 +26,10 @@ def add_vectors(p1, p2):
 
 def rotation(cos_v, sin_v):
     """Helper function for rotation matrix"""
+
     def rotation_v(x, y):
         return (x * cos_v - y * mirror * sin_v, x * mirror * sin_v + y * cos_v)
+
     return rotation_v
 
 
@@ -75,6 +76,7 @@ def inverse(x, y):
 
 # === TEST FUNCTIONS ===
 
+
 def test_mathematical_consistency():
     """Test if trans(inverse(x, y)) ≈ (x, y) for various points"""
     print("=== MATHEMATICAL CONSISTENCY TEST ===")
@@ -82,15 +84,7 @@ def test_mathematical_consistency():
     print()
 
     # Test points including some that should work well within robot reach
-    test_points = [
-        (0, 0),
-        (50, 50),
-        (100, 100),
-        (25, 75),
-        (-50, 50),
-        (0, 100),
-        (100, 0)
-    ]
+    test_points = [(0, 0), (50, 50), (100, 100), (25, 75), (-50, 50), (0, 100), (100, 0)]
 
     consistent = True
     tolerance = 1.0  # 1mm tolerance

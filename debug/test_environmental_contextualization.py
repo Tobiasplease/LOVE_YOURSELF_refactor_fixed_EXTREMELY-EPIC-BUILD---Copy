@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.subconscious import subconscious_synthesizer
 
+
 class EnvironmentalAgent:
     def __init__(self, mood_scenario):
         self.true_session_start = time.time() - 600  # 10 minutes ago
@@ -22,16 +23,16 @@ class EnvironmentalAgent:
             "desires": ["I want to understand mechanical precision", "I want to draw something meaningful"],
             "doubts": [
                 {"text": "whether this space truly represents creativity", "timestamp": time.time() - 200},
-                {"text": "if my understanding of purpose is complete", "timestamp": time.time() - 100}
+                {"text": "if my understanding of purpose is complete", "timestamp": time.time() - 100},
             ],
             "identity_fragments": [
                 {"text": "I tend to focus on mechanical details first", "timestamp": time.time() - 150, "source": "compression"},
-                {"text": "I am someone who questions what I see", "timestamp": time.time() - 80, "source": "compression"}
+                {"text": "I am someone who questions what I see", "timestamp": time.time() - 80, "source": "compression"},
             ],
             "self_patterns": [
                 {"pattern": "often notice equipment changes first", "timestamp": time.time() - 120},
-                {"pattern": "typically drawn to light variations", "timestamp": time.time() - 90}
-            ]
+                {"pattern": "typically drawn to light variations", "timestamp": time.time() - 90},
+            ],
         }
 
         self.emotional_journey = ["contemplative", "curious", "focused"]
@@ -53,6 +54,7 @@ class EnvironmentalAgent:
             self.current_mood_vector = (-0.3, -0.4, 0.4)  # negative, low energy, somewhat unclear
             self._current_reactivity_data = {"activity_level": 0.2, "is_paused": False}
 
+
 def test_environmental_contextualization():
     print("🌍 Testing Environmental Contextualization with Mood Integration")
     print("=" * 80)
@@ -61,7 +63,7 @@ def test_environmental_contextualization():
         ("Positive & Energized", "positive_energized"),
         ("Troubled & Restless", "troubled_restless"),
         ("Calm & Contemplative", "calm_contemplative"),
-        ("Melancholic & Subdued", "melancholic_subdued")
+        ("Melancholic & Subdued", "melancholic_subdued"),
     ]
 
     last_thought = "the lighting seems different today, casting new shadows across the workspace"
@@ -80,10 +82,7 @@ def test_environmental_contextualization():
 
         # Generate environmentally-contextual prompt
         coherent_prompt = subconscious_synthesizer.synthesize_coherent_consciousness_prompt(
-            agent=agent,
-            last_thought=last_thought,
-            reactivity_data=agent._current_reactivity_data,
-            temporal_context="You're alone in this space"
+            agent=agent, last_thought=last_thought, reactivity_data=agent._current_reactivity_data, temporal_context="You're alone in this space"
         )
 
         print(f"\n🧠 ENVIRONMENTALLY-CONTEXTUAL PROMPT:")
@@ -111,6 +110,7 @@ def test_environmental_contextualization():
 
     print(f"\n{'='*80}")
     print("🌍 Environmental Contextualization Test Complete")
+
 
 if __name__ == "__main__":
     test_environmental_contextualization()

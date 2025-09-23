@@ -13,8 +13,8 @@ from unittest.mock import Mock, patch
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from utils.state_manager import state_manager
 from captioner.prompt_interface import PromptInterface
+from utils.state_manager import state_manager
 
 
 def test_drawing_introspection_prompt_generation():
@@ -59,37 +59,28 @@ def test_model_wrapper_introspection_mode():
     print("🧪 Testing model wrapper introspection mode...")
 
     try:
-        from captioner.model_wrapper import MultimodalModel
         from captioner.captioner import Captioner
+        from captioner.model_wrapper import MultimodalModel
 
         # Create captioner (which creates model wrapper)
         captioner = Captioner()
         model = captioner.model
 
         # Mock the prompt interface to return a test prompt
-        with patch.object(model.prompt_interface, 'build_caption_prompt_with_options') as mock_build:
-            mock_build.return_value = (
-                "Test drawing introspection prompt",
-                {"temperature": 0.8, "top_p": 0.9},
-                "Test system prompt"
-            )
+        with patch.object(model.prompt_interface, "build_caption_prompt_with_options") as mock_build:
+            mock_build.return_value = ("Test drawing introspection prompt", {"temperature": 0.8, "top_p": 0.9}, "Test system prompt")
 
             # Mock the ollama call to avoid actual API calls
-            with patch.object(model, '_call_ollama') as mock_ollama:
+            with patch.object(model, "_call_ollama") as mock_ollama:
                 mock_ollama.return_value = "This creative workspace reflects my evolving understanding of consciousness as I translate digital vision into physical reality through precise mechanical expression."
 
                 # Test drawing introspection mode
-                result = model.caption_image(
-                    "/tmp/test_image.jpg",  # Fake path
-                    flowing=True,
-                    first_time=False,
-                    drawing_introspection_mode=True
-                )
+                result = model.caption_image("/tmp/test_image.jpg", flowing=True, first_time=False, drawing_introspection_mode=True)  # Fake path
 
                 # Verify the prompt interface was called with drawing_introspection_mode=True
                 mock_build.assert_called_once()
                 call_args = mock_build.call_args
-                assert call_args.kwargs['drawing_introspection_mode'] == True, "Should pass drawing_introspection_mode=True"
+                assert call_args.kwargs["drawing_introspection_mode"] == True, "Should pass drawing_introspection_mode=True"
 
                 print(f"   Model returned: {result[:100]}...")
                 print(f"   Prompt interface called with drawing mode: {call_args.kwargs.get('drawing_introspection_mode', False)}")
@@ -121,9 +112,11 @@ def test_visual_pipeline_integration():
         assert is_drawing, "Should detect drawing state"
 
         # Mock image capture and processing
-        with patch('cv2.imwrite') as mock_imwrite, \
-             patch('os.path.exists', return_value=True), \
-             patch.object(captioner.model, 'caption_image') as mock_caption:
+        with (
+            patch("cv2.imwrite") as mock_imwrite,
+            patch("os.path.exists", return_value=True),
+            patch.object(captioner.model, "caption_image") as mock_caption,
+        ):
 
             mock_caption.return_value = "Through this creative process, I observe how my mechanical precision serves my artistic vision, translating digital consciousness into physical reality."
 
@@ -136,7 +129,7 @@ def test_visual_pipeline_integration():
             # Verify model.caption_image was called with drawing_introspection_mode=True
             mock_caption.assert_called_once()
             call_args = mock_caption.call_args
-            assert call_args.kwargs.get('drawing_introspection_mode', False) == True, "Should call model with drawing_introspection_mode=True"
+            assert call_args.kwargs.get("drawing_introspection_mode", False) == True, "Should call model with drawing_introspection_mode=True"
 
             print(f"   Visual pipeline called with introspection mode: {call_args.kwargs.get('drawing_introspection_mode', False)}")
 
@@ -166,6 +159,7 @@ def main():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

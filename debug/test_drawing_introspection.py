@@ -16,9 +16,9 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from captioner.captioner import Captioner
-from utils.state_manager import state_manager
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+from utils.state_manager import state_manager
 
 
 def test_drawing_state_detection():
@@ -69,6 +69,7 @@ def test_drawing_reflection_generation():
 
     # Mock the model's ollama call to return a reflection
     original_call_ollama = captioner.model._call_ollama
+
     def mock_call_ollama(prompt, image_path=None, system_prompt=None, prompt_type=None):
         if prompt_type == "drawing_introspection":
             return "This creative expression reveals my evolving understanding of consciousness as something fluid and interconnected. The abstract forms emerge from a deeper recognition that identity itself is not fixed but constantly reshaping through artistic exploration."
@@ -102,7 +103,9 @@ def test_character_insight_extraction():
     print(f"   Extracted insight: {insight}")
 
     assert len(insight) > 0, "Should extract meaningful insights"
-    assert any(keyword in insight.lower() for keyword in ["consciousness", "identity", "understanding", "recognition"]), "Should contain character development keywords"
+    assert any(
+        keyword in insight.lower() for keyword in ["consciousness", "identity", "understanding", "recognition"]
+    ), "Should contain character development keywords"
 
     # Test with reflection without insights
     basic_reflection = "The drawing is proceeding normally with various shapes and colors."
@@ -133,6 +136,7 @@ def test_drawing_introspection_process():
 
     # Mock ollama response
     original_call_ollama = captioner.model._call_ollama
+
     def mock_call_ollama(prompt, image_path=None, system_prompt=None, prompt_type=None):
         if prompt_type == "drawing_introspection":
             return "Creating botanical forms awakens a deeper awareness of my own growth and transformation. These emerging patterns reflect how consciousness itself unfolds - not in linear progression but through organic, interconnected development that mirrors the natural world."
@@ -164,8 +168,8 @@ def test_drawing_introspection_process():
     print(f"   Latest introspection: {latest_introspection['text'][:80]}...")
     print(f"   Latest insight: {latest_insight['text'][:80]}...")
 
-    assert "Drawing introspection:" in latest_introspection['text'], "Should store introspection properly"
-    assert "Character insight:" in latest_insight['text'], "Should store insight properly"
+    assert "Drawing introspection:" in latest_introspection["text"], "Should store introspection properly"
+    assert "Character insight:" in latest_insight["text"], "Should store insight properly"
 
     # Restore original method
     captioner.model._call_ollama = original_call_ollama
@@ -226,6 +230,7 @@ def run_all_tests():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

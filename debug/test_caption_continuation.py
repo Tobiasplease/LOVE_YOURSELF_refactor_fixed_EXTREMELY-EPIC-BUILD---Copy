@@ -9,13 +9,17 @@ import time
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from captioner.captioner import Captioner
 from unittest.mock import Mock
+
+from captioner.captioner import Captioner
+
 
 def create_mock_frame():
     """Create a mock frame for testing."""
     import numpy as np
+
     return np.zeros((480, 640, 3), dtype=np.uint8)
+
 
 def main():
     print("🧪 Testing Caption Continuation System")
@@ -67,6 +71,7 @@ def main():
         print(f"✅ Semantic connection found: {shared_concepts}")
     else:
         print(f"❌ Limited semantic connection: {shared_concepts}")
+
 
 if __name__ == "__main__":
     main()

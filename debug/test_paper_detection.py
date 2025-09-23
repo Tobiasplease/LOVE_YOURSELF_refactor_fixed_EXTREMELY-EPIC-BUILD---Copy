@@ -6,16 +6,22 @@ Provides manual testing and calibration capabilities for the paper detection saf
 Use this to set up reference images, test detection accuracy, and debug the system.
 """
 
-import sys
-import os
-import time
 import argparse
+import os
+import sys
+import time
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from safety.paper_detection import paper_detector, get_paper_detection_status, check_paper_before_drawing, capture_paper_present_reference, capture_paper_absent_reference
 from config.config import ENABLE_PAPER_DETECTION, PAPER_CHECK_METHOD, PAPER_DETECTION_CONFIDENCE_THRESHOLD
+from safety.paper_detection import (
+    capture_paper_absent_reference,
+    capture_paper_present_reference,
+    check_paper_before_drawing,
+    get_paper_detection_status,
+    paper_detector,
+)
 
 
 def init_hardware():
@@ -23,8 +29,9 @@ def init_hardware():
     try:
         # Try to import and initialize hardware
         from camera.camera_opencv import Camera
-        from servo_control.servo_control import ServoController
+
         from captioner.captioner import Captioner
+        from servo_control.servo_control import ServoController
 
         print("🔧 Initializing hardware...")
 
@@ -187,8 +194,8 @@ def show_system_status():
     print(f"\n📊 Detection History:")
     print(f"   Recent Checks: {status['recent_checks']}")
 
-    if status['last_check']:
-        last = status['last_check']
+    if status["last_check"]:
+        last = status["last_check"]
         print(f"   Last Result: {'✅' if last['paper_present'] else '❌'}")
         print(f"   Last Confidence: {last['confidence']:.2f}")
         print(f"   Last Method: {last['method_used']}")

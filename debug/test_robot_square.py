@@ -1,4 +1,4 @@
-1#!/usr/bin/env python3
+1  #!/usr/bin/env python3
 """
 Test Robot Square Drawing
 =========================
@@ -7,13 +7,14 @@ Connect to GRBL CNC, home the machine, and draw the corrected square coordinates
 to test if the warp transform correction actually works on the physical robot.
 """
 
-import serial
-import time
-import sys
 import os
+import sys
+import time
+
+import serial
 
 # Add the grbl directory to path for GRBL utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'grbl'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "grbl"))
 
 try:
     from grbl_utils import find_grbl_port, send_gcode_line, wait_for_idle
@@ -36,12 +37,12 @@ def find_arduino_cnc_port():
         time.sleep(2)  # Wait for connection
 
         # Send status query
-        ser.write(b'?\n')
-        response = ser.readline().decode('utf-8', errors='ignore').strip()
+        ser.write(b"?\n")
+        response = ser.readline().decode("utf-8", errors="ignore").strip()
 
         ser.close()
 
-        if response and ('<' in response or 'Grbl' in response):
+        if response and ("<" in response or "Grbl" in response):
             print(f"✅ GRBL found on {port_name}: {response}")
             return port_name
         else:
@@ -64,7 +65,7 @@ def connect_to_grbl(port_name):
         time.sleep(2)  # Wait for GRBL to initialize
 
         # Read initial response (usually "Grbl X.X ['$' for help]")
-        initial = ser.readline().decode('utf-8', errors='ignore').strip()
+        initial = ser.readline().decode("utf-8", errors="ignore").strip()
         print(f"GRBL startup: {initial}")
 
         return ser
@@ -76,23 +77,23 @@ def connect_to_grbl(port_name):
 
 def send_gcode_line_simple(ser, line):
     """Send a single G-code line and wait for response"""
-    if not line.strip() or line.strip().startswith(';'):
+    if not line.strip() or line.strip().startswith(";"):
         return True
 
     try:
         print(f"Sending: {line.strip()}")
 
         # Send the line
-        ser.write((line.strip() + '\n').encode())
+        ser.write((line.strip() + "\n").encode())
 
         # Wait for response
         while True:
-            response = ser.readline().decode('utf-8', errors='ignore').strip()
+            response = ser.readline().decode("utf-8", errors="ignore").strip()
             print(f"  Response: {response}")
 
-            if response == 'ok':
+            if response == "ok":
                 return True
-            elif 'error' in response.lower():
+            elif "error" in response.lower():
                 print(f"❌ GRBL Error: {response}")
                 return False
             elif not response:
@@ -113,15 +114,15 @@ def wait_for_idle_simple(ser, timeout=30):
     while time.time() - start_time < timeout:
         try:
             # Send status query
-            ser.write(b'?\n')
-            response = ser.readline().decode('utf-8', errors='ignore').strip()
+            ser.write(b"?\n")
+            response = ser.readline().decode("utf-8", errors="ignore").strip()
 
             print(f"Status: {response}")
 
-            if 'Idle' in response:
+            if "Idle" in response:
                 print("✅ GRBL is idle")
                 return True
-            elif 'Alarm' in response:
+            elif "Alarm" in response:
                 print("❌ GRBL is in alarm state")
                 return False
 
@@ -140,7 +141,7 @@ def home_grbl(ser):
     print("Homing GRBL machine...")
 
     # Send homing command
-    if not send_gcode_line_simple(ser, '$H'):
+    if not send_gcode_line_simple(ser, "$H"):
         print("❌ Homing command failed")
         return False
 
@@ -179,12 +180,12 @@ def draw_corrected_square(ser):
         "G1 X66 Y-2 F500 ; Back to start",
         "",
         "M3 S30 ; Raise pen",
-        "M2 ; End program"
+        "M2 ; End program",
     ]
 
     # Send each line
     for line in gcode_lines:
-        if line.strip() and not line.strip().startswith(';'):
+        if line.strip() and not line.strip().startswith(";"):
             if not send_gcode_line_simple(ser, line):
                 print(f"❌ Failed to send: {line}")
                 return False
@@ -224,12 +225,12 @@ def draw_reference_square(ser):
         "G1 X66 Y-2 F500 ; Back to bottom-left",
         "",
         "M3 S30 ; Raise pen",
-        "M2 ; End program"
+        "M2 ; End program",
     ]
 
     # Send each line
     for line in gcode_lines:
-        if line.strip() and not line.strip().startswith(';'):
+        if line.strip() and not line.strip().startswith(";"):
             if not send_gcode_line_simple(ser, line):
                 print(f"❌ Failed to send: {line}")
                 return False
@@ -275,11 +276,11 @@ def main():
 
         choice = input("Enter choice (1-3): ").strip()
 
-        if choice == '1':
+        if choice == "1":
             draw_corrected_square(ser)
-        elif choice == '2':
+        elif choice == "2":
             draw_reference_square(ser)
-        elif choice == '3':
+        elif choice == "3":
             print("\n--- Drawing corrected square first ---")
             draw_corrected_square(ser)
 

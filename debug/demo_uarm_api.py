@@ -6,15 +6,15 @@ This demonstrates the 3 utilitarian motions without any emotion logic.
 Just simple function calls to trigger pre-recorded movements.
 """
 
-import sys
 import os
+import sys
 import time
 
 # Add parent directory for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import the simple API functions
-from uarm_control.simple_api import pickup, place, gesture, home, status, is_available
+from uarm_control.simple_api import gesture, home, is_available, pickup, place, status
 
 
 def demo_api_usage():
@@ -64,7 +64,8 @@ def demo_api_usage():
 
 def show_integration_examples():
     print("=== Integration Examples ===")
-    print("""
+    print(
+        """
 How to use the uArm API in your main script:
 
 # Example 1: Simple function calls
@@ -111,7 +112,8 @@ def process_frame(frame):
         place()
     elif gesture_needed:
         gesture()
-""")
+"""
+    )
 
 
 def main():

@@ -12,13 +12,7 @@ def test_config_integration():
     print("=== Testing Configuration Integration ===")
 
     try:
-        from config.config import (
-            USE_UARM,
-            UARM_PORT,
-            UARM_MOTION_STORAGE,
-            UARM_EMOTION_INTEGRATION,
-            UARM_MOVEMENT_NAMES
-        )
+        from config.config import UARM_EMOTION_INTEGRATION, UARM_MOTION_STORAGE, UARM_MOVEMENT_NAMES, UARM_PORT, USE_UARM
 
         print(f"✅ Config imported successfully")
         print(f"USE_UARM: {USE_UARM}")
@@ -78,7 +72,7 @@ class UarmEmotionMapper:
         # Execute the emotion mapper code
         local_vars = {}
         exec(emotion_mapper_code, globals(), local_vars)
-        UarmEmotionMapper = local_vars['UarmEmotionMapper']
+        UarmEmotionMapper = local_vars["UarmEmotionMapper"]
 
         emotion_mapper = UarmEmotionMapper()
         print(f"✅ Emotion mapper created: {emotion_mapper is not None}")
@@ -102,6 +96,7 @@ class UarmEmotionMapper:
     except Exception as e:
         print(f"❌ Emotion mapper test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -148,16 +143,16 @@ def test_machine_py_imports():
 
     # Test if our imports are correctly added to machine.py
     try:
-        with open('machine.py', 'r') as f:
+        with open("machine.py", "r") as f:
             content = f.read()
 
         required_imports = [
-            'USE_UARM',
-            'UARM_PORT',
-            'UARM_MOTION_STORAGE',
-            'from uarm_control.uarm_controller import UarmController',
-            'from uarm_control.motion_manager import MotionManager',
-            'from uarm_control.emotion_mapper import UarmEmotionMapper'
+            "USE_UARM",
+            "UARM_PORT",
+            "UARM_MOTION_STORAGE",
+            "from uarm_control.uarm_controller import UarmController",
+            "from uarm_control.motion_manager import MotionManager",
+            "from uarm_control.emotion_mapper import UarmEmotionMapper",
         ]
 
         missing_imports = []
@@ -172,13 +167,13 @@ def test_machine_py_imports():
             print("✅ All required imports present in machine.py")
 
         # Check for initialization code
-        if 'uarm_controller = None' in content and 'motion_manager = None' in content:
+        if "uarm_controller = None" in content and "motion_manager = None" in content:
             print("✅ uArm initialization code present")
         else:
             print("❌ uArm initialization code missing")
 
         # Check for emotion integration
-        if 'UARM_EMOTION_INTEGRATION' in content:
+        if "UARM_EMOTION_INTEGRATION" in content:
             print("✅ Emotion integration code present")
         else:
             print("❌ Emotion integration code missing")

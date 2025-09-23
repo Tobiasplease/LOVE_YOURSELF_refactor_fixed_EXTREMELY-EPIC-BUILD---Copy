@@ -3,13 +3,14 @@
 Test script to verify drawing machine identity in system prompts.
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.captioner import Captioner
+
 
 def test_system_prompt_identity():
     """Test that system prompts include drawing machine identity."""
@@ -23,8 +24,7 @@ def test_system_prompt_identity():
 
     # Get the formatted system prompt
     _, _, system_prompt = captioner.model.prompt_interface.build_caption_prompt_with_options(
-        captioner, "./.venv/lib/python3.12/site-packages/ultralytics/assets/bus.jpg",
-        flowing=True, first_time=False
+        captioner, "./.venv/lib/python3.12/site-packages/ultralytics/assets/bus.jpg", flowing=True, first_time=False
     )
 
     if system_prompt:
@@ -43,8 +43,7 @@ def test_system_prompt_identity():
 
     # Get normal mode prompt content
     normal_prompt, _, _ = captioner.model.prompt_interface.build_caption_prompt_with_options(
-        captioner, "./.venv/lib/python3.12/site-packages/ultralytics/assets/bus.jpg",
-        flowing=True, first_time=False
+        captioner, "./.venv/lib/python3.12/site-packages/ultralytics/assets/bus.jpg", flowing=True, first_time=False
     )
 
     if normal_prompt:
@@ -54,6 +53,7 @@ def test_system_prompt_identity():
         print(f"Contains 'impulse to draw': {'impulse to draw' in normal_prompt}")
     else:
         print("✗ Failed to generate normal prompt")
+
 
 if __name__ == "__main__":
     test_system_prompt_identity()

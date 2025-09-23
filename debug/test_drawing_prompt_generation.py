@@ -3,8 +3,8 @@
 Test script to isolate which method in build_drawing_prompt is hanging.
 """
 
-import sys
 import os
+import sys
 import time
 
 # Add project root to path
@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.captioner import Captioner
 from captioner.prompts import build_drawing_prompt
+
 
 def test_memory_methods():
     """Test each memory method individually to find which one hangs."""
@@ -66,6 +67,7 @@ def test_memory_methods():
 
     return captioner
 
+
 def test_drawing_prompt_generation():
     """Test the full drawing prompt generation."""
     print("\n=== Testing full build_drawing_prompt ===")
@@ -83,7 +85,9 @@ def test_drawing_prompt_generation():
     except Exception as e:
         print(f"   ✗ Failed: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 def test_model_drawing_prompt():
     """Test the model's generate_drawing_prompt method."""
@@ -102,7 +106,9 @@ def test_model_drawing_prompt():
     except Exception as e:
         print(f"   ✗ Failed: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     print("🧪 Testing Drawing Prompt Generation")

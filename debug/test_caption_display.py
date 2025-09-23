@@ -2,8 +2,10 @@
 """Test script for LCD caption display functionality."""
 
 import time
-from utils.caption_display import init_caption_display, send_caption_to_display, close_caption_display
+
 from config.config import CAPTION_DISPLAY_PORT
+from utils.caption_display import close_caption_display, init_caption_display, send_caption_to_display
+
 
 def test_caption_display():
     print(f"Testing LCD caption display on {CAPTION_DISPLAY_PORT}")
@@ -20,7 +22,7 @@ def test_caption_display():
         "AI consciousness awakening... observing the environment with wonder and curiosity.",
         "Testing emoji symbols: * # @ & % ! ?",
         "Numbers: 123456789 Temperature: 25.5C Time: 14:32",
-        "Final test complete"
+        "Final test complete",
     ]
 
     print("Sending test captions...")
@@ -31,6 +33,7 @@ def test_caption_display():
 
     print("Test complete!")
     close_caption_display()
+
 
 if __name__ == "__main__":
     try:

@@ -10,11 +10,13 @@ Use this to determine the optimal center position and range.
 import os
 import sys
 import time
+
 import serial
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
+
 
 def find_arduino_port():
     """Find the Arduino port."""
@@ -34,6 +36,7 @@ def find_arduino_port():
     print("❌ No Arduino found on any port")
     return None
 
+
 def initialize_left_arm(ser):
     """Initialize left arm servos - enable them first."""
     try:
@@ -48,6 +51,7 @@ def initialize_left_arm(ser):
         print(f"❌ Error enabling left arm: {e}")
         return False
 
+
 def send_servo_command(ser, pin, angle):
     """Send servo command to Arduino."""
     try:
@@ -61,6 +65,7 @@ def send_servo_command(ser, pin, angle):
         print(f"❌ Error sending command: {e}")
         return False
 
+
 def calibration_sweep(ser, pin, start_angle, end_angle, step=2, delay=1.0):
     """Sweep servo from start to end angle."""
     print(f"\n🔄 Sweeping Pin {pin} from {start_angle}° to {end_angle}° (step: {step}°, delay: {delay}s)")
@@ -72,6 +77,7 @@ def calibration_sweep(ser, pin, start_angle, end_angle, step=2, delay=1.0):
         send_servo_command(ser, pin, current)
         time.sleep(delay)
         current += step * direction
+
 
 def interactive_calibration_bounded(ser, pin):
     """Interactive calibration within safe bounds (80°-100°)."""
@@ -89,18 +95,18 @@ def interactive_calibration_bounded(ser, pin):
         try:
             cmd = input(f"Pin {pin} @ {current_angle}° > ").strip()
 
-            if cmd == 'q':
+            if cmd == "q":
                 break
-            elif cmd == '+':
+            elif cmd == "+":
                 current_angle = min(100, current_angle + 1)
                 send_servo_command(ser, pin, current_angle)
-            elif cmd == '-':
+            elif cmd == "-":
                 current_angle = max(80, current_angle - 1)
                 send_servo_command(ser, pin, current_angle)
-            elif cmd == '++':
+            elif cmd == "++":
                 current_angle = min(100, current_angle + 2)
                 send_servo_command(ser, pin, current_angle)
-            elif cmd == '--':
+            elif cmd == "--":
                 current_angle = max(80, current_angle - 2)
                 send_servo_command(ser, pin, current_angle)
             elif cmd.isdigit():
@@ -117,6 +123,7 @@ def interactive_calibration_bounded(ser, pin):
             break
         except ValueError:
             print("❌ Invalid input")
+
 
 def main():
     print("🤖 Left Arm Calibration Test")
@@ -144,19 +151,19 @@ def main():
 
         choice = input("\nSelect option (1-4): ").strip()
 
-        if choice == '1':
+        if choice == "1":
             # Range sweep within bounds
             for pin in pins:
                 print(f"\n🔄 Range sweep for Pin {pin} (80°-100°)")
                 calibration_sweep(ser, pin, 80, 100, step=1, delay=1.0)
                 input("Press Enter to continue to next pin...")
 
-        elif choice == '2':
+        elif choice == "2":
             # Interactive calibration within bounds
             for pin in pins:
                 interactive_calibration_bounded(ser, pin)
 
-        elif choice == '3':
+        elif choice == "3":
             # Center position test
             print("\n📍 Testing center position (90°)")
             for pin in pins:
@@ -164,7 +171,7 @@ def main():
                 time.sleep(1)
             print("✅ Both servos at 90° center position")
 
-        elif choice == '4':
+        elif choice == "4":
             # Range test with current settings
             print("\n📏 Testing range positions (80°/90°/100°)")
             for pin in pins:
@@ -173,7 +180,7 @@ def main():
                 time.sleep(2)
                 send_servo_command(ser, pin, 90)  # Center
                 time.sleep(2)
-                send_servo_command(ser, pin, 100) # Max
+                send_servo_command(ser, pin, 100)  # Max
                 time.sleep(2)
                 send_servo_command(ser, pin, 90)  # Back to center
 
@@ -188,6 +195,7 @@ def main():
             send_servo_command(ser, pin, 90)
         ser.close()
         print("🔌 Serial connection closed")
+
 
 if __name__ == "__main__":
     main()

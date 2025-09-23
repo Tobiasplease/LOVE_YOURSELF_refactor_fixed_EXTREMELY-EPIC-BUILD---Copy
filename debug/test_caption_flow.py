@@ -2,14 +2,15 @@
 
 """Test the improved caption flow system with Arduino feedback."""
 
-import time
-import sys
 import os
+import sys
+import time
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.caption_display import CaptionDisplay
+
 
 def test_caption_flow():
     print("Testing improved caption flow system...")
@@ -56,6 +57,7 @@ def test_caption_flow():
             display.close()
         except:
             pass
+
 
 if __name__ == "__main__":
     test_caption_flow()

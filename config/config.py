@@ -229,6 +229,7 @@ DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute int
 REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
 DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 180  # 1 minute debug vs 3 minutes normal
 DRAWING_COOLDOWN = 120 if DEBUG_FAST_DRAWING else 720  # 2 minutes debug vs 12 minutes normal
+DRAWING_STARTUP_DELAY = 60  # Minimum seconds to wait after startup before first drawing (camera initialization)
 
 # State-motivated drawing system (when DEBUG_FAST_DRAWING is False)
 DRAWING_USE_STATE_MOTIVATION = not DEBUG_FAST_DRAWING  # Enable sophisticated triggering
@@ -327,8 +328,8 @@ USE_MULTI_STEP_DRAWING_ANALYSIS = True  # Set to False for original single-promp
 # === PAPER DETECTION SAFETY SYSTEM ===
 # Prevent drawing on bare surfaces by checking for paper before execution
 ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
-PAPER_CHECK_METHOD = "direct"  # "direct" (ask LLM directly)
-PAPER_DETECTION_CONFIDENCE_THRESHOLD = 0.8  # LLM confidence requirement (0.0-1.0)
+PAPER_CHECK_METHOD = "direct"  # "direct" (direct LLM analysis) - proven reliable with text detection
+PAPER_DETECTION_CONFIDENCE_THRESHOLD = 0.65  # LLM confidence requirement (lowered for bright environments)
 # Reference images (used by paper detection). If they do not exist, detection falls back safely.
 PAPER_PRESENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_present.jpg")
 PAPER_ABSENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_absent.jpg")

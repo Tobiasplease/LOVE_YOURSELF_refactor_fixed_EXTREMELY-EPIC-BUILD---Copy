@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.prompts import build_ongoing_caption_prompt
 
+
 class MockAgent:
     def __init__(self):
         self.current_emotion_state = "uncertain"
@@ -25,16 +26,12 @@ class MockAgent:
             "desires": ["I want to understand this place"],
             "doubts": [
                 {"text": "whether this is really a creative workspace", "timestamp": time.time() - 100},
-                {"text": "if what I see matches the label 'studio'", "timestamp": time.time() - 50}
-            ]
+                {"text": "if what I see matches the label 'studio'", "timestamp": time.time() - 50},
+            ],
         }
 
         # Mock context compression with stagnation
-        self._current_reactivity_data = {
-            "activity_level": 0.1,  # Very low activity
-            "is_paused": False,
-            "timestamp": time.time()
-        }
+        self._current_reactivity_data = {"activity_level": 0.1, "is_paused": False, "timestamp": time.time()}  # Very low activity
 
         self.recent_captions = []
         self.memory_ref = MockMemoryRef()
@@ -43,25 +40,28 @@ class MockAgent:
         # We need to make this available globally since subconscious imports it
         import sys
         import types
+
         mock_compressor = types.SimpleNamespace()
-        mock_compressor.get_current_stagnation_info = lambda: {
-            "stagnation_duration_minutes": 4.5  # High stagnation
-        }
+        mock_compressor.get_current_stagnation_info = lambda: {"stagnation_duration_minutes": 4.5}  # High stagnation
 
         # Inject into the module where subconscious will find it
         try:
             from captioner import context_compression
+
             context_compression.context_compressor = mock_compressor
         except:
             pass
 
+
 class MockMemoryRef:
     def __init__(self):
         from collections import Counter
+
         self.motif_counter = Counter()
 
     def get_top_motifs(self, n):
         return []
+
 
 def main():
     print("🤔 Testing Doubt Exploration Subconscious Guidance")
@@ -90,6 +90,7 @@ def main():
             print("\n❓ Different guidance type provided")
     else:
         print("❌ No subconscious context found")
+
 
 if __name__ == "__main__":
     main()

@@ -4,11 +4,13 @@ Test uArm height limits and attempt to increase workspace
 """
 
 import sys
+
 try:
     from uarm.wrapper.swift_api import SwiftAPI
 except Exception as e:
     print(f"Error: uArm SDK not available: {e}")
     sys.exit(1)
+
 
 def main():
     swift = SwiftAPI(port="/dev/arduino_uarm")
@@ -25,10 +27,10 @@ def main():
 
         # Test current position limits
         test_positions = [
-            [200, 0, 150],   # Default safe position
-            [200, 0, 174],   # Current observed limit
-            [200, 0, 180],   # Try slightly higher
-            [200, 0, 200],   # Try much higher
+            [200, 0, 150],  # Default safe position
+            [200, 0, 174],  # Current observed limit
+            [200, 0, 180],  # Try slightly higher
+            [200, 0, 200],  # Try much higher
         ]
 
         print("\n=== Testing Position Limits ===")
@@ -74,6 +76,7 @@ def main():
     finally:
         swift.disconnect()
         print("Disconnected from uArm")
+
 
 if __name__ == "__main__":
     main()

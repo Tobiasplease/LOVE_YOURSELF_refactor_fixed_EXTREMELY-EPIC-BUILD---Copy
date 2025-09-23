@@ -26,7 +26,7 @@ def analyze_gcode_segments(gcode_file):
     pen_state = "unknown"
 
     try:
-        with open(gcode_file, 'r') as f:
+        with open(gcode_file, "r") as f:
             lines = f.readlines()
     except Exception as e:
         print(f"❌ Error reading file: {e}")
@@ -37,12 +37,12 @@ def analyze_gcode_segments(gcode_file):
     # Separate header from drawing commands
     for i, line in enumerate(lines):
         line = line.strip()
-        if not line or line.startswith(';'):
+        if not line or line.startswith(";"):
             header_lines.append(line)
             continue
 
         # Look for first movement or pen command to end header
-        if any(line.startswith(cmd) for cmd in ['G0', 'G1', 'M3']):
+        if any(line.startswith(cmd) for cmd in ["G0", "G1", "M3"]):
             header_lines = lines[:i]  # Everything before first real command
             drawing_lines = lines[i:]  # Everything from first command onward
             break
@@ -63,29 +63,33 @@ def analyze_gcode_segments(gcode_file):
         elif "PEN UP" in line or "S47" in line or "S20" in line:
             pen_state = "up"
             # End segment on pen up
-            segments.append({
-                'lines': current_segment.copy(),
-                'line_count': len(current_segment),
-                'start_line': line_num - len(current_segment) + 1,
-                'end_line': line_num
-            })
+            segments.append(
+                {
+                    "lines": current_segment.copy(),
+                    "line_count": len(current_segment),
+                    "start_line": line_num - len(current_segment) + 1,
+                    "end_line": line_num,
+                }
+            )
             current_segment = []
 
     # Add final segment if exists
     if current_segment:
-        segments.append({
-            'lines': current_segment.copy(),
-            'line_count': len(current_segment),
-            'start_line': len(drawing_lines) - len(current_segment),
-            'end_line': len(drawing_lines) - 1
-        })
+        segments.append(
+            {
+                "lines": current_segment.copy(),
+                "line_count": len(current_segment),
+                "start_line": len(drawing_lines) - len(current_segment),
+                "end_line": len(drawing_lines) - 1,
+            }
+        )
 
     # Analysis results
     print(f"\n🔢 SEGMENTATION ANALYSIS:")
     print(f"   Total segments: {len(segments)}")
 
     if segments:
-        line_counts = [seg['line_count'] for seg in segments]
+        line_counts = [seg["line_count"] for seg in segments]
         print(f"   Lines per segment: {min(line_counts)} - {max(line_counts)}")
         print(f"   Average lines per segment: {sum(line_counts) / len(line_counts):.1f}")
 
@@ -94,24 +98,24 @@ def analyze_gcode_segments(gcode_file):
         for i, seg in enumerate(segments[:5]):
             print(f"   Segment {i+1}: {seg['line_count']} lines (lines {seg['start_line']}-{seg['end_line']})")
             # Show first and last line of segment
-            if seg['lines']:
+            if seg["lines"]:
                 print(f"      First: {seg['lines'][0][:50]}...")
                 print(f"      Last:  {seg['lines'][-1][:50]}...")
 
         # Check for any problematic segments
-        large_segments = [seg for seg in segments if seg['line_count'] > 200]
+        large_segments = [seg for seg in segments if seg["line_count"] > 200]
         if large_segments:
             print(f"\n⚠️  LARGE SEGMENTS (>200 lines): {len(large_segments)}")
             for seg in large_segments:
                 print(f"   Segment {segments.index(seg)+1}: {seg['line_count']} lines")
 
     return {
-        'file': gcode_file,
-        'total_lines': len(lines),
-        'header_lines': len(header_lines),
-        'drawing_lines': len(drawing_lines),
-        'segments': segments,
-        'segment_count': len(segments)
+        "file": gcode_file,
+        "total_lines": len(lines),
+        "header_lines": len(header_lines),
+        "drawing_lines": len(drawing_lines),
+        "segments": segments,
+        "segment_count": len(segments),
     }
 
 
@@ -126,7 +130,7 @@ def test_recent_files():
 
     if os.path.exists(output_dir):
         for file in os.listdir(output_dir):
-            if file.endswith('.gcode'):
+            if file.endswith(".gcode"):
                 full_path = os.path.join(output_dir, file)
                 gcode_files.append(full_path)
 

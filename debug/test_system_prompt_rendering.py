@@ -3,13 +3,14 @@
 Test script to see how the drawing system prompt gets rendered with context.
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.captioner import Captioner
+
 
 def test_system_prompt_rendering():
     """Test how the drawing system prompt gets rendered with actual context."""
@@ -23,10 +24,13 @@ def test_system_prompt_rendering():
 
     # Add some fake drawing history
     captioner.observe("Drawing intent: Captured the interplay of shadows and light across the desk surface", 0.6, "", memory_type="drawing_intent")
-    captioner.observe("Drawing intent: Focused on the organic curves of scattered papers against geometric monitor edges", 0.8, "", memory_type="drawing_intent")
+    captioner.observe(
+        "Drawing intent: Focused on the organic curves of scattered papers against geometric monitor edges", 0.8, "", memory_type="drawing_intent"
+    )
 
     # Test the system prompt building
     from captioner.prompt_interface import PromptInterface
+
     interface = PromptInterface()
 
     rendered_system_prompt = interface._build_drawing_system_prompt_with_context(captioner)
@@ -45,6 +49,7 @@ def test_system_prompt_rendering():
         print("✓ AI disclaimer prohibition")
     if "balanced emotional state" in rendered_system_prompt:
         print("✓ Emotional state context")
+
 
 if __name__ == "__main__":
     test_system_prompt_rendering()

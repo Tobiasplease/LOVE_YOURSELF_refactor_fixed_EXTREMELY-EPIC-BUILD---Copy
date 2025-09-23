@@ -941,6 +941,17 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         from utils.state_manager import state_manager
         original_prompt = getattr(state_manager, 'current_drawing_prompt', None) or "Unknown drawing"
         state_manager.start_cnc_execution(gcode_file, original_prompt)
+
+        # Display drawing summary on LCD during execution
+        try:
+            from utils.caption_display import _caption_display
+            if _caption_display and _caption_display.connected:
+                # Send with HIGH priority to override regular captions during drawing
+                _caption_display.send_caption(original_prompt, priority="HIGH")
+                print(f"[📺] Displaying drawing title on LCD: {original_prompt}")
+        except Exception as lcd_e:
+            print(f"[⚠️] Could not display drawing title on LCD: {lcd_e}")
+
     except Exception as e:
         print(f"[⚠️] Could not start CNC execution tracking: {e}")
 
@@ -1888,16 +1899,8 @@ def process_svg_to_grbl(
                                 "Decide deterministically whether a white paper sheet is present anywhere on the table surface in view. "
                                 "Be concise and follow the response format exactly."
                             )
-                            prompt = (
-                                "Analyze the image of the table surface. Consider the entire table area in view (ignore walls/background).\n"
-                                "Paper (YES): a flat, white or slightly off-white rectangular sheet placed for drawing; it may be off-center, rotated, or partially cut off by the image edge, as long as a substantial portion is visible.\n"
-                                "Not paper (NO): bare grey/brown surface, sandpaper mat, tools, or a large painted 'X'; small white scraps or bright reflections do not count as paper.\n"
-                                "When uncertain, prefer NO.\n\n"
-                                "Respond with exactly these lines:\n"
-                                "PAPER: YES or NO\n"
-                                "CONFIDENCE: 0.0-1.0\n"
-                                "REASON: brief visual justification"
-                            )
+                            # Use same text-based detection as proven working system
+                            prompt = 'Do you see the text saying "NO PAPER"?\n\nAnswer: YES or NO'
                             resp = query_ollama(
                                 prompt,
                                 image=roi_path,
@@ -1908,47 +1911,18 @@ def process_svg_to_grbl(
                                 show_progress=False,
                                 skip_generation_wait=True,
                             )
-                            # Parse structured response: PAPER/CONFIDENCE with robust fallbacks
+                            # Parse simple YES/NO response (text-based detection)
                             ans = None
-                            conf = None
-                            import re as _re
-                            for line in resp.splitlines():
-                                raw = line.strip()
-                                up = raw.upper()
-                                if ans is None:
-                                    m = _re.search(r"\bPAPER\s*:\s*(YES|NO)\b", up)
-                                    if m:
-                                        ans = m.group(1)
-                                if conf is None:
-                                    m2 = _re.search(r"\bCONFIDENCE\s*:\s*([01](?:\.\d+)?)\b", up)
-                                    if m2:
-                                        try:
-                                            conf = float(m2.group(1))
-                                        except Exception:
-                                            conf = None
-                            if ans is None:
-                                # Fallback 2: first whole-word YES/NO anywhere
-                                tok = None
-                                for line in resp.splitlines():
-                                    t = line.strip().upper()
-                                    if t in ("YES", "NO"):
-                                        tok = t; break
-                                ans = tok
+                            response_upper = resp.strip().upper()
+                            if 'YES' in response_upper:
+                                ans = "YES"
+                            elif 'NO' in response_upper:
+                                ans = "NO"
                             if ans is not None:
-                                paper_present = (ans == "YES")
-                                # Apply a conservative confidence threshold if provided by config
-                                try:
-                                    from config.config import PAPER_LLM_CONFIDENCE_MIN as _LLM_MIN
-                                except Exception:
-                                    _LLM_MIN = 0.85
-                                if conf is not None and paper_present and conf < _LLM_MIN:
-                                    paper_present = False
-                                    reason = f"llm_paper_structured(ans={ans},conf={conf:.2f}<min {_LLM_MIN:.2f})"
-                                else:
-                                    reason = (
-                                        f"llm_paper_structured(ans={ans},conf={conf:.2f})" if conf is not None
-                                        else f"llm_paper_structured(ans={ans})"
-                                    )
+                                # NEW TEXT-BASED LOGIC: "NO" = paper present, "YES" = no paper present
+                                paper_present = (ans == "NO")
+                                conf = 0.8  # Fixed confidence for text-based detection like safety system
+                                reason = f"llm_text_detection(ans={ans},conf={conf:.2f})"
                                 print(f"[📄] LLM PAPER → {ans}{(' '+str(round(conf,2))) if conf is not None else ''} ⇒ {'YES' if paper_present else 'NO'} ({reason})")
                             else:
                                 print(f"[📄] LLM unparsed response → keep {('YES' if paper_present else 'NO')} ({reason})")

@@ -10,8 +10,8 @@ Goal: Draw an accurate square by applying the warp correction properly.
 """
 
 import math
-import numpy as np
 
+import numpy as np
 
 # === ORIGINAL FUNCTIONS ===
 biceps = 295  # Upper arm length (mm)
@@ -28,6 +28,7 @@ def add_vectors(p1, p2):
 def rotation(cos_v, sin_v):
     def rotation_v(x, y):
         return (x * cos_v - y * mirror * sin_v, x * mirror * sin_v + y * cos_v)
+
     return rotation_v
 
 
@@ -71,19 +72,14 @@ def inverse_original(x, y):
 
 # Andreas's working A4 coordinates
 ANDREAS_A4_CORNERS = [
-    (66, -2),    # bottom_left  → A4 (0, 0)
-    (111, -1),   # bottom_right → A4 (210, 0)
-    (-2, 67),    # top_left     → A4 (0, 297)
-    (24, 67)     # top_right    → A4 (210, 297)
+    (66, -2),  # bottom_left  → A4 (0, 0)
+    (111, -1),  # bottom_right → A4 (210, 0)
+    (-2, 67),  # top_left     → A4 (0, 297)
+    (24, 67),  # top_right    → A4 (210, 297)
 ]
 
 # Standard A4 coordinates
-A4_CORNERS = [
-    (0, 0),      # bottom_left
-    (210, 0),    # bottom_right
-    (0, 297),    # top_left
-    (210, 297)   # top_right
-]
+A4_CORNERS = [(0, 0), (210, 0), (0, 297), (210, 297)]  # bottom_left  # bottom_right  # top_left  # top_right
 
 
 def calculate_coordinate_transform_matrix():
@@ -169,11 +165,11 @@ def test_square_drawing():
     # Define a 50x50mm square
     square_size = 50
     square_points = [
-        (0, 0),                    # bottom_left
-        (square_size, 0),          # bottom_right
-        (square_size, square_size), # top_right
-        (0, square_size),          # top_left
-        (0, 0)                     # back to start
+        (0, 0),  # bottom_left
+        (square_size, 0),  # bottom_right
+        (square_size, square_size),  # top_right
+        (0, square_size),  # top_left
+        (0, 0),  # back to start
     ]
 
     print("Original square coordinates:")
@@ -200,7 +196,7 @@ def test_square_drawing():
         for i in range(4):
             p1 = corrected_points[i]
             p2 = corrected_points[i + 1]
-            length = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+            length = math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
             sides.append(length)
             print(f"  Side {i+1} length: {length:.2f} GRBL units")
 
@@ -217,8 +213,8 @@ def test_square_drawing():
 
             # Angle between vectors
             dot_product = v1[0] * v2[0] + v1[1] * v2[1]
-            mag1 = math.sqrt(v1[0]**2 + v1[1]**2)
-            mag2 = math.sqrt(v2[0]**2 + v2[1]**2)
+            mag1 = math.sqrt(v1[0] ** 2 + v1[1] ** 2)
+            mag2 = math.sqrt(v2[0] ** 2 + v2[1] ** 2)
 
             if mag1 > 0 and mag2 > 0:
                 angle = math.degrees(math.acos(max(-1, min(1, dot_product / (mag1 * mag2)))))
@@ -246,23 +242,12 @@ def generate_gcode_for_square():
     print()
 
     square_size = 50
-    square_points = [
-        (0, 0),
-        (square_size, 0),
-        (square_size, square_size),
-        (0, square_size),
-        (0, 0)
-    ]
+    square_points = [(0, 0), (square_size, 0), (square_size, square_size), (0, square_size), (0, 0)]
 
     gcode_lines = []
 
     # G-code header
-    gcode_lines.extend([
-        "G21 ; Set units to millimeters",
-        "G90 ; Use absolute positioning",
-        "G17 ; Select XY plane",
-        ""
-    ])
+    gcode_lines.extend(["G21 ; Set units to millimeters", "G90 ; Use absolute positioning", "G17 ; Select XY plane", ""])
 
     # Generate movement commands
     for i, (x, y) in enumerate(square_points):
@@ -271,10 +256,7 @@ def generate_gcode_for_square():
 
             if i == 0:
                 # First point - rapid move with pen up
-                gcode_lines.extend([
-                    f"G0 X{grbl_x:.4f} Y{grbl_y:.4f} ; Move to start",
-                    "M3 S50 ; Lower pen"
-                ])
+                gcode_lines.extend([f"G0 X{grbl_x:.4f} Y{grbl_y:.4f} ; Move to start", "M3 S50 ; Lower pen"])
             else:
                 # Drawing moves
                 gcode_lines.append(f"G1 X{grbl_x:.4f} Y{grbl_y:.4f} F1500 ; Draw line")
@@ -283,12 +265,7 @@ def generate_gcode_for_square():
             gcode_lines.append(f"; ERROR at point ({x}, {y}): {e}")
 
     # G-code footer
-    gcode_lines.extend([
-        "",
-        "M3 S30 ; Raise pen",
-        "G0 X0 Y0 ; Return to origin",
-        "M2 ; End program"
-    ])
+    gcode_lines.extend(["", "M3 S30 ; Raise pen", "G0 X0 Y0 ; Return to origin", "M2 ; End program"])
 
     # Print G-code
     print("Generated G-code:")
@@ -298,8 +275,8 @@ def generate_gcode_for_square():
     # Save to file
     gcode_file = "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/debug/corrected_square.gcode"
     try:
-        with open(gcode_file, 'w') as f:
-            f.write('\n'.join(gcode_lines))
+        with open(gcode_file, "w") as f:
+            f.write("\n".join(gcode_lines))
         print(f"\nG-code saved to: {gcode_file}")
     except Exception as e:
         print(f"\nError saving G-code: {e}")

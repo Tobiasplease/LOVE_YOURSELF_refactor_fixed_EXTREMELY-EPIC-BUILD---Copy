@@ -2,15 +2,17 @@
 """
 Test SVG parsing for the transform UI
 """
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add the project root to the path
-sys.path.append('/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy')
+sys.path.append("/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy")
+
+import tkinter as tk
 
 from tools.svg_transform_ui import SVGTransformUI
-import tkinter as tk
+
 
 def test_svg_parsing():
     """Test if SVG parsing is working correctly"""
@@ -64,6 +66,7 @@ def test_svg_parsing():
     else:
         print("❌ No paths were parsed!")
         return False
+
 
 if __name__ == "__main__":
     test_svg_parsing()

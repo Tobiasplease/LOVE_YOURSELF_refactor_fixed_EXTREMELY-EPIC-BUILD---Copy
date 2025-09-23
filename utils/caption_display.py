@@ -1,7 +1,6 @@
 import threading
 import time
-from typing import Optional, List
-from collections import deque
+from typing import Optional
 
 import serial
 
@@ -16,22 +15,17 @@ class CaptionDisplay:
         self.send_lock = threading.Lock()
         self.current_brightness = 255  # Default full brightness
 
-        # Caption queuing system
-        self.caption_queue = deque()
-        self.lcd_busy = False
-        self.queue_lock = threading.Lock()
+        # Slower timing for better readability
+        self.chunk_delay = 1000  # 1000ms (1 second) between chunks for readability
 
-
-        # Fixed timing system - responsive but readable
-        self.caption_history = []  # Track caption timestamps
-        self.base_chunk_delay = 300   # Fixed 300ms for readable chunks
-        self.min_chunk_delay = 300    # Always 300ms chunks
-        self.max_chunk_delay = 300    # Always 300ms chunks
+        # Simple rate limiting with skip-ahead logic
+        self.last_sent_time = 0
+        self.min_interval = 3.0  # 3 seconds between captions for readability
+        self.caption_queue = []
+        self.skip_counter = 0
 
         self._connect()
 
-        # Start queue processing thread
-        threading.Thread(target=self._process_queue, daemon=True).start()
 
     def _connect(self):
         try:
@@ -40,6 +34,17 @@ class CaptionDisplay:
             time.sleep(2)
             self.connected = True
             print(f"[DISPLAY] Successfully connected to {self.port}")
+
+            # Test if Arduino responds to anything
+            print(f"[DEBUG] Testing Arduino communication...")
+            self.ser.write(b"BRIGHTNESS:255\n")
+            self.ser.flush()
+            time.sleep(0.5)
+            if self.ser.in_waiting > 0:
+                response = self.ser.readline().decode().strip()
+                print(f"[DEBUG] Arduino brightness response: {response}")
+            else:
+                print(f"[DEBUG] No response to brightness command")
         except Exception as e:
             print(f"[DISPLAY] Failed to connect to caption display: {e}")
             print(f"[DISPLAY] Error type: {type(e)}")
@@ -47,74 +52,56 @@ class CaptionDisplay:
             traceback.print_exc()
             self.connected = False
 
-    def _process_queue(self):
-        """Process caption queue, ensuring each caption displays fully before the next."""
+    def _monitor_arduino_status(self):
+        """Background thread to continuously monitor Arduino status."""
         while True:
             try:
-                # Check if we have captions to send and LCD is not busy
-                with self.queue_lock:
-                    if not self.caption_queue or self.lcd_busy:
-                        time.sleep(0.1)
-                        continue
-
-                    caption, priority = self.caption_queue.popleft()
-                    self.lcd_busy = True
-
-                # Send caption and wait for completion
-                success = self._send_caption_and_wait(caption, priority)
-
-                with self.queue_lock:
-                    self.lcd_busy = False
-
-                if not success:
-                    time.sleep(1)  # Wait before trying next caption if this one failed
-
+                if self.connected and self.ser:
+                    self._check_arduino_status()
+                time.sleep(0.1)  # Check every 100ms
             except Exception as e:
-                print(f"[DISPLAY] Queue processing error: {e}")
-                with self.queue_lock:
-                    self.lcd_busy = False
                 time.sleep(1)
 
-    def _send_caption_and_wait(self, caption: str, priority: str, timeout: int = 30) -> bool:
-        """Send caption and wait for Arduino to confirm it's fully displayed."""
+
+    def _check_arduino_status(self):
+        """Check for any pending Arduino responses and update LCD state."""
+        if not self.connected or not self.ser:
+            return
+
+        try:
+            while self.ser.in_waiting > 0:
+                response = self.ser.readline().decode().strip()
+                if response == "CAPTION_COMPLETE":
+                    self.lcd_busy = False
+                    # Send latest caption if we have one
+                    if self.latest_caption:
+                        caption, priority = self.latest_caption
+                        self.latest_caption = None
+                        self._try_send_caption(caption, priority)
+                elif response == "CAPTION_ACCEPTED":
+                    self.lcd_busy = True
+        except Exception:
+            pass
+
+    def _try_send_caption(self, caption: str, priority: str) -> bool:
+        """Try to send caption, return True if sent, False if LCD busy."""
         if not self.connected or not self.ser:
             return False
 
         try:
-            adaptive_delay = self._calculate_adaptive_timing()
+            # Use single-row format (16 chars max per chunk)
             priority_flag = {"HIGH": "H", "MEDIUM": "M", "LOW": "L"}.get(priority, "M")
-            message = f"{priority_flag}:{adaptive_delay}:{caption}\n"
+            message = f"{priority_flag}:2000:{caption}\n"  # 2 second delay for readability
 
-            # Send caption
+            print(f"[DEBUG] Sending to Arduino: {message.strip()}")
             with self.send_lock:
                 self.ser.write(message.encode())
                 self.ser.flush()
 
-            # Wait for Arduino response
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                if self.ser.in_waiting > 0:
-                    response = self.ser.readline().decode().strip()
-                    if response == "CAPTION_ACCEPTED":
-                        print(f"[DISPLAY] Caption accepted: {caption[:40]}...")
-                        # Now wait for completion
-                        while time.time() - start_time < timeout:
-                            if self.ser.in_waiting > 0:
-                                response = self.ser.readline().decode().strip()
-                                if response == "CAPTION_COMPLETE":
-                                    print(f"[DISPLAY] Caption completed")
-                                    return True
-                            time.sleep(0.1)
-                    elif response == "CAPTION_BUSY":
-                        print(f"[DISPLAY] LCD busy, caption queued")
-                        return False
-                time.sleep(0.1)
+            # Don't wait for response - just force send every caption
+            return True
 
-            print(f"[DISPLAY] Caption send timeout")
-            return False
-
-        except Exception as e:
-            print(f"[DISPLAY] Send error: {e}")
+        except Exception:
             return False
 
     def _detect_priority(self, caption: str) -> str:
@@ -140,80 +127,48 @@ class CaptionDisplay:
 
         return "MEDIUM"  # Default priority
 
-    def _calculate_adaptive_timing(self) -> int:
-        """Calculate chunk delay based on recent caption frequency."""
-        import time
-        now = time.time()
 
-        # Clean old history (keep last 5 minutes)
-        self.caption_history = [t for t in self.caption_history if now - t < 300]
-
-        if len(self.caption_history) < 2:
-            return self.base_chunk_delay
-
-        # Calculate average time between captions
-        intervals = []
-        for i in range(1, len(self.caption_history)):
-            intervals.append(self.caption_history[i] - self.caption_history[i-1])
-
-        avg_interval = sum(intervals) / len(intervals)
-
-        # Adaptive logic: much faster chunks when captions come frequently
-        if avg_interval < 20:  # Very frequent (< 20s apart)
-            return self.min_chunk_delay  # 100ms - super fast
-        elif avg_interval < 40:  # Moderate (20-40s apart)
-            return int(self.base_chunk_delay * 0.7)  # 140ms - fast
-        elif avg_interval < 60:  # Less frequent (40-60s apart)
-            return self.base_chunk_delay  # 200ms
-        else:  # Sparse (> 60s apart)
-            return self.max_chunk_delay  # 500ms
-
-    def send_caption(self, caption: str, priority: str = None, max_retries: int = 3):
+    def send_caption(self, caption: str, priority: str = None):
         if not self.connected or not self.ser:
-            print(f"[DISPLAY] Cannot send - not connected (connected={self.connected}, ser={self.ser is not None})")
             return
 
         clean_caption = caption.strip()
         import time
         now = time.time()
 
-        # Relaxed deduplication - only skip exact duplicates within 30 seconds
-        if clean_caption == self.last_caption and hasattr(self, '_last_send_time') and (now - self._last_send_time) < 30:
+        # Add to queue
+        self.caption_queue.append((clean_caption, priority))
+
+        # Rate limit captions for readability
+        if hasattr(self, 'last_sent_time') and now - self.last_sent_time < self.min_interval:
             return
 
-        # Auto-detect priority if not provided
+        # Every 4th caption, skip to the latest
+        self.skip_counter += 1
+        if self.skip_counter >= 4 and len(self.caption_queue) > 1:
+            # Skip to latest caption
+            clean_caption, priority = self.caption_queue[-1]
+            self.caption_queue.clear()
+            self.skip_counter = 0
+        else:
+            # Send oldest caption
+            if self.caption_queue:
+                clean_caption, priority = self.caption_queue.pop(0)
+            else:
+                return
+
         if priority is None:
             priority = self._detect_priority(clean_caption)
 
-        # Track caption timing for adaptive system
-        self.caption_history.append(now)
-
-        # Minimal interruption logic - only skip if truly spamming
-        if hasattr(self, '_last_send_time'):
-            time_since_last = now - self._last_send_time
-
-            # Only skip if extremely recent (< 0.5 seconds) to prevent spam
-            if time_since_last < 0.5:
-                return  # Skip silently
-
-        self._last_send_time = now
-        self._current_priority = priority
-
-        # Add to queue instead of sending directly
-        with self.queue_lock:
-            # Limit queue size to prevent memory issues
-            if len(self.caption_queue) > 10:
-                self.caption_queue.popleft()  # Remove oldest if queue is full
-
-            self.caption_queue.append((clean_caption, priority))
-            print(f"[DISPLAY] Caption queued: {clean_caption[:40]}... (queue size: {len(self.caption_queue)})")
-
-        self.last_caption = clean_caption
+        # Send this caption
+        success = self._try_send_caption(clean_caption, priority)
+        if success:
+            self.last_caption = clean_caption
+            self.last_sent_time = now
 
     def set_brightness(self, brightness: int):
         """Set LCD brightness (0-255, 0=off, 255=full brightness)."""
         if not self.connected or not self.ser:
-            print(f"[DISPLAY] Cannot set brightness - not connected")
             return
 
         brightness = max(0, min(255, brightness))
@@ -224,9 +179,8 @@ class CaptionDisplay:
                 message = f"BRIGHTNESS:{brightness}\n"
                 self.ser.write(message.encode())
                 self.ser.flush()
-                print(f"[DISPLAY] Brightness set to {brightness}")
-            except Exception as e:
-                print(f"[DISPLAY] Failed to set brightness: {e}")
+            except Exception:
+                pass
 
     def _reconnect(self):
         if self.ser:
@@ -268,8 +222,6 @@ def set_lcd_brightness(brightness: int):
     global _caption_display
     if _caption_display:
         _caption_display.set_brightness(brightness)
-    else:
-        print("[DISPLAY] Caption display not initialized - cannot set brightness")
 
 
 def close_caption_display():

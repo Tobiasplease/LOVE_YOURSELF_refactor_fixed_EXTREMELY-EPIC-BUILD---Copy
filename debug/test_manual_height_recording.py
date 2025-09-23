@@ -6,11 +6,13 @@ when physically moved to different heights
 
 import sys
 import time
+
 try:
     from uarm.wrapper.swift_api import SwiftAPI
 except Exception as e:
     print(f"Error: uArm SDK not available: {e}")
     sys.exit(1)
+
 
 def main():
     swift = SwiftAPI(port="/dev/arduino_uarm")
@@ -43,7 +45,7 @@ def main():
 
         while True:
             input_val = input(f"\nPosition {len(positions)+1} (or 'quit'): ").strip()
-            if input_val.lower() == 'quit':
+            if input_val.lower() == "quit":
                 break
 
             try:
@@ -81,6 +83,7 @@ def main():
             pass
         swift.disconnect()
         print("Disconnected from uArm")
+
 
 if __name__ == "__main__":
     main()

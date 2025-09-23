@@ -9,8 +9,8 @@ gets stuck at "executing: True" but no drawing is actually happening.
 Usage: python debug/reset_cnc_state.py
 """
 
-import sys
 import os
+import sys
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -45,4 +45,5 @@ except ImportError as e:
 except Exception as e:
     print(f"[❌] Error: {e}")
     import traceback
+
     traceback.print_exc()

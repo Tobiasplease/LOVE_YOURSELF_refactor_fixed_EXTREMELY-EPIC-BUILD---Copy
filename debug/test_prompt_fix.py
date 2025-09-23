@@ -9,25 +9,36 @@ import sys
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from captioner.prompts import build_ongoing_caption_prompt
 import time
+
+from captioner.prompts import build_ongoing_caption_prompt
 
 
 class MockAgent:
     """Mock agent for testing prompt generation."""
+
     def __init__(self):
         self.current_emotion_state = "calm_observant"
         self.true_session_start = time.time() - 300  # 5 minutes ago
         self.recent_captions = [
-            ("The workspace reveals mechanical components scattered across surfaces, drawing my curiosity toward their potential purpose.", time.time() - 60),
-            ("Light from the window creates interesting shadows that shift across the equipment, highlighting the robotic arms designed for precise movements.", time.time() - 30),
-            ("Camera lenses mounted on adjustable fixtures suggest this space serves multiple creative functions beyond just mechanical work.", time.time() - 10)
+            (
+                "The workspace reveals mechanical components scattered across surfaces, drawing my curiosity toward their potential purpose.",
+                time.time() - 60,
+            ),
+            (
+                "Light from the window creates interesting shadows that shift across the equipment, highlighting the robotic arms designed for precise movements.",
+                time.time() - 30,
+            ),
+            (
+                "Camera lenses mounted on adjustable fixtures suggest this space serves multiple creative functions beyond just mechanical work.",
+                time.time() - 10,
+            ),
         ]
         self.beliefs = {"workspace_lighting": 0.8, "drawing_focus": 0.7}
         self.self_model = {
             "location_understanding": "artist studio",
             "environmental_certainty": 0.6,
-            "desires": ["explore visual patterns", "understand spatial relationships"]
+            "desires": ["explore visual patterns", "understand spatial relationships"],
         }
 
     def describe_current_mood(self):
@@ -55,7 +66,7 @@ def test_prompt_fix():
     test_cases = [
         "The technical equipment here reveals layers of complexity that spark my interest in understanding their interconnections.",
         "Natural light filtering through creates subtle illumination patterns that change how I perceive the workspace arrangement.",
-        "Mechanical precision in these robotic components suggests a carefully designed system for creative expression."
+        "Mechanical precision in these robotic components suggests a carefully designed system for creative expression.",
     ]
 
     for i, last_thought in enumerate(test_cases, 1):
@@ -66,7 +77,7 @@ def test_prompt_fix():
         prompt = build_ongoing_caption_prompt(agent, last_thought)
 
         # Extract the semantic bridge part
-        lines = prompt.split('\n')
+        lines = prompt.split("\n")
         bridge_line = ""
         for line in lines:
             if any(bridge_word in line.lower() for bridge_word in ["continues", "reveals", "shifts", "draws", "leads", "deepens", "building"]):

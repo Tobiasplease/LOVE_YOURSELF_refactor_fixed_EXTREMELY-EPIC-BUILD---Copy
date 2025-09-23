@@ -9,9 +9,10 @@ import time
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from perception.person_detection_state import get_person_detection_state
-from captioner.subconscious import subconscious_synthesizer
 from breathing.breathing import update_lung_position
+from captioner.subconscious import subconscious_synthesizer
+from perception.person_detection_state import get_person_detection_state
+
 
 class MockAgent:
     def __init__(self):
@@ -24,7 +25,7 @@ class MockAgent:
             "desires": ["I want to understand who is here"],
             "doubts": [{"text": "whether they notice my responses", "timestamp": time.time() - 50}],
             "identity_fragments": [{"text": "I respond to social presence", "timestamp": time.time() - 100, "source": "compression"}],
-            "self_patterns": [{"pattern": "notice people immediately", "timestamp": time.time() - 80}]
+            "self_patterns": [{"pattern": "notice people immediately", "timestamp": time.time() - 80}],
         }
 
         self.emotional_journey = ["alert", "curious", "social"]
@@ -39,6 +40,7 @@ class MockAgent:
 
     def get_old_session_memory_fragments(self, k=2):
         return ["previous solitary moments"]
+
 
 def test_person_detection_integration():
     print("👤 Testing Complete Person Detection Integration")
@@ -72,7 +74,7 @@ def test_person_detection_integration():
         agent=agent,
         last_thought="the mechanical precision of this workspace continues to fascinate me",
         reactivity_data=agent._current_reactivity_data,
-        temporal_context="You sense a presence in your space"
+        temporal_context="You sense a presence in your space",
     )
 
     print("Generated consciousness prompt:")
@@ -140,6 +142,7 @@ def test_person_detection_integration():
     print("   - Consciousness prompt integration")
     print("   - Temporal state tracking (arrival/departure)")
     print("   - Social context generation")
+
 
 if __name__ == "__main__":
     test_person_detection_integration()

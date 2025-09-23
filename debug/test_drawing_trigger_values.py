@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captioner.captioner import Captioner
-from mood.mood import MoodEngine
 from drawing.drawing import DrawingController
+from mood.mood import MoodEngine
+
 
 def test_drawing_trigger_values():
     """Test what novelty/boredom values the drawing system actually receives."""
@@ -25,7 +27,7 @@ def test_drawing_trigger_values():
         "The individual appears energetic and excited with bright lighting",
         "Someone looks tired and withdrawn, slouching in their chair",
         "A curious person leans forward, examining something with focus",
-        "The room is empty and still, with soft shadows"
+        "The room is empty and still, with soft shadows",
     ]
 
     for i, caption in enumerate(test_captions):
@@ -50,15 +52,11 @@ def test_drawing_trigger_values():
 
         # Test drawing decision
         ready = drawing_controller.ready_to_draw()
-        should_draw = drawing_controller.should_draw(
-            mood=mood,
-            novelty=novelty,
-            boredom=boredom
-        )
+        should_draw = drawing_controller.should_draw(mood=mood, novelty=novelty, boredom=boredom)
 
         # Test logic without cooldown
         logic_only = (novelty > 0.4 or boredom > 0.5 or mood < 0.4) if ready else False
-        would_draw_without_cooldown = (novelty > 0.4 or boredom > 0.5 or mood < 0.4)
+        would_draw_without_cooldown = novelty > 0.4 or boredom > 0.5 or mood < 0.4
 
         print(f"Ready to draw (cooldown check): {ready}")
         print(f"Drawing thresholds: novelty>0.4 OR boredom>0.5 OR mood<0.4")
@@ -74,6 +72,7 @@ def test_drawing_trigger_values():
             print("  → TRIGGERED by mood < 0.4")
         else:
             print("  → NOT TRIGGERED - all thresholds missed")
+
 
 if __name__ == "__main__":
     test_drawing_trigger_values()

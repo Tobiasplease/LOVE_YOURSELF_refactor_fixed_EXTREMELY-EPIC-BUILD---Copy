@@ -11,8 +11,8 @@ import time
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from utils.state_manager import state_manager
 from captioner.captioner import Captioner
+from utils.state_manager import state_manager
 
 
 def test_drawing_state_detection_fix():

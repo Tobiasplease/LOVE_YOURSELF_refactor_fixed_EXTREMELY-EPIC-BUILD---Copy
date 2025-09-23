@@ -15,17 +15,19 @@ Controls:
 - Q: Quit
 """
 
-import sys
 import os
-import cv2
-import time
+import sys
 import threading
+import time
+
+import cv2
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from safety.paper_detection import capture_paper_present_reference, capture_paper_absent_reference, get_paper_detection_status
 from config.config import PAPER_DETECTION_GAZE_PAN, PAPER_DETECTION_GAZE_TILT
+from safety.paper_detection import capture_paper_absent_reference, capture_paper_present_reference, get_paper_detection_status
+
 # Always align with runtime drawing lock pose: use drawing tilt (TILT_MIN+2)
 try:
     from config.config import TILT_MIN
@@ -43,21 +45,23 @@ class PaperReferenceCaptureTool:
         self.last_frame = None
         self.status_text = "Initializing..."
 
-        # Detection area parameters (adjustable)
-        self.detection_x = 0.3  # X center as fraction of width (0.0-1.0)
-        self.detection_y = 0.4  # Y center as fraction of height (0.0-1.0)
-        self.detection_width = 0.4  # Width as fraction of frame width
-        self.detection_height = 0.3  # Height as fraction of frame height
+        # Detection area parameters - MUST MATCH safety/paper_detection.py coordinates exactly
+        self.detection_x = 0.6  # X center as fraction of width (right of center)
+        self.detection_y = 0.52  # Y center as fraction of height
+        self.detection_width = 0.25  # Width as fraction of frame width
+        self.detection_height = 0.2  # Height as fraction of frame height
 
     def init_hardware(self):
         """Initialize camera and servo hardware."""
         try:
             print("🔧 Initializing hardware...")
 
-            import cv2
             import os
+
+            import cv2
+
+            from config.config import BAUD_RATE, CAMERA_HEIGHT, CAMERA_INDEX, CAMERA_WIDTH, USE_SERVO
             from servo_control.servo_control import ServoController
-            from config.config import CAMERA_INDEX, USE_SERVO, BAUD_RATE, CAMERA_WIDTH, CAMERA_HEIGHT
 
             # Initialize camera like machine.py does
             self.camera = cv2.VideoCapture(CAMERA_INDEX if CAMERA_INDEX else 0)
@@ -70,19 +74,20 @@ class PaperReferenceCaptureTool:
                 self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
                 # Load persisted camera settings if available
                 import json
-                settings_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'camera_settings.json')
+
+                settings_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "camera_settings.json")
                 if os.path.exists(settings_path):
-                    with open(settings_path, 'r', encoding='utf-8') as f:
+                    with open(settings_path, "r", encoding="utf-8") as f:
                         s = json.load(f)
                     # Apply basic properties if present
-                    if 'brightness' in s:
-                        self.camera.set(cv2.CAP_PROP_BRIGHTNESS, float(s['brightness']))
-                    if 'contrast' in s:
-                        self.camera.set(cv2.CAP_PROP_CONTRAST, float(s['contrast']))
-                    if 'saturation' in s:
-                        self.camera.set(cv2.CAP_PROP_SATURATION, float(s['saturation']))
-                    if 'sharpness' in s:
-                        self.camera.set(cv2.CAP_PROP_SHARPNESS, float(s['sharpness']))
+                    if "brightness" in s:
+                        self.camera.set(cv2.CAP_PROP_BRIGHTNESS, float(s["brightness"]))
+                    if "contrast" in s:
+                        self.camera.set(cv2.CAP_PROP_CONTRAST, float(s["contrast"]))
+                    if "saturation" in s:
+                        self.camera.set(cv2.CAP_PROP_SATURATION, float(s["saturation"]))
+                    if "sharpness" in s:
+                        self.camera.set(cv2.CAP_PROP_SHARPNESS, float(s["sharpness"]))
             except Exception:
                 pass
 
@@ -93,6 +98,7 @@ class PaperReferenceCaptureTool:
             # Get Arduino devices mapping
             try:
                 from config.config import SERIAL_PORT  # This should be the servo port
+
                 servo_port = SERIAL_PORT
             except:
                 servo_port = "/dev/arduino_lunggaze"  # Fallback to default
@@ -124,7 +130,7 @@ class PaperReferenceCaptureTool:
 
             print(f"🎯 Positioning servos for paper detection...")
             # Force the same tilt as runtime drawing lock/paper check
-            det_tilt = (TILT_MIN + 2)
+            det_tilt = TILT_MIN + 2
             print(f"   Pan: {PAPER_DETECTION_GAZE_PAN}°")
             print(f"   Tilt: {det_tilt}° (drawing lock tilt)")
 
@@ -190,6 +196,7 @@ class PaperReferenceCaptureTool:
         except Exception as e:
             print(f"❌ Servo positioning failed: {e}")
             import traceback
+
             traceback.print_exc()
             self.status_text = f"Servo error: {e}"
             return False
@@ -212,20 +219,16 @@ class PaperReferenceCaptureTool:
 
         # Dark semi-transparent overlay for text
         overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (width-10, 140), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (10, 10), (width - 10, 140), (0, 0, 0), -1)
         frame = cv2.addWeighted(frame, 0.7, overlay, 0.3, 0)
 
         # Status text
-        cv2.putText(frame, "Paper Detection Reference Capture", (20, 35),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(frame, self.status_text, (20, 60),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(frame, "Paper Detection Reference Capture", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(frame, self.status_text, (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         # Controls
-        cv2.putText(frame, "Controls: [P] Paper Present  [A] Paper Absent  [Q] Quit", (20, 85),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        cv2.putText(frame, "Adjust Area: Arrow Keys=Move  +/-=Size  R=Reset", (20, 110),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        cv2.putText(frame, "Controls: [P] Paper Present  [A] Paper Absent  [Q] Quit", (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.putText(frame, "Adjust Area: Arrow Keys=Move  +/-=Size  R=Reset", (20, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
         # Adjustable detection area
         det_center_x = int(self.detection_x * width)
@@ -240,8 +243,7 @@ class PaperReferenceCaptureTool:
         y2 = det_center_y + det_h // 2
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
-        cv2.putText(frame, "Paper Detection Area",
-                   (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        cv2.putText(frame, "Paper Detection Area", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
         # Center crosshair
         cv2.line(frame, (det_center_x - 10, det_center_y), (det_center_x + 10, det_center_y), (0, 255, 255), 1)
@@ -366,14 +368,14 @@ class PaperReferenceCaptureTool:
                 # Handle key presses
                 key = cv2.waitKey(1) & 0xFF
 
-                if key == ord('q') or key == 27:  # Q or ESC
+                if key == ord("q") or key == 27:  # Q or ESC
                     print("\n👋 Exiting...")
                     break
-                elif key == ord('p'):
+                elif key == ord("p"):
                     self.capture_paper_present()
-                elif key == ord('a'):
+                elif key == ord("a"):
                     self.capture_paper_absent()
-                elif key == ord('r'):  # Reset detection area
+                elif key == ord("r"):  # Reset detection area
                     self.detection_x = 0.5
                     self.detection_y = 0.5
                     self.detection_width = 0.4
@@ -389,10 +391,10 @@ class PaperReferenceCaptureTool:
                 elif key == 83:  # Right arrow
                     self.detection_x = min(0.9, self.detection_x + 0.02)
                 # +/- for size
-                elif key == ord('+') or key == ord('='):  # Increase size
+                elif key == ord("+") or key == ord("="):  # Increase size
                     self.detection_width = min(0.8, self.detection_width + 0.02)
                     self.detection_height = min(0.8, self.detection_height + 0.02)
-                elif key == ord('-'):  # Decrease size
+                elif key == ord("-"):  # Decrease size
                     self.detection_width = max(0.1, self.detection_width - 0.02)
                     self.detection_height = max(0.1, self.detection_height - 0.02)
 

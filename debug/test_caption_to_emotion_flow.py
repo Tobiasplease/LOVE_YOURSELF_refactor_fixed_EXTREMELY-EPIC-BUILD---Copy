@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mood.mood import MoodEngine
+
 
 def test_caption_to_emotion_flow():
     """Test that captions now properly flow through to emotion states."""
@@ -35,11 +37,13 @@ def test_caption_to_emotion_flow():
 
         # Show the results including time adjustments
         mood_vector = mood_engine.mood_vector
-        novelty = getattr(mood_engine, '_last_novelty', 0.0)
+        novelty = getattr(mood_engine, "_last_novelty", 0.0)
 
         # Calculate adjusted values like the emotion mapping does
         import time
+
         import numpy as np
+
         time_factor = (time.time() - mood_engine.session_start) / 1800.0
         valence_variation = 0.05 * np.sin(time_factor)
         arousal_variation = 0.08 * np.cos(time_factor * 1.3)
@@ -55,6 +59,7 @@ def test_caption_to_emotion_flow():
         print(f"Adjusted:  valence={adjusted_valence:.3f}, arousal={adjusted_arousal:.3f}, clarity={adjusted_clarity:.3f}")
         print(f"→ Emotion State: {emotion_state}")
         print("-" * 40)
+
 
 if __name__ == "__main__":
     test_caption_to_emotion_flow()

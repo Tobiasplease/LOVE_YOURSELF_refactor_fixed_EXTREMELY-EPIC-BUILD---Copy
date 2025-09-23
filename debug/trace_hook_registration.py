@@ -16,6 +16,7 @@ print("=== HOOK REGISTRATION TRACE ===")
 print("\n1. Testing imports...")
 try:
     import utils.hooks as _hooks
+
     print(f"✅ utils.hooks imported: {_hooks}")
     print(f"   Initial hook value: {_hooks.on_grbl_drawing_complete}")
 except Exception as e:
@@ -23,7 +24,8 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+    from config.config import UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE, USE_UARM
+
     print(f"✅ Config imports successful")
     print(f"   USE_UARM: {USE_UARM}")
     print(f"   UARM_PLAY_AFTER_DRAW: {UARM_PLAY_AFTER_DRAW}")
@@ -31,6 +33,7 @@ try:
 except Exception as e:
     print(f"❌ Config import failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -49,8 +52,10 @@ if not condition:
 # 3. Test hook registration (like machine.py does)
 print(f"\n3. Testing hook registration...")
 
+
 def test_uarm_hook():
     print("🎯 UARM HOOK WAS CALLED!")
+
 
 try:
     _hooks.on_grbl_drawing_complete = test_uarm_hook
@@ -58,6 +63,7 @@ try:
 except Exception as e:
     print(f"❌ Hook registration failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -65,6 +71,7 @@ except Exception as e:
 print(f"\n4. Testing GRBL hook call...")
 try:
     from utils.hooks import on_grbl_drawing_complete
+
     print(f"   Imported hook: {on_grbl_drawing_complete}")
     if callable(on_grbl_drawing_complete):
         print("✅ Hook is callable from GRBL")
@@ -74,6 +81,7 @@ try:
 except Exception as e:
     print(f"❌ GRBL hook call failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 # 5. Check if machine.py is actually running the registration block
@@ -84,9 +92,10 @@ try:
     print(f"[DEBUG] Hook setup: USE_UARM={USE_UARM}, UARM_PLAY_AFTER_DRAW={UARM_PLAY_AFTER_DRAW}, UARM_PLAY_FILE={UARM_PLAY_FILE}")
 
     if USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE:
+
         def _normalize_smooth(path: str) -> str:
             base, ext = os.path.splitext(path)
-            while base.lower().endswith('.smooth'):
+            while base.lower().endswith(".smooth"):
                 base = base[:-7]
             return f"{base}{ext or '.txt'}"
 
@@ -107,6 +116,7 @@ try:
 except Exception as e:
     print(f"[DEBUG] GRBL hook registration failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 print("\n=== TRACE COMPLETE ===")

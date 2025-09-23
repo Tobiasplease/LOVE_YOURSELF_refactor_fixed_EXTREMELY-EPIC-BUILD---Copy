@@ -304,6 +304,7 @@ if USE_UARM and UARM_BACKEND:
                     uarm_api.uarm_api = simple_api
                     debug_print("uArm simple API initialized", "INIT")
                     if UARM_HOME_ON_CONNECT:
+      
                         debug_print("Performing uArm homing sequence", "INIT")
                         uarm_controller.home()
                 else:

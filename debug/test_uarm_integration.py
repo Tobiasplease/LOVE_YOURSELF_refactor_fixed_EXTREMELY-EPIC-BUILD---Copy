@@ -7,17 +7,12 @@ import time
 # Add the parent directory to sys.path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from uarm_control.uarm_controller import UarmController
-from uarm_control.motion_manager import MotionManager
 from uarm_control.emotion_mapper import UarmEmotionMapper
+from uarm_control.motion_manager import MotionManager
+from uarm_control.uarm_controller import UarmController
 
 try:
-    from config.config import (
-        USE_UARM,
-        UARM_PORT,
-        UARM_MOTION_STORAGE,
-        UARM_EMOTION_INTEGRATION
-    )
+    from config.config import UARM_EMOTION_INTEGRATION, UARM_MOTION_STORAGE, UARM_PORT, USE_UARM
 except ImportError:
     USE_UARM = True
     UARM_PORT = None
@@ -53,10 +48,7 @@ def test_motion_manager():
     print("\n=== Testing Motion Manager ===")
 
     controller = UarmController(connect_on_init=False)  # Don't connect for testing
-    motion_manager = MotionManager(
-        storage_path=UARM_MOTION_STORAGE,
-        controller=controller
-    )
+    motion_manager = MotionManager(storage_path=UARM_MOTION_STORAGE, controller=controller)
 
     print(f"Motion manager created: {motion_manager is not None}")
 
@@ -167,6 +159,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Integration test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

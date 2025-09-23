@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.config import DEBUG_FAST_DRAWING, DRAWING_INTERVAL, DRAWING_COOLDOWN
+from config.config import DEBUG_FAST_DRAWING, DRAWING_COOLDOWN, DRAWING_INTERVAL
 from drawing.drawing import DrawingController
+
 
 def test_debug_drawing_system():
     """Test the debug drawing system with detailed logging."""
@@ -31,11 +33,7 @@ def test_debug_drawing_system():
 
     for i, scenario in enumerate(test_scenarios):
         print(f"\n--- Scenario {i+1}: {scenario['name']} ---")
-        result = drawing_controller.should_draw(
-            mood=scenario["mood"],
-            novelty=scenario["novelty"],
-            boredom=scenario["boredom"]
-        )
+        result = drawing_controller.should_draw(mood=scenario["mood"], novelty=scenario["novelty"], boredom=scenario["boredom"])
         print(f"Result: {'WOULD DRAW' if result else 'WOULD NOT DRAW'}")
 
     print(f"\n{'='*50}")
@@ -45,6 +43,7 @@ def test_debug_drawing_system():
     print("3. Restart machine.py")
     print("4. Drawing will check every 60 seconds with 30-second cooldown")
     print("5. Watch for [🎨] messages in console output")
+
 
 if __name__ == "__main__":
     test_debug_drawing_system()
