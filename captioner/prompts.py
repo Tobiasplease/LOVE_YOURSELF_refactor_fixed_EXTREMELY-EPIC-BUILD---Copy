@@ -1738,5 +1738,53 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     return final_result
 
 
+# === PAPER DETECTION PROMPTS ===
+
+def build_paper_detection_reference_prompt() -> str:
+    """Build prompt for paper detection using reference image comparison."""
+    return (
+        "Compare this current view to the reference image showing proper paper setup. "
+        "The reference shows exactly how paper should be positioned for safe drawing.\n\n"
+        "Key comparison points:\n"
+        "- Paper position and orientation match the reference\n"
+        "- Paper appears flat and properly positioned (not wrinkled or curled)\n"
+        "- Paper edges are visible and well-defined\n"
+        "- Surface texture appears similar to reference (matte paper vs glossy table)\n"
+        "- Drawing area is clear and ready for use\n\n"
+        "IMPORTANT: Account for lighting differences - the current image may be darker or lighter "
+        "than the reference, but the paper shape, position, and texture characteristics should still match. "
+        "Focus on structural elements rather than exact brightness.\n\n"
+        "Respond with:\n"
+        "PAPER: YES/NO\n"
+        "CONFIDENCE: 0.0-1.0\n"
+        "REASON: Detailed comparison noting paper position, edges, texture, and any lighting differences\n"
+        "\n"
+        "Only say YES if the current setup shows paper positioned similarly to the reference image, "
+        "even if lighting conditions are different."
+    )
+
+
+def build_paper_detection_direct_prompt() -> str:
+    """Build prompt for direct paper detection without reference."""
+    return (
+        "Carefully examine this drawing area to determine if there is paper properly positioned for drawing. "
+        "Look for these paper characteristics:\n"
+        "- White, off-white, or light-colored paper surface\n"
+        "- Rectangular paper shape with visible edges\n"
+        "- Flat surface texture (not glossy or reflective)\n"
+        "- Properly positioned in the drawing area\n"
+        "- Clean and ready for pen/pencil drawing\n\n"
+        "IMPORTANT: Even in low light or dim conditions, paper should still be visible as a lighter surface "
+        "against the background. Paper has a distinct matte texture different from smooth tables, glossy surfaces, or machinery.\n\n"
+        "Respond with:\n"
+        "PAPER: YES/NO\n"
+        "CONFIDENCE: 0.0-1.0\n"
+        "REASON: Detailed explanation of what you see - describe surface texture, color, edges, and positioning\n"
+        "\n"
+        "Be conservative but consider lighting conditions - only say YES if you can identify paper characteristics. "
+        "If you see bare table, machinery, tools, or completely unclear surfaces, say NO."
+    )
+
+
 # === SIMPLE FALLBACK PROMPT SYSTEM ===
 # Removed legacy build_simple_contextual_prompt (unused)

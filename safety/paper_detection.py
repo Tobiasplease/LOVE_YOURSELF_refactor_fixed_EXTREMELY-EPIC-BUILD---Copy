@@ -255,7 +255,8 @@ class PaperDetector:
         if not os.path.exists(self.reference_image_path):
             raise Exception(f"Reference image not found: {self.reference_image_path}")
 
-        prompt = self._build_reference_comparison_prompt()
+        from captioner.prompts import build_paper_detection_reference_prompt
+        prompt = build_paper_detection_reference_prompt()
 
         # Use captioner if available, otherwise direct ollama query
         if captioner and hasattr(captioner, 'model'):
@@ -288,7 +289,8 @@ class PaperDetector:
 
     def _check_direct_detection(self, check_image_path: str, captioner=None) -> PaperCheckResult:
         """Check paper presence by direct LLM analysis."""
-        prompt = self._build_direct_detection_prompt()
+        from captioner.prompts import build_paper_detection_direct_prompt
+        prompt = build_paper_detection_direct_prompt()
 
         # Use captioner if available, otherwise direct ollama query
         if captioner and hasattr(captioner, 'model'):
@@ -319,37 +321,6 @@ class PaperDetector:
             llm_response=response
         )
 
-    def _build_reference_comparison_prompt(self) -> str:
-        """Build prompt for reference image comparison."""
-        return (
-            "Compare this current view to the reference image showing proper paper setup. "
-            "The reference shows exactly how paper should be positioned for safe drawing. "
-            "Check if the current view matches the reference setup - same paper position, "
-            "flatness, alignment, and readiness for drawing. "
-            "\n\n"
-            "Respond with:\n"
-            "PAPER: YES/NO\n"
-            "CONFIDENCE: 0.0-1.0\n"
-            "REASON: Brief explanation comparing current view to reference\n"
-            "\n"
-            "Only say YES if current setup closely matches the reference image."
-        )
-
-    def _build_direct_detection_prompt(self) -> str:
-        """Build prompt for direct paper detection."""
-        return (
-            "Look at this drawing area and determine if there is paper properly positioned for drawing. "
-            "You should see white paper or a drawing surface that is flat, clean, and ready for pen/pencil drawing. "
-            "Look for the characteristic appearance of paper - white or off-white surface, flat texture, proper positioning. "
-            "\n\n"
-            "Respond with:\n"
-            "PAPER: YES/NO\n"
-            "CONFIDENCE: 0.0-1.0\n"
-            "REASON: Brief explanation of what you see in the drawing area\n"
-            "\n"
-            "Be conservative - only say YES if you clearly see paper ready for drawing. "
-            "If you see bare table, machinery, or unclear surfaces, say NO."
-        )
 
     def _parse_detection_response(self, response: str) -> Tuple[bool, float]:
         """Parse LLM response to extract paper presence and confidence."""
