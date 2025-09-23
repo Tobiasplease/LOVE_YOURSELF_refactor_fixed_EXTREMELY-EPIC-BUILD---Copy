@@ -24,10 +24,10 @@ from config.config import (
 )
 
 # === VELOCITY LIMITING CONSTANTS ===
-# Face tracking - increased for more reactive tracking
-FACE_PAN_VELOCITY = 8.0   # Maximum degrees per update during face tracking (more reactive)
-FACE_TILT_VELOCITY = 7.0  # Maximum degrees per update during face tracking (more reactive)
-FACE_VELOCITY_SMOOTHING = 0.4  # Even less smoothing for face tracking (more responsive)
+# Face tracking - reduced for smoother movement
+FACE_PAN_VELOCITY = 8.0   # Maximum degrees per update during face tracking (smoother)
+FACE_TILT_VELOCITY = 7.0  # Maximum degrees per update during face tracking (smoother)
+FACE_VELOCITY_SMOOTHING = 0.0  # No velocity smoothing for face tracking (immediate response)
 
 # General movement - higher limits for idle movement
 MAX_PAN_VELOCITY = 8.0   # Maximum degrees per update for pan servo (prevents hard lock-ins)
@@ -202,7 +202,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
         face_x_norm = face_center_x / w  # 0.0 to 1.0
         face_y_norm = face_center_y / h  # 0.0 to 1.0
 
-        # Direct mapping for responsive tracking - no curves during face tracking
+        # Direct mapping to face position for natural eye contact
         target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * face_x_norm
         target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * face_y_norm
 

@@ -14,7 +14,7 @@ import argparse
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from safety.paper_detection import paper_detector, get_paper_detection_status, check_paper_before_drawing, capture_paper_reference
+from safety.paper_detection import paper_detector, get_paper_detection_status, check_paper_before_drawing, capture_paper_present_reference, capture_paper_absent_reference
 from config.config import ENABLE_PAPER_DETECTION, PAPER_CHECK_METHOD, PAPER_DETECTION_CONFIDENCE_THRESHOLD
 
 

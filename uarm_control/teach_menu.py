@@ -154,6 +154,13 @@ class UArmTeachApp:
             self._sync_pump_state()
             print(f"Pump state synchronized: {'ON' if self.pump_on else 'OFF'}")
 
+            # Expand workspace to allow full range during teaching
+            try:
+                result = self.swift.set_height_offset(30)
+                print(f"Height workspace expanded (+30mm): {result}")
+            except Exception as e:
+                print(f"Warning: Could not expand height workspace: {e}")
+
             # Default idle: detach servos so the arm is limp/discrete
             try:
                 self.swift.set_servo_detach()

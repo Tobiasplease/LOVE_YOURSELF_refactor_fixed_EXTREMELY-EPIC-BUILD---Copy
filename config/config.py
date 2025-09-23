@@ -26,7 +26,7 @@ SERVO_MAX = PAN_MAX  # Use PAN_MAX as default
 EASING_FACTOR = 0.15  # Slightly faster for more responsive movement
 
 # === SERVO FLIPPING ===
-FLIP_X = False  # Pan servo direction is correct
+FLIP_X = True   # Test flipping pan direction
 FLIP_Y = True
 
 # === FACE DETECTION ===
@@ -207,14 +207,14 @@ UARM_DEFAULT_SPEED = 100        # Default movement speed (1-250)
 UARM_PLAY_AFTER_DRAW = True
 UARM_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "papermove_20250918_013415.txt",  # Paper movement after GRBL completion
+    "paper_move_20250922_142926.txt",  # Paper movement after GRBL completion
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
 UARM_PLAY_ON_START = True
 UARM_START_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "startup_20250918_013712.txt",
+    "startup_20250921_200151.txt",
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
@@ -227,8 +227,17 @@ CAPTION_INTERVAL = 10  # seconds between full caption cycles
 # Drawing system intervals
 DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
 REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
-DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 60  # 1 minute debug vs 10 minutes normal
-DRAWING_COOLDOWN = 600 if DEBUG_FAST_DRAWING else 60  # 30 seconds debug vs 10 minutes normal
+DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 180  # 1 minute debug vs 3 minutes normal
+DRAWING_COOLDOWN = 120 if DEBUG_FAST_DRAWING else 720  # 2 minutes debug vs 12 minutes normal
+
+# State-motivated drawing system (when DEBUG_FAST_DRAWING is False)
+DRAWING_USE_STATE_MOTIVATION = not DEBUG_FAST_DRAWING  # Enable sophisticated triggering
+DRAWING_MIN_INTERVAL = 600   # 10 minutes minimum between drawings (safety)
+DRAWING_MAX_INTERVAL = 1800  # 30 minutes maximum (ensure some activity)
+DRAWING_BASE_THRESHOLD = 0.6  # Base threshold for drawing decision (0-1)
+DRAWING_NOVELTY_WEIGHT = 0.3  # How much novelty influences decision
+DRAWING_BOREDOM_WEIGHT = 0.4   # How much boredom influences decision
+DRAWING_MOOD_WEIGHT = 0.3      # How much mood influences decision
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
@@ -320,11 +329,53 @@ USE_MULTI_STEP_DRAWING_ANALYSIS = True  # Set to False for original single-promp
 ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
 PAPER_CHECK_METHOD = "reference"  # "reference" (compare to reference image) or "direct" (ask LLM directly)
 PAPER_DETECTION_CONFIDENCE_THRESHOLD = 0.8  # LLM confidence requirement (0.0-1.0)
+# Reference images (used by paper detection). If they do not exist, detection falls back safely.
+PAPER_PRESENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_present.jpg")
+PAPER_ABSENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_absent.jpg")
+# Legacy single-reference path (kept for backwards compatibility)
 PAPER_REFERENCE_IMAGE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_reference.jpg")
 PAPER_DETECTION_GAZE_PAN = 90  # Pan angle for looking down at drawing area
 PAPER_DETECTION_GAZE_TILT = 50  # Tilt angle for looking down at drawing area (lowest safe position)
 PAPER_CHECK_TIMEOUT = 10.0  # Maximum seconds to wait for paper detection
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
+
+# Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
+# Leave False to preserve a working baseline.
+ENABLE_POST_HOME_PAPER_CHECK = True
+# Soft vs. strict behavior: when False, paper check never blocks drawing
+# (it only logs and proceeds). Set to True to enforce blocking on "no paper".
+PAPER_CHECK_STRICT_MODE = False
+# Max time budget for the post-home paper check (seconds)
+PAPER_CHECK_MAX_WAIT_S = 1.0
+# Use the same tilt as drawing lock for detection (aligns view)
+PAPER_USE_DRAWING_TILT = True
+# Use full frame for paper check (not cropped ROI)
+PAPER_USE_FULL_FRAME = True
+
+# --- Paper detection debug + tuning ---
+# Dump diagnostic images/metrics during post-home paper check
+PAPER_DEBUG_DUMP = True
+# Disable all local image heuristics during the post-home paper check
+# (use LLM-only judgment). When True, skips X/whiteness/reference comparisons
+# and relies solely on the LLM single-token decision.
+PAPER_DISABLE_LOCAL_HEURISTICS = True
+# Whiteness thresholds (0..1)
+PAPER_WHITENESS_MIN = 0.25           # Global ROI whiteness guard
+PAPER_WHITENESS_WINDOW_MIN = 0.60    # Any 1/9 window whiteness guard (partial paper)
+# Correlation decision thresholds
+PAPER_CORR_MARGIN = 0.12
+PAPER_PRESENT_CORR_MIN = 0.35
+PAPER_ABSENT_CORR_MIN = 0.35
+# X-detection thresholds
+PAPER_X_SCORE_MIN = 0.35              # Min weighted diagonal length score to accept X
+PAPER_X_CENTER_TOL_FRAC = 0.20        # Fraction of ROI size for center tolerance
+PAPER_X_WHITENESS_OVERRIDE = 0.85     # Only override a strong X if a window whiteness >= this
+
+# --- Optional LLM tie-breaker ---
+PAPER_LLM_ENABLED = True             # Use LLM only when local check is inconclusive/NO
+PAPER_LLM_TIMEOUT_S = 2.0            # Soft time budget for LLM check (best-effort)
+PAPER_LLM_CONFIDENCE_MIN = 0.85      # Require at least this confidence to override
+PAPER_LLM_MODE = "always"            # 'tie_break' or 'always'
 # === LCD CAPTION DISPLAY ===
 USE_CAPTION_DISPLAY = True
 CAPTION_DISPLAY_PORT = "/dev/arduino_lcd"

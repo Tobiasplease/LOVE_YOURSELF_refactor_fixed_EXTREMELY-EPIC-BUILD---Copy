@@ -1,5 +1,28 @@
 import re
 
+# ================================================================
+# Optional PRE‑TRANSFORM (ideal domain) settings
+# ------------------------------------------------
+# These apply BEFORE the warp mapping so the correction is preserved.
+# Defaults are identity/no‑op so baseline behavior is unchanged.
+#
+# Units: same units as incoming G-code XY (typically mm) but in the
+#        IDEAL domain (before mapping). For human‑oriented "up/down/left/right"
+#        adjustments tied to the actual robot frame, prefer the POST nudges
+#        (NUDGE_*_MM) below, which operate in machine coordinates.
+# Pivot: if None, uses the domain center (max_x/2, max_y/2).
+# Clamp: if True, clamps pre‑transformed XY to [0..max_x]/[0..max_y].
+#
+# To revert to baseline: set SCALE=1.0 and OFFSETS=0.0 (or leave defaults).
+# ================================================================
+PRE_SCALE_X = 1.0
+PRE_SCALE_Y = 1.0
+PRE_OFFSET_X = 0.0
+PRE_OFFSET_Y = 0.0
+PRE_PIVOT_X = None  # e.g., 0.0 to use origin, or None for center
+PRE_PIVOT_Y = None
+PRE_CLAMP_TO_DOMAIN = False
+
 def find_max_xy_from_lines(lines):
     max_x = float('-inf')
     max_y = float('-inf')
@@ -41,11 +64,11 @@ def map_to_quad(x, y, x_max=40, y_max=40):
     # Vertically flip Y coordinate to prevent upside-down output
     v = 1.0 - v
 
-    # Professor's latest calibrated values (2025-09-17) - new rotation correction
-    Ax, Ay = 0, 40   # vänster längst från robot (top-left)
-    Bx, By = 35, 2   # vänster närmast robot (bottom-left)
-    Cx, Cy = 70, 3   # höger närmast robot (bottom-right)
-    Dx, Dy = 25, 40  # höger längst från robot (top-right)
+    # Professor's latest calibrated values (2025-09-17) - corrected for leftward skew
+    Ax, Ay = 1, 40   # vänster längst från robot (top-left) - shifted right 1mm
+    Bx, By = 35, 2   # vänster närmast robot (bottom-left) - unchanged
+    Cx, Cy = 70, 3   # höger närmast robot (bottom-right) - unchanged
+    Dx, Dy = 26, 40  # höger längst från robot (top-right) - shifted right 1mm
 
     # Previous coordinate versions (for reference):
     # Original values:
@@ -71,7 +94,28 @@ def map_to_quad(x, y, x_max=40, y_max=40):
 def warp_transform_line(gcode_line, max_x, max_y):
     """Apply inverse warp transform to G-code coordinates"""
     # TEMPORARY SCALING FIX - easily reversible by setting to 1.0
-    SCALE_FACTOR = 1.3  # Increase output size (set to 1.0 to disable)
+    SCALE_FACTOR = 1.0  # Increase output size (set to 1.0 to disable)
+
+    # POSITION OFFSET - easily toggleable positioning adjustment (legacy)
+    # NOTE: Applied in machine/GRBL coordinates AFTER mapping and scaling.
+    # Keep as-is for baseline compatibility.
+    OFFSET_X = 0.0  # X offset in mm (historical note: positive intended as 'away from robot')
+    OFFSET_Y = 0.0  # Y offset in mm (historical note: positive intended as 'toward robot body')
+
+    # ------------------------------------------------------------
+    # Optional POST‑TRANSFORM direction nudges in machine coords
+    # Consistent with quadrilateral labels in map_to_quad:
+    #   - 'vänster'/'höger' correspond to X‑ decreases/increases
+    #   - 'längst från robot' (top) has larger Y; 'närmast robot' (bottom) has smaller Y
+    # Therefore:
+    #   RIGHT  => +X, LEFT  => -X
+    #   UP     => +Y (farther from robot), DOWN => -Y (toward robot)
+    # Defaults 0.0 keep baseline behavior unchanged.
+    # ------------------------------------------------------------
+    NUDGE_RIGHT_MM = 0.0
+    NUDGE_LEFT_MM = 0.0
+    NUDGE_UP_MM = 0.0
+    NUDGE_DOWN_MM = 0.0
 
     x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
     y_match = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
@@ -81,8 +125,27 @@ def warp_transform_line(gcode_line, max_x, max_y):
         original_x = float(x_match.group(1))
         original_y = float(y_match.group(1))
 
-        # Apply JBE's inverse warp transform directly
-        transformed_x, transformed_y = map_to_quad(original_x, original_y, max_x, max_y)
+        # ------------------------------------------------------------
+        # PRE‑TRANSFORM (ideal domain): scale/offset BEFORE warp map
+        # Baseline reference: originally we called
+        #   map_to_quad(original_x, original_y, max_x, max_y)
+        # Applying PRE_* with identity (scale=1, offsets=0) reproduces
+        # the baseline exactly.
+        # ------------------------------------------------------------
+        cx = (max_x / 2.0) if PRE_PIVOT_X is None else float(PRE_PIVOT_X)
+        cy = (max_y / 2.0) if PRE_PIVOT_Y is None else float(PRE_PIVOT_Y)
+
+        x_pre = cx + (original_x - cx) * float(PRE_SCALE_X) + float(PRE_OFFSET_X)
+        y_pre = cy + (original_y - cy) * float(PRE_SCALE_Y) + float(PRE_OFFSET_Y)
+
+        if PRE_CLAMP_TO_DOMAIN:
+            if max_x is not None:
+                x_pre = min(max(x_pre, 0.0), float(max_x))
+            if max_y is not None:
+                y_pre = min(max(y_pre, 0.0), float(max_y))
+
+        # Apply JBE's inverse warp transform using pre‑adjusted coords
+        transformed_x, transformed_y = map_to_quad(x_pre, y_pre, max_x, max_y)
 
         # Apply scaling around center point for larger drawings
         if SCALE_FACTOR != 1.0:
@@ -93,6 +156,14 @@ def warp_transform_line(gcode_line, max_x, max_y):
             # Scale around center point
             transformed_x = center_x + (transformed_x - center_x) * SCALE_FACTOR
             transformed_y = center_y + (transformed_y - center_y) * SCALE_FACTOR
+
+        # Optional post‑warp directional nudges (machine space)
+        transformed_x += float(NUDGE_RIGHT_MM) - float(NUDGE_LEFT_MM)
+        transformed_y += float(NUDGE_UP_MM) - float(NUDGE_DOWN_MM)
+
+        # Apply legacy position offset (after warp transform and scaling)
+        transformed_x += OFFSET_X
+        transformed_y += OFFSET_Y
 
         # Update G-code line with transformed coordinates
         gcode_line = re.sub(r"X[-+]?\d*\.?\d+", f"X{transformed_x:.4f}", gcode_line, flags=re.IGNORECASE)

@@ -936,10 +936,14 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         print_message=f"[🚀] Executing G-code file: {gcode_file}",
     )
 
-    # SAFETY CHECK: Paper detection DISABLED for now
-    # (Paper detection was causing gaze system to stay locked after drawing)
-    
-    
+    # Start CNC execution tracking NOW (when actual GRBL execution begins)
+    try:
+        from utils.state_manager import state_manager
+        original_prompt = getattr(state_manager, 'current_drawing_prompt', None) or "Unknown drawing"
+        state_manager.start_cnc_execution(gcode_file, original_prompt)
+    except Exception as e:
+        print(f"[⚠️] Could not start CNC execution tracking: {e}")
+
     # Pause idle movements NOW for actual drawing execution
     try:
         from grbl.idle_movement_manager import pause_for_drawing
@@ -959,20 +963,22 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         from utils.state_manager import state_manager
         import os
         
-        # Get drawing description from state_manager and compress it
-        drawing_prompt = getattr(state_manager, 'current_drawing_prompt', 'recent drawing')
-
-        # Use prompt compression system
+        # Get simple drawing description for state tracking
+        # Note: Detailed drawing summary is extracted and stored in drawing.py during prompt generation
         compressed_description = "actively drawing"
-        try:
-            from utils.prompt_compression import compress_drawing_prompt
-            if drawing_prompt and drawing_prompt != 'recent drawing':
-                compressed_description = compress_drawing_prompt(drawing_prompt)
-                print(f"[🗜️] Compressed drawing prompt: {drawing_prompt[:50]}... -> {compressed_description}")
-            else:
-                print(f"[⚠️] No valid drawing prompt to compress, using fallback")
-        except Exception as e:
-            print(f"[⚠️] Prompt compression failed: {e}")
+
+        # Try to get a simple description from the state_manager if available
+        drawing_prompt = getattr(state_manager, 'current_drawing_prompt', None)
+        if drawing_prompt and isinstance(drawing_prompt, str) and len(drawing_prompt) > 20:
+            # Simple extraction of first meaningful content
+            lines = drawing_prompt.strip().split('\n')
+            for line in lines:
+                if line.strip() and not line.startswith('=') and len(line.strip()) > 10:
+                    compressed_description = line.strip()[:60] + ("..." if len(line.strip()) > 60 else "")
+                    break
+            print(f"[📝] Using drawing description for state: {compressed_description}")
+        else:
+            print(f"[📝] Using default drawing description for state tracking")
 
         # Drawing state tracking with compressed description
         DrawingState.start_drawing(
@@ -1011,10 +1017,12 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     # Execute G-code in a separate thread to avoid blocking other systems
     gcode_complete = threading.Event()
     gcode_error = None
+    executed_lines = 0
+    total_lines = 0
 
     def execute_gcode_threaded():
         """Execute G-code in background thread."""
-        nonlocal gcode_error
+        nonlocal gcode_error, executed_lines, total_lines
         try:
             with open(gcode_file, "r") as f:
                 lines = f.readlines()
@@ -1106,6 +1114,16 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
 
     # Re-raise any errors that occurred in the thread
     if gcode_error:
+        # Ensure gaze unlock even on error
+        try:
+            from vision.gaze import set_drawing_mode
+            set_drawing_mode(active=False)
+        except Exception:
+            pass
+        try:
+            lightbulb_fluctuation.stop_fluctuation()
+        except Exception:
+            pass
         raise gcode_error
 
     log_json_entry(
@@ -1119,7 +1137,18 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         },
         print_message=f"[✅] G-code execution complete: {executed_lines} lines executed",
     )
-    
+
+    # IMMEDIATELY unlock gaze system after GRBL execution completes
+    try:
+        from vision.gaze import set_drawing_mode
+        print("[DEBUG] About to call set_drawing_mode(active=False)...")
+        set_drawing_mode(active=False)
+        print("[👁️] ✅ Gaze unlocked immediately after GRBL execution")
+    except Exception as e:
+        print(f"[❌] Could not unlock gaze system after execution: {e}")
+        import traceback
+        traceback.print_exc()
+
     # === DRAWING COMPLETION RITUAL ===
     
     # Step 1: End drawing state (releases drawing context from captions)
@@ -1166,17 +1195,20 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         
         log_json_entry(
             LogType.GRBL,
-            {"message": "Homed for completion ritual - staying at home for 7-second pause", "action": "completion_homing_complete"},
-            print_message="[✅] Homing complete - beginning 7-second completion pause at home position",
+            {"message": "Homed for completion ritual - staying at home for 30-second pause", "action": "completion_homing_complete"},
+            print_message="[✅] Homing complete - beginning 30-second completion pause at home position",
         )
         
         # Step 3: Unlock gaze system during completion pause
+        print("[DEBUG] About to unlock gaze system...")
         try:
             from vision.gaze import set_drawing_mode
             set_drawing_mode(active=False)
-            print("[👁️] Gaze unlocked for completion ritual")
+            print("[👁️] ✅ Gaze unlocked for completion ritual")
         except Exception as e:
-            print(f"[⚠️] Could not unlock gaze system: {e}")
+            print(f"[❌] Could not unlock gaze system: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Step 4: Trigger self-critique during 7-second pause (AT HOME POSITION)
         completion_thread_running = threading.Event()
@@ -1270,9 +1302,27 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
         # Start self-critique in background thread
         critique_thread = threading.Thread(target=completion_self_critique, daemon=True)
         critique_thread.start()
-        
-        # 7-second completion pause AT HOME POSITION (allows time for self-critique)
-        time.sleep(7.0)
+
+        # Notify any runtime hook that GRBL drawing has finished (uArm starts immediately)
+        # CRITICAL: Hook must run BEFORE 30-second pause to allow uArm to use the full time
+        hook_completed_successfully = False
+        try:
+            from utils.hooks import on_grbl_drawing_complete
+            print(f"[DEBUG] GRBL completion hook check: callable={callable(on_grbl_drawing_complete)}")
+            if callable(on_grbl_drawing_complete):
+                print(f"[DEBUG] Calling GRBL completion hook (uArm starts NOW during pause)")
+                on_grbl_drawing_complete()
+                hook_completed_successfully = True
+                print(f"[DEBUG] GRBL completion hook finished successfully")
+            else:
+                print(f"[DEBUG] No GRBL completion hook registered")
+                hook_completed_successfully = True
+        except Exception as e:
+            print(f"[hooks] on_grbl_drawing_complete error: {e}")
+            hook_completed_successfully = True  # Continue anyway
+
+        # 30-second completion pause AT HOME POSITION (allows time for uArm movement to complete)
+        time.sleep(30.0)
         
         # Ensure self-critique thread completes
         if not completion_thread_running.is_set():
@@ -1283,23 +1333,6 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
             {"message": "Completion ritual finished at home position", "action": "completion_ritual_complete"},
             print_message="[✅] Completion ritual finished at home - idle movements will handle positioning",
         )
-        # Notify any runtime hook that GRBL drawing has finished
-        # CRITICAL: Hook must run BEFORE clearing CNC state to allow proper coordination
-        hook_completed_successfully = False
-        try:
-            from utils.hooks import on_grbl_drawing_complete
-            print(f"[DEBUG] GRBL completion hook check: callable={callable(on_grbl_drawing_complete)}")
-            if callable(on_grbl_drawing_complete):
-                print(f"[DEBUG] Calling GRBL completion hook (BEFORE clearing CNC state)")
-                on_grbl_drawing_complete()
-                hook_completed_successfully = True
-                print(f"[DEBUG] GRBL completion hook finished successfully")
-            else:
-                print(f"[DEBUG] No GRBL completion hook registered")
-                hook_completed_successfully = True
-        except Exception as e:
-            print(f"[hooks] on_grbl_drawing_complete error: {e}")
-            hook_completed_successfully = True  # Continue anyway
 
     except Exception as e:
         log_json_entry(
@@ -1478,6 +1511,7 @@ def process_svg_to_grbl(
                     ser = find_grbl_port(continuous_retry=True)
                     max_retries = -1  # Continuous retry by default
 
+                print(f"🎯 [DEBUG] About to call initialize_grbl_for_drawing...")
                 initialize_grbl_for_drawing(
                     ser,
                     origin=origin,
@@ -1486,20 +1520,510 @@ def process_svg_to_grbl(
                     use_absolute_positioning=use_absolute_positioning,
                     max_homing_retries=max_retries,
                 )
-                
+                print(f"🎯 [DEBUG] initialize_grbl_for_drawing completed successfully")
+
+                # === PAPER CHECK AFTER HOMING (opt-in) ===
+                try:
+                    from config.config import ENABLE_PAPER_DETECTION, ENABLE_POST_HOME_PAPER_CHECK, ALLOW_PAPER_DETECTION_OVERRIDE, PAPER_DETECTION_GAZE_PAN, PAPER_DETECTION_GAZE_TILT, PAPER_USE_DRAWING_TILT
+                except Exception:
+                    ENABLE_PAPER_DETECTION = False
+                    ENABLE_POST_HOME_PAPER_CHECK = False
+                    ALLOW_PAPER_DETECTION_OVERRIDE = True
+                    PAPER_DETECTION_GAZE_PAN = 90
+                    PAPER_USE_DRAWING_TILT = True
+                    from config.config import TILT_MIN
+                    PAPER_DETECTION_GAZE_TILT = TILT_MIN + 2
+
+                def _paper_check_after_homing() -> bool:
+                    start_t = time.time()
+                    # Position gaze down for capture (best-effort)
+                    try:
+                        from config.config import USE_SERVO
+                        if USE_SERVO:
+                            try:
+                                from vision.gaze import set_drawing_mode
+                                # Direct print to ensure visibility even when PRINT_CLEAN_CAPTIONS is True
+                                print("[👁️] Positioning gaze for post-home paper check…")
+                                try:
+                                    if PAPER_USE_DRAWING_TILT:
+                                        from config.config import TILT_MIN
+                                        det_tilt = TILT_MIN + 2
+                                    else:
+                                        det_tilt = PAPER_DETECTION_GAZE_TILT
+                                except Exception:
+                                    det_tilt = PAPER_DETECTION_GAZE_TILT
+                                set_drawing_mode(active=True, drawing_pan=PAPER_DETECTION_GAZE_PAN, drawing_tilt=det_tilt)
+                                time.sleep(1.6)
+                            except Exception as e:
+                                log_json_entry(LogType.WARNING, {"action": "paper_check_after_homing", "step": "gaze_failed", "error": str(e)})
+                    except Exception:
+                        pass
+
+                    import cv2, numpy as np, os, sys
+                    # Try to read a frame from shared camera (avoid opening a new capture)
+                    frame = None
+                    # 1) state_manager.camera if available
+                    try:
+                        from utils.state_manager import state_manager as _sm
+                        cam = getattr(_sm, 'camera', None)
+                        if cam is not None:
+                            if hasattr(cam, 'read_frame'):
+                                # Take last of two frames for freshness
+                                _ = cam.read_frame()
+                                frame = cam.read_frame()
+                            elif hasattr(cam, 'read'):
+                                # Warm-up reads
+                                for _i in range(2):
+                                    cam.read()
+                                ok, frm = cam.read()
+                                frame = frm if ok else None
+                    except Exception:
+                        cam = None
+                    # 2) fall back to machine globals if present
+                    if frame is None:
+                        try:
+                            m = sys.modules.get('machine') or sys.modules.get('__main__')
+                            if m is not None:
+                                cap0 = getattr(m, '_global_cap', None) or getattr(m, 'cap', None)
+                                if cap0 is not None and hasattr(cap0, 'read'):
+                                    ok, frm = cap0.read()
+                                    frame = frm if ok else None
+                        except Exception:
+                            pass
+                    # 3) as last resort, proceed (do NOT open a new camera)
+                    if frame is None:
+                        print("[📄] Post-home paper check: no shared camera — proceeding")
+                        return True
+
+                    # Choose ROI: full frame if configured, else 10–90% crop
+                    h, w = frame.shape[:2]
+                    try:
+                        from config.config import PAPER_USE_FULL_FRAME
+                    except Exception:
+                        PAPER_USE_FULL_FRAME = True
+                    if PAPER_USE_FULL_FRAME:
+                        rx1, ry1, rx2, ry2 = 0, 0, w, h
+                    else:
+                        rx1, ry1, rx2, ry2 = int(w*0.1), int(h*0.1), int(w*0.9), int(h*0.9)
+                    roi = frame[ry1:ry2, rx1:rx2]
+                    # Read toggle to optionally disable local heuristics (LLM-only)
+                    try:
+                        from config.config import PAPER_DISABLE_LOCAL_HEURISTICS
+                    except Exception:
+                        PAPER_DISABLE_LOCAL_HEURISTICS = False
+
+                    # A) X marker detection (robust): look for two strong diagonal families
+                    try:
+                        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+                        gray = cv2.GaussianBlur(gray, (5,5), 0)
+                        # Boost contrast with CLAHE before edge detection
+                        try:
+                            _clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                            gray_eq = _clahe.apply(gray)
+                        except Exception:
+                            gray_eq = gray
+                        # Lower Canny thresholds to catch faint lines
+                        edges = cv2.Canny(gray_eq, 15, 60)
+                        # Hough transform for line segments
+                        lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=15, minLineLength=20, maxLineGap=20)
+                        x_visible = False
+                        x_score = 0.0
+                        pos_sum = neg_sum = 0.0
+                        pos_cnt = neg_cnt = 0
+                        import math as _math
+                        if lines is not None and len(lines) > 0:
+                            try:
+                                from config.config import PAPER_X_SCORE_MIN
+                            except Exception:
+                                PAPER_X_SCORE_MIN = 0.20
+                            for l in lines[:,0,:]:
+                                x1,y1,x2,y2 = map(float, l)
+                                dx, dy = x2-x1, y2-y1
+                                L = _math.hypot(dx, dy)
+                                if L < 20: 
+                                    continue
+                                # slope angle in degrees
+                                ang = _math.degrees(_math.atan2(dy, dx))
+                                # Accept diagonal families roughly near ±45° (tolerant)
+                                if not (20 <= abs(ang) <= 80):
+                                    continue
+                                if dy*dx >= 0:  # positive slope family
+                                    pos_sum += L
+                                    pos_cnt += 1
+                                else:           # negative slope family
+                                    neg_sum += L
+                                    neg_cnt += 1
+                            # Normalize by ROI diagonal to get a dimensionless score
+                            roi_diag = _math.hypot(roi.shape[0], roi.shape[1])
+                            x_score = min(pos_sum, neg_sum) / max(roi_diag, 1e-6)
+                            x_visible = (x_score >= PAPER_X_SCORE_MIN) and (pos_cnt >= 2) and (neg_cnt >= 2)
+                        if x_visible:
+                            reason = f"x_marker_visible(score={x_score:.2f},pos={pos_sum:.0f},neg={neg_sum:.0f})"
+                            paper_present = False
+                        else:
+                            paper_present = True
+                            reason = "default"
+                    except Exception:
+                        paper_present = True
+                        reason = "x_marker_error_default_yes"
+
+                    # A.2) Orthogonal rectangle edge detection (heuristic paper edges)
+                    try:
+                        edges2 = cv2.Canny(gray, 60, 180)
+                        lines2 = cv2.HoughLinesP(edges2, 1, np.pi/180, threshold=40, minLineLength=40, maxLineGap=10)
+                        horiz = vert = 0
+                        if lines2 is not None:
+                            for l in lines2[:,0,:]:
+                                x1,y1,x2,y2 = map(float, l)
+                                dx, dy = abs(x2-x1), abs(y2-y1)
+                                if dx + dy < 1: continue
+                                if dy <= dx * 0.15: horiz += 1  # near horizontal
+                                if dx <= dy * 0.15: vert += 1   # near vertical
+                        # If we see several orthogonal edges and ROI is reasonably bright, bias to present
+                        if horiz >= 3 and vert >= 3:
+                            # We'll finalize using whiteness later; store a hint
+                            rect_hint = True
+                        else:
+                            rect_hint = False
+                    except Exception:
+                        rect_hint = False
+
+                    # B) Reference correlation (with illumination normalization and tunable thresholds)
+                    try:
+                        from config.config import PAPER_PRESENT_REFERENCE_PATH, PAPER_ABSENT_REFERENCE_PATH
+                        # Tunable thresholds with safe defaults
+                        try:
+                            from config.config import (
+                                PAPER_CORR_MARGIN,
+                                PAPER_PRESENT_CORR_MIN,
+                                PAPER_ABSENT_CORR_MIN,
+                                PAPER_WHITENESS_MIN,
+                            )
+                        except Exception:
+                            PAPER_CORR_MARGIN = 0.12
+                            PAPER_PRESENT_CORR_MIN = 0.35
+                            PAPER_ABSENT_CORR_MIN = 0.35
+                            PAPER_WHITENESS_MIN = 0.25
+                        # Equalize ROI illumination
+                        roi_gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+                        try:
+                            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                            roi_eq = clahe.apply(roi_gray)
+                        except Exception:
+                            roi_eq = roi_gray
+
+                        def load_ref(path):
+                            if not os.path.exists(path): return None
+                            img = cv2.imread(path)
+                            if img is None: return None
+                            H,W = img.shape[:2]
+                            # Match detection ROI (10%-90%) to maximize correlation consistency
+                            X1,Y1,X2,Y2 = int(W*0.1), int(H*0.1), int(W*0.9), int(H*0.9)
+                            ref = img[Y1:Y2, X1:X2]
+                            ref_g = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
+                            try:
+                                clahe2 = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                                ref_eq = clahe2.apply(ref_g)
+                            except Exception:
+                                ref_eq = ref_g
+                            return ref_eq
+                        def corr(a,b):
+                            try:
+                                a_gray = cv2.cvtColor(cv2.resize(a,(160,120)), cv2.COLOR_BGR2GRAY).astype(np.float32)
+                                b_gray = cv2.cvtColor(cv2.resize(b,(160,120)), cv2.COLOR_BGR2GRAY).astype(np.float32)
+                                a_gray -= a_gray.mean(); b_gray -= b_gray.mean()
+                                denom = (a_gray.std()*b_gray.std())+1e-6
+                                return float(np.mean((a_gray*b_gray)/denom))
+                            except Exception:
+                                return 0.0
+                        rp = load_ref(PAPER_PRESENT_REFERENCE_PATH)
+                        ra = load_ref(PAPER_ABSENT_REFERENCE_PATH)
+                        cp = corr(roi_eq, rp) if rp is not None else None
+                        ca = corr(roi_eq, ra) if ra is not None else None
+                        # Fixed-threshold whiteness
+                        white = float(np.mean(roi_eq >= 200))
+
+                        # Dynamic whiteness with Otsu
+                        try:
+                            _, otsu_bin = cv2.threshold(roi_eq, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+                            white_otsu = float(np.mean(otsu_bin == 255))
+                        except Exception:
+                            white_otsu = white
+
+                        # Skip quadrilateral detection: the X is drawn on grey sandpaper; quadrilateral cues are unreliable
+                        paper_quad = False
+
+                        # Windowed whiteness to handle partial paper visibility (fixed and Otsu)
+                        try:
+                            from config.config import PAPER_WHITENESS_WINDOW_MIN
+                        except Exception:
+                            PAPER_WHITENESS_WINDOW_MIN = 0.6
+                        try:
+                            gh = 3; gw = 3
+                            h_win = roi_eq.shape[0] // gh
+                            w_win = roi_eq.shape[1] // gw
+                            w_max = 0.0
+                            w_max_otsu = 0.0
+                            for gi in range(gh):
+                                for gj in range(gw):
+                                    y1 = gi * h_win
+                                    y2 = (gi + 1) * h_win if gi < gh - 1 else roi_eq.shape[0]
+                                    x1 = gj * w_win
+                                    x2 = (gj + 1) * w_win if gj < gw - 1 else roi_eq.shape[1]
+                                    win = roi_eq[y1:y2, x1:x2]
+                                    if win.size > 0:
+                                        w_local = float(np.mean(win >= 200))
+                                        if w_local > w_max:
+                                            w_max = w_local
+                                        try:
+                                            _, win_otsu = cv2.threshold(win, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+                                            w_local_o = float(np.mean(win_otsu == 255))
+                                            if w_local_o > w_max_otsu:
+                                                w_max_otsu = w_local_o
+                                        except Exception:
+                                            pass
+                        except Exception:
+                            w_max = white
+                            w_max_otsu = white_otsu
+                        if 'x_marker_visible' in reason:
+                            # X remains definitive NO (LLM may still override in tie-break mode).
+                            pass
+                        elif (w_max >= PAPER_WHITENESS_WINDOW_MIN) or (w_max_otsu >= PAPER_WHITENESS_WINDOW_MIN) or (white_otsu >= PAPER_WHITENESS_WINDOW_MIN) or (white >= PAPER_WHITENESS_MIN):
+                            paper_present = True; reason = f"whiteness_guard(w={white:.2f},wo={white_otsu:.2f})"
+                        elif cp is not None and ca is not None:
+                            margin = float(PAPER_CORR_MARGIN)
+                            if (cp - ca) > margin and cp >= PAPER_PRESENT_CORR_MIN:
+                                paper_present = True; reason = f"ref_present({cp:.2f}>{ca:.2f})"
+                            elif (ca - cp) > (margin + 0.05) and ca >= PAPER_ABSENT_CORR_MIN and white < (PAPER_WHITENESS_MIN * 0.8):
+                                paper_present = False; reason = f"ref_absent({ca:.2f}>{cp:.2f})"
+                            else:
+                                paper_present = True; reason = f"inconclusive_ref_bias_present(cp={cp:.2f},ca={ca:.2f},w={white:.2f})"
+                        elif cp is not None:
+                            paper_present = (cp >= PAPER_PRESENT_CORR_MIN or white >= PAPER_WHITENESS_MIN); reason = f"single_ref_present(cp={cp:.2f},w={white:.2f})"
+                        elif ca is not None:
+                            paper_present = not (ca >= (PAPER_ABSENT_CORR_MIN + 0.05)) or white >= (PAPER_WHITENESS_MIN*0.9); reason = f"single_ref_absent(ca={ca:.2f},w={white:.2f})"
+                        else:
+                            paper_present = (white >= PAPER_WHITENESS_MIN); reason = f"fallback_white({white:.2f})"
+
+                        # If orthogonal edges strongly present and not contradicting whiteness, reinforce present
+                        if rect_hint and white >= (PAPER_WHITENESS_MIN * 0.8) and paper_present is not False:
+                            paper_present = True
+                            reason = f"rect_edges(h={horiz},v={vert},w={white:.2f})"
+
+                        # Inconclusive/dark scene bias: if everything is low and dark, prefer ABSENT
+                        if (reason.startswith('inconclusive') or reason == 'default') and (white < 0.15) and (w_max < 0.30):
+                            paper_present = False
+                            reason = f"inconclusive_bias_absent_dark(w={white:.2f},wmax={w_max:.2f})"
+                        if not PAPER_DISABLE_LOCAL_HEURISTICS:
+                            print(f"[📄] Post-home paper check → {'YES' if paper_present else 'NO'} ({reason})")
+                        else:
+                            # Defer decision to LLM only; suppress heuristic print
+                            paper_present = False
+                            reason = "heuristics_disabled_llm_only"
+                    except Exception as e:
+                        print(f"[📄] Paper check error: {e} — proceeding")
+                        paper_present = True
+
+                    # Time budget enforcement
+                    try:
+                        from config.config import PAPER_CHECK_MAX_WAIT_S, PAPER_CHECK_STRICT_MODE
+                    except Exception:
+                        PAPER_CHECK_MAX_WAIT_S = 1.0
+                        PAPER_CHECK_STRICT_MODE = False
+                    elapsed = time.time() - start_t
+                    if elapsed > PAPER_CHECK_MAX_WAIT_S:
+                        # Time budget reached; do not override an explicit NO decision.
+                        # Keep current paper_present value, only log the overrun (unless heuristics disabled).
+                        if not PAPER_DISABLE_LOCAL_HEURISTICS:
+                            print(f"[📄] Paper check exceeded {PAPER_CHECK_MAX_WAIT_S:.1f}s — using current decision ({'YES' if paper_present else 'NO'})")
+
+                    # Optional debug dump of images/metrics (silent by default)
+                    try:
+                        from config.config import PAPER_DEBUG_DUMP, MOOD_SNAPSHOT_FOLDER
+                    except Exception:
+                        PAPER_DEBUG_DUMP = False
+                        MOOD_SNAPSHOT_FOLDER = os.path.join(os.getcwd(), 'event_log')
+                    if PAPER_DEBUG_DUMP and not PAPER_DISABLE_LOCAL_HEURISTICS:
+                        try:
+                            ts = int(time.time())
+                            base = os.path.join(MOOD_SNAPSHOT_FOLDER, f"paper_dbg_{ts}")
+                            os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
+                            # Save full frame and ROI
+                            cv2.imwrite(base + "_full.jpg", frame)
+                            cv2.imwrite(base + "_roi.jpg", roi)
+                            cv2.imwrite(base + "_roi_eq.jpg", roi_eq)
+                            # Save edges with detected lines overlay
+                            dbg = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+                            if lines is not None:
+                                for l in lines[:,0,:]:
+                                    x1,y1,x2,y2 = map(int, l)
+                                    cv2.line(dbg, (x1,y1), (x2,y2), (0,255,0), 2)
+                            cv2.imwrite(base + "_edges.jpg", dbg)
+                        except Exception:
+                            pass
+
+                    # Optional LLM tie-breaker
+                    try:
+                        from config.config import PAPER_LLM_ENABLED, PAPER_LLM_TIMEOUT_S, PAPER_LLM_CONFIDENCE_MIN, PAPER_LLM_MODE
+                    except Exception:
+                        PAPER_LLM_ENABLED = False
+                        PAPER_LLM_TIMEOUT_S = 1.0
+                        PAPER_LLM_CONFIDENCE_MIN = 0.8
+                        PAPER_LLM_MODE = "tie_break"
+
+                    use_llm = PAPER_LLM_ENABLED and (
+                        PAPER_LLM_MODE == "always" or (not paper_present or str(reason).startswith("inconclusive") or reason == "default")
+                    )
+
+                    if use_llm:
+                        try:
+                            from utils.ollama import query_ollama
+                            # Save a transient ROI image for the LLM
+                            ts2 = int(time.time())
+                            roi_path = os.path.join(MOOD_SNAPSHOT_FOLDER, f"paper_llm_{ts2}_roi.jpg")
+                            cv2.imwrite(roi_path, roi)
+
+                            sys_prompt = (
+                                "You are a precise vision safety checker for a CNC drawing surface. "
+                                "Decide deterministically whether a white paper sheet is present anywhere on the table surface in view. "
+                                "Be concise and follow the response format exactly."
+                            )
+                            prompt = (
+                                "Analyze the image of the table surface. Consider the entire table area in view (ignore walls/background).\n"
+                                "Paper (YES): a flat, white or slightly off-white rectangular sheet placed for drawing; it may be off-center, rotated, or partially cut off by the image edge, as long as a substantial portion is visible.\n"
+                                "Not paper (NO): bare grey/brown surface, sandpaper mat, tools, or a large painted 'X'; small white scraps or bright reflections do not count as paper.\n"
+                                "When uncertain, prefer NO.\n\n"
+                                "Respond with exactly these lines:\n"
+                                "PAPER: YES or NO\n"
+                                "CONFIDENCE: 0.0-1.0\n"
+                                "REASON: brief visual justification"
+                            )
+                            resp = query_ollama(
+                                prompt,
+                                image=roi_path,
+                                timeout=int(PAPER_LLM_TIMEOUT_S if PAPER_LLM_TIMEOUT_S else 1),
+                                system_prompt=sys_prompt,
+                                options={"temperature": 0.1, "top_p": 0.5},
+                                prompt_type="vision",
+                                show_progress=False,
+                                skip_generation_wait=True,
+                            )
+                            # Parse structured response: PAPER/CONFIDENCE with robust fallbacks
+                            ans = None
+                            conf = None
+                            import re as _re
+                            for line in resp.splitlines():
+                                raw = line.strip()
+                                up = raw.upper()
+                                if ans is None:
+                                    m = _re.search(r"\bPAPER\s*:\s*(YES|NO)\b", up)
+                                    if m:
+                                        ans = m.group(1)
+                                if conf is None:
+                                    m2 = _re.search(r"\bCONFIDENCE\s*:\s*([01](?:\.\d+)?)\b", up)
+                                    if m2:
+                                        try:
+                                            conf = float(m2.group(1))
+                                        except Exception:
+                                            conf = None
+                            if ans is None:
+                                # Fallback 2: first whole-word YES/NO anywhere
+                                tok = None
+                                for line in resp.splitlines():
+                                    t = line.strip().upper()
+                                    if t in ("YES", "NO"):
+                                        tok = t; break
+                                ans = tok
+                            if ans is not None:
+                                paper_present = (ans == "YES")
+                                # Apply a conservative confidence threshold if provided by config
+                                try:
+                                    from config.config import PAPER_LLM_CONFIDENCE_MIN as _LLM_MIN
+                                except Exception:
+                                    _LLM_MIN = 0.85
+                                if conf is not None and paper_present and conf < _LLM_MIN:
+                                    paper_present = False
+                                    reason = f"llm_paper_structured(ans={ans},conf={conf:.2f}<min {_LLM_MIN:.2f})"
+                                else:
+                                    reason = (
+                                        f"llm_paper_structured(ans={ans},conf={conf:.2f})" if conf is not None
+                                        else f"llm_paper_structured(ans={ans})"
+                                    )
+                                print(f"[📄] LLM PAPER → {ans}{(' '+str(round(conf,2))) if conf is not None else ''} ⇒ {'YES' if paper_present else 'NO'} ({reason})")
+                            else:
+                                print(f"[📄] LLM unparsed response → keep {('YES' if paper_present else 'NO')} ({reason})")
+                        except Exception as _e:
+                            print(f"[📄] LLM error: {_e} — keep {('YES' if paper_present else 'NO')} ({reason})")
+
+                    # Keep gaze locked for drawing; it will be released after execution or on error/completion ritual.
+
+                    # Record paper status for downstream systems
+                    try:
+                        from utils.state_manager import state_manager as _sm
+                        _sm.paper_present = bool(paper_present)
+                        _sm.last_paper_check_ts = time.time()
+                        try:
+                            _sm.last_paper_check_reason = str(reason)
+                        except Exception:
+                            _sm.last_paper_check_reason = ""
+                    except Exception:
+                        pass
+
+                    if paper_present:
+                        return True
+                    # Always skip the drawing when no paper detected (go back to idle)
+                    print("[⛔] No paper detected — skipping drawing and returning to idle")
+                    return False
+
+                # Run paper check with hard fail-safes (never blocks silently)
+                if ENABLE_PAPER_DETECTION and ENABLE_POST_HOME_PAPER_CHECK:
+                    try:
+                        # Force a visible console print regardless of clean-caption settings
+                        print("[📄] Post-home paper check enabled")
+                        import sys as _sys; _sys.stdout.flush()
+                        ok = _paper_check_after_homing()
+                        print(f"[📄] Post-home paper check result: {'OK' if ok else 'BLOCK'}"); _sys.stdout.flush()
+                        if not ok:
+                            try:
+                                ser.close()
+                            except Exception:
+                                pass
+                            # Mark skip for image monitor to log gracefully
+                            try:
+                                from utils.state_manager import state_manager as _sm
+                                _sm.last_no_paper_skip_ts = time.time()
+                            except Exception:
+                                pass
+                            # Ensure gaze unlocked after skip
+                            try:
+                                from vision.gaze import set_drawing_mode
+                                set_drawing_mode(active=False)
+                            except Exception:
+                                pass
+                            return None
+                    except Exception as e:
+                        # Never block drawing due to check errors
+                        print(f"[📄] Paper check error ({e}) — proceeding"); _sys.stdout.flush()
+                else:
+                    print("[📄] Post-home paper check skipped (disabled)")
+
+
                 # Execute G-code in a separate thread to prevent blocking captions
+                print(f"🎯 [DEBUG] Starting threaded G-code execution for file: {output_file_adjusted}")
                 import threading
-                import time
-                
+
                 gcode_complete = threading.Event()
                 gcode_error = None
-                
+
                 def execute_gcode_threaded():
                     """Execute G-code in background thread."""
                     nonlocal gcode_error
                     try:
+                        print(f"🎯 [DEBUG] Thread starting G-code execution...")
                         execute_gcode_file(ser, output_file_adjusted)
+                        print(f"🎯 [DEBUG] Thread completed G-code execution successfully")
                     except Exception as e:
+                        print(f"🎯 [DEBUG] Thread G-code execution failed: {e}")
                         gcode_error = e
                     finally:
                         gcode_complete.set()
@@ -1523,14 +2047,38 @@ def process_svg_to_grbl(
                     print_message="[✅] Drawing complete!",
                 )
 
-                # CRITICAL: Perform completion ritual after drawing finishes
-                # This homes the machine and triggers the uArm hook
-                print(f"🏁 [DEBUG] CALLING COMPLETION RITUAL AFTER DRAWING")
+                # Drawing execution completed successfully
+                print(f"🏁 [DEBUG] Drawing execution completed successfully")
+
+                # CRITICAL: Now that physical drawing is complete, start the cooldown timer
+                # This ensures proper spacing between actual drawings, not just prompt generations
                 try:
-                    perform_completion_ritual_with_self_critique(ser, svg_input, output_file_adjusted)
+                    import sys
+                    from utils.state_manager import state_manager
+
+                    # Get the drawing prompt that was used for this drawing
+                    drawing_prompt = state_manager.current_drawing_prompt or state_manager.last_completed_drawing_prompt or "Unknown drawing"
+
+                    # Get the captioner instance from machine.py to access the drawing controller
+                    if 'machine' in sys.modules:
+                        machine_module = sys.modules['machine']
+                        captioner = getattr(machine_module, '_global_captioner', None) or getattr(machine_module, 'captioner', None)
+
+                        if captioner and hasattr(captioner, 'drawing') and hasattr(captioner.drawing, 'register_drawing'):
+                            captioner.drawing.register_drawing(drawing_prompt)
+                            print(f"🎯 [DEBUG] Drawing cooldown timer started after GRBL completion")
+                            log_json_entry(
+                                LogType.DEBUG,
+                                {"message": "Drawing cooldown started after physical completion", "prompt": drawing_prompt[:50] + "..." if len(drawing_prompt) > 50 else drawing_prompt},
+                                print_message=f"[⏰] Drawing cooldown started: {captioner.drawing.cooldown}s"
+                            )
+                        else:
+                            print(f"🎯 [DEBUG] Could not access drawing controller for cooldown registration")
+                    else:
+                        print(f"🎯 [DEBUG] Machine module not available for drawing controller access")
                 except Exception as e:
-                    print(f"[WARNING] Completion ritual failed: {e}")
-                    # Don't fail the whole process if completion ritual fails
+                    print(f"🎯 [DEBUG] Error registering drawing completion: {e}")
+                    # Don't fail the whole process if cooldown registration fails
 
                 try:
                     ser.close()

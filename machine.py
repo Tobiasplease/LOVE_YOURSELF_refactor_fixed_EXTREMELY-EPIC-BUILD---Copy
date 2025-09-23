@@ -252,9 +252,22 @@ if USE_SERVO:
         try:
             servos = ServoController(port=servo_port, baudrate=BAUD_RATE)
             debug_print(f"Servo controller initialized on {servo_port}", "INIT")
-            
+
+            # Send immediate safe initial position to prevent servo jumpiness
+            try:
+                time.sleep(0.5)  # Allow Arduino to fully initialize
+                # Set to neutral position: 90 degrees pan, mid-range tilt
+                initial_pan = 90
+                initial_tilt = (TILT_MIN + TILT_MAX) // 2
+                servos.send(f"P{initial_pan}", key="pan")
+                time.sleep(0.1)
+                servos.send(f"T{initial_tilt}", key="tilt")
+                debug_print(f"Servos initialized to safe position: pan={initial_pan}, tilt={initial_tilt}", "INIT")
+            except Exception as e:
+                debug_print(f"Initial servo positioning failed: {e}", "INIT")
+
             # Startup movement sequence disabled to prevent timing conflicts
-            debug_print("Servo controller ready - skipping startup sequence", "INIT")
+            debug_print("Servo controller ready with initial positioning", "INIT")
             
         except Exception as e:
             print(f"ERROR: Servo controller init failed on {servo_port}: {e}")
@@ -729,6 +742,15 @@ def on_drawing_complete(image_path: str):
 
 
 image_monitor.on_image_complete = on_drawing_complete
+# Set dependencies for paper detection
+image_monitor.set_dependencies(cap, servos, captioner)
+
+# Expose shared hardware handles for other modules (e.g., GRBL paper check)
+try:
+    state_manager.camera = cap  # Shared OpenCV capture handle
+    state_manager.servos = servos  # Optional
+except Exception:
+    pass
 image_monitor.start()
 
 # Register GRBL-complete hook to trigger uArm after actual G-code completion
@@ -1146,7 +1168,7 @@ try:
         object_detector.set_frame(frame)  # YOLO person detection enabled
 
         frame = cv2.resize(frame, (320, 240))
-        frame = cv2.flip(frame, 1)
+        # Display preview unflipped to match capture/reference orientation
 
         # Force garbage collection periodically to prevent memory accumulation
         frame_count += 1

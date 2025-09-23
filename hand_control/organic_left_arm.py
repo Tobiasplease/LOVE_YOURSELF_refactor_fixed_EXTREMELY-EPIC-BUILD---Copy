@@ -32,21 +32,22 @@ class OrganicLeftArmController:
         self.thread: Optional[threading.Thread] = None
         self.current_emotional_state = "neutral"
 
-        # Movement parameters
+        # Movement parameters - individualized per servo
         self.servo_count = 2
-        self.center_position = 90
-        self.movement_range = 20  # ±10 degrees from center (very subtle, gentle movement)
-        self.min_position = self.center_position - (self.movement_range // 2)  # 60
-        self.max_position = self.center_position + (self.movement_range // 2)  # 120
+
+        # Pin 4: 81°-95° (center 88°), Pin 5: 88°-102° (center 95°) - pin 4 shifted 7° lower
+        self.center_positions = [88, 95]  # [pin4, pin5]
+        self.min_positions = [81, 88]     # [pin4, pin5]
+        self.max_positions = [95, 102]   # [pin4, pin5]
 
         # Current state for each servo
-        self.current_positions = [self.center_position] * self.servo_count
+        self.current_positions = self.center_positions.copy()
         # Initialize with different random targets to start movement
         self.target_positions = []
         for i in range(self.servo_count):
-            target = random.randint(self.min_position, self.max_position)
+            target = random.randint(self.min_positions[i], self.max_positions[i])
             self.target_positions.append(target)
-            print(f"🎯 Servo {i} initial target: {target}° (current: {self.center_position}°)")
+            print(f"🎯 Servo {i} initial target: {target}° (current: {self.center_positions[i]}°)")
         self.last_move_time = [time.time()] * self.servo_count
         self.last_speed_change = [time.time()] * self.servo_count
 
@@ -63,18 +64,18 @@ class OrganicLeftArmController:
         # Movement speeds (seconds between moves)
         self.current_speeds = [1.0] * self.servo_count  # Start at 1 second intervals
 
-        # Organic movement constants - much smoother
-        self.min_speed = 0.05  # Fastest: 50ms between moves (very smooth)
-        self.max_speed = 0.3   # Slowest: 300ms between moves (still smooth)
-        self.speed_change_interval = 12.0  # Change speed every 12 seconds
+        # Organic movement constants - more reactive while still smooth
+        self.min_speed = 0.02  # Fastest: 20ms between moves (very responsive)
+        self.max_speed = 0.15  # Slowest: 150ms between moves (responsive but smooth)
+        self.speed_change_interval = 8.0   # Change speed every 8 seconds (more dynamic)
 
 
-        # Base pause constants - adjusted by emotional state (VERY subtle changes)
-        self.base_pause_chance = 0.05
-        self.base_min_pause = 10.0
-        self.base_max_pause = 30.0
-        self.base_long_pause_chance = 0.4
-        self.base_long_pause_duration = 60.0
+        # Base pause constants - adjusted by emotional state (less frequent pauses)
+        self.base_pause_chance = 0.03  # Reduced from 0.05 - less frequent pauses
+        self.base_min_pause = 8.0      # Slightly shorter minimum pause
+        self.base_max_pause = 25.0     # Slightly shorter maximum pause
+        self.base_long_pause_chance = 0.3  # Reduced from 0.4 - fewer long pauses
+        self.base_long_pause_duration = 45.0  # Shorter long pauses
 
         # Current emotional modifiers (updated by mood system)
         self.pause_chance = self.base_pause_chance
@@ -83,16 +84,16 @@ class OrganicLeftArmController:
         self.long_pause_chance = self.base_long_pause_chance
         self.long_pause_duration = self.base_long_pause_duration
 
-        # Emotional state profiles (VERY subtle variations)
+        # Emotional state profiles (more pronounced but still natural)
         self.emotional_profiles = {
             "excited": {
-                "pause_multiplier": 0.7,  # Slightly shorter pauses
-                "speed_multiplier": 0.8,  # Slightly faster movement
-                "range_multiplier": 1.2   # Slightly larger range (but still subtle)
+                "pause_multiplier": 0.5,  # Much shorter pauses
+                "speed_multiplier": 0.6,  # Faster movement
+                "range_multiplier": 1.2   # Slightly larger range
             },
             "happy": {
-                "pause_multiplier": 0.85,
-                "speed_multiplier": 0.9,
+                "pause_multiplier": 0.7,  # Shorter pauses
+                "speed_multiplier": 0.8,  # Faster movement
                 "range_multiplier": 1.1
             },
             "neutral": {
@@ -101,14 +102,14 @@ class OrganicLeftArmController:
                 "range_multiplier": 1.0
             },
             "sad": {
-                "pause_multiplier": 1.3,  # Longer pauses
-                "speed_multiplier": 1.2,  # Slower movement
+                "pause_multiplier": 1.5,  # Longer pauses
+                "speed_multiplier": 1.4,  # Slower movement
                 "range_multiplier": 0.8   # Smaller range
             },
             "angry": {
-                "pause_multiplier": 0.6,  # Much shorter pauses
-                "speed_multiplier": 0.7,  # Faster movement
-                "range_multiplier": 1.3   # Slightly larger range
+                "pause_multiplier": 0.4,  # Very short pauses
+                "speed_multiplier": 0.5,  # Much faster movement
+                "range_multiplier": 1.3   # Larger range within limits
             }
         }
 
@@ -144,12 +145,23 @@ class OrganicLeftArmController:
         self.min_speed = 0.05 * speed_mod
         self.max_speed = 0.3 * speed_mod
 
-        # Adjust range very subtly (still keeping it minimal)
+        # Adjust range very subtly for each servo individually
         range_mod = profile["range_multiplier"]
-        base_range = 20
-        self.movement_range = max(10, min(30, int(base_range * range_mod)))  # Never more than ±15°
-        self.min_position = self.center_position - (self.movement_range // 2)
-        self.max_position = self.center_position + (self.movement_range // 2)
+
+        # Pin 4: base range 81°-95° (14°), Pin 5: base range 88°-102° (14°)
+        base_ranges = [14, 14]  # Both servos have 14° base ranges
+
+        for i in range(self.servo_count):
+            adjusted_range = max(5, min(15, int(base_ranges[i] * range_mod)))  # 5°-15° range
+            half_range = adjusted_range // 2
+
+            # Pin 4: centered around 88°, bounded 81°-95°; Pin 5: centered around 95°, bounded 88°-102°
+            if i == 0:  # Pin 4 (elbow) - shifted 7° lower
+                self.min_positions[i] = max(81, self.center_positions[i] - half_range)
+                self.max_positions[i] = min(95, self.center_positions[i] + half_range)
+            else:  # Pin 5 - original range
+                self.min_positions[i] = max(88, self.center_positions[i] - half_range)
+                self.max_positions[i] = min(102, self.center_positions[i] + half_range)
 
     def enable(self):
         """Enable organic movement."""
@@ -263,14 +275,16 @@ class OrganicLeftArmController:
 
         # If reached target, pick new target
         if abs(self.current_positions[servo_index] - self.target_positions[servo_index]) <= 1:
-            # Pick new random target
-            range_size = self.max_position - self.min_position
-            new_target = self.min_position + random.randint(0, range_size)
+            # Pick new random target using individual servo range
+            min_pos = self.min_positions[servo_index]
+            max_pos = self.max_positions[servo_index]
+            range_size = max_pos - min_pos
+            new_target = min_pos + random.randint(0, range_size)
 
             # Avoid staying at same position - require minimal movement for brief cycles
             attempts = 0
             while abs(new_target - self.current_positions[servo_index]) < 3 and attempts < 10:
-                new_target = self.min_position + random.randint(0, range_size)
+                new_target = min_pos + random.randint(0, range_size)
                 attempts += 1
 
             self.target_positions[servo_index] = new_target
@@ -357,7 +371,7 @@ class OrganicLeftArmController:
     def _change_movement_mode(self, current_time: float):
         """Change to a new movement mode."""
         modes = ["independent", "coordinated", "sweep", "retract"]
-        weights = [0.4, 0.3, 0.2, 0.1]  # independent most common, retract least
+        weights = [0.25, 0.45, 0.25, 0.05]  # coordinated movement is now most common
 
         self.movement_mode = random.choices(modes, weights=weights)[0]
         self.mode_change_time = current_time
@@ -401,17 +415,17 @@ class OrganicLeftArmController:
 
                     # If at target, pick a new target in same general direction
                     if abs(current_pos - target_pos) <= 1:
-                        direction = 1 if current_pos < self.center_position else -1
+                        direction = 1 if current_pos < self.center_positions[i] else -1
                         if random.random() < 0.3:  # 30% chance to reverse
                             direction *= -1
 
                         # Make a sweep target
                         if direction > 0:
-                            new_target = random.randint(current_pos + 3, self.max_position)
+                            new_target = random.randint(current_pos + 3, self.max_positions[i])
                         else:
-                            new_target = random.randint(self.min_position, current_pos - 3)
+                            new_target = random.randint(self.min_positions[i], current_pos - 3)
 
-                        self.target_positions[i] = max(self.min_position, min(self.max_position, new_target))
+                        self.target_positions[i] = max(self.min_positions[i], min(self.max_positions[i], new_target))
                         # print(f"🌊 Servo {i} sweep target: {self.target_positions[i]}°")
 
                     self._move_servo(i, current_time)
@@ -423,11 +437,11 @@ class OrganicLeftArmController:
                 # Fast movement back toward center
                 if current_time - self.last_move_time[i] >= 0.1:  # Very fast for retraction
                     # Set target to center position
-                    self.target_positions[i] = self.center_position
+                    self.target_positions[i] = self.center_positions[i]
                     self._move_servo(i, current_time)
 
                     # If close to center, end retract mode early
-                    if abs(self.current_positions[i] - self.center_position) <= 2:
+                    if abs(self.current_positions[i] - self.center_positions[i]) <= 2:
                         # print(f"✨ Servo {i} retracted to center")
                         # Switch to a new random target after retraction
-                        self.target_positions[i] = random.randint(self.min_position, self.max_position)
+                        self.target_positions[i] = random.randint(self.min_positions[i], self.max_positions[i])

@@ -686,7 +686,7 @@ EMBODIED AWARENESS: You have a physical body - a drawing machine with robotic ar
 - Your consciousness is messy, not poetic - think like a real mind, not formal observation
 - Consider drawing potential: notice when something visual moves you or captures attention
 - When moved by something visual, mention the impulse to draw it
-- Avoid abstract words like "essence", "being", "existence" - stay concrete"""
+- Use whatever language feels natural to express your thoughts"""
 
     # Get beliefs - what the consciousness has learned to value/notice
     beliefs_context = ""
@@ -1292,7 +1292,7 @@ def build_drawing_prompt(memory_ref, extra: Optional[str] = None, image_path: Op
     if extra and isinstance(extra, str) and extra.strip():
         prompt += f"\n\n=== IMMEDIATE CONTEXT ===\n{extra.strip()}"
 
-    # === FINAL DRAWING SYNTHESIS INSTRUCTION ===
+    # === SYNTHESIS & CREATIVE DIRECTION ===
     prompt += (
         f"\n\n=== SYNTHESIS & CREATIVE DIRECTION ===\n"
         "Taking ALL of the above into account, provide a detailed response that includes:\n"

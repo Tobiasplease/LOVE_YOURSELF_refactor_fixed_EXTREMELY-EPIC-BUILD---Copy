@@ -44,48 +44,133 @@ class DrawingController:
     """Decides when to draw and queues ComfyUI jobs."""
 
     def __init__(self) -> None:
-        self.last_drawing_time: float = time.time()  # Initialize to current time to prevent immediate trigger
+        self.last_drawing_time: float = time.time() - DRAWING_COOLDOWN - 10  # Allow immediate first drawing
         self.cooldown: float = DRAWING_COOLDOWN  # seconds between drawings
         self.last_prompt: Optional[str] = None
         self.last_drawing_prompt: str = ""
         self.last_reflection: Optional[str] = None
+        self.quota_manager = None  # No quota system - use timer-based drawing
 
     # ------------------------------------------------------------------
     # decision helpers
     # ------------------------------------------------------------------
     def ready_to_draw(self) -> bool:
-        return time.time() - self.last_drawing_time > self.cooldown
+        # Check if cooldown period has passed
+        cooldown_ready = time.time() - self.last_drawing_time > self.cooldown
+
+        # Check if currently generating or executing a drawing
+        try:
+            from utils.drawing_state import DrawingState
+            from utils.state_manager import state_manager
+
+            currently_executing = DrawingState.is_drawing()
+            currently_generating = getattr(state_manager, "is_generating_drawing", False)
+
+            if currently_generating:
+                print(f"[🎨] Drawing blocked: ComfyUI generation currently in progress")
+                return False
+            if currently_executing:
+                print(f"[🎨] Drawing blocked: GRBL execution currently in progress")
+                return False
+        except Exception as e:
+            print(f"[⚠️] Could not check drawing state: {e}")
+
+        return cooldown_ready
 
     def should_draw(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
+        # Use state-motivated drawing logic when enabled, otherwise timer-based
+        try:
+            from config.config import DRAWING_USE_STATE_MOTIVATION
+            if DRAWING_USE_STATE_MOTIVATION:
+                return self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+            else:
+                return self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+        except ImportError:
+            return self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+
+    def _should_draw_original(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
+        """Pure timer-based drawing decision logic for debugging."""
         if not self.ready_to_draw():
             cooldown_remaining = max(0, self.cooldown - (time.time() - self.last_drawing_time))
-            print(f"[🎨] Drawing conditions check: novelty={novelty:.3f}, boredom={boredom:.3f}, mood={mood:.3f} - BLOCKED by cooldown ({cooldown_remaining:.0f}s remaining)")
+            print(f"[🎨] Timer drawing check: BLOCKED by cooldown ({cooldown_remaining:.0f}s remaining)")
             return False
 
-        # Check drawing trigger conditions with detailed logging
-        triggers = []
-        if novelty > 0.4:
-            triggers.append(f"novelty({novelty:.3f}>0.4)")
-        if boredom > 0.5:
-            triggers.append(f"boredom({boredom:.3f}>0.5)")
-        if mood < 0.4:
-            triggers.append(f"mood({mood:.3f}<0.4)")
+        # Pure timer-based: if cooldown passed, always draw
+        print(f"[🎨] ✨ TIMER DRAWING TRIGGERED (debug mode - ignoring mood/novelty/boredom)")
+        return True
 
-        reflections = ("i feel stuck", "i need to express", "nothing is changing", "want to draw", "create something")
-        if reflection and any(key in reflection.lower() for key in reflections):
-            triggers.append("reflection_keywords")
+    def _should_draw_state_motivated(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
+        """Sophisticated state-motivated drawing decision logic."""
+        import random
+        from config.config import (
+            DRAWING_MIN_INTERVAL, DRAWING_MAX_INTERVAL, DRAWING_BASE_THRESHOLD,
+            DRAWING_NOVELTY_WEIGHT, DRAWING_BOREDOM_WEIGHT, DRAWING_MOOD_WEIGHT
+        )
 
-        if triggers:
-            print(f"[🎨] ✨ DRAWING TRIGGERED by: {', '.join(triggers)}")
+        current_time = time.time()
+        time_since_last = current_time - self.last_drawing_time
+
+        # Absolute minimum interval - safety check
+        if time_since_last < DRAWING_MIN_INTERVAL:
+            remaining = DRAWING_MIN_INTERVAL - time_since_last
+            print(f"[🎨] State drawing check: BLOCKED by minimum interval ({remaining:.0f}s remaining)")
+            return False
+
+        # Force drawing if maximum interval exceeded (ensure some activity)
+        if time_since_last >= DRAWING_MAX_INTERVAL:
+            print(f"[🎨] ✨ STATE DRAWING TRIGGERED: Maximum interval exceeded ({time_since_last:.0f}s)")
             return True
-        else:
-            print(f"[🎨] Drawing conditions check: novelty={novelty:.3f}, boredom={boredom:.3f}, mood={mood:.3f} - no triggers met")
-            return False
+
+        # Calculate state-based drawing motivation score
+        # Normalize inputs to 0-1 range
+        normalized_mood = max(0, min(1, (mood + 1) / 2))  # mood is -1 to 1, normalize to 0-1
+        normalized_novelty = max(0, min(1, novelty))      # novelty should be 0-1
+        normalized_boredom = max(0, min(1, boredom))       # boredom should be 0-1
+
+        # Calculate weighted motivation score
+        motivation_score = (
+            normalized_novelty * DRAWING_NOVELTY_WEIGHT +
+            normalized_boredom * DRAWING_BOREDOM_WEIGHT +
+            normalized_mood * DRAWING_MOOD_WEIGHT
+        )
+
+        # Add time pressure - gradually increase motivation over time
+        time_factor = min(1.0, time_since_last / DRAWING_MAX_INTERVAL)
+        time_pressure = time_factor * 0.3  # Up to 0.3 additional motivation
+
+        total_motivation = motivation_score + time_pressure
+
+        # Add small random factor for unpredictability (±0.1)
+        randomness = (random.random() - 0.5) * 0.2
+        final_score = total_motivation + randomness
+
+        # Decision threshold
+        will_draw = final_score >= DRAWING_BASE_THRESHOLD
+
+        print(f"[🎨] State drawing evaluation:")
+        print(f"  Time since last: {time_since_last:.0f}s (min: {DRAWING_MIN_INTERVAL}s, max: {DRAWING_MAX_INTERVAL}s)")
+        print(f"  Mood: {normalized_mood:.3f}, Novelty: {normalized_novelty:.3f}, Boredom: {normalized_boredom:.3f}")
+        print(f"  Base motivation: {motivation_score:.3f}, Time pressure: {time_pressure:.3f}")
+        print(f"  Final score: {final_score:.3f} (threshold: {DRAWING_BASE_THRESHOLD})")
+        print(f"  Decision: {'DRAW' if will_draw else 'WAIT'}")
+
+        if will_draw:
+            print(f"[🎨] ✨ STATE DRAWING TRIGGERED: Internal motivation reached threshold")
+
+        return will_draw
 
     def register_drawing(self, prompt: str) -> None:
         self.last_drawing_time = time.time()
         self.last_prompt = prompt
         self.last_drawing_prompt = prompt
+
+        # Send drawing prompt to LCD display
+        try:
+            from utils.caption_display import send_caption_to_display
+            send_caption_to_display(f"Drawing: {prompt}")
+            print(f"[LCD] Sent drawing prompt: {prompt[:40]}...")
+        except Exception as e:
+            print(f"[LCD] Failed to send drawing prompt: {e}")
 
     # ------------------------------------------------------------------
     # main entry
@@ -176,27 +261,38 @@ class DrawingController:
                 )
                 return
 
-            self.register_drawing(drawing_prompt)
+            # NOTE: register_drawing() is now called AFTER GRBL execution completes, not here
+            # This ensures cooldown starts after physical drawing, not after prompt generation
 
             # Record a concise drawing intent into memory for future reference
             try:
                 from config.config import INCLUDE_DRAWING_HISTORY
 
                 if INCLUDE_DRAWING_HISTORY and hasattr(agent, "observe"):
-                    # Use prompt compression system for better storage
+                    # Extract drawing summary from the model's own response
+                    drawing_summary = "drawing based on current observations"  # fallback
                     try:
-                        from utils.prompt_compression import compress_drawing_prompt
-                        compressed_intent = compress_drawing_prompt(drawing_prompt)
-                        print(f"[🗜️] Compressed drawing intent: {drawing_prompt[:50]}... -> {compressed_intent}")
-                    except Exception as e:
-                        print(f"[⚠️] Intent compression failed: {e}")
-                        # Fallback to simple truncation
-                        compressed_intent = drawing_prompt.strip().split("\n")[0]
-                        if len(compressed_intent) > 160:
-                            compressed_intent = compressed_intent[:157] + "..."
+                        # Ask the model to summarize what it's drawing
+                        from utils.ollama import query_ollama
+                        from config.config import MOOD_SNAPSHOT_FOLDER
 
-                    agent.observe(f"Drawing intent: {compressed_intent}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
-                    print(f"[📝] Stored drawing intent in memory: {compressed_intent}")
+                        summary_prompt = f"Summarize what this drawing shows in 2-4 words:\n\n{drawing_prompt}\n\nSummary:"
+
+                        drawing_summary = query_ollama(
+                            prompt=summary_prompt,
+                            log_dir=MOOD_SNAPSHOT_FOLDER,
+                            system_prompt="You are summarizing visual content. Give only a brief 2-4 word description of the subject matter.",
+                            prompt_type="drawing_summary",
+                            options={"temperature": 0.3, "num_predict": 20}
+                        ).strip()
+
+                        print(f"[📝] Model-generated drawing summary: {drawing_summary}")
+                    except Exception as e:
+                        print(f"[⚠️] Summary generation failed: {e}")
+                        drawing_summary = "drawing based on current observations"
+
+                    agent.observe(f"Drawing intent: {drawing_summary}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
+                    print(f"[📝] Stored drawing intent in memory: {drawing_summary}")
                 else:
                     print(f"[⚠️] Drawing intent not stored: INCLUDE_DRAWING_HISTORY={INCLUDE_DRAWING_HISTORY}, agent.observe exists={hasattr(agent, 'observe')}")
             except Exception as e:

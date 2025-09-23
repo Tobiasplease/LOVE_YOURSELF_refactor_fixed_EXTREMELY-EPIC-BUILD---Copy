@@ -13,6 +13,6 @@
   "home_mode": "xyz",
   "home_stretch": 70.0,
   "home_rotation": 0.0,
-  "smoothing_enabled": true,
+  "smoothing_enabled": false,
   "smoothing_window": 3
 }

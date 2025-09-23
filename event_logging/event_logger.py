@@ -198,6 +198,15 @@ def log_json_entry(
     if PRINT_CLEAN_CAPTIONS and lt not in llm_always_print:
         should_print = False
 
+    # Send captions to LCD display ALWAYS (regardless of print filtering)
+    if lt == LogType.CAPTION and "caption" in data:
+        try:
+            from utils.caption_display import send_caption_to_display
+            send_caption_to_display(data["caption"])
+            print(f"[LCD] Sent: {data['caption'][:40]}...")
+        except Exception as e:
+            print(f"[LCD] Failed to send: {e}")
+
     if should_print and print_message:
         elapsed = get_elapsed_time()
         # Clean formatting for LLM text types

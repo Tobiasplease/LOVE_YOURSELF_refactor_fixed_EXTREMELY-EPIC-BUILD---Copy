@@ -34,6 +34,20 @@ def find_arduino_port():
     print("❌ No Arduino found on any port")
     return None
 
+def initialize_left_arm(ser):
+    """Initialize left arm servos - enable them first."""
+    try:
+        # Send enable command
+        command = "LEFT_ARM_ENABLE\n"
+        ser.write(command.encode())
+        ser.flush()
+        print("🤖 Left arm servos ENABLED")
+        time.sleep(1.0)  # Give time for Arduino to process
+        return True
+    except Exception as e:
+        print(f"❌ Error enabling left arm: {e}")
+        return False
+
 def send_servo_command(ser, pin, angle):
     """Send servo command to Arduino."""
     try:
@@ -111,6 +125,11 @@ def main():
     # Connect to Arduino
     ser = find_arduino_port()
     if not ser:
+        return
+
+    # Initialize left arm servos
+    if not initialize_left_arm(ser):
+        print("❌ Failed to initialize left arm - exiting")
         return
 
     try:

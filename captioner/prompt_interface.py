@@ -28,7 +28,7 @@ class PromptInterface:
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or config.OLLAMA_MODEL
 
-    def build_caption_prompt_with_options(self, memory_ref, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False):
+    def build_caption_prompt_with_options(self, memory_ref, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False, person_present: bool = False):
         """Build caption prompt and prepare all options for API call."""
         if not os.path.exists(image_path):
             return None, None, None
@@ -55,7 +55,7 @@ class PromptInterface:
             baseline_context = self._get_baseline_context()
             # REMOVED: drawing_context injection - handled in prompts.py build_ongoing_caption_prompt()
 
-            prompt = build_ongoing_caption_prompt(memory_ref, getattr(memory_ref, "last_caption", None))
+            prompt = build_ongoing_caption_prompt(memory_ref, getattr(memory_ref, "last_caption", None), person_present=person_present)
 
             # Add non-drawing contexts and temporal awareness
             context_parts = []
@@ -256,11 +256,28 @@ class PromptInterface:
         """Get baseline understanding context from compression system."""
         try:
             from captioner.context_compression import context_compressor
-
-            return context_compressor.get_baseline_context()
+            baseline = context_compressor.get_baseline_context()
         except Exception as e:
             print(f"[PROMPT] Could not get baseline context: {e}")
-            return ""
+            baseline = ""
+
+        # Inject environmental safety context (paper detection) if recent
+        try:
+            from utils.state_manager import state_manager
+            ts = getattr(state_manager, 'last_paper_check_ts', 0)
+            present = getattr(state_manager, 'paper_present', True)
+            reason = getattr(state_manager, 'last_paper_check_reason', '')
+            import time as _t
+            if ts and (_t.time() - ts) < 120:
+                if not present:
+                    note = "ENVIRONMENTAL SAFETY: No paper detected on the drawing surface. Avoid initiating physical drawing; focus on observation and preparation."
+                    if reason:
+                        note += f" (Reason: {reason})"
+                    baseline = (baseline + "\n\n" + note).strip() if baseline else note
+        except Exception:
+            pass
+
+        return baseline
 
     # REMOVED: _get_drawing_context() - drawing context now handled directly in prompts.py
 

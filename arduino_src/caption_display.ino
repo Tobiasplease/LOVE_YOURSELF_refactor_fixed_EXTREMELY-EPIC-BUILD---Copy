@@ -13,6 +13,7 @@ unsigned long lastChunkTime = 0;
 int chunkDelay = 1500;  // Adaptive chunk delay (readable default)
 String currentPriority = "M";  // M=Medium, H=High, L=Low
 int lcdBrightness = 255;  // Default brightness (0-255)
+bool captionComplete = true;  // Track if current caption is fully displayed
 
 void setup() {
   Serial.begin(9600);
@@ -62,26 +63,34 @@ void loop() {
         int newDelay = message.substring(firstColon + 1, secondColon).toInt();
         String newCaption = message.substring(secondColon + 1);
 
-        // High priority can interrupt current display
-        if (newPriority == "H" || newCaption != currentCaption) {
+        // Only accept new caption if current one is complete
+        if (captionComplete) {
           currentCaption = newCaption;
           currentPriority = newPriority;
           chunkDelay = newDelay;
           currentChunk = 0;
-          totalChunks = (currentCaption.length() + 31) / 32;  // 32 chars per screen (2 rows of 16)
+          totalChunks = (currentCaption.length() + 31) / 32;  // 32 chars per chunk (2 rows)
           lastChunkTime = millis();
+          captionComplete = (totalChunks <= 1);  // Single chunk = complete immediately
           updateDisplay();
+          Serial.println("CAPTION_ACCEPTED");
+        } else {
+          Serial.println("CAPTION_BUSY");
         }
       } else {
         // Fallback for old format (just caption)
-        if (message != currentCaption) {
+        if (captionComplete) {
           currentCaption = message;
           currentPriority = "M";
-          chunkDelay = 200;
+          chunkDelay = 300;
           currentChunk = 0;
-          totalChunks = (currentCaption.length() + 31) / 32;  // 32 chars per screen (2 rows of 16)
+          totalChunks = (currentCaption.length() + 31) / 32;  // 32 chars per chunk (2 rows)
           lastChunkTime = millis();
+          captionComplete = (totalChunks <= 1);  // Single chunk = complete immediately
           updateDisplay();
+          Serial.println("CAPTION_ACCEPTED");
+        } else {
+          Serial.println("CAPTION_BUSY");
         }
       }
     }
@@ -92,15 +101,21 @@ void loop() {
     currentChunk = (currentChunk + 1) % totalChunks;
     lastChunkTime = millis();
     updateDisplay();
+
+    // Mark caption as complete when we've shown all chunks
+    if (currentChunk == 0) {  // We've cycled back to start
+      captionComplete = true;
+      Serial.println("CAPTION_COMPLETE");
+    }
   }
 }
 
 void updateDisplay() {
   lcd.clear();
 
-  int startPos = currentChunk * 32;  // 32 chars per screen (2 rows of 16)
+  int startPos = currentChunk * 32;  // 32 chars per chunk (2 rows)
 
-  // First row
+  // Display on both rows (16 chars each)
   int row1Start = startPos;
   int row1End = min(row1Start + LCD_COLS, (int)currentCaption.length());
   if (row1Start < currentCaption.length()) {

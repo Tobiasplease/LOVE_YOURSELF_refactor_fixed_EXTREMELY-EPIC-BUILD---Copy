@@ -12,12 +12,14 @@ from event_logging.log_type import LogType
 from grbl import svg_to_grbl
 from grbl.idle_movement_manager import pause_for_drawing, resume_after_drawing
 from utils.state_manager import state_manager
+import numpy as np
+import cv2
 
 
 class ImageMonitor:
     """Monitor a folder for new images and log them when they appear."""
 
-    def __init__(self, monitor_folder=None, log_folder=None, check_interval=1.0, on_image_complete: Optional[Callable[[str], None]] = None):
+    def __init__(self, monitor_folder=None, log_folder=None, check_interval=1.0, on_image_complete: Optional[Callable[[str], None]] = None, camera=None, servos=None, captioner=None):
         self.monitor_folder = monitor_folder or COMFY_OUTPUT_FOLDER
         self.log_folder = log_folder or MOOD_SNAPSHOT_FOLDER
         self.check_interval = check_interval
@@ -27,6 +29,15 @@ class ImageMonitor:
         self.thread = None
         self.on_image_complete = on_image_complete
         self.session_start_time = time.time()  # Track when this session started
+        self.camera = camera
+        self.servos = servos
+        self.captioner = captioner
+
+    def set_dependencies(self, camera, servos, captioner):
+        """Set camera, servos, and captioner dependencies after initialization."""
+        self.camera = camera
+        self.servos = servos
+        self.captioner = captioner
 
     def start(self):
         """Start the image monitoring thread."""
@@ -90,12 +101,271 @@ class ImageMonitor:
 
     def _process_png_to_gcode(self, png_path):
         """Process a PNG file to G-code based on CENTER_LINE_SVG config."""
+
         # Pause idle movements to free the serial port
         pause_for_drawing()
 
         try:
             base_name = os.path.splitext(os.path.basename(png_path))[0]
             output_folder = os.path.dirname(png_path)
+
+            # End any lingering 'generation' phase now that we have the PNG
+            try:
+                if getattr(state_manager, 'is_generating_drawing', False):
+                    state_manager.finish_drawing_generation()
+                    state_manager.clear_expected_output_prefix()
+            except Exception:
+                pass
+
+            # --- Minimal Paper Presence Check (non-blocking, safe fallbacks) ---
+            try:
+                from config.config import ENABLE_PAPER_DETECTION, ALLOW_PAPER_DETECTION_OVERRIDE
+            except Exception:
+                ENABLE_PAPER_DETECTION = True
+                ALLOW_PAPER_DETECTION_OVERRIDE = True
+
+            def _quick_paper_check() -> bool:
+                """Fast, simple check using a single camera frame.
+                - Returns True to proceed with drawing; False to block (only if override disabled).
+                - Never raises; logs decisions.
+                """
+                if not ENABLE_PAPER_DETECTION:
+                    log_json_entry(
+                        LogType.DECISION,
+                        {"action": "paper_check", "enabled": False, "decision": "proceed"},
+                        print_message="[📄] Paper detection disabled — proceeding",
+                    )
+                    return True
+
+                # Proactively position gaze to look down for the check (if servos available)
+                try:
+                    from config.config import USE_SERVO, PAPER_DETECTION_GAZE_PAN, PAPER_DETECTION_GAZE_TILT
+                    if USE_SERVO:
+                        try:
+                            from vision.gaze import set_drawing_mode
+                            log_json_entry(
+                                LogType.DEBUG,
+                                {"action": "paper_check_gaze", "step": "engage", "pan": PAPER_DETECTION_GAZE_PAN, "tilt": PAPER_DETECTION_GAZE_TILT},
+                                print_message="[👁️] Positioning gaze for paper check...",
+                            )
+                            set_drawing_mode(active=True, drawing_pan=PAPER_DETECTION_GAZE_PAN, drawing_tilt=PAPER_DETECTION_GAZE_TILT)
+                            time.sleep(1.2)  # brief settle; shorter than drawing settle
+                        except Exception as e:
+                            log_json_entry(
+                                LogType.WARNING,
+                                {"action": "paper_check_gaze", "step": "fallback", "error": str(e)},
+                                print_message=f"[👁️] Could not use gaze system ({e})",
+                            )
+                            # Optional minimal fallback via direct servos if provided
+                            try:
+                                if self.servos is not None:
+                                    self.servos.set_pan(PAPER_DETECTION_GAZE_PAN)
+                                    time.sleep(0.2)
+                                    self.servos.set_tilt(PAPER_DETECTION_GAZE_TILT)
+                                    time.sleep(0.6)
+                            except Exception:
+                                pass
+                except Exception:
+                    # Missing config or gaze system — continue without repositioning
+                    pass
+
+                # No camera available — proceed by override
+                if self.camera is None or not hasattr(self.camera, "read_frame"):
+                    log_json_entry(
+                        LogType.WARNING,
+                        {"action": "paper_check", "camera": "unavailable", "decision": "proceed"},
+                        print_message="[📄] No camera — proceeding (safety override)",
+                    )
+                    return True
+
+                try:
+                    frame = self.camera.read_frame()
+                except Exception as e:
+                    frame = None
+                    log_json_entry(
+                        LogType.ERROR,
+                        {"action": "paper_check", "error": str(e), "decision": "proceed"},
+                        print_message=f"[📄] Camera read failed ({e}) — proceeding",
+                    )
+
+                if frame is None or not isinstance(frame, np.ndarray):
+                    log_json_entry(
+                        LogType.WARNING,
+                        {"action": "paper_check", "frame": "none", "decision": "proceed"},
+                        print_message="[📄] No camera frame — proceeding",
+                    )
+                    return True
+
+                # Define a central ROI for robust comparisons
+                h, w = frame.shape[:2]
+                roi_x1 = int(w * 0.2)
+                roi_y1 = int(h * 0.2)
+                roi_x2 = int(w * 0.8)
+                roi_y2 = int(h * 0.8)
+                roi = frame[roi_y1:roi_y2, roi_x1:roi_x2]
+
+                # --- Method A: Explicit X-marker detection (fast, robust to lighting)
+                def detect_x_marker(bgr_img) -> bool:
+                    try:
+                        gray = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2GRAY)
+                        gray = cv2.GaussianBlur(gray, (5, 5), 0)
+                        edges = cv2.Canny(gray, 50, 150)
+                        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=30, minLineLength=40, maxLineGap=10)
+                        if lines is None:
+                            return False
+                        pos_slope = []
+                        neg_slope = []
+                        cx = (bgr_img.shape[1] - 1) / 2.0
+                        cy = (bgr_img.shape[0] - 1) / 2.0
+                        # Collect long-ish diagonal lines and check intersection near center
+                        for l in lines[:, 0, :]:
+                            x1, y1, x2, y2 = map(float, l)
+                            dx, dy = (x2 - x1), (y2 - y1)
+                            L = (dx * dx + dy * dy) ** 0.5
+                            if L < 40:  # pixel length threshold
+                                continue
+                            if dx == 0:
+                                slope = np.inf
+                            else:
+                                slope = dy / dx
+                            # near ±1 slope (diagonal), allow some tolerance
+                            if 0.5 <= slope <= 2.0:
+                                pos_slope.append((x1, y1, x2, y2))
+                            elif -2.0 <= slope <= -0.5:
+                                neg_slope.append((x1, y1, x2, y2))
+                        if not pos_slope or not neg_slope:
+                            return False
+                        # Quick center proximity check: any line crosses near center band
+                        def line_mid_dist(x1, y1, x2, y2):
+                            mx, my = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+                            return abs(mx - cx) + abs(my - cy)
+                        pos_close = min(line_mid_dist(*l) for l in pos_slope)
+                        neg_close = min(line_mid_dist(*l) for l in neg_slope)
+                        return (pos_close < 60) and (neg_close < 60)
+                    except Exception:
+                        return False
+
+                x_visible = detect_x_marker(roi)
+
+                # --- Method B: Reference correlation if references exist
+                from config.config import PAPER_PRESENT_REFERENCE_PATH, PAPER_ABSENT_REFERENCE_PATH
+                def load_ref(path):
+                    if not os.path.exists(path):
+                        return None
+                    img = cv2.imread(path)
+                    if img is None:
+                        return None
+                    # Use same ROI proportion from the reference image
+                    H, W = img.shape[:2]
+                    X1, Y1, X2, Y2 = int(W * 0.2), int(H * 0.2), int(W * 0.8), int(H * 0.8)
+                    return img[Y1:Y2, X1:X2]
+
+                def norm_corr(a, b) -> float:
+                    try:
+                        a_gray = cv2.cvtColor(cv2.resize(a, (160, 120)), cv2.COLOR_BGR2GRAY)
+                        b_gray = cv2.cvtColor(cv2.resize(b, (160, 120)), cv2.COLOR_BGR2GRAY)
+                        a_f = a_gray.astype(np.float32)
+                        b_f = b_gray.astype(np.float32)
+                        a_f -= a_f.mean(); b_f -= b_f.mean()
+                        denom = (a_f.std() * b_f.std()) + 1e-6
+                        return float(np.mean((a_f * b_f) / denom))
+                    except Exception:
+                        return 0.0
+
+                ref_present = load_ref(PAPER_PRESENT_REFERENCE_PATH)
+                ref_absent = load_ref(PAPER_ABSENT_REFERENCE_PATH)
+
+                corr_present = corr_absent = None
+                if ref_present is not None:
+                    corr_present = norm_corr(roi, ref_present)
+                if ref_absent is not None:
+                    corr_absent = norm_corr(roi, ref_absent)
+
+                # --- Method C: Whiteness heuristic as last fallback
+                gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+                white_mask = gray_roi >= 200
+                whiteness = float(np.mean(white_mask))  # 0..1
+
+                # Decision fusion:
+                paper_present = True
+                reason = "default"
+
+                # If X visible, treat as NO PAPER immediately
+                if x_visible:
+                    paper_present = False
+                    reason = "x_marker_visible"
+                # Else if both references available, compare correlations with margin
+                elif (corr_present is not None) and (corr_absent is not None):
+                    # thresholds: expect corr in ~[-1,1], choose conservative margins
+                    margin = 0.08
+                    present_thresh = 0.25
+                    absent_thresh = 0.25
+                    if (corr_present - corr_absent) > margin and corr_present >= present_thresh:
+                        paper_present = True
+                        reason = f"ref_match_present({corr_present:.2f}>{corr_absent:.2f})"
+                    elif (corr_absent - corr_present) > margin and corr_absent >= absent_thresh:
+                        paper_present = False
+                        reason = f"ref_match_absent({corr_absent:.2f}>{corr_present:.2f})"
+                    else:
+                        # inconclusive → fall back to whiteness
+                        paper_present = (whiteness >= 0.35)
+                        reason = f"inconclusive_ref_whiteness({whiteness:.2f})"
+                # Else if one reference available, use it with threshold
+                elif corr_present is not None:
+                    paper_present = (corr_present >= 0.30)
+                    reason = f"single_ref_present({corr_present:.2f})"
+                elif corr_absent is not None:
+                    paper_present = not (corr_absent >= 0.30)
+                    reason = f"single_ref_absent({corr_absent:.2f})"
+                else:
+                    # No refs → whiteness fallback
+                    paper_present = (whiteness >= 0.35)
+                    reason = f"fallback_whiteness({whiteness:.2f})"
+
+                log_json_entry(
+                    LogType.DECISION,
+                    {
+                        "action": "paper_check",
+                        "enabled": True,
+                        "x_marker": x_visible,
+                        "corr_present": None if corr_present is None else round(corr_present, 3),
+                        "corr_absent": None if corr_absent is None else round(corr_absent, 3),
+                        "whiteness": round(whiteness, 3),
+                        "paper_present": paper_present,
+                        "reason": reason,
+                        "override": ALLOW_PAPER_DETECTION_OVERRIDE,
+                    },
+                    print_message=f"[📄] Paper check → {'YES' if paper_present else 'NO'} ({reason})",
+                )
+
+                # Release gaze lock after check
+                try:
+                    from vision.gaze import set_drawing_mode
+                    set_drawing_mode(active=False)
+                except Exception:
+                    pass
+
+                if paper_present:
+                    return True
+
+                # If not present: proceed only if override is allowed
+                if ALLOW_PAPER_DETECTION_OVERRIDE:
+                    log_json_entry(
+                        LogType.WARNING,
+                        {"action": "paper_check", "result": "no_paper", "decision": "proceed_override"},
+                        print_message="[📄] No paper detected — proceeding (override)",
+                    )
+                    return True
+
+                log_json_entry(
+                    LogType.DECISION,
+                    {"action": "paper_check", "result": "no_paper", "decision": "block"},
+                    print_message="[⛔] No paper detected — blocking draw",
+                )
+                return False
+
+            # Paper check moved to after GRBL homing (in grbl_utils.process_svg_to_grbl)
+            # to ensure the arm is not blocking the view. Pre-check intentionally disabled here.
 
             if CENTER_LINE_SVG:
                 # Convert PNG to centerline SVG, then to G-code
@@ -119,10 +389,7 @@ class ImageMonitor:
                     scale=1.0,  # SVG-skalning
                 )
 
-                # Start CNC execution tracking
-                original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
-                state_manager.start_cnc_execution(gcode_path, original_prompt)
-
+                # Convert SVG to G-code (CNC execution tracking will start when GRBL actually begins)
                 result_path = svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
                 if result_path:
@@ -138,13 +405,54 @@ class ImageMonitor:
                     
                     # Note: CNC execution state is cleared by grbl_utils.py after physical drawing completes
                 else:
-                    # Execution failed - must clear execution state to allow recovery
+                    # Determine if this was a deliberate skip due to no paper
+                    no_paper_skip = False
+                    try:
+                        now_ts = time.time()
+                        if getattr(state_manager, 'last_paper_check_ts', 0) > 0 and not getattr(state_manager, 'paper_present', True):
+                            if now_ts - state_manager.last_paper_check_ts < 5.0:
+                                no_paper_skip = True
+                    except Exception:
+                        no_paper_skip = False
+
+                    # Clear execution state to allow recovery/next attempt
                     state_manager.finish_cnc_execution()
-                    log_json_entry(
-                        LogType.ERROR,
-                        {"message": "CNC execution failed; clearing execution state for retry", "gcode_path": gcode_path},
-                        print_message="[❌] CNC execution failed; clearing state for retry",
-                    )
+
+                    if no_paper_skip:
+                        # Reset cooldown so next drawing attempt isn't throttled
+                        try:
+                            if self.captioner and hasattr(self.captioner, 'drawing'):
+                                # Start cooldown now to encompass prompt+generation+execution attempt
+                                self.captioner.drawing.last_drawing_time = time.time()
+                        except Exception:
+                            pass
+                        # If a generation cycle was active, end it now to avoid long timeouts blocking captions
+                        try:
+                            if getattr(state_manager, 'is_generating_drawing', False):
+                                state_manager.finish_drawing_generation()
+                                state_manager.clear_expected_output_prefix()
+                        except Exception:
+                            pass
+
+                        # Record context for LLM/memory
+                        try:
+                            if self.captioner and hasattr(self.captioner, 'observe'):
+                                reason = getattr(state_manager, 'last_paper_check_reason', 'no_paper')
+                                self.captioner.observe(f"Skipped drawing: no paper detected ({reason}).", getattr(self.captioner, 'current_mood', 0.5), png_path, memory_type="environment")
+                        except Exception:
+                            pass
+
+                        log_json_entry(
+                            LogType.DECISION,
+                            {"decision": "skip_drawing_no_paper", "reason": getattr(state_manager, 'last_paper_check_reason', '')},
+                            print_message="[🛑] Skipped drawing: no paper detected",
+                        )
+                    else:
+                        log_json_entry(
+                            LogType.ERROR,
+                            {"message": "CNC execution failed; clearing execution state for retry", "gcode_path": gcode_path},
+                            print_message="[❌] CNC execution failed; clearing state for retry",
+                        )
 
             else:
                 # Find latest SVG in output folder and convert to G-code
@@ -160,11 +468,7 @@ class ImageMonitor:
                         print_message=f"[🔄] Converting latest SVG to G-code: {os.path.basename(latest_svg)}",
                     )
 
-                    # Start CNC execution tracking
-                    original_prompt = state_manager.current_drawing_prompt or "Unknown drawing"
-                    state_manager.start_cnc_execution(gcode_path, original_prompt)
-
-                    # Convert SVG to G-code and execute
+                    # Convert SVG to G-code and execute (CNC execution tracking will start when GRBL actually begins)
                     result_path = svg_to_grbl(svg_input=latest_svg, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
                     if result_path:
@@ -180,13 +484,48 @@ class ImageMonitor:
                         
                         # Note: CNC execution state is cleared by grbl_utils.py after physical drawing completes
                     else:
-                        # Execution failed - must clear execution state to allow recovery
+                        # Determine if skipped due to no paper and log accordingly
+                        no_paper_skip = False
+                        try:
+                            now_ts = time.time()
+                            if getattr(state_manager, 'last_paper_check_ts', 0) > 0 and not getattr(state_manager, 'paper_present', True):
+                                if now_ts - state_manager.last_paper_check_ts < 5.0:
+                                    no_paper_skip = True
+                        except Exception:
+                            no_paper_skip = False
+
                         state_manager.finish_cnc_execution()
-                        log_json_entry(
-                            LogType.ERROR,
-                            {"message": "CNC execution failed; clearing execution state for retry", "gcode_path": gcode_path},
-                            print_message="[❌] CNC execution failed; clearing state for retry",
-                        )
+                        # If generation was active, end it to prevent captioner waiting for timeout
+                        try:
+                            if getattr(state_manager, 'is_generating_drawing', False):
+                                state_manager.finish_drawing_generation()
+                                state_manager.clear_expected_output_prefix()
+                        except Exception:
+                            pass
+                        if no_paper_skip:
+                            try:
+                                if self.captioner and hasattr(self.captioner, 'drawing'):
+                                    # Start cooldown now since full cycle was attempted but skipped
+                                    self.captioner.drawing.last_drawing_time = time.time()
+                            except Exception:
+                                pass
+                            try:
+                                if self.captioner and hasattr(self.captioner, 'observe'):
+                                    reason = getattr(state_manager, 'last_paper_check_reason', 'no_paper')
+                                    self.captioner.observe(f"Skipped drawing: no paper detected ({reason}).", getattr(self.captioner, 'current_mood', 0.5), png_path, memory_type="environment")
+                            except Exception:
+                                pass
+                            log_json_entry(
+                                LogType.DECISION,
+                                {"decision": "skip_drawing_no_paper", "reason": getattr(state_manager, 'last_paper_check_reason', '')},
+                                print_message="[🛑] Skipped drawing: no paper detected",
+                            )
+                        else:
+                            log_json_entry(
+                                LogType.ERROR,
+                                {"message": "CNC execution failed; clearing execution state for retry", "gcode_path": gcode_path},
+                                print_message="[❌] CNC execution failed; clearing state for retry",
+                            )
                 else:
                     log_json_entry(
                         LogType.ERROR,
@@ -251,47 +590,6 @@ class ImageMonitor:
 
         # Process PNG to G-code and execute it (if configured)
         if image_path.lower().endswith(".png"):
-            # Strict gating: only process when a drawing job is active AND prefix matches
-            try:
-                expected = state_manager.get_expected_output_prefix()
-                generating = getattr(state_manager, "is_generating_drawing", False)
-            except Exception:
-                expected = None
-                generating = False
-
-            if not generating:
-                log_json_entry(
-                    LogType.DECISION,
-                    {"message": "Ignoring PNG: no active drawing generation", "filename": filename},
-                    print_message=f"[⏭️] Ignoring {filename}: no active drawing",
-                )
-                return False
-
-            if not expected:
-                log_json_entry(
-                    LogType.DECISION,
-                    {"message": "Ignoring PNG: no expected output prefix set", "filename": filename},
-                    print_message=f"[⏭️] Ignoring {filename}: no expected prefix",
-                )
-                return False
-
-            if not os.path.basename(image_path).startswith(expected):
-                log_json_entry(
-                    LogType.DECISION,
-                    {"message": "Ignoring PNG that does not match expected prefix", "expected_prefix": expected, "filename": filename},
-                    print_message=f"[⏭️] Ignoring {filename}: does not match expected prefix",
-                )
-                return False
-
-            # Stop the generation timer BEFORE starting CNC execution
-            if state_manager.is_generating_drawing:
-                state_manager.finish_drawing_generation()
-                log_json_entry(
-                    LogType.INFO,
-                    {"message": "Drawing generation completed", "image_path": image_path},
-                    print_message="[✅] Drawing generation completed",
-                )
-
             self._process_png_to_gcode(image_path)
         if self.on_image_complete:
             self.on_image_complete(image_path)

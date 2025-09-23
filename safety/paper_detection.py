@@ -18,6 +18,8 @@ from config.config import (
     PAPER_CHECK_METHOD,
     PAPER_DETECTION_CONFIDENCE_THRESHOLD,
     PAPER_REFERENCE_IMAGE_PATH,
+    PAPER_PRESENT_REFERENCE_PATH,
+    PAPER_ABSENT_REFERENCE_PATH,
     PAPER_DETECTION_GAZE_PAN,
     PAPER_DETECTION_GAZE_TILT,
     PAPER_CHECK_TIMEOUT,
@@ -46,6 +48,8 @@ class PaperDetector:
 
     def __init__(self):
         self.reference_image_path = PAPER_REFERENCE_IMAGE_PATH
+        self.present_image_path = PAPER_PRESENT_REFERENCE_PATH
+        self.absent_image_path = PAPER_ABSENT_REFERENCE_PATH
         self.calibration_dir = os.path.dirname(self.reference_image_path)
 
         # Ensure calibration directory exists
@@ -106,6 +110,38 @@ class PaperDetector:
                 },
                 print_message=f"[📄] ✗ Failed to capture reference image: {e}"
             )
+            return False
+
+    def capture_present_image(self, camera, servos) -> bool:
+        """Capture 'paper present' reference image to configured path."""
+        try:
+            self._position_gaze_for_detection(servos)
+            time.sleep(1.0)
+            frame = camera.read_frame()
+            if frame is None:
+                raise Exception("Failed to capture frame from camera")
+            Path(os.path.dirname(self.present_image_path)).mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(self.present_image_path, frame)
+            log_json_entry(LogType.DEBUG, {"action": "present_reference_saved", "path": self.present_image_path}, print_message=f"[📄] ✓ Paper PRESENT saved: {self.present_image_path}")
+            return True
+        except Exception as e:
+            log_json_entry(LogType.ERROR, {"action": "present_reference_failed", "error": str(e)}, print_message=f"[📄] ✗ Failed PRESENT capture: {e}")
+            return False
+
+    def capture_absent_image(self, camera, servos) -> bool:
+        """Capture 'paper absent' reference image to configured path."""
+        try:
+            self._position_gaze_for_detection(servos)
+            time.sleep(1.0)
+            frame = camera.read_frame()
+            if frame is None:
+                raise Exception("Failed to capture frame from camera")
+            Path(os.path.dirname(self.absent_image_path)).mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(self.absent_image_path, frame)
+            log_json_entry(LogType.DEBUG, {"action": "absent_reference_saved", "path": self.absent_image_path}, print_message=f"[📄] ✓ Paper ABSENT saved: {self.absent_image_path}")
+            return True
+        except Exception as e:
+            log_json_entry(LogType.ERROR, {"action": "absent_reference_failed", "error": str(e)}, print_message=f"[📄] ✗ Failed ABSENT capture: {e}")
             return False
 
     def check_paper_present(self, camera, servos, captioner=None) -> PaperCheckResult:
@@ -357,6 +393,10 @@ class PaperDetector:
             "confidence_threshold": PAPER_DETECTION_CONFIDENCE_THRESHOLD,
             "reference_image_exists": os.path.exists(self.reference_image_path),
             "reference_image_path": self.reference_image_path,
+            "paper_present_exists": os.path.exists(self.present_image_path),
+            "paper_absent_exists": os.path.exists(self.absent_image_path),
+            "paper_present_path": self.present_image_path,
+            "paper_absent_path": self.absent_image_path,
             "recent_checks": len(self.detection_history),
             "last_check": self.detection_history[-1].__dict__ if self.detection_history else None
         }
@@ -386,6 +426,14 @@ def capture_paper_reference(camera, servos) -> bool:
         bool: True if reference captured successfully
     """
     return paper_detector.capture_reference_image(camera, servos)
+
+
+def capture_paper_present_reference(camera, servos) -> bool:
+    return paper_detector.capture_present_image(camera, servos)
+
+
+def capture_paper_absent_reference(camera, servos) -> bool:
+    return paper_detector.capture_absent_image(camera, servos)
 
 
 def get_paper_detection_status() -> Dict[str, Any]:

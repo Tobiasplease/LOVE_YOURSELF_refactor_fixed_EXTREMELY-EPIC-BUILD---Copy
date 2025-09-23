@@ -35,6 +35,11 @@ class StateManager:
         self.current_drawing_phase = None  # "executing" when active
         # Expected output from ComfyUI for current job (filename prefix)
         self.expected_output_prefix: Optional[str] = None
+        # Paper detection state
+        self.paper_present: bool = True
+        self.last_paper_check_ts: float = 0.0
+        self.last_paper_check_reason: str = ""
+        self.last_no_paper_skip_ts: float = 0.0
 
     def save_session_state(self, captioner, mood_engine, timekeeper=None) -> bool:
         """Save current session state for next startup."""
@@ -79,9 +84,8 @@ class StateManager:
                     "emotional_patterns": getattr(captioner, "emotional_patterns", {}),
                     # Recent memory (last 10 entries)
                     "recent_memory": list(captioner.memory_queue)[-10:] if captioner.memory_queue else [],
-                    # Timer states for reflection and drawing intervals
+                    # Timer states for reflection interval
                     "last_reason_time": captioner.last_reason_time,
-                    "last_drawing_time": captioner.last_drawing_time,
                 },
                 # Mood engine state
                 "mood_engine": {
@@ -211,7 +215,6 @@ class StateManager:
             # Reset timer states to current time for fresh session intervals
             # Don't restore old timer states - start intervals from session startup
             captioner.last_reason_time = time.time()
-            captioner.last_drawing_time = time.time()
 
             # Set session start to NOW (when we actually restart), not old save time
             # The save_time represents when we were last active, but true_session_start

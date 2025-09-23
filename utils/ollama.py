@@ -188,6 +188,7 @@ def query_ollama(
     options: Optional[dict] = None,
     show_progress: bool = OLLAMA_SHOW_PROGRESS,
     prompt_type: str = "general",
+    skip_generation_wait: bool = False,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -205,7 +206,9 @@ def query_ollama(
     Returns:
         Response text from Ollama
     """
-    _wait_for_drawing_completion()
+    # Skip waiting for generation if explicitly requested (e.g., safety LLM checks)
+    if not skip_generation_wait:
+        _wait_for_drawing_completion()
 
     # Use streaming if progress bar is requested
     use_streaming = show_progress

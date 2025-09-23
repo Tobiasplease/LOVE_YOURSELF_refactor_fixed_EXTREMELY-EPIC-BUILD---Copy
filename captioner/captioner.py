@@ -101,7 +101,7 @@ class Captioner(MemoryMixin):
 
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
-        self.last_drawing_time: float = time.time() - DRAWING_INTERVAL - 10  # Allow immediate first drawing
+        self.last_drawing_check_time: float = 0.0  # Allow immediate first check
 
         # Track session continuity
         self.sessions_since_boot = 0
@@ -173,13 +173,13 @@ class Captioner(MemoryMixin):
 
         while True:
             if self.snapshot_queue:
-                frame, _, reactivity_data = self.snapshot_queue.popleft()
+                frame, person_present, reactivity_data = self.snapshot_queue.popleft()
                 try:
                     # Check if we're currently drawing - switch to introspective mode
                     if self._is_currently_drawing():
                         self._process_drawing_introspection(reactivity_data)
                     else:
-                        self._process_frame(frame, reactivity_data)
+                        self._process_frame(frame, reactivity_data, person_present)
                 except Exception as exc:
                     log_json_entry(
                         LogType.ERROR,
@@ -190,7 +190,7 @@ class Captioner(MemoryMixin):
                 # Wait longer on startup to allow main loop to populate frames
                 time.sleep(0.5 if not self.first_caption_done else 0.05)
 
-    def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None) -> None:
+    def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None, person_present: bool = False) -> None:
         now = time.time()
         if now - self.last_caption_time < CAPTION_INTERVAL:
             return
@@ -253,7 +253,7 @@ class Captioner(MemoryMixin):
                     print_message=f"[🐞] Requesting new caption for {img_path}",
                 )
                 previous_caption = getattr(self, "last_caption", "")
-                caption = self.model.caption_image(img_path, flowing=True, first_time=False)
+                caption = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
                 if caption == previous_caption:
                     log_json_entry(
                         LogType.DEBUG,
@@ -282,7 +282,7 @@ class Captioner(MemoryMixin):
                 time.sleep(0.5)
                 try:
                     if hasattr(self, "model") and img_path and os.path.exists(img_path):
-                        caption = self.model.caption_image(img_path, flowing=True, first_time=False)
+                        caption = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
                     else:
                         caption = "Awakening... vision initializing..."
                 except Exception:
@@ -331,24 +331,11 @@ class Captioner(MemoryMixin):
         except ImportError:
             print_msg = f"[📸] {caption}"
 
-        # Filter for continuous captions only - skip system/compression prompts
+        # NO FILTERING - ALWAYS PRINT ALL CAPTIONS
         should_print = True
-        caption_lower = caption.lower().strip()
-
-        # Skip only specific system prefixes
-        skip_prefixes = ['experience:', 'reflection:', 'analysis:', 'summary:', 'context:', 'memory:', 'system:', 'debug:']
-
-        # Skip only obvious startup/system messages (not general observations)
-        startup_patterns = ['awakening...', 'consciousness returning', 'reorientation', 'phase 1:', 'phase 2:', 'internal awakening']
-
-        if any(caption_lower.startswith(prefix) for prefix in skip_prefixes):
-            should_print = False
-        elif any(pattern in caption_lower for pattern in startup_patterns):
-            should_print = False
-        elif hasattr(self, '_last_sent_caption') and self._last_sent_caption == caption.strip():
-            should_print = False
 
         if should_print:
+            # RESTORED: Back to original working logic
             # Track last sent caption for deduplication
             self._last_sent_caption = caption.strip()
 
@@ -356,8 +343,11 @@ class Captioner(MemoryMixin):
             try:
                 from utils.caption_display import send_caption_to_display
                 send_caption_to_display(caption)
+                print(f"[LCD] Sent: {caption[:40]}...")
             except Exception as e:
-                pass  # Silently fail if display not available
+                print(f"[LCD] Failed to send caption: {e}")
+            # Track last sent caption for deduplication
+            self._last_sent_caption = caption.strip()
 
             log_json_entry(
                 LogType.CAPTION,
@@ -504,70 +494,78 @@ class Captioner(MemoryMixin):
                 # Still update the timer to prevent infinite retries
                 self.last_reason_time = now - REASON_INTERVAL + 60  # Retry in 60 seconds
 
-        # Check drawing interval condition
-        time_since_last_drawing = now - self.last_drawing_time
-        if time_since_last_drawing > DRAWING_INTERVAL:
-            print(f"[DEBUG] DRAWING TRIGGER ACTIVATED! Starting drawing generation...")
-            print(f"[DEBUG] Step 1: About to start drawing generation process")
-            try:
-                print(f"[DEBUG] Step 2: Attempting log_json_entry...")
-                with self.print_lock:
-                    print("\r" + " " * 80 + "\r", end="")
-                    log_json_entry(
-                        LogType.DEBUG,
-                        {
-                            "message": "Drawing interval reached",
-                            "action": "drawing_trigger",
-                            "time_since_last_drawing": time_since_last_drawing,
-                            "drawing_interval": DRAWING_INTERVAL,
-                        },
-                        print_message=f"[🎨] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...",
-                    )
-                print(f"[DEBUG] Step 3: log_json_entry completed successfully")
-            except Exception as e:
-                print(f"[DEBUG] EXCEPTION in log_json_entry: {e}")
-                import traceback
+        # Check drawing interval - should trigger check every DRAWING_INTERVAL
+        time_since_last_check = now - getattr(self, 'last_drawing_check_time', 0)
+        if time_since_last_check < DRAWING_INTERVAL:
+            return  # Not time to check yet
 
-                traceback.print_exc()
+        # Update check time so we don't check too frequently
+        self.last_drawing_check_time = now
 
-            print(f"[DEBUG] Step 4: About to check pipeline state...")
-            # Guard: do not start a new drawing while pipeline is busy (prevents stacking)
-            try:
-                is_generating = getattr(state_manager, "is_generating_drawing", False)
-                is_executing = getattr(state_manager, "is_executing_cnc", False)
-                print(f"[DEBUG] Pipeline state - generating: {is_generating}, executing: {is_executing}")
-                if is_generating or is_executing:
-                    log_json_entry(
-                        LogType.DECISION,
-                        {
-                            "decision": "skip_drawing",
-                            "reason": "pipeline_busy",
-                            "is_generating": getattr(state_manager, "is_generating_drawing", False),
-                            "is_executing_cnc": getattr(state_manager, "is_executing_cnc", False),
-                        },
-                        print_message="[⏳] Skipping drawing: pipeline busy (generation/execution)",
-                    )
-                    # Re-check after short delay
-                    self.last_drawing_time = now - DRAWING_INTERVAL + 30
-                    return
-            except Exception as e:
-                print(f"[DEBUG] Exception checking pipeline state: {e}")
-                pass
+        # DEBUG: Log drawing timing information
+        time_since_last_drawing = now - self.drawing.last_drawing_time
+        print(f"[DEBUG] Drawing timer check:")
+        print(f"  Time since last check: {time_since_last_check:.1f}s (interval: {DRAWING_INTERVAL}s)")
+        print(f"  Time since last drawing: {time_since_last_drawing:.1f}s (cooldown: {self.drawing.cooldown}s)")
+        print(f"  Drawing system ready: {self.drawing.ready_to_draw()}")
 
-            print(f"[DEBUG] Step 5: Pipeline check passed, building context...")
-            memory_context = self.get_recent_memory()
-            reflection_context = self.get_last_reflection()
-            extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
-            print(f"[DEBUG] Step 6: Context built, starting drawing generation...")
+        # Check if drawing system is ready (this handles cooldown logic)
+        if not self.drawing.ready_to_draw():
+            # Drawing system handles its own cooldown - don't proceed
+            cooldown_remaining = self.drawing.cooldown - time_since_last_drawing
+            print(f"[DEBUG] Drawing blocked: {cooldown_remaining:.1f}s remaining")
+            return
 
-            # Start loading animation for drawing prompt
-            loading_stop = threading.Event()
-            loading_thread = threading.Thread(target=loading_animation, daemon=True)
-            loading_thread.start()
+        # Also check pipeline state early
+        try:
+            is_generating = getattr(state_manager, "is_generating_drawing", False)
+            is_executing = getattr(state_manager, "is_executing_cnc", False)
+            if is_generating or is_executing:
+                # Silently return - pipeline busy, will retry on next caption cycle
+                print(f"[DEBUG] Drawing blocked: pipeline busy (generating: {is_generating}, executing: {is_executing})")
+                return
+        except Exception:
+            pass
 
-            try:
-                prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path)
+        # Only proceed with messaging if drawing is actually possible
+        print(f"[DEBUG] DRAWING TRIGGER ACTIVATED! Starting drawing generation...")
+        print(f"[DEBUG] Step 1: About to start drawing generation process")
+        try:
+            print(f"[DEBUG] Step 2: Attempting log_json_entry...")
+            with self.print_lock:
+                print("\r" + " " * 80 + "\r", end="")
+                system_type = "Timer"
                 log_json_entry(
+                    LogType.DEBUG,
+                    {
+                        "message": "Drawing system ready, starting generation",
+                        "action": "drawing_check",
+                        "system_type": system_type.lower(),
+                    },
+                    print_message=f"[🎨] {system_type} drawing ready, evaluating...",
+                )
+            print(f"[DEBUG] Step 3: log_json_entry completed successfully")
+        except Exception as e:
+            print(f"[DEBUG] EXCEPTION in log_json_entry: {e}")
+            import traceback
+            traceback.print_exc()
+
+        print(f"[DEBUG] Step 4: Drawing system ready, building context...")
+        memory_context = self.get_recent_memory()
+        reflection_context = self.get_last_reflection()
+        extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
+        print(f"[DEBUG] Step 7: Context built, starting drawing generation...")
+
+        # Start loading animation for drawing prompt
+        loading_stop = threading.Event()
+        loading_thread = threading.Thread(target=loading_animation, daemon=True)
+        loading_thread.start()
+
+        try:
+            print(f"[DEBUG] Step 8: About to call generate_drawing_prompt...")
+            prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path)
+            print(f"[DEBUG] Step 9: Drawing prompt generated successfully")
+            log_json_entry(
                     LogType.DEBUG,
                     {
                         "message": "Drawing prompt generated",
@@ -577,31 +575,29 @@ class Captioner(MemoryMixin):
                     },
                     print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}...",
                 )
-            except Exception as e:
-                log_json_entry(
-                    LogType.ERROR,
-                    {"message": "Error generating drawing prompt", "component": "drawing", "error": str(e), "error_type": type(e).__name__},
-                    print_message=f"[❌] Error generating drawing prompt: {e}",
-                )
-                prompt = "[ERROR] Drawing prompt generation failed"
-            finally:
-                # Stop loading animation and wait for it to fully terminate
-                loading_stop.set()
-                loading_thread.join(timeout=2.0)  # Increased timeout
-                if loading_thread.is_alive():
-                    # Force clear animation remnants if thread still running
-                    with self.print_lock:
-                        print("\r" + " " * 80 + "\r", end="")
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": "Error generating drawing prompt", "component": "drawing", "error": str(e), "error_type": type(e).__name__},
+                print_message=f"[❌] Error generating drawing prompt: {e}",
+            )
+            prompt = "[ERROR] Drawing prompt generation failed"
+        finally:
+            # Stop loading animation and wait for it to fully terminate
+            loading_stop.set()
+            loading_thread.join(timeout=2.0)  # Increased timeout
+            if loading_thread.is_alive():
+                # Force clear animation remnants if thread still running
+                with self.print_lock:
+                    print("\r" + " " * 80 + "\r", end="")
 
-            # Only update timer if drawing system is ready (not in cooldown)
-            if self.drawing.ready_to_draw():
-                if "[ERROR]" not in prompt:
-                    self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
-                self.last_drawing_time = now
-            else:
-                # In cooldown, don't spam drawing attempts
-                cooldown_remaining = self.drawing.cooldown - (time.time() - self.drawing.last_drawing_time)
-                self.last_drawing_time = now - DRAWING_INTERVAL + cooldown_remaining + 30  # Retry after cooldown + 30s
+        # Since we already checked readiness, proceed with drawing flow
+        if "[ERROR]" not in prompt:
+            print(f"[DEBUG] Step 10: Starting handle_drawing_flow...")
+            self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
+            print(f"[DEBUG] Step 11: handle_drawing_flow completed")
+        else:
+            print(f"[DEBUG] ERROR: Drawing prompt contains error, skipping flow")
 
     def describe_current_mood(self) -> str:
         """Rich emotional description using 3D mood state and temporal context."""
@@ -940,16 +936,12 @@ class Captioner(MemoryMixin):
         return 0.0
 
     def _is_currently_drawing(self) -> bool:
-        """Check if system is currently generating or drawing artwork."""
+        """Check if system is currently executing G-code (actual drawing)."""
         try:
-            # Check both ComfyUI generation and GRBL execution phases
-            drawing_status = state_manager.get_drawing_status()
-            is_generating = drawing_status.get("is_generating", False)
-
-            # Also check if GRBL is executing (CNC phase)
+            # Only enter drawing introspection during actual G-code execution
+            # Ignore ComfyUI generation phase to allow normal captions during preparation
             is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
-
-            return is_generating or is_executing_cnc
+            return is_executing_cnc
         except Exception:
             return False
 
@@ -1022,8 +1014,9 @@ class Captioner(MemoryMixin):
                     try:
                         from utils.caption_display import send_caption_to_display
                         send_caption_to_display(introspection)
-                    except Exception:
-                        pass  # Silently fail if display not available
+                        print(f"[LCD] Sent introspection: {introspection[:40]}...")
+                    except Exception as e:
+                        print(f"[LCD] Failed to send introspection: {e}")
 
                     # Log with both introspection type and caption type for consistency
                     log_json_entry(

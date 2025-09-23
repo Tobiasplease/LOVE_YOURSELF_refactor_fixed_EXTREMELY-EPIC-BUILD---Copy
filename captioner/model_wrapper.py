@@ -32,11 +32,11 @@ class MultimodalModel:
         self.model_name = OLLAMA_MODEL
         self.prompt_interface = PromptInterface(self.model_name)
 
-    def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False) -> str:
+    def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False, person_present: bool = False) -> str:
         """Generate image caption using centralized prompt interface."""
         # Get prompt and options from centralized interface
         prompt, model_options, system_prompt = self.prompt_interface.build_caption_prompt_with_options(
-            self.memory_ref, image_path, flowing=flowing, first_time=first_time, drawing_introspection_mode=drawing_introspection_mode
+            self.memory_ref, image_path, flowing=flowing, first_time=first_time, drawing_introspection_mode=drawing_introspection_mode, person_present=person_present
         )
 
         if prompt is None:

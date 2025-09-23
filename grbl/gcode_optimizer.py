@@ -451,7 +451,7 @@ def create_optimizer_from_config() -> GCodeOptimizer:
             large_move_threshold=GRBL_LARGE_MOVE_THRESHOLD,
             cluster_distance_threshold=GRBL_CLUSTER_DISTANCE_THRESHOLD,
             cluster_sequence_min=GRBL_CLUSTER_SEQUENCE_MIN,
-            micro_stroke_threshold=0.25,  # Skip pen lifts for moves < 0.25mm
+            micro_stroke_threshold=0.5,   # Skip pen lifts for moves < 0.5mm
             continuous_path_threshold=2.0
         )
 
