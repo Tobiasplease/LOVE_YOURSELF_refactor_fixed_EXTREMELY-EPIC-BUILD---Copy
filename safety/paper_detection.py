@@ -20,6 +20,7 @@ from config.config import (
     ENABLE_PAPER_DETECTION,
     PAPER_CHECK_METHOD,
     PAPER_DETECTION_CONFIDENCE_THRESHOLD,
+    PAPER_DETECTION_TEXT,
     PAPER_REFERENCE_IMAGE_PATH,
     PAPER_PRESENT_REFERENCE_PATH,
     PAPER_ABSENT_REFERENCE_PATH,
@@ -325,8 +326,12 @@ class PaperDetector:
         if not os.path.exists(self.present_image_path) or not os.path.exists(self.absent_image_path):
             raise Exception(f"Reference images not found: {self.present_image_path}, {self.absent_image_path}")
 
-        # Text reading test
-        prompt = """Do you see the text saying "NO PAPER"?
+        # Text reading test - step-by-step reasoning for better accuracy
+        prompt = f"""Please examine this image carefully using these steps:
+
+1. First, scan the entire image for any visible text, words, or writing
+2. Look specifically for the text "{PAPER_DETECTION_TEXT}" written anywhere in the image
+3. Answer YES if you can see "{PAPER_DETECTION_TEXT}" text, NO if you cannot see it
 
 Answer: YES or NO"""
 
@@ -430,9 +435,21 @@ Answer: YES or NO"""
     def _single_paper_check(self, check_image_path: str, check_type: str = "primary") -> dict:
         """Perform a single paper detection check."""
         if check_type == "primary":
-            prompt = 'Do you see the text saying "NO PAPER"?\n\nAnswer: YES or NO'
+            prompt = f'''Please examine this image carefully using these steps:
+
+1. First, scan the entire image for any visible text, words, or writing
+2. Look specifically for the text "{PAPER_DETECTION_TEXT}" written anywhere in the image
+3. Answer YES if you can see "{PAPER_DETECTION_TEXT}" text, NO if you cannot see it
+
+Answer: YES or NO'''
         else:  # confirmation check with different phrasing
-            prompt = 'Is there visible text that reads "NO PAPER" anywhere in this image?\n\nAnswer: YES or NO'
+            prompt = f'''Look at this image step by step:
+
+1. Search the image thoroughly for any written text or words
+2. Check if the specific phrase "{PAPER_DETECTION_TEXT}" appears anywhere
+3. Respond YES if "{PAPER_DETECTION_TEXT}" text is visible, NO if it is not visible
+
+Answer: YES or NO'''
 
         # Read and encode image
         import base64

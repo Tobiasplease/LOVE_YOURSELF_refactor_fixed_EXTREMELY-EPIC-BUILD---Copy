@@ -304,7 +304,6 @@ if USE_UARM and UARM_BACKEND:
                     uarm_api.uarm_api = simple_api
                     debug_print("uArm simple API initialized", "INIT")
                     if UARM_HOME_ON_CONNECT:
-      
                         debug_print("Performing uArm homing sequence", "INIT")
                         uarm_controller.home()
                 else:
@@ -748,8 +747,21 @@ image_monitor.set_dependencies(cap, servos, captioner)
 
 # Expose shared hardware handles for other modules (e.g., GRBL paper check)
 try:
-    state_manager.camera = cap  # Shared OpenCV capture handle
+    # Create camera wrapper that provides read_frame() method expected by paper detection
+    class CameraWrapper:
+        def __init__(self, cv2_camera):
+            self.cv2_camera = cv2_camera
+
+        def read_frame(self):
+            ret, frame = self.cv2_camera.read()
+            return frame if ret else None
+
+        def read(self):
+            return self.cv2_camera.read()
+
+    state_manager.camera = CameraWrapper(cap)  # Wrapped camera with read_frame() method
     state_manager.servos = servos  # Optional
+    debug_print(f"Camera wrapper shared via state_manager: {cap}", "DEBUG")
 except Exception:
     pass
 image_monitor.start()

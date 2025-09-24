@@ -15,10 +15,18 @@ import re
 #
 # To revert to baseline: set SCALE=1.0 and OFFSETS=0.0 (or leave defaults).
 # ================================================================
-PRE_SCALE_X = 1.0
-PRE_SCALE_Y = 1.0
+# Original (baseline) settings:
+# PRE_SCALE_X = 1.0
+# PRE_SCALE_Y = 1.0
+# PRE_OFFSET_X = 0.0
+# PRE_OFFSET_Y = 0.0
+
+# Modified settings: 20% scale up, shift 10mm closer to robot body
+# Previous modified: PRE_OFFSET_Y = -5.0
+PRE_SCALE_X = 1.2
+PRE_SCALE_Y = 1.2
 PRE_OFFSET_X = 0.0
-PRE_OFFSET_Y = 0.0
+PRE_OFFSET_Y = -10.0
 PRE_PIVOT_X = None  # e.g., 0.0 to use origin, or None for center
 PRE_PIVOT_Y = None
 PRE_CLAMP_TO_DOMAIN = False

@@ -196,141 +196,36 @@ class ImageMonitor:
                     )
                     return True
 
-                # Define a central ROI for robust comparisons
-                h, w = frame.shape[:2]
-                roi_x1 = int(w * 0.2)
-                roi_y1 = int(h * 0.2)
-                roi_x2 = int(w * 0.8)
-                roi_y2 = int(h * 0.8)
-                roi = frame[roi_y1:roi_y2, roi_x1:roi_x2]
+                # Use centralized LLM-based paper detection (same as reliable hotkey test)
+                try:
+                    from safety.paper_detection import check_paper_before_drawing
+                    # Create minimal camera/servos objects for the centralized function
+                    camera_obj = type('Camera', (), {'read_frame': lambda: frame})()
+                    servos_obj = self.servos if hasattr(self, 'servos') and self.servos is not None else None
 
-                # --- Method A: Explicit X-marker detection (fast, robust to lighting)
-                def detect_x_marker(bgr_img) -> bool:
-                    try:
-                        gray = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2GRAY)
-                        gray = cv2.GaussianBlur(gray, (5, 5), 0)
-                        edges = cv2.Canny(gray, 50, 150)
-                        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=30, minLineLength=40, maxLineGap=10)
-                        if lines is None:
-                            return False
-                        pos_slope = []
-                        neg_slope = []
-                        cx = (bgr_img.shape[1] - 1) / 2.0
-                        cy = (bgr_img.shape[0] - 1) / 2.0
-                        # Collect long-ish diagonal lines and check intersection near center
-                        for l in lines[:, 0, :]:
-                            x1, y1, x2, y2 = map(float, l)
-                            dx, dy = (x2 - x1), (y2 - y1)
-                            L = (dx * dx + dy * dy) ** 0.5
-                            if L < 40:  # pixel length threshold
-                                continue
-                            if dx == 0:
-                                slope = np.inf
-                            else:
-                                slope = dy / dx
-                            # near ±1 slope (diagonal), allow some tolerance
-                            if 0.5 <= slope <= 2.0:
-                                pos_slope.append((x1, y1, x2, y2))
-                            elif -2.0 <= slope <= -0.5:
-                                neg_slope.append((x1, y1, x2, y2))
-                        if not pos_slope or not neg_slope:
-                            return False
-                        # Quick center proximity check: any line crosses near center band
-                        def line_mid_dist(x1, y1, x2, y2):
-                            mx, my = (x1 + x2) / 2.0, (y1 + y2) / 2.0
-                            return abs(mx - cx) + abs(my - cy)
-                        pos_close = min(line_mid_dist(*l) for l in pos_slope)
-                        neg_close = min(line_mid_dist(*l) for l in neg_slope)
-                        return (pos_close < 60) and (neg_close < 60)
-                    except Exception:
-                        return False
+                    paper_present = check_paper_before_drawing(camera_obj, servos_obj, None)
+                    reason = "centralized_llm_detection"
 
-                x_visible = detect_x_marker(roi)
-
-                # --- Method B: Reference correlation if references exist
-                from config.config import PAPER_PRESENT_REFERENCE_PATH, PAPER_ABSENT_REFERENCE_PATH
-                def load_ref(path):
-                    if not os.path.exists(path):
-                        return None
-                    img = cv2.imread(path)
-                    if img is None:
-                        return None
-                    # Use same ROI proportion from the reference image
-                    H, W = img.shape[:2]
-                    X1, Y1, X2, Y2 = int(W * 0.2), int(H * 0.2), int(W * 0.8), int(H * 0.8)
-                    return img[Y1:Y2, X1:X2]
-
-                def norm_corr(a, b) -> float:
-                    try:
-                        a_gray = cv2.cvtColor(cv2.resize(a, (160, 120)), cv2.COLOR_BGR2GRAY)
-                        b_gray = cv2.cvtColor(cv2.resize(b, (160, 120)), cv2.COLOR_BGR2GRAY)
-                        a_f = a_gray.astype(np.float32)
-                        b_f = b_gray.astype(np.float32)
-                        a_f -= a_f.mean(); b_f -= b_f.mean()
-                        denom = (a_f.std() * b_f.std()) + 1e-6
-                        return float(np.mean((a_f * b_f) / denom))
-                    except Exception:
-                        return 0.0
-
-                ref_present = load_ref(PAPER_PRESENT_REFERENCE_PATH)
-                ref_absent = load_ref(PAPER_ABSENT_REFERENCE_PATH)
-
-                corr_present = corr_absent = None
-                if ref_present is not None:
-                    corr_present = norm_corr(roi, ref_present)
-                if ref_absent is not None:
-                    corr_absent = norm_corr(roi, ref_absent)
-
-                # --- Method C: Whiteness heuristic as last fallback
-                gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-                white_mask = gray_roi >= 200
-                whiteness = float(np.mean(white_mask))  # 0..1
-
-                # Decision fusion:
-                paper_present = True
-                reason = "default"
-
-                # If X visible, treat as NO PAPER immediately
-                if x_visible:
-                    paper_present = False
-                    reason = "x_marker_visible"
-                # Else if both references available, compare correlations with margin
-                elif (corr_present is not None) and (corr_absent is not None):
-                    # thresholds: expect corr in ~[-1,1], choose conservative margins
-                    margin = 0.08
-                    present_thresh = 0.25
-                    absent_thresh = 0.25
-                    if (corr_present - corr_absent) > margin and corr_present >= present_thresh:
-                        paper_present = True
-                        reason = f"ref_match_present({corr_present:.2f}>{corr_absent:.2f})"
-                    elif (corr_absent - corr_present) > margin and corr_absent >= absent_thresh:
-                        paper_present = False
-                        reason = f"ref_match_absent({corr_absent:.2f}>{corr_present:.2f})"
-                    else:
-                        # inconclusive → fall back to whiteness
-                        paper_present = (whiteness >= 0.35)
-                        reason = f"inconclusive_ref_whiteness({whiteness:.2f})"
-                # Else if one reference available, use it with threshold
-                elif corr_present is not None:
-                    paper_present = (corr_present >= 0.30)
-                    reason = f"single_ref_present({corr_present:.2f})"
-                elif corr_absent is not None:
-                    paper_present = not (corr_absent >= 0.30)
-                    reason = f"single_ref_absent({corr_absent:.2f})"
-                else:
-                    # No refs → whiteness fallback
-                    paper_present = (whiteness >= 0.35)
-                    reason = f"fallback_whiteness({whiteness:.2f})"
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {"action": "paper_check_delegated", "result": paper_present, "method": "centralized"},
+                        print_message=f"[📄] Delegated to centralized detection: {'YES' if paper_present else 'NO'}"
+                    )
+                except Exception as e:
+                    log_json_entry(
+                        LogType.ERROR,
+                        {"action": "paper_check_fallback", "error": str(e)},
+                        print_message=f"[📄] Centralized detection failed ({e}) — defaulting to PROCEED"
+                    )
+                    paper_present = True
+                    reason = f"centralized_error_fallback({str(e)})"
 
                 log_json_entry(
                     LogType.DECISION,
                     {
                         "action": "paper_check",
                         "enabled": True,
-                        "x_marker": x_visible,
-                        "corr_present": None if corr_present is None else round(corr_present, 3),
-                        "corr_absent": None if corr_absent is None else round(corr_absent, 3),
-                        "whiteness": round(whiteness, 3),
+                        "method": "centralized_llm",
                         "paper_present": paper_present,
                         "reason": reason,
                         "override": ALLOW_PAPER_DETECTION_OVERRIDE,

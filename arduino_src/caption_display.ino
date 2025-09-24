@@ -69,7 +69,7 @@ void loop() {
           currentPriority = newPriority;
           chunkDelay = newDelay;
           currentChunk = 0;
-          totalChunks = (currentCaption.length() + 15) / 16;  // 16 chars per chunk (1 row)
+          totalChunks = (currentCaption.length() + 31) / 32;  // 32 chars per chunk (2 rows)
           lastChunkTime = millis();
           captionComplete = (totalChunks <= 1);  // Single chunk = complete immediately
           updateDisplay();
@@ -84,7 +84,7 @@ void loop() {
           currentPriority = "M";
           chunkDelay = 300;
           currentChunk = 0;
-          totalChunks = (currentCaption.length() + 15) / 16;  // 16 chars per chunk (1 row)
+          totalChunks = (currentCaption.length() + 31) / 32;  // 32 chars per chunk (2 rows)
           lastChunkTime = millis();
           captionComplete = (totalChunks <= 1);  // Single chunk = complete immediately
           updateDisplay();
@@ -113,9 +113,10 @@ void loop() {
 void updateDisplay() {
   lcd.clear();
 
-  int startPos = currentChunk * 16;  // 16 chars per chunk (1 row)
+  int startPos = currentChunk * 32;  // 32 chars per chunk (2 rows)
 
   // Display on both rows (16 chars each)
+  // Row 1: chars 0-15 of current chunk
   int row1Start = startPos;
   int row1End = min(row1Start + LCD_COLS, (int)currentCaption.length());
   if (row1Start < currentCaption.length()) {
@@ -124,5 +125,12 @@ void updateDisplay() {
     lcd.print(row1);
   }
 
-  // Only use first row for single-line display
+  // Row 2: chars 16-31 of current chunk
+  int row2Start = startPos + LCD_COLS;
+  int row2End = min(row2Start + LCD_COLS, (int)currentCaption.length());
+  if (row2Start < currentCaption.length()) {
+    String row2 = currentCaption.substring(row2Start, row2End);
+    lcd.setCursor(0, 1);
+    lcd.print(row2);
+  }
 }

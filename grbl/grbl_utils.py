@@ -1577,18 +1577,26 @@ def process_svg_to_grbl(
                     try:
                         from utils.state_manager import state_manager as _sm
                         cam = getattr(_sm, 'camera', None)
+                        print(f"[DEBUG] state_manager.camera: {cam}")
                         if cam is not None:
                             if hasattr(cam, 'read_frame'):
+                                print("[DEBUG] Using state_manager.camera.read_frame() - SUCCESS!")
                                 # Take last of two frames for freshness
                                 _ = cam.read_frame()
                                 frame = cam.read_frame()
+                                print(f"[DEBUG] Frame captured: {frame is not None}")
                             elif hasattr(cam, 'read'):
+                                print("[DEBUG] Using state_manager.camera.read() - OLD METHOD")
                                 # Warm-up reads
                                 for _i in range(2):
                                     cam.read()
                                 ok, frm = cam.read()
                                 frame = frm if ok else None
-                    except Exception:
+                                print(f"[DEBUG] Frame captured: {frame is not None}")
+                        else:
+                            print("[DEBUG] state_manager.camera is None - PROBLEM!")
+                    except Exception as e:
+                        print(f"[DEBUG] state_manager.camera access failed: {e}")
                         cam = None
                     # 2) fall back to machine globals if present
                     if frame is None:
@@ -1601,10 +1609,33 @@ def process_svg_to_grbl(
                                     frame = frm if ok else None
                         except Exception:
                             pass
-                    # 3) as last resort, proceed (do NOT open a new camera)
+                    # 3) as last resort, try centralized detection if heuristics disabled
                     if frame is None:
-                        print("[📄] Post-home paper check: no shared camera — proceeding")
-                        return True
+                        if PAPER_DISABLE_LOCAL_HEURISTICS:
+                            print("[📄] Post-home paper check: no shared camera — trying centralized detection")
+                            try:
+                                from safety.paper_detection import check_paper_before_drawing
+                                # Let centralized detection handle camera access
+                                try:
+                                    import sys
+                                    m = sys.modules.get('machine') or sys.modules.get('__main__')
+                                    if m is not None:
+                                        camera_obj = getattr(m, 'camera', None)
+                                        servos_obj = getattr(m, 'servos', None)
+                                    else:
+                                        camera_obj = servos_obj = None
+                                except Exception:
+                                    camera_obj = servos_obj = None
+
+                                result = check_paper_before_drawing(camera_obj, servos_obj, None)
+                                print(f"[📄] Centralized paper check (no shared camera) → {'YES' if result else 'NO'}")
+                                return result
+                            except Exception as e:
+                                print(f"[📄] Centralized detection failed ({e}) — proceeding")
+                                return True
+                        else:
+                            print("[📄] Post-home paper check: no shared camera — proceeding")
+                            return True
 
                     # Choose ROI: full frame if configured, else 10–90% crop
                     h, w = frame.shape[:2]
@@ -1828,9 +1859,31 @@ def process_svg_to_grbl(
                         if not PAPER_DISABLE_LOCAL_HEURISTICS:
                             print(f"[📄] Post-home paper check → {'YES' if paper_present else 'NO'} ({reason})")
                         else:
-                            # Defer decision to LLM only; suppress heuristic print
-                            paper_present = False
-                            reason = "heuristics_disabled_llm_only"
+                            # Use centralized LLM-based paper detection (when heuristics disabled)
+                            try:
+                                from safety.paper_detection import check_paper_before_drawing
+                                # Create minimal camera/servos objects for the centralized function
+                                camera_obj = type('Camera', (), {'read_frame': lambda: frame})()
+
+                                # Try to get servos from the machine module if available
+                                servos_obj = None
+                                try:
+                                    import sys
+                                    m = sys.modules.get('machine') or sys.modules.get('__main__')
+                                    if m is not None:
+                                        servos_obj = getattr(m, 'servos', None)
+                                except Exception:
+                                    pass
+
+                                # Call centralized paper detection
+                                paper_present = check_paper_before_drawing(camera_obj, servos_obj, None)
+                                reason = "centralized_llm_detection"
+                                print(f"[📄] Post-home paper check (LLM-only) → {'YES' if paper_present else 'NO'}")
+
+                            except Exception as llm_e:
+                                print(f"[📄] Centralized LLM detection failed ({llm_e}) — defaulting to NO")
+                                paper_present = False
+                                reason = f"centralized_llm_error({str(llm_e)})"
                     except Exception as e:
                         print(f"[📄] Paper check error: {e} — proceeding")
                         paper_present = True

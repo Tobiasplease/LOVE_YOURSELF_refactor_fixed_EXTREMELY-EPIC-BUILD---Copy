@@ -329,6 +329,7 @@ USE_MULTI_STEP_DRAWING_ANALYSIS = True  # Set to False for original single-promp
 # Prevent drawing on bare surfaces by checking for paper before execution
 ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
 PAPER_CHECK_METHOD = "direct"  # "direct" (direct LLM analysis) - proven reliable with text detection
+PAPER_DETECTION_TEXT = "EMPTY"  # Text to look for when no paper is present (change to "EMPTY" for clarity)
 PAPER_DETECTION_CONFIDENCE_THRESHOLD = 0.65  # LLM confidence requirement (lowered for bright environments)
 # Reference images (used by paper detection). If they do not exist, detection falls back safely.
 PAPER_PRESENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_present.jpg")
