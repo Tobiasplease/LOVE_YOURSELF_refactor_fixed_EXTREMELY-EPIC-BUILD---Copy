@@ -233,9 +233,9 @@ DRAWING_STARTUP_DELAY = 60  # Minimum seconds to wait after startup before first
 
 # State-motivated drawing system (when DEBUG_FAST_DRAWING is False)
 DRAWING_USE_STATE_MOTIVATION = not DEBUG_FAST_DRAWING  # Enable sophisticated triggering
-DRAWING_MIN_INTERVAL = 600   # 10 minutes minimum between drawings (safety)
+DRAWING_MIN_INTERVAL = 900   # 15 minutes minimum between drawings (safety)
 DRAWING_MAX_INTERVAL = 1800  # 30 minutes maximum (ensure some activity)
-DRAWING_BASE_THRESHOLD = 0.6  # Base threshold for drawing decision (0-1)
+DRAWING_BASE_THRESHOLD = 0.75  # Base threshold for drawing decision (0-1) - raised to reduce frequency
 DRAWING_NOVELTY_WEIGHT = 0.3  # How much novelty influences decision
 DRAWING_BOREDOM_WEIGHT = 0.4   # How much boredom influences decision
 DRAWING_MOOD_WEIGHT = 0.3      # How much mood influences decision
@@ -336,7 +336,7 @@ PAPER_PRESENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__fi
 PAPER_ABSENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_absent.jpg")
 # Legacy single-reference path (kept for backwards compatibility)
 PAPER_REFERENCE_IMAGE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_reference.jpg")
-PAPER_DETECTION_GAZE_PAN = 90  # Pan angle for looking down at drawing area
+PAPER_DETECTION_GAZE_PAN = 80  # Pan angle for looking down at drawing area (adjusted further left for better centering)
 PAPER_DETECTION_GAZE_TILT = 50  # Tilt angle for looking down at drawing area (lowest safe position)
 PAPER_CHECK_TIMEOUT = 10.0  # Maximum seconds to wait for paper detection
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails

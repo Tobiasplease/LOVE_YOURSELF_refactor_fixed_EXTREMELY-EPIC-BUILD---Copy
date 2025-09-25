@@ -1773,7 +1773,8 @@ def build_paper_detection_reference_prompt() -> str:
 
 def build_paper_detection_direct_prompt() -> str:
     """Build prompt for reliable text-based paper detection."""
-    return 'Do you see the text saying "NO PAPER"?\n\nAnswer: YES or NO'
+    from config.config import PAPER_DETECTION_TEXT
+    return f'Do you see the text saying "{PAPER_DETECTION_TEXT}"?\n\nAnswer: YES or NO'
 
 
 # === SIMPLE FALLBACK PROMPT SYSTEM ===

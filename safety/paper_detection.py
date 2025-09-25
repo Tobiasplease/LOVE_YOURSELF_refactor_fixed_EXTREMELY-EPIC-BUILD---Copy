@@ -365,13 +365,13 @@ Answer: YES or NO"""
         except Exception as e:
             response = f"Error: {e}"
 
-        # Parse YES/NO response - if it sees "NO PAPER" text, that means no paper present
+        # Parse YES/NO response - if it sees "EMPTY" text, that means no paper present
         response_upper = response.strip().upper()
         if 'YES' in response_upper:
-            paper_present = False  # YES = sees "NO PAPER" text = no paper present
+            paper_present = False  # YES = sees "EMPTY" text = no paper present
             confidence = 0.8
         elif 'NO' in response_upper:
-            paper_present = True   # NO = doesn't see "NO PAPER" text = paper present
+            paper_present = True   # NO = doesn't see "EMPTY" text = paper present
             confidence = 0.8
         else:
             paper_present = False
@@ -482,10 +482,10 @@ Answer: YES or NO'''
         # Parse response
         response_upper = response.strip().upper()
         if 'YES' in response_upper:
-            paper_present = False  # YES = sees "NO PAPER" text = no paper present
+            paper_present = False  # YES = sees "EMPTY" text = no paper present
             confidence = 0.8
         elif 'NO' in response_upper:
-            paper_present = True   # NO = doesn't see "NO PAPER" text = paper present
+            paper_present = True   # NO = doesn't see "EMPTY" text = paper present
             confidence = 0.8
         else:
             paper_present = False

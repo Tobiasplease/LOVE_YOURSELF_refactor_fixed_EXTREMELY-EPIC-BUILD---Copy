@@ -136,7 +136,7 @@ class DrawingController:
 
         # Add time pressure - gradually increase motivation over time
         time_factor = min(1.0, time_since_last / DRAWING_MAX_INTERVAL)
-        time_pressure = time_factor * 0.3  # Up to 0.3 additional motivation
+        time_pressure = time_factor * 0.2  # Up to 0.2 additional motivation
 
         total_motivation = motivation_score + time_pressure
 
@@ -164,13 +164,7 @@ class DrawingController:
         self.last_prompt = prompt
         self.last_drawing_prompt = prompt
 
-        # Send drawing prompt to LCD display
-        try:
-            from utils.caption_display import send_caption_to_display
-            send_caption_to_display(f"Drawing: {prompt}")
-            print(f"[LCD] Sent drawing prompt: {prompt[:40]}...")
-        except Exception as e:
-            print(f"[LCD] Failed to send drawing prompt: {e}")
+        # LCD display is now handled in handle_drawing_flow with the drawing summary
 
     # ------------------------------------------------------------------
     # main entry
@@ -292,9 +286,25 @@ class DrawingController:
                         # so introspection references the summary instead of the full ComfyUI prompt
                         state_manager.current_drawing_prompt = drawing_summary
 
+                        # Send drawing summary to LCD display for better readability
+                        try:
+                            from utils.caption_display import send_caption_to_display
+                            send_caption_to_display(f"Drawing: {drawing_summary}")
+                            print(f"[LCD] Sent drawing summary to display: {drawing_summary}")
+                        except Exception as lcd_e:
+                            print(f"[LCD] Failed to send drawing summary: {lcd_e}")
+
                     except Exception as e:
                         print(f"[⚠️] Summary generation failed: {e}")
                         drawing_summary = "drawing based on current observations"
+
+                        # Send fallback to LCD display
+                        try:
+                            from utils.caption_display import send_caption_to_display
+                            send_caption_to_display(f"Drawing: {drawing_summary}")
+                            print(f"[LCD] Sent fallback drawing summary to display: {drawing_summary}")
+                        except Exception as lcd_e:
+                            print(f"[LCD] Failed to send drawing summary: {lcd_e}")
 
                     agent.observe(f"Drawing intent: {drawing_summary}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
                     print(f"[📝] Stored drawing intent in memory: {drawing_summary}")

@@ -314,13 +314,6 @@ class ImageMonitor:
                     state_manager.finish_cnc_execution()
 
                     if no_paper_skip:
-                        # Reset cooldown so next drawing attempt isn't throttled
-                        try:
-                            if self.captioner and hasattr(self.captioner, 'drawing'):
-                                # Start cooldown now to encompass prompt+generation+execution attempt
-                                self.captioner.drawing.last_drawing_time = time.time()
-                        except Exception:
-                            pass
                         # If a generation cycle was active, end it now to avoid long timeouts blocking captions
                         try:
                             if getattr(state_manager, 'is_generating_drawing', False):
@@ -398,12 +391,6 @@ class ImageMonitor:
                         except Exception:
                             pass
                         if no_paper_skip:
-                            try:
-                                if self.captioner and hasattr(self.captioner, 'drawing'):
-                                    # Start cooldown now since full cycle was attempted but skipped
-                                    self.captioner.drawing.last_drawing_time = time.time()
-                            except Exception:
-                                pass
                             try:
                                 if self.captioner and hasattr(self.captioner, 'observe'):
                                     reason = getattr(state_manager, 'last_paper_check_reason', 'no_paper')
