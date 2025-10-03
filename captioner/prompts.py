@@ -1738,6 +1738,49 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     return final_result
 
 
+# === DRAWING VISUAL VOCABULARY HELPERS ===
+
+def get_drawing_visual_vocabulary_context(agent) -> str:
+    """Get drawing history as visual vocabulary development context."""
+    try:
+        if not hasattr(agent, 'get_memory_entries_by_type'):
+            return ""
+
+        drawing_entries = agent.get_memory_entries_by_type("drawing", limit=5)
+        if not drawing_entries or len(drawing_entries) == 0:
+            return ""
+
+        recent_count = len(drawing_entries)
+        themes = []
+
+        for entry in drawing_entries[-3:]:
+            text = entry.get("text", "")
+            timestamp = entry.get("timestamp", 0)
+
+            if text and len(text) > 20:
+                theme_snippet = text[:60].split('.')[0].strip()
+                days_ago = (time.time() - timestamp) / 86400
+
+                if days_ago < 1:
+                    time_desc = "today"
+                elif days_ago < 2:
+                    time_desc = "yesterday"
+                else:
+                    time_desc = f"{int(days_ago)} days ago"
+
+                themes.append(f"{theme_snippet} ({time_desc})")
+
+        if len(themes) >= 2:
+            return f"Recent drawings (developing visual language): {'; '.join(themes[:3])}."
+        elif themes:
+            return f"Last drawing: {themes[0]}."
+
+        return f"You've created {recent_count} drawing(s) recently."
+
+    except Exception:
+        return ""
+
+
 # === PAPER DETECTION PROMPTS ===
 
 def build_paper_detection_reference_prompt() -> str:
@@ -1772,9 +1815,8 @@ def build_paper_detection_reference_prompt() -> str:
 
 
 def build_paper_detection_direct_prompt() -> str:
-    """Build prompt for reliable text-based paper detection."""
-    from config.config import PAPER_DETECTION_TEXT
-    return f'Do you see the text saying "{PAPER_DETECTION_TEXT}"?\n\nAnswer: YES or NO'
+    """Deprecated: Paper detection now centralized in safety/paper_detection.py"""
+    raise NotImplementedError("Use safety.paper_detection.check_paper_before_drawing() instead")
 
 
 # === SIMPLE FALLBACK PROMPT SYSTEM ===

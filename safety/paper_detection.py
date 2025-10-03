@@ -193,11 +193,14 @@ class PaperDetector:
             check_image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"paper_check_{timestamp_str}.jpg")
             cv2.imwrite(check_image_path, frame)
 
+            # Crop to focus on drawing area (avoid seeing "EMPTY" sign at edges)
+            cropped_path = self._crop_detection_area(check_image_path)
+
             # Perform detection based on configured method
             if PAPER_CHECK_METHOD == "reference":
-                result = self._check_with_reference_image(check_image_path, captioner)
+                result = self._check_with_reference_image(cropped_path, captioner)
             else:  # "direct"
-                result = self._check_direct_detection(check_image_path, captioner)
+                result = self._check_direct_detection(cropped_path, captioner)
 
             # Update result with common fields
             result.check_image_path = check_image_path
@@ -249,6 +252,8 @@ class PaperDetector:
 
     def _position_gaze_for_detection(self, servos):
         """Position servos to look down at drawing area."""
+        if servos is None:
+            return  # Skip servo positioning for testing/debugging
         # Use direct servo control instead of gaze locking to prevent stuck states
         servos.set_pan(PAPER_DETECTION_GAZE_PAN)
         time.sleep(0.1)
@@ -386,14 +391,23 @@ class PaperDetector:
 
     def _single_paper_check(self, check_image_path: str, check_type: str = "primary") -> dict:
         """Perform a single paper detection check."""
-        # Two-step prompt: first list all text, then check for target - reduces hallucination
-        prompt = (
-            f'Look carefully at this image. List ALL text you can see, if any.\n'
-            f'Then answer: Is the word "{PAPER_DETECTION_TEXT}" visible in the image?\n\n'
-            f'Format:\n'
-            f'TEXT VISIBLE: [list all text you see, or "none"]\n'
-            f'ANSWER: YES or NO'
-        )
+        # Use the working step-by-step prompt from commit 3fbac10
+        if check_type == "primary":
+            prompt = f'''Please examine this image carefully using these steps:
+
+1. First, scan the entire image for any visible text, words, or writing
+2. Look specifically for the text "{PAPER_DETECTION_TEXT}" written anywhere in the image
+3. Answer YES if you can see "{PAPER_DETECTION_TEXT}" text, NO if you cannot see it
+
+Answer: YES or NO'''
+        else:  # confirmation check with different phrasing
+            prompt = f'''Look at this image step by step:
+
+1. Search the image thoroughly for any written text or words
+2. Check if the specific phrase "{PAPER_DETECTION_TEXT}" appears anywhere
+3. Respond YES if "{PAPER_DETECTION_TEXT}" text is visible, NO if it is not visible
+
+Answer: YES or NO'''
 
         # Read and encode image
         import base64
@@ -407,20 +421,12 @@ class PaperDetector:
             "prompt": prompt,
             "stream": False,
             "images": [img_b64],
-            "system": (
-                "You are a precise text detection system for safety verification. "
-                "You must be extremely careful and accurate. "
-                "ONLY report text that you can clearly and definitely see in the image. "
-                "If you are not absolutely certain you see specific text, say you do NOT see it. "
-                "Do NOT guess or imagine text that might be there. "
-                "Be skeptical and conservative - when in doubt, say NO."
-            ),
             "options": {
-                "temperature": 0.0,  # Completely deterministic
-                "top_p": 0.8,
-                "top_k": 5,
-                "repeat_penalty": 1.1,
-                "seed": None
+                "temperature": 0.1,
+                "top_p": 0.9,
+                "top_k": 10,
+                "repeat_penalty": 1.0,
+                "seed": None  # Remove fixed seed to allow variation between checks
             }
         }
 
@@ -431,42 +437,35 @@ class PaperDetector:
         except Exception as e:
             response = f"Error: {e}"
 
-        # Parse response - look for explicit YES/NO in the ANSWER section
-        response_upper = response.strip().upper()
+        # Simple YES/NO parsing
+        response_clean = response.strip().upper()
 
-        # Extract what text was actually detected
-        text_visible = "unknown"
-        if "TEXT VISIBLE:" in response_upper:
-            text_line = response.split("TEXT VISIBLE:")[1].split("\n")[0].strip()
-            text_visible = text_line
-
-        # Look for the final answer
-        answer_yes = False
-        if "ANSWER:" in response_upper:
-            answer_line = response_upper.split("ANSWER:")[1].strip()
-            answer_yes = answer_line.startswith("YES")
-        elif 'YES' in response_upper and 'NO' not in response_upper:
-            answer_yes = True
+        # Check for YES or NO in response
+        sees_text = False
+        if "YES" in response_clean and "NO" not in response_clean:
+            sees_text = True
+        elif response_clean.startswith("YES"):
+            sees_text = True
 
         # Determine paper presence
-        if answer_yes:
-            paper_present = False  # YES = sees "EMPTY" text = no paper present
+        if sees_text:
+            paper_present = False  # Sees "EMPTY" text = no paper on drawing surface
             confidence = 0.8
         else:
-            paper_present = True   # NO = doesn't see "EMPTY" text = paper present
+            paper_present = True   # Doesn't see "EMPTY" text = paper present
             confidence = 0.8
 
-        # Log what text was detected for debugging
+        # Log for debugging
         log_json_entry(
             LogType.DEBUG,
             {
                 "action": "llm_text_detection",
                 "check_type": check_type,
-                "text_visible": text_visible,
-                "answer": "YES" if answer_yes else "NO",
+                "response_preview": response[:150],
+                "sees_text": sees_text,
                 "paper_present": paper_present
             },
-            print_message=f"[📄] LLM ({check_type}): text='{text_visible}', ans={'YES' if answer_yes else 'NO'} => {'PAPER' if paper_present else 'NO PAPER'}"
+            print_message=f"[📄] LLM ({check_type}): '{response[:80]}' → TEXT={'YES' if sees_text else 'NO'} => {'PAPER' if paper_present else 'NO PAPER'}"
         )
 
         return {

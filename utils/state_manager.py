@@ -82,8 +82,8 @@ class StateManager:
                     "emotional_expressions": getattr(captioner, "emotional_expressions", []),
                     "personal_emotional_vocabulary": getattr(captioner, "personal_emotional_vocabulary", {}),
                     "emotional_patterns": getattr(captioner, "emotional_patterns", {}),
-                    # Recent memory (last 10 entries)
-                    "recent_memory": list(captioner.memory_queue)[-10:] if captioner.memory_queue else [],
+                    # Recent memory (last 50 entries for richer context)
+                    "recent_memory": list(captioner.memory_queue)[-50:] if captioner.memory_queue else [],
                     # Timer states for reflection interval
                     "last_reason_time": captioner.last_reason_time,
                 },
@@ -356,7 +356,7 @@ class StateManager:
 
         self.is_generating_drawing = False
         self.drawing_start_time = None
-        self.current_drawing_prompt = None
+        # Don't clear current_drawing_prompt yet - keep it for GRBL execution LCD display
 
     def get_drawing_status(self) -> Dict[str, Any]:
         """Get current drawing generation status."""
@@ -397,6 +397,8 @@ class StateManager:
         self.cnc_start_time = None
         self.current_gcode_file = None
         self.current_drawing_phase = None
+        # Clear the drawing prompt now that physical drawing is complete
+        self.current_drawing_prompt = None
 
         log_json_entry(
             LogType.INFO,

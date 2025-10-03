@@ -75,8 +75,9 @@ class ContextCompressionEngine:
         else:
             time_desc = f"{int(time_since / 3600)} hours ago"
 
-        return f"""ALREADY OBSERVED ({time_desc}): {self.baseline_context}\n\nDO NOT repeat these established facts.
-        Notice what's new, different, or if nothing has changed - that's meaningful too."""
+        return f"""ESTABLISHED UNDERSTANDING ({time_desc}): {self.baseline_context}
+
+Build upon this foundation. Notice how these elements evolve, interact, or develop. If patterns strengthen or shift, that's significant. Your understanding should deepen, not merely repeat."""
 
     def should_mention_evolution(self) -> bool:
         """Check if recent compression shows significant change."""

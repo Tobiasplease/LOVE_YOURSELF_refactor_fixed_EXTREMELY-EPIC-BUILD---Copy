@@ -122,7 +122,7 @@ class PaperDetectionTester:
         return frame
 
     def test_paper_detection(self):
-        """Run paper detection test on current camera view."""
+        """Run paper detection test on current camera view using centralized detection."""
         if self.testing:
             print("⏳ Test already in progress...")
             return
@@ -145,54 +145,33 @@ class PaperDetectionTester:
             cv2.imwrite(test_image_path, frame)
             print(f"📸 Captured: {test_image_path}")
 
-            # Text reading test
-            prompt = """Do you see the text saying "NO PAPER"?
-
-Answer: YES or NO"""
-
-            print("🤖 Querying Ollama with direct contextual approach...")
+            print("🤖 Using centralized paper detection system...")
             start_time = time.time()
 
-            # Query ollama with deterministic parameters for consistency
-            import base64
+            # Use the centralized paper detection system
+            from safety.paper_detection import paper_detector
 
-            import requests
+            # Create a simple camera wrapper for the test
+            class TestCamera:
+                def read_frame(self):
+                    return frame
 
-            # Read and encode image
-            with open(test_image_path, "rb") as f:
-                img_b64 = base64.b64encode(f.read()).decode("utf-8")
-
-            payload = {
-                "model": "llava:7b-v1.6-mistral-q5_1",
-                "prompt": prompt,
-                "stream": False,
-                "images": [img_b64],
-                "options": {
-                    "temperature": 0.1,  # Very low for consistency
-                    "top_p": 0.9,
-                    "top_k": 10,
-                    "repeat_penalty": 1.0,
-                    "seed": 42,  # Fixed seed for deterministic results
-                },
-            }
-
-            try:
-                response_obj = requests.post("http://localhost:11434/api/generate", json=payload, timeout=60)
-                response_obj.raise_for_status()
-                response = response_obj.json().get("response", "")
-            except Exception as e:
-                response = f"Error: {e}"
-
+            print(f"   Camera wrapper created, calling paper detector...")
+            result = paper_detector.check_paper_present(TestCamera(), None, None)
             duration = time.time() - start_time
 
-            # Parse response
-            paper_present, confidence, reason = self.parse_response(response)
+            paper_present = result.paper_present
+            confidence = result.confidence
+            reason = f"{result.method_used}"
+
+            print(f"   Raw LLM response: '{result.llm_response}'")
 
             # Display results
             print(f"\n📄 RESULTS (took {duration:.1f}s):")
             print(f"   Paper Present: {'✅ YES' if paper_present else '❌ NO'}")
             print(f"   Confidence: {confidence:.2f}")
-            print(f"   Reason: {reason}")
+            print(f"   Method: {result.method_used}")
+            print(f"   LLM Response: {result.llm_response[:200]}...")
             print(f"   Image saved: {test_image_path}")
 
             if confidence < 0.65:  # Current threshold
@@ -200,6 +179,8 @@ Answer: YES or NO"""
 
         except Exception as e:
             print(f"❌ Test failed: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.testing = False
             print("\n" + "=" * 60)
