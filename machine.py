@@ -1154,7 +1154,8 @@ def reset_camera_controls():
         debug_print("Camera controls reset to defaults", "CAMERA")
 
 # Create trackbars for real-time camera adjustment
-cv2.namedWindow("mslint camera")
+cv2.namedWindow("mslint camera", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("mslint camera", 1920, 1080)
 cv2.createTrackbar("Brightness", "mslint camera", current_brightness, 100, on_brightness_change)
 cv2.createTrackbar("Contrast", "mslint camera", current_contrast, 100, on_contrast_change)
 cv2.createTrackbar("Saturation", "mslint camera", current_saturation, 100, on_saturation_change)

@@ -155,7 +155,7 @@ GRBL_ENABLE_STROKE_FILTERING = os.getenv("GRBL_ENABLE_STROKE_FILTERING", "false"
 
 # === GRBL SEGMENTED EXECUTION ===
 # Splits large G-code files into segments to prevent buffer overload
-GRBL_ENABLE_SEGMENTED_EXECUTION = os.getenv("GRBL_ENABLE_SEGMENTED_EXECUTION", "false").lower() in ("1", "true", "yes")
+GRBL_ENABLE_SEGMENTED_EXECUTION = os.getenv("GRBL_ENABLE_SEGMENTED_EXECUTION", "true").lower() in ("1", "true", "yes")
 GRBL_MAX_SEGMENT_SIZE = int(os.getenv("GRBL_MAX_SEGMENT_SIZE", 150))  # Lines per segment
 GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAUSE", "false").lower() in ("1", "true", "yes")
 
@@ -207,7 +207,7 @@ UARM_DEFAULT_SPEED = 100        # Default movement speed (1-250)
 UARM_PLAY_AFTER_DRAW = True
 UARM_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "paper_move_20250922_142926.txt",  # Paper movement after GRBL completion
+    "paper_move_20250930_203603.txt",  # Paper movement after GRBL completion
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
@@ -227,18 +227,20 @@ CAPTION_INTERVAL = 10  # seconds between full caption cycles
 # Drawing system intervals
 DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
 REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
-DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 180  # 1 minute debug vs 3 minutes normal
+DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 1200  # 1 minute debug vs 20 minutes normal (check frequency)
 DRAWING_COOLDOWN = 120 if DEBUG_FAST_DRAWING else 720  # 2 minutes debug vs 12 minutes normal
 DRAWING_STARTUP_DELAY = 60  # Minimum seconds to wait after startup before first drawing (camera initialization)
 
 # State-motivated drawing system (when DEBUG_FAST_DRAWING is False)
 DRAWING_USE_STATE_MOTIVATION = not DEBUG_FAST_DRAWING  # Enable sophisticated triggering
-DRAWING_MIN_INTERVAL = 900   # 15 minutes minimum between drawings (safety)
-DRAWING_MAX_INTERVAL = 1800  # 30 minutes maximum (ensure some activity)
-DRAWING_BASE_THRESHOLD = 0.75  # Base threshold for drawing decision (0-1) - raised to reduce frequency
+DRAWING_MIN_INTERVAL = 120   # 2 minutes minimum between drawings (documentation mode)
+DRAWING_MAX_INTERVAL = 180   # 3 minutes maximum (documentation mode) - forces drawing if threshold not met
+DRAWING_BASE_THRESHOLD = 0.72  # Base threshold for drawing decision (0-1) - raised to make drawing more selective
 DRAWING_NOVELTY_WEIGHT = 0.3  # How much novelty influences decision
 DRAWING_BOREDOM_WEIGHT = 0.4   # How much boredom influences decision
 DRAWING_MOOD_WEIGHT = 0.3      # How much mood influences decision
+DRAWING_PERSON_WEIGHT = 0.4    # How much person presence influences decision
+DRAWING_PERSON_BONUS = 0.2     # Additional motivation boost when person detected
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
@@ -268,8 +270,8 @@ TINYLLAMA_TIMEOUT = 20  # Timeout in seconds for TinyLlama queries
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
 # === CAMERA RESOLUTION ===
-CAMERA_WIDTH = 1920   # Full HD width for high quality image processing
-CAMERA_HEIGHT = 1080  # Full HD height for high quality image processing
+CAMERA_WIDTH = 2560   # 2K width for maximum quality (documentation mode)
+CAMERA_HEIGHT = 1440  # 2K height for maximum quality (documentation mode)
 
 # === CAMERA IMAGE QUALITY ===
 CAMERA_SHARPNESS = -1      # Sharpness (0-100, -1 for auto/default)
