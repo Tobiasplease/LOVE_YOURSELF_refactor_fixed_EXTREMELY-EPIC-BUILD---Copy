@@ -24,6 +24,7 @@ int currentLung = 90;
 
 void setup() {
   Serial.begin(9600);
+  Serial.println("DEVICE_ID:SERVO_CONTROLLER");
   Serial.println("READY");
 }
 
@@ -34,7 +35,8 @@ void loop() {
     Serial.println("Received: " + line);
 
     if (line.startsWith("PAN:")) {
-      targetPan = constrain(line.substring(4).toInt(), 0, 180);
+      // Expanded natural head movement: ±45° from center (45-135°)
+      targetPan = constrain(line.substring(4).toInt(), 45, 135);
       if (!panAttached) {
         panServo.attach(9);
         panAttached = true;
@@ -42,7 +44,8 @@ void loop() {
     }
 
     else if (line.startsWith("TILT:")) {
-      targetTilt = constrain(line.substring(5).toInt(), 0, 180);
+      // Expanded natural head movement: ±40° from center (50-130°)
+      targetTilt = constrain(line.substring(5).toInt(), 50, 130);
       if (!tiltAttached) {
         tiltServo.attach(10);
         tiltAttached = true;
@@ -51,8 +54,10 @@ void loop() {
 
     else if (line.startsWith("LUNG:")) {
       String value = line.substring(5);
-      if (value == "hold" || value == "slow") {
-        lungMode = value;
+      if (value == "hold") {
+        lungMode = value;  // Stop autonomous breathing, hold position
+      } else if (value == "slow") {
+        lungMode = value;  // Enable autonomous breathing (fallback mode)
       } else {
         int angle = value.toInt();
         if (!lungAttached) {
@@ -60,33 +65,34 @@ void loop() {
           lungAttached = true;
         }
         lungServo.write(constrain(angle, 0, 180));
-        lungMode = "hold";
+        lungMode = "python";  // Set to python-controlled mode
       }
     }
   }
 
   updatePanTilt();
   updateLung();
-  delay(30);  // run loop ~30Hz
+  delay(10);  // run loop ~100Hz for smoother movement
 }
 
 void updatePanTilt() {
-  if (panAttached) {
-    if (abs(currentPan - targetPan) > 2) {
-      currentPan += (targetPan > currentPan) ? 2 : -2;
-      panServo.write(currentPan);
-    }
+  // Direct control - Python already handles smoothing perfectly
+  // This eliminates double-smoothing and choppy movement
+  
+  if (panAttached && currentPan != targetPan) {
+    currentPan = targetPan;
+    panServo.write(currentPan);
   }
 
-  if (tiltAttached) {
-    if (abs(currentTilt - targetTilt) > 2) {
-      currentTilt += (targetTilt > currentTilt) ? 2 : -2;
-      tiltServo.write(currentTilt);
-    }
+  if (tiltAttached && currentTilt != targetTilt) {
+    currentTilt = targetTilt;
+    tiltServo.write(currentTilt);
   }
 }
 
 void updateLung() {
+  // Only run autonomous breathing when explicitly in "slow" mode (fallback)
+  // Python-controlled mode ("python") and hold mode ("hold") don't use this
   if (lungMode != "slow" || !lungAttached) return;
 
   unsigned long now = millis();

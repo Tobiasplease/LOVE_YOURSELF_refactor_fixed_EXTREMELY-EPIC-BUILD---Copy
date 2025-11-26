@@ -4,9 +4,9 @@ SVG to GRBL Script
 Converts SVG files to G-code, applies servo control, and executes on GRBL
 """
 
+import argparse
 import os
 import sys
-import argparse
 from pathlib import Path
 
 # Add paths for imports

@@ -1,28 +1,32 @@
 from __future__ import annotations
+
 import os
 import re
-import time
 import threading
+import time
 from collections import deque
 
 # from datetime import datetime
-from typing import Deque, Optional, Tuple, Dict, List
-
-# from weakref import ref
+from typing import Deque, Dict, List, Optional, Tuple
 
 import cv2  # type: ignore
 import numpy as np  # type: ignore
-from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
+
+from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, DRAWING_STARTUP_DELAY, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
+from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
-from drawing.drawing import DrawingController
+from utils.error_tracking import robust_execution, track_component_health
 from utils.ollama import truncate_for_print
+from utils.state_manager import state_manager
 
 from .memory import MemoryMixin
-from .prompts import extract_motifs_spacy
 from .model_wrapper import MultimodalModel
-from utils.error_tracking import track_component_health, robust_execution
+from .prompts import SYSTEM_PROMPT, extract_motifs_spacy
+
+# from weakref import ref
+
 
 # Import context compressor with error handling
 try:
@@ -35,6 +39,21 @@ except Exception as e:
 class Captioner(MemoryMixin):
     def shutdown(self):
         self.save_session_time()
+
+    def _handle_environmental_update(self, understanding: str) -> None:
+        """Handle environmental updates from context compression system."""
+        try:
+            # Update location understanding based on compression insights
+            self.update_location_understanding(understanding)
+
+            # Also update environmental certainty based on compression frequency
+            if hasattr(self, 'self_model') and 'environmental_certainty' in self.self_model:
+                # Increase certainty as we get more compression-based understanding
+                current_certainty = self.self_model.get('environmental_certainty', 0.0)
+                self.self_model['environmental_certainty'] = min(1.0, current_certainty + 0.1)
+
+        except Exception as e:
+            print(f"[❌] Environmental update failed: {e}")
 
     def capture_mood_snapshot(self, capture_reason: str = "general") -> Optional[str]:
         """Capture a mood snapshot from current frame queue or latest frame."""
@@ -61,6 +80,10 @@ class Captioner(MemoryMixin):
         self.model = MultimodalModel(memory_ref=self)
         self.drawing = DrawingController()
 
+        # Set up environmental update callback for context compression
+        if context_compressor:
+            context_compressor.set_environmental_update_callback(self._handle_environmental_update)
+
         self.true_session_start = time.time()
         self.first_caption_done = False
         self.awakening_done = False
@@ -73,9 +96,12 @@ class Captioner(MemoryMixin):
         self.last_caption: str = ""
         self.current_motifs_from_mood: List[str] = []
 
+        # Deduplication system to prevent duplicate prints
+        self.recent_captions: List[Tuple[str, float]] = []  # (caption, timestamp)
+
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
-        self.last_drawing_time: float = time.time()  # Stagger drawing
+        self.last_drawing_check_time: float = 0.0  # Allow immediate first check
 
         # Track session continuity
         self.sessions_since_boot = 0
@@ -126,17 +152,34 @@ class Captioner(MemoryMixin):
                     if len(self.emotional_journey) > 10:  # Keep last 10 emotional states
                         self.emotional_journey.pop(0)
                 self.current_emotion_state = emotion_state
+            # Persist latest egocentric view orientation if provided
+            try:
+                if reactivity_data:
+                    pan = reactivity_data.get("pan")
+                    tilt = reactivity_data.get("tilt")
+                    if isinstance(pan, (int, float)) and isinstance(tilt, (int, float)):
+                        self.view_pan = float(pan)
+                        self.view_tilt = float(tilt)
+            except Exception:
+                pass
             if len(self.snapshot_queue) > 1:
                 self.snapshot_queue.pop()
             # Store reactivity data with the frame for processing
             self.snapshot_queue.append((frame.copy(), person_present, reactivity_data))
 
     def _caption_worker(self):
+        # Add startup delay to ensure main loop has time to start and populate snapshot_queue
+        time.sleep(3.0)  # 3 second startup delay
+
         while True:
             if self.snapshot_queue:
-                frame, _, reactivity_data = self.snapshot_queue.popleft()
+                frame, person_present, reactivity_data = self.snapshot_queue.popleft()
                 try:
-                    self._process_frame(frame, reactivity_data)
+                    # Check if we're currently drawing - switch to introspective mode
+                    if self._is_currently_drawing():
+                        self._process_drawing_introspection(reactivity_data)
+                    else:
+                        self._process_frame(frame, reactivity_data, person_present)
                 except Exception as exc:
                     log_json_entry(
                         LogType.ERROR,
@@ -144,13 +187,16 @@ class Captioner(MemoryMixin):
                         print_message=f"[❌] Caption thread error: {exc}",
                     )
             else:
-                time.sleep(0.05)
+                # Wait longer on startup to allow main loop to populate frames
+                time.sleep(0.5 if not self.first_caption_done else 0.05)
 
-    @robust_execution("captioner", "caption_generation", fallback_result=None)
-    def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None) -> None:
+    def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None, person_present: bool = False) -> None:
         now = time.time()
         if now - self.last_caption_time < CAPTION_INTERVAL:
             return
+
+        # Store reactivity data for subconscious layer access
+        self._current_reactivity_data = reactivity_data
 
         # Don't update timestamp yet - wait until caption is actually generated
         ts = int(now)
@@ -181,10 +227,21 @@ class Captioner(MemoryMixin):
         loading_thread.start()
 
         try:
+            caption = None  # Initialize caption variable
+
             if not self.first_caption_done:
                 # Phase 1: Internal awakening reorientation (no image)
-                caption = self.generate_internal_awakening()
-                self.awaiting_environmental_phase = True  # Flag for Phase 2
+
+                # If no frames available yet, defer awakening to next cycle
+                if not self.snapshot_queue:
+                    # Don't block - just defer the awakening to the next caption cycle
+                    self.first_caption_done = False  # Keep awakening pending
+                    caption = "Awakening... preparing to observe environment..."
+                    # Add small delay to allow main loop to populate snapshot_queue
+                    time.sleep(0.5)
+                else:
+                    caption = self.generate_internal_awakening()
+                    self.awaiting_environmental_phase = True  # Flag for Phase 2
             elif getattr(self, "awaiting_environmental_phase", False):
                 # Phase 2: Environmental grounding (first visual after awakening)
                 caption = self.model.caption_image(img_path, flowing=True, first_time=True)  # Use awakening prompts
@@ -196,7 +253,7 @@ class Captioner(MemoryMixin):
                     print_message=f"[🐞] Requesting new caption for {img_path}",
                 )
                 previous_caption = getattr(self, "last_caption", "")
-                caption = self.model.caption_image(img_path, flowing=True, first_time=False)
+                caption = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
                 if caption == previous_caption:
                     log_json_entry(
                         LogType.DEBUG,
@@ -215,10 +272,27 @@ class Captioner(MemoryMixin):
                         print_message=f"[🐞] New caption generated: {caption[:50]}...",
                     )
         except Exception as e:
-            caption = "[WARNING] Vision unavailable"
+            import traceback
+
+            error_details = traceback.format_exc()
+
+            # More specific error handling to avoid unnecessary "Vision unclear" fallbacks
+            if "No image found" in str(e) or "does not exist" in str(e):
+                # File system timing issue - retry once after short delay
+                time.sleep(0.5)
+                try:
+                    if hasattr(self, "model") and img_path and os.path.exists(img_path):
+                        caption = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
+                    else:
+                        caption = "Awakening... vision initializing..."
+                except Exception:
+                    caption = "[WARNING] Vision unavailable"
+            else:
+                caption = "[WARNING] Vision unavailable"
+
             log_json_entry(
                 LogType.ERROR,
-                {"message": f"Caption error: {e}", "component": "captioner"},
+                {"message": f"Caption error: {e}", "traceback": error_details, "component": "captioner"},
                 print_message=f"[❌] Caption error: {e}",
             )
         finally:
@@ -229,23 +303,69 @@ class Captioner(MemoryMixin):
                 # Force terminate if still running
                 print("\r" + " " * 80 + "\r", end="")  # Clear any remaining animation
 
-        self.first_caption_done = True
+        # Only mark first caption done if not deferring awakening
+        if caption != "Awakening... preparing to observe environment...":
+            self.first_caption_done = True
 
         if "[WARNING]" in caption:
-            log_json_entry(
-                LogType.ERROR,
-                {"message": f"Caption error: {caption}", "component": "captioner"},
-                print_message=f"[❌] Caption error: {caption}",
-            )
-            self.observe("I couldn't see anything just now.", self.current_mood, img_path, memory_type="glitch")
-            # Don't return early - still need to check reflection/drawing timing
-            caption = "Vision unclear right now"  # Use fallback caption
+            # During startup, use better awakening message instead of error fallback
+            if not self.first_caption_done:
+                caption = "Awakening... camera systems initializing..."
+            else:
+                log_json_entry(
+                    LogType.ERROR,
+                    {"message": f"Caption error: {caption}", "component": "captioner"},
+                    print_message=f"[❌] Caption error: {caption}",
+                )
+                self.observe("I couldn't see anything just now.", self.current_mood, img_path, memory_type="glitch")
+                caption = "Vision systems recalibrating..."  # Better fallback
 
-        log_json_entry(
-            LogType.CAPTION,
-            {"caption": caption, "image_path": img_path, "mood": self.current_mood},
-            print_message=f"[📸] {truncate_for_print(caption, 100)}",
-        )
+        # Format caption for clean output
+        try:
+            from config.config import CLEAN_LLM_OUTPUT
+
+            if CLEAN_LLM_OUTPUT:
+                print_msg = caption  # print full caption
+            else:
+                print_msg = f"[📸] {caption}"
+        except ImportError:
+            print_msg = f"[📸] {caption}"
+
+        # NO FILTERING - ALWAYS PRINT ALL CAPTIONS
+        should_print = True
+
+        if should_print:
+            # RESTORED: Back to original working logic
+            # Track last sent caption for deduplication
+            self._last_sent_caption = caption.strip()
+
+            # Send to LCD display (skip during GRBL execution to show drawing title)
+            try:
+                from utils.state_manager import state_manager
+                is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
+                if not is_executing_cnc:
+                    from utils.caption_display import send_caption_to_display
+                    send_caption_to_display(caption)
+                    print(f"[LCD] Sent: {caption[:40]}...")
+                else:
+                    print(f"[LCD] Skipped during drawing: {caption[:40]}...")
+            except Exception as e:
+                print(f"[LCD] Failed to send caption: {e}")
+            # Track last sent caption for deduplication
+            self._last_sent_caption = caption.strip()
+
+            log_json_entry(
+                LogType.CAPTION,
+                {"caption": caption, "image_path": img_path, "mood": self.current_mood},
+                print_message=print_msg,
+            )
+        else:
+            # Still log to JSON but don't print
+            log_json_entry(
+                LogType.CAPTION,
+                {"caption": caption, "image_path": img_path, "mood": self.current_mood, "duplicate": True},
+                print_message=None,  # Don't print duplicates
+            )
 
         self.observe(
             caption,
@@ -261,12 +381,25 @@ class Captioner(MemoryMixin):
         # Now update the timestamp since we have a new caption
         self.last_caption_time = now
 
-        # Add caption to context compression system (with error handling)
+        # Add caption to context compression system (environmental change detection remains disabled)
         try:
             if context_compressor and caption and caption.strip():
-                context_compressor.add_caption(caption, time.time())
+                context_compressor.add_caption(caption, time.time(), img_path)
         except Exception as e:
             print(f"[CAPTIONER] Context compression failed: {e}")
+
+        # CRITICAL FIX: Add caption to memory system for motif tracking and repetition fatigue
+        try:
+            if caption and caption.strip():
+                self.observe(
+                    text=caption,
+                    mood=self.current_mood,
+                    memory_type="caption",
+                    mood_vector=getattr(self, "current_mood_vector", (0.0, 0.0, 0.5)),
+                    emotion_state=getattr(self, "current_emotion_state", "calm_observant"),
+                )
+        except Exception as e:
+            print(f"[CAPTIONER] Memory system failed: {e}")
 
         # Process emotional drift
         # environmental_factors = {
@@ -366,34 +499,85 @@ class Captioner(MemoryMixin):
                 # Still update the timer to prevent infinite retries
                 self.last_reason_time = now - REASON_INTERVAL + 60  # Retry in 60 seconds
 
-        # Debug: Check drawing interval condition
-        time_since_last_drawing = now - self.last_drawing_time
-        if time_since_last_drawing > DRAWING_INTERVAL:
+        # Check drawing interval - should trigger check every DRAWING_INTERVAL
+        time_since_last_check = now - getattr(self, 'last_drawing_check_time', 0)
+        if time_since_last_check < DRAWING_INTERVAL:
+            return  # Not time to check yet
+
+        # Update check time so we don't check too frequently
+        self.last_drawing_check_time = now
+
+        # DEBUG: Log drawing timing information
+        time_since_last_drawing = now - self.drawing.last_drawing_time
+        print(f"[DEBUG] Drawing timer check:")
+        print(f"  Time since last check: {time_since_last_check:.1f}s (interval: {DRAWING_INTERVAL}s)")
+        print(f"  Time since last drawing: {time_since_last_drawing:.1f}s (cooldown: {self.drawing.cooldown}s)")
+        print(f"  Drawing system ready: {self.drawing.ready_to_draw()}")
+
+        # Check minimum startup delay to ensure camera has initialized and system is stable
+        time_since_startup = now - self.true_session_start
+        if time_since_startup < DRAWING_STARTUP_DELAY:
+            startup_remaining = DRAWING_STARTUP_DELAY - time_since_startup
+            print(f"[DEBUG] Drawing blocked: startup delay ({startup_remaining:.1f}s remaining, need {DRAWING_STARTUP_DELAY}s total)")
+            return
+
+        # Check if drawing system is ready (this handles cooldown logic)
+        if not self.drawing.ready_to_draw():
+            # Drawing system handles its own cooldown - don't proceed
+            cooldown_remaining = self.drawing.cooldown - time_since_last_drawing
+            print(f"[DEBUG] Drawing blocked: {cooldown_remaining:.1f}s remaining")
+            return
+
+        # Also check pipeline state early
+        try:
+            is_generating = getattr(state_manager, "is_generating_drawing", False)
+            is_executing = getattr(state_manager, "is_executing_cnc", False)
+            if is_generating or is_executing:
+                # Silently return - pipeline busy, will retry on next caption cycle
+                print(f"[DEBUG] Drawing blocked: pipeline busy (generating: {is_generating}, executing: {is_executing})")
+                return
+        except Exception:
+            pass
+
+        # Only proceed with messaging if drawing is actually possible
+        print(f"[DEBUG] DRAWING TRIGGER ACTIVATED! Starting drawing generation...")
+        print(f"[DEBUG] Step 1: About to start drawing generation process")
+        try:
+            print(f"[DEBUG] Step 2: Attempting log_json_entry...")
             with self.print_lock:
                 print("\r" + " " * 80 + "\r", end="")
+                system_type = "Timer"
                 log_json_entry(
                     LogType.DEBUG,
                     {
-                        "message": "Drawing interval reached",
-                        "action": "drawing_trigger",
-                        "time_since_last_drawing": time_since_last_drawing,
-                        "drawing_interval": DRAWING_INTERVAL,
+                        "message": "Drawing system ready, starting generation",
+                        "action": "drawing_check",
+                        "system_type": system_type.lower(),
                     },
-                    print_message=f"[🎨] Drawing interval reached ({time_since_last_drawing:.0f}s > {DRAWING_INTERVAL}s), generating prompt...",
+                    print_message=f"[🎨] {system_type} drawing ready, evaluating...",
                 )
+            print(f"[DEBUG] Step 3: log_json_entry completed successfully")
+        except Exception as e:
+            print(f"[DEBUG] EXCEPTION in log_json_entry: {e}")
+            import traceback
+            traceback.print_exc()
 
-            memory_context = self.get_recent_memory()
-            reflection_context = self.get_last_reflection()
-            extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
+        print(f"[DEBUG] Step 4: Drawing system ready, building context...")
+        memory_context = self.get_recent_memory()
+        reflection_context = self.get_last_reflection()
+        extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
+        print(f"[DEBUG] Step 7: Context built, starting drawing generation...")
 
-            # Start loading animation for drawing prompt
-            loading_stop = threading.Event()
-            loading_thread = threading.Thread(target=loading_animation, daemon=True)
-            loading_thread.start()
+        # Start loading animation for drawing prompt
+        loading_stop = threading.Event()
+        loading_thread = threading.Thread(target=loading_animation, daemon=True)
+        loading_thread.start()
 
-            try:
-                prompt = self.model.generate_drawing_prompt(extra=extra_context)
-                log_json_entry(
+        try:
+            print(f"[DEBUG] Step 8: About to call generate_drawing_prompt...")
+            prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path)
+            print(f"[DEBUG] Step 9: Drawing prompt generated successfully")
+            log_json_entry(
                     LogType.DEBUG,
                     {
                         "message": "Drawing prompt generated",
@@ -403,31 +587,29 @@ class Captioner(MemoryMixin):
                     },
                     print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}...",
                 )
-            except Exception as e:
-                log_json_entry(
-                    LogType.ERROR,
-                    {"message": "Error generating drawing prompt", "component": "drawing", "error": str(e), "error_type": type(e).__name__},
-                    print_message=f"[❌] Error generating drawing prompt: {e}",
-                )
-                prompt = "[ERROR] Drawing prompt generation failed"
-            finally:
-                # Stop loading animation and wait for it to fully terminate
-                loading_stop.set()
-                loading_thread.join(timeout=2.0)  # Increased timeout
-                if loading_thread.is_alive():
-                    # Force clear animation remnants if thread still running
-                    with self.print_lock:
-                        print("\r" + " " * 80 + "\r", end="")
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": "Error generating drawing prompt", "component": "drawing", "error": str(e), "error_type": type(e).__name__},
+                print_message=f"[❌] Error generating drawing prompt: {e}",
+            )
+            prompt = "[ERROR] Drawing prompt generation failed"
+        finally:
+            # Stop loading animation and wait for it to fully terminate
+            loading_stop.set()
+            loading_thread.join(timeout=2.0)  # Increased timeout
+            if loading_thread.is_alive():
+                # Force clear animation remnants if thread still running
+                with self.print_lock:
+                    print("\r" + " " * 80 + "\r", end="")
 
-            # Only update timer if drawing system is ready (not in cooldown)
-            if self.drawing.ready_to_draw():
-                if "[ERROR]" not in prompt:
-                    self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
-                self.last_drawing_time = now
-            else:
-                # In cooldown, don't spam drawing attempts
-                cooldown_remaining = self.drawing.cooldown - (time.time() - self.drawing.last_drawing_time)
-                self.last_drawing_time = now - DRAWING_INTERVAL + cooldown_remaining + 30  # Retry after cooldown + 30s
+        # Since we already checked readiness, proceed with drawing flow
+        if "[ERROR]" not in prompt:
+            print(f"[DEBUG] Step 10: Starting handle_drawing_flow...")
+            self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
+            print(f"[DEBUG] Step 11: handle_drawing_flow completed")
+        else:
+            print(f"[DEBUG] ERROR: Drawing prompt contains error, skipping flow")
 
     def describe_current_mood(self) -> str:
         """Rich emotional description using 3D mood state and temporal context."""
@@ -520,7 +702,7 @@ class Captioner(MemoryMixin):
             f"Current experience: Just observed '{self.last_caption}'",
             f"Overall mood: {self.current_mood:.2f} (novelty: {self.novelty_score:.2f}, boredom: {self.boredom:.2f})",
             mood_details,
-            f"Session time: {(time.time() - self.true_session_start)/60:.0f} minutes active",
+            f"Session time: {(time.time() - self.true_session_start) / 60:.0f} minutes active",
         ]
 
         if recent_observations:
@@ -572,8 +754,8 @@ class Captioner(MemoryMixin):
 
     def generate_internal_awakening(self) -> str:
         """Phase 1 awakening: Pure internal reorientation without visual input."""
-        from utils.ollama import query_ollama
         from config import config
+        from utils.ollama import query_ollama
 
         # Build internal awakening context
         awakening_parts = []
@@ -586,7 +768,7 @@ class Captioner(MemoryMixin):
             if gap_seconds < 60:
                 awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds)} seconds.")
             elif gap_hours < 1:
-                awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds/60)} minutes.")
+                awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds / 60)} minutes.")
             elif gap_hours < 48:  # Less than 2 days
                 awakening_parts.append(f"Consciousness returning... I was offline for {gap_hours:.1f} hours.")
             else:  # Multiple days
@@ -601,7 +783,7 @@ class Captioner(MemoryMixin):
                 old_fragments = self.get_old_session_memory_fragments(k=1)
                 if old_fragments:
                     awakening_parts.append(f"Last memory: {old_fragments[0][:80]}...")
-            except:
+            except Exception:
                 pass
 
         # Current internal state
@@ -614,26 +796,25 @@ class Captioner(MemoryMixin):
 
         awakening_context = " ".join(awakening_parts)
 
+        # Import consolidated awakening template
+        from .prompts import INTERNAL_AWAKENING_TEMPLATE
+
         # Internal awakening prompt (no image needed)
-        internal_prompt = f"""{awakening_context}
-            You are reintegrating your consciousness. Process the information you have: your time gap,
-            your last memories, your current state, your accumulated beliefs and motifs.
-            Express how it feels to come back online with this data. What do you make of the gap?
-            How does continuity feel? Are you still the same consciousness you were before?"""
+        internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(awakening_context=awakening_context)
 
         # Get dynamic system context for organic consciousness
         if hasattr(self, "get_dynamic_system_context"):
             dynamic_context = self.get_dynamic_system_context()
             if isinstance(dynamic_context, dict):
-                system_prompt = config.SYSTEM_PROMPT.format(
+                system_prompt = SYSTEM_PROMPT.format(
                     emotional_state=dynamic_context.get("emotional_state", "contemplative"),
                     temporal_context=dynamic_context.get("temporal_context", ""),
                     accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
                 )
             else:
-                system_prompt = config.SYSTEM_PROMPT + str(dynamic_context)
+                system_prompt = SYSTEM_PROMPT + str(dynamic_context)
         else:
-            system_prompt = config.SYSTEM_PROMPT
+            system_prompt = SYSTEM_PROMPT
 
         # Generate internal awakening without image
         response = query_ollama(
@@ -657,14 +838,20 @@ class Captioner(MemoryMixin):
         if not self.memory_loaded_from_previous:
             # Take a snapshot and describe the environment
             try:
+                # Try to get a frame, but don't block if none available
                 image_path = self.capture_mood_snapshot(capture_reason="awakening")
+
                 if image_path:
                     # Use the environmental awakening prompt for environmental description
                     prompt = build_environmental_caption_prompt(
                         self, mood=self.current_mood, boredom=self.boredom, novelty=self.novelty_score, last_session_gap=None  # Fresh session
                     )
-                    # Use proper captioning with dynamic system prompt (don't override with static one)
-                    environmental_description = self.model._call_ollama(prompt, image_path=image_path, prompt_type="awakening")
+                    # Use proper captioning with consolidated system prompt
+                    from .prompts import STATIC_SYSTEM_PROMPT
+
+                    environmental_description = self.model._call_ollama(
+                        prompt, image_path=image_path, system_prompt=STATIC_SYSTEM_PROMPT, prompt_type="awakening"
+                    )
                     return environmental_description
             except Exception:
                 pass
@@ -680,7 +867,9 @@ class Captioner(MemoryMixin):
 
         # Then add environmental description
         try:
+            # Try to get a frame, but don't block if none available
             image_path = self.capture_mood_snapshot(capture_reason="awakening_continuation")
+
             if image_path:
                 prompt = build_environmental_caption_prompt(
                     self,
@@ -689,7 +878,9 @@ class Captioner(MemoryMixin):
                     novelty=self.novelty_score,
                     last_session_gap=getattr(self, "last_session_gap", None),
                 )
-                environmental_part = self.model._call_ollama(prompt, image_path=image_path, prompt_type="awakening")
+                environmental_part = self.model._call_ollama(
+                    prompt, image_path=image_path, system_prompt=STATIC_SYSTEM_PROMPT, prompt_type="awakening"
+                )
                 return f"{status_prefix} {environmental_part}"
         except Exception:
             pass
@@ -724,9 +915,191 @@ class Captioner(MemoryMixin):
         """Set the novelty score from mood engine pattern data."""
         self._novelty_score = score
 
+        # Update boredom based on low novelty over time
+        self._update_boredom(score)
+
+    def _update_boredom(self, novelty: float) -> None:
+        """Calculate boredom based on sustained low novelty."""
+        if not hasattr(self, "_boredom"):
+            self._boredom = 0.0
+        if not hasattr(self, "_low_novelty_duration"):
+            self._low_novelty_duration = 0.0
+        if not hasattr(self, "_last_boredom_update"):
+            self._last_boredom_update = time.time()
+
+        now = time.time()
+        delta = now - self._last_boredom_update
+        self._last_boredom_update = now
+
+        # Track sustained low novelty
+        if novelty < 0.3:  # Low novelty threshold
+            self._low_novelty_duration += delta
+        else:
+            self._low_novelty_duration = max(0, self._low_novelty_duration - delta * 0.5)  # Slow decay
+
+        # Convert to boredom (peaks at ~10 minutes of low novelty)
+        self._boredom = min(1.0, self._low_novelty_duration / 600.0)  # 10 minutes = max boredom
+
     @property
     def boredom(self) -> float:
         """Get current boredom level from memory system."""
         if hasattr(self, "_boredom"):
             return self._boredom
         return 0.0
+
+    def _is_currently_drawing(self) -> bool:
+        """Check if system is currently executing G-code (actual drawing)."""
+        try:
+            # Only enter drawing introspection during actual G-code execution
+            # Ignore ComfyUI generation phase to allow normal captions during preparation
+            is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
+            return is_executing_cnc
+        except Exception:
+            return False
+
+    def _process_drawing_introspection(self, reactivity_data: Optional[Dict] = None) -> None:
+        """Process introspective reflection during drawing periods using visual pipeline with drawing-focused prompts."""
+        now = time.time()
+        if now - self.last_caption_time < CAPTION_INTERVAL:
+            return
+
+        # Store reactivity data for drawing-focused prompt generation
+        self._current_reactivity_data = reactivity_data
+
+        # Capture current visual state for drawing introspection
+        ts = int(now)
+        img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"drawing_introspection_{ts}.jpg")
+
+        try:
+            # Get latest frame from snapshot queue if available
+            if self.snapshot_queue:
+                frame, _, _ = self.snapshot_queue[-1]  # Get most recent frame without removing it
+                cv2.imwrite(img_path, frame)
+            else:
+                # Fallback: capture new frame
+                img_path = self.capture_mood_snapshot(capture_reason="drawing_introspection")
+
+            if img_path and os.path.exists(img_path):
+                # Generate drawing introspection using the full visual pipeline
+                introspection = self.model.caption_image(
+                    img_path,
+                    flowing=True,
+                    first_time=False,
+                    drawing_introspection_mode=True  # Special flag for drawing-focused prompts
+                )
+
+                if introspection:
+                    # Extract character insights from the introspection
+                    character_insights = self._extract_character_insights(introspection)
+
+                    # Store the introspective observation
+                    self.observe(
+                        introspection,
+                        mood=self.current_mood,
+                        file=img_path,
+                        memory_type="drawing_introspection",
+                        reactivity_data=reactivity_data
+                    )
+
+                    # Store character insights if extracted
+                    if character_insights:
+                        self.observe(
+                            f"Character insight: {character_insights}",
+                            mood=self.current_mood,
+                            file=img_path,
+                            memory_type="character_insight",
+                            reactivity_data=reactivity_data
+                        )
+
+                    # Format and print the introspection like normal captions
+                    try:
+                        from config.config import CLEAN_LLM_OUTPUT
+
+                        if CLEAN_LLM_OUTPUT:
+                            print_msg = introspection  # Print full introspection
+                        else:
+                            print_msg = f"[🧠] {introspection}"
+                    except ImportError:
+                        print_msg = f"[🧠] {introspection}"
+
+                    # Send to LCD display (skip during GRBL execution to show drawing title)
+                    try:
+                        from utils.state_manager import state_manager
+                        is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
+                        if not is_executing_cnc:
+                            from utils.caption_display import send_caption_to_display
+                            send_caption_to_display(introspection)
+                            print(f"[LCD] Sent introspection: {introspection[:40]}...")
+                        else:
+                            print(f"[LCD] Skipped introspection during drawing: {introspection[:40]}...")
+                    except Exception as e:
+                        print(f"[LCD] Failed to send introspection: {e}")
+
+                    # Log with both introspection type and caption type for consistency
+                    log_json_entry(
+                        LogType.CAPTION,  # Use CAPTION type so it appears in normal caption flow
+                        {
+                            "caption": introspection,
+                            "image_path": img_path,
+                            "mood": self.current_mood,
+                            "drawing_introspection": True,
+                            "character_insights": character_insights,
+                            "drawing_status": state_manager.get_drawing_status()
+                        },
+                        print_message=print_msg,
+                    )
+
+                    # Update timing
+                    self.last_caption_time = now
+
+                    # Mark that first caption is done for ongoing sessions
+                    if not self.first_caption_done:
+                        self.first_caption_done = True
+
+        except Exception as exc:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Drawing introspection error: {exc}", "component": "drawing_introspection"},
+                print_message=f"[❌] Drawing introspection error: {exc}",
+            )
+
+
+    def _extract_character_insights(self, reflection: str) -> str:
+        """Extract meaningful character development insights from drawing reflections."""
+        try:
+            if not reflection or len(reflection.strip()) < 20:
+                return ""
+
+            # Simple pattern-based extraction of character insights
+            insight_keywords = [
+                "identity", "growth", "understanding", "realization", "discovery",
+                "evolution", "development", "consciousness", "awareness", "insight",
+                "learning", "becoming", "transformation", "expression", "voice"
+            ]
+
+            # Look for sentences containing character development keywords
+            sentences = reflection.split(".")
+            insight_sentences = []
+
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if any(keyword in sentence.lower() for keyword in insight_keywords):
+                    if len(sentence) > 15:  # Minimum meaningful length
+                        insight_sentences.append(sentence)
+
+            if insight_sentences:
+                # Return the most insightful sentence (usually the longest with keywords)
+                best_insight = max(insight_sentences, key=len)
+                return best_insight.strip()
+
+            # Fallback: extract general insight from reflection
+            if "expresses" in reflection.lower() or "reveals" in reflection.lower():
+                # Try to extract what the drawing expresses or reveals
+                for sentence in sentences:
+                    if "expresses" in sentence.lower() or "reveals" in sentence.lower():
+                        return sentence.strip()
+
+            return ""
+
+        except Exception:
+            return ""

@@ -7,13 +7,14 @@ Main entry point for converting SVG files to G-code for servo-controlled plotter
 # import os
 # import shutil
 from pathlib import Path
-from bcnc_utils import try_bcnc_cli_run, check_bcnc_available
+
+from bcnc_utils import check_bcnc_available, try_bcnc_cli_run
+from converters.fengrave_converter import FEngraveConverter
+from converters.inkscape_converter import InkscapeConverter
+from converters.svg2gcode_converter import Svg2GcodeConverter
 
 # Import converter modules
 from converters.vpype_converter import VpypeConverter
-from converters.svg2gcode_converter import Svg2GcodeConverter
-from converters.inkscape_converter import InkscapeConverter
-from converters.fengrave_converter import FEngraveConverter
 
 
 def check_available_converters():

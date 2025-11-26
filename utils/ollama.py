@@ -1,11 +1,13 @@
 # from calendar import c
-import os
-import time
 import base64
 import json
-import requests
+import os
+import time
 from typing import Optional, Union
-from config.config import MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_SHOW_PROGRESS, DEBUG_OLLAMA_PROMPTS, OLLAMA_PRINT_FULL_RESPONSE
+
+import requests
+
+from config.config import CLEAN_LLM_OUTPUT, DEBUG_OLLAMA_PROMPTS, MOOD_SNAPSHOT_FOLDER, OLLAMA_MODEL, OLLAMA_PRINT_FULL_RESPONSE, OLLAMA_SHOW_PROGRESS
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.progress_bar import ProgressBar
@@ -115,7 +117,13 @@ def log_ollama_call(
     if response:
         call_details.append("\nResponse: " + truncate_for_print(response, 1000))
 
-    if DEBUG_OLLAMA_PROMPTS:
+    if CLEAN_LLM_OUTPUT and response:
+        # Clean output: prefer caller-owned printing for text types to avoid duplicates
+        if prompt_type in ("caption", "reflection", "drawing", "awakening"):
+            print_message = None  # Suppress here; higher-level modules print cleanly
+        else:
+            print_message = truncate_for_print(response, 1000)
+    elif DEBUG_OLLAMA_PROMPTS:
         debug_details = [f"\n[🤖{type_emoji}] {prompt_type.title()} PROMPT:\n{'-' * 50}", truncate_for_print(prompt, 1000), "-" * 50]
 
         # if system_prompt:
@@ -144,25 +152,29 @@ def log_ollama_call(
 
 
 def _wait_for_drawing_completion() -> None:
-    """Wait for any drawing generation to complete before proceeding."""
+    """Wait for ComfyUI drawing generation to complete, but allow captions during CNC execution."""
     from utils.state_manager import state_manager
 
+    # Only block during ComfyUI generation for performance
+    # Allow captions during CNC execution so user can see AI's drawing awareness
     if state_manager.is_generating_drawing:
         log_json_entry(
             LogType.INFO,
             {
-                "message": "Ollama API call paused - waiting for drawing generation to complete",
+                "message": "Ollama API call paused - waiting for ComfyUI generation to complete",
                 "drawing_prompt": state_manager.current_drawing_prompt,
             },
-            print_message="⏸️ Ollama paused - drawing in progress",
+            print_message="⏸️ Ollama paused - ComfyUI generating",
         )
 
         while state_manager.is_generating_drawing:
             time.sleep(1.0)
 
         log_json_entry(
-            LogType.INFO, {"message": "Drawing generation completed - resuming Ollama calls"}, print_message="▶️ Ollama resumed - drawing complete"
+            LogType.INFO, {"message": "ComfyUI generation completed - resuming Ollama calls"}, print_message="▶️ Ollama resumed - generation complete"
         )
+    
+    # Do NOT block during CNC execution - captions should continue during physical drawing
 
 
 def query_ollama(
@@ -176,6 +188,7 @@ def query_ollama(
     options: Optional[dict] = None,
     show_progress: bool = OLLAMA_SHOW_PROGRESS,
     prompt_type: str = "general",
+    skip_generation_wait: bool = False,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -193,7 +206,9 @@ def query_ollama(
     Returns:
         Response text from Ollama
     """
-    _wait_for_drawing_completion()
+    # Skip waiting for generation if explicitly requested (e.g., safety LLM checks)
+    if not skip_generation_wait:
+        _wait_for_drawing_completion()
 
     # Use streaming if progress bar is requested
     use_streaming = show_progress

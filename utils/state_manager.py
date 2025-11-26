@@ -8,14 +8,15 @@ memory retention, and identity evolution.
 
 import json
 import os
-import time
 import threading
-from typing import Dict, Any, Optional
+import time
 from datetime import datetime
-from utils.continuity import now, describe_duration
+from typing import Any, Dict, Optional
+
 from config.config import DRAWING_TIMEOUT, MOOD_SNAPSHOT_FOLDER
-from event_logging.log_type import LogType
 from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
+from utils.continuity import describe_duration, now
 
 
 class StateManager:
@@ -25,7 +26,20 @@ class StateManager:
         self.is_generating_drawing = False
         self.drawing_start_time = None
         self.current_drawing_prompt = None
+        self.last_completed_drawing_prompt = None
         self.timeout_timer = None
+        # Minimal CNC execution tracking (added for idle/drawing handoff)
+        self.is_executing_cnc = False
+        self.cnc_start_time = None
+        self.current_gcode_file = None
+        self.current_drawing_phase = None  # "executing" when active
+        # Expected output from ComfyUI for current job (filename prefix)
+        self.expected_output_prefix: Optional[str] = None
+        # Paper detection state
+        self.paper_present: bool = True
+        self.last_paper_check_ts: float = 0.0
+        self.last_paper_check_reason: str = ""
+        self.last_no_paper_skip_ts: float = 0.0
 
     def save_session_state(self, captioner, mood_engine, timekeeper=None) -> bool:
         """Save current session state for next startup."""
@@ -68,11 +82,10 @@ class StateManager:
                     "emotional_expressions": getattr(captioner, "emotional_expressions", []),
                     "personal_emotional_vocabulary": getattr(captioner, "personal_emotional_vocabulary", {}),
                     "emotional_patterns": getattr(captioner, "emotional_patterns", {}),
-                    # Recent memory (last 10 entries)
-                    "recent_memory": list(captioner.memory_queue)[-10:] if captioner.memory_queue else [],
-                    # Timer states for reflection and drawing intervals
+                    # Recent memory (last 50 entries for richer context)
+                    "recent_memory": list(captioner.memory_queue)[-50:] if captioner.memory_queue else [],
+                    # Timer states for reflection interval
                     "last_reason_time": captioner.last_reason_time,
-                    "last_drawing_time": captioner.last_drawing_time,
                 },
                 # Mood engine state
                 "mood_engine": {
@@ -202,7 +215,6 @@ class StateManager:
             # Reset timer states to current time for fresh session intervals
             # Don't restore old timer states - start intervals from session startup
             captioner.last_reason_time = time.time()
-            captioner.last_drawing_time = time.time()
 
             # Set session start to NOW (when we actually restart), not old save time
             # The save_time represents when we were last active, but true_session_start
@@ -338,9 +350,13 @@ class StateManager:
             self.timeout_timer.cancel()
             self.timeout_timer = None
 
+        # Store the completed drawing prompt for introspection
+        if self.current_drawing_prompt:
+            self.last_completed_drawing_prompt = self.current_drawing_prompt
+
         self.is_generating_drawing = False
         self.drawing_start_time = None
-        self.current_drawing_prompt = None
+        # Don't clear current_drawing_prompt yet - keep it for GRBL execution LCD display
 
     def get_drawing_status(self) -> Dict[str, Any]:
         """Get current drawing generation status."""
@@ -350,6 +366,45 @@ class StateManager:
             "prompt": self.current_drawing_prompt,
             "duration": time.time() - self.drawing_start_time if self.drawing_start_time else None,
         }
+
+    # --- Coordination helpers for ComfyUI output tracking ---
+    def set_expected_output_prefix(self, prefix: str) -> None:
+        self.expected_output_prefix = prefix
+
+    def clear_expected_output_prefix(self) -> None:
+        self.expected_output_prefix = None
+
+    def get_expected_output_prefix(self) -> Optional[str]:
+        return self.expected_output_prefix
+
+    # --- Minimal CNC execution API for coordination with idle manager ---
+    def start_cnc_execution(self, gcode_file: str, original_prompt: str) -> None:
+        """Enter Drawing Mode - used to block idle movements during CNC execution."""
+        self.is_executing_cnc = True
+        self.cnc_start_time = time.time()
+        self.current_gcode_file = gcode_file
+        self.current_drawing_phase = "executing"
+
+        log_json_entry(
+            LogType.INFO,
+            {"message": "CNC execution started", "gcode_file": gcode_file, "prompt": original_prompt},
+            print_message="[🎨] Physical drawing started",
+        )
+
+    def finish_cnc_execution(self, image_path: str = None, gcode_path: str = None) -> None:
+        """Exit Drawing Mode - allow idle movements to resume."""
+        self.is_executing_cnc = False
+        self.cnc_start_time = None
+        self.current_gcode_file = None
+        self.current_drawing_phase = None
+        # Clear the drawing prompt now that physical drawing is complete
+        self.current_drawing_prompt = None
+
+        log_json_entry(
+            LogType.INFO,
+            {"message": "CNC execution completed", "image_path": image_path, "gcode_path": gcode_path},
+            print_message="[✅] Physical drawing completed",
+        )
 
 
 # Global instance

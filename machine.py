@@ -1,15 +1,72 @@
-import time
-import argparse
-import sys
-import cv2
-import threading
+#!/usr/bin/env python3
+print("🚀 [DEBUG] MACHINE.PY STARTING UP")
 
-# import subprocess
+import argparse
+import atexit
+import glob
 import os
 import signal
-import atexit
-from config.config import USE_LIGHTBULB_PWM, LIGHTBULB_SERIAL_PORT, LIGHTBULB_SENSITIVITY
-from servo_control.lightbulb_pwm import LightbulbController
+import sys
+import threading
+import time
+
+print("🚀 [DEBUG] BASIC IMPORTS COMPLETE")
+
+import cv2
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
+from breathing.breathing import update_lung_position
+from captioner.captioner import Captioner
+from config.config import (
+    BAUD_RATE,
+    CAMERA_INDEX,
+    CAMERA_WIDTH,
+    CAMERA_HEIGHT,
+    CAMERA_SHARPNESS,
+    CAMERA_SATURATION,
+    CAMERA_CONTRAST,
+    CAMERA_BRIGHTNESS,
+    CAMERA_EXPOSURE,
+    CAMERA_AUTO_FOCUS,
+    CONFIDENCE_THRESHOLD,
+    DEBUG_REACTIVITY_PAUSE,
+    MODEL_PATH,
+    MOOD_EVALUATION_INTERVAL,
+    MOOD_SNAPSHOT_FOLDER,
+    PAUSE_DURATION,
+    REACTIVITY_PAUSE_COOLDOWN,
+    REACTIVITY_PAUSE_DURATION,
+    REACTIVITY_PAUSE_THRESHOLD,
+    USE_HAND_CONTROLLER,
+    USE_LIGHTBULB_PWM,
+    USE_SERVO,
+    USE_UARM,
+    USE_CAPTION_DISPLAY,
+    CAPTION_DISPLAY_PORT,
+    UARM_PORT,
+    UARM_CONNECT_ON_STARTUP,
+    UARM_HOME_ON_CONNECT,
+    UARM_DEFAULT_SPEED,
+    UARM_MOTION_STORAGE,
+)
+from event_logging.event_logger import get_current_run_id, log_json_entry, set_start_time
+from event_logging.log_type import LogType
+from event_logging.run_manager import get_run_image_path
+from grbl.idle_movement_manager import start_idle_movements, stop_idle_movements, update_emotion
+from image_monitor import ImageMonitor
+from mood.mood import MoodEngine
+from perception.detection_memory import DetectionMemory
+from perception.object_detection import ObjectDetectionThread
+from perception.person_detection_state import get_person_detection_state
+from reactivity.camera_reactive import CameraReactivityEngine
+from utils.continuity import describe_duration
+from utils.error_tracking import get_failure_tracker
+from utils.state_manager import state_manager
+from vision.gaze import update_gaze
 
 
 def parse_args():
@@ -37,8 +94,8 @@ if DEBUG_MODE:
 
 if args.config_override:
     try:
-        from config.loader import load_config_override, apply_config_overrides
         import config.config as config_module
+        from config.loader import apply_config_overrides, load_config_override
 
         overrides = load_config_override(args.config_override)
         apply_config_overrides(config_module, overrides)
@@ -48,34 +105,7 @@ if args.config_override:
         sys.exit(1)
 
 
-# from perception.object_detection import ObjectDetectionThread
-from captioner.captioner import Captioner
-from vision.gaze import update_gaze
-from mood.mood import MoodEngine
-from breathing.breathing import update_lung_position
-from image_monitor import ImageMonitor
-from utils.state_manager import state_manager
-from utils.continuity import describe_duration, get_temporal_feeling
-from utils.error_tracking import get_failure_tracker
-from config.config import (
-    USE_SERVO,
-    USE_HAND_CONTROLLER,
-    CAMERA_INDEX,
-    SERIAL_PORT,
-    BAUD_RATE,
-    CONFIDENCE_THRESHOLD,
-    MOOD_SNAPSHOT_FOLDER,
-    MOOD_EVALUATION_INTERVAL,
-    PAUSE_DURATION,
-    MODEL_PATH,
-    REACTIVITY_PAUSE_THRESHOLD,
-    REACTIVITY_PAUSE_DURATION,
-    REACTIVITY_PAUSE_COOLDOWN,
-    DEBUG_REACTIVITY_PAUSE,
-)
-from event_logging.run_manager import get_run_image_path
-from event_logging.event_logger import get_current_run_id, set_start_time, log_json_entry
-from event_logging.log_type import LogType
+# Imports moved to top of file
 
 try:
     import config.config as config_module
@@ -83,14 +113,13 @@ try:
     if getattr(config_module, "NO_HANDS", False):
         raise ImportError("Hand control disabled by NO_HANDS config")
 
-    from hand_control.direct_hand_control import (
-        start_hand_controller,  # type: ignore
+    from hand_control.direct_hand_control import change_to_emotion  # type: ignore
+    from hand_control.direct_hand_control import get_status  # type: ignore
+    from hand_control.direct_hand_control import send_reactivity_data  # type: ignore
+    from hand_control.direct_hand_control import start_autonomous_mode  # type: ignore
+    from hand_control.direct_hand_control import start_hand_controller  # type: ignore
+    from hand_control.direct_hand_control import (  # set_emotion,
         stop_hand_controller,
-        # set_emotion,
-        send_reactivity_data,  # type: ignore
-        get_status,  # type: ignore
-        change_to_emotion,  # type: ignore
-        start_autonomous_mode,  # type: ignore
     )
 
     HAND_CONTROL_AVAILABLE = True
@@ -105,44 +134,107 @@ except ImportError:
     def stop_hand_controller():
         pass
 
-    def send_reactivity_data(*args, **kwargs):
+    def send_reactivity_data(*stub_args, **stub_kwargs):
         pass
 
     def get_status():
         return "disabled"
 
-    def change_to_emotion(*args, **kwargs):
+    def change_to_emotion(*stub_args, **stub_kwargs):
         pass
 
-    def start_autonomous_mode(*args, **kwargs):
+    def start_autonomous_mode(*stub_args, **stub_kwargs):
         pass
 
 
-from reactivity.camera_reactive import CameraReactivityEngine
-
+# Moved to top
 
 if USE_SERVO:
     from servo_control.servo_control import ServoController
 
+if USE_LIGHTBULB_PWM:
+    from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
+
+if USE_UARM:
+    # Try native controller API; if unavailable, fall back to official Teach API
+    UARM_BACKEND = "controller"
+    try:
+        from uarm_control.uarm_controller import UarmController
+        from uarm_control.motion_manager import MotionManager
+        from uarm_control.simple_api import UarmSimpleAPI
+        import uarm_control.simple_api as uarm_api
+    except Exception:
+        UARM_BACKEND = "teach"
+        try:
+            from uarm_control.teach_menu import UArmTeachApp  # Official SDK path
+        except Exception as e:
+            print(f"Warning: uArm controller imports unavailable: {e}")
+            UARM_BACKEND = None
+
 VERBOSE = False
 
+# Fixed udev device paths for each Arduino
+ARDUINO_DEVICES = {
+    "LIGHTBULB": "/dev/arduino_lightbulb",  # Lightbulb PWM controller
+    "LUNGGAZE": "/dev/arduino_lunggaze",  # Gaze pan/tilt and breath controller
+    "LEFTHAND": "/dev/arduino_lefthand",  # Hand gesture controller
+    "CNC": "/dev/arduino_cnc",  # GRBL CNC controller (for bCNC)
+    "UARM": "/dev/arduino_uarm",  # uArm (not integrated yet)
+}
+
 # === INIT ===
+debug_print("Using fixed udev Arduino device paths", "INIT")
+for device_name, device_path in ARDUINO_DEVICES.items():
+    if os.path.exists(device_path):
+        debug_print(f"  {device_name}: {device_path} [FOUND]", "INIT")
+    else:
+        debug_print(f"  {device_name}: {device_path} [NOT CONNECTED]", "INIT")
+
 debug_print("Opening camera", "INIT")
 lightbulb = None
 if USE_LIGHTBULB_PWM:
-    try:
-        lightbulb = LightbulbController(LIGHTBULB_SERIAL_PORT)
-    except Exception as e:
-        print(f"Lightbulb PWM controller init failed: {e}")
+    lightbulb_port = ARDUINO_DEVICES["LIGHTBULB"]
+    if os.path.exists(lightbulb_port):
+        try:
+            lightbulb = NonBlockingLightbulbController(lightbulb_port, debug=False)
+            debug_print(f"Lightbulb controller initialized on {lightbulb_port}", "INIT")
+        except Exception as e:
+            debug_print(f"Lightbulb controller init failed on {lightbulb_port}: {e}", "ERROR")
+            print("  Device may not be ready or firmware mismatch")
+            lightbulb = None
+    else:
+        debug_print(f"Lightbulb controller not found at {lightbulb_port}", "WARN")
+        print("  Device may not be connected")
 cap = cv2.VideoCapture(CAMERA_INDEX if "CAMERA_INDEX" in globals() else 0)
 _global_cap = cap
 if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 debug_print("Camera opened successfully", "INIT")
-# Reduce camera resolution to prevent memory issues
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+# Set camera resolution for better image quality
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+
+# Set camera image quality properties
+def set_camera_property_safe(cap, prop, value, name):
+    """Safely set camera property with error handling"""
+    if value != -1:  # -1 means use default/auto
+        try:
+            result = cap.set(prop, value)
+            if result:
+                debug_print(f"Camera {name} set to {value}", "INIT")
+            else:
+                debug_print(f"Camera {name} setting failed (not supported)", "WARN")
+        except Exception as e:
+            debug_print(f"Camera {name} error: {e}", "ERROR")
+
+# Apply camera quality settings
+set_camera_property_safe(cap, cv2.CAP_PROP_SHARPNESS, CAMERA_SHARPNESS, "sharpness")
+set_camera_property_safe(cap, cv2.CAP_PROP_SATURATION, CAMERA_SATURATION, "saturation")
+set_camera_property_safe(cap, cv2.CAP_PROP_CONTRAST, CAMERA_CONTRAST, "contrast")
+set_camera_property_safe(cap, cv2.CAP_PROP_BRIGHTNESS, CAMERA_BRIGHTNESS, "brightness")
+set_camera_property_safe(cap, cv2.CAP_PROP_EXPOSURE, CAMERA_EXPOSURE, "exposure")
+set_camera_property_safe(cap, cv2.CAP_PROP_AUTOFOCUS, 1 if CAMERA_AUTO_FOCUS else 0, "autofocus")
 
 proto = f"{MODEL_PATH}/deploy.prototxt"
 model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
@@ -150,19 +242,123 @@ model = f"{MODEL_PATH}/res10_300x300_ssd_iter_140000.caffemodel"
 debug_print("Loading face detection model", "INIT")
 net = cv2.dnn.readNetFromCaffe(proto, model)
 debug_print("Face detection model loaded", "INIT")
+
+# Initialize person detection state for consciousness context
+person_detection = get_person_detection_state()
+debug_print("Person detection state initialized", "INIT")
 if USE_SERVO:
-    servos = ServoController(port=SERIAL_PORT, baudrate=BAUD_RATE)
-    servos.serial.setDTR(False)  # type: ignore
-    time.sleep(1)
-    servos.serial.setDTR(True)  # type: ignore
-    time.sleep(2)
+    servo_port = ARDUINO_DEVICES["LUNGGAZE"]  # Gaze pan/tilt and breath controller
+    if os.path.exists(servo_port):
+        try:
+            servos = ServoController(port=servo_port, baudrate=BAUD_RATE)
+            debug_print(f"Servo controller initialized on {servo_port}", "INIT")
+
+            # Send immediate safe initial position to prevent servo jumpiness
+            try:
+                time.sleep(0.5)  # Allow Arduino to fully initialize
+                # Set to neutral position: 90 degrees pan, mid-range tilt
+                initial_pan = 90
+                initial_tilt = (TILT_MIN + TILT_MAX) // 2
+                servos.send(f"P{initial_pan}", key="pan")
+                time.sleep(0.1)
+                servos.send(f"T{initial_tilt}", key="tilt")
+                debug_print(f"Servos initialized to safe position: pan={initial_pan}, tilt={initial_tilt}", "INIT")
+            except Exception as e:
+                debug_print(f"Initial servo positioning failed: {e}", "INIT")
+
+            # Startup movement sequence disabled to prevent timing conflicts
+            debug_print("Servo controller ready with initial positioning", "INIT")
+            
+        except Exception as e:
+            print(f"ERROR: Servo controller init failed on {servo_port}: {e}")
+            print("  Device may not be ready or firmware mismatch")
+            servos = None
+    else:
+        print(f"WARNING: Servo controller not found at {servo_port}")
+        print("  Device may not be connected")
+        servos = None
 else:
+    debug_print("Servo control disabled in config", "INIT")
     servos = None
-    lung_angle = 0.0
-    breath_speed = 4.0
-    breath_paused = False
-    pause_start_time = 0
-    last_breath_direction = None
+
+# Initialize uArm Swift Pro robotic arm (separate from servos)
+uarm_controller = None
+motion_manager = None
+uarm_teach_app = None
+if USE_UARM and UARM_BACKEND:
+    try:
+        uarm_port = ARDUINO_DEVICES["UARM"]
+        debug_print(f"Initializing uArm on {uarm_port} using backend={UARM_BACKEND}", "INIT")
+
+        if not os.path.exists(uarm_port):
+            print(f"WARNING: uArm device not found at {uarm_port}")
+            print("  Check USB connection or udev symlink")
+        else:
+            if UARM_BACKEND == "controller":
+                uarm_controller = UarmController(port=uarm_port, connect_on_init=UARM_CONNECT_ON_STARTUP)
+                if uarm_controller and uarm_controller.is_connected():
+                    debug_print("uArm connected successfully", "INIT")
+                    motion_manager = MotionManager(storage_path=UARM_MOTION_STORAGE, controller=uarm_controller)
+                    debug_print("uArm motion manager initialized", "INIT")
+                    simple_api = UarmSimpleAPI(controller=uarm_controller, motion_manager=motion_manager)
+                    uarm_api.uarm_api = simple_api
+                    debug_print("uArm simple API initialized", "INIT")
+                    if UARM_HOME_ON_CONNECT:
+                        debug_print("Performing uArm homing sequence", "INIT")
+                        uarm_controller.home()
+                else:
+                    debug_print("uArm connection failed - check USB connection and firmware", "WARN")
+                    if uarm_controller and uarm_controller.last_error:
+                        debug_print(f"uArm error: {uarm_controller.last_error}", "WARN")
+            elif UARM_BACKEND == "teach":
+                try:
+                    uarm_teach_app = UArmTeachApp()
+                    uarm_teach_app.connect()
+                    debug_print("uArm (Teach API) connected", "INIT")
+                    # Startup reassurance play (non-blocking)
+                    try:
+                        from config.config import UARM_PLAY_ON_START, UARM_START_PLAY_FILE
+                        if UARM_PLAY_ON_START:
+                            import threading
+
+                            def _uarm_start_play():
+                                try:
+                                    target = UARM_START_PLAY_FILE
+                                    # Fast playback; avoid homing around play
+                                    try:
+                                        uarm_teach_app.smoothing_enabled = False
+                                        uarm_teach_app.use_home_before_play = False
+                                        uarm_teach_app.use_home_after_play = False
+                                    except Exception:
+                                        pass
+                                    if os.path.exists(target):
+                                        uarm_teach_app.play_file = target
+                                    print(f"[uArm] Startup play: {os.path.basename(getattr(uarm_teach_app, 'play_file', target))}")
+                                    uarm_teach_app.play()
+                                except Exception as e:
+                                    print(f"[uArm] Startup play failed: {e}")
+
+                            threading.Thread(target=_uarm_start_play, daemon=True, name="UArmStartupPlay").start()
+                    except Exception:
+                        pass
+                except Exception as e:
+                    print(f"WARNING: Failed to init uArm Teach API: {e}")
+            else:
+                debug_print("uArm backend not available", "WARN")
+
+    except Exception as e:
+        debug_print(f"uArm initialization failed: {e}", "ERROR")
+        uarm_controller = None
+        motion_manager = None
+else:
+    debug_print("uArm control disabled in config", "INIT")
+
+# Initialize breathing variables regardless of servo setting
+lung_angle = 0.0
+breath_speed = 4.0
+breath_paused = False
+pause_start_time = 0
+last_breath_direction = None
 
 last_mood_time = 0
 last_seen_time = time.time()
@@ -181,6 +377,7 @@ _global_mood_engine = None
 _global_state_manager = None
 _global_start_time = None
 _global_run_id = None
+organic_left_arm = None
 
 
 def emergency_cleanup():
@@ -209,6 +406,19 @@ def emergency_cleanup():
         except Exception:
             pass
 
+        # Emergency organic left arm stop
+        try:
+            if 'organic_left_arm' in globals() and organic_left_arm:
+                organic_left_arm.shutdown()
+        except Exception:
+            pass
+
+        # Stop idle movements on shutdown
+        try:
+            stop_idle_movements()
+        except Exception as e:
+            print(f"[WARNING] Failed to stop idle movements: {e}")
+
         cv2.destroyAllWindows()
 
         # Clear PyTorch cache if available (helps with YOLO cleanup)
@@ -217,7 +427,14 @@ def emergency_cleanup():
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                print("[🔧] GPU cache cleared")
+                # Only print debug if clean output is disabled
+                try:
+                    from config.config import CLEAN_LLM_OUTPUT
+
+                    if not CLEAN_LLM_OUTPUT:
+                        print("[🔧] GPU cache cleared")
+                except ImportError:
+                    print("[🔧] GPU cache cleared")
         except ImportError:
             pass  # PyTorch not available, skip
         except Exception as e:
@@ -245,7 +462,14 @@ def graceful_cleanup():
     # Save session state first (most important)
     if _global_captioner and _global_mood_engine and _global_state_manager:
         try:
-            print("[💾] Saving session state...")
+            # Only print debug if clean output is disabled
+            try:
+                from config.config import CLEAN_LLM_OUTPUT
+
+                if not CLEAN_LLM_OUTPUT:
+                    print("[💾] Saving session state...")
+            except ImportError:
+                print("[💾] Saving session state...")
             success = _global_state_manager.save_session_state(_global_captioner, _global_mood_engine)
             print("[SUCCESS] Session state saved successfully" if success else "[ERROR] Failed to save session state")
         except Exception as e:
@@ -289,6 +513,28 @@ def graceful_cleanup():
     except Exception as e:
         print(f"[ERROR] Error stopping hand controller: {e}")
 
+    # Stop organic left arm controller
+    try:
+        if 'organic_left_arm' in globals() and organic_left_arm:
+            organic_left_arm.shutdown()
+            print("[🦾] Organic left arm controller shutdown")
+    except Exception as e:
+        print(f"[ERROR] Error stopping organic left arm: {e}")
+
+    # Stop uArm controller
+    if uarm_controller:
+        try:
+            debug_print("Disconnecting uArm controller", "CLEANUP")
+            uarm_controller.disconnect()
+        except Exception as e:
+            print(f"[ERROR] Error stopping uArm controller: {e}")
+    elif 'uarm_teach_app' in globals() and uarm_teach_app:
+        try:
+            debug_print("Disconnecting uArm (Teach API)", "CLEANUP")
+            uarm_teach_app.disconnect()
+        except Exception as e:
+            print(f"[ERROR] Error stopping uArm (Teach API): {e}")
+
     # Release camera
     if _global_cap:
         try:
@@ -307,7 +553,14 @@ def graceful_cleanup():
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            print("[🔧] GPU cache cleared")
+            # Only print debug if clean output is disabled
+            try:
+                from config.config import CLEAN_LLM_OUTPUT
+
+                if not CLEAN_LLM_OUTPUT:
+                    print("[🔧] GPU cache cleared")
+            except ImportError:
+                print("[🔧] GPU cache cleared")
     except ImportError:
         pass  # PyTorch not available, skip
     except Exception as e:
@@ -316,15 +569,31 @@ def graceful_cleanup():
     # Shutdown error tracker
     try:
         get_failure_tracker().shutdown()
-        print("[📊] Error tracker shutdown")
+        # Only print debug if clean output is disabled
+        try:
+            from config.config import CLEAN_LLM_OUTPUT
+
+            if not CLEAN_LLM_OUTPUT:
+                print("[📊] Error tracker shutdown")
+        except ImportError:
+            print("[📊] Error tracker shutdown")
     except Exception as e:
         print(f"[WARNING] Error shutting down error tracker: {e}")
+
+    # Close LCD caption display
+    if USE_CAPTION_DISPLAY:
+        try:
+            from utils.caption_display import close_caption_display
+            close_caption_display()
+            print("[📟] LCD caption display closed")
+        except Exception as e:
+            print(f"[WARNING] Error closing LCD caption display: {e}")
 
     cleanup_completed = True
     print("[SUCCESS] Graceful shutdown completed")
 
 
-def signal_handler(signum, frame):
+def signal_handler(signum, signal_frame):
     """Handle interrupt signals."""
     print(f"\n[🔄] Received signal {signum}")
     graceful_cleanup()
@@ -339,17 +608,21 @@ signal.signal(signal.SIGTERM, signal_handler)
 atexit.register(emergency_cleanup)
 
 last_snapshot_time = 0
-debug_print("YOLO object detection disabled", "INIT")
-# object_detector = ObjectDetectionThread()
-# _global_object_detector = object_detector
-# object_detector.start()
-object_detector = None
-_global_object_detector = None
+mood_thread_running = False
+mood_thread_lock = threading.Lock()
+debug_print("YOLO person detection enabled", "INIT")
+# Import moved to top
+
+object_detector = ObjectDetectionThread()
+_global_object_detector = object_detector
+object_detector.start()
 
 # Start image monitoring
 debug_print("Starting image monitor", "INIT")
 image_monitor = ImageMonitor(log_folder=MOOD_SNAPSHOT_FOLDER)
 _global_image_monitor = image_monitor
+
+# Idle movements manager will start after emotion state is determined
 
 # Initialize run ID and start time for this session
 start_time = time.time()
@@ -383,6 +656,26 @@ captioner = Captioner()
 _global_captioner = captioner
 _global_state_manager = state_manager
 
+# Initialize LCD caption display
+if USE_CAPTION_DISPLAY:
+    debug_print("Initializing LCD caption display", "INIT")
+    try:
+        from utils.caption_display import init_caption_display
+        init_caption_display(CAPTION_DISPLAY_PORT)
+        log_json_entry(
+            LogType.INFO,
+            {"message": f"LCD caption display initialized on {CAPTION_DISPLAY_PORT}"},
+            print_message=f"📟 LCD caption display initialized on {CAPTION_DISPLAY_PORT}",
+        )
+    except Exception as e:
+        log_json_entry(
+            LogType.ERROR,
+            {"message": f"Failed to initialize LCD caption display: {e}"},
+            print_message=f"❌ Failed to initialize LCD caption display: {e}",
+        )
+else:
+    debug_print("LCD caption display disabled in config", "INIT")
+
 # Initialize direct hand controller integration
 if USE_HAND_CONTROLLER:
     debug_print("Initializing direct hand controller integration", "INIT")
@@ -402,8 +695,39 @@ if hand_controller_started:
         debug_print("Failed to start autonomous mode", "INIT")
     status = get_status()
     debug_print(f"Hand controller status: {status}", "INIT")
+
+    # Initialize organic left arm controller for servo pins 4 and 5
+    debug_print("Initializing organic left arm controller", "INIT")
+    try:
+        from hand_control.organic_left_arm import OrganicLeftArmController
+        import serial
+
+        # Create serial connection to left hand Arduino
+        left_arm_serial = serial.Serial(ARDUINO_DEVICES["LEFTHAND"], 9600, timeout=1)
+        time.sleep(2)  # Allow Arduino to reset
+
+        # Initialize organic controller
+        organic_left_arm = OrganicLeftArmController(serial_connection=left_arm_serial)
+        organic_left_arm.enable()
+
+        debug_print("Organic left arm controller started successfully", "INIT")
+        log_json_entry(
+            LogType.INFO,
+            {"message": "Organic left arm controller initialized", "port": ARDUINO_DEVICES["LEFTHAND"]},
+            print_message=f"🦾 Organic left arm controller initialized on {ARDUINO_DEVICES['LEFTHAND']}",
+        )
+    except Exception as e:
+        debug_print(f"Failed to initialize organic left arm controller: {e}", "ERROR")
+        log_json_entry(
+            LogType.ERROR,
+            {"message": f"Failed to initialize organic left arm: {e}"},
+            print_message=f"❌ Failed to initialize organic left arm: {e}",
+        )
+        organic_left_arm = None
+
 else:
     debug_print("Hand controller failed to start", "WARN")
+    organic_left_arm = None
 
 # Initialize camera reactivity engine
 debug_print("Initializing camera reactivity engine", "INIT")
@@ -413,12 +737,127 @@ debug_print("Camera reactivity enabled - hand will respond to environmental chan
 
 # Set up image monitor with self-critique callback
 def on_drawing_complete(image_path: str):
-    """Handle drawing completion with self-critique."""
+    """Handle drawing completion with self-critique only (uArm handled via GRBL hook)."""
     captioner.drawing.critique_drawing(image_path)
 
 
 image_monitor.on_image_complete = on_drawing_complete
+# Set dependencies for paper detection
+image_monitor.set_dependencies(cap, servos, captioner)
+
+# Expose shared hardware handles for other modules (e.g., GRBL paper check)
+try:
+    # Create camera wrapper that provides read_frame() method expected by paper detection
+    class CameraWrapper:
+        def __init__(self, cv2_camera):
+            self.cv2_camera = cv2_camera
+
+        def read_frame(self):
+            ret, frame = self.cv2_camera.read()
+            return frame if ret else None
+
+        def read(self):
+            return self.cv2_camera.read()
+
+    state_manager.camera = CameraWrapper(cap)  # Wrapped camera with read_frame() method
+    state_manager.servos = servos  # Optional
+    debug_print(f"Camera wrapper shared via state_manager: {cap}", "DEBUG")
+except Exception:
+    pass
 image_monitor.start()
+
+# Register GRBL-complete hook to trigger uArm after actual G-code completion
+print("🔥 [DEBUG] STARTING HOOK REGISTRATION BLOCK")
+try:
+    import utils.hooks as _hooks
+    from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+    print(f"🔥 [DEBUG] Hook setup: USE_UARM={USE_UARM}, UARM_PLAY_AFTER_DRAW={UARM_PLAY_AFTER_DRAW}, UARM_PLAY_FILE={UARM_PLAY_FILE}")
+    if USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE:
+        def _normalize_smooth(path: str) -> str:
+            base, ext = os.path.splitext(path)
+            while base.lower().endswith('.smooth'):
+                base = base[:-7]
+            return f"{base}{ext or '.txt'}"
+
+        def _uarm_after_grbl():
+            print(f"[DEBUG] _uarm_after_grbl() called - starting papermove sequence")
+            def _run():
+                try:
+                    from grbl.idle_movement_manager import pause_for_drawing, get_manager
+
+                    # Force pause idle movements regardless of CNC state
+                    # (since we're in transition period between GRBL completion and uArm execution)
+                    manager = get_manager()
+                    if manager.process and manager.process.poll() is None:
+                        print("[DEBUG] Force pausing idle movements for uArm sequence")
+                        manager.pause_for_drawing()
+                    else:
+                        print("[DEBUG] No idle movements running to pause")
+
+                    target = _normalize_smooth(UARM_PLAY_FILE)
+                    app = None
+                    try:
+                        if 'uarm_teach_app' in globals() and uarm_teach_app:
+                            app = uarm_teach_app
+                    except Exception:
+                        app = None
+                    if app is None:
+                        from uarm_control.teach_menu import UArmTeachApp
+                        app = UArmTeachApp()
+                        app.connect()
+                    try:
+                        app.smoothing_enabled = False
+                        app.use_home_before_play = False
+                        app.use_home_after_play = False
+                    except Exception:
+                        pass
+                    if os.path.exists(target):
+                        app.play_file = target
+                    print(f"[uArm] Post-GRBL play: {os.path.basename(getattr(app, 'play_file', target))}")
+                    app.play()
+
+                    # Wait for actual movement completion instead of fixed 30s delay
+                    if hasattr(app, 'teach') and app.teach:
+                        print("[uArm] Waiting for movement completion...")
+                        timeout = 60.0  # Maximum wait time
+                        start_time = time.time()
+                        while (app.teach.is_playing() and
+                               (time.time() - start_time) < timeout):
+                            time.sleep(0.5)
+
+                        if app.teach.is_playing():
+                            print("[uArm] Movement timeout - forcing completion")
+                        else:
+                            print("[uArm] Movement completed successfully")
+                    else:
+                        # Fallback to shorter fixed delay if we can't track completion
+                        print("[uArm] Using fallback 15s delay")
+                        time.sleep(15.0)
+
+                except Exception as e:
+                    print(f"[uArm] Post-GRBL play failed: {e}")
+                finally:
+                    # Brief pause to ensure arm settles before resuming CNC movements
+                    try:
+                        time.sleep(2.0)
+                    except Exception:
+                        pass
+                    # Note: idle movement resumption is handled by the completion ritual
+                    # after CNC state is properly cleared, so we don't need to do it here
+
+            # Run synchronously to ensure GRBL waits for uArm completion before clearing CNC state
+            print("[DEBUG] Running uArm sequence synchronously to coordinate with GRBL")
+            _run()
+            print("[DEBUG] uArm sequence completed, GRBL can now clear CNC state")
+
+        _hooks.on_grbl_drawing_complete = _uarm_after_grbl
+        print(f"🔥 [DEBUG] GRBL hook registered successfully - uArm will trigger after drawing completion")
+    else:
+        print(f"[DEBUG] GRBL hook NOT registered - condition failed")
+except Exception as e:
+    print(f"[DEBUG] GRBL hook registration failed: {e}")
+    import traceback
+    traceback.print_exc()
 
 # Load previous session state if available
 debug_print("Loading previous session state", "INIT")
@@ -437,6 +876,12 @@ if previous_state:
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
 
+    # Start idle CNC movements with restored emotion
+    if start_idle_movements(emotion):
+        debug_print(f"Idle CNC movements started with emotion: {emotion}", "INIT")
+    else:
+        debug_print("Failed to start idle CNC movements", "WARN")
+
     # Reset last_caption so remnants from previous session are not printed
     captioner.last_caption = ""
     # Set memory loaded flag BEFORE generating awakening message
@@ -452,7 +897,6 @@ if previous_state:
     log_json_entry(
         LogType.INFO,
         {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
-        print_message=f'"{awakening_msg}"',
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
@@ -464,10 +908,16 @@ else:
     log_json_entry(
         LogType.INFO,
         {"message": awakening_msg, "continuity": False},
-        print_message=f'"{awakening_msg}"',
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
+
+    # Start idle CNC movements with default emotion
+    default_emotion = "calm_observant"
+    if start_idle_movements(default_emotion):
+        debug_print(f"Idle CNC movements started with default emotion: {default_emotion}", "INIT")
+    else:
+        debug_print("Failed to start idle CNC movements", "WARN")
 
 debug_print("System initialization complete", "INIT")
 
@@ -478,92 +928,96 @@ last_printed_caption_time = 0.0
 last_state_save_time = 0.0
 
 
-def mood_update_thread(frame, timestamp):
-    global last_snapshot_time, best_box, last_printed_caption_time, last_state_save_time
-    debug_print("Mood update thread started", "MOOD")
-    now = time.time()
-    if now - last_snapshot_time >= 10:
-        snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(now)}.jpg")
-        cv2.imwrite(snapshot_path, frame)
-        debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
-        # Lightbulb flicker on snapshot
-        if USE_LIGHTBULB_PWM and lightbulb:
+# Redundant functions removed - using existing MoodEngine functionality
+
+
+def mood_update_thread(mood_frame, timestamp):
+    global last_snapshot_time, last_state_save_time, mood_thread_running
+
+    # Set running flag at start
+    with mood_thread_lock:
+        mood_thread_running = True
+
+    try:
+        debug_print("Mood update thread started", "MOOD")
+        thread_now = time.time()
+        if thread_now - last_snapshot_time >= 10:
+            snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(thread_now)}.jpg")
+            cv2.imwrite(snapshot_path, mood_frame)
+            debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
+
             try:
-                lightbulb.flicker(duration=0.2, brightness=255)
-            except Exception as e:
-                print(f"Lightbulb PWM flicker failed: {e}")
+                # Use existing MoodEngine for emotional state - single source of truth
+                thread_emotion = mood_engine.get_emotion_for_hand_controller()
+                thread_mood = mood_engine.get_current_mood()
 
-        try:
-            # First: Update captioner to generate new captions
-            captioner.update(
-                frame=frame,
-                person_present=best_box is not None,
-                mood=mood_engine.get_current_mood(),
-                mood_vector=mood_engine.mood_vector,  # Pass 3D mood state
-                emotion_state=mood_engine.get_emotion_for_hand_controller(),  # Pass current emotion
-                reactivity_data=reactivity_metrics,
-            )
-            debug_print("Captioner updated successfully", "CAPTIONER")
+                debug_print(f"Current emotion: {thread_emotion}, mood: {thread_mood:.2f}", "EMOTION")
 
-            # Second: Analyze mood from captioner's latest caption
-            if captioner.last_caption:
-                clean_caption = captioner.last_caption
-                if clean_caption.lower().startswith("caption:"):
-                    clean_caption = clean_caption[len("caption:") :].strip()
-                # Lightbulb boost on caption print
-                if USE_LIGHTBULB_PWM and lightbulb:
-                    try:
-                        lightbulb.caption_boost(duration=600)
-                    except Exception as e:
-                        print(f"Lightbulb caption boost failed: {e}")
+                # Captioner is now updated in main loop - mood system just reads captions
+                debug_print("Captioner updated successfully", "CAPTIONER")
 
-                # PRINT_CLEAN_CAPTIONS? chuck into logging func?
-                # if captioner.last_caption_time > last_printed_caption_time:
-                #     print(f"\n{clean_caption}\n")
-                #     last_printed_caption_time = captioner.last_caption_time
+                # Second: Process caption and update physical systems
+                if captioner.last_caption:
+                    clean_caption = captioner.last_caption
+                    if clean_caption.lower().startswith("caption:"):
+                        clean_caption = clean_caption[len("caption:") :].strip()
 
-                # Generate embodied temporal feeling for mood analysis
-                current_emotion = mood_engine.get_emotion_for_hand_controller()
-                temporal_feeling = get_temporal_feeling(start_time, current_emotion, scene_stagnation=False)
+                    # CRITICAL: Process caption through mood analysis (was missing!)
+                    mood_engine.analyze_mood(
+                        clean_caption,
+                        saw_person=best_box is not None,
+                        image_path=snapshot_path if 'snapshot_path' in locals() else None,
+                        memory_context=captioner.memory_manager if hasattr(captioner, 'memory_manager') else None
+                    )
+                    debug_print(f"Processed caption through mood analysis: {clean_caption[:100]}...", "MOOD")
 
-                current_mood = mood_engine.analyze_mood(
-                    clean_caption, image_path=snapshot_path, memory_context=captioner, temporal_feeling=temporal_feeling
-                )
-                debug_print(f"Mood analyzed from caption: {current_mood:.2f}", "MOOD")
-
-                # Update lightbulb mood parameters
-                if USE_LIGHTBULB_PWM and lightbulb:
-                    try:
-                        mood_speed = 0.2 + (current_mood * 0.6)  # 0.2 to 0.8
-                        mood_randomness = current_mood * 0.3  # 0 to 0.3
-                        lightbulb.update_mood(mood_speed, mood_randomness)
-                    except Exception as e:
-                        print(f"Lightbulb mood update failed: {e}")
-
-                # Periodic state saving (every 2 minutes)
-                if now - last_state_save_time > 120:  # 2 minutes
-                    if _global_state_manager:
+                    # Lightbulb flash on caption print
+                    if USE_LIGHTBULB_PWM and lightbulb:
                         try:
-                            _global_state_manager.save_session_state(captioner, mood_engine)
-                            last_state_save_time = now
+                            lightbulb.caption_flash()
                         except Exception as e:
-                            print(f"[ERROR] Periodic state save failed: {e}")
+                            debug_print(f"Lightbulb caption flash failed: {e}", "ERROR")
 
-                # Update hand controller with new emotional state
-                emotion = mood_engine.get_emotion_for_hand_controller()
-                change_to_emotion(emotion)
-                debug_print(f"Updated hand controller emotion: {emotion}", "HAND")
+                    # PRINT_CLEAN_CAPTIONS? chuck into logging func?
+                    # if captioner.last_caption_time > last_printed_caption_time:
+                    #     print(f"\n{clean_caption}\n")
+                    #     last_printed_caption_time = captioner.last_caption_time
 
-                # Third: Update captioner's mood state and pattern data for next cycle
-                captioner.current_mood = current_mood
-                pattern_data = mood_engine.get_pattern_data()
-                captioner.set_novelty_score(pattern_data["novelty_score"])
-                # Pass recent motifs to captioner for memory integration
-                captioner.current_motifs_from_mood = pattern_data["recent_motifs"]
+                    # SimpleLightbulbController doesn't have mood parameters - uses frame diff only
 
-        except Exception as e:
-            debug_print(f"Captioner update failed: {e}", "ERROR")
-        last_snapshot_time = now
+                    # Periodic state saving (every 2 minutes)
+                    if thread_now - last_state_save_time > 120:  # 2 minutes
+                        if _global_state_manager:
+                            try:
+                                _global_state_manager.save_session_state(captioner, mood_engine)
+                                last_state_save_time = thread_now
+                            except Exception as e:
+                                print(f"[ERROR] Periodic state save failed: {e}")
+
+                    # Update hand controller with new emotional state
+                    change_to_emotion(thread_emotion)
+                    debug_print(f"Updated hand controller emotion: {thread_emotion}", "HAND")
+
+                    # Update CNC idle movements with new emotional state
+                    update_emotion(thread_emotion)
+                    debug_print(f"Updated CNC emotion: {thread_emotion}", "CNC")
+
+                    # Third: Update captioner's mood state and pattern data for next cycle
+                    captioner.current_mood = thread_mood
+                    pattern_data = mood_engine.get_pattern_data()
+                    captioner.set_novelty_score(pattern_data["novelty_score"])
+                    # Pass recent motifs to captioner for memory integration
+                    captioner.current_motifs_from_mood = pattern_data["recent_motifs"]
+
+            except Exception as e:
+                debug_print(f"Captioner update failed: {e}", "ERROR")
+            last_snapshot_time = thread_now
+        debug_print("Mood update thread completed successfully", "MOOD")
+    finally:
+        # Always clear running flag when thread completes
+        with mood_thread_lock:
+            mood_thread_running = False
+        debug_print("Mood update thread flag cleared", "MOOD")
 
 
 # === REACTIVITY PAUSE SYSTEM STATE ===
@@ -575,62 +1029,160 @@ frame_count = 0
 last_display_time = 0
 DISPLAY_THROTTLE_INTERVAL = 0.1  # Show camera feed max 10 FPS to save memory
 
+# Real-time camera controls with persistence
+import json
+
+CAMERA_SETTINGS_FILE = "camera_settings.json"
+
+default_brightness = CAMERA_BRIGHTNESS if CAMERA_BRIGHTNESS != -1 else 50
+default_contrast = CAMERA_CONTRAST if CAMERA_CONTRAST != -1 else 50
+default_saturation = CAMERA_SATURATION if CAMERA_SATURATION != -1 else 50
+default_sharpness = CAMERA_SHARPNESS if CAMERA_SHARPNESS != -1 else 50
+
+def load_camera_settings():
+    """Load camera settings from file, return defaults if file doesn't exist"""
+    try:
+        with open(CAMERA_SETTINGS_FILE, 'r') as f:
+            settings = json.load(f)
+            return {
+                'brightness': settings.get('brightness', default_brightness),
+                'contrast': settings.get('contrast', default_contrast),
+                'saturation': settings.get('saturation', default_saturation),
+                'sharpness': settings.get('sharpness', default_sharpness)
+            }
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {
+            'brightness': default_brightness,
+            'contrast': default_contrast,
+            'saturation': default_saturation,
+            'sharpness': default_sharpness
+        }
+
+def save_camera_settings(brightness, contrast, saturation, sharpness):
+    """Save current camera settings to file"""
+    try:
+        settings = {
+            'brightness': brightness,
+            'contrast': contrast,
+            'saturation': saturation,
+            'sharpness': sharpness
+        }
+        with open(CAMERA_SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=2)
+        if DEBUG_MODE:
+            debug_print("Camera settings saved", "CAMERA")
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Failed to save camera settings: {e}", "CAMERA")
+
+# Load saved settings
+saved_settings = load_camera_settings()
+current_brightness = saved_settings['brightness']
+current_contrast = saved_settings['contrast']
+current_saturation = saved_settings['saturation']
+current_sharpness = saved_settings['sharpness']
+
+def on_brightness_change(val):
+    global current_brightness
+    current_brightness = val
+    try:
+        result = cap.set(cv2.CAP_PROP_BRIGHTNESS, val)
+        if not result and DEBUG_MODE:
+            debug_print(f"Brightness setting to {val} failed (not supported)", "CAMERA")
+        save_camera_settings(current_brightness, current_contrast, current_saturation, current_sharpness)
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Brightness adjustment error: {e}", "CAMERA")
+
+def on_contrast_change(val):
+    global current_contrast
+    current_contrast = val
+    try:
+        result = cap.set(cv2.CAP_PROP_CONTRAST, val)
+        if not result and DEBUG_MODE:
+            debug_print(f"Contrast setting to {val} failed (not supported)", "CAMERA")
+        save_camera_settings(current_brightness, current_contrast, current_saturation, current_sharpness)
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Contrast adjustment error: {e}", "CAMERA")
+
+def on_saturation_change(val):
+    global current_saturation
+    current_saturation = val
+    try:
+        result = cap.set(cv2.CAP_PROP_SATURATION, val)
+        if not result and DEBUG_MODE:
+            debug_print(f"Saturation setting to {val} failed (not supported)", "CAMERA")
+        save_camera_settings(current_brightness, current_contrast, current_saturation, current_sharpness)
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Saturation adjustment error: {e}", "CAMERA")
+
+def on_sharpness_change(val):
+    global current_sharpness
+    current_sharpness = val
+    try:
+        result = cap.set(cv2.CAP_PROP_SHARPNESS, val)
+        if not result and DEBUG_MODE:
+            debug_print(f"Sharpness setting to {val} failed (not supported)", "CAMERA")
+        save_camera_settings(current_brightness, current_contrast, current_saturation, current_sharpness)
+    except Exception as e:
+        if DEBUG_MODE:
+            debug_print(f"Sharpness adjustment error: {e}", "CAMERA")
+
+def reset_camera_controls():
+    """Reset all camera controls to default values"""
+    global current_brightness, current_contrast, current_saturation, current_sharpness
+    current_brightness = default_brightness
+    current_contrast = default_contrast
+    current_saturation = default_saturation
+    current_sharpness = default_sharpness
+
+    cv2.setTrackbarPos("Brightness", "mslint camera", default_brightness)
+    cv2.setTrackbarPos("Contrast", "mslint camera", default_contrast)
+    cv2.setTrackbarPos("Saturation", "mslint camera", default_saturation)
+    cv2.setTrackbarPos("Sharpness", "mslint camera", default_sharpness)
+
+    # Apply defaults to camera
+    cap.set(cv2.CAP_PROP_BRIGHTNESS, default_brightness)
+    cap.set(cv2.CAP_PROP_CONTRAST, default_contrast)
+    cap.set(cv2.CAP_PROP_SATURATION, default_saturation)
+    cap.set(cv2.CAP_PROP_SHARPNESS, default_sharpness)
+
+    save_camera_settings(default_brightness, default_contrast, default_saturation, default_sharpness)
+    if DEBUG_MODE:
+        debug_print("Camera controls reset to defaults", "CAMERA")
+
+# Create trackbars for real-time camera adjustment
+cv2.namedWindow("mslint camera", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("mslint camera", 1920, 1080)
+cv2.createTrackbar("Brightness", "mslint camera", current_brightness, 100, on_brightness_change)
+cv2.createTrackbar("Contrast", "mslint camera", current_contrast, 100, on_contrast_change)
+cv2.createTrackbar("Saturation", "mslint camera", current_saturation, 100, on_saturation_change)
+cv2.createTrackbar("Sharpness", "mslint camera", current_sharpness, 100, on_sharpness_change)
+
+debug_print("Camera controls initialized - use trackbars in preview window to adjust in real-time", "INIT")
+debug_print("Press 'r' in camera window to reset controls to defaults", "INIT")
+
 try:
     prev_gray = None
     smoothed_pwm = 0
+    debug_print("Entering main camera processing loop", "MAIN")
     while True:
         # Check for shutdown signal
         if shutdown_in_progress:
             print("[SHUTDOWN] Shutdown signal received - breaking main loop")
             break
 
+        debug_print("Reading camera frame", "MAIN")
         ret, frame = cap.read()
         if not ret:
             continue
 
-        # object_detector.set_frame(frame)  # YOLO disabled
+        object_detector.set_frame(frame)  # YOLO person detection enabled
 
         frame = cv2.resize(frame, (320, 240))
-        frame = cv2.flip(frame, 1)
-
-        # === ENHANCED FRAME DIFF FOR PWM WITH FLUCTUATION ===
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        if prev_gray is not None:
-            diff = cv2.absdiff(prev_gray, gray)
-            diff_score = diff.mean() * LIGHTBULB_SENSITIVITY
-            max_diff = 50.0
-            diff_score = max(0, min(max_diff, diff_score))
-
-            # Base PWM from activity
-            base_pwm = int((diff_score / max_diff) * 255)
-
-            # Smooth base value
-            alpha = 0.15  # Gentler smoothing
-            smoothed_pwm = int(alpha * base_pwm + (1 - alpha) * smoothed_pwm)
-
-            # Set sensible minimum (not too high)
-            MIN_BRIGHTNESS = 18  # Higher baseline
-            MAX_BRIGHTNESS = 255
-            smoothed_pwm = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, smoothed_pwm))
-
-            # Use Arduino-based high-frequency fluctuation
-            final_brightness = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, smoothed_pwm))
-
-            if USE_LIGHTBULB_PWM and lightbulb:
-                try:
-                    # Only send if brightness changed significantly (reduce serial traffic)
-                    if (
-                        not hasattr(lightbulb, "_last_base")
-                        or abs(final_brightness - lightbulb._last_base) > 3  # type: ignore
-                        or not hasattr(lightbulb, "_last_send_time")
-                        or time.time() - lightbulb._last_send_time > 0.1  # type: ignore
-                    ):  # Max 10fps updates
-                        lightbulb.set_base_brightness(final_brightness)
-                        lightbulb._last_base = final_brightness  # type: ignore
-                        lightbulb._last_send_time = time.time()  # type: ignore
-                except Exception as e:
-                    print(f"Lightbulb base brightness failed: {e}")
-        prev_gray = gray.copy()
+        # Display preview unflipped to match capture/reference orientation
 
         # Force garbage collection periodically to prevent memory accumulation
         frame_count += 1
@@ -643,6 +1195,20 @@ try:
         # Process frame for real-time behavioral reactivity
         reactivity_metrics = reactivity_engine.process_frame(frame)
         frame_count += 1
+
+        # === LIGHTBULB BRIGHTNESS FROM REACTIVITY DATA ===
+        # Use the same activity level that drives the reactivity bar
+        if USE_LIGHTBULB_PWM and lightbulb and reactivity_metrics:
+            try:
+                # Get activity level from reactivity engine (0.0-1.0 scale)
+                activity_level = reactivity_metrics.get("activity_level", 0.0)
+
+                # Convert to 0-255 brightness scale
+                brightness = int(min(255, activity_level * 255))
+
+                lightbulb.set_frame_diff_brightness(brightness)
+            except Exception as e:
+                debug_print(f"Lightbulb brightness failed: {e}", "ERROR")
 
         # Get current time for pause/cooldown calculations
         now = time.time()
@@ -722,24 +1288,70 @@ try:
                 best_box = box.astype("int")
                 best_conf = conf
 
+        # Update person detection state for consciousness context
         if best_box is not None:
-            # Suppress frequent face detection messages - only show occasionally
-            if int(now) % 5 == 0:  # Every 5 seconds
-                debug_print(f"Face detected with confidence: {best_conf:.2f}", "FACE")
+            # Convert box to (x1, y1, x2, y2) format
+            x1, y1, x2, y2 = best_box
+            person_detection.update_face_detection(best_conf, (x1, y1, x2, y2))
         else:
-            # Only show "no face" occasionally to avoid spam
+            person_detection.update_face_detection(0.0)
+
+        # Disable YOLO person fallback to rely only on high-confidence face detection
+        # This prevents false positives from YOLO detecting "persons" in walls/objects
+        # if best_box is None:
+        #     labels = DetectionMemory.get_labels()
+        #     if "person" in labels:
+        #         best_box = [50, 50, 100, 100]  # Dummy box to indicate person present
+        #         best_conf = 0.8  # Dummy confidence for YOLO person detection
+        #         if int(now) % 5 == 0:  # Every 5 seconds
+        #             debug_print("Person detected by YOLO", "PERSON")
+
+        if best_box is not None:
+            # Suppress frequent detection messages - only show occasionally
+            if int(now) % 5 == 0:  # Every 5 seconds
+                source = "Face" if best_conf < 0.7 else "Person"  # Distinguish source
+                debug_print(f"{source} detected with confidence: {best_conf:.2f}", "DETECTION")
+        else:
+            # Only show "no person" occasionally to avoid spam
             if int(now) % 10 == 0:  # Every 10 seconds
-                debug_print("No face detected", "FACE")
+                debug_print("No person detected", "DETECTION")
 
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:
-            debug_print(f"Starting mood update thread - interval: {MOOD_EVALUATION_INTERVAL}s", "MOOD")
-            threading.Thread(target=mood_update_thread, args=(frame.copy(), int(now)), daemon=True).start()
-            last_mood_time = now
+            # Check if mood analysis is already running to prevent overlapping threads
+            with mood_thread_lock:
+                if not mood_thread_running:
+                    debug_print(f"Starting mood update thread - interval: {MOOD_EVALUATION_INTERVAL}s", "MOOD")
+                    threading.Thread(target=mood_update_thread, args=(frame.copy(), int(now)), daemon=True).start()
+                    last_mood_time = now
+                else:
+                    debug_print("Mood analysis already running - skipping this interval", "MOOD")
 
         current_mood = mood_engine.get_current_mood()
 
         face_box = tuple(best_box) if best_box is not None else None
-        person_present, pan, tilt = update_gaze(frame, face_box, current_mood)
+        person_present, pan, tilt = update_gaze(frame, face_box, mood_engine.get_emotion_for_hand_controller())
+
+        # Attach egocentric orientation and face hint to reactivity data
+        reactivity_with_view = dict(reactivity_metrics)
+        reactivity_with_view["pan"] = float(pan)
+        reactivity_with_view["tilt"] = float(tilt)
+        if face_box is not None:
+            x1, y1, x2, y2 = face_box
+            cx = (x1 + x2) / 2.0
+            cy = (y1 + y2) / 2.0
+            reactivity_with_view["face_pos"] = {"x": cx / w, "y": cy / h}
+
+        # Add person consciousness context for rich social awareness
+        person_context = person_detection.get_consciousness_context()
+        reactivity_with_view["person_consciousness"] = person_context
+
+        # Update captioner with every frame (decoupled from mood system)
+        captioner.update(
+            frame=frame,
+            person_present=best_box is not None,
+            mood=mood_engine.get_current_mood() if mood_engine else 0.5,
+            reactivity_data=reactivity_with_view,
+        )
 
         (
             lung_pos,
@@ -749,7 +1361,7 @@ try:
             last_breath_direction,
             pause_start_time,
         ) = update_lung_position(
-            current_mood=current_mood,
+            current_emotion_state=mood_engine.get_emotion_for_hand_controller(),
             person_present=person_present,
             delta=delta,
             lung_angle=lung_angle,
@@ -761,9 +1373,22 @@ try:
             servo_controller=servos,
         )
 
-        if USE_SERVO:
-            servos.set_pan(pan)  # type: ignore
-            servos.set_tilt(tilt)  # type: ignore
+        if USE_SERVO and servos:
+            try:
+                if DEBUG_MODE and frame_count % 30 == 0:
+                    debug_print(f"Sending PAN/TILT: {pan}/{tilt}", "SERVO")
+                # Check servo controller health
+                if frame_count % 150 == 0:  # Every 5 seconds at 30fps
+                    servo_health = "OK" if (servos.ser and servos.ser.is_open) else "DISCONNECTED"
+                    debug_print(f"Servo controller health: {servo_health}", "SERVO")
+                servos.set_pan(pan)  # type: ignore
+                servos.set_tilt(tilt)  # type: ignore
+            except Exception as e:
+                debug_print(f"Servo command failed: {e}", "ERROR")
+                print(f"[SERVO ERROR] Exception details: {type(e).__name__}: {e}")
+                # Don't crash the whole system for servo errors
+        elif USE_SERVO and not servos and frame_count % 120 == 0:
+            debug_print("Servo controller not initialized; skipping PAN/TILT/LUNG sends", "WARN")
 
         if face_box:
             (x1, y1, x2, y2) = face_box
@@ -772,8 +1397,6 @@ try:
         # === DISPLAY OVERLAYS ===
         debug = f"Mood: {current_mood:.2f} | Lung: {lung_pos} | Pan/Tilt: {pan}/{tilt}"
         cv2.putText(frame, debug, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-        from perception.detection_memory import DetectionMemory
 
         labels = DetectionMemory.get_labels()
         label_text = ", ".join(labels) if labels else "no objects"
@@ -838,17 +1461,7 @@ try:
                 cv2.rectangle(frame, (bar_x + bar_w - 30, bar_y + 10), (bar_x + bar_w - 10, bar_y + 30), (0, 0, 255), -1)
                 cv2.putText(frame, "PAUSE", (bar_x + bar_w - 28, bar_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
 
-                # === LIGHTBULB PWM OUTPUT ===
-                if USE_LIGHTBULB_PWM and lightbulb:
-                    try:
-                        chaos_val = reactivity_metrics.get("chaos_multiplier", 0.3)
-                        pwm_value = int(max(0, min(1, (chaos_val - 0.3) / 3.2)) * 255)
-                        # Use Arduino fluctuation for smoother mood-based lighting
-                        if not lightbulb.fluctuating or abs(pwm_value - getattr(lightbulb, "_last_mood_base", 0)) > 10:
-                            lightbulb.start_fluctuation(max(8, pwm_value), amplitude=5, speed=0.3)  # type: ignore # Slower mood fluctuation
-                            lightbulb._last_mood_base = pwm_value  # type: ignore
-                    except Exception as e:
-                        print(f"Lightbulb fluctuation failed: {e}")
+                # SimpleLightbulbController uses frame diff for brightness, not mood fluctuation
 
         # MEMORY FIX: Throttle camera display to prevent graphics memory exhaustion
         current_time = time.time()
@@ -859,14 +1472,11 @@ try:
         # Hand controller now runs completely autonomously in its own thread
         # No GUI updates needed from machine.py
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
             break
-
+        elif key == ord("r"):
+            reset_camera_controls()
 except KeyboardInterrupt:
     graceful_cleanup()
-    sys.exit(0)
-finally:
-    # Always ensure cleanup happens
-    if not cleanup_completed:
-        graceful_cleanup()
     sys.exit(0)

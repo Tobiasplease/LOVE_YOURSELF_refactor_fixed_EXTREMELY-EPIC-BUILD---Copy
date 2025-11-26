@@ -1,0 +1,85 @@
+// Fixed lightbulb controller - uses standard analogWrite for reliable PWM
+// Expects B:<value> commands for brightness (0-255)
+// Expects F for caption flash
+
+#define PWM_PIN 9
+
+// State variables
+int target_base_brightness = 0;  // Start at 0
+float current_base_brightness = 0.0;
+bool is_boosting = false;
+unsigned long boost_start_time = 0;
+unsigned long boost_duration = 1000;  // Fixed 1 second flash
+float current_boost = 0.0;
+int target_boost = 255;  // Full brightness for caption flash
+
+void setup() {
+  pinMode(PWM_PIN, OUTPUT);
+  analogWrite(PWM_PIN, 0);  // Start at 0 using standard Arduino PWM
+
+  Serial.begin(9600);
+  Serial.println("DEVICE_ID:LIGHTBULB_CONTROLLER");
+  Serial.println("Fixed lightbulb controller ready");
+}
+
+void loop() {
+  // Handle serial commands
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    
+    if (input.startsWith("B:")) {
+      // Set base brightness from frame diff (0-255)
+      target_base_brightness = constrain(input.substring(2).toInt(), 0, 255);
+      Serial.print("Brightness: ");
+      Serial.println(target_base_brightness);
+    }
+    else if (input == "F") {
+      // Caption flash
+      boost_start_time = millis();
+      is_boosting = true;
+      Serial.println("Flash triggered");
+    }
+  }
+  
+  // Update every 10ms for smooth response
+  static unsigned long last_update = 0;
+  if (millis() - last_update >= 10) {
+    unsigned long now = millis();
+    
+    // Very slow easing for gradual changes
+    float ease_speed = 0.01;  // Much slower for smooth transitions
+    current_base_brightness += (target_base_brightness - current_base_brightness) * ease_speed;
+    
+    float working_base = current_base_brightness;
+    
+    // Handle smooth caption boost
+    if (is_boosting) {
+      unsigned long elapsed = now - boost_start_time;
+      if (elapsed >= boost_duration) {
+        is_boosting = false;
+        current_boost = 0.0;
+      } else {
+        // Create smooth ease-in-out curve for boost
+        float progress = (float)elapsed / (float)boost_duration; // 0 to 1
+        float ease_curve;
+        if (progress < 0.5) {
+          // Ease in: accelerate to peak
+          ease_curve = 2.0 * progress * progress;
+        } else {
+          // Ease out: decelerate from peak
+          float t = 1.0 - progress;
+          ease_curve = 1.0 - 2.0 * t * t;
+        }
+        current_boost = target_boost * ease_curve;
+        working_base = current_boost; // Override base during boost
+      }
+    }
+    
+    // Set final PWM using standard analogWrite - this should properly turn off at 0
+    int final_pwm = constrain((int)working_base, 0, 255);
+    analogWrite(PWM_PIN, final_pwm);
+    
+    last_update = now;
+  }
+}

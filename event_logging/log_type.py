@@ -16,6 +16,7 @@ class LogType(Enum):
     MOOD = "mood_update"
     CAPTION = "caption"
     REFLECTION = "reflection"
+    INTROSPECTION = "introspection"
     # SENTIMENT = "sentiment_analysis"
     COMPRESSION = "compression"
     OLLAMA_API_CALL = "ollama_api_call"

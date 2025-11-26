@@ -1,7 +1,11 @@
-import serial
+import threading
 import time
 
-ANGLE_THRESHOLD = 2  # degrees — for gaze only
+import serial
+
+# Smooth movement settings for natural head motion
+ANGLE_THRESHOLD = 0.3  # Even smaller threshold for ultra-smooth movement
+MIN_COMMAND_INTERVAL = 0.01  # 10ms between commands (100Hz) for ultra-silky smooth motion
 
 
 class ServoController:
@@ -9,10 +13,8 @@ class ServoController:
         try:
             self.ser = serial.Serial(port, baudrate, timeout=1)
             self.serial = self.ser  # For optional external use
-            self.serial.setDTR(False)  # type: ignore
-            time.sleep(1)
-            self.serial.setDTR(True)  # type: ignore
-            time.sleep(2)
+            # Skip DTR manipulation - causes issues with lint arduinoserial sketch
+            time.sleep(0.5)  # Brief delay for Arduino initialization
             print(f"[ServoController] Connected on {port} at {baudrate} baud.")
         except serial.SerialException as e:
             print(f"[ERROR] Could not connect to {port}: {e}")
@@ -20,16 +22,59 @@ class ServoController:
             self.serial = None
 
         self.last_sent = {}
+        self.last_send_time = 0
+        self.send_lock = threading.Lock()
+        self.disabled = False  # Permanently disable sends after hard errors
+        self.last_error_log = 0.0  # Throttle error logs
 
     def send(self, message: str, key=None):
+        if self.disabled:
+            return
         if not self.ser or not self.ser.is_open:
             return
         if key and self.last_sent.get(key) == message:
             return
-        full = message.strip() + "\n"
-        self.ser.write(full.encode("utf-8"))
-        if key:
-            self.last_sent[key] = message
+
+        with self.send_lock:
+            # Rate limiting: enforce minimum interval between commands
+            now = time.time()
+            time_since_last = now - self.last_send_time
+            if time_since_last < MIN_COMMAND_INTERVAL:
+                time.sleep(MIN_COMMAND_INTERVAL - time_since_last)
+
+            try:
+                full = message.strip() + "\n"
+                self.ser.write(full.encode("utf-8"))
+                self.ser.flush()  # Ensure command is sent immediately
+                self.last_send_time = time.time()
+
+                if key:
+                    self.last_sent[key] = message
+
+            except Exception as e:
+                # Throttle flooding and disable on hard I/O errors
+                now = time.time()
+                if now - self.last_error_log >= 2.0:
+                    print(f"[ERROR] Servo send failed: {e}")
+                    self.last_error_log = now
+                # Disable further traffic on I/O errors to prevent log floods
+                try:
+                    msg = str(e).lower()
+                    if "input/output error" in msg or "i/o error" in msg or isinstance(e, serial.SerialException):
+                        self.disabled = True
+                        try:
+                            self.ser.close()
+                        except Exception:
+                            pass
+                        print("[WARN] Servo serial disabled after I/O error; suppressing further logs.")
+                except Exception:
+                    pass
+                # Try to recover minimal buffers if not disabled yet
+                if not self.disabled:
+                    try:
+                        self.ser.reset_output_buffer()
+                    except Exception:
+                        pass
 
     def set_pan(self, angle: int):
         if self._should_send("pan", angle):

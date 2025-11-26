@@ -3,10 +3,10 @@ SVG2GCode converter - Node.js based SVG to G-code conversion
 Uses svg2gcode npm package for conversion
 """
 
-import subprocess
-import shutil
-import sys
 import os
+import shutil
+import subprocess
+import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from bcnc_utils import convert_z_to_servo

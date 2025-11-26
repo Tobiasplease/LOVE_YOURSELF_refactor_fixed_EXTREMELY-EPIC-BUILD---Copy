@@ -18,12 +18,13 @@ Integration approach:
 
 Author: Bridge System for Emotional Hand Control
 """
-import time
 import json
+import time
 
 # import os
 # import socket
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from mood.mood import MoodEngine
 
 

@@ -1,12 +1,11 @@
 import cv2
 import numpy as np
-from skimage.morphology import skeletonize
-
-import torch
-import torchvision.transforms.functional as F
 
 # from skimage.util import invert
 import svgwrite
+import torch
+import torchvision.transforms.functional as F
+from skimage.morphology import skeletonize
 
 
 def raster_to_centerline_svg(

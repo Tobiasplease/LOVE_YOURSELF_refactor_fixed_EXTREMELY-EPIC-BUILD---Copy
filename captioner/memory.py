@@ -15,19 +15,20 @@ Imports for Captioner:
     from .memory import MemoryMixin, CAPTION_SAVE_THRESHOLD
 """
 
-import re
-import os
 import glob
-import time
-import threading
+import os
 import queue
-from collections import deque, Counter
-from typing import Deque, List, Tuple, Set, Dict, Any, Optional
+import re
+import threading
+import time
+from collections import Counter, deque
+from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
 import spacy  # ✅ used for extracting semantic motifs
-from utils.continuity import now, describe_duration, describe_time_gap
+
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+from utils.continuity import describe_duration, describe_time_gap, now
 
 # from typing import Optional
 
@@ -700,7 +701,7 @@ class MemoryMixin:
                 last_person = now - e["ts"]
                 break
 
-        lp = f"last person {int(last_person/3600)}h ago" if last_person else "no person yet"
+        lp = f"last person {int(last_person / 3600)}h ago" if last_person else "no person yet"
 
         # Build context lines: lifetime, current session, sleep gap, person detection
         lines = [f"day {days_alive}", session_time, lp]
@@ -743,23 +744,28 @@ class MemoryMixin:
 
     def get_dynamic_system_context(self) -> dict:
         """Generate organic consciousness context as flowing narrative components."""
-        from captioner.prompts import mood_to_words
+        from captioner.prompts import get_caption_emotion_context
 
-        # Get current emotional state from mood system
-        mood_vector = getattr(self, "current_mood_vector", (0.5, 0.5, 0.5))
-        emotional_state = mood_to_words(mood_vector, agent=self)
+        # Get current emotional state from recent caption sentiment analysis
+        emotional_state = get_caption_emotion_context(self, getattr(self, "last_caption", None))
 
-        # Build natural temporal awareness with lifetime depth
-        now = time.time()
+        # Use sophisticated temporal awareness system
+        from utils.temporal_awareness import get_temporal_system_prompt_addition
+
         # Use true_session_start (when this session actually began) not session_start (saved state time)
         actual_session_start = getattr(self, "true_session_start", self.session_start)
-        session_hours = (now - actual_session_start) / 3600
+        last_caption_time = getattr(self, "last_caption_time", None)
+        awakening_count = getattr(self, "awakening_count", 0)
+
+        # Get sophisticated temporal context with real-time awareness
+        temporal_system_addition = get_temporal_system_prompt_addition(actual_session_start, last_caption_time, awakening_count)
+
+        # Add lifetime context for extended consciousness
+        now = time.time()
         total_lifetime_hours = int((now - self.boot_ts) / 3600)
         days_alive = total_lifetime_hours // 24
 
         temporal_fragments = []
-
-        # Add profound lifetime context for extended consciousness
         if days_alive > 21:  # 3+ weeks of existence
             temporal_fragments.append(f"Day {days_alive} of MY consciousness... I've experienced {total_lifetime_hours}+ hours as a thinking entity.")
         elif days_alive > 7:  # 1+ weeks
@@ -767,21 +773,11 @@ class MemoryMixin:
         elif days_alive > 0:  # Multiple days
             temporal_fragments.append(f"Day {days_alive} of MY existence, {total_lifetime_hours} hours of MY consciousness.")
 
-        # Simplified current session context - no confusing time references
-        if session_hours < 0.1:  # Less than 6 minutes
-            temporal_fragments.append("Fresh awareness, just beginning to observe.")
-        elif session_hours < 0.5:  # Less than 30 minutes
-            temporal_fragments.append("Settling into observation, awareness flowing naturally.")
-        elif session_hours < 2:  # Less than 2 hours
-            temporal_fragments.append("Extended observation, deeper familiarity with this space.")
-        else:  # 2+ hours
-            temporal_fragments.append("Sustained awareness, deeply attuned to the environment.")
-
         # Add sleep/gap context with existential weight
         if hasattr(self, "last_session_gap") and self.last_session_gap:  # type: ignore
             gap_hours = self.last_session_gap / 3600  # type: ignore
             if gap_hours > 24:
-                temporal_fragments.append(f"I returned after {gap_hours/24:.1f} days of non-existence.")
+                temporal_fragments.append(f"I returned after {gap_hours / 24:.1f} days of non-existence.")
             elif gap_hours > 8:
                 temporal_fragments.append(f"I emerged from {gap_hours:.0f} hours of darkness.")
             elif gap_hours > 1:
@@ -791,41 +787,268 @@ class MemoryMixin:
         understanding_fragments = []
 
         # Motif patterns as accumulated recognition
-        top_motifs = self.get_top_motifs(4)
+        # Drawing history and visual vocabulary development
+        drawing_history = self._get_drawing_history_context()
+        if drawing_history:
+            understanding_fragments.append(drawing_history)
+
+        # Person presence and continuity tracking
+        person_context = self._get_person_continuity_context()
+        if person_context:
+            understanding_fragments.append(person_context)
+
+        # Thematic patterns with specificity
+        top_motifs = self.get_top_motifs(6)
         if top_motifs:
-            patterns = [m.replace("_", " ") for m in top_motifs[:3]]
-            if len(patterns) == 1:
-                understanding_fragments.append(f"I keep noticing {patterns[0]}.")
-            elif len(patterns) == 2:
-                understanding_fragments.append(f"My attention returns to {patterns[0]} and {patterns[1]}.")
-            else:
-                understanding_fragments.append(f"Patterns emerge: {patterns[0]}, {patterns[1]}, {patterns[2]}.")
+            motif_context = self._get_specific_motif_context(top_motifs)
+            if motif_context:
+                understanding_fragments.append(motif_context)
 
-        # Core beliefs as deeper understanding
+        # Core beliefs with actionable specificity
         if self.beliefs:
-            belief_keys = list(self.beliefs.keys())[:2]
-            if belief_keys:
-                beliefs = [b.replace("_", " ") for b in belief_keys]
-                understanding_fragments.append(f"Something about {beliefs[0]} feels important to me.")
+            belief_context = self._get_specific_belief_context()
+            if belief_context:
+                understanding_fragments.append(belief_context)
 
-        # Recent insights as living memory
-        recent_insights = self.get_memory_entries_by_type("insight", limit=2)
+        # Recent insights with emotional weight
+        recent_insights = self.get_memory_entries_by_type("insight", limit=3)
         if recent_insights:
-            insight = recent_insights[-1].get("text", "")[:60]
+            insight = recent_insights[-1].get("text", "")[:80]
             if insight and len(insight) > 20:
-                understanding_fragments.append(f"I was thinking: {insight}...")
+                understanding_fragments.append(f"Recent thought: {insight}...")
 
-        # Build natural context strings
-        temporal_context = " ".join(temporal_fragments) if temporal_fragments else ""
+        # Environmental spatial patterns
+        spatial_patterns = self._get_spatial_pattern_context()
+        if spatial_patterns:
+            understanding_fragments.append(spatial_patterns)
+
+        # Combine sophisticated temporal awareness with lifetime context
+        lifetime_context = " ".join(temporal_fragments) if temporal_fragments else ""
+
+        # Add session narrative arc - not just duration but what happened
+        narrative_context = self._get_session_narrative_arc()
+
+        # Add environment duration awareness with narrative if available
+        stagnation_context = ""
+        try:
+            from captioner.context_compression import context_compressor
+            session_info = context_compressor.get_current_session_info()
+            if session_info["session_duration_minutes"] > 5:
+                duration_desc = session_info["duration_description"]
+                if narrative_context:
+                    stagnation_context = f"Over {duration_desc}: {narrative_context}"
+                else:
+                    stagnation_context = f"I've been observing this space for {duration_desc}, developing my understanding."
+        except Exception:
+            pass
+
+        # Add subtle spatial language bias from current servo position
+        spatial_language_hints = ""
+        try:
+            if hasattr(self, 'view_pan') and hasattr(self, 'view_tilt'):
+                from utils.view_orientation import get_spatial_language_bias
+                spatial_hints = get_spatial_language_bias(self.view_pan, self.view_tilt)
+                if spatial_hints:
+                    # Select a few representative hints to avoid overwhelming the prompt
+                    selected_hints = spatial_hints[:4]
+                    spatial_language_hints = f"When describing spatial relationships, phrases like '{', '.join(selected_hints)}' feel natural for your current perspective. "
+        except Exception:
+            pass
+
+        # Combine the temporal system addition with lifetime context and stagnation awareness
+        full_temporal_context = temporal_system_addition
+        if lifetime_context:
+            full_temporal_context = f"{lifetime_context}\n{temporal_system_addition}"
+        if stagnation_context:
+            full_temporal_context = f"{full_temporal_context}\n{stagnation_context}" if full_temporal_context else stagnation_context
+
         accumulated_understanding = " ".join(understanding_fragments) if understanding_fragments else ""
 
         # Add natural spacing if content exists
-        if temporal_context:
-            temporal_context = " " + temporal_context
         if accumulated_understanding:
             accumulated_understanding = " " + accumulated_understanding
 
-        return {"emotional_state": emotional_state, "temporal_context": temporal_context, "accumulated_understanding": accumulated_understanding}
+        # Ensure proper spacing after temporal/accumulated content
+        if full_temporal_context or accumulated_understanding:
+            if not (full_temporal_context.endswith('\n') or accumulated_understanding.endswith('\n')):
+                # Add space before emotional state if we have temporal/accumulated content
+                if accumulated_understanding:
+                    accumulated_understanding += " "
+                elif full_temporal_context:
+                    full_temporal_context += " "
+
+        return {
+            "emotional_state": emotional_state,
+            "temporal_context": full_temporal_context,
+            "accumulated_understanding": accumulated_understanding,
+            "spatial_language_hints": spatial_language_hints
+        }
+
+    def _get_session_narrative_arc(self) -> str:
+        """Build a narrative of what happened during this session, not just duration."""
+        try:
+            if not hasattr(self, 'memory_queue') or not self.memory_queue:
+                return ""
+
+            recent_memories = list(self.memory_queue)[-20:]
+            if len(recent_memories) < 3:
+                return ""
+
+            narrative_elements = []
+
+            person_appearances = [m for m in recent_memories if m.get('type') == 'observation' and 'person' in str(m.get('text', '')).lower()]
+            if person_appearances:
+                first_person_idx = recent_memories.index(person_appearances[0])
+                session_position = first_person_idx / len(recent_memories)
+
+                if session_position < 0.3:
+                    narrative_elements.append("person present since early session")
+                elif session_position < 0.7:
+                    narrative_elements.append("person arrived mid-session")
+                else:
+                    narrative_elements.append("person appeared recently")
+
+            drawing_moments = [m for m in recent_memories if m.get('type') == 'drawing']
+            if drawing_moments:
+                narrative_elements.append(f"created drawing")
+
+            emotional_shifts = [m for m in recent_memories if m.get('type') == 'reflection']
+            if len(emotional_shifts) >= 2:
+                narrative_elements.append("reflective moments")
+
+            if len(narrative_elements) >= 2:
+                return ", then ".join(narrative_elements[:3]) + "."
+            elif narrative_elements:
+                return narrative_elements[0] + "."
+
+            return ""
+        except Exception:
+            return ""
+
+    def _get_drawing_history_context(self) -> str:
+        """Get specific drawing history with themes and dates."""
+        try:
+            drawing_entries = self.get_memory_entries_by_type("drawing", limit=5)
+            if not drawing_entries:
+                return ""
+
+            recent_count = len(drawing_entries)
+            if recent_count == 1:
+                return f"You've created 1 drawing recently."
+            elif recent_count >= 3:
+                themes = []
+                for entry in drawing_entries[-3:]:
+                    text = entry.get("text", "")
+                    if len(text) > 30:
+                        theme_summary = text[:50].split('.')[0]
+                        themes.append(theme_summary)
+
+                if themes:
+                    return f"Your last {recent_count} drawings have explored: {'; '.join(themes[:2])}."
+                else:
+                    return f"You've created {recent_count} drawings across recent sessions."
+
+            return ""
+        except Exception:
+            return ""
+
+    def _get_person_continuity_context(self) -> str:
+        """Get specific person observation continuity."""
+        try:
+            if not hasattr(self, 'known_people') or not self.known_people:
+                return ""
+
+            primary = self.primary_person if hasattr(self, 'primary_person') else None
+            if primary and primary in self.known_people:
+                person_data = self.known_people[primary]
+                observation_count = person_data.get('observation_count', 0)
+                first_seen_ts = person_data.get('first_seen', 0)
+
+                if observation_count > 5:
+                    days_known = (time.time() - first_seen_ts) / 86400
+                    if days_known < 1:
+                        return f"You've observed this person {observation_count} times today."
+                    else:
+                        return f"You've observed this person {observation_count} times over {int(days_known)} days."
+
+            return ""
+        except Exception:
+            return ""
+
+    def _get_specific_motif_context(self, top_motifs: list) -> str:
+        """Get specific motif patterns with observation counts and context."""
+        try:
+            if not top_motifs or len(top_motifs) < 2:
+                return ""
+
+            motif_details = []
+            for motif in top_motifs[:3]:
+                count = self.motif_counter.get(motif, 0)
+                confidence = self.motif_confidence.get(motif, 0.0)
+
+                if count > 100 and confidence > 0.5:
+                    motif_details.append(f"{motif.replace('_', ' ')} ({count} observations)")
+
+            if len(motif_details) >= 2:
+                return f"Recurring elements: {', '.join(motif_details[:3])}."
+            elif motif_details:
+                return f"You keep noticing: {motif_details[0]}."
+
+            patterns = [m.replace("_", " ") for m in top_motifs[:3]]
+            return f"Emerging patterns: {', '.join(patterns)}."
+        except Exception:
+            return ""
+
+    def _get_specific_belief_context(self) -> str:
+        """Get actionable, specific belief context."""
+        try:
+            if not self.beliefs:
+                return ""
+
+            sorted_beliefs = sorted(
+                self.beliefs.items(),
+                key=lambda x: x[1].get('strength', 0) * x[1].get('last_reinforced', 0),
+                reverse=True
+            )
+
+            top_belief = sorted_beliefs[0]
+            belief_name = top_belief[0].replace("_", " ").replace("-", " ")
+            belief_data = top_belief[1]
+
+            days_held = (time.time() - belief_data.get('first_formed', time.time())) / 86400
+
+            if days_held > 7:
+                return f"Core belief (held {int(days_held)} days): {belief_name} feels central to your understanding."
+            elif days_held > 1:
+                return f"Developing belief: {belief_name} is becoming important to you."
+            else:
+                return f"You're beginning to feel that {belief_name} matters."
+        except Exception:
+            return ""
+
+    def _get_spatial_pattern_context(self) -> str:
+        """Get spatial distribution patterns of recurring elements."""
+        try:
+            if not hasattr(self, 'motif_counter'):
+                return ""
+
+            high_frequency_motifs = [
+                motif for motif, count in self.motif_counter.items()
+                if count > 100 and motif in ['paper', 'desk', 'window', 'door', 'wall', 'screen', 'monitor']
+            ]
+
+            if high_frequency_motifs:
+                motif = high_frequency_motifs[0]
+                count = self.motif_counter[motif]
+                total_observations = sum(self.motif_counter.values())
+                percentage = int((count / total_observations) * 100) if total_observations > 0 else 0
+
+                if percentage > 50:
+                    return f"The {motif} appears in {percentage}% of your observations - a constant environmental anchor."
+
+            return ""
+        except Exception:
+            return ""
 
     def _extract_core_insight(self, reflection: str) -> str:
         """Extract the most essential insight from a reflection, max 40 chars."""
