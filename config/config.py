@@ -225,7 +225,7 @@ MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
 # Drawing system intervals
-DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
+DEBUG_FAST_DRAWING = True # Set to True for rapid drawing testing (1 minute intervals)
 REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
 DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 1200  # 1 minute debug vs 20 minutes normal (check frequency)
 DRAWING_COOLDOWN = 120 if DEBUG_FAST_DRAWING else 720  # 2 minutes debug vs 12 minutes normal
@@ -329,7 +329,7 @@ USE_MULTI_STEP_DRAWING_ANALYSIS = True  # Set to False for original single-promp
 
 # === PAPER DETECTION SAFETY SYSTEM ===
 # Prevent drawing on bare surfaces by checking for paper before execution
-ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
+ENABLE_PAPER_DETECTION = False  # Master toggle for paper detection safety
 PAPER_CHECK_METHOD = "direct"  # "direct" (direct LLM analysis) - proven reliable with text detection
 PAPER_DETECTION_TEXT = "EMPTY"  # Text to look for when no paper is present (change to "EMPTY" for clarity)
 PAPER_DETECTION_CONFIDENCE_THRESHOLD = 0.65  # LLM confidence requirement (lowered for bright environments)
