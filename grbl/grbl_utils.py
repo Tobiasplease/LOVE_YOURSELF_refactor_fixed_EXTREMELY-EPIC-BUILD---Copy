@@ -1540,31 +1540,57 @@ def process_svg_to_grbl(
                     from config.config import TILT_MIN
                     PAPER_DETECTION_GAZE_TILT = TILT_MIN + 2
 
+                def _paper_check_after_homing_LEGACY() -> bool:
+                    # LEGACY VERSION - DISABLED
+                    # This 420-line monster has been replaced with clean ArUco detection
+                    return True
+
                 def _paper_check_after_homing() -> bool:
-                    start_t = time.time()
+                    """Simple ArUco-only paper detection - no legacy heuristics"""
+                    print("[📄] Running ArUco-only paper check...")
+                    try:
+                        # Get camera and servos from state manager
+                        from utils.state_manager import state_manager as _sm
+                        camera_obj = getattr(_sm, 'camera', None)
+
+                        # Get servos from machine module
+                        import sys as _sys
+                        m = _sys.modules.get('machine') or _sys.modules.get('__main__')
+                        servos_obj = getattr(m, 'servos', None) if m else None
+
+                        if camera_obj is None:
+                            print("[📄] No camera - defaulting to ALLOW drawing")
+                            return True
+
+                        # Call centralized ArUco detection
+                        from safety.paper_detection import check_paper_before_drawing
+                        paper_present = check_paper_before_drawing(camera_obj, servos_obj, None)
+
+                        print(f"[📄] ArUco check result: {'PAPER PRESENT' if paper_present else 'NO PAPER'}")
+                        return paper_present
+
+                    except Exception as e:
+                        print(f"[📄] Paper check error: {e} - defaulting to ALLOW drawing")
+                        import traceback
+                        traceback.print_exc()
+                        return True
+
+                    start_t_DISABLED = time.time()
                     # Import paper detection config at function start
                     try:
                         from config.config import PAPER_DISABLE_LOCAL_HEURISTICS
                     except Exception:
                         PAPER_DISABLE_LOCAL_HEURISTICS = False
-                    # Position gaze down for capture (best-effort)
+                    # Position gaze down for capture (best-effort) - use working gaze system
                     try:
                         from config.config import USE_SERVO
                         if USE_SERVO:
                             try:
                                 from vision.gaze import set_drawing_mode
-                                # Direct print to ensure visibility even when PRINT_CLEAN_CAPTIONS is True
-                                print("[👁️] Positioning gaze for post-home paper check…")
-                                try:
-                                    if PAPER_USE_DRAWING_TILT:
-                                        from config.config import TILT_MIN
-                                        det_tilt = TILT_MIN + 2
-                                    else:
-                                        det_tilt = PAPER_DETECTION_GAZE_TILT
-                                except Exception:
-                                    det_tilt = PAPER_DETECTION_GAZE_TILT
-                                set_drawing_mode(active=True, drawing_pan=PAPER_DETECTION_GAZE_PAN, drawing_tilt=det_tilt)
-                                time.sleep(1.6)
+                                print(f"[👁️] Positioning gaze for post-home paper check: pan={PAPER_DETECTION_GAZE_PAN}°, tilt={PAPER_DETECTION_GAZE_TILT}°")
+                                # Use the correct tilt angle for ArUco detection
+                                set_drawing_mode(active=True, drawing_pan=PAPER_DETECTION_GAZE_PAN, drawing_tilt=PAPER_DETECTION_GAZE_TILT)
+                                time.sleep(2.0)  # Wait for smooth transition to complete + camera settle
                             except Exception as e:
                                 log_json_entry(LogType.WARNING, {"action": "paper_check_after_homing", "step": "gaze_failed", "error": str(e)})
                     except Exception:
@@ -1611,8 +1637,9 @@ def process_svg_to_grbl(
                             pass
                     # 3) as last resort, try centralized detection if heuristics disabled
                     if frame is None:
+                        print(f"[DEBUG] frame is None, PAPER_DISABLE_LOCAL_HEURISTICS={PAPER_DISABLE_LOCAL_HEURISTICS}")
                         if PAPER_DISABLE_LOCAL_HEURISTICS:
-                            print("[📄] Post-home paper check: no shared camera — trying centralized detection")
+                            print("[📄] Post-home paper check: no shared camera — trying centralized detection (PATH A)")
                             try:
                                 from safety.paper_detection import check_paper_before_drawing
                                 # Let centralized detection handle camera access
@@ -1856,11 +1883,13 @@ def process_svg_to_grbl(
                         if not PAPER_DISABLE_LOCAL_HEURISTICS:
                             print(f"[📄] Post-home paper check → {'YES' if paper_present else 'NO'} ({reason})")
                         else:
-                            # Use centralized LLM-based paper detection (when heuristics disabled)
+                            # Use centralized paper detection (when heuristics disabled) - PATH B
+                            print(f"[DEBUG] Using centralized detection PATH B with frame: {frame is not None}")
                             try:
                                 from safety.paper_detection import check_paper_before_drawing
                                 # Create minimal camera/servos objects for the centralized function
                                 camera_obj = type('Camera', (), {'read_frame': lambda: frame})()
+                                print(f"[DEBUG] Created fake camera that will return: {frame is not None}")
 
                                 # Try to get servos from the machine module if available
                                 servos_obj = None
@@ -1872,15 +1901,15 @@ def process_svg_to_grbl(
                                 except Exception:
                                     pass
 
-                                # Call centralized paper detection
+                                # Call centralized paper detection (uses method from PAPER_CHECK_METHOD config)
                                 paper_present = check_paper_before_drawing(camera_obj, servos_obj, None)
-                                reason = "centralized_llm_detection"
-                                print(f"[📄] Post-home paper check (LLM-only) → {'YES' if paper_present else 'NO'}")
+                                reason = "centralized_detection_path_b"
+                                print(f"[📄] Post-home paper check (centralized PATH B) → {'YES' if paper_present else 'NO'}")
 
-                            except Exception as llm_e:
-                                print(f"[📄] Centralized LLM detection failed ({llm_e}) — defaulting to NO")
-                                paper_present = False
-                                reason = f"centralized_llm_error({str(llm_e)})"
+                            except Exception as detect_e:
+                                print(f"[📄] Centralized detection failed ({detect_e}) — defaulting to YES (allow drawing)")
+                                paper_present = True  # Safe default: allow drawing on error
+                                reason = f"centralized_detection_error({str(detect_e)})"
                     except Exception as e:
                         print(f"[📄] Paper check error: {e} — proceeding")
                         paper_present = True

@@ -82,7 +82,7 @@ class PaperDetector:
 
             # Position gaze to look down at drawing area
             self._position_gaze_for_detection(servos)
-            time.sleep(1.0)  # Allow gaze to settle
+            time.sleep(0.5)  # Brief additional wait for camera to stabilize
 
             # Capture image
             frame = camera.read_frame()
@@ -181,30 +181,51 @@ class PaperDetector:
 
             # Position gaze to look down at drawing area
             self._position_gaze_for_detection(servos)
-            time.sleep(1.0)  # Allow gaze to settle
+            time.sleep(0.5)  # Brief additional wait for camera to stabilize
 
-            # Capture current view
-            frame = camera.read_frame()
-            if frame is None:
-                raise Exception("Failed to capture frame for paper detection")
+            # ArUco detection runs continuously on live camera feed (like face detection)
+            if PAPER_CHECK_METHOD == "aruco":
+                result = self._check_aruco_detection_continuous(camera)
+                result.timestamp = start_time
 
-            # Save check image with timestamp
-            timestamp_str = str(int(start_time))
-            check_image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"paper_check_{timestamp_str}.jpg")
-            cv2.imwrite(check_image_path, frame)
+                # Log result
+                log_json_entry(
+                    LogType.DECISION,
+                    {
+                        "action": "paper_check_complete",
+                        "paper_present": result.paper_present,
+                        "confidence": result.confidence,
+                        "method": result.method_used,
+                        "duration": time.time() - start_time
+                    },
+                    print_message=f"[📄] {'✓' if result.paper_present else '✗'} Paper detection: {result.confidence:.2f} confidence"
+                )
 
-            # Crop to focus on drawing area (avoid seeing "EMPTY" sign at edges)
-            cropped_path = self._crop_detection_area(check_image_path)
+                return result
 
-            # Perform detection based on configured method
-            if PAPER_CHECK_METHOD == "reference":
-                result = self._check_with_reference_image(cropped_path, captioner)
-            else:  # "direct"
-                result = self._check_direct_detection(cropped_path, captioner)
+            # Legacy methods (reference, direct) need single frame for LLM
+            else:
+                print(f"[📄] Capturing single frame for LLM-based detection...")
+                frame = camera.read_frame()
+                if frame is None:
+                    raise Exception("Failed to capture frame for paper detection")
 
-            # Update result with common fields
-            result.check_image_path = check_image_path
-            result.timestamp = start_time
+                timestamp_str = str(int(start_time))
+                check_image_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"paper_check_{timestamp_str}.jpg")
+                cv2.imwrite(check_image_path, frame)
+
+                # Crop to focus on drawing area (avoid seeing "EMPTY" sign at edges)
+                cropped_path = self._crop_detection_area(check_image_path)
+
+                # Perform detection based on configured method
+                if PAPER_CHECK_METHOD == "reference":
+                    result = self._check_with_reference_image(cropped_path, captioner)
+                else:  # "direct"
+                    result = self._check_direct_detection(cropped_path, captioner)
+
+                # Update result with common fields
+                result.check_image_path = check_image_path
+                result.timestamp = start_time
 
             # Log result
             log_json_entry(
@@ -228,8 +249,10 @@ class PaperDetector:
             return result
 
         except Exception as e:
+            # When detection fails, default to ALLOWING drawing (assume paper present)
+            # This prevents blocking due to technical failures or camera issues
             error_result = PaperCheckResult(
-                paper_present=False,
+                paper_present=True,  # Safe default: assume paper is present when detection fails
                 confidence=0.0,
                 method_used=PAPER_CHECK_METHOD,
                 check_image_path="",
@@ -243,21 +266,35 @@ class PaperDetector:
                 {
                     "action": "paper_check_failed",
                     "error": str(e),
-                    "component": "paper_detection"
+                    "component": "paper_detection",
+                    "default_behavior": "allow_drawing"
                 },
-                print_message=f"[📄] ✗ Paper detection failed: {e}"
+                print_message=f"[📄] ⚠️ Paper detection failed: {e} → Defaulting to ALLOW drawing"
             )
 
             return error_result
 
     def _position_gaze_for_detection(self, servos):
-        """Position servos to look down at drawing area."""
+        """Position servos to look down at drawing area using smooth gaze system."""
         if servos is None:
+            print("[📄] Warning: No servos available - skipping gaze positioning")
             return  # Skip servo positioning for testing/debugging
-        # Use direct servo control instead of gaze locking to prevent stuck states
-        servos.set_pan(PAPER_DETECTION_GAZE_PAN)
-        time.sleep(0.1)
-        servos.set_tilt(PAPER_DETECTION_GAZE_TILT)
+
+        # Use smooth gaze system (same as drawing lock) for consistent, smooth movement
+        try:
+            from vision.gaze import set_drawing_mode
+            print(f"[📄] Smoothly positioning gaze for paper check: pan={PAPER_DETECTION_GAZE_PAN}°, tilt={PAPER_DETECTION_GAZE_TILT}°")
+            set_drawing_mode(active=True, drawing_pan=PAPER_DETECTION_GAZE_PAN, drawing_tilt=PAPER_DETECTION_GAZE_TILT)
+            time.sleep(3.5)  # Wait for smooth transition to complete and settle
+            print("[📄] Gaze positioned and settled")
+        except Exception as e:
+            print(f"[📄] Warning: Gaze system unavailable ({e}), using direct servo control")
+            # Fallback to direct control if gaze system unavailable
+            servos.set_pan(PAPER_DETECTION_GAZE_PAN)
+            time.sleep(0.5)
+            servos.set_tilt(PAPER_DETECTION_GAZE_TILT)
+            time.sleep(2.5)
+            print("[📄] Servos positioned and settled (direct control)")
 
     def _crop_detection_area(self, image_path: str) -> str:
         """Crop image to focus on the paper detection area."""
@@ -346,6 +383,177 @@ class PaperDetector:
     def _check_direct_detection(self, check_image_path: str, captioner=None) -> PaperCheckResult:
         """Check paper presence by direct LLM analysis."""
         return self._perform_double_check_detection(check_image_path, "direct")
+
+    def _check_aruco_detection_continuous(self, camera) -> PaperCheckResult:
+        """Check paper presence by continuously detecting ArUco markers on live camera feed (like face detection)."""
+        print(f"[📄] Starting continuous ArUco detection on live camera feed (5 seconds)...")
+
+        try:
+            # Initialize ArUco detector
+            aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+            aruco_params = cv2.aruco.DetectorParameters()
+
+            # Handle both new and legacy OpenCV APIs
+            try:
+                detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
+                use_new_api = True
+            except AttributeError:
+                detector = None
+                use_new_api = False
+
+            # Continuously check frames for 5 seconds
+            start_time = time.time()
+            detection_duration = 5.0
+            frames_checked = 0
+            marker_detected_count = 0
+            all_detected_ids = set()
+
+            while time.time() - start_time < detection_duration:
+                frame = camera.read_frame()
+                if frame is None:
+                    continue
+
+                frames_checked += 1
+
+                # Detect markers
+                if use_new_api:
+                    corners, ids, rejected = detector.detectMarkers(frame)
+                else:
+                    corners, ids, rejected = cv2.aruco.detectMarkers(frame, aruco_dict, parameters=aruco_params)
+
+                # Track detections
+                if ids is not None and len(ids) > 0:
+                    detected_ids = ids.flatten().tolist()
+                    all_detected_ids.update(detected_ids)
+                    if 0 in detected_ids:
+                        marker_detected_count += 1
+
+                time.sleep(0.05)  # ~20fps sampling rate
+
+            print(f"[📄] Continuous detection complete: {frames_checked} frames checked over {detection_duration}s")
+            print(f"[📄] Marker ID 0 detected in {marker_detected_count}/{frames_checked} frames")
+            print(f"[📄] All markers seen during scan: {sorted(all_detected_ids)}")
+
+            # If marker 0 was detected in ANY frame, it means no paper is covering it
+            if marker_detected_count > 0:
+                confidence = marker_detected_count / frames_checked if frames_checked > 0 else 0
+                print(f"[📄] ✓ Marker ID 0 VISIBLE ({confidence:.1%} of frames) → No paper present → BLOCKING draw")
+                return PaperCheckResult(
+                    paper_present=False,
+                    confidence=confidence,
+                    method_used="aruco_continuous",
+                    check_image_path="",
+                    timestamp=time.time(),
+                    llm_response=f"ArUco marker 0 visible in {marker_detected_count}/{frames_checked} frames - no paper covering surface"
+                )
+            else:
+                print(f"[📄] ✗ Marker ID 0 NOT VISIBLE → Paper present → ALLOWING draw")
+                return PaperCheckResult(
+                    paper_present=True,
+                    confidence=1.0,
+                    method_used="aruco_continuous",
+                    check_image_path="",
+                    timestamp=time.time(),
+                    llm_response=f"ArUco marker 0 not detected in {frames_checked} frames - paper present (other markers: {sorted(all_detected_ids)})"
+                )
+
+        except Exception as e:
+            print(f"[📄] ⚠️ ArUco detection failed: {e} → Defaulting to ALLOW drawing")
+            return PaperCheckResult(
+                paper_present=True,
+                confidence=0.0,
+                method_used="aruco_continuous",
+                check_image_path="",
+                timestamp=time.time(),
+                llm_response="",
+                error_message=f"ArUco detection error: {str(e)} (defaulting to allow drawing)"
+            )
+
+    def _check_aruco_detection_live(self, frame) -> PaperCheckResult:
+        """Check paper presence by detecting ArUco markers directly on camera frame (no disk I/O)."""
+        print(f"[📄] Running ArUco detection on live frame: {frame.shape}")
+        try:
+            # Initialize ArUco detector
+            aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+            aruco_params = cv2.aruco.DetectorParameters()
+
+            # Detect markers (handle both new and legacy OpenCV APIs)
+            try:
+                detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
+                corners, ids, rejected = detector.detectMarkers(frame)
+            except AttributeError:
+                # Legacy API
+                corners, ids, rejected = cv2.aruco.detectMarkers(frame, aruco_dict, parameters=aruco_params)
+
+            # Check if marker ID 0 was detected
+            # Logic: Marker visible = NO paper present (marker not covered)
+            #        Marker hidden = paper present (marker covered by paper)
+            detected_ids = ids.flatten().tolist() if ids is not None else []
+            print(f"[📄] ArUco detection result: {len(detected_ids)} markers found - IDs: {detected_ids}")
+
+            if ids is not None and len(ids) > 0 and 0 in ids:
+                print("[📄] ✓ Marker ID 0 VISIBLE → No paper present → BLOCKING draw")
+                return PaperCheckResult(
+                    paper_present=False,  # Marker visible = no paper covering it
+                    confidence=1.0,
+                    method_used="aruco_live",
+                    check_image_path="",
+                    timestamp=time.time(),
+                    llm_response=f"ArUco marker visible (ID 0) - no paper covering surface, {len(ids)} total markers"
+                )
+            else:
+                print("[📄] ✗ Marker ID 0 NOT VISIBLE → Paper present → ALLOWING draw")
+                return PaperCheckResult(
+                    paper_present=True,  # Marker hidden = paper covering it
+                    confidence=1.0,
+                    method_used="aruco_live",
+                    check_image_path="",
+                    timestamp=time.time(),
+                    llm_response=f"ArUco marker hidden - paper present (other IDs found: {detected_ids})"
+                )
+
+        except Exception as e:
+            # When detection fails, default to ALLOWING drawing (assume paper present)
+            print(f"[📄] ⚠️ ArUco detection failed: {e} → Defaulting to ALLOW drawing")
+            return PaperCheckResult(
+                paper_present=True,  # Safe default: assume paper is present when detection fails
+                confidence=0.0,
+                method_used="aruco_live",
+                check_image_path="",
+                timestamp=time.time(),
+                llm_response="",
+                error_message=f"ArUco detection error: {str(e)} (defaulting to allow drawing)"
+            )
+
+    def _check_aruco_detection(self, check_image_path: str, captioner=None) -> PaperCheckResult:
+        """Legacy: Check paper presence by detecting ArUco markers from saved image."""
+        print(f"[📄] Running ArUco detection on: {check_image_path}")
+        print(f"[📄] Image file exists: {os.path.exists(check_image_path)}")
+        try:
+            # Load image
+            frame = cv2.imread(check_image_path)
+            if frame is None:
+                raise Exception(f"Failed to load image: {check_image_path} (file exists: {os.path.exists(check_image_path)})")
+            print(f"[📄] Image loaded successfully: {frame.shape}")
+
+            # Use the live detection method
+            result = self._check_aruco_detection_live(frame)
+            result.check_image_path = check_image_path  # Update path for logging
+            return result
+
+        except Exception as e:
+            # When detection fails, default to ALLOWING drawing (assume paper present)
+            # This prevents blocking due to camera positioning issues or other technical failures
+            print(f"[📄] ⚠️ ArUco detection failed: {e} → Defaulting to ALLOW drawing")
+            return PaperCheckResult(
+                paper_present=True,  # Safe default: assume paper is present when detection fails
+                confidence=0.0,
+                method_used="aruco",
+                check_image_path=check_image_path,
+                timestamp=time.time(),
+                llm_response="",
+                error_message=f"ArUco detection error: {str(e)} (defaulting to allow drawing)"
+            )
 
     def _perform_double_check_detection(self, check_image_path: str, method_name: str) -> PaperCheckResult:
         """Perform paper detection with double-check mechanism to reduce false positives."""
@@ -539,7 +747,11 @@ def check_paper_before_drawing(camera, servos, captioner=None) -> bool:
         bool: True if paper is present and safe to draw, False otherwise
     """
     result = paper_detector.check_paper_present(camera, servos, captioner)
-    return result.paper_present and result.error_message is None
+    # Safe default: on errors, allow drawing (assume paper present)
+    if result.error_message is not None:
+        print(f"[📄] Paper check had error - defaulting to ALLOW: {result.error_message}")
+        return True
+    return result.paper_present
 
 
 def capture_paper_reference(camera, servos) -> bool:

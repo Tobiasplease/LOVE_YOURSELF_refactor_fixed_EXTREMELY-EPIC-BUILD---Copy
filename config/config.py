@@ -18,8 +18,8 @@ USE_HAND_CONTROLLER = True  # Enable hand controller system
 # Natural head movement limits for realistic gaze
 PAN_MIN = 45   # Left limit (±45° from center) - expanded range
 PAN_MAX = 135  # Right limit (±45° from center) - expanded range
-TILT_MIN = 50  # Down limit - expanded range
-TILT_MAX = 130 # Up limit - expanded range
+TILT_MIN = 65  # Down limit - matches current working position with lowered mount
+TILT_MAX = 150 # Up limit - expanded for upward viewing range
 # Legacy values for backwards compatibility
 SERVO_MIN = PAN_MIN  # Use PAN_MIN as default
 SERVO_MAX = PAN_MAX  # Use PAN_MAX as default
@@ -329,8 +329,8 @@ USE_MULTI_STEP_DRAWING_ANALYSIS = True  # Set to False for original single-promp
 
 # === PAPER DETECTION SAFETY SYSTEM ===
 # Prevent drawing on bare surfaces by checking for paper before execution
-ENABLE_PAPER_DETECTION = False  # Master toggle for paper detection safety
-PAPER_CHECK_METHOD = "direct"  # "direct" (direct LLM analysis) - proven reliable with text detection
+ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
+PAPER_CHECK_METHOD = "aruco"  # "aruco" (ArUco marker detection), "direct" (LLM), or "reference" (image comparison)
 PAPER_DETECTION_TEXT = "EMPTY"  # Text to look for when no paper is present (change to "EMPTY" for clarity)
 PAPER_DETECTION_CONFIDENCE_THRESHOLD = 0.65  # LLM confidence requirement (lowered for bright environments)
 # Reference images (used by paper detection). If they do not exist, detection falls back safely.
@@ -339,20 +339,20 @@ PAPER_ABSENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__fil
 # Legacy single-reference path (kept for backwards compatibility)
 PAPER_REFERENCE_IMAGE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_reference.jpg")
 PAPER_DETECTION_GAZE_PAN = 80  # Pan angle for looking down at drawing area (adjusted further left for better centering)
-PAPER_DETECTION_GAZE_TILT = 50  # Tilt angle for looking down at drawing area (lowest safe position)
+PAPER_DETECTION_GAZE_TILT = 65  # Tilt angle for looking down at drawing area (low enough to see ArUco marker)
 PAPER_CHECK_TIMEOUT = 10.0  # Maximum seconds to wait for paper detection
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
 
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
-# Leave False to preserve a working baseline.
+# ArUco detection is fast and reliable - safe to enable for post-home check
 ENABLE_POST_HOME_PAPER_CHECK = True
 # Soft vs. strict behavior: when False, paper check never blocks drawing
 # (it only logs and proceeds). Set to True to enforce blocking on "no paper".
-PAPER_CHECK_STRICT_MODE = False
+PAPER_CHECK_STRICT_MODE = True
 # Max time budget for the post-home paper check (seconds)
 PAPER_CHECK_MAX_WAIT_S = 1.0
 # Use the same tilt as drawing lock for detection (aligns view)
-PAPER_USE_DRAWING_TILT = True
+PAPER_USE_DRAWING_TILT = False  # Use PAPER_DETECTION_GAZE_TILT instead (65° for proper ArUco viewing)
 # Use full frame for paper check (not cropped ROI)
 PAPER_USE_FULL_FRAME = True
 

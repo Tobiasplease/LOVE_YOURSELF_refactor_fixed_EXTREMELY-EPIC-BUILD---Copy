@@ -36,8 +36,8 @@ void loop() {
     }
 
     else if (line.startsWith("TILT:")) {
-      // Constrain TILT to safe vertical range (45-135 degrees)
-      int angle = constrain(line.substring(5).toInt(), 45, 135);
+      // Constrain TILT to safe vertical range (45-150 degrees) - expanded for lowered mount
+      int angle = constrain(line.substring(5).toInt(), 45, 150);
       if (!tiltAttached) {
         tiltServo.attach(10);
         tiltAttached = true;
