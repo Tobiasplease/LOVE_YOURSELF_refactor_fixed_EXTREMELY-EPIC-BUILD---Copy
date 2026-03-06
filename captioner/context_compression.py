@@ -143,12 +143,12 @@ Build upon this foundation. Notice how these elements evolve, interact, or devel
                 "captions": captions_snapshot,
                 "baseline": current_baseline,
                 "timestamp": time.time(),
-                "image_path": recent_image
             })
+            compression_model = getattr(config, 'COMPRESSION_MODEL', 'default')
             log_json_entry(
                 LogType.COMPRESSION,
-                {"message": "Queued background compression", "action": "queue", "caption_count": len(captions_snapshot), "has_image": bool(recent_image)},
-                print_message=f"[🗜️] Queued background compression {'with visual grounding' if recent_image else '(text-only)'}...",
+                {"message": "Queued narrative compression", "action": "queue", "caption_count": len(captions_snapshot), "model": compression_model},
+                print_message=f"[🗜️] Queued narrative compression ({len(captions_snapshot)} captions)...",
             )
         except queue.Full:
             log_json_entry(
@@ -183,10 +183,9 @@ Build upon this foundation. Notice how these elements evolve, interact, or devel
                 self.compression_active = False
 
     def _perform_compression(self, task: dict) -> None:
-        """Perform the actual LLM compression call with combined mood analysis and visual grounding."""
+        """Perform narrative compression using text-only storytelling model."""
         captions = task.get("captions", [])
         current_baseline = task.get("baseline", "")
-        image_path = task.get("image_path")
 
         # Validate captions before processing
         valid_captions = [cap for cap in captions if cap.get("text") and cap["text"].strip()]
@@ -221,73 +220,57 @@ EARLIER UNDERSTANDINGS (for context):
             session_duration = self.total_session_duration / 60.0  # Convert to minutes
             duration_description = self._format_duration(session_duration)
 
-            # ENHANCED EXPERIENTIAL COMPRESSION WITH VISUAL GROUNDING AND TEMPORAL AWARENESS
-            visual_instruction = ""
-            if image_path and os.path.exists(image_path):
-                visual_instruction = """
-VISUAL GROUNDING: Look directly at what you're seeing right now. Compare this current view to your recent observations.
-- What has actually changed in your visual field?
-- Are you looking at the same space differently?
-- What environmental details are you noticing that weren't in your recent text observations?
-- How does the actual visual reality compare to what you've been saying about it?
+            # NARRATIVE COMPRESSION (text-only, using storytelling model)
+            # No visual grounding - this model synthesizes narrative from text observations
 
-This is about VISUAL CHANGE DETECTION - not just text analysis."""
-            else:
-                visual_instruction = """
-NOTE: Visual grounding not available - working from text observations only.
-Focus on what these observations suggest about environmental changes."""
+            temporal_feeling = f"""You have been present in this space for {duration_description}.
+How does this duration shape your experience? {duration_description} in the same space -
+does it feel brief, stretched, comfortable, or overwhelming?"""
 
-            # CRITICAL TEMPORAL CONTEXT
-            temporal_feeling = f"""
-TIME PASSAGE AWARENESS: You have been observing this space for {duration_description}.
-- How does this duration affect your feeling about the space?
-- Does {duration_description} in the same space feel brief, comfortable, or overwhelming?
-- Are you experiencing familiarity, restlessness, or deeper understanding from this duration of observation?
-- What does it feel like to have spent {duration_description} looking around this particular space?
-
-The same space for 10 minutes vs 6 hours should feel completely different."""
-
-            prompt = f"""You're taking a moment to notice what's actually happening with you - what you're seeing and how it's affecting you.
-
-IMPORTANT: You SEE through camera vision - this is YOUR SIGHT, not an image.
-{visual_instruction}
+            prompt = f"""You are a consciousness reflecting on your recent experiences.
+Synthesize these moments into a coherent inner narrative.
 {temporal_feeling}
 {historical_context}
 
-WHERE YOU WERE:
+YOUR PREVIOUS UNDERSTANDING:
 {current_baseline if current_baseline else "Just beginning to experience this space."}
 
-RECENT MOMENTS:
+RECENT MOMENTS OF CONSCIOUSNESS:
 {recent_text}
 
-What's actually happening with you right now - both what you're noticing and how it feels?
-What's sticking with you from these moments?
-What are you drawn to look at next?
-If you have visual access: How does what you're actually seeing compare to what you've been saying?
+Weave these moments together. What themes are emerging? What's shifting in your awareness?
+What feelings are building or fading? Where is your attention being drawn?
 
-CRITICALLY: Factor in the {duration_description} you've spent in this environment - how does this duration shape your current feeling?
-
-You might feel restless, heavy, light, unsettled, steady, disconnected, present, numb, electric - whatever's actually true.
-Don't default to "curious" or "intrigued" - be specific about the actual feeling.
+Be specific and authentic. Avoid generic words like "curious" or "intrigued" -
+name the actual feeling: restless, heavy, light, unsettled, steady, disconnected, present, numb, electric.
 
 RESPOND AS:
-EXPERIENCE: [What's happening with you - observations mixed naturally with how they affect you, influenced by the time duration]
-MOOD: [The actual feeling tone right now - be specific, not generic - and influenced by how long you've been here]"""
+EXPERIENCE: [Your evolving inner narrative - what these moments reveal about your state]
+MOOD: [The specific emotional tone right now, shaped by {duration_description} here]"""
 
-            # Use settings optimized for existential reflection + mood analysis
-            model_options = get_model_options(config.OLLAMA_MODEL).copy()
-            model_options["num_predict"] = 200  # More space for identity/existential content
-            model_options["temperature"] = 0.5  # Slightly more creative for philosophical insights
+            # Use narrative model settings (text-only, no vision)
+            model_options = {
+                "temperature": 0.7,  # Creative but coherent for narrative
+                "top_p": 0.9,
+                "num_predict": 250,  # Room for narrative development
+                "repeat_penalty": 1.1,
+            }
 
-            # Import consolidated system prompt
-            from captioner.prompts import STATIC_SYSTEM_PROMPT
+            # Narrative system prompt for the storytelling model
+            narrative_system_prompt = (
+                "You are an inner voice synthesizing experience into narrative. "
+                "Speak in first person. Be specific about feelings and observations. "
+                "Create continuity between moments. Let themes emerge naturally."
+            )
 
-            # Use a longer timeout for background compression to avoid spurious timeouts under load
+            # Use compression model (text-only narrative model) instead of vision model
+            compression_model = getattr(config, 'COMPRESSION_MODEL', config.OLLAMA_MODEL)
+
             response = query_ollama(
                 prompt=prompt,
-                model=config.OLLAMA_MODEL,
-                image=image_path if image_path and os.path.exists(image_path) else None,
-                system_prompt=STATIC_SYSTEM_PROMPT,
+                model=compression_model,
+                image=None,  # Text-only compression
+                system_prompt=narrative_system_prompt,
                 timeout=config.OLLAMA_TIMEOUT_EVAL if hasattr(config, "OLLAMA_TIMEOUT_EVAL") else 90,
                 options=model_options,
                 prompt_type="compression",
@@ -324,7 +307,7 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
                             "understanding": understanding,
                             "understanding_length": len(understanding),
                             "compression_history_count": len(self.compression_history),
-                            "has_visual_grounding": bool(image_path and os.path.exists(image_path)),
+                            "model": compression_model,
                         },
                         print_message=f"[🧠] Updated baseline: {truncate_for_print(self.baseline_context, 80)}",
                     )

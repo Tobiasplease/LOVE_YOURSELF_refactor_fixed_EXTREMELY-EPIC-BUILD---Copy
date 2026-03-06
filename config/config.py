@@ -67,6 +67,15 @@ OLLAMA_MODEL = "llava:7b-v1.6-mistral-q5_1"
 #
 # To switch models, change OLLAMA_MODEL above (no alternative presets maintained).
 
+# === NARRATIVE/COMPRESSION MODEL ===
+# Text-only model for compression, reflection, and narrative tasks
+# Uses a storytelling-tuned model for better narrative continuity
+COMPRESSION_MODEL = "Tohur/natsumura-storytelling-rp-llama-3.1:8b"
+# Alternatives:
+# - "mistral:7b-instruct" (4GB, general purpose)
+# - "llama3.2:3b" (2GB, lighter)
+# - "tinyllama:latest" (637MB, basic - not recommended for narrative)
+
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log"))
 
 # === COMFY STUFF ===
