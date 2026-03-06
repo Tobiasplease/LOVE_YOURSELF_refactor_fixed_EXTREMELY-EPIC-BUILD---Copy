@@ -33,31 +33,31 @@ def update_lung_position(
     # === 5-State Emotional Breathing Patterns ===
     breathing_patterns = {
         "energized_engaged": {
-            "base_speed": 1.6,  # Energetic but not frantic (slowed from 1.0)
+            "base_speed": 2.0,  # Energetic but not frantic (slowed 25% for motor longevity)
             "amplitude": 1.2,  # Full breathing depth
             "pause_scale": 0.2,  # Quick energy - shorter pauses
             "special_modes": ["FAST_BURST", "NORMAL"],
         },
         "alert_curious": {
-            "base_speed": 2.0,  # Alert but controlled breathing (slowed from 1.3)
+            "base_speed": 2.5,  # Alert but controlled breathing (slowed 25%)
             "amplitude": 1.0,  # Normal depth
             "pause_scale": 0.4,  # Thoughtful micro-pauses
             "special_modes": ["ALERT_HOLD", "NORMAL"],
         },
         "calm_observant": {
-            "base_speed": 2.8,  # Calm, contemplative breathing (slowed from 1.8)
+            "base_speed": 3.5,  # Calm, contemplative breathing (slowed 25%)
             "amplitude": 1.0,  # Normal depth
             "pause_scale": 1.2,  # Longer contemplative pauses
             "special_modes": ["SLOW_SIGH", "CONTEMPLATIVE_PAUSE", "NORMAL"],
         },
         "quiet_detached": {
-            "base_speed": 3.5,  # Gentle, minimal breathing (slowed from 2.2)
+            "base_speed": 4.4,  # Gentle, minimal breathing (slowed 25%)
             "amplitude": 0.7,  # Reduced but visible depth
             "pause_scale": 1.8,  # Extended hesitant pauses
             "special_modes": ["SHALLOW", "HESITANT_PAUSE", "NORMAL"],
         },
         "withdrawn_distant": {
-            "base_speed": 4.2,  # Subdued breathing (slowed from 2.8)
+            "base_speed": 5.3,  # Subdued breathing (slowed 25%)
             "amplitude": 0.8,  # Somewhat shallow
             "pause_scale": 2.5,  # Long, listless pauses
             "special_modes": ["SLOW_SIGH", "WITHDRAWN_PAUSE", "NORMAL"],

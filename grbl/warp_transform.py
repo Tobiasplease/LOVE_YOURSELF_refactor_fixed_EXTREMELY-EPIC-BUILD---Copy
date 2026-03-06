@@ -1,4 +1,5 @@
 import re
+import math
 
 # ================================================================
 # Optional PRE‑TRANSFORM (ideal domain) settings
@@ -21,15 +22,19 @@ import re
 # PRE_OFFSET_X = 0.0
 # PRE_OFFSET_Y = 0.0
 
-# Modified settings: 20% scale up, shift 10mm closer to robot body
-# Previous modified: PRE_OFFSET_Y = -5.0
-PRE_SCALE_X = 1.2
-PRE_SCALE_Y = 1.2
-PRE_OFFSET_X = 0.0
-PRE_OFFSET_Y = -10.0
+# Modified settings: scaled and positioned for drawing area
+# Previous: PRE_SCALE=1.66, PRE_OFFSET_X=-4.0, PRE_OFFSET_Y=-14.5, PRE_ROTATION_DEG=20.0
+PRE_SCALE_X = 1.45  # 13% smaller (was 1.66)
+PRE_SCALE_Y = 1.45  # 13% smaller (was 1.66)
+PRE_OFFSET_X = -8.0  # further left (was -4.0)
+PRE_OFFSET_Y = -8.0  # away from base (was -14.5)
 PRE_PIVOT_X = None  # e.g., 0.0 to use origin, or None for center
 PRE_PIVOT_Y = None
 PRE_CLAMP_TO_DOMAIN = False
+
+# Rotation correction (degrees, positive = clockwise when looking down at paper)
+# If drawings appear rotated to the left, increase this value
+PRE_ROTATION_DEG = 20.0  # 5° to the right (was 15.0)
 
 def find_max_xy_from_lines(lines):
     max_x = float('-inf')
@@ -151,6 +156,16 @@ def warp_transform_line(gcode_line, max_x, max_y):
                 x_pre = min(max(x_pre, 0.0), float(max_x))
             if max_y is not None:
                 y_pre = min(max(y_pre, 0.0), float(max_y))
+
+        # Apply rotation correction around center (positive = clockwise)
+        if PRE_ROTATION_DEG != 0.0:
+            angle_rad = math.radians(-PRE_ROTATION_DEG)  # negative because we rotate coords, not image
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            x_rel = x_pre - cx
+            y_rel = y_pre - cy
+            x_pre = cx + x_rel * cos_a - y_rel * sin_a
+            y_pre = cy + x_rel * sin_a + y_rel * cos_a
 
         # Apply JBE's inverse warp transform using pre‑adjusted coords
         transformed_x, transformed_y = map_to_quad(x_pre, y_pre, max_x, max_y)

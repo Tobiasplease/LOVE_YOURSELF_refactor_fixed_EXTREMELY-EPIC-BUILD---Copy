@@ -355,7 +355,7 @@ else:
 
 # Initialize breathing variables regardless of servo setting
 lung_angle = 0.0
-breath_speed = 4.0
+breath_speed = 5.0  # Slowed 25% for motor longevity
 breath_paused = False
 pause_start_time = 0
 last_breath_direction = None
@@ -653,8 +653,14 @@ mood_engine = MoodEngine()
 _global_mood_engine = mood_engine
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
+captioner.load_prior_session_caption()  # Load last thought from prior session for awakening
 _global_captioner = captioner
 _global_state_manager = state_manager
+
+# CRITICAL: Register captioner with state_manager so GRBL can access it
+# (sys.modules doesn't work from GRBL thread context)
+state_manager.captioner = captioner
+print("[🔧 INIT] Registered captioner with state_manager for GRBL access")
 
 # Initialize LCD caption display
 if USE_CAPTION_DISPLAY:
@@ -759,8 +765,8 @@ try:
         def read(self):
             return self.cv2_camera.read()
 
-    state_manager.camera = CameraWrapper(cap)  # Wrapped camera with read_frame() method
-    state_manager.servos = servos  # Optional
+    camera_wrapper = CameraWrapper(cap)
+    state_manager.set_hardware_refs(camera_wrapper, servos)
     debug_print(f"Camera wrapper shared via state_manager: {cap}", "DEBUG")
 except Exception:
     pass
@@ -1179,7 +1185,13 @@ try:
         if not ret:
             continue
 
+        # Share full-resolution frame for paper detection (before resize)
+        state_manager.update_shared_frame(frame)
+
         object_detector.set_frame(frame)  # YOLO person detection enabled
+
+        # Store full-resolution frame for LLM captioning (before resize for display)
+        full_res_frame = frame.copy()
 
         frame = cv2.resize(frame, (320, 240))
         # Display preview unflipped to match capture/reference orientation
@@ -1321,7 +1333,8 @@ try:
             with mood_thread_lock:
                 if not mood_thread_running:
                     debug_print(f"Starting mood update thread - interval: {MOOD_EVALUATION_INTERVAL}s", "MOOD")
-                    threading.Thread(target=mood_update_thread, args=(frame.copy(), int(now)), daemon=True).start()
+                    # Use full_res_frame for LLM captioning (2560x1440 instead of 320x240)
+                    threading.Thread(target=mood_update_thread, args=(full_res_frame, int(now)), daemon=True).start()
                     last_mood_time = now
                 else:
                     debug_print("Mood analysis already running - skipping this interval", "MOOD")

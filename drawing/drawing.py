@@ -140,6 +140,17 @@ class DrawingController:
 
         total_motivation = motivation_score + time_pressure
 
+        # Startup bonus - ensure first drawing happens within 5 minutes
+        startup_bonus = 0.0
+        STARTUP_DRAWING_WINDOW = 300  # 5 minutes
+        if time_since_last > STARTUP_DRAWING_WINDOW:
+            # This is likely the first drawing (time since last is huge)
+            # Add bonus to ensure it triggers soon after startup delay
+            startup_bonus = 0.3
+            print(f"[🎨] First drawing bonus: +{startup_bonus}")
+
+        total_motivation = total_motivation + startup_bonus
+
         # Add small random factor for unpredictability (±0.1)
         randomness = (random.random() - 0.5) * 0.2
         final_score = total_motivation + randomness
@@ -147,10 +158,17 @@ class DrawingController:
         # Decision threshold
         will_draw = final_score >= DRAWING_BASE_THRESHOLD
 
+        # Calculate cooldown remaining for display
+        cooldown_remaining = max(0, DRAWING_MIN_INTERVAL - time_since_last)
+        cooldown_minutes = cooldown_remaining / 60
+        cooldown_percent = (time_since_last / DRAWING_MIN_INTERVAL) * 100
+
         print(f"[🎨] State drawing evaluation:")
+        print(f"  ⏱️  Cooldown: {cooldown_remaining:.0f}s remaining ({cooldown_minutes:.1f} min) - {cooldown_percent:.0f}% elapsed")
         print(f"  Time since last: {time_since_last:.0f}s (min: {DRAWING_MIN_INTERVAL}s, max: {DRAWING_MAX_INTERVAL}s)")
         print(f"  Mood: {normalized_mood:.3f}, Novelty: {normalized_novelty:.3f}, Boredom: {normalized_boredom:.3f}")
-        print(f"  Base motivation: {motivation_score:.3f}, Time pressure: {time_pressure:.3f}")
+        bonus_str = f", Startup: +{startup_bonus:.3f}" if startup_bonus > 0 else ""
+        print(f"  Base motivation: {motivation_score:.3f}, Time pressure: {time_pressure:.3f}{bonus_str}")
         print(f"  Final score: {final_score:.3f} (threshold: {DRAWING_BASE_THRESHOLD})")
         print(f"  Decision: {'DRAW' if will_draw else 'WAIT'}")
 
@@ -160,9 +178,19 @@ class DrawingController:
         return will_draw
 
     def register_drawing(self, prompt: str) -> None:
+        from config.config import DRAWING_MAX_INTERVAL
+
         self.last_drawing_time = time.time()
         self.last_prompt = prompt
         self.last_drawing_prompt = prompt
+
+        print(f"\n{'='*60}")
+        print(f"🔔 DRAWING COOLDOWN RESET")
+        print(f"{'='*60}")
+        print(f"Physical drawing completed. Cooldown timer started.")
+        print(f"Next drawing possible in: {self.cooldown}s ({self.cooldown/60:.1f} minutes)")
+        print(f"Forced drawing at: {DRAWING_MAX_INTERVAL}s ({DRAWING_MAX_INTERVAL/60:.1f} minutes)")
+        print(f"{'='*60}\n")
 
         # LCD display is now handled in handle_drawing_flow with the drawing summary
 
@@ -254,6 +282,47 @@ class DrawingController:
                     print_message=print_message,
                 )
                 return
+
+            # === EARLY PAPER CHECK (before ComfyUI generation to save resources) ===
+            try:
+                from config.config import ENABLE_EARLY_PAPER_CHECK, ENABLE_PAPER_DETECTION
+                if ENABLE_PAPER_DETECTION and ENABLE_EARLY_PAPER_CHECK:
+                    from safety.paper_detection import check_paper_before_drawing
+                    camera = state_manager.camera
+                    servos = state_manager.servos
+
+                    if camera is not None:
+                        print("[📄] Running early paper check before ComfyUI generation...")
+                        paper_present = check_paper_before_drawing(camera, servos, None)
+
+                        # Restore gaze to idle after paper check (release drawing mode lock)
+                        try:
+                            from vision.gaze import set_drawing_mode
+                            set_drawing_mode(active=False)
+                            print("[📄] Gaze restored to idle after early paper check")
+                        except Exception as gaze_e:
+                            print(f"[📄] Warning: Could not restore gaze: {gaze_e}")
+
+                        if not paper_present:
+                            log_json_entry(
+                                LogType.DECISION,
+                                {
+                                    "decision": "skip_drawing",
+                                    "reason": "early_paper_check_failed",
+                                    "mood": agent.current_mood,
+                                    "novelty": novelty,
+                                    "boredom": boredom,
+                                },
+                                print_message="[📄] Early paper check: NO PAPER - skipping ComfyUI generation",
+                            )
+                            state_manager.last_no_paper_skip_ts = time.time()
+                            return
+                        else:
+                            print("[📄] Early paper check: PAPER PRESENT - proceeding with ComfyUI")
+                    else:
+                        print("[📄] Early paper check skipped: no camera available")
+            except Exception as e:
+                print(f"[📄] Early paper check error (proceeding anyway): {e}")
 
             # NOTE: register_drawing() is now called AFTER GRBL execution completes, not here
             # This ensures cooldown starts after physical drawing, not after prompt generation

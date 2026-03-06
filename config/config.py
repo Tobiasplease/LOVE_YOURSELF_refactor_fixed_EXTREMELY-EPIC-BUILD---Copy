@@ -46,6 +46,11 @@ IDLE_PAUSE_MAX = 6.0  # Maximum pause between idle movements (more frequent)
 IDLE_EASING = 0.18  # Easing factor for idle movements (more responsive)
 SWEEP_PROBABILITY = 0.6  # Probability of doing a big sweep movement vs small movement
 
+# === LLM-DRIVEN GAZE INTENT ===
+# Allow the model to influence camera direction via caption content
+ENABLE_GAZE_INTENT = True  # Parse captions for directional cues (up/down/left/right)
+GAZE_NUDGE_DURATION = 6.0  # How long a gaze nudge lasts before decaying (seconds)
+
 
 # === BREATHING SETTINGS ===
 LUNG_MIN = 60
@@ -115,7 +120,7 @@ GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))  # -> $31
 
 # Pen up/down S values (relative to $30 scale). Tune for your linkage.
 GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 20))  # Lowered for faster operation
-GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 50))
+GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 52))
 
 # Extra safety to ensure pen is fully UP before any homing ($H)
 GRBL_PEN_UP_REPEATS = int(os.getenv("GRBL_PEN_UP_REPEATS", 5))   # How many times to assert M3 S{UP} before homing
@@ -170,10 +175,10 @@ GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 0.3))  
 GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 6.0))  # Above this: use max speed
 
 # === PEN LIFT OPTIMIZATION ===
-# Servo values for different pen operations - adjust these to tune pen lift timing
-GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 47))         # Drawing pen up value (barely clear paper)
+# Servo values for different pen operations - lower S = more lift (pen higher)
+GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 30))         # Drawing pen up value (was 41, now more lift)
 GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))   # Normal pen down value
-GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 47))       # Cluster pen up (same minimal height)
+GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 32))       # Cluster pen up (was 43, now more lift)
 GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", min(60, GRBL_PEN_DOWN_S + 5))) # Fast pen down for clusters
 
 # Cluster detection parameters
@@ -225,17 +230,17 @@ MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 10  # seconds between full caption cycles
 
 # Drawing system intervals
-DEBUG_FAST_DRAWING = True # Set to True for rapid drawing testing (1 minute intervals)
+DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
 REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
-DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 1200  # 1 minute debug vs 20 minutes normal (check frequency)
+DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 300  # 1 minute debug vs 5 minutes normal (check frequency)
 DRAWING_COOLDOWN = 120 if DEBUG_FAST_DRAWING else 720  # 2 minutes debug vs 12 minutes normal
-DRAWING_STARTUP_DELAY = 60  # Minimum seconds to wait after startup before first drawing (camera initialization)
+DRAWING_STARTUP_DELAY = 180  # Minimum seconds to wait after startup before first drawing (3 min for full init)
 
 # State-motivated drawing system (when DEBUG_FAST_DRAWING is False)
 DRAWING_USE_STATE_MOTIVATION = not DEBUG_FAST_DRAWING  # Enable sophisticated triggering
-DRAWING_MIN_INTERVAL = 120   # 2 minutes minimum between drawings (documentation mode)
-DRAWING_MAX_INTERVAL = 180   # 3 minutes maximum (documentation mode) - forces drawing if threshold not met
-DRAWING_BASE_THRESHOLD = 0.72  # Base threshold for drawing decision (0-1) - raised to make drawing more selective
+DRAWING_MIN_INTERVAL = 120 if DEBUG_FAST_DRAWING else 900   # 2 min debug vs 15 min production (max 4/hour)
+DRAWING_MAX_INTERVAL = 180 if DEBUG_FAST_DRAWING else 1800  # 3 min debug vs 30 min production (min 2/hour)
+DRAWING_BASE_THRESHOLD = 0.72 if DEBUG_FAST_DRAWING else 0.45  # Lowered to allow triggering with modest state values
 DRAWING_NOVELTY_WEIGHT = 0.3  # How much novelty influences decision
 DRAWING_BOREDOM_WEIGHT = 0.4   # How much boredom influences decision
 DRAWING_MOOD_WEIGHT = 0.3      # How much mood influences decision
@@ -293,7 +298,7 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 
 # === CAPTIONING TEMPERATURE SETTINGS ===
 # Control creativity and expressiveness in different types of responses
-CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 1.2))        # Regular observations (higher for more personality)
+CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 1.0))        # Regular observations (balanced: creative but not flowery)
 DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.2))            # Drawing prompts (creative but focused)
 REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 1.1))      # Introspective moments (philosophical)
 ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) # First observations (slightly more grounded)
@@ -305,6 +310,7 @@ ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) #
 LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_drawing", "debug"]
 CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
 PRINT_CLEAN_CAPTIONS = True  # Suppress verbose runtime messages, show only LLM captions
+USE_FOCUSED_PROMPTS = True  # Use streamlined caption prompts (vs verbose structured prompts)
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
@@ -346,6 +352,9 @@ ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check 
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
 # ArUco detection is fast and reliable - safe to enable for post-home check
 ENABLE_POST_HOME_PAPER_CHECK = True
+# Early paper check: run ArUco check BEFORE ComfyUI generation to save resources
+# This is in addition to the post-home check (double verification)
+ENABLE_EARLY_PAPER_CHECK = True
 # Soft vs. strict behavior: when False, paper check never blocks drawing
 # (it only logs and proceeds). Set to True to enforce blocking on "no paper".
 PAPER_CHECK_STRICT_MODE = True

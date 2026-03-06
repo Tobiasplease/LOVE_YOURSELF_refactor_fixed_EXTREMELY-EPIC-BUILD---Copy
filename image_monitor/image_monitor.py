@@ -109,13 +109,9 @@ class ImageMonitor:
             base_name = os.path.splitext(os.path.basename(png_path))[0]
             output_folder = os.path.dirname(png_path)
 
-            # End any lingering 'generation' phase now that we have the PNG
-            try:
-                if getattr(state_manager, 'is_generating_drawing', False):
-                    state_manager.finish_drawing_generation()
-                    state_manager.clear_expected_output_prefix()
-            except Exception:
-                pass
+            # DON'T end generation phase yet - keep blocking flag active until GRBL starts
+            # to prevent gap where both is_generating_drawing and is_executing_cnc are False
+            # We'll clear it right before svg_to_grbl starts CNC execution
 
             # --- Minimal Paper Presence Check (non-blocking, safe fallbacks) ---
             try:
@@ -284,7 +280,17 @@ class ImageMonitor:
                     scale=1.0,  # SVG-skalning
                 )
 
-                # Convert SVG to G-code (CNC execution tracking will start when GRBL actually begins)
+                # NOW end generation phase right before starting CNC execution
+                # This ensures no gap where both flags are False
+                try:
+                    if getattr(state_manager, 'is_generating_drawing', False):
+                        state_manager.finish_drawing_generation()
+                        state_manager.clear_expected_output_prefix()
+                        print("[🔄] Generation phase complete, starting CNC execution...")
+                except Exception:
+                    pass
+
+                # Convert SVG to G-code (svg_to_grbl will call start_cnc_execution immediately)
                 result_path = svg_to_grbl(svg_input=centerline_svg_path, output_gcode=gcode_path, execute_grbl=EXECUTE_GRBL_GCODE)
 
                 if result_path:

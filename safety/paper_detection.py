@@ -385,13 +385,27 @@ class PaperDetector:
         return self._perform_double_check_detection(check_image_path, "direct")
 
     def _check_aruco_detection_continuous(self, camera) -> PaperCheckResult:
-        """Check paper presence by continuously detecting ArUco markers on live camera feed (like face detection)."""
-        print(f"[📄] Starting continuous ArUco detection on live camera feed (5 seconds)...")
+        """Check paper presence by continuously detecting ArUco markers on shared frame buffer from main loop."""
+        print(f"[📄] Starting continuous ArUco detection using shared frame buffer (5 seconds)...")
 
         try:
-            # Initialize ArUco detector
+            # Import state_manager for shared frame access
+            from utils.state_manager import state_manager
+
+            # Initialize ArUco detector with low-light optimized parameters
             aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
             aruco_params = cv2.aruco.DetectorParameters()
+
+            # Low-light sensitivity improvements (increased sensitivity for variable lighting)
+            aruco_params.adaptiveThreshWinSizeMin = 3
+            aruco_params.adaptiveThreshWinSizeMax = 27
+            aruco_params.adaptiveThreshWinSizeStep = 3
+            aruco_params.adaptiveThreshConstant = 5
+            aruco_params.minMarkerPerimeterRate = 0.005
+            aruco_params.maxMarkerPerimeterRate = 4.0
+            aruco_params.polygonalApproxAccuracyRate = 0.08
+            aruco_params.minCornerDistanceRate = 0.015
+            aruco_params.minDistanceToBorder = 1
 
             # Handle both new and legacy OpenCV APIs
             try:
@@ -407,15 +421,25 @@ class PaperDetector:
             frames_checked = 0
             marker_detected_count = 0
             all_detected_ids = set()
+            last_frame_ts = 0
 
             while time.time() - start_time < detection_duration:
-                frame = camera.read_frame()
+                # Use shared frame from main loop (avoids camera contention)
+                frame = state_manager.get_shared_frame(max_age=0.2)
                 if frame is None:
+                    time.sleep(0.02)
                     continue
+
+                # Skip if we already processed this frame (check timestamp)
+                current_ts = state_manager._frame_timestamp
+                if current_ts == last_frame_ts:
+                    time.sleep(0.02)
+                    continue
+                last_frame_ts = current_ts
 
                 frames_checked += 1
 
-                # Detect markers
+                # Detect markers directly on frame (ArUco handles grayscale internally)
                 if use_new_api:
                     corners, ids, rejected = detector.detectMarkers(frame)
                 else:
@@ -428,9 +452,9 @@ class PaperDetector:
                     if 0 in detected_ids:
                         marker_detected_count += 1
 
-                time.sleep(0.05)  # ~20fps sampling rate
+                time.sleep(0.03)  # ~30fps check rate
 
-            print(f"[📄] Continuous detection complete: {frames_checked} frames checked over {detection_duration}s")
+            print(f"[📄] Continuous detection complete: {frames_checked} unique frames checked over {detection_duration}s")
             print(f"[📄] Marker ID 0 detected in {marker_detected_count}/{frames_checked} frames")
             print(f"[📄] All markers seen during scan: {sorted(all_detected_ids)}")
 
@@ -473,11 +497,22 @@ class PaperDetector:
         """Check paper presence by detecting ArUco markers directly on camera frame (no disk I/O)."""
         print(f"[📄] Running ArUco detection on live frame: {frame.shape}")
         try:
-            # Initialize ArUco detector
+            # Initialize ArUco detector with low-light optimized parameters
             aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
             aruco_params = cv2.aruco.DetectorParameters()
 
-            # Detect markers (handle both new and legacy OpenCV APIs)
+            # Low-light sensitivity improvements (increased sensitivity for variable lighting)
+            aruco_params.adaptiveThreshWinSizeMin = 3
+            aruco_params.adaptiveThreshWinSizeMax = 27  # Extended range
+            aruco_params.adaptiveThreshWinSizeStep = 3  # Finer steps
+            aruco_params.adaptiveThreshConstant = 5  # More sensitive
+            aruco_params.minMarkerPerimeterRate = 0.005  # Detect smaller markers
+            aruco_params.maxMarkerPerimeterRate = 4.0
+            aruco_params.polygonalApproxAccuracyRate = 0.08  # More lenient
+            aruco_params.minCornerDistanceRate = 0.015  # Allow closer corners
+            aruco_params.minDistanceToBorder = 1  # Allow markers closer to edge
+
+            # Detect markers directly on frame (ArUco handles grayscale internally)
             try:
                 detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
                 corners, ids, rejected = detector.detectMarkers(frame)

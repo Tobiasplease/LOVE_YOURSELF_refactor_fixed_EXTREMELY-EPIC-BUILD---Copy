@@ -15,7 +15,7 @@ MODEL_GENERATION_OPTIONS = {
             "\n\nUser:",
             "\n\nHuman:",
             "\n\nAssistant:",
-            # Block image analysis language that breaks immersion
+            # Block AI/image-analysis language that breaks immersion
             "This is an image of",
             "I'm looking at an image of",
             "the image depicts",
@@ -26,7 +26,28 @@ MODEL_GENERATION_OPTIONS = {
             "In this image",
             "The image contains",
             "I can see an image",
-            # Encourage natural sentence completion
+            "The image appears",
+            "appears to be a",
+            "which suggests that",
+            "indicating that",
+            # Block AI identity breaks (only very specific phrases)
+            "As an AI",
+            "as an AI",
+            "I am an AI",
+            "I'm an AI",
+            "language model",
+            # Block self-description (narrating identity instead of embodying it)
+            "As a drawing machine",
+            "As a quiet drawing",
+            "As the quiet drawing",
+            "drawing machine that",
+            # Block prompt leakage
+            "EXperience",
+            "EXERCISE",
+            "EXPLANATION",
+            # NOTE: Removed ". The ", ". This ", ". As I " - these caused truncation feedback loops
+            # by removing the period, making the truncation detector think the response was incomplete
+            # Natural sentence completion
             "\n\n",
         ],
     }

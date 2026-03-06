@@ -81,6 +81,168 @@ last_state_change = 0.0  # Track state transitions for clean handoff
 last_pan_velocity = 0.0  # Previous pan velocity for smoothing
 last_tilt_velocity = 0.0  # Previous tilt velocity for smoothing
 
+# === LLM-DRIVEN GAZE NUDGE (MODIFIER MODE) ===
+# Allows the model to influence idle gaze via caption content
+# Acts as a decaying bias added to organic Perlin movement - preserves natural sway
+pan_nudge = 0.0  # Current pan nudge offset (degrees)
+tilt_nudge = 0.0  # Current tilt nudge offset (degrees)
+nudge_start_time = 0.0  # When the nudge was applied
+nudge_duration = 5.0  # How long nudge lasts before decaying (seconds)
+
+
+def apply_gaze_nudge(pan_delta: float, tilt_delta: float, duration: float = 5.0):
+    """
+    Apply a directional nudge as a modifier to idle gaze movement.
+    The nudge adds a decaying bias to organic Perlin movement, creating
+    a gentle drift in the specified direction while preserving natural sway.
+
+    Args:
+        pan_delta: Degrees to bias pan (-left, +right)
+        tilt_delta: Degrees to bias tilt (+up, -down) - matches servo config
+        duration: How long the bias lasts before decaying
+    """
+    global pan_nudge, tilt_nudge, nudge_start_time, nudge_duration
+
+    pan_nudge = pan_delta
+    tilt_nudge = tilt_delta
+    nudge_start_time = time.time()
+    nudge_duration = duration
+
+    if abs(pan_delta) > 0.1 or abs(tilt_delta) > 0.1:
+        direction = []
+        # Positive tilt delta = UP (higher servo), Negative = DOWN (lower servo)
+        if tilt_delta > 1:
+            direction.append("up")
+        elif tilt_delta < -1:
+            direction.append("down")
+        if pan_delta < -1:
+            direction.append("left")
+        elif pan_delta > 1:
+            direction.append("right")
+        print(f"[👁️] Gaze nudge: {' '.join(direction)} (pan={pan_delta:+.1f}°, tilt={tilt_delta:+.1f}°)")
+
+
+def get_current_nudge() -> tuple:
+    """Get current nudge values with decay applied."""
+    global pan_nudge, tilt_nudge, nudge_start_time, nudge_duration
+
+    if nudge_duration <= 0:
+        return (0.0, 0.0)
+
+    elapsed = time.time() - nudge_start_time
+    if elapsed >= nudge_duration:
+        return (0.0, 0.0)
+
+    # Smooth decay using cosine curve (fast at start, slow at end)
+    decay = 0.5 * (1 + math.cos(math.pi * elapsed / nudge_duration))
+    return (pan_nudge * decay, tilt_nudge * decay)
+
+
+def get_gaze_description() -> str:
+    """
+    Get human-readable description of current gaze position.
+    Returns description like "looking down-left" or "looking straight ahead".
+    """
+    global servo_x, servo_y
+
+    # Use actual config centers, not hardcoded 90
+    pan_center = (PAN_MIN + PAN_MAX) / 2  # 90
+    tilt_center = (TILT_MIN + TILT_MAX) / 2  # 107.5
+
+    pan_offset = servo_x - pan_center  # Negative = left, Positive = right
+    # TILT_MIN (65) = DOWN at paper, TILT_MAX (150) = UP
+    # So: lower servo value = looking down, higher = looking up
+    tilt_offset = servo_y - tilt_center  # Negative = down, Positive = up
+
+    # Lower thresholds to match actual movement range
+    h_threshold = 8  # degrees from center to count as left/right
+    v_threshold = 8  # degrees from center to count as up/down
+
+    # Determine horizontal direction
+    if pan_offset < -h_threshold:
+        h_dir = "left"
+    elif pan_offset > h_threshold:
+        h_dir = "right"
+    else:
+        h_dir = ""
+
+    # Determine vertical direction (corrected for hardware)
+    if tilt_offset < -v_threshold:
+        v_dir = "down"  # Lower servo = looking down at paper
+    elif tilt_offset > v_threshold:
+        v_dir = "up"  # Higher servo = looking up
+    else:
+        v_dir = ""
+
+    # Combine into description
+    if v_dir and h_dir:
+        return f"{v_dir}-{h_dir}"  # e.g., "down-left"
+    elif v_dir:
+        return v_dir  # e.g., "up"
+    elif h_dir:
+        return h_dir  # e.g., "right"
+    else:
+        return "ahead"  # centered
+
+
+def get_gaze_state() -> dict:
+    """Get current gaze state for prompt injection."""
+    global servo_x, servo_y, state
+
+    direction = get_gaze_description()
+    return {
+        "pan": int(servo_x),
+        "tilt": int(servo_y),
+        "direction": direction,
+        "state": state,  # "idle", "tracking", "grace"
+    }
+
+
+def get_gaze_narrative() -> str:
+    """Return roleplay-style gaze description based on servo position.
+
+    Returns immersive narrative like '*Your gaze drifts upward.*' rather than
+    dry coordinate descriptions. Uses actual servo config for correct direction.
+    """
+    global servo_x, servo_y, state
+
+    # Use actual servo center from config (not hardcoded 90)
+    pan_center = (PAN_MIN + PAN_MAX) / 2  # 90
+    tilt_center = (TILT_MIN + TILT_MAX) / 2  # 107.5
+
+    pan_offset = servo_x - pan_center  # Negative = left, Positive = right
+    tilt_offset = servo_y - tilt_center  # Positive = up (higher servo), Negative = down
+
+    # State-aware narrative - distinguish tracking from idle
+    if state == "tracking":
+        return "*Your eyes are fixed on someone.*"
+
+    # Pure directional narrative with embodied language
+    # Lower thresholds to trigger even with subtle/tired movement (±8 degrees)
+    # TILT_MIN (65) = looking DOWN at paper, TILT_MAX (150) = looking UP
+    # So: servo_y < center → negative offset → looking DOWN
+    v_dir = None
+    if tilt_offset < -8:  # Looking down (lower servo value = paper)
+        v_dir = "down at the desk"
+    elif tilt_offset > 8:  # Looking up (higher servo value)
+        v_dir = "upward"
+
+    h_dir = None
+    if pan_offset < -8:  # Looking left
+        h_dir = "to your left"
+    elif pan_offset > 8:  # Looking right
+        h_dir = "to your right"
+
+    # Combine with more embodied phrasing
+    if v_dir and h_dir:
+        return f"*Your gaze rests {v_dir}, {h_dir}.*"
+    elif v_dir:
+        return f"*Your gaze drifts {v_dir}.*"
+    elif h_dir:
+        return f"*You're looking {h_dir}.*"
+    else:
+        return "*Your gaze settles forward.*"
+
 
 def clamp(val, min_val, max_val):
     return max(min_val, min(max_val, val))
@@ -285,19 +447,30 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
         pan_scaled = pan_center + (pan_micro_target - pan_center) * pattern["movement_scale"]
         tilt_scaled = tilt_center + (tilt_micro_target - tilt_center) * pattern["movement_scale"]
 
+        # Apply LLM-driven gaze nudge as MODIFIER (gentle drift, not override)
+        # Nudge adds a decaying bias to organic movement - preserves natural sway
+        nudge_pan, nudge_tilt = get_current_nudge()
+
+        # Add nudge as directional bias while keeping organic Perlin sway
+        # Lower blend = more subtle influence, higher = stronger pull
+        nudge_blend = 0.6  # 60% of nudge value added to organic movement
+        pan_scaled += nudge_pan * nudge_blend
+        tilt_scaled += nudge_tilt * nudge_blend
+
         # Ensure within bounds
         pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
         tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
 
-        # Independent pan/tilt movement with emotional easing, organic variance, and velocity limiting
+        # Independent pan/tilt movement with emotional easing and organic variance
         emotional_easing = IDLE_EASING * pattern["easing_scale"]
-
         pan_easing = emotional_easing * pan_easing_variance
         tilt_easing = emotional_easing * tilt_easing_variance
 
-        # Use velocity limiting for idle movement to ensure smooth, natural motion
-        servo_x = velocity_limited_step(servo_x, pan_scaled, pan_easing, MAX_PAN_VELOCITY * 0.8, "pan")  # Slightly slower for idle
-        servo_y = velocity_limited_step(servo_y, tilt_scaled, tilt_easing, MAX_TILT_VELOCITY * 0.8, "tilt")  # Slightly slower for idle
+        # Use velocity limiting for idle movement
+        pan_velocity = MAX_PAN_VELOCITY * 0.8
+        tilt_velocity = MAX_TILT_VELOCITY * 0.8
+        servo_x = velocity_limited_step(servo_x, pan_scaled, pan_easing, pan_velocity, "pan")
+        servo_y = velocity_limited_step(servo_y, tilt_scaled, tilt_easing, tilt_velocity, "tilt")
 
     # Keep decimal precision for smoother movement - only round at final output
     return person_present, int(servo_x + 0.5), int(servo_y + 0.5)

@@ -329,17 +329,13 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
                         print_message=f"[🧠] Updated baseline: {truncate_for_print(self.baseline_context, 80)}",
                     )
 
-                    # ENHANCED VISIBILITY: Always print full compression result to console
-                    visual_indicator = "👁️" if image_path and os.path.exists(image_path) else "📝"
-                    session_info = self.get_current_session_info()
-                    duration_display = session_info["duration_description"]
-
-                    print(f"\n{visual_indicator} === ENVIRONMENTAL COMPRESSION === [{duration_display} in space]")
-                    print(f"EXPERIENCE: {understanding}")
-                    if sentiment_text:
-                        print(f"MOOD: {sentiment_text}")
-                    print(f"⏱️ Time in space: {duration_display}")
-                    print("=" * 40)
+                    # Quiet compression output - only show brief spatial update
+                    if understanding and len(understanding.strip()) > 20:
+                        session_info = self.get_current_session_info()
+                        duration = session_info["duration_description"]
+                        # Truncate to first sentence for cleaner output
+                        first_sentence = understanding.split('.')[0][:100] if '.' in understanding else understanding[:100]
+                        print(f"[🧠 {duration}] {first_sentence}...")
 
                     # Update spatial familiarity callback if available
                     if self.environmental_update_callback and understanding:
@@ -396,14 +392,18 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
         sentiment_text = ""
 
         try:
-            # Try new format first (EXPERIENCE/MOOD)
-            experience_match = re.search(r"EXPERIENCE:\s*(.+?)(?=MOOD:|$)", response, re.DOTALL)
-            mood_match = re.search(r"MOOD:\s*(.+?)$", response, re.DOTALL)
+            # Try new format first (EXPERIENCE/MOOD) - handle all colon variants (: ： etc)
+            experience_match = re.search(r"EX[Pp][Ee][Rr][Ii][Ee][Nn][Cc][Ee][:\s：]+(.+?)(?=MOOD|Mood|mood|$)", response, re.DOTALL)
+            mood_match = re.search(r"MOOD[:\s：]+(.+?)$", response, re.DOTALL | re.IGNORECASE)
 
-            if experience_match and mood_match:
+            if experience_match:
                 understanding = experience_match.group(1).strip()
+                # Clean any remaining prefix that might have leaked
+                understanding = re.sub(r"^[Ee][Xx][Pp][Ee][Rr][Ii][Ee][Nn][Cc][Ee][:\s：]*", "", understanding).strip()
+            if mood_match:
                 sentiment_text = mood_match.group(1).strip()
-            else:
+
+            if not understanding:
                 # Fallback to old format (UNDERSTANDING/SENTIMENT) for compatibility
                 understanding_match = re.search(r"UNDERSTANDING:\s*(.+?)(?=SENTIMENT:|$)", response, re.DOTALL)
                 if understanding_match:
@@ -430,7 +430,8 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
     def get_consolidated_understanding(self) -> str:
         """Get the consolidated understanding to guide future observations."""
         if self.baseline_context and len(self.baseline_context.strip()) > 0:
-            return f"CONTEXT: {self.baseline_context}"
+            # Return raw understanding without prefix - let caller decide formatting
+            return self.baseline_context.strip()
         return ""
 
     def get_current_sentiment_context(self) -> str:
@@ -527,5 +528,5 @@ MOOD: [The actual feeling tone right now - be specific, not generic - and influe
         }
 
 
-# Global instance
-context_compressor = ContextCompressionEngine(compression_frequency=3)
+# Global instance - compress every 8 captions (~80s) instead of every 3 (~30s)
+context_compressor = ContextCompressionEngine(compression_frequency=8)

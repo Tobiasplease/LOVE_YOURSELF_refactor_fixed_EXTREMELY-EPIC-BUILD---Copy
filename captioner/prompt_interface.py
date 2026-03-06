@@ -15,8 +15,7 @@ from .prompts import (
     STATIC_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     build_drawing_prompt,
-    build_environmental_caption_prompt,
-    build_ongoing_caption_prompt,
+    build_focused_caption_prompt,
     build_reflection_prompt,
     context_rich_multi_step_drawing_analysis,
 )
@@ -33,53 +32,22 @@ class PromptInterface:
         if not os.path.exists(image_path):
             return None, None, None
 
-        # Build the prompt based on context
+        # Track dynamic system context and formatted system prompt from focused prompt
+        dynamic_caption_context = None
+        focused_system_prompt = None
+
+        # CONSOLIDATED: All caption prompts go through build_focused_caption_prompt
         if drawing_introspection_mode:
-            # Special drawing introspection prompt that focuses on the creative process
             prompt = self._build_drawing_introspection_prompt(memory_ref)
-        elif first_time:
-            if memory_ref:
-                session_gap = getattr(memory_ref, "last_session_gap", None)
-                prompt = build_environmental_caption_prompt(
-                    memory_ref,
-                    mood=getattr(memory_ref, "current_mood", 0.5),
-                    boredom=getattr(memory_ref, "boredom", 0.0),
-                    novelty=getattr(memory_ref, "novelty_score", 0.5),
-                    last_session_gap=session_gap,
-                )
-            else:
-                prompt = "What do I perceive as I awaken to consciousness for the first time?"
-        elif flowing and memory_ref:
-            # Only inject non-drawing contexts - drawing context is handled directly in prompts.py
-            emotional_context = self._get_emotional_context()
-            baseline_context = self._get_baseline_context()
-            # REMOVED: drawing_context injection - handled in prompts.py build_ongoing_caption_prompt()
-
-            prompt = build_ongoing_caption_prompt(memory_ref, getattr(memory_ref, "last_caption", None), person_present=person_present)
-
-            # Add non-drawing contexts and temporal awareness
-            context_parts = []
-            if baseline_context:
-                context_parts.append(baseline_context)
-            if emotional_context:
-                context_parts.append(emotional_context)
-
-            # Add temporal stagnation awareness from compression system
-            try:
-                from captioner.context_compression import context_compressor
-                session_info = context_compressor.get_current_session_info()
-                if session_info["session_duration_minutes"] > 0:
-                    duration_desc = session_info["duration_description"]
-                    temporal_context = f"TEMPORAL AWARENESS: You have been observing this space for {duration_desc}. This duration shapes your current emotional state and perspective."
-                    context_parts.append(temporal_context)
-            except Exception as e:
-                print(f"[PROMPT] Could not get temporal context: {e}")
-
-            if context_parts:
-                context_string = "\n\n".join(context_parts)
-                prompt = f"{context_string}\n\n{prompt}"
+        elif memory_ref:
+            # Single code path for all captions - awakening handled inside build_focused_caption_prompt
+            prompt, focused_system_prompt, dynamic_caption_context = build_focused_caption_prompt(
+                memory_ref,
+                getattr(memory_ref, "last_caption", None),
+                person_present=person_present
+            )
         else:
-            prompt = "Describe this image."
+            prompt = "I'm waking up. What do I see?"
 
         # Prepare model options with variation settings
         model_options = self._get_base_model_options()
@@ -94,18 +62,35 @@ class PromptInterface:
             elif first_time:
                 from config.config import ENVIRONMENTAL_TEMPERATURE
                 caption_temp = ENVIRONMENTAL_TEMPERATURE
-                model_options.update({"temperature": caption_temp, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
+                model_options.update({
+                    "temperature": caption_temp,
+                    "top_p": 0.7,
+                    "repeat_penalty": 2.5,
+                    "top_k": 20,
+                    "num_predict": 100,  # Slightly longer for awakening but still brief
+                })
             else:
                 from config.config import CAPTIONER_TEMPERATURE
                 caption_temp = CAPTIONER_TEMPERATURE
-                model_options.update({"temperature": caption_temp, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
+                # Preserve existing stops (immersion-breaking phrases) and add brevity stops
+                existing_stops = model_options.get("stop", [])
+                brevity_stops = [".\n", "?\n", "!\n", "\n\n", "...\n"]
+                merged_stops = list(set(existing_stops + brevity_stops))
+                model_options.update({
+                    "temperature": caption_temp,
+                    "top_p": 0.6,
+                    "repeat_penalty": 2.5,
+                    "top_k": 20,
+                    "num_predict": 80,  # 1-2 sentences (~50-60 words)
+                    "stop": merged_stops,
+                })
         except ImportError:
             if drawing_introspection_mode:
                 caption_temp = 1.3
                 model_options.update({"temperature": caption_temp, "top_p": 0.8, "repeat_penalty": 2.0, "top_k": 30})
             else:
-                caption_temp = 1.2 if not first_time else 0.9  # Default fallback
-                model_options.update({"temperature": caption_temp, "top_p": 0.7, "repeat_penalty": 1.5, "top_k": 20})
+                caption_temp = 1.0 if not first_time else 0.9  # Default fallback (lowered from 1.2)
+                model_options.update({"temperature": caption_temp, "top_p": 0.6, "repeat_penalty": 2.0, "top_k": 20, "num_predict": 80})
 
         # Use special system prompt for drawing introspection to encourage variety
         if drawing_introspection_mode:
@@ -118,27 +103,23 @@ class PromptInterface:
                 "Describe what you're actually experiencing right now, not what you think you should say about art."
             )
         else:
-            # Format dynamic SYSTEM_PROMPT with temporal/motif context if available
-            system_prompt = SYSTEM_PROMPT
+            # Use focused system prompt if available (has embedded character state)
+            # Otherwise fall back to static system prompt
+            base_prompt = focused_system_prompt if focused_system_prompt else STATIC_SYSTEM_PROMPT
 
-            # Try to format with dynamic context if memory_ref has the method
-            if memory_ref and hasattr(memory_ref, "get_dynamic_system_context"):
-                try:
-                    dynamic_context = memory_ref.get_dynamic_system_context()
-                    if isinstance(dynamic_context, dict):
-                        system_prompt = SYSTEM_PROMPT.format(
-                            emotional_state=dynamic_context.get("emotional_state", "contemplative"),
-                            temporal_context=dynamic_context.get("temporal_context", ""),
-                            accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
-                            spatial_language_hints=dynamic_context.get("spatial_language_hints", ""),
-                        )
-                except Exception as e:
-                    # Fall back to static prompt if formatting fails
-                    print(f"[PROMPT] Dynamic context formatting failed: {e}")
-                    system_prompt = STATIC_SYSTEM_PROMPT
+            # If focused prompt provided dynamic context, inject it into system prompt
+            # This separates CONTEXT (what model knows) from CONTENT (what to respond to)
+            if dynamic_caption_context:
+                system_prompt = (
+                    base_prompt + "\n\n"
+                    "--- CURRENT STATE (context only, do not narrate) ---\n"
+                    f"{dynamic_caption_context}\n"
+                    "--- END STATE ---\n"
+                    "IMPORTANT: The above is CONTEXT. Do NOT describe your gaze, location, or observation process. "
+                    "Just respond with inner thought/feeling."
+                )
             else:
-                # No dynamic context available, use static fallback
-                system_prompt = STATIC_SYSTEM_PROMPT
+                system_prompt = base_prompt
 
         # Return prompt, options, and formatted system prompt
         return prompt, model_options, system_prompt

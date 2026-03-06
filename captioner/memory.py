@@ -142,6 +142,7 @@ class MemoryMixin:
         self.long_memory.append(entry)
 
         self.extract_motifs_from_caption(text)
+        self.extract_desires_and_purpose(text)
 
         for motif in self.current_motifs:
             self.update_motif_focus_streak(motif)
@@ -369,7 +370,22 @@ class MemoryMixin:
             motif_age_days = (now_time - self.motif_first_seen.get(motif, now_time)) / 86400
             if count >= BELIEF_THRESHOLD and motif_age_days >= BELIEF_FORM_MIN_DAYS:
                 prev_strength = self.beliefs.get(motif, {}).get("strength", 0.5)
-                strength = min(1.0, prev_strength + 0.02)
+
+                # Context-aware strength increment based on significance and novelty
+                significance = self.motif_confidence.get(motif, 0.5)
+                novelty = getattr(self, "_novelty_score", 0.5)
+
+                if significance > 0.7 and novelty > 0.4:
+                    # HIGH significance + novelty = FASCINATION path (4x faster)
+                    strength_increment = 0.08
+                elif novelty < 0.2:
+                    # LOW novelty = BOREDOM path (slower belief growth for static things)
+                    strength_increment = 0.01
+                else:
+                    # Normal growth
+                    strength_increment = 0.02
+
+                strength = min(1.0, prev_strength + strength_increment)
                 self.beliefs[motif] = {
                     "strength": strength,
                     "first_formed": self.motif_first_seen.get(motif, now_time),
@@ -402,10 +418,20 @@ class MemoryMixin:
             self._novelty_score = 1.0
             return 1.0
 
-        # Base novelty from caption comparison
+        # Base novelty from caption comparison - use WORD OVERLAP not string equality
+        # Generic AI-speak with different words should register as LOW novelty
         cur = self.memory_queue[-1]["text"].lower()
         prev = self.memory_queue[-2]["text"].lower()
-        caption_novelty = 1.0 if cur != prev else 0.0
+
+        cur_words = set(cur.split())
+        prev_words = set(prev.split())
+
+        if cur_words and prev_words:
+            # Calculate word overlap - high overlap = low novelty
+            overlap = len(cur_words & prev_words) / max(len(cur_words), len(prev_words))
+            caption_novelty = 1.0 - overlap  # Invert: high overlap = low novelty
+        else:
+            caption_novelty = 1.0 if cur != prev else 0.0
 
         # === FRAME DIFF NOVELTY INTEGRATION ===
         # Real-time environmental change should boost novelty
@@ -1234,9 +1260,11 @@ class MemoryMixin:
             }
             return "primary"
 
-        # Update last seen for primary person
+        # Update last seen and increment observation count for primary person
         if "primary" in self.known_people:
             self.known_people["primary"]["last_seen"] = time.time()
+            self.known_people["primary"]["observation_count"] = \
+                self.known_people["primary"].get("observation_count", 0) + 1
 
         return "primary"
 

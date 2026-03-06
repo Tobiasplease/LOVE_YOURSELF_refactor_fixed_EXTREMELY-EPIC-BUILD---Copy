@@ -40,6 +40,42 @@ class StateManager:
         self.last_paper_check_ts: float = 0.0
         self.last_paper_check_reason: str = ""
         self.last_no_paper_skip_ts: float = 0.0
+        # Hardware references for early paper detection
+        self._camera = None
+        self._servos = None
+        # Shared frame buffer for paper detection (avoids camera contention)
+        self._latest_frame = None
+        self._frame_timestamp: float = 0.0
+        self._frame_lock = threading.Lock()
+
+    def set_hardware_refs(self, camera, servos):
+        """Store hardware references for early paper detection access."""
+        self._camera = camera
+        self._servos = servos
+
+    @property
+    def camera(self):
+        return self._camera
+
+    @property
+    def servos(self):
+        return self._servos
+
+    def update_shared_frame(self, frame):
+        """Update the shared frame buffer (called from main loop)."""
+        with self._frame_lock:
+            self._latest_frame = frame
+            self._frame_timestamp = time.time()
+
+    def get_shared_frame(self, max_age: float = 0.5):
+        """Get the latest shared frame if fresh enough (thread-safe)."""
+        with self._frame_lock:
+            if self._latest_frame is None:
+                return None
+            age = time.time() - self._frame_timestamp
+            if age > max_age:
+                return None
+            return self._latest_frame.copy()
 
     def save_session_state(self, captioner, mood_engine, timekeeper=None) -> bool:
         """Save current session state for next startup."""

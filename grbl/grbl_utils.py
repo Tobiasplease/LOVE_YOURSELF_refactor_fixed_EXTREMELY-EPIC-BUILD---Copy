@@ -600,7 +600,7 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
         if scale_to:
             cmd.extend(["layout", "--fit-to-margins", "1cm", scale_to])
 
-        cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesort", "gwrite", "--profile", "gcodemm", output_file])
+        cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesimplify", "--tolerance", "0.05mm", "linesort", "gwrite", "--profile", "gcodemm", output_file])
 
         log_json_entry(
             LogType.GRBL,
@@ -2081,23 +2081,35 @@ def process_svg_to_grbl(
                     # Get the drawing prompt that was used for this drawing
                     drawing_prompt = state_manager.current_drawing_prompt or state_manager.last_completed_drawing_prompt or "Unknown drawing"
 
-                    # Get the captioner instance from machine.py to access the drawing controller
-                    if 'machine' in sys.modules:
-                        machine_module = sys.modules['machine']
-                        captioner = getattr(machine_module, '_global_captioner', None) or getattr(machine_module, 'captioner', None)
+                    # Get the captioner instance via state_manager (more reliable than sys.modules)
+                    print(f"[🔍 DEBUG] Attempting to register drawing completion...")
+                    captioner = getattr(state_manager, 'captioner', None)
+                    print(f"[🔍 DEBUG] captioner from state_manager: {captioner is not None}")
 
-                        if captioner and hasattr(captioner, 'drawing') and hasattr(captioner.drawing, 'register_drawing'):
+                    if captioner is None:
+                        # Fallback: try sys.modules (old method)
+                        print(f"[🔍 DEBUG] Fallback: trying sys.modules['machine']")
+                        if 'machine' in sys.modules:
+                            machine_module = sys.modules['machine']
+                            captioner = getattr(machine_module, '_global_captioner', None) or getattr(machine_module, 'captioner', None)
+                            print(f"[🔍 DEBUG] captioner from sys.modules: {captioner is not None}")
+
+                    if captioner:
+                        print(f"[🔍 DEBUG] has 'drawing' attr: {hasattr(captioner, 'drawing')}")
+                        print(f"[🔍 DEBUG] has 'register_drawing' method: {hasattr(captioner.drawing, 'register_drawing') if hasattr(captioner, 'drawing') else False}")
+
+                        if hasattr(captioner, 'drawing') and hasattr(captioner.drawing, 'register_drawing'):
                             captioner.drawing.register_drawing(drawing_prompt)
-                            print(f"🎯 [DEBUG] Drawing cooldown timer started after GRBL completion")
+                            print(f"✅ [SUCCESS] Drawing cooldown timer started after GRBL completion")
                             log_json_entry(
                                 LogType.DEBUG,
                                 {"message": "Drawing cooldown started after physical completion", "prompt": drawing_prompt[:50] + "..." if len(drawing_prompt) > 50 else drawing_prompt},
                                 print_message=f"[⏰] Drawing cooldown started: {captioner.drawing.cooldown}s"
                             )
                         else:
-                            print(f"🎯 [DEBUG] Could not access drawing controller for cooldown registration")
+                            print(f"[❌ CRITICAL] Captioner found but missing drawing/register_drawing!")
                     else:
-                        print(f"🎯 [DEBUG] Machine module not available for drawing controller access")
+                        print(f"[❌ CRITICAL] Could not find captioner via state_manager OR sys.modules!")
                 except Exception as e:
                     print(f"🎯 [DEBUG] Error registering drawing completion: {e}")
                     import traceback

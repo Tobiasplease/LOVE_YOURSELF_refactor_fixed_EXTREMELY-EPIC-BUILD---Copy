@@ -93,7 +93,12 @@ class CaptionDisplay:
             priority_flag = {"HIGH": "H", "MEDIUM": "M", "LOW": "L"}.get(priority, "M")
             message = f"{priority_flag}:2000:{caption}\n"  # 2 second delay for readability
 
-            print(f"[DEBUG] Sending to Arduino: {message.strip()}")
+            try:
+                from config.config import PRINT_CLEAN_CAPTIONS
+                if not PRINT_CLEAN_CAPTIONS:
+                    print(f"[DEBUG] Sending to Arduino: {message.strip()}")
+            except ImportError:
+                pass
             with self.send_lock:
                 self.ser.write(message.encode())
                 self.ser.flush()

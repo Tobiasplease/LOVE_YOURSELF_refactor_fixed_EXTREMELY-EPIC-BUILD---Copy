@@ -87,6 +87,7 @@ class Captioner(MemoryMixin):
         self.true_session_start = time.time()
         self.first_caption_done = False
         self.awakening_done = False
+        self.session_awakening_done = False  # Per-session awakening flag (resets each session)
         self.print_lock = threading.Lock()  # Prevent multiple simultaneous prints
 
         self.current_mood: float = 0.0
@@ -109,7 +110,9 @@ class Captioner(MemoryMixin):
 
         # Session continuity - time gap will be set by state manager if restoring session
         self._last_session_file = os.path.join(MOOD_SNAPSHOT_FOLDER, "last_session.txt")
+        self._last_caption_file = os.path.join(MOOD_SNAPSHOT_FOLDER, "last_caption.txt")
         self.last_session_gap = None  # Will be set by state manager during restoration
+        self.prior_session_last_caption = None  # Loaded from prior session for awakening
 
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
         self.snapshot_queue: Deque[Tuple[np.ndarray, bool, Optional[Dict]]] = deque()
@@ -119,6 +122,22 @@ class Captioner(MemoryMixin):
         try:
             with open(self._last_session_file, "w") as f:
                 f.write(str(time.time()))
+            # Also save the last caption for awakening continuity
+            if self.last_caption and len(self.last_caption) > 5:
+                with open(self._last_caption_file, "w") as f:
+                    f.write(self.last_caption[:200])  # Truncate to reasonable length
+        except Exception:
+            pass
+
+    def load_prior_session_caption(self):
+        """Load the last caption from the prior session for awakening context."""
+        try:
+            if os.path.exists(self._last_caption_file):
+                with open(self._last_caption_file, "r") as f:
+                    caption = f.read().strip()
+                    if caption and len(caption) > 5:
+                        self.prior_session_last_caption = caption
+                        print(f"[💭] Loaded prior session thought: {caption[:50]}...")
         except Exception:
             pass
 
@@ -231,21 +250,18 @@ class Captioner(MemoryMixin):
 
             if not self.first_caption_done:
                 # Phase 1: Internal awakening reorientation (no image)
-
-                # If no frames available yet, defer awakening to next cycle
                 if not self.snapshot_queue:
-                    # Don't block - just defer the awakening to the next caption cycle
                     self.first_caption_done = False  # Keep awakening pending
                     caption = "Awakening... preparing to observe environment..."
-                    # Add small delay to allow main loop to populate snapshot_queue
                     time.sleep(0.5)
                 else:
                     caption = self.generate_internal_awakening()
                     self.awaiting_environmental_phase = True  # Flag for Phase 2
-            elif getattr(self, "awaiting_environmental_phase", False):
-                # Phase 2: Environmental grounding (first visual after awakening)
-                caption = self.model.caption_image(img_path, flowing=True, first_time=True)  # Use awakening prompts
-                self.awaiting_environmental_phase = False  # Clear flag
+            elif getattr(self, "awaiting_environmental_phase", False) or not self.session_awakening_done:
+                # Phase 2: Environmental grounding (first visual after awakening OR first visual of session)
+                caption = self.model.caption_image(img_path, flowing=True, first_time=True)
+                self.awaiting_environmental_phase = False
+                self.session_awakening_done = True
             else:
                 log_json_entry(
                     LogType.DEBUG,
@@ -318,7 +334,8 @@ class Captioner(MemoryMixin):
                     print_message=f"[❌] Caption error: {caption}",
                 )
                 self.observe("I couldn't see anything just now.", self.current_mood, img_path, memory_type="glitch")
-                caption = "Vision systems recalibrating..."  # Better fallback
+                caption = "..."  # Minimal fallback - don't pollute memory with fake captions
+                return caption  # Return early - don't store this in recent_captions
 
         # Format caption for clean output
         try:
@@ -346,9 +363,6 @@ class Captioner(MemoryMixin):
                 if not is_executing_cnc:
                     from utils.caption_display import send_caption_to_display
                     send_caption_to_display(caption)
-                    print(f"[LCD] Sent: {caption[:40]}...")
-                else:
-                    print(f"[LCD] Skipped during drawing: {caption[:40]}...")
             except Exception as e:
                 print(f"[LCD] Failed to send caption: {e}")
             # Track last sent caption for deduplication
@@ -377,6 +391,26 @@ class Captioner(MemoryMixin):
             emotion_state=self.current_emotion_state,
         )
         self.last_caption = caption
+
+        # Track recent captions for continuity thread (used by focused prompt)
+        if caption and caption.strip():
+            self.recent_captions.append((caption.strip(), now))
+            if len(self.recent_captions) > 20:  # Keep last 20
+                self.recent_captions = self.recent_captions[-20:]
+
+        # Extract gaze intent from caption and nudge camera
+        try:
+            from config.config import ENABLE_GAZE_INTENT, GAZE_NUDGE_DURATION
+            if ENABLE_GAZE_INTENT:
+                from vision.gaze_intent import extract_gaze_intent, get_nudge_deltas
+                from vision.gaze import apply_gaze_nudge
+                intent = extract_gaze_intent(caption)
+                if intent:
+                    direction, intensity = intent
+                    pan_delta, tilt_delta = get_nudge_deltas(direction, intensity)
+                    apply_gaze_nudge(pan_delta, tilt_delta, duration=GAZE_NUDGE_DURATION)
+        except Exception:
+            pass  # Gaze intent is non-critical
 
         # Now update the timestamp since we have a new caption
         self.last_caption_time = now
@@ -501,58 +535,81 @@ class Captioner(MemoryMixin):
 
         # Check drawing interval - should trigger check every DRAWING_INTERVAL
         time_since_last_check = now - getattr(self, 'last_drawing_check_time', 0)
+        time_since_last_drawing = now - self.drawing.last_drawing_time
+
+        # Only show drawing debug if not in clean caption mode
+        try:
+            from config.config import PRINT_CLEAN_CAPTIONS
+            show_debug = not PRINT_CLEAN_CAPTIONS
+        except ImportError:
+            show_debug = True
+
         if time_since_last_check < DRAWING_INTERVAL:
             return  # Not time to check yet
-
-        # Update check time so we don't check too frequently
-        self.last_drawing_check_time = now
-
-        # DEBUG: Log drawing timing information
-        time_since_last_drawing = now - self.drawing.last_drawing_time
-        print(f"[DEBUG] Drawing timer check:")
-        print(f"  Time since last check: {time_since_last_check:.1f}s (interval: {DRAWING_INTERVAL}s)")
-        print(f"  Time since last drawing: {time_since_last_drawing:.1f}s (cooldown: {self.drawing.cooldown}s)")
-        print(f"  Drawing system ready: {self.drawing.ready_to_draw()}")
 
         # Check minimum startup delay to ensure camera has initialized and system is stable
         time_since_startup = now - self.true_session_start
         if time_since_startup < DRAWING_STARTUP_DELAY:
-            startup_remaining = DRAWING_STARTUP_DELAY - time_since_startup
-            print(f"[DEBUG] Drawing blocked: startup delay ({startup_remaining:.1f}s remaining, need {DRAWING_STARTUP_DELAY}s total)")
+            if show_debug:
+                startup_remaining = DRAWING_STARTUP_DELAY - time_since_startup
+                print(f"[DEBUG] Drawing blocked: startup delay ({startup_remaining:.1f}s remaining)")
             return
 
         # Check if drawing system is ready (this handles cooldown logic)
         if not self.drawing.ready_to_draw():
-            # Drawing system handles its own cooldown - don't proceed
-            cooldown_remaining = self.drawing.cooldown - time_since_last_drawing
-            print(f"[DEBUG] Drawing blocked: {cooldown_remaining:.1f}s remaining")
             return
 
-        # Also check pipeline state early
+        # Pipeline check before state evaluation
         try:
             is_generating = getattr(state_manager, "is_generating_drawing", False)
             is_executing = getattr(state_manager, "is_executing_cnc", False)
             if is_generating or is_executing:
-                # Silently return - pipeline busy, will retry on next caption cycle
-                print(f"[DEBUG] Drawing blocked: pipeline busy (generating: {is_generating}, executing: {is_executing})")
                 return
         except Exception:
             pass
 
-        # Only proceed with messaging if drawing is actually possible
+        # STATE-MOTIVATED EVALUATION
+        # Get current system state for decision
+        print(f"\n[🎨 STATE EVALUATION]")
+        print(f"  Current mood: {self.current_mood:.3f}")
+        print(f"  Current novelty: {self.novelty_score:.3f}")
+        print(f"  Current boredom: {self.boredom:.3f}")
+
+        # Evaluate whether to draw based on internal state
+        should_draw = self.drawing.should_draw(
+            mood=self.current_mood,
+            novelty=self.novelty_score,
+            boredom=self.boredom,
+            reflection=getattr(self, 'last_reflection', None)
+        )
+
+        if not should_draw:
+            print(f"[🎨] State evaluation: NOT motivated to draw yet")
+            return
+
+        # Update check time ONLY after state motivation passes
+        # This allows retry on next cycle if not motivated yet
+        self.last_drawing_check_time = now
+        print(f"[🎨] ✨ State-motivated drawing decision: DRAW!")
+
+        # Proceed with drawing generation
+        # NOTE: last_drawing_time will be updated by register_drawing() after GRBL completes
         print(f"[DEBUG] DRAWING TRIGGER ACTIVATED! Starting drawing generation...")
         print(f"[DEBUG] Step 1: About to start drawing generation process")
         try:
             print(f"[DEBUG] Step 2: Attempting log_json_entry...")
             with self.print_lock:
                 print("\r" + " " * 80 + "\r", end="")
-                system_type = "Timer"
+                system_type = "State-motivated"
                 log_json_entry(
                     LogType.DEBUG,
                     {
                         "message": "Drawing system ready, starting generation",
                         "action": "drawing_check",
                         "system_type": system_type.lower(),
+                        "mood": self.current_mood,
+                        "novelty": self.novelty_score,
+                        "boredom": self.boredom,
                     },
                     print_message=f"[🎨] {system_type} drawing ready, evaluating...",
                 )
@@ -605,6 +662,10 @@ class Captioner(MemoryMixin):
 
         # Since we already checked readiness, proceed with drawing flow
         if "[ERROR]" not in prompt:
+            print(f"\n{'🎨'*30}")
+            print(f"[🚀 QUEUING DRAWING] Prompt: {prompt[:100]}...")
+            print(f"[🚀 QUEUING DRAWING] This will trigger ComfyUI generation")
+            print(f"{'🎨'*30}\n")
             print(f"[DEBUG] Step 10: Starting handle_drawing_flow...")
             self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
             print(f"[DEBUG] Step 11: handle_drawing_flow completed")
@@ -958,111 +1019,283 @@ class Captioner(MemoryMixin):
             return False
 
     def _process_drawing_introspection(self, reactivity_data: Optional[Dict] = None) -> None:
-        """Process introspective reflection during drawing periods using visual pipeline with drawing-focused prompts."""
-        now = time.time()
-        if now - self.last_caption_time < CAPTION_INTERVAL:
-            return
+        """
+        REFACTORED 2026-02-03: Replaced useless image analysis (camera can't see drawing)
+        with productive thematic consolidation for drawing continuity.
 
-        # Store reactivity data for drawing-focused prompt generation
-        self._current_reactivity_data = reactivity_data
-
-        # Capture current visual state for drawing introspection
-        ts = int(now)
-        img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"drawing_introspection_{ts}.jpg")
-
+        UPDATED 2026-02-03: Only consolidates ONCE at start of drawing, then silently skips
+        during execution to avoid spamming the same output repeatedly.
+        """
         try:
-            # Get latest frame from snapshot queue if available
-            if self.snapshot_queue:
-                frame, _, _ = self.snapshot_queue[-1]  # Get most recent frame without removing it
-                cv2.imwrite(img_path, frame)
-            else:
-                # Fallback: capture new frame
-                img_path = self.capture_mood_snapshot(capture_reason="drawing_introspection")
+            from utils.state_manager import state_manager
 
-            if img_path and os.path.exists(img_path):
-                # Generate drawing introspection using the full visual pipeline
-                introspection = self.model.caption_image(
-                    img_path,
-                    flowing=True,
-                    first_time=False,
-                    drawing_introspection_mode=True  # Special flag for drawing-focused prompts
+            # Get current drawing context (set by DrawingController)
+            drawing_summary = getattr(state_manager, 'current_drawing_prompt', None)
+
+            if not drawing_summary:
+                return  # No active drawing to consolidate
+
+            # Check if we've already consolidated for this drawing
+            # Use drawing_summary as unique key to avoid repeating
+            if not hasattr(self, '_last_consolidated_drawing'):
+                self._last_consolidated_drawing = None
+
+            if self._last_consolidated_drawing == drawing_summary:
+                return  # Already consolidated this drawing, skip silently
+
+            # Mark this drawing as consolidated
+            self._last_consolidated_drawing = drawing_summary
+
+            # Generate thematic reflection using LLM (we have 5+ minutes during GRBL execution!)
+            # This happens ONCE at the start of drawing and uses the time productively
+            reflection = self._generate_drawing_thematic_reflection_with_llm(
+                drawing_summary=drawing_summary,
+                mood=self.current_mood
+            )
+
+            if reflection:
+                # Store compressed reflection in memory
+                self.observe(
+                    reflection['reflection_text'],
+                    mood=self.current_mood,
+                    file=None,
+                    memory_type="drawing_thematic",
+                    reactivity_data=reactivity_data
                 )
 
-                if introspection:
-                    # Extract character insights from the introspection
-                    character_insights = self._extract_character_insights(introspection)
-
-                    # Store the introspective observation
-                    self.observe(
-                        introspection,
-                        mood=self.current_mood,
-                        file=img_path,
-                        memory_type="drawing_introspection",
-                        reactivity_data=reactivity_data
+                # Update drawing memory for future prompts
+                try:
+                    from drawing.drawing_memory import get_drawing_memory
+                    memory = get_drawing_memory()
+                    memory.add_drawing(
+                        prompt=drawing_summary,
+                        compressed_summary=reflection['compressed_summary'],
+                        theme_tags=reflection.get('theme_tags', []),
+                        emotional_tone=reflection.get('emotional_tone', ''),
+                        narrative_thread=reflection.get('narrative_thread', '')
                     )
+                except Exception as e:
+                    print(f"[⚠️] Could not update drawing memory: {e}")
 
-                    # Store character insights if extracted
-                    if character_insights:
-                        self.observe(
-                            f"Character insight: {character_insights}",
-                            mood=self.current_mood,
-                            file=img_path,
-                            memory_type="character_insight",
-                            reactivity_data=reactivity_data
-                        )
+                # Format output
+                try:
+                    from config.config import CLEAN_LLM_OUTPUT
+                    if CLEAN_LLM_OUTPUT:
+                        print_msg = reflection['reflection_text']
+                    else:
+                        print_msg = f"[🎨] {reflection['reflection_text']}"
+                except ImportError:
+                    print_msg = f"[🎨] {reflection['reflection_text']}"
 
-                    # Format and print the introspection like normal captions
-                    try:
-                        from config.config import CLEAN_LLM_OUTPUT
+                # Send to LCD display during drawing
+                try:
+                    from utils.caption_display import send_caption_to_display
+                    send_caption_to_display(reflection['reflection_text'])
+                except Exception:
+                    pass
 
-                        if CLEAN_LLM_OUTPUT:
-                            print_msg = introspection  # Print full introspection
-                        else:
-                            print_msg = f"[🧠] {introspection}"
-                    except ImportError:
-                        print_msg = f"[🧠] {introspection}"
+                # Log the thematic reflection (ONCE)
+                log_json_entry(
+                    LogType.CAPTION,
+                    {
+                        "caption": reflection['reflection_text'],
+                        "mood": self.current_mood,
+                        "drawing_thematic": True,
+                        "compressed_summary": reflection['compressed_summary'],
+                        "theme_tags": reflection.get('theme_tags', []),
+                        "drawing_status": state_manager.get_drawing_status()
+                    },
+                    print_message=print_msg,
+                )
 
-                    # Send to LCD display (skip during GRBL execution to show drawing title)
-                    try:
-                        from utils.state_manager import state_manager
-                        is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
-                        if not is_executing_cnc:
-                            from utils.caption_display import send_caption_to_display
-                            send_caption_to_display(introspection)
-                            print(f"[LCD] Sent introspection: {introspection[:40]}...")
-                        else:
-                            print(f"[LCD] Skipped introspection during drawing: {introspection[:40]}...")
-                    except Exception as e:
-                        print(f"[LCD] Failed to send introspection: {e}")
-
-                    # Log with both introspection type and caption type for consistency
-                    log_json_entry(
-                        LogType.CAPTION,  # Use CAPTION type so it appears in normal caption flow
-                        {
-                            "caption": introspection,
-                            "image_path": img_path,
-                            "mood": self.current_mood,
-                            "drawing_introspection": True,
-                            "character_insights": character_insights,
-                            "drawing_status": state_manager.get_drawing_status()
-                        },
-                        print_message=print_msg,
-                    )
-
-                    # Update timing
-                    self.last_caption_time = now
-
-                    # Mark that first caption is done for ongoing sessions
-                    if not self.first_caption_done:
-                        self.first_caption_done = True
+                if not self.first_caption_done:
+                    self.first_caption_done = True
 
         except Exception as exc:
             log_json_entry(
                 LogType.ERROR,
-                {"message": f"Drawing introspection error: {exc}", "component": "drawing_introspection"},
-                print_message=f"[❌] Drawing introspection error: {exc}",
+                {"message": f"Drawing thematic consolidation error: {exc}", "component": "drawing_thematic"},
+                print_message=f"[❌] Drawing thematic error: {exc}",
             )
 
+
+    def _generate_drawing_thematic_reflection(self, drawing_summary: str, mood: float) -> Optional[Dict]:
+        """
+        Generate ultra-brief thematic reflection during drawing execution.
+
+        NO image analysis, NO expensive LLM calls - just lightweight thematic extraction
+        from the drawing intent. Uses GRBL execution time productively with minimal overhead.
+        """
+        try:
+            # Extract theme keywords from drawing summary
+            theme_words = []
+            summary_lower = drawing_summary.lower()
+
+            # Common thematic categories
+            spatial_themes = ['space', 'room', 'container', 'boundary', 'edge', 'corner', 'ceiling', 'wall', 'floor']
+            object_themes = ['box', 'boxes', 'window', 'light', 'shadow', 'object', 'thing', 'form', 'shape']
+            emotional_themes = ['solitude', 'isolation', 'presence', 'absence', 'quiet', 'stillness', 'tension', 'calm']
+            relational_themes = ['inside', 'outside', 'between', 'against', 'within', 'beyond', 'toward']
+
+            # Extract themes present in drawing summary
+            for word in summary_lower.split():
+                if word in spatial_themes:
+                    theme_words.append('spatial')
+                elif word in object_themes:
+                    theme_words.append('material')
+                elif word in emotional_themes:
+                    theme_words.append('affective')
+                elif word in relational_themes:
+                    theme_words.append('relational')
+
+            # Deduplicate
+            theme_tags = list(set(theme_words))[:3]  # Max 3 tags
+
+            # Map mood to emotional tone (very simple, no LLM needed)
+            if mood < -0.3:
+                emotional_tone = "heavy"
+            elif mood < -0.1:
+                emotional_tone = "somber"
+            elif mood < 0.1:
+                emotional_tone = "neutral"
+            elif mood < 0.3:
+                emotional_tone = "light"
+            else:
+                emotional_tone = "bright"
+
+            # Extract meaningful subject matter (skip generic preamble like "Black ink line drawing")
+            # Look for content after "drawing" or "on white paper"
+            summary_to_parse = drawing_summary.lower()
+
+            # Skip common preamble phrases
+            skip_phrases = ["black ink line drawing on white paper", "black ink drawing", "line drawing"]
+            for phrase in skip_phrases:
+                if summary_to_parse.startswith(phrase):
+                    summary_to_parse = summary_to_parse[len(phrase):].strip().lstrip('.')
+                    break
+
+            # Extract key nouns/subjects (first meaningful words)
+            meaningful_words = []
+            stop_words = ['the', 'a', 'an', 'with', 'for', 'of', 'in', 'on', 'at']
+            for word in summary_to_parse.split()[:8]:  # Look at more words to find meaningful ones
+                clean_word = word.strip('.,;:')
+                if clean_word and clean_word not in stop_words and len(clean_word) > 2:
+                    meaningful_words.append(clean_word)
+                    if len(meaningful_words) >= 3:
+                        break
+
+            compressed_summary = ' '.join(meaningful_words) if meaningful_words else drawing_summary.split()[:3]
+
+            # Generate brief narrative thread (relationship between themes)
+            if len(theme_tags) >= 2:
+                narrative_thread = f"{theme_tags[0]}-{theme_tags[1]}"
+            elif theme_tags:
+                narrative_thread = theme_tags[0]
+            else:
+                narrative_thread = "exploration"
+
+            # Create ultra-brief reflection text
+            reflection_text = f"Drawing: {compressed_summary}. {emotional_tone.capitalize()} {narrative_thread}."
+
+            return {
+                'reflection_text': reflection_text,
+                'compressed_summary': compressed_summary,
+                'theme_tags': theme_tags,
+                'emotional_tone': emotional_tone,
+                'narrative_thread': narrative_thread
+            }
+
+        except Exception as e:
+            print(f"[⚠️] Error generating thematic reflection: {e}")
+            return None
+
+    def _generate_drawing_thematic_reflection_with_llm(self, drawing_summary: str, mood: float) -> Optional[Dict]:
+        """
+        Generate thoughtful thematic reflection using LLM during drawing execution.
+
+        Uses GRBL execution time (5+ minutes) productively to:
+        - Compress the drawing intent into meaningful words
+        - Reflect on how it relates to recent drawings
+        - Identify emerging themes and patterns
+        """
+        try:
+            from drawing.drawing_memory import get_drawing_memory
+            from utils.ollama import query_ollama
+            from config.config import MOOD_SNAPSHOT_FOLDER
+
+            # Get recent drawing history
+            memory = get_drawing_memory()
+            recent_summary = memory.get_recent_drawings_summary(max_count=3)
+            thematic_context = memory.get_thematic_context()
+
+            # Build context for reflection
+            context_parts = []
+            if recent_summary:
+                context_parts.append(f"Recent drawings: {recent_summary}")
+            if thematic_context.get('recurring_themes'):
+                themes_str = ', '.join(thematic_context['recurring_themes'][:3])
+                context_parts.append(f"Recurring themes: {themes_str}")
+
+            context_str = '\n'.join(context_parts) if context_parts else "This is your first drawing."
+
+            # Ask LLM to compress and reflect
+            prompt = f"""Current drawing intent:
+{drawing_summary}
+
+{context_str}
+
+Compress this drawing into 3-5 meaningful words that capture its essence (not "black ink line" - the actual subject).
+Then briefly note how it relates to recent themes or what's emerging.
+
+Format:
+COMPRESSED: [3-5 words]
+REFLECTION: [1 short sentence about themes/patterns]"""
+
+            reflection_text = query_ollama(
+                prompt=prompt,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                system_prompt="You are reflecting on your own drawing practice. Be concise and direct. Focus on subjects and themes, not technique.",
+                prompt_type="drawing_thematic_consolidation",
+                options={"temperature": 0.3, "num_predict": 100}
+            ).strip()
+
+            # Parse response
+            compressed = ""
+            reflection_note = ""
+
+            for line in reflection_text.split('\n'):
+                if line.startswith('COMPRESSED:'):
+                    compressed = line.replace('COMPRESSED:', '').strip()
+                elif line.startswith('REFLECTION:'):
+                    reflection_note = line.replace('REFLECTION:', '').strip()
+
+            # Fallback if parsing fails
+            if not compressed:
+                compressed = ' '.join(drawing_summary.split()[5:8])  # Skip "black ink line drawing"
+
+            # Extract themes using lightweight method as fallback
+            fallback_reflection = self._generate_drawing_thematic_reflection(drawing_summary, mood)
+            theme_tags = fallback_reflection.get('theme_tags', []) if fallback_reflection else []
+            emotional_tone = fallback_reflection.get('emotional_tone', 'neutral') if fallback_reflection else 'neutral'
+
+            # Build output
+            if reflection_note:
+                full_reflection = f"{compressed}. {reflection_note}"
+            else:
+                full_reflection = f"Drawing: {compressed}. {emotional_tone.capitalize()}."
+
+            return {
+                'reflection_text': full_reflection,
+                'compressed_summary': compressed,
+                'theme_tags': theme_tags,
+                'emotional_tone': emotional_tone,
+                'narrative_thread': reflection_note or 'exploration'
+            }
+
+        except Exception as e:
+            print(f"[⚠️] LLM reflection failed, using lightweight fallback: {e}")
+            # Fallback to keyword extraction if LLM fails
+            return self._generate_drawing_thematic_reflection(drawing_summary, mood)
 
     def _extract_character_insights(self, reflection: str) -> str:
         """Extract meaningful character development insights from drawing reflections."""
