@@ -229,14 +229,9 @@ class ImageMonitor:
                     print_message=f"[📄] Paper check → {'YES' if paper_present else 'NO'} ({reason})",
                 )
 
-                # Release gaze lock after check
-                try:
-                    from vision.gaze import set_drawing_mode
-                    set_drawing_mode(active=False)
-                except Exception:
-                    pass
-
                 if paper_present:
+                    # Keep gaze locked - will be released after GRBL execution completes
+                    print("[👁️] Gaze staying locked for GRBL execution")
                     return True
 
                 # If not present: proceed only if override is allowed

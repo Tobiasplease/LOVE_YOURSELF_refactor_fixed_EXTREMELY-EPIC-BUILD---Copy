@@ -203,9 +203,11 @@ def log_json_entry(
         try:
             from utils.caption_display import send_caption_to_display
             send_caption_to_display(data["caption"])
-            print(f"[LCD] Sent: {data['caption'][:40]}...")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[LCD] Sent: {data['caption'][:40]}...")
         except Exception as e:
-            print(f"[LCD] Failed to send: {e}")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[LCD] Failed to send: {e}")
 
     if should_print and print_message:
         elapsed = get_elapsed_time()

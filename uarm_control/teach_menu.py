@@ -257,15 +257,9 @@ class UArmTeachApp:
             print("Use base key1 to toggle pump (recorded as ee commands). 'm' toggles live but is NOT recorded.")
             self.teach.start_record(interval=float(self.record_interval))
 
-            # CRITICAL: start_record() calls start_standby_mode() which re-registers Teach callbacks
-            # We must override them again immediately after start_record()
-            try:
-                self.swift.release_key1_callback()
-                self.swift.register_key1_callback(callback=self._custom_key1_callback)
-                self.swift.set_report_keys(on=True)
-                print("Key1 callback final override after start_record()")
-            except Exception as e:
-                print(f"Warning: Could not final-override key1 callback: {e}")
+            # Let SDK's default callback handle pump toggle during recording
+            # The SDK's _key_callback already handles: pump toggle + appending ee,* to record list
+            # Don't override it - that was breaking pump recording!
 
             # Non-blocking single-key input while recording
             # Prefer reading from controlling TTY to avoid stdin redirection issues

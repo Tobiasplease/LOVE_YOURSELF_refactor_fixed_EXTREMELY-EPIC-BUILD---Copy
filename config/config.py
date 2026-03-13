@@ -175,9 +175,9 @@ GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAU
 
 # === FEED RATE OPTIMIZATION ===
 # Speed scaling for different movement types - adjust these to set your preferred overall speed range
-GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 6000))     # Slowest speed for tiny detailed movements (mm/min) - increased for faster micro-strokes
-GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 15000))     # Fastest speed for large sweeping movements (mm/min) - realistic limit for GRBL
-GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 10000))   # Default/medium speed (mm/min)
+GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 2000))     # Slowest speed for tiny detailed movements (mm/min)
+GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 6000))      # Fastest speed for large sweeping movements (mm/min)
+GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 3500))    # Default/medium speed (mm/min)
 
 # Distance thresholds for feed rate calculation (in mm)
 GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 0.3))   # Below this: use slower speeds (reduced from 1.0mm)
@@ -221,14 +221,14 @@ UARM_DEFAULT_SPEED = 100        # Default movement speed (1-250)
 UARM_PLAY_AFTER_DRAW = True
 UARM_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "paper_move_20250930_203603.txt",  # Paper movement after GRBL completion
+    "papermove_20260306_214746.txt",  # Paper movement after GRBL completion
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
 UARM_PLAY_ON_START = True
 UARM_START_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "startup_20250921_200151.txt",
+    "startup_20260306_214250.txt",
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
@@ -320,6 +320,7 @@ LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_
 CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
 PRINT_CLEAN_CAPTIONS = True  # Suppress verbose runtime messages, show only LLM captions
 USE_FOCUSED_PROMPTS = True  # Use streamlined caption prompts (vs verbose structured prompts)
+USE_NARRATIVE_PROMPTS = True  # EXPERIMENTAL: Use simplified narrative roleplay prompts
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
@@ -338,9 +339,14 @@ REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 INCLUDE_DRAWING_HISTORY = True
 DRAWING_HISTORY_LIMIT = 3  # how many recent drawing entries to surface in prompts
 
-# === MULTI-STEP DRAWING ANALYSIS ===
-# Enable 5-step context-rich drawing analysis vs. single-prompt approach
-USE_MULTI_STEP_DRAWING_ANALYSIS = True  # Set to False for original single-prompt method
+# === DRAWING ANALYSIS MODE ===
+# "natsumura" - Natsumura-driven, identity-aware drawing decisions (experimental, needs debugging)
+# "multi_step" - 5-step context-rich analysis with LLaVA (stable)
+# "single" - Original single-prompt approach
+DRAWING_ANALYSIS_MODE = "multi_step"
+
+# Legacy toggle (for backwards compatibility)
+USE_MULTI_STEP_DRAWING_ANALYSIS = DRAWING_ANALYSIS_MODE in ("multi_step",)
 
 # === PAPER DETECTION SAFETY SYSTEM ===
 # Prevent drawing on bare surfaces by checking for paper before execution

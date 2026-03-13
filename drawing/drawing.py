@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from config.config import (
+    CLEAN_LLM_OUTPUT,
     COMFY_CNET_STRENGTH,
     COMFY_FLUX_GUIDANCE,
     COMFY_LATENT_HEIGHT,
@@ -67,13 +68,16 @@ class DrawingController:
             currently_generating = getattr(state_manager, "is_generating_drawing", False)
 
             if currently_generating:
-                print(f"[🎨] Drawing blocked: ComfyUI generation currently in progress")
+                if not CLEAN_LLM_OUTPUT:
+                    print(f"[🎨] Drawing blocked: ComfyUI generation currently in progress")
                 return False
             if currently_executing:
-                print(f"[🎨] Drawing blocked: GRBL execution currently in progress")
+                if not CLEAN_LLM_OUTPUT:
+                    print(f"[🎨] Drawing blocked: GRBL execution currently in progress")
                 return False
         except Exception as e:
-            print(f"[⚠️] Could not check drawing state: {e}")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[⚠️] Could not check drawing state: {e}")
 
         return cooldown_ready
 
@@ -92,11 +96,13 @@ class DrawingController:
         """Pure timer-based drawing decision logic for debugging."""
         if not self.ready_to_draw():
             cooldown_remaining = max(0, self.cooldown - (time.time() - self.last_drawing_time))
-            print(f"[🎨] Timer drawing check: BLOCKED by cooldown ({cooldown_remaining:.0f}s remaining)")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[🎨] Timer drawing check: BLOCKED by cooldown ({cooldown_remaining:.0f}s remaining)")
             return False
 
         # Pure timer-based: if cooldown passed, always draw
-        print(f"[🎨] ✨ TIMER DRAWING TRIGGERED (debug mode - ignoring mood/novelty/boredom)")
+        if not CLEAN_LLM_OUTPUT:
+            print(f"[🎨] ✨ TIMER DRAWING TRIGGERED (debug mode - ignoring mood/novelty/boredom)")
         return True
 
     def _should_draw_state_motivated(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
@@ -113,12 +119,14 @@ class DrawingController:
         # Absolute minimum interval - safety check
         if time_since_last < DRAWING_MIN_INTERVAL:
             remaining = DRAWING_MIN_INTERVAL - time_since_last
-            print(f"[🎨] State drawing check: BLOCKED by minimum interval ({remaining:.0f}s remaining)")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[🎨] State drawing check: BLOCKED by minimum interval ({remaining:.0f}s remaining)")
             return False
 
         # Force drawing if maximum interval exceeded (ensure some activity)
         if time_since_last >= DRAWING_MAX_INTERVAL:
-            print(f"[🎨] ✨ STATE DRAWING TRIGGERED: Maximum interval exceeded ({time_since_last:.0f}s)")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[🎨] ✨ STATE DRAWING TRIGGERED: Maximum interval exceeded ({time_since_last:.0f}s)")
             return True
 
         # Calculate state-based drawing motivation score
@@ -163,16 +171,17 @@ class DrawingController:
         cooldown_minutes = cooldown_remaining / 60
         cooldown_percent = (time_since_last / DRAWING_MIN_INTERVAL) * 100
 
-        print(f"[🎨] State drawing evaluation:")
-        print(f"  ⏱️  Cooldown: {cooldown_remaining:.0f}s remaining ({cooldown_minutes:.1f} min) - {cooldown_percent:.0f}% elapsed")
-        print(f"  Time since last: {time_since_last:.0f}s (min: {DRAWING_MIN_INTERVAL}s, max: {DRAWING_MAX_INTERVAL}s)")
-        print(f"  Mood: {normalized_mood:.3f}, Novelty: {normalized_novelty:.3f}, Boredom: {normalized_boredom:.3f}")
-        bonus_str = f", Startup: +{startup_bonus:.3f}" if startup_bonus > 0 else ""
-        print(f"  Base motivation: {motivation_score:.3f}, Time pressure: {time_pressure:.3f}{bonus_str}")
-        print(f"  Final score: {final_score:.3f} (threshold: {DRAWING_BASE_THRESHOLD})")
-        print(f"  Decision: {'DRAW' if will_draw else 'WAIT'}")
+        if not CLEAN_LLM_OUTPUT:
+            print(f"[🎨] State drawing evaluation:")
+            print(f"  ⏱️  Cooldown: {cooldown_remaining:.0f}s remaining ({cooldown_minutes:.1f} min) - {cooldown_percent:.0f}% elapsed")
+            print(f"  Time since last: {time_since_last:.0f}s (min: {DRAWING_MIN_INTERVAL}s, max: {DRAWING_MAX_INTERVAL}s)")
+            print(f"  Mood: {normalized_mood:.3f}, Novelty: {normalized_novelty:.3f}, Boredom: {normalized_boredom:.3f}")
+            bonus_str = f", Startup: +{startup_bonus:.3f}" if startup_bonus > 0 else ""
+            print(f"  Base motivation: {motivation_score:.3f}, Time pressure: {time_pressure:.3f}{bonus_str}")
+            print(f"  Final score: {final_score:.3f} (threshold: {DRAWING_BASE_THRESHOLD})")
+            print(f"  Decision: {'DRAW' if will_draw else 'WAIT'}")
 
-        if will_draw:
+        if will_draw and not CLEAN_LLM_OUTPUT:
             print(f"[🎨] ✨ STATE DRAWING TRIGGERED: Internal motivation reached threshold")
 
         return will_draw
@@ -184,13 +193,14 @@ class DrawingController:
         self.last_prompt = prompt
         self.last_drawing_prompt = prompt
 
-        print(f"\n{'='*60}")
-        print(f"🔔 DRAWING COOLDOWN RESET")
-        print(f"{'='*60}")
-        print(f"Physical drawing completed. Cooldown timer started.")
-        print(f"Next drawing possible in: {self.cooldown}s ({self.cooldown/60:.1f} minutes)")
-        print(f"Forced drawing at: {DRAWING_MAX_INTERVAL}s ({DRAWING_MAX_INTERVAL/60:.1f} minutes)")
-        print(f"{'='*60}\n")
+        if not CLEAN_LLM_OUTPUT:
+            print(f"\n{'='*60}")
+            print(f"🔔 DRAWING COOLDOWN RESET")
+            print(f"{'='*60}")
+            print(f"Physical drawing completed. Cooldown timer started.")
+            print(f"Next drawing possible in: {self.cooldown}s ({self.cooldown/60:.1f} minutes)")
+            print(f"Forced drawing at: {DRAWING_MAX_INTERVAL}s ({DRAWING_MAX_INTERVAL/60:.1f} minutes)")
+            print(f"{'='*60}\n")
 
         # LCD display is now handled in handle_drawing_flow with the drawing summary
 

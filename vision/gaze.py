@@ -76,6 +76,7 @@ tilt_velocity = 0.0  # Current tilt movement velocity
 pan_target_time = 0.0  # When pan reaches target
 tilt_target_time = 0.0  # When tilt reaches target
 last_state_change = 0.0  # Track state transitions for clean handoff
+aware_minimum_dwell = 5.0  # Minimum seconds to stay in aware state before returning to idle
 
 # === VELOCITY LIMITING ===
 last_pan_velocity = 0.0  # Previous pan velocity for smoothing
@@ -88,6 +89,149 @@ pan_nudge = 0.0  # Current pan nudge offset (degrees)
 tilt_nudge = 0.0  # Current tilt nudge offset (degrees)
 nudge_start_time = 0.0  # When the nudge was applied
 nudge_duration = 5.0  # How long nudge lasts before decaying (seconds)
+
+# === SEARCHING STATE ===
+# Goal-directed searching when person is "remembered" or LLM has interest points
+searching_active = False
+searching_target_pan = 90.0  # Current search target
+searching_target_tilt = 90.0
+searching_zones_to_visit = []  # Queue of zones to scan
+searching_last_known_pan = None  # Where person was last seen
+searching_last_known_tilt = None
+searching_interest_points = []  # LLM-driven points of interest [(pan, tilt, priority, expiry_time), ...]
+searching_current_goal = None  # "zone_scan", "last_known", "interest_point"
+searching_goal_start_time = 0.0
+searching_goal_dwell_time = 2.0  # How long to dwell at each search point
+
+# === LLM-DIRECTED ZONE SYSTEM ===
+# The LLM decides which zone to look at, organic movement happens within that zone
+
+GAZE_ZONES_PAN = {
+    "left": (105, PAN_MAX),      # 105-135° (left side - servo inverted)
+    "ahead": (75, 105),          # 75-105° (center)
+    "right": (PAN_MIN, 75),      # 45-75° (right side - servo inverted)
+}
+
+GAZE_ZONES_TILT = {
+    "up": (125, TILT_MAX),       # 125-150° (looking up - servo inverted)
+    "level": (95, 125),          # 95-125° (level/center)
+    "down": (TILT_MIN, 95),      # 65-95° (looking down - servo inverted)
+}
+
+# Current LLM-directed zone
+llm_target_zone_pan = "ahead"
+llm_target_zone_tilt = "level"
+llm_zone_active = False  # Whether LLM is actively directing gaze
+
+# Tracking angle awareness
+tracking_person_position = "center"  # left/center/right
+tracking_person_last_x = None
+tracking_person_movement = "stationary"
+
+
+def set_llm_zone(pan_zone: str, tilt_zone: str = None):
+    """Set the LLM-directed gaze zone. Camera will wander within this zone."""
+    global llm_target_zone_pan, llm_target_zone_tilt, llm_zone_active, drawing_sequence_active
+
+    # Don't change zones during drawing execution - gaze is locked to drawing surface
+    if drawing_sequence_active:
+        return
+
+    if pan_zone == "person":
+        # Special case: LLM wants to track the person (let tracking take over)
+        llm_zone_active = False
+        print(f"[👁️] LLM: Look at person (tracking mode)")
+        return
+
+    if pan_zone == "stay":
+        # Keep current zone, don't change
+        print(f"[👁️] LLM: Stay in current zone ({llm_target_zone_pan}/{llm_target_zone_tilt})")
+        return
+
+    if pan_zone in GAZE_ZONES_PAN:
+        llm_target_zone_pan = pan_zone
+        llm_zone_active = True
+
+    if tilt_zone and tilt_zone in GAZE_ZONES_TILT:
+        llm_target_zone_tilt = tilt_zone
+    elif pan_zone in ("up", "down", "level"):
+        # If user passed tilt direction as pan_zone
+        llm_target_zone_tilt = pan_zone
+        llm_zone_active = True
+    elif tilt_zone is None:
+        llm_target_zone_tilt = "level"  # Default to level if not specified
+
+    # Show the actual angle target for debugging
+    pan_min, pan_max = GAZE_ZONES_PAN.get(llm_target_zone_pan, (75, 105))
+    tilt_min, tilt_max = GAZE_ZONES_TILT.get(llm_target_zone_tilt, (95, 125))
+    pan_center = (pan_min + pan_max) / 2
+    tilt_center = (tilt_min + tilt_max) / 2
+    print(f"[👁️] LLM zone: {llm_target_zone_pan}/{llm_target_zone_tilt} → target pan={pan_center:.0f}° tilt={tilt_center:.0f}°")
+
+
+def get_current_zone_text() -> str:
+    """Get current zone as simple text for LLM prompts."""
+    # Map zones to simple direction words
+    zone_to_word = {
+        "left": "LEFT",
+        "right": "RIGHT",
+        "ahead": "AHEAD",
+        "up": "UP",
+        "down": "DOWN",
+        "level": "AHEAD",
+    }
+
+    if state == "tracking":
+        return "AT THE PERSON"
+
+    pan_word = zone_to_word.get(llm_target_zone_pan, "AHEAD")
+    tilt_word = zone_to_word.get(llm_target_zone_tilt, "")
+
+    if llm_target_zone_tilt == "up":
+        return "UP" if pan_word == "AHEAD" else f"UP and {pan_word}"
+    elif llm_target_zone_tilt == "down":
+        return "DOWN" if pan_word == "AHEAD" else f"DOWN and {pan_word}"
+    else:
+        return pan_word
+
+
+def update_tracking_awareness(face_box, frame_width: int):
+    """Track where the person is relative to frame center."""
+    global tracking_person_position, tracking_person_last_x, tracking_person_movement
+
+    if face_box is None:
+        return
+
+    x1, y1, x2, y2 = face_box
+    face_center_x = (x1 + x2) / 2
+    frame_center_x = frame_width / 2
+
+    # Relative position
+    offset_ratio = (face_center_x - frame_center_x) / frame_center_x
+    if offset_ratio < -0.2:
+        tracking_person_position = "left"
+    elif offset_ratio > 0.2:
+        tracking_person_position = "right"
+    else:
+        tracking_person_position = "center"
+
+    # Movement detection
+    if tracking_person_last_x is not None:
+        delta = face_center_x - tracking_person_last_x
+        if delta > 20:
+            tracking_person_movement = "moved_right"
+        elif delta < -20:
+            tracking_person_movement = "moved_left"
+        else:
+            tracking_person_movement = "stationary"
+    tracking_person_last_x = face_center_x
+
+
+def get_tracking_context() -> str:
+    """Get text description of person position for LLM prompt."""
+    if tracking_person_movement != "stationary":
+        return f"to your {tracking_person_position}, {tracking_person_movement.replace('_', ' ')}"
+    return f"to your {tracking_person_position}"
 
 
 def apply_gaze_nudge(pan_delta: float, tilt_delta: float, duration: float = 5.0):
@@ -136,6 +280,201 @@ def get_current_nudge() -> tuple:
     # Smooth decay using cosine curve (fast at start, slow at end)
     decay = 0.5 * (1 + math.cos(math.pi * elapsed / nudge_duration))
     return (pan_nudge * decay, tilt_nudge * decay)
+
+
+# === SEARCHING STATE FUNCTIONS ===
+
+def activate_search_mode(last_seen_pan: float = None, last_seen_tilt: float = None, zones_visited: set = None):
+    """
+    Activate searching state when person is "remembered" but not visible.
+    Camera will systematically scan unvisited zones and check last known location.
+    """
+    global searching_active, searching_last_known_pan, searching_last_known_tilt
+    global searching_zones_to_visit, searching_current_goal, searching_goal_start_time
+
+    searching_active = True
+    searching_last_known_pan = last_seen_pan
+    searching_last_known_tilt = last_seen_tilt
+
+    # Build queue of unvisited zones (0-5, each 30 degrees)
+    # But ONLY include zones that are at least partially within servo range
+    all_zones = set()
+    for zone in range(6):
+        zone_start = zone * 30
+        zone_end = zone_start + 30
+        # Include zone if it overlaps with servo range [PAN_MIN, PAN_MAX]
+        if zone_end > PAN_MIN and zone_start < PAN_MAX:
+            all_zones.add(zone)
+
+    visited = zones_visited or set()
+    unvisited = sorted(all_zones - visited)
+
+    # Prioritize zones near last known location
+    if last_seen_pan is not None:
+        last_zone = int(clamp(last_seen_pan, PAN_MIN, PAN_MAX) // 30)
+        # Sort by distance from last known zone
+        unvisited.sort(key=lambda z: abs(z - last_zone))
+
+    searching_zones_to_visit = unvisited
+    searching_current_goal = None
+    searching_goal_start_time = 0.0
+
+    print(f"[🔍] Search mode activated - {len(unvisited)} zones to scan, last seen at pan={last_seen_pan}")
+
+
+def deactivate_search_mode():
+    """Deactivate searching state (person found or confirmed absent)."""
+    global searching_active, searching_current_goal, searching_interest_points
+
+    if searching_active:
+        print("[🔍] Search mode deactivated")
+    searching_active = False
+    searching_current_goal = None
+    # Keep interest points - they can persist beyond search mode
+
+
+def add_interest_point(pan: float, tilt: float, priority: float = 0.5, duration: float = 30.0):
+    """
+    Add an LLM-driven point of interest that the camera should visit.
+    Higher priority points are visited first. Points expire after duration.
+
+    Args:
+        pan: Target pan angle (will be clamped to servo limits)
+        tilt: Target tilt angle (will be clamped to servo limits)
+        priority: 0.0-1.0, higher = more interesting
+        duration: How long the interest point persists
+    """
+    global searching_interest_points
+
+    # Clamp to servo limits
+    pan = clamp(pan, PAN_MIN, PAN_MAX)
+    tilt = clamp(tilt, TILT_MIN, TILT_MAX)
+
+    expiry = time.time() + duration
+    searching_interest_points.append((pan, tilt, priority, expiry))
+
+    # Sort by priority (highest first) and remove expired
+    now = time.time()
+    searching_interest_points = [
+        p for p in searching_interest_points if p[3] > now
+    ]
+    searching_interest_points.sort(key=lambda p: -p[2])
+
+    # Limit to 5 interest points max
+    searching_interest_points = searching_interest_points[:5]
+
+    print(f"[✨] Interest point added at pan={pan:.0f}°, tilt={tilt:.0f}° (priority={priority:.1f})")
+
+
+def get_search_target() -> tuple:
+    """
+    Get the next target for searching behavior.
+    Returns (pan, tilt, goal_type) or (None, None, None) if no targets.
+
+    Priority: interest_points > last_known_location > zone_scan
+    """
+    global searching_zones_to_visit, searching_interest_points
+    global searching_last_known_pan, searching_last_known_tilt
+
+    now = time.time()
+
+    # Clean expired interest points
+    searching_interest_points = [
+        p for p in searching_interest_points if p[3] > now
+    ]
+
+    # Priority 1: High-priority interest points (>0.7)
+    high_priority = [p for p in searching_interest_points if p[2] > 0.7]
+    if high_priority:
+        point = high_priority[0]
+        return (point[0], point[1], "interest_point")
+
+    # Priority 2: Last known location (if we haven't checked it recently)
+    if searching_last_known_pan is not None:
+        # Clamp to servo limits
+        clamped_pan = clamp(searching_last_known_pan, PAN_MIN, PAN_MAX)
+        clamped_tilt = clamp(searching_last_known_tilt or 90, TILT_MIN, TILT_MAX)
+        return (clamped_pan, clamped_tilt, "last_known")
+
+    # Priority 3: Unvisited zones
+    if searching_zones_to_visit:
+        zone = searching_zones_to_visit[0]
+        zone_pan = zone * 30 + 15  # Center of zone
+        # CRITICAL: Clamp to actual servo limits so we don't get stuck trying to reach unreachable positions
+        zone_pan = clamp(zone_pan, PAN_MIN, PAN_MAX)
+        zone_tilt = (TILT_MIN + TILT_MAX) / 2  # Middle height
+        return (zone_pan, zone_tilt, "zone_scan")
+
+    # Priority 4: Lower-priority interest points
+    if searching_interest_points:
+        point = searching_interest_points[0]
+        return (point[0], point[1], "interest_point")
+
+    return (None, None, None)
+
+
+def update_search_progress(current_pan: float, current_tilt: float, person_found: bool = False):
+    """
+    Update search progress based on current position.
+    Call this from the main gaze update loop.
+    """
+    global searching_zones_to_visit, searching_current_goal, searching_goal_start_time
+    global searching_last_known_pan, searching_interest_points
+
+    if not searching_active:
+        return
+
+    now = time.time()
+
+    # If person was found, clear the search
+    if person_found:
+        deactivate_search_mode()
+        return
+
+    # Check if we've reached current goal
+    target_pan, target_tilt, goal_type = get_search_target()
+    if target_pan is None:
+        return
+
+    pan_diff = abs(current_pan - target_pan)
+    tilt_diff = abs(current_tilt - (target_tilt or current_tilt))
+    at_target = pan_diff < 10 and tilt_diff < 10
+
+    if at_target:
+        # Track dwell time at target
+        if searching_current_goal != goal_type:
+            searching_current_goal = goal_type
+            searching_goal_start_time = now
+
+        dwell_time = now - searching_goal_start_time
+
+        # After dwelling, mark this target as visited
+        if dwell_time >= searching_goal_dwell_time:
+            if goal_type == "zone_scan" and searching_zones_to_visit:
+                visited_zone = searching_zones_to_visit.pop(0)
+                print(f"[🔍] Zone {visited_zone} scanned ({len(searching_zones_to_visit)} remaining)")
+            elif goal_type == "last_known":
+                searching_last_known_pan = None
+                searching_last_known_tilt = None
+                print("[🔍] Last known location checked - person not there")
+            elif goal_type == "interest_point" and searching_interest_points:
+                searching_interest_points.pop(0)
+                print(f"[🔍] Interest point visited ({len(searching_interest_points)} remaining)")
+
+            # Reset for next target
+            searching_current_goal = None
+            searching_goal_start_time = 0.0
+
+
+def is_search_mode_active() -> bool:
+    """Check if search mode is currently active."""
+    return searching_active
+
+
+def has_search_targets() -> bool:
+    """Check if there are any targets to search for."""
+    target_pan, _, _ = get_search_target()
+    return target_pan is not None
 
 
 def get_gaze_description() -> str:
@@ -194,7 +533,7 @@ def get_gaze_state() -> dict:
         "pan": int(servo_x),
         "tilt": int(servo_y),
         "direction": direction,
-        "state": state,  # "idle", "tracking", "grace"
+        "state": state,  # "idle", "tracking", "grace", "aware"
     }
 
 
@@ -213,9 +552,11 @@ def get_gaze_narrative() -> str:
     pan_offset = servo_x - pan_center  # Negative = left, Positive = right
     tilt_offset = servo_y - tilt_center  # Positive = up (higher servo), Negative = down
 
-    # State-aware narrative - distinguish tracking from idle
+    # State-aware narrative - distinguish tracking from idle/aware
     if state == "tracking":
         return "*Your eyes are fixed on someone.*"
+    elif state == "aware":
+        return "*You sense someone nearby.*"
 
     # Pure directional narrative with embodied language
     # Lower thresholds to trigger even with subtle/tired movement (±8 degrees)
@@ -270,9 +611,10 @@ def bezier_curve(t, p0, p1, p2):
 
 
 def update_organic_movement(now):
-    """Generate organic movement targets using Perlin noise for natural idle patterns"""
+    """Generate organic movement targets using Perlin noise within the LLM-directed zone."""
     global pan_micro_target, tilt_micro_target, pan_easing_variance, tilt_easing_variance
     global pan_noise_offset, tilt_noise_offset, pan_frequency, tilt_frequency
+    global llm_target_zone_pan, llm_target_zone_tilt, llm_zone_active
 
     # Generate independent Perlin noise for pan and tilt
     pan_noise_time = (now * pan_frequency) + pan_noise_offset
@@ -281,20 +623,39 @@ def update_organic_movement(now):
     pan_noise = perlin_noise_1d(pan_noise_time, octaves=3, persistence=0.6)
     tilt_noise = perlin_noise_1d(tilt_noise_time, octaves=2, persistence=0.4)
 
-    # Convert noise to movement range
-    pan_range = (PAN_MAX - PAN_MIN) * 0.6  # Use 60% of full range for contemplative movement
-    tilt_range = (TILT_MAX - TILT_MIN) * 0.4  # Use 40% of full range for subtle vertical movement
+    if llm_zone_active:
+        # LLM is directing gaze - stay within the specified zone
+        pan_min, pan_max = GAZE_ZONES_PAN.get(llm_target_zone_pan, (75, 105))
+        tilt_min, tilt_max = GAZE_ZONES_TILT.get(llm_target_zone_tilt, (95, 125))
 
-    # Apply noise to center position with natural bias
-    pan_center = (PAN_MIN + PAN_MAX) / 2
-    tilt_center = (TILT_MIN + TILT_MAX) / 2 + 5  # Slight downward bias for natural head position
+        # Zone center
+        pan_center = (pan_min + pan_max) / 2
+        tilt_center = (tilt_min + tilt_max) / 2
 
-    pan_micro_target = pan_center + (pan_noise - 0.5) * pan_range
-    tilt_micro_target = tilt_center + (tilt_noise - 0.5) * tilt_range
+        # Organic variance bounded to stay in zone (80% of zone width)
+        pan_range = (pan_max - pan_min) * 0.8
+        tilt_range = (tilt_max - tilt_min) * 0.8
 
-    # Ensure within bounds
-    pan_micro_target = clamp(pan_micro_target, PAN_MIN, PAN_MAX)
-    tilt_micro_target = clamp(tilt_micro_target, TILT_MIN, TILT_MAX)
+        pan_micro_target = pan_center + (pan_noise - 0.5) * pan_range
+        tilt_micro_target = tilt_center + (tilt_noise - 0.5) * tilt_range
+
+        # Clamp to zone bounds
+        pan_micro_target = clamp(pan_micro_target, pan_min, pan_max)
+        tilt_micro_target = clamp(tilt_micro_target, tilt_min, tilt_max)
+    else:
+        # Original behavior - full contemplative range
+        pan_range = (PAN_MAX - PAN_MIN) * 0.6
+        tilt_range = (TILT_MAX - TILT_MIN) * 0.4
+
+        pan_center = (PAN_MIN + PAN_MAX) / 2
+        tilt_center = (TILT_MIN + TILT_MAX) / 2 + 5  # Slight downward bias
+
+        pan_micro_target = pan_center + (pan_noise - 0.5) * pan_range
+        tilt_micro_target = tilt_center + (tilt_noise - 0.5) * tilt_range
+
+        # Ensure within overall bounds
+        pan_micro_target = clamp(pan_micro_target, PAN_MIN, PAN_MAX)
+        tilt_micro_target = clamp(tilt_micro_target, TILT_MIN, TILT_MAX)
 
     # Create organic easing variance
     pan_easing_variance = 0.8 + 0.4 * perlin_noise_1d(pan_noise_time * 0.5)
@@ -303,7 +664,17 @@ def update_organic_movement(now):
 
 
 
-def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
+def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_person_detected=False, person_direction=None):
+    """
+    Update gaze position based on face detection, YOLO detection, and emotional state.
+
+    Args:
+        frame: Camera frame
+        face_box: Face bounding box if detected, None otherwise
+        current_emotion_state: Emotional state for movement modulation
+        yolo_person_detected: True if YOLO detected a person (even without face)
+        person_direction: Direction of last known person ("to my left", "to my right", "ahead", None)
+    """
     global servo_x, servo_y, target_x, target_y, last_seen_time, state, idle_next_move_time
     global startup_sequence_active, drawing_sequence_active, last_state_change
     global drawing_target_x, drawing_target_y, drawing_transition_active
@@ -350,6 +721,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
         state = "tracking"
         last_seen_time = now
 
+        # Update tracking awareness for LLM context
+        update_tracking_awareness(face_box, w)
+
         # Direct position mapping for responsive tracking
         (startX, startY, endX, endY) = face_box
         face_center_x = (startX + endX) // 2
@@ -383,94 +757,195 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant"):
         state = "grace"
 
     elif state in ["tracking", "grace"] and now - last_seen_time >= FACE_STABLE_TIMEOUT:
-        # Clean transition to idle
-        if state != "idle":
-            last_state_change = now
-        state = "idle"
-        # Dynamic pause timing - shorter base pauses with occasional longer ones
-        if random.random() < IDLE_LONG_PAUSE_CHANCE:
-            pause_duration = random.uniform(IDLE_PAUSE_LONG * 0.8, IDLE_PAUSE_LONG * 1.2)
+        # Transition from tracking - check if YOLO still sees person
+        if yolo_person_detected:
+            # Person present but no face - enter aware state
+            if state != "aware":
+                last_state_change = now
+                print("[👁️] Entering 'aware' state - person detected but no face")
+            state = "aware"
         else:
-            pause_duration = random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
-        idle_next_move_time = now + pause_duration
+            # Clean transition to idle
+            if state != "idle":
+                last_state_change = now
+            state = "idle"
+            # Dynamic pause timing - shorter base pauses with occasional longer ones
+            if random.random() < IDLE_LONG_PAUSE_CHANCE:
+                pause_duration = random.uniform(IDLE_PAUSE_LONG * 0.8, IDLE_PAUSE_LONG * 1.2)
+            else:
+                pause_duration = random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
+            idle_next_move_time = now + pause_duration
 
-    elif state == "idle":
-        # Organic idle behavior using Perlin noise with emotional modulation
+    elif state == "aware":
+        # AWARE STATE: Person detected by YOLO but no face to track
+        # Slow movement - respects LLM zone if active, otherwise holds position
 
-        # 5-State Emotional Gaze Patterns - more dynamic and faster
-        gaze_patterns = {
-            "energized_engaged": {
-                "movement_scale": 1.6,  # Large, expressive movements
-                "frequency_scale": 2.0,  # Much faster frequency changes
-                "easing_scale": 1.5,  # Very responsive movement
-            },
-            "alert_curious": {
-                "movement_scale": 1.3,  # Quick, darting movements
-                "frequency_scale": 1.6,  # Frequent changes
-                "easing_scale": 1.3,  # More responsive movement
-            },
-            "calm_observant": {
-                "movement_scale": 1.0,  # Smooth, but more dynamic
-                "frequency_scale": 1.2,  # Slightly faster than before
-                "easing_scale": 1.1,  # Bit more responsive
-            },
-            "quiet_detached": {
-                "movement_scale": 0.7,  # Small, but not tiny movements
-                "frequency_scale": 0.8,  # Slower but not too slow
-                "easing_scale": 0.9,  # Still responsive
-            },
-            "withdrawn_distant": {
-                "movement_scale": 0.5,  # Small, listless
-                "frequency_scale": 0.6,  # Slower changes
-                "easing_scale": 0.7,  # Slower, disengaged
-            },
-        }
+        time_in_aware = now - last_state_change
+        if not yolo_person_detected and time_in_aware > aware_minimum_dwell:
+            # Person gone AND minimum dwell time passed - transition to idle
+            last_state_change = now
+            print(f"[👁️] Person no longer detected after {time_in_aware:.1f}s - returning to idle")
+            state = "idle"
+        elif yolo_person_detected or time_in_aware <= aware_minimum_dwell:
+            # AWARE STATE with LLM zone respect
+            # If LLM has given a direction, slowly drift toward that zone
+            # Otherwise hold position with micro-movements
 
-        # Get current emotional pattern (fallback to calm)
-        pattern = gaze_patterns.get(current_emotion_state, gaze_patterns["calm_observant"])
+            update_organic_movement(now)
 
-        # Apply emotional scaling to noise frequencies - faster base frequencies for more dynamic movement
-        global pan_frequency, tilt_frequency
-        base_pan_freq = 0.12  # Increased from 0.08 for more dynamic movement
-        base_tilt_freq = 0.10  # Increased from 0.06 for more dynamic movement
-        pan_frequency = base_pan_freq * pattern["frequency_scale"]
-        tilt_frequency = base_tilt_freq * pattern["frequency_scale"]
+            if llm_zone_active:
+                # LLM has directed us somewhere - slowly move toward that zone
+                pan_min, pan_max = GAZE_ZONES_PAN.get(llm_target_zone_pan, (75, 105))
+                tilt_min, tilt_max = GAZE_ZONES_TILT.get(llm_target_zone_tilt, (95, 125))
 
-        # Generate organic movement targets using Perlin noise
-        update_organic_movement(now)
+                # Target zone center with small organic variance
+                pan_center = (pan_min + pan_max) / 2
+                tilt_center = (tilt_min + tilt_max) / 2
 
-        # Scale movement based on emotional state
-        pan_center = (PAN_MIN + PAN_MAX) / 2
-        tilt_center = (TILT_MIN + TILT_MAX) / 2
+                # Small organic variance (less than idle mode)
+                micro_sway_pan = (pan_micro_target - 90) * 0.15
+                micro_sway_tilt = (tilt_micro_target - 107.5) * 0.1
 
-        # Apply emotional scaling to movement range
-        pan_scaled = pan_center + (pan_micro_target - pan_center) * pattern["movement_scale"]
-        tilt_scaled = tilt_center + (tilt_micro_target - tilt_center) * pattern["movement_scale"]
+                pan_scaled = pan_center + micro_sway_pan
+                tilt_scaled = tilt_center + micro_sway_tilt
+            else:
+                # No LLM direction - hold position with tiny micro-movements
+                micro_sway_pan = (pan_micro_target - 90) * 0.08
+                micro_sway_tilt = (tilt_micro_target - 107.5) * 0.05
+                pan_scaled = servo_x + micro_sway_pan * 0.3
+                tilt_scaled = servo_y + micro_sway_tilt * 0.3
 
-        # Apply LLM-driven gaze nudge as MODIFIER (gentle drift, not override)
-        # Nudge adds a decaying bias to organic movement - preserves natural sway
-        nudge_pan, nudge_tilt = get_current_nudge()
+            # Ensure within bounds
+            pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
+            tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
 
-        # Add nudge as directional bias while keeping organic Perlin sway
-        # Lower blend = more subtle influence, higher = stronger pull
-        nudge_blend = 0.6  # 60% of nudge value added to organic movement
-        pan_scaled += nudge_pan * nudge_blend
-        tilt_scaled += nudge_tilt * nudge_blend
+            # Slow movement speed for aware state
+            aware_easing = IDLE_EASING * 0.4  # 40% of normal easing
+            aware_velocity = MAX_PAN_VELOCITY * 0.35  # 35% speed - deliberate but not frozen
 
-        # Ensure within bounds
-        pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
-        tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
+            servo_x = velocity_limited_step(servo_x, pan_scaled, aware_easing, aware_velocity, "pan")
+            servo_y = velocity_limited_step(servo_y, tilt_scaled, aware_easing, MAX_TILT_VELOCITY * 0.35, "tilt")
 
-        # Independent pan/tilt movement with emotional easing and organic variance
-        emotional_easing = IDLE_EASING * pattern["easing_scale"]
-        pan_easing = emotional_easing * pan_easing_variance
-        tilt_easing = emotional_easing * tilt_easing_variance
+    elif state == "idle" or state == "searching":
+        # Check if YOLO detected someone - transition to aware
+        if yolo_person_detected:
+            last_state_change = now
+            print("[👁️] Person detected while idle - entering 'aware' state")
+            state = "aware"
+            deactivate_search_mode()
+            # Movement will be handled by aware state on next frame
 
-        # Use velocity limiting for idle movement
-        pan_velocity = MAX_PAN_VELOCITY * 0.8
-        tilt_velocity = MAX_TILT_VELOCITY * 0.8
-        servo_x = velocity_limited_step(servo_x, pan_scaled, pan_easing, pan_velocity, "pan")
-        servo_y = velocity_limited_step(servo_y, tilt_scaled, tilt_easing, tilt_velocity, "tilt")
+        # === SEARCHING STATE: Goal-directed movement ===
+        elif searching_active and has_search_targets():
+            state = "searching"
+
+            # Get current search target
+            target_pan, target_tilt, goal_type = get_search_target()
+
+            if target_pan is not None:
+                # Update search progress (marks zones as visited when dwelled)
+                update_search_progress(servo_x, servo_y, person_found=False)
+
+                # Goal-directed movement toward search target
+                # Slower, more deliberate than idle - like looking for something
+                search_easing = IDLE_EASING * 0.6  # 60% of normal speed
+                search_velocity = MAX_PAN_VELOCITY * 0.5  # Deliberate pace
+
+                # Add subtle organic variation to avoid robotic movement
+                time_jitter = math.sin(now * 0.3) * 3  # ±3 degree sway
+                target_with_jitter_pan = target_pan + time_jitter
+                target_with_jitter_tilt = target_tilt + math.cos(now * 0.25) * 2
+
+                target_with_jitter_pan = clamp(target_with_jitter_pan, PAN_MIN, PAN_MAX)
+                target_with_jitter_tilt = clamp(target_with_jitter_tilt, TILT_MIN, TILT_MAX)
+
+                servo_x = velocity_limited_step(servo_x, target_with_jitter_pan, search_easing, search_velocity, "pan")
+                servo_y = velocity_limited_step(servo_y, target_with_jitter_tilt, search_easing, MAX_TILT_VELOCITY * 0.5, "tilt")
+
+                # Debug output (infrequent)
+                if random.random() < 0.02:
+                    print(f"[🔍] Searching: {goal_type} → pan={target_pan:.0f}° (current={servo_x:.0f}°)")
+            else:
+                # No more targets - deactivate search
+                deactivate_search_mode()
+                state = "idle"
+
+        else:
+            # Regular idle - deactivate any lingering search state
+            if state == "searching":
+                deactivate_search_mode()
+            state = "idle"
+
+            # Organic idle behavior using Perlin noise with emotional modulation
+
+            # 5-State Emotional Gaze Patterns - more dynamic and faster
+            gaze_patterns = {
+                "energized_engaged": {
+                    "movement_scale": 1.6,
+                    "frequency_scale": 2.0,
+                    "easing_scale": 1.5,
+                },
+                "alert_curious": {
+                    "movement_scale": 1.3,
+                    "frequency_scale": 1.6,
+                    "easing_scale": 1.3,
+                },
+                "calm_observant": {
+                    "movement_scale": 1.0,
+                    "frequency_scale": 1.2,
+                    "easing_scale": 1.1,
+                },
+                "quiet_detached": {
+                    "movement_scale": 0.7,
+                    "frequency_scale": 0.8,
+                    "easing_scale": 0.9,
+                },
+                "withdrawn_distant": {
+                    "movement_scale": 0.5,
+                    "frequency_scale": 0.6,
+                    "easing_scale": 0.7,
+                },
+            }
+
+            # Get current emotional pattern (fallback to calm)
+            pattern = gaze_patterns.get(current_emotion_state, gaze_patterns["calm_observant"])
+
+            # Apply emotional scaling to noise frequencies
+            global pan_frequency, tilt_frequency
+            base_pan_freq = 0.12
+            base_tilt_freq = 0.10
+            pan_frequency = base_pan_freq * pattern["frequency_scale"]
+            tilt_frequency = base_tilt_freq * pattern["frequency_scale"]
+
+            # Generate organic movement targets using Perlin noise
+            update_organic_movement(now)
+
+            # Scale movement based on emotional state
+            pan_center = (PAN_MIN + PAN_MAX) / 2
+            tilt_center = (TILT_MIN + TILT_MAX) / 2
+
+            pan_scaled = pan_center + (pan_micro_target - pan_center) * pattern["movement_scale"]
+            tilt_scaled = tilt_center + (tilt_micro_target - tilt_center) * pattern["movement_scale"]
+
+            # Apply LLM-driven gaze nudge as MODIFIER
+            nudge_pan, nudge_tilt = get_current_nudge()
+            nudge_blend = 0.6
+            pan_scaled += nudge_pan * nudge_blend
+            tilt_scaled += nudge_tilt * nudge_blend
+
+            # Ensure within bounds
+            pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
+            tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
+
+            # Independent pan/tilt movement with emotional easing
+            emotional_easing = IDLE_EASING * pattern["easing_scale"]
+            pan_easing = emotional_easing * pan_easing_variance
+            tilt_easing = emotional_easing * tilt_easing_variance
+
+            pan_velocity = MAX_PAN_VELOCITY * 0.8
+            tilt_velocity = MAX_TILT_VELOCITY * 0.8
+            servo_x = velocity_limited_step(servo_x, pan_scaled, pan_easing, pan_velocity, "pan")
+            servo_y = velocity_limited_step(servo_y, tilt_scaled, tilt_easing, tilt_velocity, "tilt")
 
     # Keep decimal precision for smoother movement - only round at final output
     return person_present, int(servo_x + 0.5), int(servo_y + 0.5)

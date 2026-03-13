@@ -30,25 +30,36 @@ MODEL_GENERATION_OPTIONS = {
             "appears to be a",
             "which suggests that",
             "indicating that",
-            # Block AI identity breaks (only very specific phrases)
+            # Block AI identity breaks
             "As an AI",
             "as an AI",
             "I am an AI",
             "I'm an AI",
             "language model",
+            "text-based AI",
+            "without visual capabilities",
+            "I do not have",
+            "I cannot perceive",
+            "I am unable to",
             # Block self-description (narrating identity instead of embodying it)
             "As a drawing machine",
             "As a quiet drawing",
             "As the quiet drawing",
             "drawing machine that",
+            # Block hedging/programming language
+            "as per my programming",
+            "not programmed",
+            "my programming",
+            "programmed to",
+            "I was programmed",
+            "I'm programmed",
             # Block prompt leakage
             "EXperience",
             "EXERCISE",
             "EXPLANATION",
             # NOTE: Removed ". The ", ". This ", ". As I " - these caused truncation feedback loops
-            # by removing the period, making the truncation detector think the response was incomplete
-            # Natural sentence completion
-            "\n\n",
+            # NOTE: Removed "\n\n" - was causing mid-thought truncation ("The room" etc)
+            # Let num_predict handle length instead of aggressive stop sequences
         ],
     }
 }
@@ -57,8 +68,10 @@ MODEL_GENERATION_OPTIONS = {
 
 
 def get_model_options(model_name: str) -> dict:
-    """Get generation options for a specific model."""
-    return MODEL_GENERATION_OPTIONS.get(model_name, MODEL_GENERATION_OPTIONS["llava:7b-v1.6-mistral-q5_1"])
+    """Get generation options for a specific model. Returns a COPY to prevent mutation."""
+    import copy
+    base = MODEL_GENERATION_OPTIONS.get(model_name, MODEL_GENERATION_OPTIONS["llava:7b-v1.6-mistral-q5_1"])
+    return copy.deepcopy(base)
 
 
 def get_model_system_prompt(model_name: str) -> dict:

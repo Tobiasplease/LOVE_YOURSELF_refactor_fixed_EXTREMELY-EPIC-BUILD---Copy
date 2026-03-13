@@ -62,6 +62,7 @@ from mood.mood import MoodEngine
 from perception.detection_memory import DetectionMemory
 from perception.object_detection import ObjectDetectionThread
 from perception.person_detection_state import get_person_detection_state
+from safety.aruco_detector import get_aruco_detector
 from reactivity.camera_reactive import CameraReactivityEngine
 from utils.continuity import describe_duration
 from utils.error_tracking import get_failure_tracker
@@ -364,6 +365,9 @@ last_mood_time = 0
 last_seen_time = time.time()
 last_time = time.time()
 
+# Person detection now uses unified PersonDetectionState with spatial memory
+# (see perception/person_detection_state.py)
+
 # Global cleanup state
 shutdown_in_progress = False
 cleanup_completed = False
@@ -616,6 +620,10 @@ debug_print("YOLO person detection enabled", "INIT")
 object_detector = ObjectDetectionThread()
 _global_object_detector = object_detector
 object_detector.start()
+
+# Start real-time ArUco marker detection (for paper presence)
+aruco_detector = get_aruco_detector()
+debug_print("ArUco marker detection started", "INIT")
 
 # Start image monitoring
 debug_print("Starting image monitor", "INIT")
@@ -1189,6 +1197,7 @@ try:
         state_manager.update_shared_frame(frame)
 
         object_detector.set_frame(frame)  # YOLO person detection enabled
+        aruco_detector.set_frame(frame)   # Real-time ArUco marker detection
 
         # Store full-resolution frame for LLM captioning (before resize for display)
         full_res_frame = frame.copy()
@@ -1308,25 +1317,18 @@ try:
         else:
             person_detection.update_face_detection(0.0)
 
-        # Disable YOLO person fallback to rely only on high-confidence face detection
-        # This prevents false positives from YOLO detecting "persons" in walls/objects
-        # if best_box is None:
-        #     labels = DetectionMemory.get_labels()
-        #     if "person" in labels:
-        #         best_box = [50, 50, 100, 100]  # Dummy box to indicate person present
-        #         best_conf = 0.8  # Dummy confidence for YOLO person detection
-        #         if int(now) % 5 == 0:  # Every 5 seconds
-        #             debug_print("Person detected by YOLO", "PERSON")
-
-        if best_box is not None:
-            # Suppress frequent detection messages - only show occasionally
-            if int(now) % 5 == 0:  # Every 5 seconds
-                source = "Face" if best_conf < 0.7 else "Person"  # Distinguish source
-                debug_print(f"{source} detected with confidence: {best_conf:.2f}", "DETECTION")
+        # YOLO person awareness - broader detection for consciousness context
+        # Face detection = gaze tracking (following specific faces)
+        # YOLO = general person presence awareness (triggers "aware" gaze state)
+        yolo_person_detected = False
+        labels = DetectionMemory.get_labels()
+        if "person" in labels:
+            yolo_person_detected = True
+            person_detection.update_yolo_detection(True, 0.8)
         else:
-            # Only show "no person" occasionally to avoid spam
-            if int(now) % 10 == 0:  # Every 10 seconds
-                debug_print("No person detected", "DETECTION")
+            person_detection.update_yolo_detection(False)
+
+        # Note: best_box is only for FACE tracking, YOLO detection is passed separately
 
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:
             # Check if mood analysis is already running to prevent overlapping threads
@@ -1342,7 +1344,46 @@ try:
         current_mood = mood_engine.get_current_mood()
 
         face_box = tuple(best_box) if best_box is not None else None
-        person_present, pan, tilt = update_gaze(frame, face_box, mood_engine.get_emotion_for_hand_controller())
+
+        # Get person direction for aware state gaze bias
+        person_state = person_detection.get_person_state()
+        person_direction = person_state.get("direction")
+
+        # Update gaze with face tracking AND YOLO awareness
+        # IMPORTANT: Use SMOOTHED detection state, not raw YOLO (which flickers)
+        smoothed_person_detected = person_state.get("is_present", False)
+        person_present, pan, tilt = update_gaze(
+            frame,
+            face_box,
+            mood_engine.get_emotion_for_hand_controller(),
+            yolo_person_detected=smoothed_person_detected,
+            person_direction=person_direction
+        )
+
+        # Feed servo position to person detection for spatial memory
+        person_detection.update_servo_position(pan, tilt)
+
+        # Refresh person state after servo update
+        person_state = person_detection.get_person_state()
+        person_is_present = person_state["is_present"]
+
+        # Manage gaze search mode based on person detection state
+        from vision.gaze import activate_search_mode, deactivate_search_mode, is_search_mode_active
+        current_person_state = person_state.get("person_state", "absent")
+
+        if current_person_state == "remembered" and not is_search_mode_active():
+            # Person lost but remembered - activate search to find them
+            activate_search_mode(
+                last_seen_pan=person_detection.last_seen_servo_pan,
+                last_seen_tilt=person_detection.last_seen_servo_tilt,
+                zones_visited=person_detection.scan_zones_visited
+            )
+        elif current_person_state == "visible" and is_search_mode_active():
+            # Person found - stop searching
+            deactivate_search_mode()
+        elif current_person_state == "absent" and is_search_mode_active():
+            # Person confirmed absent - stop searching
+            deactivate_search_mode()
 
         # Attach egocentric orientation and face hint to reactivity data
         reactivity_with_view = dict(reactivity_metrics)
@@ -1359,9 +1400,10 @@ try:
         reactivity_with_view["person_consciousness"] = person_context
 
         # Update captioner with every frame (decoupled from mood system)
+        # Uses unified PersonDetectionState with spatial memory (visible/remembered/absent)
         captioner.update(
             frame=frame,
-            person_present=best_box is not None,
+            person_present=person_is_present,
             mood=mood_engine.get_current_mood() if mood_engine else 0.5,
             reactivity_data=reactivity_with_view,
         )
@@ -1375,7 +1417,7 @@ try:
             pause_start_time,
         ) = update_lung_position(
             current_emotion_state=mood_engine.get_emotion_for_hand_controller(),
-            person_present=person_present,
+            person_present=person_is_present,
             delta=delta,
             lung_angle=lung_angle,
             breath_speed=breath_speed,

@@ -23,11 +23,12 @@ import math
 # PRE_OFFSET_Y = 0.0
 
 # Modified settings: scaled and positioned for drawing area
-# Previous: PRE_SCALE=1.66, PRE_OFFSET_X=-4.0, PRE_OFFSET_Y=-14.5, PRE_ROTATION_DEG=20.0
-PRE_SCALE_X = 1.45  # 13% smaller (was 1.66)
-PRE_SCALE_Y = 1.45  # 13% smaller (was 1.66)
-PRE_OFFSET_X = -8.0  # further left (was -4.0)
-PRE_OFFSET_Y = -8.0  # away from base (was -14.5)
+# History: 1.66/-4/-14.5 → 1.45/-8/-8 → 1.0/-12/0 → 1.0/-6/-6 → BASELINE
+# Reverting to baseline to test professor's quad mapping alone
+PRE_SCALE_X = 1.0   # baseline (no scaling)
+PRE_SCALE_Y = 1.0   # baseline (no scaling)
+PRE_OFFSET_X = 0.0   # baseline (no offset)
+PRE_OFFSET_Y = 0.0   # baseline (no offset)
 PRE_PIVOT_X = None  # e.g., 0.0 to use origin, or None for center
 PRE_PIVOT_Y = None
 PRE_CLAMP_TO_DOMAIN = False

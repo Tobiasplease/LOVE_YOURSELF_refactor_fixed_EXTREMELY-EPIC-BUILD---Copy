@@ -32,15 +32,19 @@ class MultimodalModel:
         self.model_name = OLLAMA_MODEL
         self.prompt_interface = PromptInterface(self.model_name)
 
-    def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False, person_present: bool = False) -> str:
-        """Generate image caption using centralized prompt interface."""
+    def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False, person_present: bool = False) -> tuple:
+        """Generate image caption using centralized prompt interface.
+
+        Returns:
+            tuple: (caption_text, prompt_mode) where prompt_mode is 'introspective', 'observational', 'relational', etc.
+        """
         # Get prompt and options from centralized interface
-        prompt, model_options, system_prompt = self.prompt_interface.build_caption_prompt_with_options(
+        prompt, model_options, system_prompt, prompt_mode = self.prompt_interface.build_caption_prompt_with_options(
             self.memory_ref, image_path, flowing=flowing, first_time=first_time, drawing_introspection_mode=drawing_introspection_mode, person_present=person_present
         )
 
         if prompt is None:
-            return "Vision initializing... camera systems coming online..."
+            return ("Vision initializing... camera systems coming online...", "awakening")
 
         log_json_entry(
             LogType.DEBUG,
@@ -51,11 +55,17 @@ class MultimodalModel:
                 "prompt_preview": prompt[:200],
                 "flowing": flowing,
                 "first_time": first_time,
+                "prompt_mode": prompt_mode,
             },
-            print_message=f"[🐞] Prompt hash: {hash(prompt)}, preview: {truncate_for_print(prompt, 200)}",
+            print_message=f"[🐞] Prompt hash: {hash(prompt)}, mode: {prompt_mode}, preview: {truncate_for_print(prompt, 200)}",
         )
 
-        result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="caption")
+        # Use Natsumura for introspective mode (text-only, narrative continuation)
+        if prompt_mode == "introspective":
+            result = self._call_natsumura_introspective(prompt, system_prompt, model_options)
+        else:
+            # Use LLaVA for visual modes (observational, relational, etc.)
+            result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="caption")
 
         log_json_entry(
             LogType.DEBUG,
@@ -68,7 +78,7 @@ class MultimodalModel:
             },
             print_message=f"[🐞] Response hash: {hash(result)}, preview: {truncate_for_print(result, 50)}",
         )
-        return result
+        return (result, prompt_mode)
 
     def reason_about_caption(
         self, caption: str, *, agent: Optional[any] = None, mood_text: Optional[str] = None, extra: Optional[str] = None  # type: ignore
@@ -137,11 +147,11 @@ class MultimodalModel:
         except Exception:
             pass
 
-        # If using multi-step analysis, the prompt IS the final result, don't call LLM again
+        # If using natsumura or multi-step analysis, the prompt IS the final result, don't call LLM again
         try:
-            from config.config import USE_MULTI_STEP_DRAWING_ANALYSIS
-            if USE_MULTI_STEP_DRAWING_ANALYSIS:
-                return prompt  # Multi-step analysis already returns the final drawing prompt
+            from config.config import DRAWING_ANALYSIS_MODE
+            if DRAWING_ANALYSIS_MODE in ("natsumura", "multi_step"):
+                return prompt  # These modes already return the final drawing prompt
         except ImportError:
             pass
 
@@ -169,6 +179,59 @@ class MultimodalModel:
             return response.strip()
         except Exception:
             return "0.5"
+
+    def _call_natsumura_introspective(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        model_options: dict | None = None,
+    ) -> str:
+        """Call Natsumura model for introspective/narrative captions (no image needed)."""
+        try:
+            from config.config import COMPRESSION_MODEL
+            natsumura_model = COMPRESSION_MODEL
+        except ImportError:
+            natsumura_model = "natsumura-storytelling-rp:latest"
+
+        # Use provided options or get defaults, but adjust for narrative mode
+        if model_options is None:
+            model_options = self.prompt_interface._get_base_model_options()
+
+        # Adjust options for narrative introspection - SHORT inner thoughts, not prose
+        model_options.update({
+            "temperature": 0.9,
+            "top_p": 0.7,
+            "repeat_penalty": 1.5,
+            "num_predict": 60,  # Force brevity - let num_predict handle length
+            # Removed aggressive stop sequences - they cause mid-thought truncation
+        })
+
+        log_json_entry(
+            LogType.DEBUG,
+            {
+                "message": "Natsumura introspective call",
+                "action": "natsumura_caption",
+                "model": natsumura_model,
+                "prompt_preview": prompt[:150],
+            },
+            print_message=f"[🌸] Natsumura introspective: {truncate_for_print(prompt, 100)}",
+        )
+
+        response = query_ollama(
+            prompt=prompt,
+            model=natsumura_model,
+            image=None,  # No image for introspective mode
+            timeout=60,
+            log_dir=MOOD_SNAPSHOT_FOLDER,
+            system_prompt=system_prompt,
+            options=model_options,
+            prompt_type="introspective_caption",
+        )
+
+        if not response:
+            response = ""
+
+        return self._clean_response(response)
 
     def _call_ollama(
         self,

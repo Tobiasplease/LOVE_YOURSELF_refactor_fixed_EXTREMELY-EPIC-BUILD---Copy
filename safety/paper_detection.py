@@ -385,206 +385,56 @@ class PaperDetector:
         return self._perform_double_check_detection(check_image_path, "direct")
 
     def _check_aruco_detection_continuous(self, camera) -> PaperCheckResult:
-        """Check paper presence by continuously detecting ArUco markers on shared frame buffer from main loop."""
-        print(f"[📄] Starting continuous ArUco detection using shared frame buffer (5 seconds)...")
+        """Check paper presence using real-time ArUco detector running in main loop."""
+        print(f"[📄] Waiting for ArUco detector to accumulate frames after gaze settled...")
 
         try:
-            # Import state_manager for shared frame access
-            from utils.state_manager import state_manager
+            from safety.aruco_detector import get_aruco_detector
 
-            # Initialize ArUco detector with low-light optimized parameters
-            aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-            aruco_params = cv2.aruco.DetectorParameters()
+            detector = get_aruco_detector()
 
-            # Low-light sensitivity improvements (increased sensitivity for variable lighting)
-            aruco_params.adaptiveThreshWinSizeMin = 3
-            aruco_params.adaptiveThreshWinSizeMax = 27
-            aruco_params.adaptiveThreshWinSizeStep = 3
-            aruco_params.adaptiveThreshConstant = 5
-            aruco_params.minMarkerPerimeterRate = 0.005
-            aruco_params.maxMarkerPerimeterRate = 4.0
-            aruco_params.polygonalApproxAccuracyRate = 0.08
-            aruco_params.minCornerDistanceRate = 0.015
-            aruco_params.minDistanceToBorder = 1
+            # Wait for detector to accumulate fresh frames after camera settles
+            # The rolling window is 2 seconds, so wait ~2.5s for a clean window
+            time.sleep(2.5)
 
-            # Handle both new and legacy OpenCV APIs
-            try:
-                detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
-                use_new_api = True
-            except AttributeError:
-                detector = None
-                use_new_api = False
+            status = detector.get_status()
 
-            # Continuously check frames for 5 seconds
-            start_time = time.time()
-            detection_duration = 5.0
-            frames_checked = 0
-            marker_detected_count = 0
-            all_detected_ids = set()
-            last_frame_ts = 0
+            marker_visible = status["marker_visible"]
+            confidence = status["confidence"]
+            detected_ids = status["detected_ids"]
+            window_size = status["window_size"]
 
-            while time.time() - start_time < detection_duration:
-                # Use shared frame from main loop (avoids camera contention)
-                frame = state_manager.get_shared_frame(max_age=0.2)
-                if frame is None:
-                    time.sleep(0.02)
-                    continue
+            detections_in_window = int(confidence * window_size) if window_size > 0 else 0
+            print(f"[📄] Real-time ArUco: {detections_in_window}/{window_size} frames detected marker ({confidence:.1%}), IDs={detected_ids}")
 
-                # Skip if we already processed this frame (check timestamp)
-                current_ts = state_manager._frame_timestamp
-                if current_ts == last_frame_ts:
-                    time.sleep(0.02)
-                    continue
-                last_frame_ts = current_ts
-
-                frames_checked += 1
-
-                # Detect markers directly on frame (ArUco handles grayscale internally)
-                if use_new_api:
-                    corners, ids, rejected = detector.detectMarkers(frame)
-                else:
-                    corners, ids, rejected = cv2.aruco.detectMarkers(frame, aruco_dict, parameters=aruco_params)
-
-                # Track detections
-                if ids is not None and len(ids) > 0:
-                    detected_ids = ids.flatten().tolist()
-                    all_detected_ids.update(detected_ids)
-                    if 0 in detected_ids:
-                        marker_detected_count += 1
-
-                time.sleep(0.03)  # ~30fps check rate
-
-            print(f"[📄] Continuous detection complete: {frames_checked} unique frames checked over {detection_duration}s")
-            print(f"[📄] Marker ID 0 detected in {marker_detected_count}/{frames_checked} frames")
-            print(f"[📄] All markers seen during scan: {sorted(all_detected_ids)}")
-
-            # If marker 0 was detected in ANY frame, it means no paper is covering it
-            if marker_detected_count > 0:
-                confidence = marker_detected_count / frames_checked if frames_checked > 0 else 0
-                print(f"[📄] ✓ Marker ID 0 VISIBLE ({confidence:.1%} of frames) → No paper present → BLOCKING draw")
+            if marker_visible:
+                print(f"[📄] ✓ Paper marker VISIBLE ({confidence:.1%}) → No paper present → BLOCKING draw")
                 return PaperCheckResult(
                     paper_present=False,
                     confidence=confidence,
-                    method_used="aruco_continuous",
+                    method_used="aruco_realtime",
                     check_image_path="",
                     timestamp=time.time(),
-                    llm_response=f"ArUco marker 0 visible in {marker_detected_count}/{frames_checked} frames - no paper covering surface"
+                    llm_response=f"ArUco marker visible ({confidence:.0%} detection rate) - no paper covering surface"
                 )
             else:
-                print(f"[📄] ✗ Marker ID 0 NOT VISIBLE → Paper present → ALLOWING draw")
+                print(f"[📄] ✗ Paper marker NOT VISIBLE ({confidence:.1%}) → Paper present → ALLOWING draw")
                 return PaperCheckResult(
                     paper_present=True,
-                    confidence=1.0,
-                    method_used="aruco_continuous",
+                    confidence=1.0 - confidence,
+                    method_used="aruco_realtime",
                     check_image_path="",
                     timestamp=time.time(),
-                    llm_response=f"ArUco marker 0 not detected in {frames_checked} frames - paper present (other markers: {sorted(all_detected_ids)})"
+                    llm_response=f"ArUco marker not detected ({confidence:.0%}) - paper present"
                 )
 
         except Exception as e:
-            print(f"[📄] ⚠️ ArUco detection failed: {e} → Defaulting to ALLOW drawing")
+            print(f"[📄] ⚠️ Real-time ArUco check failed: {e} → Defaulting to ALLOW drawing")
             return PaperCheckResult(
                 paper_present=True,
                 confidence=0.0,
-                method_used="aruco_continuous",
+                method_used="aruco_realtime",
                 check_image_path="",
-                timestamp=time.time(),
-                llm_response="",
-                error_message=f"ArUco detection error: {str(e)} (defaulting to allow drawing)"
-            )
-
-    def _check_aruco_detection_live(self, frame) -> PaperCheckResult:
-        """Check paper presence by detecting ArUco markers directly on camera frame (no disk I/O)."""
-        print(f"[📄] Running ArUco detection on live frame: {frame.shape}")
-        try:
-            # Initialize ArUco detector with low-light optimized parameters
-            aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-            aruco_params = cv2.aruco.DetectorParameters()
-
-            # Low-light sensitivity improvements (increased sensitivity for variable lighting)
-            aruco_params.adaptiveThreshWinSizeMin = 3
-            aruco_params.adaptiveThreshWinSizeMax = 27  # Extended range
-            aruco_params.adaptiveThreshWinSizeStep = 3  # Finer steps
-            aruco_params.adaptiveThreshConstant = 5  # More sensitive
-            aruco_params.minMarkerPerimeterRate = 0.005  # Detect smaller markers
-            aruco_params.maxMarkerPerimeterRate = 4.0
-            aruco_params.polygonalApproxAccuracyRate = 0.08  # More lenient
-            aruco_params.minCornerDistanceRate = 0.015  # Allow closer corners
-            aruco_params.minDistanceToBorder = 1  # Allow markers closer to edge
-
-            # Detect markers directly on frame (ArUco handles grayscale internally)
-            try:
-                detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
-                corners, ids, rejected = detector.detectMarkers(frame)
-            except AttributeError:
-                # Legacy API
-                corners, ids, rejected = cv2.aruco.detectMarkers(frame, aruco_dict, parameters=aruco_params)
-
-            # Check if marker ID 0 was detected
-            # Logic: Marker visible = NO paper present (marker not covered)
-            #        Marker hidden = paper present (marker covered by paper)
-            detected_ids = ids.flatten().tolist() if ids is not None else []
-            print(f"[📄] ArUco detection result: {len(detected_ids)} markers found - IDs: {detected_ids}")
-
-            if ids is not None and len(ids) > 0 and 0 in ids:
-                print("[📄] ✓ Marker ID 0 VISIBLE → No paper present → BLOCKING draw")
-                return PaperCheckResult(
-                    paper_present=False,  # Marker visible = no paper covering it
-                    confidence=1.0,
-                    method_used="aruco_live",
-                    check_image_path="",
-                    timestamp=time.time(),
-                    llm_response=f"ArUco marker visible (ID 0) - no paper covering surface, {len(ids)} total markers"
-                )
-            else:
-                print("[📄] ✗ Marker ID 0 NOT VISIBLE → Paper present → ALLOWING draw")
-                return PaperCheckResult(
-                    paper_present=True,  # Marker hidden = paper covering it
-                    confidence=1.0,
-                    method_used="aruco_live",
-                    check_image_path="",
-                    timestamp=time.time(),
-                    llm_response=f"ArUco marker hidden - paper present (other IDs found: {detected_ids})"
-                )
-
-        except Exception as e:
-            # When detection fails, default to ALLOWING drawing (assume paper present)
-            print(f"[📄] ⚠️ ArUco detection failed: {e} → Defaulting to ALLOW drawing")
-            return PaperCheckResult(
-                paper_present=True,  # Safe default: assume paper is present when detection fails
-                confidence=0.0,
-                method_used="aruco_live",
-                check_image_path="",
-                timestamp=time.time(),
-                llm_response="",
-                error_message=f"ArUco detection error: {str(e)} (defaulting to allow drawing)"
-            )
-
-    def _check_aruco_detection(self, check_image_path: str, captioner=None) -> PaperCheckResult:
-        """Legacy: Check paper presence by detecting ArUco markers from saved image."""
-        print(f"[📄] Running ArUco detection on: {check_image_path}")
-        print(f"[📄] Image file exists: {os.path.exists(check_image_path)}")
-        try:
-            # Load image
-            frame = cv2.imread(check_image_path)
-            if frame is None:
-                raise Exception(f"Failed to load image: {check_image_path} (file exists: {os.path.exists(check_image_path)})")
-            print(f"[📄] Image loaded successfully: {frame.shape}")
-
-            # Use the live detection method
-            result = self._check_aruco_detection_live(frame)
-            result.check_image_path = check_image_path  # Update path for logging
-            return result
-
-        except Exception as e:
-            # When detection fails, default to ALLOWING drawing (assume paper present)
-            # This prevents blocking due to camera positioning issues or other technical failures
-            print(f"[📄] ⚠️ ArUco detection failed: {e} → Defaulting to ALLOW drawing")
-            return PaperCheckResult(
-                paper_present=True,  # Safe default: assume paper is present when detection fails
-                confidence=0.0,
-                method_used="aruco",
-                check_image_path=check_image_path,
                 timestamp=time.time(),
                 llm_response="",
                 error_message=f"ArUco detection error: {str(e)} (defaulting to allow drawing)"

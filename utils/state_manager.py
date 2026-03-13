@@ -261,6 +261,12 @@ class StateManager:
             save_time = state["metadata"]["save_time"]
             captioner.last_session_gap = time.time() - save_time
 
+            # Restore prior session caption for awakening context
+            # This is what the AI was thinking before shutdown - used in awakening prompts
+            prior_caption = cap_state.get("last_caption", "")
+            if prior_caption and len(prior_caption) > 5:
+                captioner.prior_session_last_caption = prior_caption
+
             # IMPORTANT: Mark that we've restored state, so we don't repeat awakening
             # The awakening should only happen once per session start
             captioner.first_caption_done = False  # Will trigger awakening sequence once

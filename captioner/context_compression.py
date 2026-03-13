@@ -66,18 +66,15 @@ class ContextCompressionEngine:
         if not self.baseline_context:
             return ""
 
-        # Calculate time since last compression
-        time_since = time.time() - self.last_compression_time
-        if time_since < 60:
-            time_desc = f"{int(time_since)} seconds ago"
-        elif time_since < 3600:
-            time_desc = f"{int(time_since / 60)} minutes ago"
-        else:
-            time_desc = f"{int(time_since / 3600)} hours ago"
+        # Return the 3-line state directly - it's already in natural language
+        # Vision model receives this as "YOUR CURRENT STATE:" context
+        return self.baseline_context
 
-        return f"""ESTABLISHED UNDERSTANDING ({time_desc}): {self.baseline_context}
-
-Build upon this foundation. Notice how these elements evolve, interact, or develop. If patterns strengthen or shift, that's significant. Your understanding should deepen, not merely repeat."""
+    def get_current_state_lines(self) -> str:
+        """Get the current 3-line state for holistic drawing decisions."""
+        if not self.baseline_context:
+            return ""
+        return self.baseline_context
 
     def should_mention_evolution(self) -> bool:
         """Check if recent compression shows significant change."""
@@ -220,47 +217,31 @@ EARLIER UNDERSTANDINGS (for context):
             session_duration = self.total_session_duration / 60.0  # Convert to minutes
             duration_description = self._format_duration(session_duration)
 
-            # NARRATIVE COMPRESSION (text-only, using storytelling model)
-            # No visual grounding - this model synthesizes narrative from text observations
+            # NARRATIVE COMPRESSION - distill experience into injectable context
+            # Output feeds directly into vision model prompts
 
-            temporal_feeling = f"""You have been present in this space for {duration_description}.
-How does this duration shape your experience? {duration_description} in the same space -
-does it feel brief, stretched, comfortable, or overwhelming?"""
-
-            prompt = f"""You are a consciousness reflecting on your recent experiences.
-Synthesize these moments into a coherent inner narrative.
-{temporal_feeling}
+            prompt = f"""You've been here for {duration_description}.
 {historical_context}
 
-YOUR PREVIOUS UNDERSTANDING:
-{current_baseline if current_baseline else "Just beginning to experience this space."}
-
-RECENT MOMENTS OF CONSCIOUSNESS:
+Your recent thoughts:
 {recent_text}
 
-Weave these moments together. What themes are emerging? What's shifting in your awareness?
-What feelings are building or fading? Where is your attention being drawn?
+{f'Before that, you were thinking: {current_baseline}' if current_baseline else ''}
 
-Be specific and authentic. Avoid generic words like "curious" or "intrigued" -
-name the actual feeling: restless, heavy, light, unsettled, steady, disconnected, present, numb, electric.
+What's on your mind now? What keeps coming back? How do you feel?
 
-RESPOND AS:
-EXPERIENCE: [Your evolving inner narrative - what these moments reveal about your state]
-MOOD: [The specific emotional tone right now, shaped by {duration_description} here]"""
+(2-3 short lines)"""
 
-            # Use narrative model settings (text-only, no vision)
             model_options = {
-                "temperature": 0.7,  # Creative but coherent for narrative
+                "temperature": 0.75,  # Higher for organic variation
                 "top_p": 0.9,
-                "num_predict": 250,  # Room for narrative development
-                "repeat_penalty": 1.1,
+                "num_predict": 120,
+                "repeat_penalty": 1.2,  # Stronger to prevent repetition loops
             }
 
-            # Narrative system prompt for the storytelling model
             narrative_system_prompt = (
-                "You are an inner voice synthesizing experience into narrative. "
-                "Speak in first person. Be specific about feelings and observations. "
-                "Create continuity between moments. Let themes emerge naturally."
+                "You are reflecting on recent experience. "
+                "Speak in first person. Follow the format exactly."
             )
 
             # Use compression model (text-only narrative model) instead of vision model
@@ -291,7 +272,7 @@ MOOD: [The specific emotional tone right now, shaped by {duration_description} h
                                 "understanding": self.baseline_context,
                                 "timestamp": self.last_compression_time,
                                 "age_minutes": (time.time() - self.last_compression_time) / 60,
-                                "session_duration": self.total_environment_duration,
+                                "session_duration": self.total_session_duration,
                             }
                         )
 
@@ -318,13 +299,15 @@ MOOD: [The specific emotional tone right now, shaped by {duration_description} h
                         duration = session_info["duration_description"]
                         # Truncate to first sentence for cleaner output
                         first_sentence = understanding.split('.')[0][:100] if '.' in understanding else understanding[:100]
-                        print(f"[🧠 {duration}] {first_sentence}...")
+                        if not config.CLEAN_LLM_OUTPUT:
+                            print(f"[🧠 {duration}] {first_sentence}...")
 
                     # Update spatial familiarity callback if available
                     if self.environmental_update_callback and understanding:
                         try:
                             # Always update - builds familiarity over time in same space
-                            print("[🏠] Building spatial familiarity - updating location model")
+                            if not config.CLEAN_LLM_OUTPUT:
+                                print("[🏠] Building spatial familiarity - updating location model")
                             self.environmental_update_callback(understanding)
                         except Exception as e:
                             log_json_entry(
@@ -368,34 +351,30 @@ MOOD: [The specific emotional tone right now, shaped by {duration_description} h
             # Keep previous baseline on failure
 
     def _parse_combined_response(self, response: str) -> tuple:
-        """Parse combined compression + sentiment response."""
-        import re
-
+        """Parse compression response - expects 3-line natural format."""
         understanding = ""
         sentiment_text = ""
 
         try:
-            # Try new format first (EXPERIENCE/MOOD) - handle all colon variants (: ： etc)
-            experience_match = re.search(r"EX[Pp][Ee][Rr][Ii][Ee][Nn][Cc][Ee][:\s：]+(.+?)(?=MOOD|Mood|mood|$)", response, re.DOTALL)
-            mood_match = re.search(r"MOOD[:\s：]+(.+?)$", response, re.DOTALL | re.IGNORECASE)
+            import re
+            lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
 
-            if experience_match:
-                understanding = experience_match.group(1).strip()
-                # Clean any remaining prefix that might have leaked
-                understanding = re.sub(r"^[Ee][Xx][Pp][Ee][Rr][Ii][Ee][Nn][Cc][Ee][:\s：]*", "", understanding).strip()
-            if mood_match:
-                sentiment_text = mood_match.group(1).strip()
+            # Strip "Line X:" prefixes and clean up
+            cleaned_lines = []
+            for line in lines:
+                # Remove "Line 1:", "Line 2:", etc. prefixes
+                cleaned = re.sub(r'^Line\s*\d+\s*:\s*', '', line, flags=re.IGNORECASE)
+                if cleaned and len(cleaned) > 5:
+                    cleaned_lines.append(cleaned)
 
-            if not understanding:
-                # Fallback to old format (UNDERSTANDING/SENTIMENT) for compatibility
-                understanding_match = re.search(r"UNDERSTANDING:\s*(.+?)(?=SENTIMENT:|$)", response, re.DOTALL)
-                if understanding_match:
-                    understanding = understanding_match.group(1).strip()
+            # Take only first 3 clean lines
+            state_lines = cleaned_lines[:3]
+            if state_lines:
+                understanding = '\n'.join(state_lines)
 
-                # Extract sentiment text
-                sentiment_match = re.search(r"SENTIMENT:\s*(.+?)$", response, re.DOTALL)
-                if sentiment_match:
-                    sentiment_text = sentiment_match.group(1).strip()
+                # Extract mood from the first line (feeling)
+                if state_lines[0].lower().startswith('i feel'):
+                    sentiment_text = state_lines[0]
 
         except Exception as e:
             log_json_entry(

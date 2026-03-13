@@ -12,7 +12,7 @@ from typing import Deque, Dict, List, Optional, Tuple
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 
-from config.config import CAPTION_INTERVAL, DRAWING_INTERVAL, DRAWING_STARTUP_DELAY, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
+from config.config import CAPTION_INTERVAL, CLEAN_LLM_OUTPUT, DRAWING_INTERVAL, DRAWING_STARTUP_DELAY, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
@@ -34,6 +34,59 @@ try:
 except Exception as e:
     print(f"[WARNING] Context compression module failed to load: {e}")
     context_compressor = None
+
+
+def _parse_gaze_direction(caption: str) -> Optional[str]:
+    """Parse LOOK: [direction] from caption response."""
+    if not caption:
+        return None
+
+    text_lower = caption.lower()
+
+    # Look for explicit "LOOK:" tag (model should output this)
+    match = re.search(r'look:\s*(\w+)', text_lower)
+    if match:
+        direction = match.group(1)
+        if direction in ("left", "right", "up", "down", "ahead", "person"):
+            return direction
+
+    # Fallback: check last line for standalone direction word
+    lines = [l.strip() for l in caption.strip().split('\n') if l.strip()]
+    if lines:
+        last_line = lines[-1].lower()
+        for direction in ("left", "right", "up", "down", "ahead", "person"):
+            if last_line == direction or last_line.startswith(f"{direction} "):
+                return direction
+
+    return None
+
+
+def _clean_caption_for_display(caption: str) -> Optional[str]:
+    """Remove LOOK: lines and filter out direction-only captions."""
+    if not caption:
+        return None
+
+    # Remove LOOK: lines
+    lines = caption.strip().split('\n')
+    clean_lines = []
+    for line in lines:
+        line_lower = line.lower().strip()
+        # Skip LOOK: lines
+        if line_lower.startswith('look:'):
+            continue
+        # Skip arrow notation lines
+        if '→ look' in line_lower:
+            continue
+        clean_lines.append(line)
+
+    cleaned = '\n'.join(clean_lines).strip()
+
+    # Filter out direction-only responses (these aren't real captions)
+    direction_words = {"left", "right", "up", "down", "ahead", "person", "up ahead", "a person"}
+    if cleaned.lower().rstrip('.,!?') in direction_words:
+        return None  # Signal to skip this caption
+
+    return cleaned if cleaned else None
 
 
 class Captioner(MemoryMixin):
@@ -337,6 +390,33 @@ class Captioner(MemoryMixin):
                 caption = "..."  # Minimal fallback - don't pollute memory with fake captions
                 return caption  # Return early - don't store this in recent_captions
 
+        # Clean caption: remove LOOK: lines and filter direction-only responses
+        # Parse gaze BEFORE cleaning so we can still extract the direction
+        gaze_direction = _parse_gaze_direction(caption)
+
+        # Set gaze for ALL responses (direction-only or full caption)
+        if gaze_direction:
+            try:
+                from vision.gaze import set_llm_zone
+                if gaze_direction == "person":
+                    set_llm_zone("ahead", "level")
+                elif gaze_direction in ("left", "right", "ahead"):
+                    set_llm_zone(gaze_direction)
+                elif gaze_direction in ("up", "down"):
+                    set_llm_zone("ahead", gaze_direction)
+            except Exception:
+                pass
+
+        cleaned_caption = _clean_caption_for_display(caption)
+        if cleaned_caption is None:
+            # Direction-only response - gaze already set, skip caption display
+            if gaze_direction:
+                print(f"[👁️] Gaze → {gaze_direction.upper()}")
+            self.last_caption_time = now  # Still update time to maintain interval
+            return  # Skip display but gaze was set
+
+        caption = cleaned_caption  # Use cleaned version for display
+
         # Format caption for clean output
         try:
             from config.config import CLEAN_LLM_OUTPUT
@@ -397,20 +477,6 @@ class Captioner(MemoryMixin):
             self.recent_captions.append((caption.strip(), now))
             if len(self.recent_captions) > 20:  # Keep last 20
                 self.recent_captions = self.recent_captions[-20:]
-
-        # Extract gaze intent from caption and nudge camera
-        try:
-            from config.config import ENABLE_GAZE_INTENT, GAZE_NUDGE_DURATION
-            if ENABLE_GAZE_INTENT:
-                from vision.gaze_intent import extract_gaze_intent, get_nudge_deltas
-                from vision.gaze import apply_gaze_nudge
-                intent = extract_gaze_intent(caption)
-                if intent:
-                    direction, intensity = intent
-                    pan_delta, tilt_delta = get_nudge_deltas(direction, intensity)
-                    apply_gaze_nudge(pan_delta, tilt_delta, duration=GAZE_NUDGE_DURATION)
-        except Exception:
-            pass  # Gaze intent is non-critical
 
         # Now update the timestamp since we have a new caption
         self.last_caption_time = now
@@ -570,10 +636,11 @@ class Captioner(MemoryMixin):
 
         # STATE-MOTIVATED EVALUATION
         # Get current system state for decision
-        print(f"\n[🎨 STATE EVALUATION]")
-        print(f"  Current mood: {self.current_mood:.3f}")
-        print(f"  Current novelty: {self.novelty_score:.3f}")
-        print(f"  Current boredom: {self.boredom:.3f}")
+        if not CLEAN_LLM_OUTPUT:
+            print(f"\n[🎨 STATE EVALUATION]")
+            print(f"  Current mood: {self.current_mood:.3f}")
+            print(f"  Current novelty: {self.novelty_score:.3f}")
+            print(f"  Current boredom: {self.boredom:.3f}")
 
         # Evaluate whether to draw based on internal state
         should_draw = self.drawing.should_draw(
@@ -584,20 +651,24 @@ class Captioner(MemoryMixin):
         )
 
         if not should_draw:
-            print(f"[🎨] State evaluation: NOT motivated to draw yet")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[🎨] State evaluation: NOT motivated to draw yet")
             return
 
         # Update check time ONLY after state motivation passes
         # This allows retry on next cycle if not motivated yet
         self.last_drawing_check_time = now
-        print(f"[🎨] ✨ State-motivated drawing decision: DRAW!")
+        if not CLEAN_LLM_OUTPUT:
+            print(f"[🎨] ✨ State-motivated drawing decision: DRAW!")
 
         # Proceed with drawing generation
         # NOTE: last_drawing_time will be updated by register_drawing() after GRBL completes
-        print(f"[DEBUG] DRAWING TRIGGER ACTIVATED! Starting drawing generation...")
-        print(f"[DEBUG] Step 1: About to start drawing generation process")
+        if not CLEAN_LLM_OUTPUT:
+            print(f"[DEBUG] DRAWING TRIGGER ACTIVATED! Starting drawing generation...")
+            print(f"[DEBUG] Step 1: About to start drawing generation process")
         try:
-            print(f"[DEBUG] Step 2: Attempting log_json_entry...")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[DEBUG] Step 2: Attempting log_json_entry...")
             with self.print_lock:
                 print("\r" + " " * 80 + "\r", end="")
                 system_type = "State-motivated"
@@ -613,17 +684,21 @@ class Captioner(MemoryMixin):
                     },
                     print_message=f"[🎨] {system_type} drawing ready, evaluating...",
                 )
-            print(f"[DEBUG] Step 3: log_json_entry completed successfully")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[DEBUG] Step 3: log_json_entry completed successfully")
         except Exception as e:
-            print(f"[DEBUG] EXCEPTION in log_json_entry: {e}")
-            import traceback
-            traceback.print_exc()
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[DEBUG] EXCEPTION in log_json_entry: {e}")
+                import traceback
+                traceback.print_exc()
 
-        print(f"[DEBUG] Step 4: Drawing system ready, building context...")
+        if not CLEAN_LLM_OUTPUT:
+            print(f"[DEBUG] Step 4: Drawing system ready, building context...")
         memory_context = self.get_recent_memory()
         reflection_context = self.get_last_reflection()
         extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
-        print(f"[DEBUG] Step 7: Context built, starting drawing generation...")
+        if not CLEAN_LLM_OUTPUT:
+            print(f"[DEBUG] Step 7: Context built, starting drawing generation...")
 
         # Start loading animation for drawing prompt
         loading_stop = threading.Event()
@@ -631,9 +706,11 @@ class Captioner(MemoryMixin):
         loading_thread.start()
 
         try:
-            print(f"[DEBUG] Step 8: About to call generate_drawing_prompt...")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[DEBUG] Step 8: About to call generate_drawing_prompt...")
             prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path)
-            print(f"[DEBUG] Step 9: Drawing prompt generated successfully")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[DEBUG] Step 9: Drawing prompt generated successfully")
             log_json_entry(
                     LogType.DEBUG,
                     {
@@ -662,15 +739,18 @@ class Captioner(MemoryMixin):
 
         # Since we already checked readiness, proceed with drawing flow
         if "[ERROR]" not in prompt:
-            print(f"\n{'🎨'*30}")
-            print(f"[🚀 QUEUING DRAWING] Prompt: {prompt[:100]}...")
-            print(f"[🚀 QUEUING DRAWING] This will trigger ComfyUI generation")
-            print(f"{'🎨'*30}\n")
-            print(f"[DEBUG] Step 10: Starting handle_drawing_flow...")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"\n{'🎨'*30}")
+                print(f"[🚀 QUEUING DRAWING] Prompt: {prompt[:100]}...")
+                print(f"[🚀 QUEUING DRAWING] This will trigger ComfyUI generation")
+                print(f"{'🎨'*30}\n")
+                print(f"[DEBUG] Step 10: Starting handle_drawing_flow...")
             self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
-            print(f"[DEBUG] Step 11: handle_drawing_flow completed")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[DEBUG] Step 11: handle_drawing_flow completed")
         else:
-            print(f"[DEBUG] ERROR: Drawing prompt contains error, skipping flow")
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[DEBUG] ERROR: Drawing prompt contains error, skipping flow")
 
     def describe_current_mood(self) -> str:
         """Rich emotional description using 3D mood state and temporal context."""

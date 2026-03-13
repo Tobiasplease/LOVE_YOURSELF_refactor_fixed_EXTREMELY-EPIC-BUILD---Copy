@@ -80,7 +80,9 @@
       "Bash(PYTHONPATH=/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy python debug/test_caption_display.py)",
       "Bash(PYTHONPATH=/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy python -c \"\nimport sys\nsys.path.append(''/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy'')\nfrom grbl.grbl_utils import process_svg_to_grbl\n\nprint(''=== DEFAULT OFFSET (-40, -40, 0) ==='')\nresult1 = process_svg_to_grbl(\n    ''grbl/test_files/simple_square.svg'', \n    ''grbl/test_files/test_coord_default.gcode'',\n    execute_grbl=False,\n    origin_offset=(-40, -40, 0)\n)\n\nprint(''=== SHIFTED OFFSET (-40, -30, 0) ==='') \nresult2 = process_svg_to_grbl(\n    ''grbl/test_files/simple_square.svg'',\n    ''grbl/test_files/test_coord_shifted.gcode'', \n    execute_grbl=False,\n    origin_offset=(-40, -30, 0)\n)\n\nprint(f''Files generated: {result1}, {result2}'')\n\")",
       "WebFetch(domain:ollama.com)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

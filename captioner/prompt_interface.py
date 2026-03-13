@@ -20,6 +20,13 @@ from .prompts import (
     context_rich_multi_step_drawing_analysis,
 )
 
+# Experimental narrative prompts (toggle via USE_NARRATIVE_PROMPTS in config)
+try:
+    from .prompts_experimental import build_narrative_prompt, NARRATIVE_SYSTEM_PROMPT
+    NARRATIVE_PROMPTS_AVAILABLE = True
+except ImportError:
+    NARRATIVE_PROMPTS_AVAILABLE = False
+
 
 class PromptInterface:
     """Centralized interface for all prompt building and preparation."""
@@ -32,22 +39,37 @@ class PromptInterface:
         if not os.path.exists(image_path):
             return None, None, None
 
+        # === EXPERIMENTAL: Narrative prompts (simpler, roleplay-style) ===
+        use_narrative = False
+        try:
+            from config.config import USE_NARRATIVE_PROMPTS
+            use_narrative = USE_NARRATIVE_PROMPTS and NARRATIVE_PROMPTS_AVAILABLE
+        except ImportError:
+            pass
+
+        if use_narrative and not drawing_introspection_mode:
+            return self._build_narrative_caption(memory_ref, person_present)
+
+        # === LEGACY: Original prompt system ===
         # Track dynamic system context and formatted system prompt from focused prompt
         dynamic_caption_context = None
         focused_system_prompt = None
+        prompt_mode = None  # Track prompt mode for model selection
 
         # CONSOLIDATED: All caption prompts go through build_focused_caption_prompt
         if drawing_introspection_mode:
             prompt = self._build_drawing_introspection_prompt(memory_ref)
+            prompt_mode = "drawing_introspection"
         elif memory_ref:
             # Single code path for all captions - awakening handled inside build_focused_caption_prompt
-            prompt, focused_system_prompt, dynamic_caption_context = build_focused_caption_prompt(
+            prompt, focused_system_prompt, dynamic_caption_context, prompt_mode = build_focused_caption_prompt(
                 memory_ref,
                 getattr(memory_ref, "last_caption", None),
                 person_present=person_present
             )
         else:
             prompt = "I'm waking up. What do I see?"
+            prompt_mode = "awakening"
 
         # Prepare model options with variation settings
         model_options = self._get_base_model_options()
@@ -121,8 +143,8 @@ class PromptInterface:
             else:
                 system_prompt = base_prompt
 
-        # Return prompt, options, and formatted system prompt
-        return prompt, model_options, system_prompt
+        # Return prompt, options, formatted system prompt, and prompt mode
+        return prompt, model_options, system_prompt, prompt_mode
 
     def build_reflection_prompt_with_options(self, caption: str, agent=None, extra: Optional[str] = None):
         """Build reflection prompt and prepare options."""
@@ -145,15 +167,21 @@ class PromptInterface:
         if not memory_ref:
             return None, None, None
 
-        # Choose between multi-step context-rich analysis or single-prompt approach
+        # Choose drawing analysis mode
         try:
-            from config.config import USE_MULTI_STEP_DRAWING_ANALYSIS
-
-            use_multi_step = USE_MULTI_STEP_DRAWING_ANALYSIS
+            from config.config import DRAWING_ANALYSIS_MODE
+            analysis_mode = DRAWING_ANALYSIS_MODE
         except ImportError:
-            use_multi_step = False  # Fallback to single-prompt
+            analysis_mode = "single"  # Fallback
 
-        if use_multi_step:
+        if analysis_mode == "natsumura":
+            from .prompts import natsumura_drawing_analysis
+            print("=" * 60)
+            print(f"[🎨 NATSUMURA] Starting identity-aware drawing analysis")
+            print("=" * 60)
+            prompt = natsumura_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
+            print(f"[🎨 NATSUMURA] Got prompt back, length={len(prompt) if prompt else 0}")
+        elif analysis_mode == "multi_step":
             print("[🎨] Using context-rich multi-step drawing analysis")
             prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
         else:
@@ -336,3 +364,33 @@ Focus on the unique aspects of THIS specific drawing rather than generic creativ
 Rather than generic observations about creativity, focus on what's uniquely present in this specific moment. What do you notice about your current state of mind? How does your physical workspace reflect your artistic process right now? What feels different about this particular creative session?
 
 Provide a specific, personal reflection (2-3 sentences) about what you're experiencing in this exact moment. Avoid generic statements about creativity. (Context error: {e})"""
+
+    def _build_narrative_caption(self, memory_ref, person_present: bool):
+        """Build caption using experimental narrative prompt system."""
+        user_prompt, system_prompt, prompt_mode = build_narrative_prompt(
+            memory_ref,
+            last_caption=getattr(memory_ref, "last_caption", None),
+            person_present=person_present
+        )
+
+        # Simpler model options for narrative style
+        model_options = self._get_base_model_options()
+        model_options["seed"] = random.randint(1, 1000000)
+
+        try:
+            from config.config import CAPTIONER_TEMPERATURE
+            caption_temp = CAPTIONER_TEMPERATURE
+        except ImportError:
+            caption_temp = 1.0
+
+        model_options.update({
+            "temperature": caption_temp,
+            "top_p": 0.7,
+            "repeat_penalty": 1.8,  # Lower than old system (was 2.5)
+            "top_k": 30,
+            "num_predict": 100,
+            "stop": ["\n\n\n"],  # Only stop on triple newline - let LOOK: come through for gaze
+        })
+
+        # No dynamic context injection - it's all in the narrative prompt
+        return (user_prompt, model_options, system_prompt, prompt_mode)
