@@ -121,39 +121,39 @@ physics_state = GazePhysicsState()
 
 PHYSICS_PATTERNS = {
     "energized_engaged": {
-        "mass": 0.5,
-        "spring_constant": 15.0,
-        "damping": 3.0,
-        "tremor_amplitude": 0.4,
-        "orbital_strength": 0.3,
+        "mass": 0.4,
+        "spring_constant": 18.0,
+        "damping": 2.5,
+        "tremor_amplitude": 1.2,
+        "orbital_strength": 1.0,
     },
     "alert_curious": {
-        "mass": 0.7,
-        "spring_constant": 12.0,
-        "damping": 4.0,
-        "tremor_amplitude": 0.25,
-        "orbital_strength": 0.4,
+        "mass": 0.5,
+        "spring_constant": 14.0,
+        "damping": 3.0,
+        "tremor_amplitude": 0.8,
+        "orbital_strength": 1.2,
     },
     "calm_observant": {
-        "mass": 1.0,
-        "spring_constant": 8.0,
-        "damping": 5.0,
-        "tremor_amplitude": 0.15,
-        "orbital_strength": 0.2,
+        "mass": 0.7,
+        "spring_constant": 10.0,
+        "damping": 4.0,
+        "tremor_amplitude": 0.5,
+        "orbital_strength": 0.7,
     },
     "quiet_detached": {
-        "mass": 1.5,
-        "spring_constant": 5.0,
-        "damping": 6.0,
-        "tremor_amplitude": 0.08,
-        "orbital_strength": 0.1,
+        "mass": 1.0,
+        "spring_constant": 6.0,
+        "damping": 5.0,
+        "tremor_amplitude": 0.3,
+        "orbital_strength": 0.4,
     },
     "withdrawn_distant": {
-        "mass": 2.5,
-        "spring_constant": 3.0,
-        "damping": 8.0,
-        "tremor_amplitude": 0.0,
-        "orbital_strength": 0.05,
+        "mass": 1.5,
+        "spring_constant": 4.0,
+        "damping": 6.0,
+        "tremor_amplitude": 0.1,
+        "orbital_strength": 0.2,
     },
 }
 
@@ -201,9 +201,12 @@ def update_physics_step(dt: float, is_tracking: bool = False) -> tuple:
 
         f_orbital = 0.0
         if not is_tracking and ps.orbital_strength > 0.01:
-            orbit_freq = 0.15 if axis == "pan" else 0.12
+            # Multi-frequency orbital for smooth, organic wandering
+            orbit_freq = 0.22 if axis == "pan" else 0.16
             phase_offset = 0.0 if axis == "pan" else math.pi / 2
             f_orbital = ps.orbital_strength * 8.0 * math.sin(now * orbit_freq * 2 * math.pi + phase_offset)
+            f_orbital += ps.orbital_strength * 4.0 * math.sin(now * orbit_freq * 1.6 * 2 * math.pi + phase_offset + 0.8)
+            f_orbital += ps.orbital_strength * 2.0 * math.sin(now * orbit_freq * 2.4 * 2 * math.pi + phase_offset + 1.5)
 
         f_total = f_spring + f_damping + f_orbital
         acceleration = f_total / ps.mass
@@ -214,8 +217,12 @@ def update_physics_step(dt: float, is_tracking: bool = False) -> tuple:
 
         tremor = 0.0
         if not is_tracking and ps.tremor_amplitude > 0.01:
-            tremor_freq = 3.5 if axis == "pan" else 4.2
-            tremor = ps.tremor_amplitude * math.sin(now * tremor_freq * 2 * math.pi)
+            # Multi-layered tremor for organic, continuous movement
+            # Higher frequencies = smoother apparent motion
+            base_freq = 4.5 if axis == "pan" else 5.2
+            tremor = ps.tremor_amplitude * 0.5 * math.sin(now * base_freq * 2 * math.pi)
+            tremor += ps.tremor_amplitude * 0.3 * math.sin(now * base_freq * 1.7 * 2 * math.pi + 0.5)
+            tremor += ps.tremor_amplitude * 0.2 * math.sin(now * base_freq * 2.3 * 2 * math.pi + 1.2)
         pos += tremor
 
         pos = max(bounds[0], min(bounds[1], pos))
@@ -1037,8 +1044,8 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             freq_scale = FREQUENCY_SCALE.get(current_emotion_state, 1.2)
 
             global pan_frequency, tilt_frequency
-            base_pan_freq = 0.12
-            base_tilt_freq = 0.10
+            base_pan_freq = 0.18
+            base_tilt_freq = 0.14
             pan_frequency = base_pan_freq * freq_scale
             tilt_frequency = base_tilt_freq * freq_scale
 
@@ -1064,7 +1071,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
 
             # Physics-based idle movement - blend to emotional parameters
             physics_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"])
-            physics_state.blend_params(physics_params, blend_rate=0.05)
+            physics_state.blend_params(physics_params, blend_rate=0.12)
 
             physics_state.pan_target = pan_scaled
             physics_state.tilt_target = tilt_scaled
