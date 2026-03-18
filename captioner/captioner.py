@@ -42,13 +42,16 @@ def _parse_gaze_direction(caption: str) -> Optional[str]:
     Looks for embodied gaze phrases like:
     - *glancing left* or *looking down* or *eyes ahead*
     - *turning right* or *gazing up*
+    - *looking around* or *scanning* triggers search mode
+
+    Returns: direction string, "search" for scanning, or None
     """
     if not caption:
         return None
 
     text_lower = caption.lower()
 
-    # Direction keywords to look for
+    # Direction keywords and location-to-direction mappings
     directions = {
         "left": "left",
         "right": "right",
@@ -57,27 +60,59 @@ def _parse_gaze_direction(caption: str) -> Optional[str]:
         "ahead": "ahead",
         "forward": "ahead",
         "straight": "ahead",
+        "upward": "up",
+        "downward": "down",
+        "leftward": "left",
+        "rightward": "right",
     }
 
+    location_to_direction = {
+        "ceiling": "up",
+        "sky": "up",
+        "above": "up",
+        "shelf": "up",
+        "shelves": "up",
+        "desk": "down",
+        "table": "down",
+        "floor": "down",
+        "paper": "down",
+        "ground": "down",
+        "surface": "down",
+    }
+
+    # Expanded gaze verbs
+    gaze_verbs = [
+        "glancing", "looking", "gazing", "turning", "eyes", "glance", "look", "gaze",
+        "staring", "peering", "watching", "observing", "focusing", "scanning", "shifting",
+        "pondering", "studying", "examining", "noticing", "drifts", "drift", "lingers",
+        "rests", "settles", "wanders", "moves", "shifts"
+    ]
+
+    # Pattern 0: Search/scan detection - "looking around", "scanning the room", "around"
+    search_patterns = ["around", "scanning", "surveying", "searching", "sweeping"]
+    for search_word in search_patterns:
+        if search_word in text_lower:
+            return "search"
+
     # Pattern 1: Asterisk-delimited gaze expressions (preferred format)
-    # Matches: *glancing left*, *looking down*, *eyes ahead*, *turning right*
     asterisk_pattern = r'\*([^*]+)\*'
     asterisk_matches = re.findall(asterisk_pattern, text_lower)
     for match in asterisk_matches:
-        # Check if this contains a gaze verb and direction
-        gaze_verbs = ["glancing", "looking", "gazing", "turning", "eyes", "glance", "look", "gaze", "staring", "peering"]
-        for verb in gaze_verbs:
-            if verb in match:
-                for dir_word, dir_name in directions.items():
-                    if dir_word in match:
-                        return dir_name
+        has_gaze_verb = any(verb in match for verb in gaze_verbs)
+        if has_gaze_verb:
+            for dir_word, dir_name in directions.items():
+                if dir_word in match:
+                    return dir_name
+            for loc_word, dir_name in location_to_direction.items():
+                if loc_word in match:
+                    return dir_name
 
     # Pattern 2: Non-asterisk natural phrases (fallback)
-    # Matches: "looking to the left", "glancing down", "eyes on the desk"
     natural_patterns = [
-        r'(?:looking|glancing|gazing|staring|peering)\s+(?:to\s+(?:the\s+)?)?(\w+)',
-        r'eyes\s+(?:on\s+(?:the\s+)?)?(\w+)',
+        r'(?:looking|glancing|gazing|staring|peering|watching|focusing)\s+(?:at\s+(?:the\s+)?|to\s+(?:the\s+)?)?(\w+)',
+        r'eyes\s+(?:on\s+(?:the\s+)?|at\s+(?:the\s+)?)?(\w+)',
         r'(?:turned?|turning)\s+(?:to\s+(?:the\s+)?)?(\w+)',
+        r'gaze\s+(?:drifts?|shifts?|moves?|rests?|settles?|lingers?)\s+(?:to\s+(?:the\s+)?|on\s+(?:the\s+)?)?(\w+)',
     ]
     for pattern in natural_patterns:
         match = re.search(pattern, text_lower)
@@ -85,13 +120,19 @@ def _parse_gaze_direction(caption: str) -> Optional[str]:
             found = match.group(1)
             if found in directions:
                 return directions[found]
-            # Handle "down at the desk" -> down
-            if "down" in found or "desk" in found or "paper" in found or "floor" in found:
-                return "down"
-            if "up" in found or "ceiling" in found or "above" in found:
-                return "up"
+            if found in location_to_direction:
+                return location_to_direction[found]
 
-    # Pattern 3: Legacy LOOK: format (backward compatibility)
+    # Pattern 3: Bare direction mentions with gaze context
+    if "gaze" in text_lower or "eyes" in text_lower or "looking" in text_lower:
+        for dir_word, dir_name in directions.items():
+            if dir_word in text_lower:
+                return dir_name
+        for loc_word, dir_name in location_to_direction.items():
+            if loc_word in text_lower:
+                return dir_name
+
+    # Pattern 4: Legacy LOOK: format (backward compatibility)
     look_match = re.search(r'look:\s*(\w+)', text_lower)
     if look_match:
         direction = look_match.group(1)
@@ -479,8 +520,12 @@ class Captioner(MemoryMixin):
         # Set gaze for ALL responses (direction-only or full caption)
         if gaze_direction:
             try:
-                from vision.gaze import set_llm_zone
-                if gaze_direction == "person":
+                from vision.gaze import set_llm_zone, activate_search_mode
+                if gaze_direction == "search":
+                    # "Looking around" or similar - activate search/scan behavior
+                    activate_search_mode()
+                    print("[👁️] Gaze → SCANNING (search mode activated)")
+                elif gaze_direction == "person":
                     set_llm_zone("ahead", "level")
                 elif gaze_direction in ("left", "right", "ahead"):
                     set_llm_zone(gaze_direction)

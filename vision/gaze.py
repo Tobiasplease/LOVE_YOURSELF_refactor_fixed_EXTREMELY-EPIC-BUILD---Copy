@@ -145,15 +145,15 @@ PHYSICS_PATTERNS = {
         "mass": 1.0,
         "spring_constant": 6.0,
         "damping": 5.0,
-        "tremor_amplitude": 0.3,
-        "orbital_strength": 0.4,
+        "tremor_amplitude": 0.5,  # Raised minimum for visible movement
+        "orbital_strength": 0.6,  # Raised minimum for visible movement
     },
     "withdrawn_distant": {
         "mass": 1.5,
         "spring_constant": 4.0,
         "damping": 6.0,
-        "tremor_amplitude": 0.1,
-        "orbital_strength": 0.2,
+        "tremor_amplitude": 0.4,  # Raised from 0.1 - still moves even when withdrawn
+        "orbital_strength": 0.5,  # Raised from 0.2 - subtle but visible wandering
     },
 }
 
@@ -698,45 +698,54 @@ def get_gaze_narrative() -> str:
 
     Returns immersive narrative like '*Your gaze drifts upward.*' rather than
     dry coordinate descriptions. Uses actual servo config for correct direction.
+    Always includes direction info, even during tracking or searching.
     """
     global servo_x, servo_y, state
 
-    # Use actual servo center from config (not hardcoded 90)
-    pan_center = (PAN_MIN + PAN_MAX) / 2  # 90
-    tilt_center = (TILT_MIN + TILT_MAX) / 2  # 107.5
+    pan_center = (PAN_MIN + PAN_MAX) / 2
+    tilt_center = (TILT_MIN + TILT_MAX) / 2
 
-    pan_offset = servo_x - pan_center  # Negative = left, Positive = right
-    tilt_offset = servo_y - tilt_center  # Positive = up (higher servo), Negative = down
+    pan_offset = servo_x - pan_center
+    tilt_offset = servo_y - tilt_center
 
-    # State-aware narrative - distinguish tracking from idle/aware
-    if state == "tracking":
-        return "*Your eyes are fixed on someone.*"
-    elif state == "aware":
-        return "*You sense someone nearby.*"
-
-    # Pure directional narrative with embodied language
-    # Lower thresholds to trigger even with subtle/tired movement (±8 degrees)
-    # TILT_MIN (65) = looking DOWN at paper, TILT_MAX (150) = looking UP
-    # So: servo_y < center → negative offset → looking DOWN
+    # Determine direction components
     v_dir = None
-    if tilt_offset < -8:  # Looking down (lower servo value = paper)
-        v_dir = "down at the desk"
-    elif tilt_offset > 8:  # Looking up (higher servo value)
+    if tilt_offset < -8:
+        v_dir = "downward"
+    elif tilt_offset > 8:
         v_dir = "upward"
 
     h_dir = None
-    if pan_offset < -8:  # Looking left
-        h_dir = "to your left"
-    elif pan_offset > 8:  # Looking right
-        h_dir = "to your right"
+    if pan_offset < -8:
+        h_dir = "left"
+    elif pan_offset > 8:
+        h_dir = "right"
 
-    # Combine with more embodied phrasing
+    # Build direction string
     if v_dir and h_dir:
-        return f"*Your gaze rests {v_dir}, {h_dir}.*"
+        direction = f"{v_dir} and to the {h_dir}"
     elif v_dir:
-        return f"*Your gaze drifts {v_dir}.*"
+        direction = v_dir
     elif h_dir:
-        return f"*You're looking {h_dir}.*"
+        direction = f"to the {h_dir}"
+    else:
+        direction = "straight ahead"
+
+    # State-aware narrative - always include position info
+    if state == "tracking":
+        return f"*Your eyes are fixed on someone ({direction}).*"
+    elif state == "aware":
+        return f"*You sense someone nearby, looking {direction}.*"
+    elif state == "searching":
+        return f"*Your gaze sweeps the room, currently looking {direction}.*"
+
+    # Idle/default state
+    if v_dir and h_dir:
+        return f"*Your gaze rests {direction}.*"
+    elif v_dir:
+        return f"*Your gaze drifts {direction}.*"
+    elif h_dir:
+        return f"*You're looking {direction}.*"
     else:
         return "*Your gaze settles forward.*"
 
@@ -902,10 +911,10 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * face_x_norm
         target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * face_y_norm
 
-        # Physics tracking: set target, blend to stiff tracking params
+        # Physics tracking: set target, blend quickly to stiff tracking params
         physics_state.pan_target = target_x
         physics_state.tilt_target = target_y
-        physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.15)
+        physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.5)  # Fast snap to attention
 
         pan, tilt = update_physics_step(dt, is_tracking=True)
         servo_x = pan
@@ -914,7 +923,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
     elif state == "tracking" and now - last_seen_time < FACE_STABLE_TIMEOUT:
         # Grace period - hold position using physics (maintains smooth momentum)
         state = "grace"
-        physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.1)
+        physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.2)  # Slightly faster during grace
         pan, tilt = update_physics_step(dt, is_tracking=True)
         servo_x = pan
         servo_y = tilt
