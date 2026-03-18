@@ -63,9 +63,10 @@ LUNG_OFFSET_SCALE = -0.10
 OLLAMA_MODEL = "llava:7b-v1.6-mistral-q5_1"
 
 # Active model:
-# - "llava:7b-v1.6-mistral-q5_1"
+# - "llava:7b-v1.6-mistral-q5_1" (Mistral base - works well with current prompts)
+# - "llava-llama3" (Llama 3 base - verbose, prompt leakage issues)
 #
-# To switch models, change OLLAMA_MODEL above (no alternative presets maintained).
+# To switch models, change OLLAMA_MODEL above.
 
 # === NARRATIVE/COMPRESSION MODEL ===
 # Text-only model for compression, reflection, and narrative tasks
@@ -320,7 +321,7 @@ LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_
 CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
 PRINT_CLEAN_CAPTIONS = True  # Suppress verbose runtime messages, show only LLM captions
 USE_FOCUSED_PROMPTS = True  # Use streamlined caption prompts (vs verbose structured prompts)
-USE_NARRATIVE_PROMPTS = True  # EXPERIMENTAL: Use simplified narrative roleplay prompts
+USE_NARRATIVE_PROMPTS = False  # EXPERIMENTAL: Disabled - reverted to original system
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages

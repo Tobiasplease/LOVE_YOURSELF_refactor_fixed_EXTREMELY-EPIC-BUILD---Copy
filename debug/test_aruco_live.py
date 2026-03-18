@@ -2,6 +2,7 @@
 """
 Live ArUco marker detection test for paper detection system.
 Shows real-time detection status with your actual camera.
+Includes real-time parameter tuning via trackbars.
 """
 import sys
 import cv2
@@ -19,14 +20,14 @@ except:
     height = 480
 
 print("=" * 60)
-print("ArUco Marker Paper Detection Test")
+print("ArUco Marker Paper Detection Test - TUNING MODE")
 print("=" * 60)
 print(f"\nCamera: Index {camera_index}, Resolution {width}x{height}")
 print("\nInstructions:")
 print("1. Hold the printed ArUco marker in front of camera")
-print("2. Try different distances and angles")
-print("3. Check detection rate")
-print("4. Press 'q' to quit\n")
+print("2. Adjust sliders to tune detection sensitivity")
+print("3. Watch detection rate improve/degrade")
+print("4. Press 'q' to quit, 's' to save current params\n")
 
 # Initialize camera
 cap = cv2.VideoCapture(camera_index)
@@ -37,20 +38,93 @@ actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 print(f"Actual camera resolution: {actual_width}x{actual_height}\n")
 
-# Initialize ArUco detector (same as safety/aruco_paper_detection.py)
+# Initialize ArUco detector
 aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 aruco_params = cv2.aruco.DetectorParameters()
 
-# Try both old and new OpenCV API
-try:
-    detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
-    use_new_api = True
-    print("Using new OpenCV ArUco API")
-except AttributeError:
-    detector = None
-    use_new_api = False
-    print("Using legacy OpenCV ArUco API")
+# Parameter defaults (will be controlled by trackbars)
+PARAM_DEFAULTS = {
+    "adaptiveThreshWinSizeMin": 3,
+    "adaptiveThreshWinSizeMax": 23,
+    "adaptiveThreshWinSizeStep": 10,
+    "adaptiveThreshConstant": 7,
+    "minMarkerPerimeterRate": 3,  # x100 (0.03)
+    "maxMarkerPerimeterRate": 400,  # x100 (4.0)
+    "polygonalApproxAccuracyRate": 3,  # x100 (0.03)
+    "minCornerDistanceRate": 5,  # x100 (0.05)
+    "minDistanceToBorder": 3,
+    "cornerRefinementMethod": 0,  # 0=none, 1=subpix, 2=contour
+}
 
+# Create window and trackbars
+WINDOW_NAME = "ArUco Tuning"
+cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+cv2.resizeWindow(WINDOW_NAME, 900, 700)
+
+def nothing(x):
+    pass
+
+# Create trackbars for key parameters
+cv2.createTrackbar("WinSizeMin", WINDOW_NAME, PARAM_DEFAULTS["adaptiveThreshWinSizeMin"], 30, nothing)
+cv2.createTrackbar("WinSizeMax", WINDOW_NAME, PARAM_DEFAULTS["adaptiveThreshWinSizeMax"], 100, nothing)
+cv2.createTrackbar("WinSizeStep", WINDOW_NAME, PARAM_DEFAULTS["adaptiveThreshWinSizeStep"], 30, nothing)
+cv2.createTrackbar("ThreshConst", WINDOW_NAME, PARAM_DEFAULTS["adaptiveThreshConstant"], 30, nothing)
+cv2.createTrackbar("MinPerim x100", WINDOW_NAME, PARAM_DEFAULTS["minMarkerPerimeterRate"], 20, nothing)
+cv2.createTrackbar("MaxPerim x100", WINDOW_NAME, PARAM_DEFAULTS["maxMarkerPerimeterRate"], 800, nothing)
+cv2.createTrackbar("PolyApprox x100", WINDOW_NAME, PARAM_DEFAULTS["polygonalApproxAccuracyRate"], 20, nothing)
+cv2.createTrackbar("MinCornerDist x100", WINDOW_NAME, PARAM_DEFAULTS["minCornerDistanceRate"], 20, nothing)
+cv2.createTrackbar("MinBorderDist", WINDOW_NAME, PARAM_DEFAULTS["minDistanceToBorder"], 10, nothing)
+cv2.createTrackbar("CornerRefine", WINDOW_NAME, PARAM_DEFAULTS["cornerRefinementMethod"], 2, nothing)
+
+def get_params_from_trackbars():
+    """Read current trackbar values and update detector parameters."""
+    params = cv2.aruco.DetectorParameters()
+
+    win_min = max(3, cv2.getTrackbarPos("WinSizeMin", WINDOW_NAME))
+    win_max = max(win_min + 2, cv2.getTrackbarPos("WinSizeMax", WINDOW_NAME))
+    win_step = max(2, cv2.getTrackbarPos("WinSizeStep", WINDOW_NAME))
+
+    params.adaptiveThreshWinSizeMin = win_min
+    params.adaptiveThreshWinSizeMax = win_max
+    params.adaptiveThreshWinSizeStep = win_step
+    params.adaptiveThreshConstant = cv2.getTrackbarPos("ThreshConst", WINDOW_NAME)
+    params.minMarkerPerimeterRate = cv2.getTrackbarPos("MinPerim x100", WINDOW_NAME) / 100.0
+    params.maxMarkerPerimeterRate = cv2.getTrackbarPos("MaxPerim x100", WINDOW_NAME) / 100.0
+    params.polygonalApproxAccuracyRate = max(0.01, cv2.getTrackbarPos("PolyApprox x100", WINDOW_NAME) / 100.0)
+    params.minCornerDistanceRate = cv2.getTrackbarPos("MinCornerDist x100", WINDOW_NAME) / 100.0
+    params.minDistanceToBorder = cv2.getTrackbarPos("MinBorderDist", WINDOW_NAME)
+
+    corner_method = cv2.getTrackbarPos("CornerRefine", WINDOW_NAME)
+    if corner_method == 0:
+        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_NONE
+    elif corner_method == 1:
+        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+    else:
+        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_CONTOUR
+
+    return params
+
+def print_current_params():
+    """Print current parameter values for copying to aruco_detector.py"""
+    params = get_params_from_trackbars()
+    print("\n" + "=" * 60)
+    print("CURRENT PARAMETER VALUES (copy to aruco_detector.py):")
+    print("=" * 60)
+    print(f"self.aruco_params.adaptiveThreshWinSizeMin = {params.adaptiveThreshWinSizeMin}")
+    print(f"self.aruco_params.adaptiveThreshWinSizeMax = {params.adaptiveThreshWinSizeMax}")
+    print(f"self.aruco_params.adaptiveThreshWinSizeStep = {params.adaptiveThreshWinSizeStep}")
+    print(f"self.aruco_params.adaptiveThreshConstant = {params.adaptiveThreshConstant}")
+    print(f"self.aruco_params.minMarkerPerimeterRate = {params.minMarkerPerimeterRate}")
+    print(f"self.aruco_params.maxMarkerPerimeterRate = {params.maxMarkerPerimeterRate}")
+    print(f"self.aruco_params.polygonalApproxAccuracyRate = {params.polygonalApproxAccuracyRate}")
+    print(f"self.aruco_params.minCornerDistanceRate = {params.minCornerDistanceRate}")
+    print(f"self.aruco_params.minDistanceToBorder = {params.minDistanceToBorder}")
+    corner_names = ["CORNER_REFINE_NONE", "CORNER_REFINE_SUBPIX", "CORNER_REFINE_CONTOUR"]
+    corner_idx = cv2.getTrackbarPos("CornerRefine", WINDOW_NAME)
+    print(f"self.aruco_params.cornerRefinementMethod = cv2.aruco.{corner_names[corner_idx]}")
+    print("=" * 60 + "\n")
+
+print("Using new OpenCV ArUco API with real-time tuning")
 print("\nStarting detection...\n")
 time.sleep(0.5)
 
@@ -58,6 +132,7 @@ time.sleep(0.5)
 frame_count = 0
 detection_count = 0
 last_detection_time = 0
+last_params_update = 0
 
 try:
     while True:
@@ -68,11 +143,12 @@ try:
 
         frame_count += 1
 
+        # Update parameters from trackbars every frame
+        current_params = get_params_from_trackbars()
+        detector = cv2.aruco.ArucoDetector(aruco_dict, current_params)
+
         # Detect markers
-        if use_new_api:
-            corners, ids, rejected = detector.detectMarkers(frame)
-        else:
-            corners, ids, rejected = cv2.aruco.detectMarkers(frame, aruco_dict, parameters=aruco_params)
+        corners, ids, rejected = detector.detectMarkers(frame)
 
         # Check detection
         if ids is not None and len(ids) > 0:
@@ -112,15 +188,36 @@ try:
 
             # Warn if no detection for a while
             if last_detection_time > 0 and time.time() - last_detection_time > 3:
-                cv2.putText(frame, "Move marker closer or check lighting", (10, 90),
+                cv2.putText(frame, "Adjust sliders to improve detection", (10, 90),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-        # Display frame
-        cv2.imshow("ArUco Paper Detection Test", frame)
+        # Show rejected candidates (potential markers that failed validation)
+        if rejected and len(rejected) > 0:
+            cv2.putText(frame, f"Rejected candidates: {len(rejected)}", (10, actual_height - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 128, 128), 1)
+            # Draw rejected candidates in gray
+            for rej in rejected:
+                pts = rej[0].astype(int)
+                cv2.polylines(frame, [pts], True, (128, 128, 128), 1)
 
-        # Quit on 'q'
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        # Display current key parameters on frame
+        y_offset = actual_height - 60
+        params_text = f"WinSize: {current_params.adaptiveThreshWinSizeMin}-{current_params.adaptiveThreshWinSizeMax}"
+        cv2.putText(frame, params_text, (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        params_text2 = f"Perim: {current_params.minMarkerPerimeterRate:.2f}-{current_params.maxMarkerPerimeterRate:.1f}"
+        cv2.putText(frame, params_text2, (10, y_offset + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        params_text3 = f"ThreshConst: {current_params.adaptiveThreshConstant}"
+        cv2.putText(frame, params_text3, (10, y_offset + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+
+        # Display frame
+        cv2.imshow(WINDOW_NAME, frame)
+
+        # Handle key presses
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
             break
+        elif key == ord('s'):
+            print_current_params()
 
 except KeyboardInterrupt:
     print("\n\nTest interrupted by user")
@@ -133,26 +230,32 @@ finally:
     print("\n" + "=" * 60)
     print("TEST RESULTS")
     print("=" * 60)
-    print(f"Total frames: {frame_count}")
-    print(f"Detections: {detection_count}")
-    print(f"Detection rate: {detection_count/frame_count*100:.1f}%")
-    print()
+    if frame_count > 0:
+        print(f"Total frames: {frame_count}")
+        print(f"Detections: {detection_count}")
+        print(f"Detection rate: {detection_count/frame_count*100:.1f}%")
+        print()
 
-    if detection_count > 0:
-        if detection_count / frame_count > 0.8:
-            print("✅ EXCELLENT - Detection is very reliable!")
-            print("   ArUco system is ready to use for paper detection.")
-        elif detection_count / frame_count > 0.5:
-            print("✓ GOOD - Detection works but could be improved")
-            print("   Tips: Better lighting, larger marker, flatter surface")
+        if detection_count > 0:
+            if detection_count / frame_count > 0.8:
+                print("✅ EXCELLENT - Detection is very reliable!")
+                print("   ArUco system is ready to use for paper detection.")
+            elif detection_count / frame_count > 0.5:
+                print("✓ GOOD - Detection works but could be improved")
+                print("   Tips: Better lighting, larger marker, flatter surface")
+            else:
+                print("⚠ POOR - Detection is unreliable")
+                print("   Try adjusting the sliders or marker position")
         else:
-            print("⚠ POOR - Detection is unreliable")
-            print("   Try: Larger marker print, better lighting, different marker position")
-    else:
-        print("✗ NO DETECTIONS - Check:")
-        print("  1. Printed the correct marker (DICT_4X4_50, ID 0)")
-        print("  2. Marker is visible to camera")
-        print("  3. Good lighting conditions")
-        print("  4. Marker is printed large enough (8cm+ recommended)")
+            print("✗ NO DETECTIONS - Check:")
+            print("  1. Printed the correct marker (DICT_4X4_50, ID 0)")
+            print("  2. Marker is visible to camera")
+            print("  3. Good lighting conditions")
+            print("  4. Marker is printed large enough (8cm+ recommended)")
 
-    print("\n" + "=" * 60)
+        # Print final parameters
+        print_current_params()
+    else:
+        print("No frames captured.")
+
+    print("=" * 60)

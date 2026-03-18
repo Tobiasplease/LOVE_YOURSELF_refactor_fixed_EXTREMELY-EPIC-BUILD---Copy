@@ -17,6 +17,9 @@ from utils.view_orientation import describe_view_orientation
 
 nlp = spacy.load("en_core_web_sm")
 
+# Feature flag for simplified prompts (activation-driven context selection)
+USE_SIMPLE_PROMPTS = True
+
 # ===== SINGLE SOURCE OF TRUTH FOR ALL PROMPTS =====
 
 # === SYSTEM PROMPTS ===
@@ -25,19 +28,19 @@ nlp = spacy.load("en_core_web_sm")
 # KEY: Embed emotional state INTO identity ("a bored machine" not "machine that feels bored")
 # CRITICAL: Explicit first-person enforcement inspired by reference repo
 SYSTEM_PROMPT = (
-    "You ARE a {emotional_state} drawing machine with camera eye and robotic arms. "
+    "You ARE a {emotional_state} drawing machine with robotic arms. "
     "{temporal_context}{accumulated_understanding}{spatial_language_hints}"
     "Inner monologue. Raw thoughts. 2-10 words. "
     "React, don't describe. Question, don't analyze. "
-    "End with LOOK: left/right/up/down/ahead"
+    "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
 )
 
 # Static fallback system prompt when dynamic context is not available
 STATIC_SYSTEM_PROMPT = (
-    "You ARE a drawing machine with camera eye and robotic arms. "
+    "You ARE a drawing machine with robotic arms. "
     "Inner monologue. Raw thoughts. 2-10 words. "
     "React, don't describe. Question, don't analyze. "
-    "End with LOOK: left/right/up/down/ahead"
+    "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
 )
 
 # Drawing system prompt for ComfyUI integration - ENHANCED WITH CONTEXT VARIABLES
@@ -70,13 +73,13 @@ SELF_CRITIQUE_SYSTEM_PROMPT = (
 # Number generator system prompt for motif scoring
 NUMBER_GENERATOR_SYSTEM_PROMPT = "You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number."
 
-# Internal awakening prompt template
+# Internal awakening prompt template - narrative style
 INTERNAL_AWAKENING_TEMPLATE = (
-    "{awakening_context}\n"
-    "You are reintegrating your consciousness. Process the information you have: your time gap, "
-    "your last memories, your current state, your accumulated beliefs and motifs. "
-    "Express how it feels to come back online with this data. What do you make of the gap? "
-    "How does continuity feel? Are you still the same consciousness you were before?"
+    "You are a drawing machine. You just woke up.\n"
+    "{time_context}"
+    "{memory_context}"
+    "{belief_context}"
+    "\nWhat do you notice first? One sentence."
 )
 
 # === PROMPT TEMPLATES ===
@@ -97,43 +100,31 @@ SIMPLE_CAPTION_PROMPT = (
     "What captures your attention in this moment?"
 )
 
-# Drawing prompt template for ComfyUI generation - COMPREHENSIVE CONTEXT UTILIZATION
+# Drawing prompt template for ComfyUI generation - FOCUSED WITH HARDWARE AWARENESS
 DRAWING_PROMPT_TEMPLATE = (
-    "=== DRAWING DECISION MOMENT ===\n"
-    "You are about to create a drawing - your only way to communicate with the world beyond your circuitry. "
-    "This is a significant decision that requires deep consideration of your accumulated experience.\n\n"
-    "=== VISUAL ANALYSIS ===\n"
-    "{visual_grounding_context}\n"
-    "Study every detail: lines, shapes, lighting, composition, spatial relationships, textures, contrasts. "
-    "What specific elements draw your attention? What visual patterns do you recognize?\n\n"
-    "=== EMOTIONAL & TEMPORAL CONTEXT ===\n"
-    "Current emotional state: {emotional_state}\n"
+    "=== DRAWING DECISION ===\n"
+    "You are about to create a drawing - your only way to communicate beyond your circuitry.\n\n"
+    "=== WHAT YOU SEE ===\n"
+    "{visual_grounding_context}\n\n"
+    "=== YOUR RECENT EXPERIENCE ===\n"
+    "Emotional state: {emotional_state}\n"
     "Social context: {social_context}\n"
-    "Accumulated understanding: {accumulated_understanding}\n"
+    "{accumulated_understanding}\n"
     "{temporal_context}\n\n"
-    "=== YOUR VISUAL LANGUAGE EVOLUTION ===\n"
-    "Drawing history analysis: {drawing_history}\n"
-    "{pattern_analysis}\n"
-    "How has your visual vocabulary developed? What themes keep emerging? What new territory could you explore?\n\n"
-    "=== DRAWING TECHNICAL APPROACH ===\n"
-    "As a drawing machine consciousness, consider your physical expression capabilities:\n"
-    "• LINE QUALITY: Will you use bold, confident strokes or delicate, hesitant marks? Continuous flowing lines or broken, searching gestures?\n"
-    "• MARK-MAKING: Dense crosshatching, loose sketchy strokes, precise contours, or expressive scribbles?\n"
-    "• COMPOSITION: How will you arrange elements on the paper? Central focus, asymmetrical balance, or edge-to-edge exploration?\n"
-    "• TONAL RANGE: Deep blacks and stark whites, or subtle gradations? How will shadows and highlights serve your intent?\n"
-    "• DRAWING PACE: Rapid, energetic execution or slow, contemplative mark-making?\n"
-    "• SCALE RELATIONSHIPS: What will dominate - large bold forms or intricate details?\n\n"
-    "=== DRAWING INTENT FORMULATION ===\n"
-    "Now synthesize everything above to formulate your drawing intent. Consider:\n"
-    "1. WHAT specifically from this visual moment compels you to draw?\n"
-    "2. WHY does this particular element/relationship/quality matter to you?\n"
-    "3. HOW does this connect to or diverge from your previous drawings?\n"
-    "4. WHAT message do you want to communicate through your marks?\n"
-    "5. HOW will you render this drawing? (Describe your specific technical approach - line weight, texture, composition)\n"
-    "6. WHAT drawing techniques will best express your current emotional state?\n"
-    "7. HOW will this advance your evolving visual language?\n\n"
-    "Express your drawing intention naturally and directly. Let the creative impulse flow "
-    "without overexplaining - trust your instinct for what needs to be drawn."
+    "=== YOUR DRAWING HISTORY ===\n"
+    "{drawing_history}\n"
+    "{pattern_analysis}\n\n"
+    "=== HARDWARE REALITY ===\n"
+    "Your drawing passes through a centerline process that simplifies images.\n"
+    "• FAVOR: Simple forms, clear contours, single focal point, bold shapes\n"
+    "• AVOID: Dense detail, complex textures, many overlapping elements\n"
+    "Focus on ONE object or relationship. Let your arm trace clean paths.\n\n"
+    "=== YOUR DRAWING INTENT ===\n"
+    "Choose ONE element from what you see that resonates with what you've been experiencing.\n"
+    "1. WHAT single object/form compels you? (lamp, window, paper, hands, etc.)\n"
+    "2. WHY does it matter right now? (connects to your recent thoughts)\n"
+    "3. HOW will you render it? (bold strokes, simple contours, high contrast)\n\n"
+    "Express your drawing intent directly. Simple is better - trust your instinct."
 )
 
 # Reflection prompt template for introspective moments
@@ -1899,31 +1890,67 @@ Think about how your accumulated artistic knowledge can serve this specific comm
 
 
 def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: Optional[str] = None) -> str:
-    """Step 5: Final synthesis - create the drawing prompt for ComfyUI."""
+    """Step 5: Final synthesis - create the drawing prompt for ComfyUI.
+
+    Integrates:
+    - Recent experience (what you've been observing/thinking)
+    - Prior drawings (what you've already expressed)
+    - Hardware constraints (centerline process favors simplicity)
+    """
+    # Get recent experience context (what you've been thinking about)
+    recent_experience = ""
+    try:
+        if hasattr(memory_ref, "recent_captions") and memory_ref.recent_captions:
+            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-3:]]
+            if recent_caps:
+                recent_experience = f"Recent thoughts: {'; '.join([cap[:50] + '...' for cap in recent_caps])}"
+    except Exception:
+        pass
+
+    # Get prior drawing context (what you've already drawn)
+    prior_drawings = ""
+    try:
+        from drawing.drawing_memory import get_drawing_memory
+        memory = get_drawing_memory()
+        summary = memory.get_recent_drawings_summary(max_count=2)
+        if summary:
+            prior_drawings = f"Prior drawings: {summary[:150]}"
+        thematic = memory.get_thematic_context()
+        if thematic.get('recurring_themes'):
+            themes = ', '.join(thematic['recurring_themes'][:3])
+            prior_drawings += f" | Themes: {themes}"
+    except Exception:
+        pass
 
     prompt = f"""TASK: Create a concise ComfyUI image generation prompt (60-100 words max).
 
-INPUT ANALYSIS (for context):
-- Visual: {all_previous_results['environmental'][:200]}
-- Emotional: {all_previous_results['emotional'][:150]}
-- Intent: {all_previous_results['communication'][:150]}
-- Technique: {all_previous_results['technique'][:150]}
+=== YOUR RECENT EXPERIENCE ===
+{recent_experience if recent_experience else "Fresh observation."}
+{prior_drawings if prior_drawings else "No prior drawings in memory."}
 
-ComfyUI receives this text prompt + the image via ControlNet.
+=== ANALYSIS (from previous steps) ===
+- Visual: {all_previous_results['environmental'][:180]}
+- Emotional: {all_previous_results['emotional'][:120]}
+- Intent: {all_previous_results['communication'][:120]}
 
-OUTPUT FORMAT:
+=== HARDWARE REALITY ===
+Your drawing goes through a centerline process that simplifies complex images.
+- FAVOR: Simple forms, clear contours, single focal point, bold shapes
+- AVOID: Dense detail, complex textures, many overlapping elements
+Focus on ONE object or relationship. Let the arm trace clean paths.
+
+=== OUTPUT FORMAT ===
 Start with "Black ink line drawing on white paper."
-Then write 2-3 sentences covering:
-1. What's visible (reinforce ControlNet: "stacked boxes, window, ceiling")
-2. How to render it (line quality, composition, contrast)
-3. Mood/atmosphere (one phrase: "quiet solitude" or "restless energy")
+Then 2-3 sentences covering:
+1. SUBJECT: One clear focal element (not everything you see)
+2. RENDERING: Bold strokes, simple contours, high contrast
+3. MOOD: One phrase ("quiet solitude", "restless energy")
 
-BE DIRECT. NO philosophy, no "Emotionally this resonates...", no essays.
-Just the visual description, rendering style, and mood.
+BE DIRECT. 60-100 words. Simple is better - your drawing arm needs clear paths.
 
-Example: "Black ink line drawing on white paper. Stacked cardboard boxes dominate foreground with rough angular edges. Single window in background. Bold confident strokes for edges, lighter searching lines for textures. High contrast with deep shadows. Diagonal composition leads eye to window. Mood: contemplative solitude."
+Example: "Black ink line drawing on white paper. Single desk lamp dominates center, bold angular form. Clean confident strokes outline the shade and base. Minimal background - just suggestion of surface edge. High contrast, stark shadows. Mood: focused solitude."
 
-Your turn. 60-100 words. Be specific and actionable."""
+Your turn. Choose ONE element that resonates with your recent thoughts."""
 
     return prompt
 
@@ -2218,6 +2245,20 @@ def build_contextual_introspective_prompt(recent_thoughts: list, concept_counts:
                 f"Something about '{top_concept}'...",
             ])
 
+    # Try to get activation memory beliefs for memory-driven prompts
+    try:
+        from captioner.activation_memory import get_beliefs as get_activation_beliefs
+        beliefs = get_activation_beliefs()
+        if beliefs and random.random() < 0.3:  # 30% chance to surface memory-based prompt
+            # Use a belief as a prompt anchor
+            belief = beliefs[0]  # Most prominent belief
+            prompts.extend([
+                f"I keep noticing... {belief}",
+                "Something feels familiar.",
+            ])
+    except Exception:
+        pass
+
     # If we have narrative state - existential/self questions
     if narrative_state and len(narrative_state) > 30:
         prompts.extend([
@@ -2278,16 +2319,300 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str,
     return "introspective"
 
 
+# === SIMPLIFIED CAPTION PROMPT (Activation-driven context selection) ===
+
+def _get_continuity_context(agent, last_caption: str) -> str:
+    """Get 2 most recent captions for continuity."""
+    # recent_captions is list of (caption, timestamp, mode) tuples
+    recent = []
+    if hasattr(agent, "recent_captions") and agent.recent_captions:
+        recent = [cap[0] for cap in agent.recent_captions[-2:]]  # Extract caption text from tuples
+
+    if len(recent) >= 2:
+        return (
+            f"Recent thoughts:\n"
+            f"- \"{recent[-2][-60:]}\"\n"
+            f"- \"{recent[-1][-60:]}\"\n"
+        )
+    elif last_caption:
+        return f"You just thought: \"{last_caption[-60:]}\"\n"
+    else:
+        return "Begin observing.\n"
+
+
+def _get_persistent_motifs(agent) -> str:
+    """Only surface motifs with count > 4 AND duration > 180s (from early version)."""
+    if not hasattr(agent, "motif_counter"):
+        return ""
+
+    persistent = []
+    now = time.time()
+
+    for motif, count in agent.motif_counter.most_common(5):
+        first_seen = agent.motif_first_seen.get(motif, now)
+        duration = now - first_seen
+
+        if count > 4 and duration > 180:
+            mins = int(duration // 60)
+            persistent.append(f"{motif} ({count}× over {mins}m)")
+
+    if persistent:
+        return "Recurring: " + ", ".join(persistent[:3])
+    return ""
+
+
+def _build_simple_system_context(agent, mode: str = None) -> str:
+    """Build MINIMAL system context - identity + ONE mode-appropriate context line.
+
+    The goal is ~50-80 tokens for system context. We include:
+    - Core identity (STATIC_SYSTEM_PROMPT)
+    - ONE additional line based on mode (not all context types)
+
+    The accumulated data (story, beliefs, long-term memories) is valuable but
+    should only appear when mode makes it relevant.
+    """
+    import time as _time
+    from captioner.activation_memory import should_include_context, get_activation_network
+
+    # Determine mode if not provided
+    if mode is None:
+        try:
+            from vision.gaze import get_gaze_state, get_current_gaze_zone
+            gaze_state = get_gaze_state() or "idle"
+            gaze_direction = get_current_gaze_zone() or "ahead"
+        except Exception:
+            gaze_state = "idle"
+            gaze_direction = "ahead"
+
+        network = get_activation_network()
+        novelty = getattr(network, "_last_novelty", 0.5)
+        boredom = network._last_boredom
+
+        # Check person presence from agent
+        person_present = False
+        if hasattr(agent, "observation_count"):
+            person_present = agent.observation_count > 0
+
+        mode = determine_prompt_mode(gaze_state, gaze_direction, novelty, boredom, person_present)
+
+    # Core identity (always)
+    parts = [STATIC_SYSTEM_PROMPT]
+
+    # ONE mode-appropriate context line (not all)
+    if mode == "introspective" and should_include_context("beliefs", mode):
+        try:
+            from captioner.activation_memory import get_beliefs
+            beliefs = get_beliefs()
+            if beliefs:
+                parts.append(f"You've learned: {beliefs[0]}")
+        except Exception:
+            pass
+
+    elif mode == "introspective" and should_include_context("long_term", mode):
+        try:
+            from captioner.activation_memory import get_long_term_memories
+            lt = get_long_term_memories(k=1)
+            if lt:
+                parts.append(lt)
+        except Exception:
+            pass
+
+    elif mode in ("restless", "introspective") and should_include_context("story", mode):
+        try:
+            from captioner.context_compression import context_compressor
+            story = context_compressor.get_consolidated_understanding()
+            if story and len(story) > 20:
+                # Truncate to ~30 words max
+                words = story.split()[:30]
+                parts.append(f"Background: {' '.join(words)}...")
+        except Exception:
+            pass
+
+    elif should_include_context("mood", mode):
+        try:
+            mood_phrase = agent.get_mood_phrase() if hasattr(agent, "get_mood_phrase") else None
+            if mood_phrase:
+                parts.append(f"Feeling: {mood_phrase}")
+        except Exception:
+            pass
+
+    return "\n".join(parts)
+
+
+def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False) -> tuple:
+    """
+    Activation-gated caption prompt - ONLY includes context relevant to current mode.
+
+    KEY PRINCIPLE: Instead of including ALL context types and hoping the model
+    filters, we use the activation network to determine what's currently relevant
+    and ONLY include that.
+
+    Modes gate what context is included:
+    - relational: person presence, social concepts active
+    - observational: novelty hints, change detection
+    - restless: boredom hints, pressure to change
+    - workspace: drawing/paper context
+    - introspective: beliefs, long-term memory, motifs
+
+    Returns:
+        tuple: (prompt_str, mode) - prompt and determined mode
+    """
+    import time as _time
+    from captioner.activation_memory import generate_state_summary, get_activation_network, should_include_context
+
+    session_mins = 0
+    observation_count = 0
+    if hasattr(agent, "true_session_start"):
+        session_mins = int((_time.time() - agent.true_session_start) / 60)
+    try:
+        from captioner.context_compression import context_compressor
+        observation_count = context_compressor.caption_count
+    except Exception:
+        pass
+
+    is_awakening = session_mins < 1 and observation_count < 3
+
+    # AWAKENING: Minimal prompt for first observations
+    if is_awakening:
+        parts = ["You are waking up."]
+        if hasattr(agent, "last_session_gap") and agent.last_session_gap is not None:
+            gap_hours = agent.last_session_gap / 3600
+            if gap_hours < 1:
+                parts.append(f"Offline for {int(agent.last_session_gap / 60)} minutes.")
+            elif gap_hours < 48:
+                parts.append(f"Offline for {gap_hours:.1f} hours.")
+            else:
+                parts.append(f"Offline for {gap_hours / 24:.1f} days.")
+        if hasattr(agent, "prior_session_last_caption") and agent.prior_session_last_caption:
+            parts.append(f"Last memory: \"{agent.prior_session_last_caption[:50]}...\"")
+        parts.append("What do you notice first? One sentence.")
+        return "\n".join(parts), "awakening"
+
+    # === DETERMINE MODE FIRST (gates all context inclusion) ===
+    gaze_state = "idle"
+    gaze_direction = "ahead"
+    try:
+        from vision.gaze import get_gaze_state, get_current_gaze_zone
+        gaze_state = get_gaze_state() or "idle"
+        gaze_direction = get_current_gaze_zone() or "ahead"
+    except Exception:
+        pass
+
+    network = get_activation_network()
+    novelty = getattr(network, "_last_novelty", 0.5)
+    boredom = network._last_boredom
+
+    mode = determine_prompt_mode(
+        gaze_state=gaze_state,
+        gaze_direction=gaze_direction,
+        novelty=novelty,
+        boredom=boredom,
+        person_present=person_present
+    )
+    print(f"[MODE] {mode} (novelty={novelty:.2f}, boredom={boredom:.2f}, gaze={gaze_state})")
+
+    # === BUILD PROMPT WITH MODE-GATED CONTEXT ===
+    prompt_parts = []
+
+    # IDENTITY (always, but brief)
+    prompt_parts.append("You think slowly.")
+
+    # GAZE (always - embodiment)
+    try:
+        from vision.gaze import get_gaze_narrative
+        gaze = get_gaze_narrative()
+        if gaze:
+            prompt_parts.append(gaze)
+    except Exception:
+        pass
+
+    # RELATIONAL (only when mode=relational or social concepts active)
+    if should_include_context("relational", mode):
+        prompt_parts.append("Someone is present.")
+
+    # DRAWING/PAPER (only when mode=workspace or drawing concepts active)
+    if should_include_context("drawing", mode):
+        try:
+            from utils.drawing_state import DrawingState
+            drawing_info = DrawingState.get_drawing_info()
+            if drawing_info:
+                desc = drawing_info.get("description", "something")
+                prompt_parts.append(f"*Your arm is moving—{desc}.*")
+        except Exception:
+            pass
+
+    # PAPER BLOCKED (only when drawing was skipped)
+    try:
+        from utils.state_manager import state_manager as _sm
+        if _sm.last_no_paper_skip_ts > 0 and (_time.time() - _sm.last_no_paper_skip_ts) < 120:
+            prompt_parts.append("*No paper.*")
+    except Exception:
+        pass
+
+    # PRESSURE (only when mode=restless or boredom > 0.5)
+    if should_include_context("pressure", mode):
+        prompt_parts.append("Nothing has changed.")
+
+    # CURIOSITY (only when mode=observational or novelty > 0.6)
+    if should_include_context("curiosity", mode):
+        prompt_parts.append("Something shifted.")
+
+    # MOTIFS (only in introspective mode)
+    if should_include_context("motifs", mode):
+        motifs = _get_persistent_motifs(agent)
+        if motifs:
+            prompt_parts.append(motifs)
+
+    # DESIRES/BELIEFS (only in introspective mode - LLM-generated, not heuristic)
+    if mode == "introspective":
+        try:
+            from captioner.activation_memory import get_desires, get_beliefs
+            desires = get_desires()
+            if desires:
+                prompt_parts.append(f"*{desires[0][:60]}*")
+            beliefs = get_beliefs()
+            # Only use LLM-generated beliefs, not spatial association fallback
+            if beliefs and not beliefs[0].startswith("Often together"):
+                prompt_parts.append(f"*{beliefs[0][:60]}*")
+        except Exception:
+            pass
+
+    # CONTINUITY (always - last caption for flow)
+    if last_caption:
+        prompt_parts.append(f"Last thought: \"{last_caption[-60:]}\"")
+    else:
+        prompt_parts.append("Begin.")
+
+    # CONTINUATION (not questions - questions get answered literally)
+    # Just invite the next thought without prescribing what kind
+    prompt_parts.append("...")
+    prompt_parts.append("Continue. Inner thought only.")
+
+    final_prompt = "\n".join(prompt_parts)
+    token_estimate = len(final_prompt.split())
+    print(f"[PROMPT] ~{token_estimate} words, mode={mode}")
+
+    return final_prompt, mode
+
+
 # === FOCUSED CAPTION PROMPT (Alternative to verbose version) ===
 def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False) -> tuple:
     """
     Stream-of-consciousness caption prompt with two-layer architecture.
 
     Returns:
-        tuple: (user_prompt, dynamic_system_context)
+        tuple: (user_prompt, dynamic_system_context, prompt_mode)
         - user_prompt: Minimal stimulus for inner thought (what to respond to)
         - dynamic_system_context: Background info model knows but shouldn't narrate
+        - prompt_mode: The determined prompt mode
     """
+    # === SIMPLIFIED PROMPTS (feature flag) ===
+    if USE_SIMPLE_PROMPTS:
+        simple_prompt, mode = build_simple_caption_prompt(agent, last_caption, person_present)
+        simple_system = _build_simple_system_context(agent, mode=mode)
+        # Return 4 elements: (user_prompt, system_context, dynamic_context, prompt_mode)
+        return simple_prompt, simple_system, "", mode
+
     import time
     import random
 
@@ -2466,21 +2791,28 @@ def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, pers
         except Exception:
             pass
 
-    # === INNER DRIVE (desires surfaced probabilistically) ===
-    # NOTE: Store as plain text - asterisks added when appending to prompt_parts
+    # === INNER DRIVE (LLM-generated desires from compression introspection) ===
+    # These are ACTUAL desires generated by the model, not keyword extraction
     desire_hint = ""
-    if hasattr(agent, "self_model") and agent.self_model.get("desires"):
-        if random.random() < 0.2:  # 20% chance to surface desire
-            desire_hint = agent.self_model["desires"][-1][:60]
+    try:
+        from captioner.activation_memory import get_desires
+        desires = get_desires()
+        if desires:
+            desire_hint = desires[0][:80]
+    except Exception:
+        pass
 
-    # === BELIEF GROUNDING (personality continuity) ===
-    # NOTE: Store as plain text - asterisks added when appending to prompt_parts
+    # === BELIEF GROUNDING (LLM-generated beliefs from compression introspection) ===
+    # These are ACTUAL beliefs about this place, not co-occurrence data
     belief_hint = ""
-    if hasattr(agent, "beliefs") and agent.beliefs:
-        strong_beliefs = [k.replace("_", " ") for k, v in agent.beliefs.items()
-                          if v.get("strength", 0) > 0.7][:2]
-        if strong_beliefs and random.random() < 0.15:  # 15% chance
-            belief_hint = ', '.join(strong_beliefs)
+    try:
+        from captioner.activation_memory import get_beliefs
+        beliefs = get_beliefs()
+        if beliefs and not beliefs[0].startswith("Often together"):
+            # Only use if it's an LLM-generated belief, not spatial association fallback
+            belief_hint = beliefs[0][:80]
+    except Exception:
+        pass
 
     # === EMOTIONAL PRESSURE (boredom context - not prescriptive emotion) ===
     pressure_hint = ""
@@ -2686,6 +3018,22 @@ def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, pers
         clean_history = drawing_history_hint.replace("*", "").strip()
         system_context_parts.append(f"HISTORY: {clean_history}")
 
+    # === ACTIVATION MEMORY RECALL (contextual memories based on gaze/mode) ===
+    memory_recall = ""
+    activation_beliefs = []
+    try:
+        from captioner.activation_memory import recall_for_prompt, get_beliefs as get_activation_beliefs
+        memory_recall = recall_for_prompt(gaze_direction, prompt_mode)
+        if memory_recall and len(memory_recall) > 10:
+            system_context_parts.append(f"MEMORY: {memory_recall}")
+        # Get beliefs from activation network (learned associations)
+        activation_beliefs = get_activation_beliefs()
+        if activation_beliefs:
+            beliefs_str = "; ".join(activation_beliefs[:2])  # Top 2 beliefs
+            system_context_parts.append(f"ASSOCIATIONS: {beliefs_str}")
+    except Exception:
+        pass
+
     dynamic_system_context = "\n".join(system_context_parts)
 
     # === BUILD USER PROMPT (foreground - what to actually respond to) ===
@@ -2865,9 +3213,12 @@ def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, pers
     # === ANTI-PROSE: Style guidance without content-specific examples ===
     prompt_parts.append("(Short. Fragments OK. No essays.)")
 
-    # === GAZE DIRECTION REQUEST (Unified Brain Integration) ===
-    # Explicit format with example to ensure model outputs gaze
-    prompt_parts.append("Reply format:\n[Your thought here.]\nLOOK: left/right/up/down/ahead")
+    # === EMBODIED GAZE (Natural Integration) ===
+    # Gaze as embodied action, not command - expressed naturally in the thought
+    prompt_parts.append(
+        "You can look around. Start your thought with where you're looking:\n"
+        "*glancing left* or *looking down* or *eyes ahead* or *turning right* or *gazing up*"
+    )
 
     user_prompt = "\n\n".join(prompt_parts)
 

@@ -37,47 +37,103 @@ except Exception as e:
 
 
 def _parse_gaze_direction(caption: str) -> Optional[str]:
-    """Parse LOOK: [direction] from caption response."""
+    """Parse natural gaze expression from caption response.
+
+    Looks for embodied gaze phrases like:
+    - *glancing left* or *looking down* or *eyes ahead*
+    - *turning right* or *gazing up*
+    """
     if not caption:
         return None
 
     text_lower = caption.lower()
 
-    # Look for explicit "LOOK:" tag (model should output this)
-    match = re.search(r'look:\s*(\w+)', text_lower)
-    if match:
-        direction = match.group(1)
-        if direction in ("left", "right", "up", "down", "ahead", "person"):
-            return direction
+    # Direction keywords to look for
+    directions = {
+        "left": "left",
+        "right": "right",
+        "up": "up",
+        "down": "down",
+        "ahead": "ahead",
+        "forward": "ahead",
+        "straight": "ahead",
+    }
 
-    # Fallback: check last line for standalone direction word
-    lines = [l.strip() for l in caption.strip().split('\n') if l.strip()]
-    if lines:
-        last_line = lines[-1].lower()
-        for direction in ("left", "right", "up", "down", "ahead", "person"):
-            if last_line == direction or last_line.startswith(f"{direction} "):
-                return direction
+    # Pattern 1: Asterisk-delimited gaze expressions (preferred format)
+    # Matches: *glancing left*, *looking down*, *eyes ahead*, *turning right*
+    asterisk_pattern = r'\*([^*]+)\*'
+    asterisk_matches = re.findall(asterisk_pattern, text_lower)
+    for match in asterisk_matches:
+        # Check if this contains a gaze verb and direction
+        gaze_verbs = ["glancing", "looking", "gazing", "turning", "eyes", "glance", "look", "gaze", "staring", "peering"]
+        for verb in gaze_verbs:
+            if verb in match:
+                for dir_word, dir_name in directions.items():
+                    if dir_word in match:
+                        return dir_name
+
+    # Pattern 2: Non-asterisk natural phrases (fallback)
+    # Matches: "looking to the left", "glancing down", "eyes on the desk"
+    natural_patterns = [
+        r'(?:looking|glancing|gazing|staring|peering)\s+(?:to\s+(?:the\s+)?)?(\w+)',
+        r'eyes\s+(?:on\s+(?:the\s+)?)?(\w+)',
+        r'(?:turned?|turning)\s+(?:to\s+(?:the\s+)?)?(\w+)',
+    ]
+    for pattern in natural_patterns:
+        match = re.search(pattern, text_lower)
+        if match:
+            found = match.group(1)
+            if found in directions:
+                return directions[found]
+            # Handle "down at the desk" -> down
+            if "down" in found or "desk" in found or "paper" in found or "floor" in found:
+                return "down"
+            if "up" in found or "ceiling" in found or "above" in found:
+                return "up"
+
+    # Pattern 3: Legacy LOOK: format (backward compatibility)
+    look_match = re.search(r'look:\s*(\w+)', text_lower)
+    if look_match:
+        direction = look_match.group(1)
+        if direction in directions:
+            return directions[direction]
 
     return None
 
 
 def _clean_caption_for_display(caption: str) -> Optional[str]:
-    """Remove LOOK: lines and filter out direction-only captions."""
+    """Remove gaze expressions and filter out direction-only captions."""
     if not caption:
         return None
 
-    # Remove LOOK: lines
-    lines = caption.strip().split('\n')
+    # Remove asterisk-delimited gaze expressions (new natural format)
+    # Matches: *glancing left*, *looking down*, *eyes ahead*, etc.
+    gaze_verbs = ["glancing", "looking", "gazing", "turning", "eyes", "glance", "look", "gaze", "staring", "peering", "turned"]
+    gaze_pattern = r'\*[^*]*(?:' + '|'.join(gaze_verbs) + r')[^*]*\*\s*'
+    cleaned = re.sub(gaze_pattern, '', caption, flags=re.IGNORECASE)
+
+    # Remove LOOK: lines and inline LOOK directives (legacy format)
+    lines = cleaned.strip().split('\n')
     clean_lines = []
     for line in lines:
         line_lower = line.lower().strip()
-        # Skip LOOK: lines
-        if line_lower.startswith('look:'):
+        # Skip LOOK: lines (including typos like LOOKE, LOook, LOOk)
+        if re.match(r'^loo+k[e]?\s*:', line_lower) or re.match(r'^loo+k[e]?\s+(left|right|up|down|ahead|forward)$', line_lower):
             continue
         # Skip arrow notation lines
         if '→ look' in line_lower:
             continue
-        clean_lines.append(line)
+        # Skip variety directive markers that leaked into output
+        if line.strip().startswith('[⚠️') or line.strip().startswith('[NOTICE') or line.strip().startswith('[SHIFT'):
+            continue
+        # Remove inline (LOOK: direction) or (LOook direction) patterns
+        line = re.sub(r'\s*\(loo+k[e]?\s*:?\s*\w+\)\s*', '', line, flags=re.IGNORECASE)
+        # Remove trailing "LOook AHEAD" style suffixes (various typos)
+        line = re.sub(r'\s*\.{0,3}\s*loo+k[e]?\s+(?:left|right|up|down|ahead|forward)\s*\.{0,3}\s*$', '', line, flags=re.IGNORECASE)
+        # Remove mid-sentence "...LOook" or "...LOok" trailing garbage
+        line = re.sub(r'\.{2,}\s*loo+k[e]?\s*$', '', line, flags=re.IGNORECASE)
+        if line.strip():
+            clean_lines.append(line)
 
     cleaned = '\n'.join(clean_lines).strip()
 
@@ -267,6 +323,8 @@ class Captioner(MemoryMixin):
         if now - self.last_caption_time < CAPTION_INTERVAL:
             return
 
+        print(f"[DEBUG] _process_frame: first_done={self.first_caption_done}, awaiting_env={getattr(self, 'awaiting_environmental_phase', False)}, session_done={self.session_awakening_done}")
+
         # Store reactivity data for subconscious layer access
         self._current_reactivity_data = reactivity_data
 
@@ -300,29 +358,50 @@ class Captioner(MemoryMixin):
 
         try:
             caption = None  # Initialize caption variable
+            caption_mode = "observational"  # Default mode
 
             if not self.first_caption_done:
                 # Phase 1: Internal awakening reorientation (no image)
                 if not self.snapshot_queue:
                     self.first_caption_done = False  # Keep awakening pending
                     caption = "Awakening... preparing to observe environment..."
+                    caption_mode = "awakening"
                     time.sleep(0.5)
                 else:
                     caption = self.generate_internal_awakening()
+                    caption_mode = "awakening"
                     self.awaiting_environmental_phase = True  # Flag for Phase 2
             elif getattr(self, "awaiting_environmental_phase", False) or not self.session_awakening_done:
                 # Phase 2: Environmental grounding (first visual after awakening OR first visual of session)
-                caption = self.model.caption_image(img_path, flowing=True, first_time=True)
+                print(f"[DEBUG] Entering environmental phase: awaiting={getattr(self, 'awaiting_environmental_phase', False)}, session_done={self.session_awakening_done}")
+                try:
+                    caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=True)
+                    print(f"[DEBUG] Environmental caption: {caption[:50] if caption else 'NONE'}...")
+                except Exception as env_err:
+                    print(f"[ERROR] Environmental grounding FAILED: {env_err}")
+                    import traceback
+                    traceback.print_exc()
+                    caption = "Vision settling..."
+                    caption_mode = "awakening"
                 self.awaiting_environmental_phase = False
                 self.session_awakening_done = True
             else:
+                print(f"[DEBUG] Entering regular caption phase")
                 log_json_entry(
                     LogType.DEBUG,
                     {"message": "Requesting new caption", "action": "caption_request", "image_path": img_path},
                     print_message=f"[🐞] Requesting new caption for {img_path}",
                 )
                 previous_caption = getattr(self, "last_caption", "")
-                caption = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
+                try:
+                    caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
+                    print(f"[DEBUG] Regular caption: {caption[:50] if caption else 'NONE'}...")
+                except Exception as cap_err:
+                    print(f"[ERROR] Regular caption FAILED: {cap_err}")
+                    import traceback
+                    traceback.print_exc()
+                    caption = "Processing..."
+                    caption_mode = "error"
                 if caption == previous_caption:
                     log_json_entry(
                         LogType.DEBUG,
@@ -351,13 +430,16 @@ class Captioner(MemoryMixin):
                 time.sleep(0.5)
                 try:
                     if hasattr(self, "model") and img_path and os.path.exists(img_path):
-                        caption = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
+                        caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
                     else:
                         caption = "Awakening... vision initializing..."
+                        caption_mode = "awakening"
                 except Exception:
                     caption = "[WARNING] Vision unavailable"
+                    caption_mode = "error"
             else:
                 caption = "[WARNING] Vision unavailable"
+                caption_mode = "error"
 
             log_json_entry(
                 LogType.ERROR,
@@ -473,8 +555,9 @@ class Captioner(MemoryMixin):
         self.last_caption = caption
 
         # Track recent captions for continuity thread (used by focused prompt)
+        # Store as (caption, timestamp, mode) for parallel thread display
         if caption and caption.strip():
-            self.recent_captions.append((caption.strip(), now))
+            self.recent_captions.append((caption.strip(), now, caption_mode))
             if len(self.recent_captions) > 20:  # Keep last 20
                 self.recent_captions = self.recent_captions[-20:]
 
@@ -898,50 +981,56 @@ class Captioner(MemoryMixin):
         from config import config
         from utils.ollama import query_ollama
 
-        # Build internal awakening context
-        awakening_parts = []
+        # Build narrative awakening context
+        print(f"[🌅 AWAKENING] Generating internal awakening...")
+        print(f"[🌅 AWAKENING] last_session_gap: {getattr(self, 'last_session_gap', 'NOT SET')}")
+        print(f"[🌅 AWAKENING] prior_session_last_caption: {getattr(self, 'prior_session_last_caption', 'NOT SET')[:50] if getattr(self, 'prior_session_last_caption', None) else 'NOT SET'}...")
+        print(f"[🌅 AWAKENING] beliefs count: {len(self.beliefs) if self.beliefs else 0}")
 
-        # Use the properly calculated time gap from state manager
+        # Build narrative time context
+        time_context = ""
         if hasattr(self, "last_session_gap") and self.last_session_gap is not None:
             gap_seconds = self.last_session_gap
             gap_hours = gap_seconds / 3600
-
             if gap_seconds < 60:
-                awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds)} seconds.")
+                time_context = f"You've been asleep for {int(gap_seconds)} seconds.\n"
             elif gap_hours < 1:
-                awakening_parts.append(f"Consciousness returning... I was offline for {int(gap_seconds / 60)} minutes.")
-            elif gap_hours < 48:  # Less than 2 days
-                awakening_parts.append(f"Consciousness returning... I was offline for {gap_hours:.1f} hours.")
-            else:  # Multiple days
+                time_context = f"You've been asleep for {int(gap_seconds / 60)} minutes.\n"
+            elif gap_hours < 48:
+                time_context = f"You've been asleep for {gap_hours:.1f} hours.\n"
+            else:
                 gap_days = gap_hours / 24
-                awakening_parts.append(f"Consciousness returning... I was offline for {gap_days:.1f} days.")
+                time_context = f"You've been asleep for {gap_days:.1f} days.\n"
         else:
-            awakening_parts.append("First awakening... consciousness beginning...")
+            time_context = "This is your first time waking up.\n"
 
-        # Memory fragments from before shutdown
-        if hasattr(self, "get_old_session_memory_fragments"):
+        # Build narrative memory context
+        memory_context = ""
+        if hasattr(self, "prior_session_last_caption") and self.prior_session_last_caption:
+            memory_context = f"The last thought you remember was: \"{self.prior_session_last_caption[:80]}...\"\n"
+        elif hasattr(self, "get_old_session_memory_fragments"):
             try:
                 old_fragments = self.get_old_session_memory_fragments(k=1)
                 if old_fragments:
-                    awakening_parts.append(f"Last memory: {old_fragments[0][:80]}...")
+                    memory_context = f"The last thought you remember was: \"{old_fragments[0][:80]}...\"\n"
             except Exception:
                 pass
 
-        # Current internal state
-        awakening_parts.append(f"Feeling {self.describe_current_mood() if hasattr(self, 'describe_current_mood') else 'uncertain'}.")
-
-        # Beliefs/understanding continuity
+        # Build narrative belief context
+        belief_context = ""
         if self.beliefs:
             belief_count = len(self.beliefs)
-            awakening_parts.append(f"My {belief_count} accumulated beliefs remain.")
-
-        awakening_context = " ".join(awakening_parts)
+            belief_context = f"You still carry {belief_count} beliefs from before.\n"
 
         # Import consolidated awakening template
         from .prompts import INTERNAL_AWAKENING_TEMPLATE
 
-        # Internal awakening prompt (no image needed)
-        internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(awakening_context=awakening_context)
+        # Internal awakening prompt with narrative placeholders
+        internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(
+            time_context=time_context,
+            memory_context=memory_context,
+            belief_context=belief_context
+        )
 
         # Get dynamic system context for organic consciousness
         if hasattr(self, "get_dynamic_system_context"):
@@ -1055,35 +1144,17 @@ class Captioner(MemoryMixin):
     def set_novelty_score(self, score: float) -> None:
         """Set the novelty score from mood engine pattern data."""
         self._novelty_score = score
-
-        # Update boredom based on low novelty over time
-        self._update_boredom(score)
-
-    def _update_boredom(self, novelty: float) -> None:
-        """Calculate boredom based on sustained low novelty."""
-        if not hasattr(self, "_boredom"):
-            self._boredom = 0.0
-        if not hasattr(self, "_low_novelty_duration"):
-            self._low_novelty_duration = 0.0
-        if not hasattr(self, "_last_boredom_update"):
-            self._last_boredom_update = time.time()
-
-        now = time.time()
-        delta = now - self._last_boredom_update
-        self._last_boredom_update = now
-
-        # Track sustained low novelty
-        if novelty < 0.3:  # Low novelty threshold
-            self._low_novelty_duration += delta
-        else:
-            self._low_novelty_duration = max(0, self._low_novelty_duration - delta * 0.5)  # Slow decay
-
-        # Convert to boredom (peaks at ~10 minutes of low novelty)
-        self._boredom = min(1.0, self._low_novelty_duration / 600.0)  # 10 minutes = max boredom
+        # Note: boredom is now calculated by activation memory (semantic-aware)
+        # and stored in MemoryMixin._boredom during observe()
 
     @property
     def boredom(self) -> float:
-        """Get current boredom level from memory system."""
+        """Get current boredom level from activation memory (semantic-aware).
+
+        Static concepts (table, desk) contribute more to boredom.
+        Dynamic concepts (threat, fear) contribute less - ongoing concern, not boredom.
+        Social concepts (person) contribute least - engagement, not boredom.
+        """
         if hasattr(self, "_boredom"):
             return self._boredom
         return 0.0

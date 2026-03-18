@@ -1199,11 +1199,10 @@ try:
         object_detector.set_frame(frame)  # YOLO person detection enabled
         aruco_detector.set_frame(frame)   # Real-time ArUco marker detection
 
-        # Store full-resolution frame for LLM captioning (before resize for display)
+        # Store full-resolution frame for LLM captioning
         full_res_frame = frame.copy()
 
-        frame = cv2.resize(frame, (320, 240))
-        # Display preview unflipped to match capture/reference orientation
+        # Keep full resolution for preview (was: frame = cv2.resize(frame, (320, 240)))
 
         # Force garbage collection periodically to prevent memory accumulation
         frame_count += 1
@@ -1448,6 +1447,15 @@ try:
         if face_box:
             (x1, y1, x2, y2) = face_box
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        # === ARUCO MARKER VISUALIZATION ===
+        aruco_corners = aruco_detector.get_corners_for_drawing(include_rejected=True)
+        for corners, marker_id, is_valid in aruco_corners:
+            pts = corners.astype(int)
+            color = (0, 255, 255) if is_valid else (0, 0, 255)  # Yellow=valid, Red=rejected
+            cv2.polylines(frame, [pts], True, color, 2)
+            cx, cy = int(pts[:, 0].mean()), int(pts[:, 1].mean())
+            cv2.putText(frame, f"ID:{marker_id}", (cx - 20, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         # === DISPLAY OVERLAYS ===
         debug = f"Mood: {current_mood:.2f} | Lung: {lung_pos} | Pan/Tilt: {pan}/{tilt}"

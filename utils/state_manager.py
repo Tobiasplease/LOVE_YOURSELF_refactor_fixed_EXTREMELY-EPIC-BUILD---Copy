@@ -267,6 +267,11 @@ class StateManager:
             if prior_caption and len(prior_caption) > 5:
                 captioner.prior_session_last_caption = prior_caption
 
+            # DEBUG: Print awakening context directly
+            gap_hours = captioner.last_session_gap / 3600
+            print(f"[🌅 STATE] Session gap: {captioner.last_session_gap:.1f}s ({gap_hours:.1f}h)")
+            print(f"[🌅 STATE] Prior caption: '{prior_caption[:60]}...' " if prior_caption else "[🌅 STATE] No prior caption found")
+
             # IMPORTANT: Mark that we've restored state, so we don't repeat awakening
             # The awakening should only happen once per session start
             captioner.first_caption_done = False  # Will trigger awakening sequence once

@@ -20,14 +20,6 @@ from .prompts import (
     context_rich_multi_step_drawing_analysis,
 )
 
-# Experimental narrative prompts (toggle via USE_NARRATIVE_PROMPTS in config)
-try:
-    from .prompts_experimental import build_narrative_prompt, NARRATIVE_SYSTEM_PROMPT
-    NARRATIVE_PROMPTS_AVAILABLE = True
-except ImportError:
-    NARRATIVE_PROMPTS_AVAILABLE = False
-
-
 class PromptInterface:
     """Centralized interface for all prompt building and preparation."""
 
@@ -39,18 +31,6 @@ class PromptInterface:
         if not os.path.exists(image_path):
             return None, None, None
 
-        # === EXPERIMENTAL: Narrative prompts (simpler, roleplay-style) ===
-        use_narrative = False
-        try:
-            from config.config import USE_NARRATIVE_PROMPTS
-            use_narrative = USE_NARRATIVE_PROMPTS and NARRATIVE_PROMPTS_AVAILABLE
-        except ImportError:
-            pass
-
-        if use_narrative and not drawing_introspection_mode:
-            return self._build_narrative_caption(memory_ref, person_present)
-
-        # === LEGACY: Original prompt system ===
         # Track dynamic system context and formatted system prompt from focused prompt
         dynamic_caption_context = None
         focused_system_prompt = None
@@ -103,7 +83,7 @@ class PromptInterface:
                     "top_p": 0.6,
                     "repeat_penalty": 2.5,
                     "top_k": 20,
-                    "num_predict": 80,  # 1-2 sentences (~50-60 words)
+                    "num_predict": 120,  # Room for 1-2 sentences + LOOK directive
                     "stop": merged_stops,
                 })
         except ImportError:
@@ -364,33 +344,3 @@ Focus on the unique aspects of THIS specific drawing rather than generic creativ
 Rather than generic observations about creativity, focus on what's uniquely present in this specific moment. What do you notice about your current state of mind? How does your physical workspace reflect your artistic process right now? What feels different about this particular creative session?
 
 Provide a specific, personal reflection (2-3 sentences) about what you're experiencing in this exact moment. Avoid generic statements about creativity. (Context error: {e})"""
-
-    def _build_narrative_caption(self, memory_ref, person_present: bool):
-        """Build caption using experimental narrative prompt system."""
-        user_prompt, system_prompt, prompt_mode = build_narrative_prompt(
-            memory_ref,
-            last_caption=getattr(memory_ref, "last_caption", None),
-            person_present=person_present
-        )
-
-        # Simpler model options for narrative style
-        model_options = self._get_base_model_options()
-        model_options["seed"] = random.randint(1, 1000000)
-
-        try:
-            from config.config import CAPTIONER_TEMPERATURE
-            caption_temp = CAPTIONER_TEMPERATURE
-        except ImportError:
-            caption_temp = 1.0
-
-        model_options.update({
-            "temperature": caption_temp,
-            "top_p": 0.7,
-            "repeat_penalty": 1.8,  # Lower than old system (was 2.5)
-            "top_k": 30,
-            "num_predict": 100,
-            "stop": ["\n\n\n"],  # Only stop on triple newline - let LOOK: come through for gaze
-        })
-
-        # No dynamic context injection - it's all in the narrative prompt
-        return (user_prompt, model_options, system_prompt, prompt_mode)

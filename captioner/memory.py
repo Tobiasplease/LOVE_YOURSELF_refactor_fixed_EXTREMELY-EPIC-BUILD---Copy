@@ -1,7 +1,21 @@
 from __future__ import annotations
 
 from config.word_lists import CONCRETE_NOUN_HINTS, MEANINGFUL_CATEGORIES, MEANINGFUL_MOTIFS, MOTIF_BLACKLIST
-from utils.motif_scorer import score_motif_significance
+
+# Import activation memory system (replaces TinyLlama motif scoring)
+from captioner.activation_memory import (
+    get_activation_network,
+    get_contextual_memory,
+    extract_concepts,
+    observe_and_store as activation_observe,
+    recall_for_prompt,
+    get_beliefs as activation_get_beliefs,
+    boost_from_compression,
+    save_state as save_activation_state,
+    save_comprehensive_snapshot,
+    SOCIAL_CONCEPTS,
+    DYNAMIC_CONCEPTS,
+)
 
 """
 captioner/memory.py
@@ -51,9 +65,8 @@ except OSError:
 
 
 class MemoryMixin:
-    def score_motif_with_tinyllama(self, motif: str, context: str = "") -> float:
-        """Use optimized TinyLlama scoring system for motif significance."""
-        return score_motif_significance(motif, context)
+    # NOTE: TinyLlama scoring replaced by activation network (captioner/activation_memory.py)
+    # Significance now comes from edge weights built through co-occurrence observation
 
     def __init__(self) -> None:
         # Experience queues
@@ -84,10 +97,9 @@ class MemoryMixin:
             },
         )
 
-        # Background TinyLlama scoring system
-        self.scoring_queue = queue.Queue()
-        self.scoring_thread = None
-        self._start_background_scorer()
+        # Activation Memory System (replaces TinyLlama scoring)
+        self._activation_network = get_activation_network()
+        self._contextual_memory = get_contextual_memory()
 
         # Organic emotional evolution (preserves servo compatibility)
         self.emotional_expressions = getattr(self, "emotional_expressions", [])  # Self-generated emotional statements
@@ -124,14 +136,15 @@ class MemoryMixin:
         reactivity_data: Optional[Dict] = None,
         mood_vector: Optional[Tuple[float, float, float]] = None,
         emotion_state: Optional[str] = None,
+        gaze_zone: str = "ahead",
     ):
         ts = int(now())
         entry = {
             "timestamp": ts,
             "text": text.strip(),
             "mood": mood,
-            "mood_vector": mood_vector or (0.0, 0.0, 0.5),  # Store 3D emotional context
-            "emotion_state": emotion_state or "calm_observant",  # Store emotional state
+            "mood_vector": mood_vector or (0.0, 0.0, 0.5),
+            "emotion_state": emotion_state or "calm_observant",
             "image": file,
             "type": memory_type,
         }
@@ -141,26 +154,100 @@ class MemoryMixin:
         self.memory_queue.append(entry)
         self.long_memory.append(entry)
 
-        self.extract_motifs_from_caption(text)
+        # === ACTIVATION MEMORY SYSTEM ===
+        # Extract concepts and observe in activation network
+        concepts = extract_concepts(text)
+        if concepts:
+            novelty = self._activation_network.observe(concepts, gaze_zone)
+            boredom = self._activation_network.calculate_boredom(concepts)
+            self._novelty_score = novelty
+            self._boredom = boredom
+
+            # Store in contextual memory for later recall
+            self._contextual_memory.store(text, concepts, gaze_zone, ts)
+
+            # Promote TRULY significant observations to long-term memory
+            # STRICT criteria - only truly significant memories should be long-term
+            social_present = bool(set(concepts) & SOCIAL_CONCEPTS)
+            dynamic_present = bool(set(concepts) & DYNAMIC_CONCEPTS)
+
+            should_promote = False
+            significance = "observation"
+
+            # Social observations need to be novel too - not every "I see a person" is significant
+            if social_present and novelty > 0.7:
+                should_promote = True
+                significance = "social"
+            # Dynamic events need high novelty
+            elif dynamic_present and novelty > 0.75:
+                should_promote = True
+                significance = "event"
+            # Pure novelty needs to be very high
+            elif novelty > 0.9:
+                should_promote = True
+                significance = "novel"
+
+            if should_promote:
+                print(f"[📅 LT-MEM] Promoting: {significance} (novelty={novelty:.2f})")
+                self._contextual_memory.promote_to_long_term(text, concepts, significance)
+
+            # Save comprehensive snapshot for real-time visualizer (includes compression, desires, long-term memories)
+            save_comprehensive_snapshot(agent=self)
+
+            # Update motif_counter for backward compatibility
+            for concept in concepts:
+                self.motif_counter[concept] += 1
+                if concept not in self.motif_first_seen:
+                    self.motif_first_seen[concept] = ts
+                self.motif_last_seen[concept] = ts
+                self.current_motifs.add(concept)
+
+        # Keep legacy processing for desires/purpose
         self.extract_desires_and_purpose(text)
 
-        for motif in self.current_motifs:
-            self.update_motif_focus_streak(motif)
-
-        self.update_beliefs()
-        self.estimate_novelty(reactivity_data)
-        self.update_boredom()
+        # Update beliefs from activation network edges
+        self._update_beliefs_from_activation()
 
         # === APPLY TEMPORAL MOOD EFFECTS ===
-        # Modify mood based on temporal psychological effects
         temporal_mood_modifier = self.get_temporal_mood_modifier()
         if temporal_mood_modifier != 0.0:
-            # Update the mood in the entry to reflect temporal effects
             entry["mood"] = max(0.0, min(1.0, mood + temporal_mood_modifier))
-            # Also update current mood if this is the most recent observation
             if hasattr(self, "current_mood"):
                 self.current_mood = entry["mood"]
-        self.fade_old_beliefs()
+
+    def _update_beliefs_from_activation(self):
+        """Update beliefs based on strong edges from activation network."""
+        # Get beliefs from activation network (based on strong co-occurrence edges)
+        activation_beliefs = self._activation_network.get_beliefs()
+
+        # Update belief_history with natural language beliefs
+        self.belief_history = activation_beliefs
+
+        # Also update self.beliefs dict for backward compatibility
+        strong_edges = self._activation_network.get_strong_edges()
+        now_time = now()
+
+        for c1, c2, weight in strong_edges[:10]:
+            belief_key = f"{c1}_{c2}"
+            self.beliefs[belief_key] = {
+                "strength": weight,
+                "first_formed": now_time,
+                "last_reinforced": now_time,
+                "type": "association",
+                "concepts": [c1, c2],
+            }
+
+    def get_contextual_recall(self, gaze_zone: str = "ahead", mode: str = "introspective") -> str:
+        """Get contextual memory recall for prompt injection."""
+        return recall_for_prompt(gaze_zone, mode)
+
+    def get_activation_beliefs(self) -> List[str]:
+        """Get natural language beliefs from activation network."""
+        return self._activation_network.get_beliefs()
+
+    def get_drawing_memory_context(self) -> str:
+        """Get formatted memory context for drawing prompts."""
+        return self._contextual_memory.format_drawing_context()
 
     def update_motif_focus_streak(self, motif: str) -> None:
         now_time = now()
@@ -193,6 +280,7 @@ class MemoryMixin:
             self.motif_confirmed[label_name] = True
 
     def absorb_motif(self, motif: str) -> None:
+        """Absorb a motif - now using activation network for significance."""
         motif = motif.strip().lower()
         if not motif or len(motif) < 3:
             return
@@ -203,32 +291,25 @@ class MemoryMixin:
         self.motif_last_seen[motif] = now_time
         self.current_motifs.add(motif)
 
-        # Only score with TinyLlama if we haven't scored this motif before
-        if motif not in self.motif_confidence:
-            context = " | ".join(list(self.current_motifs)[-3:])
-            # Queue for background scoring (non-blocking)
-            self.queue_motif_for_scoring(motif, context)
-            # Use default score until background scoring completes
-            score = 0.5
-            # Queued motif for background scoring using default 0.5
-        else:
-            # Use cached score - don't re-query TinyLlama for known motifs
-            score = self.motif_confidence[motif]
-        # Weighted motif system: balance novelty vs frequency to prevent mundane domination
+        # Significance now derived from activation network edge weights
+        # rather than TinyLlama calls - much faster and learns associations
+        activation_level = self._activation_network.activations.get(motif, 0.0)
+        edge_count = len(self._activation_network.edges.get(motif, {}))
+
+        # Score based on activation level and connectedness
+        # Well-connected concepts (many edges) with sustained activation are significant
+        connectedness_bonus = min(0.3, edge_count * 0.05)
+        score = min(1.0, activation_level + connectedness_bonus)
+
+        # Weighted motif system: balance novelty vs frequency
         if not hasattr(self, "motif_weights"):
             self.motif_weights = {}
         freq = self.motif_counter[motif]
 
-        # Use logarithmic frequency dampening to allow novel observations to compete
-        # Novel motif (freq=1, score=0.9): weight = 0.9 / log(2) = 1.3
-        # Common motif (freq=20, score=0.4): weight = 0.4 / log(21) = 0.13
         import math
-
         frequency_dampener = math.log(freq + 1)
-        self.motif_weights[motif] = score / frequency_dampener
+        self.motif_weights[motif] = score / frequency_dampener if frequency_dampener > 0 else score
 
-        # Motif weighted: freq={freq}, score={score:.2f}, weight={self.motif_weights[motif]:.2f}
-        # Store confidence as score for now
         self.motif_confidence[motif] = score
         self.motif_confirmed[motif] = score > 0.6
 
@@ -331,7 +412,7 @@ class MemoryMixin:
 
                     # Only extract if it's in our concrete nouns set or ends with tool/device patterns
                     if lemma in CONCRETE_NOUN_HINTS or (lemma.endswith(("er", "or")) and len(lemma) > 5):
-                        # Skip very common motifs that we've already seen many times (reduce TinyLlama calls)
+                        # Skip very frequent motifs to reduce processing overhead
                         if lemma in self.motif_counter and self.motif_counter[lemma] > 50 and lemma in self.motif_confidence:
                             # Just update counters for very frequent motifs, don't call absorb_motif
                             self.motif_counter[lemma] += 1
@@ -414,38 +495,18 @@ class MemoryMixin:
             self.belief_history.append(f"I feel less attached to {motif} lately.")
 
     def estimate_novelty(self, reactivity_metrics: Optional[Dict[str, float]] = None) -> float:
-        if len(self.memory_queue) < 2:
-            self._novelty_score = 1.0
-            return 1.0
+        """Get novelty score - now primarily driven by activation network."""
+        # Activation network already calculates novelty based on concept familiarity
+        # But we can boost with environmental reactivity data if available
+        base_novelty = self._novelty_score
 
-        # Base novelty from caption comparison - use WORD OVERLAP not string equality
-        # Generic AI-speak with different words should register as LOW novelty
-        cur = self.memory_queue[-1]["text"].lower()
-        prev = self.memory_queue[-2]["text"].lower()
-
-        cur_words = set(cur.split())
-        prev_words = set(prev.split())
-
-        if cur_words and prev_words:
-            # Calculate word overlap - high overlap = low novelty
-            overlap = len(cur_words & prev_words) / max(len(cur_words), len(prev_words))
-            caption_novelty = 1.0 - overlap  # Invert: high overlap = low novelty
-        else:
-            caption_novelty = 1.0 if cur != prev else 0.0
-
-        # === FRAME DIFF NOVELTY INTEGRATION ===
-        # Real-time environmental change should boost novelty
-        environmental_novelty = 0.0
         if reactivity_metrics:
             activity_level = reactivity_metrics.get("activity_level", 0.0)
             sudden_change = reactivity_metrics.get("sudden_change", 0.0)
-
-            # Activity boosts novelty (movement = new visual information)
             environmental_novelty = min(1.0, activity_level * 2.0 + sudden_change)
+            # Environmental change can boost perceived novelty
+            self._novelty_score = max(base_novelty, environmental_novelty * 0.8)
 
-        # Combine caption and environmental novelty
-        # Environmental change should override text repetition
-        self._novelty_score = max(caption_novelty, environmental_novelty * 0.8)
         return self._novelty_score
 
     def get_temporal_mood_modifier(self) -> float:
@@ -473,33 +534,25 @@ class MemoryMixin:
             return 0.0
 
     def update_boredom(self) -> None:
-        # Base boredom update from novelty
-        if self._novelty_score < 0.3:
-            self._boredom = min(1.0, self._boredom + 0.1)
-        else:
-            self._boredom = max(0.0, self._boredom - 0.05)
-
-        # === TEMPORAL STAGNATION EFFECT ===
-        # Add progressive boredom from extended observation of same scene
+        """Update boredom - now primarily driven by activation network scene familiarity."""
+        # Activation network already sets self._boredom based on concept activation levels
+        # Add temporal stagnation effects on top
         if hasattr(self, "true_session_start"):
             session_duration = now() - self.true_session_start  # type: ignore
 
-            # Check if we've been staring at similar content
             stagnation_context = self.get_scene_stagnation_context()
             if stagnation_context:
-                # Progressive temporal boredom based on session duration
-                if session_duration > 14400:  # 4+ hours
-                    temporal_boredom = 0.9  # Extremely bored
-                elif session_duration > 7200:  # 2+ hours
-                    temporal_boredom = 0.7  # Very bored
-                elif session_duration > 3600:  # 1+ hour
-                    temporal_boredom = 0.5  # Moderately bored
-                elif session_duration > 1800:  # 30+ minutes
-                    temporal_boredom = 0.3  # Slightly bored
+                if session_duration > 14400:
+                    temporal_boredom = 0.9
+                elif session_duration > 7200:
+                    temporal_boredom = 0.7
+                elif session_duration > 3600:
+                    temporal_boredom = 0.5
+                elif session_duration > 1800:
+                    temporal_boredom = 0.3
                 else:
                     temporal_boredom = 0.0
 
-                # Apply temporal boredom (weighted more heavily for longer sessions)
                 self._boredom = max(self._boredom, temporal_boredom)
 
     def get_emotionally_similar_memories(self, current_emotion: str, k: int = 3) -> List[str]:
@@ -1327,31 +1380,37 @@ class MemoryMixin:
                 self.self_model["location_history"] = self.self_model["location_history"][-5:]
 
     def extract_desires_and_purpose(self, caption: str):
-        """Extract expressions of desire, intention, or purpose from internal thoughts."""
+        """Extract expressions of desire, intention, or purpose from internal thoughts.
+
+        Only captures TRUE desires (want, wish, hope, need) - not curiosities (wonder, curious).
+        Curiosities are observations, not expressions of intent.
+        """
+        # TRUE desire patterns - expressions of intent, not curiosity
         desire_patterns = [
-            ("want", "I want to"),
-            ("wish", "I wish I could"),
-            ("wonder", "I wonder about"),
-            ("curious", "I'm curious about"),
-            ("would like", "I would like to"),
-            ("hope", "I hope to"),
-            ("feel like", "I feel like"),
-            ("interested", "interested in"),
+            "i want to",
+            "i want ",
+            "i wish ",
+            "i hope to",
+            "i hope ",
+            "i need to",
+            "i would like to",
+            "i'd like to",
+            "i must ",
+            "i have to ",
         ]
 
         caption_lower = caption.lower()
 
-        for pattern, description in desire_patterns:
+        for pattern in desire_patterns:
             if pattern in caption_lower:
-                # Extract the desire/intention
                 desire_text = caption.strip()
 
-                # Add to desires if not already present
-                if desire_text not in self.self_model["desires"]:
+                # Deduplication: check if similar desire exists (first 50 chars)
+                existing_prefixes = {d[:50].lower() for d in self.self_model["desires"]}
+                if desire_text[:50].lower() not in existing_prefixes:
                     self.self_model["desires"].append(desire_text)
-
-                    # Keep only recent desires
                     self.self_model["desires"] = self.self_model["desires"][-10:]
+                break  # Only one desire per caption
 
     def get_current_self_understanding(self) -> str:
         """Generate current self-understanding for system prompt."""
@@ -1551,56 +1610,11 @@ class MemoryMixin:
 
         return ""
 
-    # === BACKGROUND TINYLLAMA SCORING ===
-    def _start_background_scorer(self):
-        """Start the background thread for TinyLlama scoring."""
-        if self.scoring_thread is None or not self.scoring_thread.is_alive():
-            self.scoring_thread = threading.Thread(target=self._background_scorer_worker, daemon=True)
-            self.scoring_thread.start()
+    # === ACTIVATION MEMORY PERSISTENCE ===
+    def save_activation_state(self):
+        """Save activation network state for persistence across sessions."""
+        save_activation_state()
 
-    def _background_scorer_worker(self):
-        """Background worker that processes TinyLlama scoring queue."""
-        while True:
-            try:
-                # Get next motif to score (blocks until available)
-                motif, context = self.scoring_queue.get(timeout=30)
-
-                # Score the motif with TinyLlama
-                score = self.score_motif_with_tinyllama(motif, context)
-
-                # Update the motif confidence (thread-safe since it's just dict assignment)
-                self.motif_confidence[motif] = score
-
-                # Mark task as done
-                self.scoring_queue.task_done()
-
-            except queue.Empty:
-                # No work for 30 seconds, continue waiting
-                continue
-            except Exception as e:
-                log_json_entry(
-                    LogType.ERROR,
-                    {
-                        "message": "Background motif scoring error",
-                        "component": "motif_scoring",
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "motif": motif if "motif" in locals() else None,
-                        "context": context if "context" in locals() else None,
-                    },
-                    print_message=f"[❌] Background scoring error: {e}",
-                )
-                continue
-
-    def queue_motif_for_scoring(self, motif: str, context: str = ""):
-        """Add a motif to the background scoring queue (non-blocking)."""
-        try:
-            self.scoring_queue.put_nowait((motif, context))
-        except queue.Full:
-            # Queue is full, skip this scoring (prioritize real-time performance)
-            log_json_entry(
-                LogType.MOTIF,
-                {"message": "Scoring queue full, skipping motif", "action": "queue_full_skip", "motif": motif, "context": context},
-                print_message=f"[⚠️] Scoring queue full, skipping '{motif}'",
-            )
-            pass
+    def get_activated_concepts(self, threshold: float = 0.3) -> list:
+        """Get currently activated concepts above threshold."""
+        return self._activation_network.get_activated_concepts(threshold)

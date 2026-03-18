@@ -1552,11 +1552,7 @@ def process_svg_to_grbl(
                         # Get camera and servos from state manager
                         from utils.state_manager import state_manager as _sm
                         camera_obj = getattr(_sm, 'camera', None)
-
-                        # Get servos from machine module
-                        import sys as _sys
-                        m = _sys.modules.get('machine') or _sys.modules.get('__main__')
-                        servos_obj = getattr(m, 'servos', None) if m else None
+                        servos_obj = getattr(_sm, 'servos', None)
 
                         if camera_obj is None:
                             print("[📄] No camera - defaulting to ALLOW drawing")
@@ -1891,13 +1887,11 @@ def process_svg_to_grbl(
                                 camera_obj = type('Camera', (), {'read_frame': lambda: frame})()
                                 print(f"[DEBUG] Created fake camera that will return: {frame is not None}")
 
-                                # Try to get servos from the machine module if available
+                                # Get servos from state_manager
                                 servos_obj = None
                                 try:
-                                    import sys
-                                    m = sys.modules.get('machine') or sys.modules.get('__main__')
-                                    if m is not None:
-                                        servos_obj = getattr(m, 'servos', None)
+                                    from utils.state_manager import state_manager as _sm
+                                    servos_obj = getattr(_sm, 'servos', None)
                                 except Exception:
                                     pass
 

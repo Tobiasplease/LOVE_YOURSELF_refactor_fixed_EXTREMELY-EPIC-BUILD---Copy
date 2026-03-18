@@ -33,6 +33,14 @@ class ContextCompressionEngine:
         self.compression_history = deque(maxlen=10)  # Keep last 10 compressions for deeper context
         self.session_start_time = time.time()
 
+        # LLM-generated introspective state (NOT heuristic extraction)
+        self.introspective_state = {
+            "current_desire": "",  # What I want right now
+            "current_belief": "",  # What I've learned about this place
+            "last_introspection": 0.0,
+        }
+        self.introspection_interval = 3  # Every 3 compressions, do deeper introspection
+
         # SESSION DURATION TRACKING (fixed for static space observation)
         self.space_observation_start = time.time()  # When we started observing this space
         self.total_session_duration = 0.0  # Total time observing this space
@@ -219,29 +227,32 @@ EARLIER UNDERSTANDINGS (for context):
 
             # NARRATIVE COMPRESSION - distill experience into injectable context
             # Output feeds directly into vision model prompts
+            # Must be CONCISE and FACTUAL - no flowery prose
 
-            prompt = f"""You've been here for {duration_description}.
+            prior_thread = f"Prior thread: {current_baseline}" if current_baseline else ""
+
+            prompt = f"""I've been watching for {duration_description}.
 {historical_context}
 
-Your recent thoughts:
+Recent thoughts:
 {recent_text}
 
-{f'Before that, you were thinking: {current_baseline}' if current_baseline else ''}
+{prior_thread}
 
-What's on your mind now? What keeps coming back? How do you feel?
-
-(2-3 short lines)"""
+What's actually happening here? What am I noticing?
+ONE sentence. First person. Direct."""
 
             model_options = {
-                "temperature": 0.75,  # Higher for organic variation
-                "top_p": 0.9,
-                "num_predict": 120,
-                "repeat_penalty": 1.2,  # Stronger to prevent repetition loops
+                "temperature": 0.6,
+                "top_p": 0.85,
+                "num_predict": 40,  # Even shorter
+                "repeat_penalty": 1.3,
             }
 
             narrative_system_prompt = (
-                "You are reflecting on recent experience. "
-                "Speak in first person. Follow the format exactly."
+                "You are summarizing your own experience. "
+                "Say what's happening, not what you observe about observations. "
+                "First person. ONE sentence. No analysis."
             )
 
             # Use compression model (text-only narrative model) instead of vision model
@@ -278,6 +289,14 @@ What's on your mind now? What keeps coming back? How do you feel?
 
                     self.baseline_context = understanding.strip()
                     self.last_compression_time = time.time()
+
+                    # === ACTIVATION MEMORY FEEDBACK LOOP ===
+                    # Boost concepts mentioned in compression output - creates reinforcement
+                    try:
+                        from captioner.activation_memory import boost_from_compression
+                        boost_from_compression(understanding)
+                    except Exception:
+                        pass  # Non-critical, continue without feedback
 
                     # Log compression with enhanced visibility
                     log_json_entry(
@@ -316,6 +335,11 @@ What's on your mind now? What keeps coming back? How do you feel?
                                 print_message=f"[❌] Spatial familiarity update failed: {e}",
                             )
 
+                    # Periodic introspection - generate desires/beliefs via LLM
+                    compression_count = len(self.compression_history) + 1
+                    if compression_count % self.introspection_interval == 0:
+                        self._perform_introspection(captions, understanding, compression_model)
+
                 if sentiment_text:
                     # Store sentiment for injection into prompts
                     self.last_sentiment_analysis = {"sentiment_text": sentiment_text, "timestamp": time.time()}
@@ -349,6 +373,133 @@ What's on your mind now? What keeps coming back? How do you feel?
                 print_message=f"[❌] Compression failed: {e}",
             )
             # Keep previous baseline on failure
+
+    def _perform_introspection(self, captions: list, current_understanding: str, model: str) -> None:
+        """Generate desires and beliefs through LLM introspection, not heuristic extraction."""
+        try:
+            recent_text = "\n".join([f"• {cap['text']}" for cap in captions[-4:]])
+            session_info = self.get_current_session_info()
+            duration = session_info["duration_description"]
+
+            # Get activation network data to inform introspection
+            activation_context = ""
+            try:
+                from captioner.activation_memory import get_activation_network
+                network = get_activation_network()
+                boredom = network._last_boredom
+                novelty = getattr(network, "_last_novelty", 0.5)
+                if boredom > 0.5:
+                    activation_context = "Nothing has changed for a while."
+                elif novelty > 0.6:
+                    activation_context = "Something new is happening."
+            except Exception:
+                pass
+
+            prompt = f"""I've been watching for {duration}.
+{activation_context}
+
+Current situation: {current_understanding}
+
+Recent thoughts:
+{recent_text}
+
+Answer both questions in ONE short sentence each:
+1. WANT: What do I want right now? (an impulse, not a goal)
+2. LEARNED: What have I noticed about this place?"""
+
+            introspection_system = (
+                "You are a machine having inner thoughts. "
+                "Answer as yourself, first person. "
+                "Be specific and concrete, not philosophical."
+            )
+
+            model_options = {
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "num_predict": 60,
+                "repeat_penalty": 1.2,
+            }
+
+            response = query_ollama(
+                prompt=prompt,
+                model=model,
+                image=None,
+                system_prompt=introspection_system,
+                timeout=config.OLLAMA_TIMEOUT_EVAL if hasattr(config, "OLLAMA_TIMEOUT_EVAL") else 60,
+                options=model_options,
+                prompt_type="introspection",
+            )
+
+            if response and isinstance(response, str):
+                desire, belief = self._parse_introspection_response(response)
+
+                if desire:
+                    self.introspective_state["current_desire"] = desire
+                if belief:
+                    self.introspective_state["current_belief"] = belief
+                self.introspective_state["last_introspection"] = time.time()
+
+                log_json_entry(
+                    LogType.COMPRESSION,
+                    {
+                        "message": "Introspection complete",
+                        "action": "introspection",
+                        "desire": desire,
+                        "belief": belief,
+                    },
+                    print_message=f"[💭] Want: {desire[:50]}... | Learned: {belief[:50]}..." if desire and belief else "[💭] Introspection updated",
+                )
+
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Introspection failed: {e}", "component": "compression"},
+                print_message=f"[❌] Introspection failed: {e}",
+            )
+
+    def _parse_introspection_response(self, response: str) -> tuple:
+        """Parse desire and belief from introspection response."""
+        desire = ""
+        belief = ""
+
+        lines = response.strip().split('\n')
+        for line in lines:
+            line_lower = line.lower().strip()
+            # Look for WANT: or 1. or desire patterns
+            if any(marker in line_lower for marker in ['want:', '1.', '1)', 'desire']):
+                # Extract after the marker
+                for marker in ['want:', 'desire:', '1.', '1)']:
+                    if marker in line_lower:
+                        idx = line_lower.find(marker) + len(marker)
+                        desire = line[idx:].strip().strip('"').strip("'")
+                        break
+            # Look for LEARNED: or 2. or belief patterns
+            elif any(marker in line_lower for marker in ['learned:', '2.', '2)', 'notice', 'belief']):
+                for marker in ['learned:', 'notice:', 'belief:', '2.', '2)']:
+                    if marker in line_lower:
+                        idx = line_lower.find(marker) + len(marker)
+                        belief = line[idx:].strip().strip('"').strip("'")
+                        break
+
+        # Fallback: if structured parsing failed, try to split by sentences
+        if not desire and not belief and len(lines) >= 2:
+            desire = lines[0].strip()
+            belief = lines[1].strip() if len(lines) > 1 else ""
+
+        return desire, belief
+
+    def get_current_desire(self) -> str:
+        """Get LLM-generated desire (what I want right now)."""
+        # Only return if recent (within 10 minutes)
+        if time.time() - self.introspective_state["last_introspection"] > 600:
+            return ""
+        return self.introspective_state.get("current_desire", "")
+
+    def get_current_belief(self) -> str:
+        """Get LLM-generated belief (what I've learned about this place)."""
+        if time.time() - self.introspective_state["last_introspection"] > 600:
+            return ""
+        return self.introspective_state.get("current_belief", "")
 
     def _parse_combined_response(self, response: str) -> tuple:
         """Parse compression response - expects 3-line natural format."""

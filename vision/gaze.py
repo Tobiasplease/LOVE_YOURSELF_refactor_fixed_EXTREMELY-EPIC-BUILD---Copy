@@ -920,30 +920,45 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             # Generate organic movement targets using Perlin noise
             update_organic_movement(now)
 
-            # Scale movement based on emotional state
-            pan_center = (PAN_MIN + PAN_MAX) / 2
-            tilt_center = (TILT_MIN + TILT_MAX) / 2
+            # When LLM zone is active, use zone-constrained targets directly
+            # Otherwise, scale movement based on emotional state around global center
+            if llm_zone_active:
+                # LLM is directing - use the zone-constrained targets from update_organic_movement
+                pan_scaled = pan_micro_target
+                tilt_scaled = tilt_micro_target
+            else:
+                # No LLM direction - scale around global center based on emotional state
+                pan_center = (PAN_MIN + PAN_MAX) / 2
+                tilt_center = (TILT_MIN + TILT_MAX) / 2
+                pan_scaled = pan_center + (pan_micro_target - pan_center) * pattern["movement_scale"]
+                tilt_scaled = tilt_center + (tilt_micro_target - tilt_center) * pattern["movement_scale"]
 
-            pan_scaled = pan_center + (pan_micro_target - pan_center) * pattern["movement_scale"]
-            tilt_scaled = tilt_center + (tilt_micro_target - tilt_center) * pattern["movement_scale"]
-
-            # Apply LLM-driven gaze nudge as MODIFIER
-            nudge_pan, nudge_tilt = get_current_nudge()
-            nudge_blend = 0.6
-            pan_scaled += nudge_pan * nudge_blend
-            tilt_scaled += nudge_tilt * nudge_blend
+            # Apply LLM-driven gaze nudge as MODIFIER (only when NOT in zone mode)
+            if not llm_zone_active:
+                nudge_pan, nudge_tilt = get_current_nudge()
+                nudge_blend = 0.6
+                pan_scaled += nudge_pan * nudge_blend
+                tilt_scaled += nudge_tilt * nudge_blend
 
             # Ensure within bounds
             pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
             tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
 
-            # Independent pan/tilt movement with emotional easing
-            emotional_easing = IDLE_EASING * pattern["easing_scale"]
-            pan_easing = emotional_easing * pan_easing_variance
-            tilt_easing = emotional_easing * tilt_easing_variance
+            # Use faster movement when LLM is directing gaze
+            if llm_zone_active:
+                # LLM direction - more responsive movement to reach target zone
+                pan_easing = IDLE_EASING * 1.4  # 40% faster easing
+                tilt_easing = IDLE_EASING * 1.4
+                pan_velocity = MAX_PAN_VELOCITY * 1.0  # Full velocity
+                tilt_velocity = MAX_TILT_VELOCITY * 1.0
+            else:
+                # Normal idle - slower, more organic movement
+                emotional_easing = IDLE_EASING * pattern["easing_scale"]
+                pan_easing = emotional_easing * pan_easing_variance
+                tilt_easing = emotional_easing * tilt_easing_variance
+                pan_velocity = MAX_PAN_VELOCITY * 0.8
+                tilt_velocity = MAX_TILT_VELOCITY * 0.8
 
-            pan_velocity = MAX_PAN_VELOCITY * 0.8
-            tilt_velocity = MAX_TILT_VELOCITY * 0.8
             servo_x = velocity_limited_step(servo_x, pan_scaled, pan_easing, pan_velocity, "pan")
             servo_y = velocity_limited_step(servo_y, tilt_scaled, tilt_easing, tilt_velocity, "tilt")
 
