@@ -1151,6 +1151,115 @@ def set_drawing_mode(active: bool, drawing_pan: int = 90, drawing_tilt: int = No
             print("[👁️] Gaze drawing lock released - resuming normal operation immediately")
 
 
+# === PAPER SEARCH MODE ===
+# Organic searching movement for ArUco paper detection
+_paper_search_active = False
+_paper_search_center_pan = 90.0
+_paper_search_center_tilt = 75.0
+_paper_search_range_pan = 20.0
+_paper_search_range_tilt = 10.0
+_paper_search_start_time = 0.0
+
+
+def set_paper_search_mode(active: bool, center_pan: float = 90.0, center_tilt: float = 75.0,
+                          range_pan: float = 20.0, range_tilt: float = 10.0):
+    """
+    Activate paper search mode for ArUco detection with organic movement.
+
+    When active, gaze moves organically within the specified range around the center,
+    allowing for marker detection at various angles. Uses same mechanism as drawing
+    mode but with continuously updating targets.
+
+    Args:
+        active: Enable/disable search mode
+        center_pan: Center pan angle for search area
+        center_tilt: Center tilt angle for search area
+        range_pan: Search range for pan (±degrees from center)
+        range_tilt: Search range for tilt (±degrees from center)
+    """
+    global _paper_search_active, _paper_search_center_pan, _paper_search_center_tilt
+    global _paper_search_range_pan, _paper_search_range_tilt, _paper_search_start_time
+    global drawing_sequence_active, drawing_target_x, drawing_target_y, drawing_transition_active
+
+    with _gaze_lock:
+        if active:
+            _paper_search_active = True
+            _paper_search_center_pan = center_pan
+            _paper_search_center_tilt = center_tilt
+            _paper_search_range_pan = range_pan
+            _paper_search_range_tilt = range_tilt
+            _paper_search_start_time = time.time()
+
+            # Use drawing mode mechanism but we'll update target continuously
+            drawing_target_x = center_pan
+            drawing_target_y = center_tilt
+            drawing_transition_active = True
+            drawing_sequence_active = True
+            print(f"[📄🔍] Paper search mode activated: center=({center_pan}°, {center_tilt}°), range=±({range_pan}°, {range_tilt}°)")
+        else:
+            _paper_search_active = False
+            drawing_sequence_active = False
+            drawing_transition_active = False
+            print("[📄🔍] Paper search mode deactivated")
+
+
+def update_paper_search_target():
+    """
+    Update the search target position with organic movement pattern.
+    Call this periodically during paper search to create smooth, searching motion.
+
+    Returns:
+        (pan, tilt): Current target position, or (None, None) if search not active
+    """
+    global drawing_target_x, drawing_target_y
+
+    if not _paper_search_active:
+        return (None, None)
+
+    now = time.time()
+    elapsed = now - _paper_search_start_time
+
+    # Multi-frequency organic pattern for natural searching motion
+    # Slow, leisurely sweep - contemplative searching
+    primary_freq_pan = 0.08  # Very slow primary sweep (~12 second cycle)
+    primary_freq_tilt = 0.06  # Even slower tilt (~16 second cycle)
+    secondary_freq_pan = 0.18  # Gentle secondary motion
+    secondary_freq_tilt = 0.14
+
+    # Calculate organic offsets using layered sine waves
+    pan_offset = (
+        0.65 * math.sin(elapsed * primary_freq_pan * 2 * math.pi) +
+        0.25 * math.sin(elapsed * secondary_freq_pan * 2 * math.pi + 0.7) +
+        0.10 * math.sin(elapsed * 0.28 * 2 * math.pi + 1.3)
+    )
+
+    tilt_offset = (
+        0.65 * math.sin(elapsed * primary_freq_tilt * 2 * math.pi + math.pi / 3) +
+        0.25 * math.sin(elapsed * secondary_freq_tilt * 2 * math.pi + 0.9) +
+        0.10 * math.sin(elapsed * 0.22 * 2 * math.pi + 2.1)
+    )
+
+    # Apply offset within search range
+    target_pan = _paper_search_center_pan + pan_offset * _paper_search_range_pan
+    target_tilt = _paper_search_center_tilt + tilt_offset * _paper_search_range_tilt
+
+    # Clamp to servo limits
+    target_pan = clamp(target_pan, PAN_MIN, PAN_MAX)
+    target_tilt = clamp(target_tilt, TILT_MIN, TILT_MAX)
+
+    # Update drawing targets (used by main gaze loop when drawing_sequence_active)
+    with _gaze_lock:
+        drawing_target_x = target_pan
+        drawing_target_y = target_tilt
+
+    return (target_pan, target_tilt)
+
+
+def is_paper_search_active() -> bool:
+    """Check if paper search mode is currently active."""
+    return _paper_search_active
+
+
 def startup_movement_sequence(servos, duration=5.0):
     """Perform single figure-8 startup sequence to establish presence
     

@@ -275,12 +275,21 @@ class PaperDetector:
             return error_result
 
     def _position_gaze_for_detection(self, servos):
-        """Position servos to look down at drawing area using smooth gaze system."""
+        """Position servos to look down at drawing area using smooth gaze system.
+
+        Note: For ArUco detection, the search mode handles its own gaze control.
+        This method is only used for legacy LLM-based detection methods.
+        """
         if servos is None:
             print("[📄] Warning: No servos available - skipping gaze positioning")
             return  # Skip servo positioning for testing/debugging
 
-        # Use smooth gaze system (same as drawing lock) for consistent, smooth movement
+        # For ArUco method, the search mode handles gaze - just return
+        if PAPER_CHECK_METHOD == "aruco":
+            print("[📄] ArUco mode - gaze will be controlled by search mode")
+            return
+
+        # Use smooth gaze system for legacy methods
         try:
             from vision.gaze import set_drawing_mode
             print(f"[📄] Smoothly positioning gaze for paper check: pan={PAPER_DETECTION_GAZE_PAN}°, tilt={PAPER_DETECTION_GAZE_TILT}°")
@@ -385,59 +394,107 @@ class PaperDetector:
         return self._perform_double_check_detection(check_image_path, "direct")
 
     def _check_aruco_detection_continuous(self, camera) -> PaperCheckResult:
-        """Check paper presence using real-time ArUco detector running in main loop."""
-        print(f"[📄] Waiting for ArUco detector to accumulate frames after gaze settled...")
+        """
+        Check paper presence using organic searching movement with ArUco detection.
+
+        Instead of holding at a fixed position, gaze moves organically around the
+        paper detection area for ~6 seconds. If the ArUco marker is detected at ANY
+        point during the search, it means no paper is present (marker visible = no paper).
+        """
+        print(f"[📄] Starting organic paper search (~6 seconds)...")
 
         try:
             from safety.aruco_detector import get_aruco_detector
+            from vision.gaze import set_paper_search_mode, update_paper_search_target, is_paper_search_active
 
             detector = get_aruco_detector()
 
-            # Wait for detector to accumulate fresh frames after camera settles
-            # The rolling window is 2 seconds, so wait ~2.5s for a clean window
-            time.sleep(2.5)
+            # Search configuration - centered around paper detection position
+            search_center_pan = PAPER_DETECTION_GAZE_PAN
+            search_center_tilt = PAPER_DETECTION_GAZE_TILT
+            search_range_pan = 20.0  # ±20° pan range
+            search_range_tilt = 10.0  # ±10° tilt range
+            search_duration = 6.0  # Total search time in seconds
+            check_interval = 0.1  # Check ArUco every 100ms
 
-            status = detector.get_status()
+            # Activate organic search mode
+            set_paper_search_mode(
+                active=True,
+                center_pan=search_center_pan,
+                center_tilt=search_center_tilt,
+                range_pan=search_range_pan,
+                range_tilt=search_range_tilt
+            )
 
-            marker_visible = status["marker_visible"]
-            confidence = status["confidence"]
-            detected_ids = status["detected_ids"]
-            window_size = status["window_size"]
+            # Give gaze time to reach search area before starting detection
+            time.sleep(1.0)
 
-            detections_in_window = int(confidence * window_size) if window_size > 0 else 0
-            print(f"[📄] Real-time ArUco: {detections_in_window}/{window_size} frames detected marker ({confidence:.1%}), IDs={detected_ids}")
+            search_start = time.time()
+            marker_ever_detected = False
+            detection_count = 0
+            total_checks = 0
 
-            if marker_visible:
-                print(f"[📄] ✓ Paper marker VISIBLE ({confidence:.1%}) → No paper present → BLOCKING draw")
+            # Search loop - continuously move and check for marker
+            while time.time() - search_start < search_duration:
+                # Update search target (creates organic movement)
+                update_paper_search_target()
+
+                # Check ArUco detector status
+                status = detector.get_status()
+                total_checks += 1
+
+                if status["marker_visible"]:
+                    marker_ever_detected = True
+                    detection_count += 1
+                    elapsed = time.time() - search_start
+                    print(f"[📄] 🎯 Marker DETECTED at {elapsed:.1f}s (IDs={status['detected_ids']}) → No paper!")
+                    # Early exit - marker detected means no paper
+                    break
+
+                time.sleep(check_interval)
+
+            # Ensure search mode is deactivated
+            set_paper_search_mode(active=False)
+
+            elapsed_total = time.time() - search_start
+
+            if marker_ever_detected:
+                print(f"[📄] ✓ Paper marker VISIBLE during search → No paper present → BLOCKING draw")
                 return PaperCheckResult(
                     paper_present=False,
-                    confidence=confidence,
-                    method_used="aruco_realtime",
+                    confidence=1.0,
+                    method_used="aruco_search",
                     check_image_path="",
                     timestamp=time.time(),
-                    llm_response=f"ArUco marker visible ({confidence:.0%} detection rate) - no paper covering surface"
+                    llm_response=f"ArUco marker detected during {elapsed_total:.1f}s organic search - no paper covering surface"
                 )
             else:
-                print(f"[📄] ✗ Paper marker NOT VISIBLE ({confidence:.1%}) → Paper present → ALLOWING draw")
+                print(f"[📄] ✗ Paper marker NOT VISIBLE during {elapsed_total:.1f}s search → Paper present → ALLOWING draw")
                 return PaperCheckResult(
                     paper_present=True,
-                    confidence=1.0 - confidence,
-                    method_used="aruco_realtime",
+                    confidence=1.0,
+                    method_used="aruco_search",
                     check_image_path="",
                     timestamp=time.time(),
-                    llm_response=f"ArUco marker not detected ({confidence:.0%}) - paper present"
+                    llm_response=f"ArUco marker not detected during {elapsed_total:.1f}s search ({total_checks} checks) - paper present"
                 )
 
         except Exception as e:
-            print(f"[📄] ⚠️ Real-time ArUco check failed: {e} → Defaulting to ALLOW drawing")
+            # Ensure search mode is deactivated on error
+            try:
+                from vision.gaze import set_paper_search_mode
+                set_paper_search_mode(active=False)
+            except:
+                pass
+            print(f"[📄] ⚠️ Paper search failed: {e} → Defaulting to ALLOW drawing")
             return PaperCheckResult(
                 paper_present=True,
                 confidence=0.0,
-                method_used="aruco_realtime",
+                method_used="aruco_search",
                 check_image_path="",
                 timestamp=time.time(),
                 llm_response="",
-                error_message=f"ArUco detection error: {str(e)} (defaulting to allow drawing)"
+                error_message=f"Paper search error: {str(e)} (defaulting to allow drawing)"
             )
 
     def _perform_double_check_detection(self, check_image_path: str, method_name: str) -> PaperCheckResult:
