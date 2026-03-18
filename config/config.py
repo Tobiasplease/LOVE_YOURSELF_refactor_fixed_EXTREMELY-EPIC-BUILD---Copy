@@ -258,7 +258,7 @@ DRAWING_PERSON_WEIGHT = 0.4    # How much person presence influences decision
 DRAWING_PERSON_BONUS = 0.2     # Additional motivation boost when person detected
 
 # === OBJECT DETECTION ===
-YOLO_CONFIDENCE_THRESHOLD = 0.3  # Adjustable confidence for YOLOv8
+YOLO_CONFIDENCE_THRESHOLD = 0.45  # Adjustable confidence for YOLOv8 (raised from 0.3 to reduce false positives)
 # Use a lightweight model by default (person-only use case)
 YOLO_MODEL_PATH = os.getenv(
     "YOLO_MODEL_PATH",

@@ -120,40 +120,43 @@ class GazePhysicsState:
 physics_state = GazePhysicsState()
 
 PHYSICS_PATTERNS = {
+    # Movement RANGE varies by emotional state - energized moves more, calm moves less
+    # mass/spring/damping create the emotional feel: snappy vs languid
+    # tremor/orbital scaled down for calmer states = less overall movement when idle
     "energized_engaged": {
-        "mass": 0.4,
-        "spring_constant": 18.0,
-        "damping": 2.5,
-        "tremor_amplitude": 1.2,
-        "orbital_strength": 1.0,
+        "mass": 0.3,           # Light - quick acceleration
+        "spring_constant": 18.0,  # Strong pull - responsive
+        "damping": 1.8,        # Low damping - bouncy, alive
+        "tremor_amplitude": 1.4,  # High tremor - jittery life
+        "orbital_strength": 1.3,  # Full wandering force
     },
     "alert_curious": {
-        "mass": 0.5,
-        "spring_constant": 14.0,
-        "damping": 3.0,
-        "tremor_amplitude": 0.8,
-        "orbital_strength": 1.2,
+        "mass": 0.45,          # Light-medium
+        "spring_constant": 14.0,  # Good responsiveness
+        "damping": 2.5,        # Some damping
+        "tremor_amplitude": 1.1,  # Good tremor
+        "orbital_strength": 1.2,  # Slightly less wandering
     },
     "calm_observant": {
-        "mass": 0.7,
-        "spring_constant": 10.0,
-        "damping": 4.0,
-        "tremor_amplitude": 0.5,
-        "orbital_strength": 0.7,
+        "mass": 0.7,           # Medium - measured movement
+        "spring_constant": 10.0,  # Moderate pull
+        "damping": 4.0,        # Smoother, less bounce
+        "tremor_amplitude": 0.6,  # Reduced tremor for calmer idle
+        "orbital_strength": 0.9,  # Less wandering - more stillness
     },
     "quiet_detached": {
-        "mass": 1.0,
-        "spring_constant": 6.0,
-        "damping": 5.0,
-        "tremor_amplitude": 0.5,  # Raised minimum for visible movement
-        "orbital_strength": 0.6,  # Raised minimum for visible movement
+        "mass": 1.0,           # Heavy - slow to start
+        "spring_constant": 6.0,   # Weak pull - drifting
+        "damping": 5.0,        # High damping - no bounce
+        "tremor_amplitude": 0.4,  # Subtle tremor
+        "orbital_strength": 0.7,  # Reduced wandering
     },
     "withdrawn_distant": {
-        "mass": 1.5,
-        "spring_constant": 4.0,
-        "damping": 6.0,
-        "tremor_amplitude": 0.4,  # Raised from 0.1 - still moves even when withdrawn
-        "orbital_strength": 0.5,  # Raised from 0.2 - subtle but visible wandering
+        "mass": 1.5,           # Very heavy - sluggish
+        "spring_constant": 4.0,   # Weak pull - slow drifting
+        "damping": 6.0,        # Heavy damping - drowsy
+        "tremor_amplitude": 0.3,  # Minimal tremor
+        "orbital_strength": 0.5,  # Minimal wandering - almost still
     },
 }
 
@@ -202,27 +205,30 @@ def update_physics_step(dt: float, is_tracking: bool = False) -> tuple:
         f_orbital = 0.0
         if not is_tracking and ps.orbital_strength > 0.01:
             # Multi-frequency orbital for smooth, organic wandering
-            orbit_freq = 0.22 if axis == "pan" else 0.16
+            # Increased frequencies and multipliers for more visible motion
+            orbit_freq = 0.28 if axis == "pan" else 0.22
             phase_offset = 0.0 if axis == "pan" else math.pi / 2
-            f_orbital = ps.orbital_strength * 8.0 * math.sin(now * orbit_freq * 2 * math.pi + phase_offset)
-            f_orbital += ps.orbital_strength * 4.0 * math.sin(now * orbit_freq * 1.6 * 2 * math.pi + phase_offset + 0.8)
-            f_orbital += ps.orbital_strength * 2.0 * math.sin(now * orbit_freq * 2.4 * 2 * math.pi + phase_offset + 1.5)
+            f_orbital = ps.orbital_strength * 15.0 * math.sin(now * orbit_freq * 2 * math.pi + phase_offset)
+            f_orbital += ps.orbital_strength * 8.0 * math.sin(now * orbit_freq * 1.6 * 2 * math.pi + phase_offset + 0.8)
+            f_orbital += ps.orbital_strength * 4.0 * math.sin(now * orbit_freq * 2.4 * 2 * math.pi + phase_offset + 1.5)
 
         f_total = f_spring + f_damping + f_orbital
         acceleration = f_total / ps.mass
         vel += acceleration * dt
-        max_vel = 12.0 if is_tracking else 8.0
+        max_vel = 15.0 if is_tracking else 12.0  # Higher limits for more visible motion
         vel = max(-max_vel, min(max_vel, vel))
         pos += vel * dt
 
         tremor = 0.0
         if not is_tracking and ps.tremor_amplitude > 0.01:
             # Multi-layered tremor for organic, continuous movement
-            # Higher frequencies = smoother apparent motion
-            base_freq = 4.5 if axis == "pan" else 5.2
-            tremor = ps.tremor_amplitude * 0.5 * math.sin(now * base_freq * 2 * math.pi)
-            tremor += ps.tremor_amplitude * 0.3 * math.sin(now * base_freq * 1.7 * 2 * math.pi + 0.5)
-            tremor += ps.tremor_amplitude * 0.2 * math.sin(now * base_freq * 2.3 * 2 * math.pi + 1.2)
+            # Higher frequencies for fluid, life-like motion
+            base_freq = 3.2 if axis == "pan" else 3.8
+            tremor = ps.tremor_amplitude * 0.6 * math.sin(now * base_freq * 2 * math.pi)
+            tremor += ps.tremor_amplitude * 0.35 * math.sin(now * base_freq * 1.5 * 2 * math.pi + 0.5)
+            tremor += ps.tremor_amplitude * 0.25 * math.sin(now * base_freq * 2.1 * 2 * math.pi + 1.2)
+            # Add slower underlying sway for variety
+            tremor += ps.tremor_amplitude * 0.4 * math.sin(now * 0.8 * 2 * math.pi + 2.3)
         pos += tremor
 
         pos = max(bounds[0], min(bounds[1], pos))
@@ -278,6 +284,8 @@ GAZE_ZONES_TILT = {
 llm_target_zone_pan = "ahead"
 llm_target_zone_tilt = "level"
 llm_zone_active = False  # Whether LLM is actively directing gaze
+llm_zone_set_time = 0.0  # When LLM zone was last set
+llm_zone_timeout = 45.0  # LLM zones expire after 45 seconds, return to free wandering
 
 # Tracking angle awareness
 tracking_person_position = "center"  # left/center/right
@@ -287,10 +295,16 @@ tracking_person_movement = "stationary"
 
 def set_llm_zone(pan_zone: str, tilt_zone: str = None):
     """Set the LLM-directed gaze zone. Camera will wander within this zone."""
-    global llm_target_zone_pan, llm_target_zone_tilt, llm_zone_active, drawing_sequence_active
+    global llm_target_zone_pan, llm_target_zone_tilt, llm_zone_active, llm_zone_set_time
+    global drawing_sequence_active, state
 
     # Don't change zones during drawing execution - gaze is locked to drawing surface
     if drawing_sequence_active:
+        return
+
+    # Don't change zones during tracking/aware - hardware tracking overrides LLM
+    # LLM gaze commands only work during idle
+    if state in ("tracking", "grace", "aware"):
         return
 
     if pan_zone == "person":
@@ -300,20 +314,24 @@ def set_llm_zone(pan_zone: str, tilt_zone: str = None):
         return
 
     if pan_zone == "stay":
-        # Keep current zone, don't change
+        # Keep current zone, don't change (but refresh timeout)
+        llm_zone_set_time = time.time()
         print(f"[👁️] LLM: Stay in current zone ({llm_target_zone_pan}/{llm_target_zone_tilt})")
         return
 
     if pan_zone in GAZE_ZONES_PAN:
         llm_target_zone_pan = pan_zone
         llm_zone_active = True
+        llm_zone_set_time = time.time()
 
     if tilt_zone and tilt_zone in GAZE_ZONES_TILT:
         llm_target_zone_tilt = tilt_zone
+        llm_zone_set_time = time.time()
     elif pan_zone in ("up", "down", "level"):
         # If user passed tilt direction as pan_zone
         llm_target_zone_tilt = pan_zone
         llm_zone_active = True
+        llm_zone_set_time = time.time()
     elif tilt_zone is None:
         llm_target_zone_tilt = "level"  # Default to level if not specified
 
@@ -527,10 +545,11 @@ def get_search_target() -> tuple:
     Get the next target for searching behavior.
     Returns (pan, tilt, goal_type) or (None, None, None) if no targets.
 
-    Priority: interest_points > last_known_location > zone_scan
+    Priority: interest_points > last_known_location (briefly) > zone_scan
     """
     global searching_zones_to_visit, searching_interest_points
     global searching_last_known_pan, searching_last_known_tilt
+    global searching_goal_start_time, searching_current_goal
 
     now = time.time()
 
@@ -545,12 +564,20 @@ def get_search_target() -> tuple:
         point = high_priority[0]
         return (point[0], point[1], "interest_point")
 
-    # Priority 2: Last known location (if we haven't checked it recently)
+    # Priority 2: Last known location - but only for first 4 seconds of search
+    # After that, move on to zone scanning even if we haven't "reached" it
     if searching_last_known_pan is not None:
-        # Clamp to servo limits
-        clamped_pan = clamp(searching_last_known_pan, PAN_MIN, PAN_MAX)
-        clamped_tilt = clamp(searching_last_known_tilt or 90, TILT_MIN, TILT_MAX)
-        return (clamped_pan, clamped_tilt, "last_known")
+        # Time-based fallthrough: don't stay stuck on last_known forever
+        time_on_last_known = now - searching_goal_start_time if searching_current_goal == "last_known" else 0
+        if time_on_last_known < 4.0:
+            clamped_pan = clamp(searching_last_known_pan, PAN_MIN, PAN_MAX)
+            clamped_tilt = clamp(searching_last_known_tilt or 90, TILT_MIN, TILT_MAX)
+            return (clamped_pan, clamped_tilt, "last_known")
+        else:
+            # Timed out - clear last_known and move to zone scanning
+            print(f"[🔍] Last known location timed out after {time_on_last_known:.1f}s - moving to zone scan")
+            searching_last_known_pan = None
+            searching_last_known_tilt = None
 
     # Priority 3: Unvisited zones
     if searching_zones_to_visit:
@@ -592,34 +619,45 @@ def update_search_progress(current_pan: float, current_tilt: float, person_found
     if target_pan is None:
         return
 
+    # Track when we start targeting a new goal type
+    if searching_current_goal != goal_type:
+        searching_current_goal = goal_type
+        searching_goal_start_time = now
+
     pan_diff = abs(current_pan - target_pan)
     tilt_diff = abs(current_tilt - (target_tilt or current_tilt))
-    at_target = pan_diff < 10 and tilt_diff < 10
+    # More lenient at_target check - physics + tremor makes exact convergence hard
+    at_target = pan_diff < 15 and tilt_diff < 15
 
-    if at_target:
-        # Track dwell time at target
-        if searching_current_goal != goal_type:
-            searching_current_goal = goal_type
-            searching_goal_start_time = now
+    # Calculate time spent on current goal
+    time_on_goal = now - searching_goal_start_time
 
-        dwell_time = now - searching_goal_start_time
+    # Mark target as visited if: at target for dwell_time OR stuck too long (timeout)
+    max_time_per_target = 6.0  # Don't spend more than 6 seconds on any target
+    should_advance = False
 
-        # After dwelling, mark this target as visited
-        if dwell_time >= searching_goal_dwell_time:
-            if goal_type == "zone_scan" and searching_zones_to_visit:
-                visited_zone = searching_zones_to_visit.pop(0)
-                print(f"[🔍] Zone {visited_zone} scanned ({len(searching_zones_to_visit)} remaining)")
-            elif goal_type == "last_known":
-                searching_last_known_pan = None
-                searching_last_known_tilt = None
-                print("[🔍] Last known location checked - person not there")
-            elif goal_type == "interest_point" and searching_interest_points:
-                searching_interest_points.pop(0)
-                print(f"[🔍] Interest point visited ({len(searching_interest_points)} remaining)")
+    if at_target and time_on_goal >= searching_goal_dwell_time:
+        should_advance = True
+    elif time_on_goal >= max_time_per_target:
+        # Timeout - move on even if we didn't reach target
+        print(f"[🔍] Target timeout ({goal_type}) after {time_on_goal:.1f}s - moving to next")
+        should_advance = True
 
-            # Reset for next target
-            searching_current_goal = None
-            searching_goal_start_time = 0.0
+    if should_advance:
+        if goal_type == "zone_scan" and searching_zones_to_visit:
+            visited_zone = searching_zones_to_visit.pop(0)
+            print(f"[🔍] Zone {visited_zone} scanned ({len(searching_zones_to_visit)} remaining)")
+        elif goal_type == "last_known":
+            searching_last_known_pan = None
+            searching_last_known_tilt = None
+            print("[🔍] Last known location checked - person not there")
+        elif goal_type == "interest_point" and searching_interest_points:
+            searching_interest_points.pop(0)
+            print(f"[🔍] Interest point visited ({len(searching_interest_points)} remaining)")
+
+        # Reset for next target
+        searching_current_goal = None
+        searching_goal_start_time = now  # Reset timer for next target
 
 
 def is_search_mode_active() -> bool:
@@ -829,7 +867,7 @@ def update_organic_movement(now):
 
 
 
-def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_person_detected=False, person_direction=None):
+def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_person_detected=False, person_direction=None, person_bbox=None):
     """
     Update gaze position based on face detection, YOLO detection, and emotional state.
     Uses spring-damper physics for organic movement with emotional modulation.
@@ -840,11 +878,12 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         current_emotion_state: Emotional state for movement modulation
         yolo_person_detected: True if YOLO detected a person (even without face)
         person_direction: Direction of last known person ("to my left", "to my right", "ahead", None)
+        person_bbox: YOLO person bounding box (x1, y1, x2, y2) for tracking in aware state
     """
     global servo_x, servo_y, target_x, target_y, last_seen_time, state, idle_next_move_time
     global startup_sequence_active, drawing_sequence_active, last_state_change
     global drawing_target_x, drawing_target_y, drawing_transition_active
-    global physics_state
+    global physics_state, llm_zone_active, llm_zone_set_time
 
     now = time.time()
     dt = now - physics_state.last_update_time
@@ -934,6 +973,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             # Person present but no face - enter aware state
             if state != "aware":
                 last_state_change = now
+                llm_zone_active = False  # Clear LLM zone - real person overrides LLM's imagined directions
                 print("[👁️] Entering 'aware' state - person detected but no face")
             state = "aware"
         else:
@@ -950,7 +990,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
 
     elif state == "aware":
         # AWARE STATE: Person detected by YOLO but no face to track
-        # Uses physics with subdued emotional parameters
+        # Tracks person bounding box with softer physics than face tracking
 
         time_in_aware = now - last_state_change
         if not yolo_person_detected and time_in_aware > aware_minimum_dwell:
@@ -960,7 +1000,32 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         elif yolo_person_detected or time_in_aware <= aware_minimum_dwell:
             update_organic_movement(now)
 
-            if llm_zone_active:
+            # If we have a person bbox, track its center (like face tracking but softer)
+            if person_bbox is not None:
+                bbox_x1, bbox_y1, bbox_x2, bbox_y2 = person_bbox
+                person_center_x = (bbox_x1 + bbox_x2) // 2
+                # Target upper portion of body (where head likely is)
+                person_center_y = bbox_y1 + (bbox_y2 - bbox_y1) // 4
+
+                if FLIP_X:
+                    person_center_x = w - person_center_x
+                if FLIP_Y:
+                    person_center_y = h - person_center_y
+
+                person_x_norm = person_center_x / w
+                person_y_norm = person_center_y / h
+
+                # Calculate target from person position
+                person_target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * person_x_norm
+                person_target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * person_y_norm
+
+                # Add subtle micro-movement overlay
+                micro_sway_pan = (pan_micro_target - 90) * 0.1
+                micro_sway_tilt = (tilt_micro_target - 107.5) * 0.08
+                pan_scaled = person_target_x + micro_sway_pan
+                tilt_scaled = person_target_y + micro_sway_tilt
+
+            elif llm_zone_active:
                 pan_min, pan_max = GAZE_ZONES_PAN.get(llm_target_zone_pan, (75, 105))
                 tilt_min, tilt_max = GAZE_ZONES_TILT.get(llm_target_zone_tilt, (95, 125))
                 pan_center = (pan_min + pan_max) / 2
@@ -978,17 +1043,26 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
             tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
 
-            # Aware state: subdued physics - higher mass, lower spring for sluggish response
+            # Aware state with person bbox: softer tracking than face mode
+            # Still responsive to person position but with more organic feel
             aware_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"]).copy()
-            aware_params["mass"] *= 1.5
-            aware_params["spring_constant"] *= 0.5
-            aware_params["tremor_amplitude"] *= 0.3
-            aware_params["orbital_strength"] *= 0.3
-            physics_state.blend_params(aware_params, blend_rate=0.08)
+            if person_bbox is not None:
+                # Tracking person bbox - more responsive but not as stiff as face tracking
+                aware_params["mass"] *= 0.9
+                aware_params["spring_constant"] *= 1.1
+                aware_params["tremor_amplitude"] *= 0.5  # Less tremor while tracking
+                aware_params["orbital_strength"] *= 0.4  # Minimal wandering while tracking
+            else:
+                # No bbox - use normal subdued parameters
+                aware_params["mass"] *= 1.2
+                aware_params["spring_constant"] *= 0.8
+                aware_params["tremor_amplitude"] *= 0.7
+                aware_params["orbital_strength"] *= 0.8
+            physics_state.blend_params(aware_params, blend_rate=0.25)
 
             physics_state.pan_target = pan_scaled
             physics_state.tilt_target = tilt_scaled
-            pan, tilt = update_physics_step(dt, is_tracking=False)
+            pan, tilt = update_physics_step(dt, is_tracking=(person_bbox is not None))
             servo_x = pan
             servo_y = tilt
 
@@ -996,6 +1070,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         # Check if YOLO detected someone - transition to aware
         if yolo_person_detected:
             last_state_change = now
+            llm_zone_active = False  # Clear LLM zone - real person overrides LLM's imagined directions
             print("[👁️] Person detected while idle - entering 'aware' state")
             state = "aware"
             deactivate_search_mode()
@@ -1014,15 +1089,16 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
                 target_with_jitter_pan = clamp(target_pan + time_jitter, PAN_MIN, PAN_MAX)
                 target_with_jitter_tilt = clamp(target_tilt + math.cos(now * 0.25) * 2, TILT_MIN, TILT_MAX)
 
-                # Searching: deliberate physics - moderate mass, medium spring
+                # Searching: deliberate but still alive physics
+                # Keep orbital/tremor similar to idle so it doesn't feel "stuck"
                 search_params = {
-                    "mass": 1.2,
-                    "spring_constant": 6.0,
-                    "damping": 5.5,
-                    "tremor_amplitude": 0.1,
-                    "orbital_strength": 0.08,
+                    "mass": 0.8,
+                    "spring_constant": 7.0,
+                    "damping": 4.0,
+                    "tremor_amplitude": 0.8,  # Still alive while searching
+                    "orbital_strength": 1.0,  # Still wanders while searching
                 }
-                physics_state.blend_params(search_params, blend_rate=0.1)
+                physics_state.blend_params(search_params, blend_rate=0.3)
 
                 physics_state.pan_target = target_with_jitter_pan
                 physics_state.tilt_target = target_with_jitter_tilt
@@ -1042,19 +1118,25 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
                 deactivate_search_mode()
             state = "idle"
 
+            # Check LLM zone timeout - if stuck in same zone too long, encourage exploration
+            if llm_zone_active and (now - llm_zone_set_time) > llm_zone_timeout:
+                print(f"[👁️] LLM zone '{llm_target_zone_pan}/{llm_target_zone_tilt}' timed out after {llm_zone_timeout:.0f}s → exploring freely")
+                llm_zone_active = False
+
             # Perlin noise frequency scaling based on emotional state
+            # Increased range for more visible difference between states
             FREQUENCY_SCALE = {
-                "energized_engaged": 2.0,
-                "alert_curious": 1.6,
-                "calm_observant": 1.2,
-                "quiet_detached": 0.8,
-                "withdrawn_distant": 0.6,
+                "energized_engaged": 2.5,
+                "alert_curious": 2.0,
+                "calm_observant": 1.5,
+                "quiet_detached": 1.2,
+                "withdrawn_distant": 1.0,  # Even withdrawn still moves
             }
             freq_scale = FREQUENCY_SCALE.get(current_emotion_state, 1.2)
 
             global pan_frequency, tilt_frequency
-            base_pan_freq = 0.18
-            base_tilt_freq = 0.14
+            base_pan_freq = 0.32  # Faster base movement
+            base_tilt_freq = 0.25  # Faster base movement
             pan_frequency = base_pan_freq * freq_scale
             tilt_frequency = base_tilt_freq * freq_scale
 
@@ -1079,8 +1161,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
 
             # Physics-based idle movement - blend to emotional parameters
+            # Fast blend rate to make emotional changes immediately visible
             physics_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"])
-            physics_state.blend_params(physics_params, blend_rate=0.12)
+            physics_state.blend_params(physics_params, blend_rate=0.35)
 
             physics_state.pan_target = pan_scaled
             physics_state.tilt_target = tilt_scaled

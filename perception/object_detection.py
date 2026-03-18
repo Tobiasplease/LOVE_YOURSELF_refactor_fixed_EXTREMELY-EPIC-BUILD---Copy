@@ -62,6 +62,8 @@ class ObjectDetectionThread(threading.Thread):
                     time.sleep(self.update_interval)
                     continue
             detected = set()
+            best_person_bbox = None
+            best_person_conf = 0.0
 
             for box in results.boxes:
                 cls_id = int(box.cls[0])
@@ -80,7 +82,12 @@ class ObjectDetectionThread(threading.Thread):
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f"{label} ({conf:.2f})", (x1, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-            DetectionMemory.update(list(detected), time.time(), clean_frame)
+                # Track the highest confidence person detection
+                if conf > best_person_conf:
+                    best_person_bbox = (x1, y1, x2, y2)
+                    best_person_conf = conf
+
+            DetectionMemory.update(list(detected), time.time(), clean_frame, best_person_bbox, best_person_conf)
 
             time.sleep(self.update_interval)
 

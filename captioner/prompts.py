@@ -3213,12 +3213,20 @@ def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, pers
     # === ANTI-PROSE: Style guidance without content-specific examples ===
     prompt_parts.append("(Short. Fragments OK. No essays.)")
 
-    # === EMBODIED GAZE (Natural Integration) ===
-    # Gaze as embodied action, not command - expressed naturally in the thought
-    prompt_parts.append(
-        "You can look around. Start your thought with where you're looking:\n"
-        "*glancing left* or *looking down* or *eyes ahead* or *turning right* or *gazing up*"
-    )
+    # === EMBODIED GAZE (Mode-Dependent) ===
+    # Only inject gaze awareness for observational modes - introspective doesn't need it
+    if prompt_mode != "introspective":
+        if gaze_state_str == "tracking":
+            # Tracking someone - just note it, no control
+            gaze_instruction = f"[Watching someone - {gaze_direction}]"
+        elif gaze_state_str == "searching":
+            gaze_instruction = f"[Scanning - {gaze_direction}]"
+        elif drawing_hint and "drawing" in drawing_hint.lower():
+            gaze_instruction = f"[Drawing - eyes on work]"
+        else:
+            # Observational mode - can direct gaze
+            gaze_instruction = f"[Looking {gaze_direction}] *glancing left* *looking right* *gazing up* *eyes down* *eyes ahead*"
+        prompt_parts.append(gaze_instruction)
 
     user_prompt = "\n\n".join(prompt_parts)
 

@@ -1320,10 +1320,12 @@ try:
         # Face detection = gaze tracking (following specific faces)
         # YOLO = general person presence awareness (triggers "aware" gaze state)
         yolo_person_detected = False
+        yolo_person_bbox = None
         labels = DetectionMemory.get_labels()
         if "person" in labels:
             yolo_person_detected = True
-            person_detection.update_yolo_detection(True, 0.8)
+            yolo_person_bbox = DetectionMemory.get_person_bbox()
+            person_detection.update_yolo_detection(True, DetectionMemory.get_person_confidence() or 0.8)
         else:
             person_detection.update_yolo_detection(False)
 
@@ -1356,7 +1358,8 @@ try:
             face_box,
             mood_engine.get_emotion_for_hand_controller(),
             yolo_person_detected=smoothed_person_detected,
-            person_direction=person_direction
+            person_direction=person_direction,
+            person_bbox=yolo_person_bbox
         )
 
         # Feed servo position to person detection for spatial memory
