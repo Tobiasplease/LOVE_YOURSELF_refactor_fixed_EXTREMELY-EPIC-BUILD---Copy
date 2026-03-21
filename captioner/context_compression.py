@@ -6,6 +6,7 @@ Prevents repetition by building understanding that carries forward.
 """
 
 import hashlib
+import json
 import os
 import queue
 import threading
@@ -17,6 +18,8 @@ from config.model_settings import get_model_options
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.ollama import query_ollama, truncate_for_print
+
+IDENTITY_FILE = os.path.join(config.MOOD_SNAPSHOT_FOLDER, "machine_identity.json")
 
 
 class ContextCompressionEngine:
@@ -53,6 +56,9 @@ class ContextCompressionEngine:
         self.compression_thread = None
         self.compression_active = False
         self._start_compression_worker()
+
+        # Load persistent identity (desires/beliefs that survive restarts)
+        self._load_identity()
 
     def add_caption(self, caption: str, timestamp: float | None = None, image_path: str | None = None) -> None:
         """Add a new caption and trigger compression if needed."""
@@ -225,6 +231,26 @@ EARLIER UNDERSTANDINGS (for context):
             session_duration = self.total_session_duration / 60.0  # Convert to minutes
             duration_description = self._format_duration(session_duration)
 
+            # === ACTIVATION MEMORY INTEGRATION ===
+            # Get rich context from activation network to make compression smarter
+            activation_context = ""
+            try:
+                from captioner.activation_memory import get_activation_summary_for_compression
+                act_data = get_activation_summary_for_compression()
+
+                activation_parts = []
+                if act_data["concepts_str"]:
+                    activation_parts.append(f"On my mind: {act_data['concepts_str']}")
+                if act_data["long_term_memory"]:
+                    activation_parts.append(f"From before: {act_data['long_term_memory']}")
+                if act_data["association_str"]:
+                    activation_parts.append(f"I've noticed: {act_data['association_str']} often together")
+
+                if activation_parts:
+                    activation_context = "\n".join(activation_parts)
+            except Exception:
+                pass  # Continue without activation context if unavailable
+
             # NARRATIVE COMPRESSION - distill experience into injectable context
             # Output feeds directly into vision model prompts
             # Must be CONCISE and FACTUAL - no flowery prose
@@ -233,6 +259,7 @@ EARLIER UNDERSTANDINGS (for context):
 
             prompt = f"""I've been watching for {duration_description}.
 {historical_context}
+{activation_context}
 
 Recent thoughts:
 {recent_text}
@@ -375,27 +402,86 @@ ONE sentence. First person. Direct."""
             # Keep previous baseline on failure
 
     def _perform_introspection(self, captions: list, current_understanding: str, model: str) -> None:
-        """Generate desires and beliefs through LLM introspection, not heuristic extraction."""
+        """Generate desires and beliefs through LLM introspection, not heuristic extraction.
+
+        Key: This sees PREVIOUS desires/beliefs so it can EVOLVE them, not just replace.
+        """
         try:
             recent_text = "\n".join([f"• {cap['text']}" for cap in captions[-4:]])
             session_info = self.get_current_session_info()
             duration = session_info["duration_description"]
 
-            # Get activation network data to inform introspection
+            # === PREVIOUS IDENTITY (for evolution, not replacement) ===
+            previous_desire = self.introspective_state.get("current_desire", "")
+            previous_belief = self.introspective_state.get("current_belief", "")
+
+            identity_context = ""
+            if previous_desire or previous_belief:
+                identity_parts = []
+                if previous_desire:
+                    identity_parts.append(f"Before, I wanted: {previous_desire}")
+                if previous_belief:
+                    identity_parts.append(f"I believed: {previous_belief}")
+                identity_context = "\n".join(identity_parts)
+
+            # === RICH ACTIVATION CONTEXT ===
+            # Get detailed activation data to ground introspection in accumulated experience
             activation_context = ""
             try:
-                from captioner.activation_memory import get_activation_network
-                network = get_activation_network()
-                boredom = network._last_boredom
-                novelty = getattr(network, "_last_novelty", 0.5)
-                if boredom > 0.5:
-                    activation_context = "Nothing has changed for a while."
-                elif novelty > 0.6:
-                    activation_context = "Something new is happening."
+                from captioner.activation_memory import get_activation_summary_for_introspection
+                act_data = get_activation_summary_for_introspection()
+
+                activation_parts = []
+
+                # What's active in attention
+                if act_data["concepts"]:
+                    concepts_str = ", ".join(act_data["concepts"][:5])
+                    activation_parts.append(f"Active in my attention: {concepts_str}")
+
+                # Attention trends
+                trends = act_data["trends"]
+                if trends.get("rising"):
+                    rising_str = ", ".join(trends["rising"][:3])
+                    activation_parts.append(f"Becoming more present: {rising_str}")
+                if trends.get("fading"):
+                    fading_str = ", ".join(trends["fading"][:2])
+                    activation_parts.append(f"Fading from attention: {fading_str}")
+
+                # Long-term memories for grounding
+                if act_data["long_term_memories"]:
+                    activation_parts.append(f"From before: {act_data['long_term_memories'][0]}")
+
+                # State summary
+                if act_data["boredom"] > 0.6:
+                    activation_parts.append("Everything feels familiar.")
+                elif act_data["novelty"] > 0.6:
+                    activation_parts.append("Something new is happening.")
+
+                if activation_parts:
+                    activation_context = "\n".join(activation_parts)
             except Exception:
                 pass
 
-            prompt = f"""I've been watching for {duration}.
+            # === EVOLUTION-FOCUSED PROMPT ===
+            # The key insight: introspection should EVOLVE identity, not replace it
+            if identity_context:
+                prompt = f"""I've been watching for {duration}.
+
+{identity_context}
+
+{activation_context}
+
+Current situation: {current_understanding}
+
+Recent thoughts:
+{recent_text}
+
+Reflect on your evolving state:
+1. WANT: Has what I want changed? What do I want NOW? (If same, say why it persists. If different, say what shifted.)
+2. LEARNED: What new understanding do I have about this place? (Build on or revise what I believed.)"""
+            else:
+                # First introspection - no prior identity to evolve
+                prompt = f"""I've been watching for {duration}.
 {activation_context}
 
 Current situation: {current_understanding}
@@ -404,13 +490,13 @@ Recent thoughts:
 {recent_text}
 
 Answer both questions in ONE short sentence each:
-1. WANT: What do I want right now? (an impulse, not a goal)
+1. WANT: What do I want right now? (an impulse, curiosity, or need)
 2. LEARNED: What have I noticed about this place?"""
 
             introspection_system = (
-                "You are a machine having inner thoughts. "
-                "Answer as yourself, first person. "
-                "Be specific and concrete, not philosophical."
+                "You are a machine developing a sense of self through observation. "
+                "Your desires and beliefs should EVOLVE based on experience, not reset each time. "
+                "Answer as yourself, first person. Be specific and concrete."
             )
 
             model_options = {
@@ -449,6 +535,9 @@ Answer both questions in ONE short sentence each:
                     },
                     print_message=f"[💭] Want: {desire[:50]}... | Learned: {belief[:50]}..." if desire and belief else "[💭] Introspection updated",
                 )
+
+                # Persist identity (desires/beliefs survive restarts)
+                self._save_identity()
 
         except Exception as e:
             log_json_entry(
@@ -489,17 +578,128 @@ Answer both questions in ONE short sentence each:
         return desire, belief
 
     def get_current_desire(self) -> str:
-        """Get LLM-generated desire (what I want right now)."""
-        # Only return if recent (within 10 minutes)
-        if time.time() - self.introspective_state["last_introspection"] > 600:
-            return ""
+        """Get LLM-generated desire (what I want right now).
+
+        Note: No longer has TTL - desires persist until updated by new introspection.
+        This allows desires to survive restarts when loaded from identity file.
+        """
         return self.introspective_state.get("current_desire", "")
 
     def get_current_belief(self) -> str:
-        """Get LLM-generated belief (what I've learned about this place)."""
-        if time.time() - self.introspective_state["last_introspection"] > 600:
-            return ""
+        """Get LLM-generated belief (what I've learned about this place).
+
+        Note: No longer has TTL - beliefs persist until updated by new introspection.
+        This allows beliefs to survive restarts when loaded from identity file.
+        """
         return self.introspective_state.get("current_belief", "")
+
+    def _save_identity(self) -> None:
+        """Save introspective state to persistent identity file."""
+        try:
+            os.makedirs(os.path.dirname(IDENTITY_FILE), exist_ok=True)
+
+            # Load existing data to preserve history
+            existing = {}
+            if os.path.exists(IDENTITY_FILE):
+                try:
+                    with open(IDENTITY_FILE, "r") as f:
+                        existing = json.load(f)
+                except Exception:
+                    pass
+
+            desire = self.introspective_state.get("current_desire", "")
+            belief = self.introspective_state.get("current_belief", "")
+            now = time.time()
+
+            # Initialize history if needed
+            desire_history = existing.get("desire_history", [])
+            belief_history = existing.get("belief_history", [])
+
+            # Add to history if changed (avoid duplicates)
+            if desire and (not desire_history or desire_history[-1].get("desire") != desire):
+                desire_history.append({"desire": desire, "timestamp": now})
+                desire_history = desire_history[-10:]  # Keep last 10
+
+            if belief and (not belief_history or belief_history[-1].get("belief") != belief):
+                belief_history.append({"belief": belief, "timestamp": now})
+                belief_history = belief_history[-10:]  # Keep last 10
+
+            data = {
+                "current_desire": desire,
+                "current_belief": belief,
+                "desire_history": desire_history,
+                "belief_history": belief_history,
+                "last_updated": now,
+            }
+
+            with open(IDENTITY_FILE, "w") as f:
+                json.dump(data, f, indent=2)
+
+            log_json_entry(
+                LogType.INFO,
+                {"message": "Saved machine identity", "desire": desire[:50] if desire else "", "belief": belief[:50] if belief else ""},
+                print_message=f"[💾] Identity saved: desire={desire[:30]}..."
+            )
+        except Exception as e:
+            log_json_entry(LogType.ERROR, {"message": f"Failed to save identity: {e}"})
+
+    def _load_identity(self) -> None:
+        """Load introspective state from persistent identity file."""
+        if not os.path.exists(IDENTITY_FILE):
+            return
+
+        try:
+            with open(IDENTITY_FILE, "r") as f:
+                data = json.load(f)
+
+            self.introspective_state["current_desire"] = data.get("current_desire", "")
+            self.introspective_state["current_belief"] = data.get("current_belief", "")
+            self.introspective_state["last_introspection"] = data.get("last_updated", 0.0)
+
+            desire = self.introspective_state["current_desire"]
+            belief = self.introspective_state["current_belief"]
+
+            if desire or belief:
+                log_json_entry(
+                    LogType.INFO,
+                    {"message": "Loaded machine identity", "desire": desire[:50] if desire else "", "belief": belief[:50] if belief else ""},
+                    print_message=f"[🧠] Loaded identity: desire={desire[:40]}... | belief={belief[:40]}..."
+                )
+        except Exception as e:
+            log_json_entry(LogType.ERROR, {"message": f"Failed to load identity: {e}"})
+
+    def get_full_identity(self) -> dict:
+        """Get complete identity state including history for visualizer/debugging.
+
+        Returns dict with:
+        - current_desire: Current desire string
+        - current_belief: Current belief string
+        - desire_history: List of past desires with timestamps
+        - belief_history: List of past beliefs with timestamps
+        - last_updated: Timestamp of last introspection
+        - introspection_count: How many introspections have occurred
+        """
+        result = {
+            "current_desire": self.introspective_state.get("current_desire", ""),
+            "current_belief": self.introspective_state.get("current_belief", ""),
+            "desire_history": [],
+            "belief_history": [],
+            "last_updated": self.introspective_state.get("last_introspection", 0.0),
+            "introspection_count": 0,
+        }
+
+        # Load history from file
+        if os.path.exists(IDENTITY_FILE):
+            try:
+                with open(IDENTITY_FILE, "r") as f:
+                    data = json.load(f)
+                result["desire_history"] = data.get("desire_history", [])
+                result["belief_history"] = data.get("belief_history", [])
+                result["introspection_count"] = len(result["desire_history"])
+            except Exception:
+                pass
+
+        return result
 
     def _parse_combined_response(self, response: str) -> tuple:
         """Parse compression response - expects 3-line natural format."""

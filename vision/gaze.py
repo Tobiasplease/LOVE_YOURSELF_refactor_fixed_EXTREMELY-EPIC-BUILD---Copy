@@ -25,15 +25,15 @@ from config.config import (
 )
 
 # === VELOCITY LIMITING CONSTANTS ===
-# Face tracking - reduced for smoother movement
-FACE_PAN_VELOCITY = 8.0   # Maximum degrees per update during face tracking (smoother)
-FACE_TILT_VELOCITY = 7.0  # Maximum degrees per update during face tracking (smoother)
+# Face tracking - fast response for immediate tracking
+FACE_PAN_VELOCITY = 15.0   # Maximum degrees per update during face tracking
+FACE_TILT_VELOCITY = 12.0  # Maximum degrees per update during face tracking
 FACE_VELOCITY_SMOOTHING = 0.0  # No velocity smoothing for face tracking (immediate response)
 
-# General movement - higher limits for idle movement
-MAX_PAN_VELOCITY = 8.0   # Maximum degrees per update for pan servo (prevents hard lock-ins)
-MAX_TILT_VELOCITY = 6.0  # Maximum degrees per update for tilt servo (prevents hard lock-ins)
-VELOCITY_SMOOTHING = 0.7 # How much to smooth velocity changes (0.0 = instant, 1.0 = never change)
+# General movement - higher limits for responsive tracking
+MAX_PAN_VELOCITY = 15.0   # Maximum degrees per update for pan servo
+MAX_TILT_VELOCITY = 12.0  # Maximum degrees per update for tilt servo
+VELOCITY_SMOOTHING = 0.3  # Less smoothing = faster response (0.0 = instant, 1.0 = never change)
 
 # Dynamic pause timing for idle movement
 IDLE_PAUSE_LONG = 8.0  # Occasional longer contemplative pauses
@@ -52,6 +52,12 @@ state = "idle"
 idle_next_move_time = 0  # Trigger immediate movement
 startup_sequence_active = False  # Flag to prevent conflicts during startup
 drawing_sequence_active = False  # Flag to prevent conflicts during CNC drawing
+
+# === AWARE STATE BREAK SYSTEM ===
+# After tracking someone for a while, look away naturally
+aware_break_until = 0.0  # Timestamp when break ends (0 = not in break)
+aware_break_target_pan = 90  # Where to look during break (away from person)
+aware_break_target_tilt = 110
 drawing_target_x = 90  # Target position for drawing mode
 drawing_target_y = 90  # Target position for drawing mode
 drawing_transition_active = False  # Flag for smooth transition to/from drawing position
@@ -161,9 +167,9 @@ PHYSICS_PATTERNS = {
 }
 
 TRACKING_PHYSICS = {
-    "mass": 0.3,
-    "spring_constant": 25.0,
-    "damping": 4.5,
+    "mass": 0.15,            # Very light for immediate response
+    "spring_constant": 35.0,  # Strong pull toward target
+    "damping": 3.0,          # Less damping = faster movement
     "tremor_amplitude": 0.0,
     "orbital_strength": 0.0,
 }
@@ -732,11 +738,10 @@ def get_gaze_state() -> dict:
 
 
 def get_gaze_narrative() -> str:
-    """Return roleplay-style gaze description based on servo position.
+    """Return simple first-person gaze direction.
 
-    Returns immersive narrative like '*Your gaze drifts upward.*' rather than
-    dry coordinate descriptions. Uses actual servo config for correct direction.
-    Always includes direction info, even during tracking or searching.
+    Returns direct statements like 'Looking up.' to match first-person prompts.
+    Clear and unambiguous for the vision model.
     """
     global servo_x, servo_y, state
 
@@ -749,9 +754,9 @@ def get_gaze_narrative() -> str:
     # Determine direction components
     v_dir = None
     if tilt_offset < -8:
-        v_dir = "downward"
+        v_dir = "down"
     elif tilt_offset > 8:
-        v_dir = "upward"
+        v_dir = "up"
 
     h_dir = None
     if pan_offset < -8:
@@ -759,33 +764,25 @@ def get_gaze_narrative() -> str:
     elif pan_offset > 8:
         h_dir = "right"
 
-    # Build direction string
+    # Build simple direction
     if v_dir and h_dir:
-        direction = f"{v_dir} and to the {h_dir}"
+        direction = f"{v_dir}-{h_dir}"
     elif v_dir:
         direction = v_dir
     elif h_dir:
-        direction = f"to the {h_dir}"
+        direction = h_dir
     else:
-        direction = "straight ahead"
+        direction = "ahead"
 
-    # State-aware narrative - always include position info
+    # Simple first-person statement
     if state == "tracking":
-        return f"*Your eyes are fixed on someone ({direction}).*"
+        return f"Looking {direction}. Someone here."
     elif state == "aware":
-        return f"*You sense someone nearby, looking {direction}.*"
+        return f"Looking {direction}. Someone nearby."
     elif state == "searching":
-        return f"*Your gaze sweeps the room, currently looking {direction}.*"
-
-    # Idle/default state
-    if v_dir and h_dir:
-        return f"*Your gaze rests {direction}.*"
-    elif v_dir:
-        return f"*Your gaze drifts {direction}.*"
-    elif h_dir:
-        return f"*You're looking {direction}.*"
+        return f"Looking {direction}. Searching."
     else:
-        return "*Your gaze settles forward.*"
+        return f"Looking {direction}."
 
 
 def clamp(val, min_val, max_val):
@@ -884,6 +881,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
     global startup_sequence_active, drawing_sequence_active, last_state_change
     global drawing_target_x, drawing_target_y, drawing_transition_active
     global physics_state, llm_zone_active, llm_zone_set_time
+    global aware_break_until, aware_break_target_pan, aware_break_target_tilt
 
     now = time.time()
     dt = now - physics_state.last_update_time
@@ -950,10 +948,10 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * face_x_norm
         target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * face_y_norm
 
-        # Physics tracking: set target, blend quickly to stiff tracking params
+        # Physics tracking: set target, snap immediately to tracking params
         physics_state.pan_target = target_x
         physics_state.tilt_target = target_y
-        physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.5)  # Fast snap to attention
+        physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.8)  # Immediate snap
 
         pan, tilt = update_physics_step(dt, is_tracking=True)
         servo_x = pan
@@ -993,10 +991,32 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         # Tracks person bounding box with softer physics than face tracking
 
         time_in_aware = now - last_state_change
+
+        # TIMEOUT: Don't stay locked on person forever - take breaks to look natural
+        AWARE_MAX_DURATION = 30.0  # Max seconds before taking a break
+        AWARE_BREAK_DURATION = 5.0  # How long to look away
+
         if not yolo_person_detected and time_in_aware > aware_minimum_dwell:
             last_state_change = now
             print(f"[👁️] Person no longer detected after {time_in_aware:.1f}s - returning to idle")
             state = "idle"
+        elif time_in_aware > AWARE_MAX_DURATION:
+            # Natural falloff - look AWAY from where the person was
+            # Pick a direction opposite to current gaze
+            current_pan = physics_state.pan
+            if current_pan < 90:
+                # Looking left, so look right
+                aware_break_target_pan = random.uniform(100, 120)
+            else:
+                # Looking right, so look left
+                aware_break_target_pan = random.uniform(60, 80)
+            # Vary tilt too
+            aware_break_target_tilt = random.uniform(95, 120)
+            aware_break_until = now + AWARE_BREAK_DURATION
+
+            last_state_change = now
+            print(f"[👁️] Aware timeout - looking away (pan={aware_break_target_pan:.0f}°) for {AWARE_BREAK_DURATION}s")
+            state = "idle"  # Go to idle but with break target active
         elif yolo_person_detected or time_in_aware <= aware_minimum_dwell:
             update_organic_movement(now)
 
@@ -1006,6 +1026,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
                 person_center_x = (bbox_x1 + bbox_x2) // 2
                 # Target upper portion of body (where head likely is)
                 person_center_y = bbox_y1 + (bbox_y2 - bbox_y1) // 4
+                # Debug: log tracking target occasionally
+                if random.random() < 0.02:
+                    print(f"[👁️ AWARE] Tracking bbox center=({person_center_x}, {person_center_y}) → target pan/tilt")
 
                 if FLIP_X:
                     person_center_x = w - person_center_x
@@ -1015,9 +1038,21 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
                 person_x_norm = person_center_x / w
                 person_y_norm = person_center_y / h
 
-                # Calculate target from person position
+                # Calculate raw target from person position
                 person_target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * person_x_norm
                 person_target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * person_y_norm
+
+                # INCREMENTAL UPDATES: Cap how far target can move per step to prevent overshoot
+                MAX_TARGET_STEP = 3.0  # Max degrees per update
+                current_pan = physics_state.pan_target if physics_state.pan_target else physics_state.pan
+                current_tilt = physics_state.tilt_target if physics_state.tilt_target else physics_state.tilt
+                pan_diff = person_target_x - current_pan
+                tilt_diff = person_target_y - current_tilt
+                # Clamp the step size
+                pan_diff = max(-MAX_TARGET_STEP, min(MAX_TARGET_STEP, pan_diff))
+                tilt_diff = max(-MAX_TARGET_STEP, min(MAX_TARGET_STEP, tilt_diff))
+                person_target_x = current_pan + pan_diff
+                person_target_y = current_tilt + tilt_diff
 
                 # Add subtle micro-movement overlay
                 micro_sway_pan = (pan_micro_target - 90) * 0.1
@@ -1035,6 +1070,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
                 pan_scaled = pan_center + micro_sway_pan
                 tilt_scaled = tilt_center + micro_sway_tilt
             else:
+                # No bbox available - just subtle sway in place
+                if random.random() < 0.01:
+                    print(f"[👁️ AWARE] No bbox - person detected but no tracking target")
                 micro_sway_pan = (pan_micro_target - 90) * 0.08
                 micro_sway_tilt = (tilt_micro_target - 107.5) * 0.05
                 pan_scaled = physics_state.pan + micro_sway_pan * 0.3
@@ -1043,22 +1081,22 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
             tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
 
-            # Aware state with person bbox: softer tracking than face mode
-            # Still responsive to person position but with more organic feel
+            # Aware state with person bbox: faster tracking with higher update frequency
             aware_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"]).copy()
             if person_bbox is not None:
-                # Tracking person bbox - more responsive but not as stiff as face tracking
-                aware_params["mass"] *= 0.9
-                aware_params["spring_constant"] *= 1.1
-                aware_params["tremor_amplitude"] *= 0.5  # Less tremor while tracking
-                aware_params["orbital_strength"] *= 0.4  # Minimal wandering while tracking
+                # Tracking person bbox - responsive but stable
+                aware_params["mass"] *= 1.1           # Slightly heavier
+                aware_params["spring_constant"] *= 0.8  # Responsive pull toward target
+                aware_params["damping"] *= 1.3        # Moderate damping
+                aware_params["tremor_amplitude"] *= 0.2  # Minimal tremor while tracking
+                aware_params["orbital_strength"] *= 0.1  # Almost no wandering while tracking
             else:
                 # No bbox - use normal subdued parameters
                 aware_params["mass"] *= 1.2
                 aware_params["spring_constant"] *= 0.8
                 aware_params["tremor_amplitude"] *= 0.7
                 aware_params["orbital_strength"] *= 0.8
-            physics_state.blend_params(aware_params, blend_rate=0.25)
+            physics_state.blend_params(aware_params, blend_rate=0.25)  # Faster blend
 
             physics_state.pan_target = pan_scaled
             physics_state.tilt_target = tilt_scaled
@@ -1067,14 +1105,28 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             servo_y = tilt
 
     elif state == "idle" or state == "searching":
-        # Check if YOLO detected someone - transition to aware
-        if yolo_person_detected:
+        # Check if we're in a break from aware state (looking away intentionally)
+        in_aware_break = aware_break_until > now
+
+        # Check if YOLO detected someone - transition to aware (unless in break)
+        if yolo_person_detected and not in_aware_break:
             last_state_change = now
             llm_zone_active = False  # Clear LLM zone - real person overrides LLM's imagined directions
             print("[👁️] Person detected while idle - entering 'aware' state")
             state = "aware"
             deactivate_search_mode()
             # Movement will be handled by aware state on next frame
+
+        # During break: look at the break target (away from person)
+        elif in_aware_break:
+            # Gently move toward break target
+            physics_state.pan_target = aware_break_target_pan
+            physics_state.tilt_target = aware_break_target_tilt
+            idle_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"]).copy()
+            physics_state.blend_params(idle_params, blend_rate=0.1)
+            pan, tilt = update_physics_step(dt, is_tracking=False)
+            servo_x = pan
+            servo_y = tilt
 
         # === SEARCHING STATE: Goal-directed movement with physics ===
         elif searching_active and has_search_targets():

@@ -258,7 +258,7 @@ DRAWING_PERSON_WEIGHT = 0.4    # How much person presence influences decision
 DRAWING_PERSON_BONUS = 0.2     # Additional motivation boost when person detected
 
 # === OBJECT DETECTION ===
-YOLO_CONFIDENCE_THRESHOLD = 0.45  # Adjustable confidence for YOLOv8 (raised from 0.3 to reduce false positives)
+YOLO_CONFIDENCE_THRESHOLD = 0.55  # Raised to 0.55 to avoid detecting hands/arms as person
 # Use a lightweight model by default (person-only use case)
 YOLO_MODEL_PATH = os.getenv(
     "YOLO_MODEL_PATH",
@@ -290,9 +290,9 @@ CAMERA_HEIGHT = 1440  # 2K height for maximum quality (documentation mode)
 
 # === CAMERA IMAGE QUALITY ===
 CAMERA_SHARPNESS = -1      # Sharpness (0-100, -1 for auto/default)
-CAMERA_SATURATION = 0    # Color saturation (0-100, lower = less colorful)
-CAMERA_CONTRAST = 50       # Contrast (0-100, 50 = normal)
-CAMERA_BRIGHTNESS = 100     # Brightness (0-100, 50 = normal)
+CAMERA_SATURATION = -1     # Color saturation (-1 for auto/default)
+CAMERA_CONTRAST = -1       # Contrast (-1 for auto/default)
+CAMERA_BRIGHTNESS = -1     # Brightness (-1 for auto/default)
 CAMERA_EXPOSURE = -1       # Exposure (-1 for auto, or manual value)
 CAMERA_AUTO_FOCUS = True   # Enable autofocus if available
 

@@ -941,6 +941,72 @@ def save_state():
         _memory.save_state()
 
 
+def get_activation_summary_for_compression() -> dict:
+    """Get formatted activation data for feeding into compression/introspection prompts.
+
+    Returns dict with:
+    - concepts_str: Top 3 activated concepts as comma-separated string
+    - long_term_memory: Most relevant long-term memory (or None)
+    - association_str: Strongest learned association (or None)
+    - trends: dict with 'rising' and 'fading' concept lists
+    - boredom: Current boredom level (0-1)
+    - novelty: Current novelty level (0-1)
+    """
+    network = get_activation_network()
+    memory = get_contextual_memory()
+
+    result = {
+        "concepts_str": "",
+        "long_term_memory": None,
+        "association_str": None,
+        "trends": {"rising": [], "fading": []},
+        "boredom": network._last_boredom,
+        "novelty": getattr(network, "_last_novelty", 0.5),
+    }
+
+    top_concepts = network.get_activated_concepts(threshold=0.4)[:3]
+    if top_concepts:
+        result["concepts_str"] = ", ".join([c for c, _ in top_concepts])
+
+    long_term_recalls = memory.recall_long_term(k=1)
+    if long_term_recalls:
+        result["long_term_memory"] = long_term_recalls[0]
+
+    strong_edges = network.get_strong_edges(threshold=0.7)[:1]
+    if strong_edges:
+        result["association_str"] = f"{strong_edges[0][0]} and {strong_edges[0][1]}"
+
+    result["trends"] = network.get_activation_trends()
+
+    return result
+
+
+def get_activation_summary_for_introspection() -> dict:
+    """Get richer activation data for introspection prompts.
+
+    Returns dict with:
+    - concepts: Top 5 activated concepts
+    - trends: Rising and fading concepts
+    - long_term_memories: Up to 2 relevant long-term memories
+    - boredom: Current boredom level
+    - novelty: Current novelty level
+    """
+    network = get_activation_network()
+    memory = get_contextual_memory()
+
+    top_concepts = network.get_activated_concepts(threshold=0.3)[:5]
+    trends = network.get_activation_trends()
+    long_term = memory.recall_long_term(k=2)
+
+    return {
+        "concepts": [c for c, _ in top_concepts],
+        "trends": trends,
+        "long_term_memories": long_term,
+        "boredom": network._last_boredom,
+        "novelty": getattr(network, "_last_novelty", 0.5),
+    }
+
+
 def save_comprehensive_snapshot(agent=None):
     """Save comprehensive state snapshot for visualizer with all accumulated data.
 
@@ -972,14 +1038,16 @@ def save_comprehensive_snapshot(agent=None):
         if sentiment:
             extra_state["compression"]["sentiment"] = sentiment
 
-        # LLM-generated introspective state (actual desires/beliefs, not heuristics)
-        current_desire = context_compressor.get_current_desire()
-        current_belief = context_compressor.get_current_belief()
-        if current_desire or current_belief:
-            extra_state["introspection"] = {
-                "desire": current_desire,
-                "belief": current_belief,
-                "last_updated": context_compressor.introspective_state.get("last_introspection", 0),
+        # LLM-generated introspective state with full history (for visualizer)
+        full_identity = context_compressor.get_full_identity()
+        if full_identity["current_desire"] or full_identity["current_belief"]:
+            extra_state["identity"] = {
+                "current_desire": full_identity["current_desire"],
+                "current_belief": full_identity["current_belief"],
+                "desire_history": full_identity["desire_history"][-5:],  # Last 5 for viz
+                "belief_history": full_identity["belief_history"][-5:],  # Last 5 for viz
+                "last_updated": full_identity["last_updated"],
+                "introspection_count": full_identity["introspection_count"],
             }
     except Exception:
         pass

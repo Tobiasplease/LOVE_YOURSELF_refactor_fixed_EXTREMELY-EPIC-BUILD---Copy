@@ -15,7 +15,11 @@ warnings.filterwarnings("ignore", message=".*attempted relative import.*")
 
 
 class ObjectDetectionThread(threading.Thread):
-    def __init__(self, model_path: str = YOLO_MODEL_PATH, update_interval: int = 5):  # default to small model
+    # Interval modes for different tracking states
+    INTERVAL_IDLE = 5.0      # When not tracking anyone - conserve resources
+    INTERVAL_TRACKING = 0.25  # When actively tracking person - fast updates (4/sec)
+
+    def __init__(self, model_path: str = YOLO_MODEL_PATH, update_interval: int = 5):
         super().__init__()
         self.model = YOLO(model_path)
         self.update_interval = update_interval
@@ -23,10 +27,19 @@ class ObjectDetectionThread(threading.Thread):
         self.shared_frame = None
         self.lock = threading.Lock()
         self.force_cpu = False  # fallback to CPU on CUDA OOM
+        self._tracking_mode = False  # When True, use fast interval
 
     def set_frame(self, frame):
         with self.lock:
             self.shared_frame = frame.copy()
+
+    def set_tracking_mode(self, is_tracking: bool):
+        """Switch between fast tracking mode and idle mode."""
+        if is_tracking != self._tracking_mode:
+            self._tracking_mode = is_tracking
+            self.update_interval = self.INTERVAL_TRACKING if is_tracking else self.INTERVAL_IDLE
+            mode_name = "TRACKING" if is_tracking else "IDLE"
+            print(f"[YOLOv8] Switched to {mode_name} mode (interval: {self.update_interval}s)")
 
     def run(self):
         print("[YOLOv8] Object detection thread started.")

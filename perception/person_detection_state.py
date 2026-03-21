@@ -71,6 +71,7 @@ class PersonDetectionState:
         self._last_raw_detection_time = 0.0  # Last time YOLO actually detected someone
         self._detection_grace_period = 1.0  # Hold detection for 1 second after losing it
         self._smoothed_detection_active = False  # Current smoothed detection state
+        self._last_valid_bbox: Optional[Tuple[int, int, int, int]] = None  # Last valid bbox for grace period
 
     def update_face_detection(self, confidence: float, bbox: Optional[Tuple[int, int, int, int]] = None):
         """Update face detection state."""
@@ -87,12 +88,14 @@ class PersonDetectionState:
             # Don't clear face_detection - let it expire via timestamp
             self._update_person_state()
 
-    def update_yolo_detection(self, person_detected: bool, confidence: float = 0.8):
+    def update_yolo_detection(self, person_detected: bool, confidence: float = 0.8, bbox: Optional[Tuple[int, int, int, int]] = None):
         """Update YOLO person detection state with time-based grace period to prevent flickering.
 
         Uses a simple 1-second hold: once detected, stays detected for 1 second even if
         raw detection drops out. This handles the case where the camera/YOLO frequently
         loses detection momentarily but false positives are rare.
+
+        The bbox is stored when available and persists through the grace period for tracking.
         """
         with self._lock:
             now = time.time()
@@ -101,22 +104,27 @@ class PersonDetectionState:
                 # Raw detection is positive - update timestamp and mark as active
                 self._last_raw_detection_time = now
                 self._smoothed_detection_active = True
+                # Store bbox when available
+                if bbox is not None:
+                    self._last_valid_bbox = bbox
             else:
                 # Raw detection is negative - check grace period
                 time_since_last = now - self._last_raw_detection_time
                 if time_since_last < self._detection_grace_period:
-                    # Within grace period - keep detection active
+                    # Within grace period - keep detection active (bbox persists)
                     self._smoothed_detection_active = True
                 else:
                     # Past grace period - detection is truly lost
                     self._smoothed_detection_active = False
+                    self._last_valid_bbox = None  # Clear bbox when truly lost
 
             # Update YOLO detection event based on smoothed state
             if self._smoothed_detection_active:
                 self.yolo_detection = PersonDetectionEvent(
                     confidence=confidence,
                     source="yolo",
-                    timestamp=now
+                    timestamp=now,
+                    bbox=self._last_valid_bbox  # Use persisted bbox
                 )
                 # Reset sweep tracking when person detected
                 self.scan_zones_visited.clear()
@@ -275,6 +283,18 @@ class PersonDetectionState:
                 "recent_arrivals": len(self.recent_arrivals),
                 "recent_departures": len(self.recent_departures),
             }
+
+    def get_smoothed_bbox(self) -> Optional[Tuple[int, int, int, int]]:
+        """Get the bbox that persists through the grace period for tracking."""
+        with self._lock:
+            if self._smoothed_detection_active:
+                return self._last_valid_bbox
+            return None
+
+    def get_last_raw_detection_time(self) -> float:
+        """Get the timestamp of the most recent positive detection (not arrival time)."""
+        with self._lock:
+            return self._last_raw_detection_time
 
     def get_breathing_modifiers(self, emotion_state: str) -> Tuple[float, float]:
         """Get breathing speed and pause modifiers based on person presence."""

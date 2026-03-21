@@ -23,7 +23,7 @@ from utils.state_manager import state_manager
 
 from .memory import MemoryMixin
 from .model_wrapper import MultimodalModel
-from .prompts import SYSTEM_PROMPT, extract_motifs_spacy
+from .prompts import SYSTEM_PROMPT, STATIC_SYSTEM_PROMPT, extract_motifs_spacy
 
 # from weakref import ref
 
@@ -1077,29 +1077,30 @@ class Captioner(MemoryMixin):
             belief_context=belief_context
         )
 
-        # Get dynamic system context for organic consciousness
-        if hasattr(self, "get_dynamic_system_context"):
-            dynamic_context = self.get_dynamic_system_context()
-            if isinstance(dynamic_context, dict):
-                system_prompt = SYSTEM_PROMPT.format(
-                    emotional_state=dynamic_context.get("emotional_state", "contemplative"),
-                    temporal_context=dynamic_context.get("temporal_context", ""),
-                    accumulated_understanding=dynamic_context.get("accumulated_understanding", ""),
-                )
-            else:
-                system_prompt = SYSTEM_PROMPT + str(dynamic_context)
-        else:
-            system_prompt = SYSTEM_PROMPT
+        # Use Natsumura for awakening (text-only narrative model, engages with context)
+        try:
+            from config.config import COMPRESSION_MODEL
+            awakening_model = COMPRESSION_MODEL
+        except ImportError:
+            awakening_model = "natsumura-storytelling-rp:latest"
 
-        # Generate internal awakening without image
+        system_prompt = (
+            "You are a drawing machine waking from sleep. "
+            "Use the context: how long you slept, your last memory, your beliefs. "
+            "Inner monologue. First person. 1-3 sentences."
+        )
+
+        print(f"[🌅 AWAKENING] Calling Natsumura: {internal_prompt[:80]}...")
         response = query_ollama(
             prompt=internal_prompt,
-            model=config.OLLAMA_MODEL,
+            model=awakening_model,
             timeout=90,
             log_dir=config.MOOD_SNAPSHOT_FOLDER,
             system_prompt=system_prompt,
+            options={"temperature": 0.9, "top_p": 0.8, "num_predict": 150},
             prompt_type="awakening",
         )
+        print(f"[🌅 AWAKENING] Response: {response[:100] if response else 'EMPTY'}...")
 
         return response
 

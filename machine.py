@@ -5,6 +5,7 @@ import argparse
 import atexit
 import glob
 import os
+import random
 import signal
 import sys
 import threading
@@ -1319,13 +1320,10 @@ try:
         # YOLO person awareness - broader detection for consciousness context
         # Face detection = gaze tracking (following specific faces)
         # YOLO = general person presence awareness (triggers "aware" gaze state)
-        yolo_person_detected = False
-        yolo_person_bbox = None
         labels = DetectionMemory.get_labels()
         if "person" in labels:
-            yolo_person_detected = True
-            yolo_person_bbox = DetectionMemory.get_person_bbox()
-            person_detection.update_yolo_detection(True, DetectionMemory.get_person_confidence() or 0.8)
+            raw_bbox = DetectionMemory.get_person_bbox()
+            person_detection.update_yolo_detection(True, DetectionMemory.get_person_confidence() or 0.8, bbox=raw_bbox)
         else:
             person_detection.update_yolo_detection(False)
 
@@ -1346,20 +1344,31 @@ try:
 
         face_box = tuple(best_box) if best_box is not None else None
 
-        # Get person direction for aware state gaze bias
+        # Get person state with SMOOTHED detection (persists through grace period)
         person_state = person_detection.get_person_state()
         person_direction = person_state.get("direction")
+        smoothed_person_detected = person_state.get("is_present", False)
+        # Use smoothed bbox that persists through grace period - prevents tracking dropout
+        smoothed_bbox = person_detection.get_smoothed_bbox()
+
+        # Debug: log bbox status when person detected but no bbox
+        if smoothed_person_detected and smoothed_bbox is None and random.random() < 0.02:
+            debug_print(f"WARN: Person detected but no bbox available", "GAZE")
+
+        # Debug: show face detection status (sampled to reduce spam)
+        if face_box is not None and random.random() < 0.05:
+            print(f"[👤 FACE] Tracking at {face_box[:2]}...")
+        elif smoothed_person_detected and random.random() < 0.05:
+            print(f"[👤 FACE] NOT detected (YOLO sees person)")
 
         # Update gaze with face tracking AND YOLO awareness
-        # IMPORTANT: Use SMOOTHED detection state, not raw YOLO (which flickers)
-        smoothed_person_detected = person_state.get("is_present", False)
         person_present, pan, tilt = update_gaze(
             frame,
             face_box,
             mood_engine.get_emotion_for_hand_controller(),
             yolo_person_detected=smoothed_person_detected,
             person_direction=person_direction,
-            person_bbox=yolo_person_bbox
+            person_bbox=smoothed_bbox
         )
 
         # Feed servo position to person detection for spatial memory
@@ -1369,12 +1378,25 @@ try:
         person_state = person_detection.get_person_state()
         person_is_present = person_state["is_present"]
 
+        # Switch YOLO to fast mode when actively tracking person, slow mode when idle
+        # This ensures bbox updates keep pace with camera movement during tracking
+        from vision.gaze import get_gaze_state
+        gaze_state_info = get_gaze_state()
+        gaze_state_name = gaze_state_info.get("state", "idle") if isinstance(gaze_state_info, dict) else "idle"
+        is_tracking_person = gaze_state_name in ("aware", "tracking", "grace")
+        object_detector.set_tracking_mode(is_tracking_person)
+
         # Manage gaze search mode based on person detection state
         from vision.gaze import activate_search_mode, deactivate_search_mode, is_search_mode_active
         current_person_state = person_state.get("person_state", "absent")
 
-        if current_person_state == "remembered" and not is_search_mode_active():
-            # Person lost but remembered - activate search to find them
+        # Only activate search mode if person has been "remembered" (not visible) for 3+ seconds
+        # Use _last_raw_detection_time (last time YOLO saw someone) not last_detection (arrival time)
+        time_since_raw_detection = now - person_detection.get_last_raw_detection_time()
+        should_search = current_person_state == "remembered" and time_since_raw_detection > 3.0
+
+        if should_search and not is_search_mode_active():
+            # Person lost for 3+ seconds but remembered - activate search to find them
             activate_search_mode(
                 last_seen_pan=person_detection.last_seen_servo_pan,
                 last_seen_tilt=person_detection.last_seen_servo_tilt,
@@ -1449,7 +1471,15 @@ try:
 
         if face_box:
             (x1, y1, x2, y2) = face_box
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green = face
+
+        # === YOLO PERSON BBOX VISUALIZATION ===
+        if smoothed_bbox is not None:
+            (px1, py1, px2, py2) = smoothed_bbox
+            cv2.rectangle(frame, (px1, py1), (px2, py2), (255, 165, 0), 2)  # Orange = YOLO person
+            # Show detection age
+            yolo_age = now - person_detection.get_last_raw_detection_time()
+            cv2.putText(frame, f"YOLO ({yolo_age:.1f}s)", (px1, py1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 165, 0), 1)
 
         # === ARUCO MARKER VISUALIZATION ===
         aruco_corners = aruco_detector.get_corners_for_drawing(include_rejected=True)
