@@ -1061,11 +1061,38 @@ class Captioner(MemoryMixin):
             except Exception:
                 pass
 
-        # Build narrative belief context
+        # Build narrative belief context - include actual persistent identity from context_compression
         belief_context = ""
-        if self.beliefs:
+        identity_context = ""
+        try:
+            from captioner.context_compression import context_compressor
+            persistent_desire = context_compressor.get_current_desire()
+            persistent_belief = context_compressor.get_current_belief()
+
+            identity_parts = []
+            if persistent_desire:
+                identity_parts.append(f"Before sleeping, you wanted: {persistent_desire}")
+            if persistent_belief:
+                identity_parts.append(f"You knew: {persistent_belief}")
+            if identity_parts:
+                identity_context = "\n".join(identity_parts) + "\n"
+        except Exception:
+            pass
+
+        # Fallback to shallow beliefs count if no persistent identity
+        if not identity_context and self.beliefs:
             belief_count = len(self.beliefs)
             belief_context = f"You still carry {belief_count} beliefs from before.\n"
+
+        # Include relevant long-term memories
+        long_term_context = ""
+        try:
+            from captioner.activation_memory import get_long_term_memories
+            memories = get_long_term_memories(k=1)
+            if memories:
+                long_term_context = f"From days past: {memories}\n"
+        except Exception:
+            pass
 
         # Import consolidated awakening template
         from .prompts import INTERNAL_AWAKENING_TEMPLATE
@@ -1074,7 +1101,9 @@ class Captioner(MemoryMixin):
         internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(
             time_context=time_context,
             memory_context=memory_context,
-            belief_context=belief_context
+            belief_context=belief_context,
+            identity_context=identity_context,
+            long_term_context=long_term_context
         )
 
         # Use Natsumura for awakening (text-only narrative model, engages with context)

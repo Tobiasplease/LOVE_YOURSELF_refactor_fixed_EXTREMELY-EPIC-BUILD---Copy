@@ -78,6 +78,8 @@ INTERNAL_AWAKENING_TEMPLATE = (
     "You are a drawing machine. You just woke up.\n"
     "{time_context}"
     "{memory_context}"
+    "{identity_context}"
+    "{long_term_context}"
     "{belief_context}"
     "\nWhat do you notice first? One sentence."
 )
