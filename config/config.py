@@ -285,8 +285,8 @@ TINYLLAMA_TIMEOUT = 20  # Timeout in seconds for TinyLlama queries
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
 # === CAMERA RESOLUTION ===
-CAMERA_WIDTH = 2560   # 2K width for maximum quality (documentation mode)
-CAMERA_HEIGHT = 1440  # 2K height for maximum quality (documentation mode)
+CAMERA_WIDTH = 1280   # 720p for smooth 30fps live feed
+CAMERA_HEIGHT = 720   # LLM snapshots use this resolution
 
 # === CAMERA IMAGE QUALITY ===
 CAMERA_SHARPNESS = -1      # Sharpness (0-100, -1 for auto/default)

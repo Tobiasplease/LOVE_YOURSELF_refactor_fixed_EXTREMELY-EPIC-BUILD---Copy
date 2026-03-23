@@ -38,6 +38,9 @@ VELOCITY_SMOOTHING = 0.3  # Less smoothing = faster response (0.0 = instant, 1.0
 # Dynamic pause timing for idle movement
 IDLE_PAUSE_LONG = 8.0  # Occasional longer contemplative pauses
 IDLE_LONG_PAUSE_CHANCE = 0.15  # 15% chance for a longer pause
+IDLE_STILLNESS_MIN = 2.0  # Minimum stillness duration (seconds)
+IDLE_STILLNESS_MAX = 5.0  # Maximum stillness duration (seconds)
+IDLE_STILLNESS_CHANCE = 0.70  # 70% of movements end in stillness (helps frame diff)
 
 # Override dead zone for precise face tracking
 PRECISE_DEAD_ZONE = 0.2  # Ultra-small dead zone for highly responsive face tracking (overrides config DEAD_ZONE)
@@ -50,6 +53,8 @@ target_y = 90
 last_seen_time = time.time() - 10  # Start as if we've been idle for 10 seconds
 state = "idle"
 idle_next_move_time = 0  # Trigger immediate movement
+idle_in_stillness = False  # Whether we're in a stillness period (no target updates)
+idle_stillness_until = 0  # Timestamp when stillness ends
 startup_sequence_active = False  # Flag to prevent conflicts during startup
 drawing_sequence_active = False  # Flag to prevent conflicts during CNC drawing
 
@@ -175,7 +180,7 @@ TRACKING_PHYSICS = {
 }
 
 
-def update_physics_step(dt: float, is_tracking: bool = False) -> tuple:
+def update_physics_step(dt: float, is_tracking: bool = False, is_still: bool = False) -> tuple:
     """
     Core spring-damper physics update with orbital wandering and tremor.
 
@@ -186,6 +191,11 @@ def update_physics_step(dt: float, is_tracking: bool = False) -> tuple:
         acceleration = F_total / mass
         velocity += acceleration * dt
         position += velocity * dt
+
+    Args:
+        dt: Time delta since last update
+        is_tracking: True during face/person tracking (no tremor/orbital)
+        is_still: True during stillness periods (dampen velocity, no tremor/orbital)
 
     Returns:
         (pan, tilt) as floats
@@ -209,9 +219,8 @@ def update_physics_step(dt: float, is_tracking: bool = False) -> tuple:
         f_damping = -ps.damping * vel
 
         f_orbital = 0.0
-        if not is_tracking and ps.orbital_strength > 0.01:
-            # Multi-frequency orbital for smooth, organic wandering
-            # Increased frequencies and multipliers for more visible motion
+        # No orbital force during tracking or stillness
+        if not is_tracking and not is_still and ps.orbital_strength > 0.01:
             orbit_freq = 0.28 if axis == "pan" else 0.22
             phase_offset = 0.0 if axis == "pan" else math.pi / 2
             f_orbital = ps.orbital_strength * 15.0 * math.sin(now * orbit_freq * 2 * math.pi + phase_offset)
@@ -220,20 +229,23 @@ def update_physics_step(dt: float, is_tracking: bool = False) -> tuple:
 
         f_total = f_spring + f_damping + f_orbital
         acceleration = f_total / ps.mass
+
+        # During stillness, apply extra damping to settle faster
+        if is_still:
+            vel *= 0.85  # Decay velocity faster during stillness
+
         vel += acceleration * dt
-        max_vel = 15.0 if is_tracking else 12.0  # Higher limits for more visible motion
+        max_vel = 15.0 if is_tracking else 12.0
         vel = max(-max_vel, min(max_vel, vel))
         pos += vel * dt
 
         tremor = 0.0
-        if not is_tracking and ps.tremor_amplitude > 0.01:
-            # Multi-layered tremor for organic, continuous movement
-            # Higher frequencies for fluid, life-like motion
+        # No tremor during tracking or stillness
+        if not is_tracking and not is_still and ps.tremor_amplitude > 0.01:
             base_freq = 3.2 if axis == "pan" else 3.8
             tremor = ps.tremor_amplitude * 0.6 * math.sin(now * base_freq * 2 * math.pi)
             tremor += ps.tremor_amplitude * 0.35 * math.sin(now * base_freq * 1.5 * 2 * math.pi + 0.5)
             tremor += ps.tremor_amplitude * 0.25 * math.sin(now * base_freq * 2.1 * 2 * math.pi + 1.2)
-            # Add slower underlying sway for variety
             tremor += ps.tremor_amplitude * 0.4 * math.sin(now * 0.8 * 2 * math.pi + 2.3)
         pos += tremor
 
@@ -820,8 +832,8 @@ def update_organic_movement(now):
     pan_noise_time = (now * pan_frequency) + pan_noise_offset
     tilt_noise_time = (now * tilt_frequency) + tilt_noise_offset
 
-    pan_noise = perlin_noise_1d(pan_noise_time, octaves=3, persistence=0.6)
-    tilt_noise = perlin_noise_1d(tilt_noise_time, octaves=2, persistence=0.4)
+    pan_noise = perlin_noise_1d(pan_noise_time, octaves=3, persistence=0.5)
+    tilt_noise = perlin_noise_1d(tilt_noise_time, octaves=1, persistence=0.3)  # Reduced for less jitter
 
     if llm_zone_active:
         # LLM is directing gaze - stay within the specified zone
@@ -1166,6 +1178,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
 
         else:
             # Regular idle - deactivate any lingering search state
+            global idle_in_stillness, idle_stillness_until
             if state == "searching":
                 deactivate_search_mode()
             state = "idle"
@@ -1175,53 +1188,72 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
                 print(f"[👁️] LLM zone '{llm_target_zone_pan}/{llm_target_zone_tilt}' timed out after {llm_zone_timeout:.0f}s → exploring freely")
                 llm_zone_active = False
 
-            # Perlin noise frequency scaling based on emotional state
-            # Increased range for more visible difference between states
-            FREQUENCY_SCALE = {
-                "energized_engaged": 2.5,
-                "alert_curious": 2.0,
-                "calm_observant": 1.5,
-                "quiet_detached": 1.2,
-                "withdrawn_distant": 1.0,  # Even withdrawn still moves
-            }
-            freq_scale = FREQUENCY_SCALE.get(current_emotion_state, 1.2)
-
-            global pan_frequency, tilt_frequency
-            base_pan_freq = 0.32  # Faster base movement
-            base_tilt_freq = 0.25  # Faster base movement
-            pan_frequency = base_pan_freq * freq_scale
-            tilt_frequency = base_tilt_freq * freq_scale
-
-            update_organic_movement(now)
-
-            # Determine target position from Perlin noise or LLM zone
-            if llm_zone_active:
-                pan_scaled = pan_micro_target
-                tilt_scaled = tilt_micro_target
+            # === STILLNESS LOGIC: Pause during stillness periods ===
+            if idle_in_stillness and now < idle_stillness_until:
+                # In stillness - hold current position with damped physics
+                # No target updates, no tremor/orbital, just settle toward current target
+                physics_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"])
+                physics_state.blend_params(physics_params, blend_rate=0.2)
+                pan, tilt = update_physics_step(dt, is_tracking=False, is_still=True)
+                servo_x = pan
+                servo_y = tilt
             else:
-                pan_center = (PAN_MIN + PAN_MAX) / 2
-                tilt_center = (TILT_MIN + TILT_MAX) / 2
-                pan_scaled = pan_center + (pan_micro_target - pan_center) * 1.0
-                tilt_scaled = tilt_center + (tilt_micro_target - tilt_center) * 1.0
+                # Stillness ended or not in stillness - update targets
+                if idle_in_stillness:
+                    idle_in_stillness = False  # Exit stillness
 
-                # Apply LLM-driven gaze nudge as modifier
-                nudge_pan, nudge_tilt = get_current_nudge()
-                pan_scaled += nudge_pan * 0.6
-                tilt_scaled += nudge_tilt * 0.6
+                # Perlin noise frequency scaling based on emotional state
+                FREQUENCY_SCALE = {
+                    "energized_engaged": 2.5,
+                    "alert_curious": 2.0,
+                    "calm_observant": 1.5,
+                    "quiet_detached": 1.0,
+                    "withdrawn_distant": 0.7,
+                }
+                freq_scale = FREQUENCY_SCALE.get(current_emotion_state, 1.2)
 
-            pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
-            tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
+                global pan_frequency, tilt_frequency
+                base_pan_freq = 0.25  # Slightly slower for more deliberate movement
+                base_tilt_freq = 0.15  # Slower tilt to reduce jitter
+                pan_frequency = base_pan_freq * freq_scale
+                tilt_frequency = base_tilt_freq * freq_scale
 
-            # Physics-based idle movement - blend to emotional parameters
-            # Fast blend rate to make emotional changes immediately visible
-            physics_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"])
-            physics_state.blend_params(physics_params, blend_rate=0.35)
+                update_organic_movement(now)
 
-            physics_state.pan_target = pan_scaled
-            physics_state.tilt_target = tilt_scaled
-            pan, tilt = update_physics_step(dt, is_tracking=False)
-            servo_x = pan
-            servo_y = tilt
+                # Determine target position from Perlin noise or LLM zone
+                if llm_zone_active:
+                    pan_scaled = pan_micro_target
+                    tilt_scaled = tilt_micro_target
+                else:
+                    pan_center = (PAN_MIN + PAN_MAX) / 2
+                    tilt_center = (TILT_MIN + TILT_MAX) / 2
+                    pan_scaled = pan_center + (pan_micro_target - pan_center) * 1.0
+                    tilt_scaled = tilt_center + (tilt_micro_target - tilt_center) * 1.0
+
+                    # Apply LLM-driven gaze nudge as modifier
+                    nudge_pan, nudge_tilt = get_current_nudge()
+                    pan_scaled += nudge_pan * 0.6
+                    tilt_scaled += nudge_tilt * 0.6
+
+                pan_scaled = clamp(pan_scaled, PAN_MIN, PAN_MAX)
+                tilt_scaled = clamp(tilt_scaled, TILT_MIN, TILT_MAX)
+
+                # Check if we should enter stillness after reaching target
+                dist_to_target = abs(servo_x - pan_scaled) + abs(servo_y - tilt_scaled)
+                if dist_to_target < 6.0 and random.random() < IDLE_STILLNESS_CHANCE:
+                    # Close to target - enter stillness
+                    idle_in_stillness = True
+                    idle_stillness_until = now + random.uniform(IDLE_STILLNESS_MIN, IDLE_STILLNESS_MAX)
+
+                # Physics-based idle movement - blend to emotional parameters
+                physics_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"])
+                physics_state.blend_params(physics_params, blend_rate=0.35)
+
+                physics_state.pan_target = pan_scaled
+                physics_state.tilt_target = tilt_scaled
+                pan, tilt = update_physics_step(dt, is_tracking=False)
+                servo_x = pan
+                servo_y = tilt
 
     # Keep decimal precision for smoother movement - only round at final output
     return person_present, int(servo_x + 0.5), int(servo_y + 0.5)

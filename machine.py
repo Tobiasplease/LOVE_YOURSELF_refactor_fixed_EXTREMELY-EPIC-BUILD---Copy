@@ -746,7 +746,7 @@ else:
 
 # Initialize camera reactivity engine
 debug_print("Initializing camera reactivity engine", "INIT")
-reactivity_engine = CameraReactivityEngine(sensitivity=1.8, smoothing_factor=0.85, pause_threshold=0.20, pause_duration=3.0)
+reactivity_engine = CameraReactivityEngine(sensitivity=0.2, smoothing_factor=0.95, pause_threshold=0.60, pause_duration=3.0)
 debug_print("Camera reactivity enabled - hand will respond to environmental changes", "INIT")
 
 
@@ -1213,8 +1213,9 @@ try:
             gc.collect()
 
         # === CAMERA REACTIVITY PROCESSING ===
-        # Process frame for real-time behavioral reactivity
-        reactivity_metrics = reactivity_engine.process_frame(frame)
+        # Downsample frame for reactivity (reduces sensitivity to small changes at 2K)
+        reactivity_frame = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_AREA)
+        reactivity_metrics = reactivity_engine.process_frame(reactivity_frame)
         frame_count += 1
 
         # === LIGHTBULB BRIGHTNESS FROM REACTIVITY DATA ===
