@@ -544,6 +544,11 @@ class Captioner(MemoryMixin):
 
         caption = cleaned_caption  # Use cleaned version for display
 
+        # Trim to last complete sentence — prevents truncated mid-sentence display
+        _last_punct = max(caption.rfind("."), caption.rfind("?"), caption.rfind("!"))
+        if _last_punct > 10:
+            caption = caption[:_last_punct + 1]
+
         # Format caption for clean output
         try:
             from config.config import CLEAN_LLM_OUTPUT
@@ -580,6 +585,14 @@ class Captioner(MemoryMixin):
                 {"caption": caption, "image_path": img_path, "mood": self.current_mood},
                 print_message=print_msg,
             )
+            try:
+                import os as _os
+                from config import config as _cfg
+                _live_log = _os.path.join(_cfg.MOOD_SNAPSHOT_FOLDER, "live_captions.txt")
+                with open(_live_log, "a", encoding="utf-8") as _f:
+                    _f.write(caption.replace("\n", " ") + "\n")
+            except Exception:
+                pass
         else:
             # Still log to JSON but don't print
             log_json_entry(
@@ -597,7 +610,7 @@ class Captioner(MemoryMixin):
             mood_vector=self.current_mood_vector,
             emotion_state=self.current_emotion_state,
         )
-        self.last_caption = caption
+        self.last_caption = caption  # already trimmed to complete sentence above
 
         # Track recent captions for continuity thread (used by focused prompt)
         # Store as (caption, timestamp, mode) for parallel thread display

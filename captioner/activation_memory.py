@@ -699,6 +699,10 @@ class ContextualMemory:
         if not text.endswith((".", "!", "?")):
             text += "..."
 
+        if mem.get("significance") == "awakening":
+            return f"I remember when I first woke {time_desc}: \"{text}\""
+        if mem.get("significance") == "discovery":
+            return f"I once discovered: \"{text}\""
         return f"I remember from {time_desc}: \"{text}\""
 
     def save_state(self):

@@ -188,6 +188,10 @@ class MemoryMixin:
                 significance = "novel"
 
             if should_promote:
+                # Tag memories from the first few observations as awakening-phase
+                # so they can be framed as "when I first woke" rather than plain recall
+                if len(self.long_memory) <= 5:
+                    significance = "awakening"
                 print(f"[📅 LT-MEM] Promoting: {significance} (novelty={novelty:.2f})")
                 self._contextual_memory.promote_to_long_term(text, concepts, significance)
 

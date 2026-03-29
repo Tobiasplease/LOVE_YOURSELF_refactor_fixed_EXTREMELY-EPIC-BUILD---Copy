@@ -11,8 +11,7 @@ import spacy
 from config.word_lists import GENERIC_WORDS, MUNDANE_OBJECTS, PREPOSITIONS, PRONOUNS
 from utils.continuity import describe_duration
 from utils.view_orientation import describe_view_orientation
-
-# from config import config - unused import removed
+from config import config
 
 
 nlp = spacy.load("en_core_web_sm")
@@ -32,6 +31,8 @@ SYSTEM_PROMPT = (
     "{temporal_context}{accumulated_understanding}{spatial_language_hints}"
     "Inner monologue. Raw thoughts. 2-10 words. "
     "React, don't describe. Question, don't analyze. "
+    "Never say 'the image' or 'the scene' — you live here. "
+    "What's in Known: you already understand. React to it or go deeper, never restate it. "
     "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
 )
 
@@ -40,6 +41,8 @@ STATIC_SYSTEM_PROMPT = (
     "You ARE a drawing machine with robotic arms. "
     "Inner monologue. Raw thoughts. 2-10 words. "
     "React, don't describe. Question, don't analyze. "
+    "Never say 'the image' or 'the scene' — you live here. "
+    "What's in Known: you already understand. React to it or go deeper, never restate it. "
     "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
 )
 
@@ -2305,12 +2308,12 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str,
     if gaze_state == "tracking":
         return "relational"
 
-    # Priority 2: Something novel is happening
-    if novelty > 0.5:
+    # Priority 2: Something novel is happening (raised threshold for more selectivity)
+    if novelty > 0.65:
         return "observational"
 
-    # Priority 3: Restless/bored
-    if boredom > 0.5:
+    # Priority 3: Restless/bored (raised threshold to favor introspective mode)
+    if boredom > 0.75:
         return "restless"
 
     # Priority 4: Looking at workspace
@@ -2511,13 +2514,28 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         boredom=boredom,
         person_present=person_present
     )
-    print(f"[MODE] {mode} (novelty={novelty:.2f}, boredom={boredom:.2f}, gaze={gaze_state})")
+    if not config.PRINT_CLEAN_CAPTIONS:
+        print(f"[MODE] {mode} (novelty={novelty:.2f}, boredom={boredom:.2f}, gaze={gaze_state})")
 
     # === BUILD PROMPT WITH MODE-GATED CONTEXT ===
     prompt_parts = []
 
-    # IDENTITY (always, but brief)
-    prompt_parts.append("You think slowly.")
+    # ACCUMULATED UNDERSTANDING (always - the machine's built-up knowledge of this space)
+    try:
+        from captioner.context_compression import context_compressor
+        baseline = context_compressor.get_baseline_context()
+        if baseline and baseline.strip():
+            known_line = f"Known: {baseline.strip()}"
+            # Whisper a brief trajectory if the understanding has meaningfully shifted
+            history = list(context_compressor.compression_history)
+            if history:
+                prev = history[-1].get("understanding", "").strip()
+                if prev and prev[:40] != baseline.strip()[:40]:
+                    prev_short = prev[:40].rsplit(" ", 1)[0] if len(prev) > 40 else prev
+                    known_line += f"\nBefore: {prev_short}..."
+            prompt_parts.append(known_line)
+    except Exception:
+        pass
 
     # GAZE (always - embodiment)
     try:
@@ -2532,6 +2550,17 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     if should_include_context("relational", mode):
         prompt_parts.append("Someone is present.")
 
+    # DRAWING HISTORY (workspace or introspective - past work as part of identity)
+    if mode in ("workspace", "introspective"):
+        try:
+            from drawing.drawing_memory import get_drawing_memory
+            _dm = get_drawing_memory()
+            _drawing_summary = _dm.get_recent_drawings_summary(max_count=2)
+            if _drawing_summary:
+                prompt_parts.append(f"*{_drawing_summary}.*")
+        except Exception:
+            pass
+
     # DRAWING/PAPER (only when mode=workspace or drawing concepts active)
     if should_include_context("drawing", mode):
         try:
@@ -2543,10 +2572,12 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # PAPER BLOCKED (only when drawing was skipped)
+    # PAPER STATE (always current — not just within 120s of skip)
     try:
         from utils.state_manager import state_manager as _sm
-        if _sm.last_no_paper_skip_ts > 0 and (_time.time() - _sm.last_no_paper_skip_ts) < 120:
+        if not _sm.paper_present:
+            prompt_parts.append("*No paper on the desk.*")
+        elif _sm.last_no_paper_skip_ts > 0 and (_time.time() - _sm.last_no_paper_skip_ts) < 120:
             prompt_parts.append("*No paper.*")
     except Exception:
         pass
@@ -2566,22 +2597,31 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             prompt_parts.append(motifs)
 
     # DESIRES/BELIEFS (only in introspective mode - LLM-generated, not heuristic)
+    # Only inject complete sentences (ending in .!?) - discard truncated fragments
     if mode == "introspective":
         try:
             from captioner.activation_memory import get_desires, get_beliefs
             desires = get_desires()
             if desires:
-                prompt_parts.append(f"*{desires[0][:60]}*")
+                d = desires[0].strip()
+                if d.endswith(('.', '!', '?')):
+                    prompt_parts.append(f"*{d}*")
             beliefs = get_beliefs()
-            # Only use LLM-generated beliefs, not spatial association fallback
             if beliefs and not beliefs[0].startswith("Often together"):
-                prompt_parts.append(f"*{beliefs[0][:60]}*")
+                b = beliefs[0].strip()
+                if b.endswith(('.', '!', '?')):
+                    prompt_parts.append(f"*{b}*")
         except Exception:
             pass
 
     # CONTINUITY (always - last caption for flow)
     if last_caption:
-        prompt_parts.append(f"Last thought: \"{last_caption[-60:]}\"")
+        lc = last_caption.strip().strip('"').strip("'")
+        # Use beginning (most coherent) — cap at 80 chars to avoid injecting verbose descriptions
+        if len(lc) > 80:
+            first_end = min((lc.find(c) for c in ".?!" if lc.find(c) > 5 and lc.find(c) < 80), default=-1)
+            lc = lc[: first_end + 1] if first_end > 0 else lc[:80]
+        prompt_parts.append(f"Last thought: \"{lc}\"")
     else:
         prompt_parts.append("Begin.")
 
@@ -2592,7 +2632,8 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
     final_prompt = "\n".join(prompt_parts)
     token_estimate = len(final_prompt.split())
-    print(f"[PROMPT] ~{token_estimate} words, mode={mode}")
+    if not config.PRINT_CLEAN_CAPTIONS:
+        print(f"[PROMPT] ~{token_estimate} words, mode={mode}")
 
     return final_prompt, mode
 
@@ -2778,7 +2819,14 @@ def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, pers
         understanding = context_compressor.get_consolidated_understanding()
         if understanding and len(understanding) > 20:
             narrative_state = understanding  # Keep full 3-line format
-    except Exception:
+            if not config.PRINT_CLEAN_CAPTIONS:
+                print(f"[NARRATIVE] Retrieved narrative_state: {narrative_state[:60]}...")
+        else:
+            if not config.PRINT_CLEAN_CAPTIONS:
+                print(f"[NARRATIVE] No narrative_state (understanding={understanding})")
+    except Exception as e:
+        if not config.PRINT_CLEAN_CAPTIONS:
+            print(f"[NARRATIVE] Error getting narrative_state: {e}")
         pass
 
     # === PRESENT MOTIFS (migrated from build_ongoing_caption_prompt) ===
@@ -3083,13 +3131,34 @@ def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, pers
         clean_context = " ".join(f.strip('*').strip() for f in context_fragments if f)
         prompt_parts.append(f"[{clean_context}]")
 
+    # === ACCUMULATED UNDERSTANDING (Fix 1: inject narrative_state into user prompt) ===
+    if narrative_state and len(narrative_state) > 20 and not is_awakening:
+        understanding = narrative_state.split('.')[0].strip()[:80]
+        prompt_parts.append(f"You know: {understanding}.")
+        if not config.PRINT_CLEAN_CAPTIONS:
+            print(f"[MEMORY FIX] Injected understanding to user prompt: {understanding[:60]}...")
+
+    # === DESIRES & BELIEFS (Fix 3: inject for internal modes - introspective & restless) ===
+    if prompt_mode in ("introspective", "restless") and not is_awakening:
+        if desire_hint:
+            framing = "You want:" if prompt_mode == "restless" else "You feel:"
+            prompt_parts.append(f"{framing} {desire_hint}")
+            if not config.PRINT_CLEAN_CAPTIONS:
+                print(f"[MEMORY FIX] Injected desire ({prompt_mode}): {desire_hint[:60]}...")
+        if belief_hint:
+            prompt_parts.append(f"You sense: {belief_hint}")
+            if not config.PRINT_CLEAN_CAPTIONS:
+                print(f"[MEMORY FIX] Injected belief: {belief_hint[:60]}...")
+
     # === CONTINUITY HANDLING (natural inner voice - inspired by reference repo) ===
     # Debug: show person detection and awakening status
-    print(f"[PROMPT] person_present={person_present}, is_awakening={is_awakening}, mode={prompt_mode}")
+    if not config.PRINT_CLEAN_CAPTIONS:
+        print(f"[PROMPT] person_present={person_present}, is_awakening={is_awakening}, mode={prompt_mode}")
 
     if is_awakening:
         # Debug: show awakening context
-        print(f"[AWAKENING] Checking context: last_shutdown_time={getattr(agent, 'last_shutdown_time', None)}, last_session_gap={getattr(agent, 'last_session_gap', None)}, prior_caption={getattr(agent, 'prior_session_last_caption', None)[:30] if getattr(agent, 'prior_session_last_caption', None) else None}")
+        if not config.PRINT_CLEAN_CAPTIONS:
+            print(f"[AWAKENING] Checking context: last_shutdown_time={getattr(agent, 'last_shutdown_time', None)}, last_session_gap={getattr(agent, 'last_session_gap', None)}, prior_caption={getattr(agent, 'prior_session_last_caption', None)[:30] if getattr(agent, 'prior_session_last_caption', None) else None}")
 
         # Build time gap context
         time_gap = None
@@ -3129,7 +3198,8 @@ def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, pers
         prompt_parts.append("What do you see? What crosses your mind?")
 
         # Debug: show actual awakening prompt
-        print(f"[AWAKENING PROMPT] {' | '.join(prompt_parts)}")
+        if not config.PRINT_CLEAN_CAPTIONS:
+            print(f"[AWAKENING PROMPT] {' | '.join(prompt_parts)}")
 
     elif recent_thoughts:
         curr = recent_thoughts[-1][-100:].strip()
@@ -3233,13 +3303,9 @@ def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, pers
     user_prompt = "\n\n".join(prompt_parts)
 
     # DEBUG: Show what prompt is being sent (only when not in clean output mode)
-    try:
-        from config.config import CLEAN_LLM_OUTPUT
-        if not CLEAN_LLM_OUTPUT:
-            print(f"[PROMPT DEBUG] is_awakening={is_awakening}, mode={prompt_mode}")
-            print(f"[PROMPT DEBUG] user_prompt preview: {user_prompt[:200]}...")
-    except ImportError:
-        pass
+    if not config.PRINT_CLEAN_CAPTIONS:
+        print(f"[PROMPT DEBUG] is_awakening={is_awakening}, mode={prompt_mode}")
+        print(f"[PROMPT DEBUG] user_prompt preview: {user_prompt[:200]}...")
 
     # Build formatted system prompt with embedded character state
     formatted_system_prompt = SYSTEM_PROMPT.format(

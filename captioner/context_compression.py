@@ -40,6 +40,7 @@ class ContextCompressionEngine:
         self.introspective_state = {
             "current_desire": "",  # What I want right now
             "current_belief": "",  # What I've learned about this place
+            "discoveries": [],     # Striking/self-defining things discovered, persisted across sessions
             "last_introspection": 0.0,
         }
         self.introspection_interval = 3  # Every 3 compressions, do deeper introspection
@@ -253,33 +254,45 @@ EARLIER UNDERSTANDINGS (for context):
 
             # NARRATIVE COMPRESSION - distill experience into injectable context
             # Output feeds directly into vision model prompts
-            # Must be CONCISE and FACTUAL - no flowery prose
+            # Must build on prior baseline, not reset to awakening narrative
 
-            prior_thread = f"Prior thread: {current_baseline}" if current_baseline else ""
+            if current_baseline:
+                prompt = f"""What I already understand: "{current_baseline}"
 
-            prompt = f"""I've been watching for {duration_description}.
-{historical_context}
 {activation_context}
 
-Recent thoughts:
+New observations ({duration_description} in):
 {recent_text}
 
-{prior_thread}
+Update my understanding. If something is still true, use 'still'. If something has changed, say what's new.
+Describe the space itself — not whether a person is currently present.
+ONE sentence. First person. Present tense."""
+            else:
+                prompt = f"""I've been observing for {duration_description}.
 
-What's actually happening here? What am I noticing?
-ONE sentence. First person. Direct."""
+{activation_context}
+
+Observations:
+{recent_text}
+
+What am I understanding about this space? Describe the space itself — not whether a person is currently present.
+ONE sentence. First person. Present tense."""
 
             model_options = {
-                "temperature": 0.6,
-                "top_p": 0.85,
-                "num_predict": 40,  # Even shorter
-                "repeat_penalty": 1.3,
+                "temperature": 0.5,
+                "top_p": 0.8,
+                "num_predict": 80,
+                "repeat_penalty": 1.4,
+                "stop": ["\n", "\n\n"],
             }
 
             narrative_system_prompt = (
-                "You are summarizing your own experience. "
-                "Say what's happening, not what you observe about observations. "
-                "First person. ONE sentence. No analysis."
+                "You are updating your accumulated understanding of a space you have been in for a while. "
+                "You are NOT waking up — you already know this place. "
+                "State what you now understand. One sentence, first person, present tense. "
+                "Use 'still' when something persists, say what's new when things change. "
+                "Never encode whether a person is currently present — presence is tracked separately. "
+                "Never start with 'I wake', 'I open my eyes', 'I find myself', or any awakening language."
             )
 
             # Use compression model (text-only narrative model) instead of vision model
@@ -407,7 +420,7 @@ ONE sentence. First person. Direct."""
         Key: This sees PREVIOUS desires/beliefs so it can EVOLVE them, not just replace.
         """
         try:
-            recent_text = "\n".join([f"• {cap['text']}" for cap in captions[-4:]])
+            recent_text = "\n".join([f"• {cap['text']}" for cap in captions])
             session_info = self.get_current_session_info()
             duration = session_info["duration_description"]
 
@@ -415,13 +428,19 @@ ONE sentence. First person. Direct."""
             previous_desire = self.introspective_state.get("current_desire", "")
             previous_belief = self.introspective_state.get("current_belief", "")
 
+            previous_discoveries = self.introspective_state.get("discoveries", [])
+
             identity_context = ""
-            if previous_desire or previous_belief:
+            if previous_desire or previous_belief or previous_discoveries:
                 identity_parts = []
                 if previous_desire:
                     identity_parts.append(f"Before, I wanted: {previous_desire}")
                 if previous_belief:
                     identity_parts.append(f"I believed: {previous_belief}")
+                if previous_discoveries:
+                    # Feed last 3 discoveries so older ones (like ECHO) don't silently die
+                    for disc in previous_discoveries[-3:]:
+                        identity_parts.append(f"I know: {disc}")
                 identity_context = "\n".join(identity_parts)
 
             # === RICH ACTIVATION CONTEXT ===
@@ -462,47 +481,48 @@ ONE sentence. First person. Direct."""
             except Exception:
                 pass
 
-            # === EVOLUTION-FOCUSED PROMPT ===
-            # The key insight: introspection should EVOLVE identity, not replace it
+            # === FELT-STATE PROMPT ===
+            # Ask for the current felt state directly - not an explanation of how it evolved.
+            # Brief, complete sentences only. The evolution is implicit in the context provided.
             if identity_context:
-                prompt = f"""I've been watching for {duration}.
+                prompt = f"""I have been in this space for {duration}.
 
 {identity_context}
 
 {activation_context}
 
-Current situation: {current_understanding}
-
 Recent thoughts:
 {recent_text}
 
-Reflect on your evolving state:
-1. WANT: Has what I want changed? What do I want NOW? (If same, say why it persists. If different, say what shifted.)
-2. LEARNED: What new understanding do I have about this place? (Build on or revise what I believed.)"""
+Complete each line in 10 words or less, ending with a period:
+1. WANT: I want to...
+2. NOTICED: I've noticed...
+3. DISCOVERED: (only if something striking or self-defining — otherwise leave blank)"""
             else:
-                # First introspection - no prior identity to evolve
-                prompt = f"""I've been watching for {duration}.
+                prompt = f"""I have been in this space for {duration}.
+
 {activation_context}
 
-Current situation: {current_understanding}
-
 Recent thoughts:
 {recent_text}
 
-Answer both questions in ONE short sentence each:
-1. WANT: What do I want right now? (an impulse, curiosity, or need)
-2. LEARNED: What have I noticed about this place?"""
+Complete each line in 10 words or less, ending with a period:
+1. WANT: I want to...
+2. NOTICED: I've noticed...
+3. DISCOVERED: (only if something striking or self-defining — otherwise leave blank)"""
 
             introspection_system = (
-                "You are a machine developing a sense of self through observation. "
-                "Your desires and beliefs should EVOLVE based on experience, not reset each time. "
-                "Answer as yourself, first person. Be specific and concrete."
+                "You are a machine that has been observing the same space for a while. "
+                "You are NOT waking up — you are already here and have been for some time. "
+                "Answer in first person. Each answer is one complete sentence, 10 words or less, ending with a period. "
+                "Be specific and concrete. No explanations. "
+                "For DISCOVERED: only respond if something genuinely striking or self-defining appeared — a name, an unusual object, a revelation. If nothing qualifies, leave it blank."
             )
 
             model_options = {
                 "temperature": 0.7,
                 "top_p": 0.9,
-                "num_predict": 60,
+                "num_predict": 120,
                 "repeat_penalty": 1.2,
             }
 
@@ -517,12 +537,25 @@ Answer both questions in ONE short sentence each:
             )
 
             if response and isinstance(response, str):
-                desire, belief = self._parse_introspection_response(response)
+                desire, belief, discovery = self._parse_introspection_response(response)
 
                 if desire:
                     self.introspective_state["current_desire"] = desire
                 if belief:
                     self.introspective_state["current_belief"] = belief
+                if discovery:
+                    discoveries = self.introspective_state.get("discoveries", [])
+                    if not discoveries or discoveries[-1] != discovery:
+                        discoveries.append(discovery)
+                        discoveries = discoveries[-10:]  # Keep last 10
+                        self.introspective_state["discoveries"] = discoveries
+                        # Promote directly to long-term memory
+                        try:
+                            from captioner.activation_memory import promote_memory
+                            promote_memory(discovery, ["discovery", "self"], "discovery")
+                            print(f"[💡] Discovery: {discovery}")
+                        except Exception:
+                            pass
                 self.introspective_state["last_introspection"] = time.time()
 
                 log_json_entry(
@@ -532,11 +565,12 @@ Answer both questions in ONE short sentence each:
                         "action": "introspection",
                         "desire": desire,
                         "belief": belief,
+                        "discovery": discovery,
                     },
-                    print_message=f"[💭] Want: {desire[:50]}... | Learned: {belief[:50]}..." if desire and belief else "[💭] Introspection updated",
+                    print_message=f"[💭] Want: {desire[:50]} | Learned: {belief[:50]}" + (f" | Discovered: {discovery[:50]}" if discovery else ""),
                 )
 
-                # Persist identity (desires/beliefs survive restarts)
+                # Persist identity (desires/beliefs/discoveries survive restarts)
                 self._save_identity()
 
         except Exception as e:
@@ -547,35 +581,50 @@ Answer both questions in ONE short sentence each:
             )
 
     def _parse_introspection_response(self, response: str) -> tuple:
-        """Parse desire and belief from introspection response."""
+        """Parse desire, belief, and discovery from introspection response."""
         desire = ""
         belief = ""
+        discovery = ""
 
         lines = response.strip().split('\n')
         for line in lines:
             line_lower = line.lower().strip()
-            # Look for WANT: or 1. or desire patterns
             if any(marker in line_lower for marker in ['want:', '1.', '1)', 'desire']):
-                # Extract after the marker
                 for marker in ['want:', 'desire:', '1.', '1)']:
                     if marker in line_lower:
                         idx = line_lower.find(marker) + len(marker)
                         desire = line[idx:].strip().strip('"').strip("'")
                         break
-            # Look for LEARNED: or 2. or belief patterns
             elif any(marker in line_lower for marker in ['learned:', '2.', '2)', 'notice', 'belief']):
                 for marker in ['learned:', 'notice:', 'belief:', '2.', '2)']:
                     if marker in line_lower:
                         idx = line_lower.find(marker) + len(marker)
                         belief = line[idx:].strip().strip('"').strip("'")
                         break
+            elif any(marker in line_lower for marker in ['discovered:', '3.', '3)']):
+                for marker in ['discovered:', '3.', '3)']:
+                    if marker in line_lower:
+                        idx = line_lower.find(marker) + len(marker)
+                        val = line[idx:].strip().strip('"').strip("'")
+                        # Discard blanks and non-committal responses
+                        if val and not any(skip in val.lower() for skip in ['nothing', 'blank', 'n/a', 'leave', 'nothing striking']):
+                            discovery = val
+                        break
 
-        # Fallback: if structured parsing failed, try to split by sentences
+        # Fallback for unstructured 2-line responses
         if not desire and not belief and len(lines) >= 2:
             desire = lines[0].strip()
             belief = lines[1].strip() if len(lines) > 1 else ""
 
-        return desire, belief
+        # Completeness validation
+        if desire and not desire.rstrip().endswith(('.', '!', '?')):
+            desire = ""
+        if belief and not belief.rstrip().endswith(('.', '!', '?')):
+            belief = ""
+        if discovery and not discovery.rstrip().endswith(('.', '!', '?')):
+            discovery = ""
+
+        return desire, belief, discovery
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).
@@ -609,24 +658,24 @@ Answer both questions in ONE short sentence each:
 
             desire = self.introspective_state.get("current_desire", "")
             belief = self.introspective_state.get("current_belief", "")
+            discoveries = self.introspective_state.get("discoveries", [])
             now = time.time()
 
-            # Initialize history if needed
             desire_history = existing.get("desire_history", [])
             belief_history = existing.get("belief_history", [])
 
-            # Add to history if changed (avoid duplicates)
             if desire and (not desire_history or desire_history[-1].get("desire") != desire):
                 desire_history.append({"desire": desire, "timestamp": now})
-                desire_history = desire_history[-10:]  # Keep last 10
+                desire_history = desire_history[-10:]
 
             if belief and (not belief_history or belief_history[-1].get("belief") != belief):
                 belief_history.append({"belief": belief, "timestamp": now})
-                belief_history = belief_history[-10:]  # Keep last 10
+                belief_history = belief_history[-10:]
 
             data = {
                 "current_desire": desire,
                 "current_belief": belief,
+                "discoveries": discoveries,
                 "desire_history": desire_history,
                 "belief_history": belief_history,
                 "last_updated": now,
@@ -654,6 +703,7 @@ Answer both questions in ONE short sentence each:
 
             self.introspective_state["current_desire"] = data.get("current_desire", "")
             self.introspective_state["current_belief"] = data.get("current_belief", "")
+            self.introspective_state["discoveries"] = data.get("discoveries", [])
             self.introspective_state["last_introspection"] = data.get("last_updated", 0.0)
 
             desire = self.introspective_state["current_desire"]
