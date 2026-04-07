@@ -50,27 +50,3 @@ class ProgressBar:
             time.sleep(0.5)  # Slower animation for dots
 
 
-class DeterminateProgressBar:
-    """Progress bar that shows actual completion percentage."""
-
-    def __init__(self, width: int = 30, description: str = "Processing"):
-        self.width = width
-        self.description = description
-        self.progress = 0.0
-
-    def update(self, progress: float):
-        """Update progress (0.0 to 1.0)."""
-        self.progress = max(0.0, min(1.0, progress))
-        filled_width = int(self.progress * self.width)
-
-        bar = "█" * filled_width + "░" * (self.width - filled_width)
-        percentage = int(self.progress * 100)
-
-        print(f"\r{self.description}: [{bar}] {percentage}%", end="", flush=True)
-
-        if self.progress >= 1.0:
-            print(" ✓")  # Complete with checkmark and newline
-
-    def complete(self):
-        """Mark as 100% complete."""
-        self.update(1.0)

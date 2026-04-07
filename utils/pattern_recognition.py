@@ -420,7 +420,3 @@ class PatternRecognitionEngine:
             "timeline": [(ts, list(motifs)) for ts, motifs in recent_entries[-5:]],
         }
 
-    def clear_old_history(self, hours_back: int = 2):
-        """Clean up old motif history to prevent memory bloat."""
-        cutoff_time = time.time() - (hours_back * 3600)
-        self.motif_history = [(ts, motifs) for ts, motifs in self.motif_history if ts > cutoff_time]

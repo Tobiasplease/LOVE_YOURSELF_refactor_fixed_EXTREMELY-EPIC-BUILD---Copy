@@ -52,37 +52,6 @@ class CaptionDisplay:
             traceback.print_exc()
             self.connected = False
 
-    def _monitor_arduino_status(self):
-        """Background thread to continuously monitor Arduino status."""
-        while True:
-            try:
-                if self.connected and self.ser:
-                    self._check_arduino_status()
-                time.sleep(0.1)  # Check every 100ms
-            except Exception as e:
-                time.sleep(1)
-
-
-    def _check_arduino_status(self):
-        """Check for any pending Arduino responses and update LCD state."""
-        if not self.connected or not self.ser:
-            return
-
-        try:
-            while self.ser.in_waiting > 0:
-                response = self.ser.readline().decode().strip()
-                if response == "CAPTION_COMPLETE":
-                    self.lcd_busy = False
-                    # Send latest caption if we have one
-                    if self.latest_caption:
-                        caption, priority = self.latest_caption
-                        self.latest_caption = None
-                        self._try_send_caption(caption, priority)
-                elif response == "CAPTION_ACCEPTED":
-                    self.lcd_busy = True
-        except Exception:
-            pass
-
     def _try_send_caption(self, caption: str, priority: str) -> bool:
         """Try to send caption, return True if sent, False if LCD busy."""
         if not self.connected or not self.ser:
@@ -171,32 +140,6 @@ class CaptionDisplay:
             self.last_caption = clean_caption
             self.last_sent_time = now
 
-    def set_brightness(self, brightness: int):
-        """Set LCD brightness (0-255, 0=off, 255=full brightness)."""
-        if not self.connected or not self.ser:
-            return
-
-        brightness = max(0, min(255, brightness))
-        self.current_brightness = brightness
-
-        with self.send_lock:
-            try:
-                message = f"BRIGHTNESS:{brightness}\n"
-                self.ser.write(message.encode())
-                self.ser.flush()
-            except Exception:
-                pass
-
-    def _reconnect(self):
-        if self.ser:
-            try:
-                self.ser.close()
-            except Exception:
-                pass
-        self.connected = False
-        time.sleep(1)
-        self._connect()
-
     def close(self):
         if self.ser:
             try:
@@ -220,13 +163,6 @@ def send_caption_to_display(caption: str):
     global _caption_display
     if _caption_display:
         threading.Thread(target=_caption_display.send_caption, args=(caption,), daemon=True).start()
-
-
-def set_lcd_brightness(brightness: int):
-    """Set LCD brightness globally (0-255)."""
-    global _caption_display
-    if _caption_display:
-        _caption_display.set_brightness(brightness)
 
 
 def close_caption_display():

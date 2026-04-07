@@ -8,20 +8,14 @@ from typing import Optional
 
 from config.config import (
     MOOD_SNAPSHOT_FOLDER,
-    MOTIF_MODEL,
     OLLAMA_MODEL,
     OLLAMA_TIMEOUT_REFLECTION,
-    TINYLLAMA_NUM_PREDICT,
-    TINYLLAMA_TEMPERATURE,
-    TINYLLAMA_TIMEOUT,
-    TINYLLAMA_TOP_P,
 )
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.ollama import query_ollama, truncate_for_print
 
 from .prompt_interface import PromptInterface
-from .prompts import NUMBER_GENERATOR_SYSTEM_PROMPT
 
 
 class MultimodalModel:
@@ -157,28 +151,6 @@ class MultimodalModel:
 
         # For single-prompt approach, call LLM
         return self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="drawing")
-
-    def query_tinyllama(self, prompt: str) -> str:
-        """Query TinyLlama model for motif scoring and emotional analysis."""
-        tinyllama_options = {
-            "temperature": TINYLLAMA_TEMPERATURE,
-            "top_p": TINYLLAMA_TOP_P,
-            "num_predict": TINYLLAMA_NUM_PREDICT,
-        }
-
-        try:
-            response = query_ollama(
-                prompt=prompt,
-                model=MOTIF_MODEL,
-                timeout=TINYLLAMA_TIMEOUT,
-                log_dir=MOOD_SNAPSHOT_FOLDER,
-                system_prompt=NUMBER_GENERATOR_SYSTEM_PROMPT,
-                options=tinyllama_options,
-                prompt_type="motif_scoring",
-            )
-            return response.strip()
-        except Exception:
-            return "0.5"
 
     def _call_natsumura_introspective(
         self,
