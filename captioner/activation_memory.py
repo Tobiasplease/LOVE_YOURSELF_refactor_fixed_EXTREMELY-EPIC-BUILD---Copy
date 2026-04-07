@@ -839,10 +839,6 @@ def generate_state_summary() -> str:
     if boredom > 0.4:
         return "Familiar."
 
-    # Moderate boredom but no beliefs yet
-    if boredom > 0.4:
-        return "The scene is familiar."
-
     # Low boredom, no beliefs = genuinely new, no summary needed
     return ""
 

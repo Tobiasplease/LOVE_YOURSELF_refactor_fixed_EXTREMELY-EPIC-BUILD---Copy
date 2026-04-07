@@ -85,17 +85,6 @@ class ContextCompressionEngine:
         # Vision model receives this as "YOUR CURRENT STATE:" context
         return self.baseline_context
 
-    def get_current_state_lines(self) -> str:
-        """Get the current 3-line state for holistic drawing decisions."""
-        if not self.baseline_context:
-            return ""
-        return self.baseline_context
-
-    def should_mention_evolution(self) -> bool:
-        """Check if recent compression shows significant change."""
-        # This could be enhanced to detect if the baseline significantly evolved
-        return len(self.baseline_context) > 20
-
     def set_environmental_update_callback(self, callback):
         """Set callback function for environmental model updates."""
         self.environmental_update_callback = callback

@@ -413,8 +413,8 @@ class PaperDetector:
             search_center_pan = PAPER_DETECTION_GAZE_PAN
             search_center_tilt = PAPER_DETECTION_GAZE_TILT
             search_range_pan = 20.0  # ±20° pan range
-            search_range_tilt = 10.0  # ±10° tilt range
-            search_duration = 6.0  # Total search time in seconds
+            search_range_tilt = 8.0   # ±8° tilt range — tighter, biased toward bottom in gaze.py
+            search_duration = 12.0  # Total search time in seconds
             check_interval = 0.1  # Check ArUco every 100ms
 
             # Activate organic search mode
@@ -427,7 +427,9 @@ class PaperDetector:
             )
 
             # Give gaze time to reach search area before starting detection
-            time.sleep(1.0)
+            time.sleep(1.5)
+            # Clear stale detections — rolling window is 2s, so anything from before gaze moved is gone
+            detector.reset_detection_state()
 
             search_start = time.time()
             marker_ever_detected = False

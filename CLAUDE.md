@@ -19,16 +19,13 @@ python machine.py
 # Run with configuration overrides
 python machine.py --config_override config/debug_config.json
 python machine.py --config_override config/production_config.json
+python machine.py --config_override config/qwen_experiment.json
 
-# Test individual components
-python debug/test_ollama_caption.py
-python debug/test_comfy.py drawing/example_workflow.json
-python debug/test_impostor_flow.py
-
-# Additional debug tools
+# Debug tools
 python debug/log_viewer.py
 python debug/force_memory_reset.py
-python debug/test_pipeline.py
+python debug/test_comfy.py drawing/example_workflow.json
+python debug/centerline_settings_explorer.py
 
 # Code formatting (configured in pyproject.toml)
 black . --line-length 150
@@ -41,157 +38,116 @@ flake8 . --max-line-length=150
 
 ## Architecture Overview
 
-This is an AI-powered interactive mirror system that combines computer vision, mood analysis, physical control systems, and advanced processing capabilities. The system is structured as a modular Python application with threaded processing for real-time performance, supporting multiple output modalities including servo control, hand gestures, CNC drawing, and speech recognition.
+An AI-powered interactive mirror system. A camera observes a space, a vision-language model (Ollama/LLaVA) generates captions, and these drive mood analysis, physical outputs (servo, CNC arm), and periodic drawing generation (ComfyUI). The system is structured as a threaded Python application.
 
 ### Configuration Override System
 
-The system supports runtime configuration overrides via JSON files passed to machine.py:
+Any variable in `config/config.py` can be overridden at runtime via a JSON file:
 
 ```bash
-# Debug mode (faster intervals for development)
-python machine.py --config_override config/debug_config.json
-
-# Production mode (optimized intervals)
+python machine.py --config_override config/debug_config.json    # Fast intervals for development
 python machine.py --config_override config/production_config.json
+python machine.py --config_override config/qwen_experiment.json  # Qwen2.5-VL model settings
 ```
 
-**Available configurations:**
-
-- `config/debug_config.json`: Fast intervals for development (REASON_INTERVAL: 30s, DRAWING_INTERVAL: 60s)
-- `config/production_config.json`: Standard intervals for production use
-- `config/gpu-peon/`: GPU-optimized configurations for high-performance systems
-- `config/impostor-bot-win/`: Windows-specific production settings
-- `config/jbe-osx/`: macOS-specific configurations
-
-**Creating custom overrides:** Any config variable in `config/config.py` can be overridden by creating a JSON file with the desired values. The system handles type conversion automatically.
+Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `config/jbe-osx/`.
 
 ### Core Components
 
-- **machine.py**: Main application entry point with debug mode and config override support
-- **config/**: Centralized configuration system
-  - **config.py**: Main configuration including camera, servo, and AI model settings
-  - **loader.py**: Configuration override system for runtime customization
-  - **Platform-specific configs**: GPU, Windows, macOS optimized settings
-- **perception/**: Computer vision modules
-  - Face detection, object detection with YOLO
-  - Spatial memory and detection memory systems
-- **captioner/**: AI captioning system with advanced memory management
-  - Context compression, memory management, model wrapper
-  - Prompt interface and template systems
-- **mood/**: Mood analysis and emotional processing engine
-- **vision/**: Gaze tracking and visual processing
-- **breathing/**: Breathing simulation for life-like behavior
-- **drawing/**: ComfyUI integration with multiple workflow templates
-- **Physical Control Systems**:
-  - **servo_control/**: Arduino servo motor control with PWM lightbulb control
-  - **hand_control/**: Emotional hand movement mapping and Arduino integration
-  - **grbl/**: GRBL CNC machine integration for precise drawing
-  - **bcnc/**: bCNC G-code processing and workflow management
-- **event_logging/**: JSON-based event logging, run management, and log types
-- **utils/**: Extended utility modules
-  - Ollama API wrapper, continuity helpers
-  - Pattern recognition, motif scoring, thematic analysis
-  - Progress tracking, error tracking, temporal awareness
-- **labs/**: Experimental features
-  - **warp-fix-lab/**: Drawing distortion correction experiments
+- **machine.py**: Main entry point. Starts all threads, registers hooks, owns the main loop.
+- **config/**: Centralized config system (`config.py`, `loader.py`, `model_settings.py`)
+- **perception/**: Computer vision — face detection (OpenCV DNN), object detection (YOLO), spatial memory
+- **captioner/**: AI captioning pipeline — the core of the system:
+  - `captioner.py`: Main captioner class, runs caption/awakening/environmental cycles
+  - `memory.py`: Agent memory — observations, drawing history, mood tracking, temporal lines
+  - `activation_memory.py`: Activation-spreading memory network for concept recall and boredom scoring
+  - `context_compression.py`: Compresses recent captions into evolving baseline context (every N captions via background thread)
+  - `model_wrapper.py`: Ollama API wrapper for the vision model
+  - `prompt_interface.py`: Builds prompts + model options for caption, reflection, drawing calls
+  - `prompts.py`: All prompt templates and builder functions
+  - `subconscious.py`: Psychological synthesis layer (used by debug scripts; not called in main loop)
+- **mood/**: Mood analysis engine, emotional state tracking
+- **vision/**: Gaze tracking, frame diff, visual processing
+- **breathing/**: Breathing simulation for servo life-like behavior
+- **drawing/**: ComfyUI integration with workflow templates
+- **servo_control/**: Arduino servo motor control with PWM lightbulb
+- **hand_control/**: Emotional hand movement mapping and Arduino integration
+- **grbl/**: GRBL CNC machine integration for precise drawing
+- **bcnc/**: bCNC G-code processing
+- **safety/**: ArUco marker detection and paper presence detection for CNC safety
+- **event_logging/**: JSON event logging with run management
+- **utils/**: Utility modules:
+  - `ollama.py`: Ollama HTTP API wrapper
+  - `state_manager.py`: Shared runtime state (drawing status, paper detection, etc.)
+  - `hooks.py`: Hook registration and dispatch
+  - `continuity.py`: Time-gap description helpers
+  - `temporal_awareness.py`: Temporal context for prompts
+  - `drawing_state.py`: Drawing state helpers
+  - `caption_display.py`: Display formatting for captions
+  - `pattern_recognition.py`: NLP pattern extraction (spaCy-based, used in memory pipeline)
+  - `view_orientation.py`: Camera orientation helpers
+  - `progress_bar.py`, `error_tracking.py`: Dev utilities
+- **labs/warp-fix-lab/**: Experimental drawing warp correction scripts (not integrated)
 
 ### Key Architecture Patterns
 
-1. **Threaded Processing**: Uses threading for real-time camera processing and AI analysis
-2. **Modular Design**: Each major function is isolated in its own module with clear interfaces
-3. **Configuration-Driven**: All settings centralized with platform-specific overrides
-4. **Multi-Modal Output**: Supports multiple physical output systems (servo, CNC, hand control)
-5. **External API Integration**:
-   - Ollama for AI processing (llava model for vision)
-   - ComfyUI for image generation with multiple workflow templates
-6. **Event-Driven Architecture**:
-   - Comprehensive JSON logging of all system events with run management
-   - Lifetime state tracking and system state persistence
-7. **Advanced Memory Systems**:
-   - Context compression and memory management
-   - Spatial memory for object tracking
-   - Pattern recognition and thematic analysis
-8. **Drawing Controller**: Intelligent decision-making for image generation based on mood, novelty, and boredom metrics
-9. **Physical Integration**: CNC machine control with G-code processing and SVG conversion
+1. **Threaded Processing**: Camera, caption, and compression each run in separate threads
+2. **Activation Memory System**: Concepts extracted from captions feed an activation network; activation levels drive boredom detection and prompt mode selection
+3. **Context Compression**: Every N captions, a background thread calls Ollama to compress recent observations into a rolling `baseline_context` string, injected into system prompts
+4. **Prompt Mode Routing**: `build_simple_caption_prompt` selects a mode (relational/observational/restless/workspace/introspective/awakening) based on activation state; mode determines prompt content
+5. **Multi-Step Drawing Analysis**: `context_rich_multi_step_drawing_analysis` runs a 5-step pipeline to generate drawing prompts from current memory state
+6. **Configuration-Driven**: All tuning parameters in `config/config.py` with JSON override support
+7. **CNC Safety Gate**: ArUco marker + paper detection (safety/) gate all physical drawing; no paper = no draw
 
 ### External Dependencies
 
-- **Ollama API**: Must be running locally at http://localhost:11434 with llava model (llava:7b-v1.6-mistral-q5_1)
-- **ComfyUI (Optional)**: For AI image generation at http://localhost:8188/prompt
-  - Multiple workflow templates available for different deployment scenarios
-- **OpenCV DNN Models**: Face detection models required in models/ directory:
-  - deploy.prototxt
-  - res10_300x300_ssd_iter_140000.caffemodel
-- **YOLO Models**: yolov8m.pt and yolov8n.pt (included)
-- **Physical Hardware (Optional)**:
-  - **Arduino**: For servo control if USE_SERVO=True
-  - **GRBL CNC Controller**: For precise drawing/engraving operations
-  - **Hand Control Arduino**: For emotional gesture expression
-- **Additional Models**:
-  - **spaCy**: en_core_web_sm model for NLP processing
-  - **Whisper (Optional)**: For local speech recognition
+- **Ollama API**: Must be running at http://localhost:11434 with a vision model loaded
+  - Default: `llava:7b-v1.6-mistral-q5_1` — set `OLLAMA_MODEL` to override
+  - Qwen experiment: `qwen2.5vl:7b`
+- **ComfyUI (Optional)**: AI image generation at http://localhost:8188
+- **OpenCV DNN Models**: `models/deploy.prototxt` + `models/res10_300x300_ssd_iter_140000.caffemodel`
+- **YOLO Models**: `yolov8m.pt` and `yolov8n.pt` (included)
+- **spaCy**: `en_core_web_sm` model for NLP in activation memory
+- **Physical Hardware (Optional)**: Arduino (servo/hand), GRBL CNC controller
+- **Whisper (Optional)**: Local speech recognition
 
 ### Data Flow
 
-1. **Input Processing**:
-   - Camera captures frames → face/object detection (OpenCV + YOLO)
-2. **AI Analysis**:
-   - Detected frames → mood analysis via Ollama with context compression
-   - Pattern recognition and thematic analysis on processed data
-   - Memory system updates with spatial and temporal awareness
-3. **Decision Making**:
-   - Mood data → drawing decisions (ComfyUI integration with multiple templates)
-   - Emotional state mapping → physical control decisions
-4. **Physical Outputs** (if enabled):
-   - Servo positioning for basic movement
-   - Hand controller for emotional gestures
-   - GRBL CNC control for precise drawing/engraving
-5. **Data Persistence**:
-   - All events → JSON logging with timestamps and run IDs
-   - Images saved to event_log/ directory with associated metadata
-   - Movement recordings stored for playback
-   - Generated artwork stored with processing metadata
-   - Lifetime state and system state persistence
+1. Camera frames → face/object detection → spatial memory updates
+2. Every caption cycle: frame + memory context → Ollama vision model → caption text
+3. Caption → activation memory update → concept activation/boredom scores
+4. Every N captions: background compression → `baseline_context` updated
+5. Caption + context → mood analysis → emotional state
+6. Emotional state → servo/hand control decisions
+7. Periodically: memory state → 5-step drawing analysis → ComfyUI → CNC execution
+8. All events → JSON event log
 
 ### Environment Variables
 
 - `MOOD_SNAPSHOT_FOLDER`: Override default event log storage location
-- `OLLAMA_MODEL`: Specify Ollama model (default: llava:7b-v1.6-mistral-q5_1)
-- Various hardware-specific environment variables for platform optimization
+- `OLLAMA_MODEL`: Specify Ollama model (default: `llava:7b-v1.6-mistral-q5_1`)
 
 ### Testing
 
-The debug/ folder contains individual component tests and debugging tools:
+The `debug/` folder has standalone component tests and calibration tools. Notable scripts:
 
-- `test_ollama_caption.py`: Tests Ollama API integration and captioning
-- `test_comfy.py`: Tests ComfyUI workflow execution with JSON templates
-- `log_viewer.py`: Interactive event log viewing and analysis
-- `force_memory_reset.py`: Memory system reset utility
-- `centerline_settings_explorer.py`: SVG centerline processing configuration tool
+- `log_viewer.py`: Interactive event log viewer
+- `force_memory_reset.py`: Reset memory/state files
+- `test_comfy.py`: Test ComfyUI workflow execution
+- `centerline_settings_explorer.py`: SVG centerline processing configuration
+- `test_caption_flow.py`, `test_prompt_flow.py`: Caption/prompt pipeline inspection
+- `test_drawing_introspection.py`, `test_multi_step_drawing.py`: Drawing pipeline tests
+- `servo_calibration_tool.py`, `test_left_arm_servos.py`: Servo/arm calibration
+- `capture_paper_references.py`: Capture ArUco/paper reference images
+- `reset_cnc_state.py`: Reset CNC state after a stalled job
 
-No formal test framework is configured - tests are standalone scripts.
+No formal test framework — all tests are standalone scripts.
 
-Put all test and evaluation scripts in the debug folder and all plan files in the docs folder.
+Put all test and evaluation scripts in the `debug/` folder and all plan files in the `docs/` folder.
 
 ### Code Style
 
 - Line length: 150 characters (configured in pyproject.toml)
-- Uses Black formatter with isort for import sorting
-- Pylint and flake8 for linting with 150 character line length
-- Dont use so many comments! Very sparingly.
-
-### Additional Components
-
-**Physical Integration:**
-
-- Multiple Arduino firmware options for different control scenarios
-- GRBL setup scripts and configuration utilities
-- Movement recording and playback system
-- SVG to G-code conversion with centerline processing
-
-**Advanced Features:**
-
-- Drawing warp correction laboratory
-- Pattern recognition and motif extraction
-- Thematic analysis and continuity tracking
-- Comprehensive error tracking and progress monitoring
+- Black formatter + isort for import sorting
+- Pylint and flake8 for linting
+- Use comments very sparingly — only where logic is not self-evident

@@ -38,17 +38,7 @@ class ArucoDetectorThread(threading.Thread):
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.aruco_params = cv2.aruco.DetectorParameters()
 
-        # Tuned parameters for noisy camera (from test_aruco_live.py tuning)
-        self.aruco_params.adaptiveThreshWinSizeMin = 29
-        self.aruco_params.adaptiveThreshWinSizeMax = 100
-        self.aruco_params.adaptiveThreshWinSizeStep = 2
-        self.aruco_params.adaptiveThreshConstant = 0
-        self.aruco_params.minMarkerPerimeterRate = 0.20
-        self.aruco_params.maxMarkerPerimeterRate = 8.0
-        self.aruco_params.polygonalApproxAccuracyRate = 0.15
-        self.aruco_params.minCornerDistanceRate = 0.20
-        self.aruco_params.minDistanceToBorder = 6
-        self.aruco_params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_NONE
+        # Default parameters — new camera is clean, no noise compensation needed
 
         # Use new ArucoDetector API
         self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
@@ -99,23 +89,21 @@ class ArucoDetectorThread(threading.Thread):
                     print(f"[ArUco] DEBUG: Saved {w}x{h} frame to /tmp/aruco_debug_frame.png")
 
                 if ids is not None and len(ids) > 0:
-                    all_detected_ids = ids.flatten().tolist()
-                    has_valid = self.valid_marker_id in all_detected_ids
                     for i, marker_id in enumerate(ids.flatten()):
                         if corners and len(corners) > i:
                             marker_corners = corners[i][0]
                             raw_corners.append((marker_corners.copy(), int(marker_id)))
 
-                            # Calculate size for debug
                             side1 = ((marker_corners[0][0] - marker_corners[1][0])**2 +
                                     (marker_corners[0][1] - marker_corners[1][1])**2)**0.5
                             side2 = ((marker_corners[1][0] - marker_corners[2][0])**2 +
                                     (marker_corners[1][1] - marker_corners[2][1])**2)**0.5
                             avg_side = (side1 + side2) / 2
 
-                            detected = True
-                            valid_ids.add(int(marker_id))
-                            valid_corners.append((marker_corners.copy(), int(marker_id)))
+                            if int(marker_id) == self.valid_marker_id and avg_side >= self.min_marker_pixels:
+                                detected = True
+                                valid_ids.add(int(marker_id))
+                                valid_corners.append((marker_corners.copy(), int(marker_id)))
 
                 now = time.time()
 
@@ -150,6 +138,13 @@ class ArucoDetectorThread(threading.Thread):
                 print(f"[ArUco] Detection error: {e}")
 
             time.sleep(self.update_interval)
+
+    def reset_detection_state(self) -> None:
+        """Clear rolling window — call before a paper check so stale detections don't carry over."""
+        with self.lock:
+            self._recent_detections.clear()
+            self.marker_visible = False
+            self.detection_confidence = 0.0
 
     def is_marker_visible(self) -> bool:
         """Check if marker is currently visible (paper NOT present)."""
