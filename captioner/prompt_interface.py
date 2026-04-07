@@ -14,7 +14,6 @@ from .prompts import (
     DRAWING_SYSTEM_PROMPT,
     STATIC_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
-    build_drawing_prompt,
     build_focused_caption_prompt,
     build_reflection_prompt,
     context_rich_multi_step_drawing_analysis,
@@ -154,19 +153,7 @@ class PromptInterface:
         except ImportError:
             analysis_mode = "single"  # Fallback
 
-        if analysis_mode == "natsumura":
-            from .prompts import natsumura_drawing_analysis
-            print("=" * 60)
-            print(f"[🎨 NATSUMURA] Starting identity-aware drawing analysis")
-            print("=" * 60)
-            prompt = natsumura_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
-            print(f"[🎨 NATSUMURA] Got prompt back, length={len(prompt) if prompt else 0}")
-        elif analysis_mode == "multi_step":
-            print("[🎨] Using context-rich multi-step drawing analysis")
-            prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
-        else:
-            print("[🎨] Using single-prompt drawing analysis")
-            prompt = build_drawing_prompt(memory_ref, extra=extra, image_path=image_path)
+        prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
 
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
