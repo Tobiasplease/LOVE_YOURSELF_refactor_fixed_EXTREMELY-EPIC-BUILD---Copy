@@ -143,45 +143,6 @@ def get_social_context(agent=None, saw_person=None) -> str:
 
 
 
-def get_caption_emotion_context(agent, recent_caption: Optional[str] = None) -> str:
-    """
-    Analyze recent captions to determine current emotional/voice patterns.
-    This creates the recursive feedback loop for natural voice variation.
-    """
-    # Get Arduino emotion state as baseline
-    arduino_emotion = getattr(agent, "current_emotion_state", "calm_observant")
-
-    # Try to get recent captions for sentiment analysis
-    recent_captions = []
-    if hasattr(agent, "recent_captions") and agent.recent_captions:
-        # Extract just the caption text from tuples (caption, timestamp)
-        recent_captions = [cap[0] if isinstance(cap, tuple) else cap for cap in agent.recent_captions[-3:]]
-    elif recent_caption:
-        recent_captions = [recent_caption]
-
-    # Analyze caption patterns if available
-    if recent_captions:
-        caption_text = " ".join(recent_captions)
-
-        # Simple pattern detection for emotional state
-        if any(word in caption_text.lower() for word in ["uncertain", "not sure", "maybe", "might", "unclear"]):
-            sentiment_pattern = "uncertain and questioning"
-        elif any(word in caption_text.lower() for word in ["fascinated", "intrigued", "curious", "wonder", "interesting"]):
-            sentiment_pattern = "engaged and curious"
-        elif any(word in caption_text.lower() for word in ["quiet", "still", "observing", "watching", "noting"]):
-            sentiment_pattern = "calm and attentive"
-        elif any(word in caption_text.lower() for word in ["restless", "shifting", "changing", "moving"]):
-            sentiment_pattern = "restless and active"
-        else:
-            sentiment_pattern = f"in a {arduino_emotion.replace('_', ' ')} mood"
-    else:
-        # Fall back to Arduino emotion state
-        sentiment_pattern = f"in a {arduino_emotion.replace('_', ' ')} mood"
-
-    return f"emotionally: {sentiment_pattern}"
-
-
-
 
 
 
@@ -939,35 +900,6 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
 
 # === PAPER DETECTION PROMPTS ===
 
-def build_paper_detection_reference_prompt() -> str:
-    """Build prompt for paper detection using reference image comparison."""
-    return (
-        "Compare this current view to the reference image showing proper paper setup. "
-        "The reference shows exactly how paper should be positioned for safe drawing.\n\n"
-        "Key comparison points:\n"
-        "- Paper position and orientation match the reference\n"
-        "- Paper appears flat and properly positioned (not wrinkled or curled)\n"
-        "- Paper edges are visible and well-defined\n"
-        "- Surface texture appears similar to reference (matte paper vs glossy table)\n"
-        "- Drawing area is clear and ready for use\n\n"
-        "LIGHTING ADAPTATION: Account for significant lighting differences:\n"
-        "- BRIGHTER than reference: Look for paper edges/shadows, ignore overexposure\n"
-        "- DARKER than reference: Paper should still show as lighter than background\n"
-        "- DIFFERENT COLOR TEMPERATURE: Focus on texture and geometry, not color matching\n"
-        "- HIGH CONTRAST: Compare edge definition and surface patterns rather than brightness\n\n"
-        "COMPARISON STRATEGY:\n"
-        "- Align the paper geometry and position (shape, orientation, placement)\n"
-        "- Verify matte texture characteristics are similar (paper vs non-paper surfaces)\n"
-        "- Ignore brightness/exposure differences but maintain edge clarity standards\n"
-        "- Be more flexible with lighting but strict about paper presence and positioning\n\n"
-        "Respond with:\n"
-        "PAPER: YES/NO\n"
-        "CONFIDENCE: 0.0-1.0\n"
-        "REASON: Detailed comparison noting paper position, edges, texture, and lighting adaptation\n"
-        "\n"
-        "Say YES if the current setup shows paper positioned similarly to the reference image, "
-        "accounting for lighting differences but maintaining structural similarity."
-    )
 
 
 
@@ -1055,25 +987,6 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str,
 
 
 # === SIMPLIFIED CAPTION PROMPT (Activation-driven context selection) ===
-
-def _get_continuity_context(agent, last_caption: str) -> str:
-    """Get 2 most recent captions for continuity."""
-    # recent_captions is list of (caption, timestamp, mode) tuples
-    recent = []
-    if hasattr(agent, "recent_captions") and agent.recent_captions:
-        recent = [cap[0] for cap in agent.recent_captions[-2:]]  # Extract caption text from tuples
-
-    if len(recent) >= 2:
-        return (
-            f"Recent thoughts:\n"
-            f"- \"{recent[-2][-60:]}\"\n"
-            f"- \"{recent[-1][-60:]}\"\n"
-        )
-    elif last_caption:
-        return f"You just thought: \"{last_caption[-60:]}\"\n"
-    else:
-        return "Begin observing.\n"
-
 
 def _get_persistent_motifs(agent) -> str:
     """Only surface motifs with count > 4 AND duration > 180s (from early version)."""
