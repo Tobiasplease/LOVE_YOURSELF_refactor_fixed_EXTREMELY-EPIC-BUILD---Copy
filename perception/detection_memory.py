@@ -27,11 +27,6 @@ class DetectionMemory:
             return cls._labels.copy()
 
     @classmethod
-    def get_image(cls):
-        with cls._lock:
-            return cls._image
-
-    @classmethod
     def get_person_bbox(cls) -> Optional[Tuple[int, int, int, int]]:
         with cls._lock:
             return cls._person_bbox

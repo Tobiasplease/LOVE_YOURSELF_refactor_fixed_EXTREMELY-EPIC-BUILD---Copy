@@ -815,40 +815,6 @@ Complete each line in 10 words or less, ending with a period:
             for hist in recent_history
         ]
 
-    def get_session_summary(self) -> str:
-        """Get a summary of the entire session's understanding evolution."""
-        if not self.compression_history:
-            return "Session just beginning - no historical understanding yet."
-
-        session_duration = (time.time() - self.session_start_time) / 3600  # hours
-        total_compressions = len(self.compression_history) + (1 if self.baseline_context else 0)
-
-        return f"Session duration: {session_duration:.1f} hours, {total_compressions} understanding iterations completed."
-
-    def _detect_environmental_change(self, new_understanding: str, previous_baseline: str) -> bool:
-        """Detect if the new understanding represents significant environmental change."""
-        if not previous_baseline:
-            return True  # First understanding is always significant
-
-        # Simple keyword-based detection for environmental indicators
-        environmental_keywords = [
-            "different", "changed", "new", "moved", "shifted", "appears",
-            "now see", "notice", "light", "dark", "shadow", "bright",
-            "position", "location", "space", "room", "area", "environment"
-        ]
-
-        new_lower = new_understanding.lower()
-        has_environmental_keywords = any(keyword in new_lower for keyword in environmental_keywords)
-
-        # Check for significant difference in content length (indicates more detailed observation)
-        length_difference = abs(len(new_understanding) - len(previous_baseline)) > 50
-
-        # Check for new spatial or environmental content
-        spatial_indicators = ["left", "right", "above", "below", "behind", "front", "corner", "edge", "center"]
-        has_spatial_content = any(indicator in new_lower for indicator in spatial_indicators)
-
-        return has_environmental_keywords or length_difference or has_spatial_content
-
     def _update_session_duration(self) -> None:
         """Update session duration for static space observation."""
         current_time = time.time()

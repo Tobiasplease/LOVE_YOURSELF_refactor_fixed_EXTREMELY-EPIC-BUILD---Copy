@@ -20,11 +20,7 @@ from config.config import PAN_MIN, PAN_MAX, TILT_MIN, TILT_MAX, OLLAMA_MODEL
 
 # Import gaze control functions
 try:
-    from vision.gaze import (
-        set_llm_zone,
-        get_current_zone_text,
-        get_tracking_context,
-    )
+    from vision.gaze import set_llm_zone
     GAZE_AVAILABLE = True
 except ImportError:
     GAZE_AVAILABLE = False

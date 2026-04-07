@@ -361,32 +361,6 @@ def set_llm_zone(pan_zone: str, tilt_zone: str = None):
     print(f"[👁️] LLM zone: {llm_target_zone_pan}/{llm_target_zone_tilt} → target pan={pan_center:.0f}° tilt={tilt_center:.0f}°")
 
 
-def get_current_zone_text() -> str:
-    """Get current zone as simple text for LLM prompts."""
-    # Map zones to simple direction words
-    zone_to_word = {
-        "left": "LEFT",
-        "right": "RIGHT",
-        "ahead": "AHEAD",
-        "up": "UP",
-        "down": "DOWN",
-        "level": "AHEAD",
-    }
-
-    if state == "tracking":
-        return "AT THE PERSON"
-
-    pan_word = zone_to_word.get(llm_target_zone_pan, "AHEAD")
-    tilt_word = zone_to_word.get(llm_target_zone_tilt, "")
-
-    if llm_target_zone_tilt == "up":
-        return "UP" if pan_word == "AHEAD" else f"UP and {pan_word}"
-    elif llm_target_zone_tilt == "down":
-        return "DOWN" if pan_word == "AHEAD" else f"DOWN and {pan_word}"
-    else:
-        return pan_word
-
-
 def update_tracking_awareness(face_box, frame_width: int):
     """Track where the person is relative to frame center."""
     global tracking_person_position, tracking_person_last_x, tracking_person_movement
@@ -417,45 +391,6 @@ def update_tracking_awareness(face_box, frame_width: int):
         else:
             tracking_person_movement = "stationary"
     tracking_person_last_x = face_center_x
-
-
-def get_tracking_context() -> str:
-    """Get text description of person position for LLM prompt."""
-    if tracking_person_movement != "stationary":
-        return f"to your {tracking_person_position}, {tracking_person_movement.replace('_', ' ')}"
-    return f"to your {tracking_person_position}"
-
-
-def apply_gaze_nudge(pan_delta: float, tilt_delta: float, duration: float = 5.0):
-    """
-    Apply a directional nudge as a modifier to idle gaze movement.
-    The nudge adds a decaying bias to organic Perlin movement, creating
-    a gentle drift in the specified direction while preserving natural sway.
-
-    Args:
-        pan_delta: Degrees to bias pan (-left, +right)
-        tilt_delta: Degrees to bias tilt (+up, -down) - matches servo config
-        duration: How long the bias lasts before decaying
-    """
-    global pan_nudge, tilt_nudge, nudge_start_time, nudge_duration
-
-    pan_nudge = pan_delta
-    tilt_nudge = tilt_delta
-    nudge_start_time = time.time()
-    nudge_duration = duration
-
-    if abs(pan_delta) > 0.1 or abs(tilt_delta) > 0.1:
-        direction = []
-        # Positive tilt delta = UP (higher servo), Negative = DOWN (lower servo)
-        if tilt_delta > 1:
-            direction.append("up")
-        elif tilt_delta < -1:
-            direction.append("down")
-        if pan_delta < -1:
-            direction.append("left")
-        elif pan_delta > 1:
-            direction.append("right")
-        print(f"[👁️] Gaze nudge: {' '.join(direction)} (pan={pan_delta:+.1f}°, tilt={tilt_delta:+.1f}°)")
 
 
 def get_current_nudge() -> tuple:
@@ -523,39 +458,6 @@ def deactivate_search_mode():
     searching_active = False
     searching_current_goal = None
     # Keep interest points - they can persist beyond search mode
-
-
-def add_interest_point(pan: float, tilt: float, priority: float = 0.5, duration: float = 30.0):
-    """
-    Add an LLM-driven point of interest that the camera should visit.
-    Higher priority points are visited first. Points expire after duration.
-
-    Args:
-        pan: Target pan angle (will be clamped to servo limits)
-        tilt: Target tilt angle (will be clamped to servo limits)
-        priority: 0.0-1.0, higher = more interesting
-        duration: How long the interest point persists
-    """
-    global searching_interest_points
-
-    # Clamp to servo limits
-    pan = clamp(pan, PAN_MIN, PAN_MAX)
-    tilt = clamp(tilt, TILT_MIN, TILT_MAX)
-
-    expiry = time.time() + duration
-    searching_interest_points.append((pan, tilt, priority, expiry))
-
-    # Sort by priority (highest first) and remove expired
-    now = time.time()
-    searching_interest_points = [
-        p for p in searching_interest_points if p[3] > now
-    ]
-    searching_interest_points.sort(key=lambda p: -p[2])
-
-    # Limit to 5 interest points max
-    searching_interest_points = searching_interest_points[:5]
-
-    print(f"[✨] Interest point added at pan={pan:.0f}°, tilt={tilt:.0f}° (priority={priority:.1f})")
 
 
 def get_search_target() -> tuple:
@@ -815,11 +717,6 @@ def perlin_noise_1d(x, octaves=3, persistence=0.5):
         frequency *= 2.0
 
     return total / max_value
-
-
-def bezier_curve(t, p0, p1, p2):
-    """Quadratic Bézier curve for smooth movement paths"""
-    return (1 - t) ** 2 * p0 + 2 * (1 - t) * t * p1 + t ** 2 * p2
 
 
 def update_organic_movement(now):
@@ -1297,17 +1194,6 @@ def velocity_limited_step(current, target, factor, max_velocity, axis="pan", smo
     return current + smoothed_step
 
 
-def smooth_step(current, target, factor):
-    """Legacy smooth step function for non-critical movement"""
-    diff = target - current
-    step = diff * factor
-
-    if abs(diff) < 0.1:
-        return target
-
-    return current + step
-
-
 def set_drawing_mode(active: bool, drawing_pan: int = 90, drawing_tilt: int = None):
     """Control drawing sequence mode with smooth transitions (thread-safe)."""
     global drawing_sequence_active, drawing_target_x, drawing_target_y, drawing_transition_active
@@ -1434,70 +1320,3 @@ def update_paper_search_target():
 def is_paper_search_active() -> bool:
     """Check if paper search mode is currently active."""
     return _paper_search_active
-
-
-def startup_movement_sequence(servos, duration=5.0):
-    """Perform single figure-8 startup sequence to establish presence
-    
-    Args:
-        servos: ServoController instance
-        duration: Total duration of the sequence in seconds
-    """
-    global startup_sequence_active, servo_x, servo_y, target_x, target_y
-    
-    startup_sequence_active = True  # Block normal gaze updates
-    print("🌟 Performing startup movement sequence...")
-    
-    # Much finer interpolation for ultra-smooth movement
-    steps = 100  # Many more steps for smoothness
-    center_x, center_y = 90, 90
-    amplitude_x = 18  # Horizontal amplitude within natural limits
-    amplitude_y = 12  # Vertical amplitude within natural limits
-    
-    step_duration = duration / steps
-    
-    # Track current positions for smooth interpolation
-    current_pan = 90.0
-    current_tilt = 90.0
-    
-    for i in range(steps):
-        # Single figure-8 parametric equations
-        t = (i / steps) * 2 * math.pi  # One complete cycle
-        
-        # Calculate target figure-8 positions
-        target_x_local = center_x + amplitude_x * math.sin(t)
-        target_y_local = center_y + amplitude_y * math.sin(2 * t)
-        
-        # Constrain to natural limits
-        target_x_local = max(PAN_MIN, min(PAN_MAX, target_x_local))
-        target_y_local = max(TILT_MIN, min(TILT_MAX, target_y_local))
-        
-        # Smooth interpolation toward target (smaller steps)
-        easing = 0.3  # Slower easing for smoother motion
-        current_pan += (target_x_local - current_pan) * easing
-        current_tilt += (target_y_local - current_tilt) * easing
-        
-        # Update global state to prevent conflicts
-        servo_x = current_pan
-        servo_y = current_tilt
-        target_x = current_pan
-        target_y = current_tilt
-        
-        # Send commands
-        servos.set_pan(int(current_pan + 0.5))
-        time.sleep(0.01)  # Very small delay
-        servos.set_tilt(int(current_tilt + 0.5))
-        
-        time.sleep(step_duration - 0.01 if step_duration > 0.01 else 0.01)
-    
-    # Final return to center
-    servos.set_pan(90)
-    time.sleep(0.05)
-    servos.set_tilt(90)
-    time.sleep(0.3)
-    
-    # Update global state and release control
-    servo_x = servo_y = target_x = target_y = 90
-    startup_sequence_active = False
-    
-    print("✅ Startup sequence complete")

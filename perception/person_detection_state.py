@@ -331,23 +331,6 @@ class PersonDetectionState:
 
         return breath_modifier, pause_modifier
 
-    def should_trigger_hand_freeze(self) -> bool:
-        """Determine if hand control should freeze due to person detection."""
-        state = self.get_person_state()
-
-        # Trigger freeze on fresh person arrival
-        if state["is_present"] and state["presence_duration"] < 2.0:
-            return True
-
-        # Trigger freeze if person detection is very sudden and confident
-        if (state["is_present"] and
-            state["confidence"] > 0.8 and
-            state["stability"] > 0.7 and
-            state["recent_arrivals"] > 0):
-            return True
-
-        return False
-
     def get_consciousness_context(self) -> str:
         """Get person presence context for consciousness prompts with spatial awareness."""
         state = self.get_person_state()
