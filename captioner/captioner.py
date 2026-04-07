@@ -364,8 +364,6 @@ class Captioner(MemoryMixin):
         if now - self.last_caption_time < CAPTION_INTERVAL:
             return
 
-        print(f"[DEBUG] _process_frame: first_done={self.first_caption_done}, awaiting_env={getattr(self, 'awaiting_environmental_phase', False)}, session_done={self.session_awakening_done}")
-
         # Store reactivity data for subconscious layer access
         self._current_reactivity_data = reactivity_data
 
@@ -414,10 +412,8 @@ class Captioner(MemoryMixin):
                     self.awaiting_environmental_phase = True  # Flag for Phase 2
             elif getattr(self, "awaiting_environmental_phase", False) or not self.session_awakening_done:
                 # Phase 2: Environmental grounding (first visual after awakening OR first visual of session)
-                print(f"[DEBUG] Entering environmental phase: awaiting={getattr(self, 'awaiting_environmental_phase', False)}, session_done={self.session_awakening_done}")
                 try:
                     caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=True)
-                    print(f"[DEBUG] Environmental caption: {caption[:50] if caption else 'NONE'}...")
                 except Exception as env_err:
                     print(f"[ERROR] Environmental grounding FAILED: {env_err}")
                     import traceback
@@ -427,7 +423,6 @@ class Captioner(MemoryMixin):
                 self.awaiting_environmental_phase = False
                 self.session_awakening_done = True
             else:
-                print(f"[DEBUG] Entering regular caption phase")
                 log_json_entry(
                     LogType.DEBUG,
                     {"message": "Requesting new caption", "action": "caption_request", "image_path": img_path},
@@ -436,7 +431,6 @@ class Captioner(MemoryMixin):
                 previous_caption = getattr(self, "last_caption", "")
                 try:
                     caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
-                    print(f"[DEBUG] Regular caption: {caption[:50] if caption else 'NONE'}...")
                 except Exception as cap_err:
                     print(f"[ERROR] Regular caption FAILED: {cap_err}")
                     import traceback

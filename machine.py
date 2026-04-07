@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-print("🚀 [DEBUG] MACHINE.PY STARTING UP")
 
 import argparse
 import atexit
@@ -11,7 +10,6 @@ import sys
 import threading
 import time
 
-print("🚀 [DEBUG] BASIC IMPORTS COMPLETE")
 
 import cv2
 
@@ -669,7 +667,6 @@ _global_state_manager = state_manager
 # CRITICAL: Register captioner with state_manager so GRBL can access it
 # (sys.modules doesn't work from GRBL thread context)
 state_manager.captioner = captioner
-print("[🔧 INIT] Registered captioner with state_manager for GRBL access")
 
 # Initialize LCD caption display
 if USE_CAPTION_DISPLAY:
@@ -782,11 +779,9 @@ except Exception:
 image_monitor.start()
 
 # Register GRBL-complete hook to trigger uArm after actual G-code completion
-print("🔥 [DEBUG] STARTING HOOK REGISTRATION BLOCK")
 try:
     import utils.hooks as _hooks
     from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
-    print(f"🔥 [DEBUG] Hook setup: USE_UARM={USE_UARM}, UARM_PLAY_AFTER_DRAW={UARM_PLAY_AFTER_DRAW}, UARM_PLAY_FILE={UARM_PLAY_FILE}")
     if USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE:
         def _normalize_smooth(path: str) -> str:
             base, ext = os.path.splitext(path)
@@ -795,7 +790,6 @@ try:
             return f"{base}{ext or '.txt'}"
 
         def _uarm_after_grbl():
-            print(f"[DEBUG] _uarm_after_grbl() called - starting papermove sequence")
             def _run():
                 try:
                     from grbl.idle_movement_manager import pause_for_drawing, get_manager
@@ -804,10 +798,9 @@ try:
                     # (since we're in transition period between GRBL completion and uArm execution)
                     manager = get_manager()
                     if manager.process and manager.process.poll() is None:
-                        print("[DEBUG] Force pausing idle movements for uArm sequence")
                         manager.pause_for_drawing()
                     else:
-                        print("[DEBUG] No idle movements running to pause")
+                        pass
 
                     target = _normalize_smooth(UARM_PLAY_FILE)
                     app = None
@@ -861,14 +854,11 @@ try:
                     # after CNC state is properly cleared, so we don't need to do it here
 
             # Run synchronously to ensure GRBL waits for uArm completion before clearing CNC state
-            print("[DEBUG] Running uArm sequence synchronously to coordinate with GRBL")
             _run()
-            print("[DEBUG] uArm sequence completed, GRBL can now clear CNC state")
 
         _hooks.on_grbl_drawing_complete = _uarm_after_grbl
-        print(f"🔥 [DEBUG] GRBL hook registered successfully - uArm will trigger after drawing completion")
     else:
-        print(f"[DEBUG] GRBL hook NOT registered - condition failed")
+        pass
 except Exception as e:
     print(f"[DEBUG] GRBL hook registration failed: {e}")
     import traceback
@@ -1356,11 +1346,6 @@ try:
         if smoothed_person_detected and smoothed_bbox is None and random.random() < 0.02:
             debug_print(f"WARN: Person detected but no bbox available", "GAZE")
 
-        # Debug: show face detection status (sampled to reduce spam)
-        if face_box is not None and random.random() < 0.05:
-            print(f"[👤 FACE] Tracking at {face_box[:2]}...")
-        elif smoothed_person_detected and random.random() < 0.05:
-            print(f"[👤 FACE] NOT detected (YOLO sees person)")
 
         # Update gaze with face tracking AND YOLO awareness
         person_present, pan, tilt = update_gaze(
