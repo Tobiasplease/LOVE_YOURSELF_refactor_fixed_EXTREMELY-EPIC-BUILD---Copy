@@ -11,8 +11,6 @@ Current safety systems:
 from .paper_detection import (
     paper_detector,
     check_paper_before_drawing,
-    capture_paper_present_reference,
-    capture_paper_absent_reference,
     get_paper_detection_status,
     PaperCheckResult
 )
@@ -20,8 +18,6 @@ from .paper_detection import (
 __all__ = [
     'paper_detector',
     'check_paper_before_drawing',
-    'capture_paper_present_reference',
-    'capture_paper_absent_reference',
     'get_paper_detection_status',
     'PaperCheckResult'
 ]

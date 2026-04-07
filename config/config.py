@@ -352,17 +352,11 @@ USE_MULTI_STEP_DRAWING_ANALYSIS = DRAWING_ANALYSIS_MODE in ("multi_step",)
 # === PAPER DETECTION SAFETY SYSTEM ===
 # Prevent drawing on bare surfaces by checking for paper before execution
 ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
-PAPER_CHECK_METHOD = "aruco"  # "aruco" (ArUco marker detection), "direct" (LLM), or "reference" (image comparison)
-PAPER_DETECTION_TEXT = "EMPTY"  # Text to look for when no paper is present (change to "EMPTY" for clarity)
-PAPER_DETECTION_CONFIDENCE_THRESHOLD = 0.65  # LLM confidence requirement (lowered for bright environments)
-# Reference images (used by paper detection). If they do not exist, detection falls back safely.
-PAPER_PRESENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_present.jpg")
-PAPER_ABSENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_absent.jpg")
-# Legacy single-reference path (kept for backwards compatibility)
-PAPER_REFERENCE_IMAGE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_reference.jpg")
 PAPER_DETECTION_GAZE_PAN = 80  # Pan angle for looking down at drawing area (adjusted further left for better centering)
 PAPER_DETECTION_GAZE_TILT = 65  # Tilt angle for looking down at drawing area (low enough to see ArUco marker)
-PAPER_CHECK_TIMEOUT = 10.0  # Maximum seconds to wait for paper detection
+# Reference images used by grbl_utils local heuristic detection
+PAPER_PRESENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_present.jpg")
+PAPER_ABSENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_absent.jpg")
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
 
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
