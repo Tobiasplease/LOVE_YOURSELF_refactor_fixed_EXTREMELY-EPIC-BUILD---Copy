@@ -146,13 +146,6 @@ class PromptInterface:
         if not memory_ref:
             return None, None, None
 
-        # Choose drawing analysis mode
-        try:
-            from config.config import DRAWING_ANALYSIS_MODE
-            analysis_mode = DRAWING_ANALYSIS_MODE
-        except ImportError:
-            analysis_mode = "single"  # Fallback
-
         prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
 
         model_options = self._get_base_model_options()
@@ -217,45 +210,6 @@ class PromptInterface:
         return DRAWING_SYSTEM_PROMPT.format(
             temporal_context=temporal_context, accumulated_understanding=accumulated_understanding, emotional_state=emotional_state
         )
-
-    def _get_emotional_context(self) -> str:
-        """Get current emotional context from compression system for prompt injection."""
-        try:
-            from captioner.context_compression import context_compressor
-
-            return context_compressor.get_current_sentiment_context()
-        except Exception as e:
-            print(f"[PROMPT] Could not get emotional context: {e}")
-            return ""
-
-    def _get_baseline_context(self) -> str:
-        """Get baseline understanding context from compression system."""
-        try:
-            from captioner.context_compression import context_compressor
-            baseline = context_compressor.get_baseline_context()
-        except Exception as e:
-            print(f"[PROMPT] Could not get baseline context: {e}")
-            baseline = ""
-
-        # Inject environmental safety context (paper detection) if recent
-        try:
-            from utils.state_manager import state_manager
-            ts = getattr(state_manager, 'last_paper_check_ts', 0)
-            present = getattr(state_manager, 'paper_present', True)
-            reason = getattr(state_manager, 'last_paper_check_reason', '')
-            import time as _t
-            if ts and (_t.time() - ts) < 120:
-                if not present:
-                    note = "ENVIRONMENTAL SAFETY: No paper detected on the drawing surface. Avoid initiating physical drawing; focus on observation and preparation."
-                    if reason:
-                        note += f" (Reason: {reason})"
-                    baseline = (baseline + "\n\n" + note).strip() if baseline else note
-        except Exception:
-            pass
-
-        return baseline
-
-    # REMOVED: _get_drawing_context() - drawing context now handled directly in prompts.py
 
     def _get_base_model_options(self):
         """Get base model options for the current model."""
