@@ -54,12 +54,20 @@ class PromptInterface:
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)
 
+        is_qwen = "qwen" in self.model_name.lower()
+
         # Use appropriate temperature based on caption type
         try:
             if drawing_introspection_mode:
-                # Higher temperature and variation for drawing introspection to avoid repetitive responses
                 caption_temp = 1.3
                 model_options.update({"temperature": caption_temp, "top_p": 0.8, "repeat_penalty": 2.0, "top_k": 30})
+            elif is_qwen:
+                # Qwen: model_settings.py already holds the correct base params.
+                # Only override temperature/num_predict per caption type; leave repeat_penalty alone.
+                from config.config import CAPTIONER_TEMPERATURE, ENVIRONMENTAL_TEMPERATURE
+                caption_temp = ENVIRONMENTAL_TEMPERATURE if first_time else CAPTIONER_TEMPERATURE
+                num_predict = 45 if first_time else 40
+                model_options.update({"temperature": caption_temp, "num_predict": num_predict})
             elif first_time:
                 from config.config import ENVIRONMENTAL_TEMPERATURE
                 caption_temp = ENVIRONMENTAL_TEMPERATURE
@@ -68,12 +76,11 @@ class PromptInterface:
                     "top_p": 0.7,
                     "repeat_penalty": 2.5,
                     "top_k": 20,
-                    "num_predict": 100,  # Slightly longer for awakening but still brief
+                    "num_predict": 100,
                 })
             else:
                 from config.config import CAPTIONER_TEMPERATURE
                 caption_temp = CAPTIONER_TEMPERATURE
-                # Preserve existing stops (immersion-breaking phrases) and add brevity stops
                 existing_stops = model_options.get("stop", [])
                 brevity_stops = [".\n", "?\n", "!\n", "\n\n", "...\n"]
                 merged_stops = list(set(existing_stops + brevity_stops))
@@ -82,7 +89,7 @@ class PromptInterface:
                     "top_p": 0.6,
                     "repeat_penalty": 2.5,
                     "top_k": 20,
-                    "num_predict": 120,  # Room for 1-2 sentences + LOOK directive
+                    "num_predict": 120,
                     "stop": merged_stops,
                 })
         except ImportError:
@@ -90,7 +97,7 @@ class PromptInterface:
                 caption_temp = 1.3
                 model_options.update({"temperature": caption_temp, "top_p": 0.8, "repeat_penalty": 2.0, "top_k": 30})
             else:
-                caption_temp = 1.0 if not first_time else 0.9  # Default fallback (lowered from 1.2)
+                caption_temp = 1.0 if not first_time else 0.9
                 model_options.update({"temperature": caption_temp, "top_p": 0.6, "repeat_penalty": 2.0, "top_k": 20, "num_predict": 80})
 
         # Use special system prompt for drawing introspection to encourage variety

@@ -189,6 +189,7 @@ def query_ollama(
     show_progress: bool = OLLAMA_SHOW_PROGRESS,
     prompt_type: str = "general",
     skip_generation_wait: bool = False,
+    prior_assistant_turn: Optional[str] = None,
 ) -> str:
     """
     Query Ollama API with a prompt and optional image.
@@ -202,61 +203,86 @@ def query_ollama(
         system_prompt: Optional system prompt to set context
         options: Model-specific generation options (temperature, top_p, etc.)
         show_progress: Show animated ASCII progress bar during generation
+        prior_assistant_turn: If set and model is Qwen, use /api/chat with this as a
+            planted prior assistant turn so Qwen continues its own voice rather than
+            describing the prior caption as external context.
 
     Returns:
         Response text from Ollama
     """
-    # Skip waiting for generation if explicitly requested (e.g., safety LLM checks)
     if not skip_generation_wait:
         _wait_for_drawing_completion()
 
-    # Use streaming if progress bar is requested
     use_streaming = show_progress
-    payload = {"model": model, "prompt": prompt, "stream": use_streaming}
 
-    # Add model-specific options (highest priority)
-    if options:
-        payload["options"] = options
-    elif strict_evaluation:
-        payload["options"] = {
-            "temperature": 0.1,  # Lower temperature for more focused responses
-            "top_p": 0.8,  # Reduce randomness
-            "repeat_penalty": 1.1,  # Discourage repetition of unseen details
-        }
-
-    if system_prompt and system_prompt.strip():
-        payload["system"] = system_prompt
-
-    # Handle image input
+    # Encode image early so both API paths can use it
     image_path = None
+    img_b64 = None
     if image is not None:
         if isinstance(image, str):
-            # Assume it's a file path
             if os.path.exists(image):
                 image_path = image
                 with open(image, "rb") as img_file:
-                    img_bytes = img_file.read()
-                    img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-                    payload["images"] = [img_b64]
+                    img_b64 = base64.b64encode(img_file.read()).decode("utf-8")
             else:
-                # Assume it's already base64 encoded
-                payload["images"] = [image]
+                img_b64 = image  # already base64
         elif isinstance(image, bytes):
-            # Raw bytes, encode to base64
             img_b64 = base64.b64encode(image).decode("utf-8")
-            payload["images"] = [img_b64]
+
+    # Qwen chat path: plant prior caption as true assistant turn so Qwen continues
+    # its own voice instead of describing the prior caption as external context.
+    use_chat_api = prior_assistant_turn is not None and "qwen" in model.lower()
+
+    if use_chat_api:
+        messages = []
+        if system_prompt and system_prompt.strip():
+            messages.append({"role": "system", "content": system_prompt})
+        # Proper multi-turn: bootstrap user → planted assistant → current user+image
+        # If assistant is last message Qwen does prefix-completion which echoes prompt text.
+        # The last message MUST be a user message so Qwen generates a fresh assistant response.
+        messages.append({"role": "user", "content": "..."})
+        # Trim prior caption to first sentence so it anchors voice without heavy context
+        prior_clean = prior_assistant_turn.strip()
+        sent_end = min((prior_clean.find(c) for c in ".?!" if prior_clean.find(c) > 8), default=-1)
+        prior_anchor = prior_clean[: sent_end + 1] if sent_end > 0 else prior_clean[:80]
+        messages.append({"role": "assistant", "content": prior_anchor})
+        # Current moment: full context prompt + image — Qwen generates the NEXT inner thought
+        current_user: dict = {"role": "user", "content": prompt}
+        if img_b64:
+            current_user["images"] = [img_b64]
+        messages.append(current_user)
+
+        payload: dict = {"model": model, "messages": messages, "stream": use_streaming}
+        if options:
+            payload["options"] = options
+        endpoint = "http://localhost:11434/api/chat"
+
+        log_json_entry(
+            LogType.DEBUG,
+            {"message": "Using /api/chat with planted prior turn", "prior_preview": prior_assistant_turn[:60]},
+            print_message=f"[💬] Qwen chat mode — prior: {prior_assistant_turn[:60]}",
+        )
     else:
-        payload["images"] = []
+        payload = {"model": model, "prompt": prompt, "stream": use_streaming}
+        if options:
+            payload["options"] = options
+        elif strict_evaluation:
+            payload["options"] = {"temperature": 0.1, "top_p": 0.8, "repeat_penalty": 1.1}
+        if system_prompt and system_prompt.strip():
+            payload["system"] = system_prompt
+        if img_b64:
+            payload["images"] = [img_b64]
+        else:
+            payload["images"] = []
+        endpoint = "http://localhost:11434/api/generate"
 
     try:
         progress_bar = None
         if use_streaming:
-            # Start progress bar for streaming
             progress_bar = ProgressBar(description="")
             progress_bar.start()
 
-            # Streaming request
-            response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=timeout, stream=True)
+            response = requests.post(endpoint, json=payload, timeout=timeout, stream=True)
             response.raise_for_status()
 
             response_text = ""
@@ -264,22 +290,24 @@ def query_ollama(
                 if line:
                     try:
                         chunk = json.loads(line.decode("utf-8"))
-                        if "response" in chunk:
-                            response_text += chunk["response"]
+                        if use_chat_api:
+                            response_text += chunk.get("message", {}).get("content", "")
+                        else:
+                            response_text += chunk.get("response", "")
                         if chunk.get("done", False):
                             break
                     except json.JSONDecodeError:
                         continue
 
-            # Stop progress bar
             progress_bar.stop(success=True)
         else:
-            # Non-streaming request (original behavior)
-            response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=timeout)
+            response = requests.post(endpoint, json=payload, timeout=timeout)
             response.raise_for_status()
-            response_text = response.json().get("response", "")
+            if use_chat_api:
+                response_text = response.json().get("message", {}).get("content", "")
+            else:
+                response_text = response.json().get("response", "")
 
-        # Log successful call
         log_ollama_call(
             prompt=prompt,
             model=model,
@@ -297,11 +325,9 @@ def query_ollama(
     except Exception as e:
         error_msg = str(e)
 
-        # Stop progress bar on error
         if progress_bar:
             progress_bar.stop(success=False)
 
-        # Log failed call
         log_ollama_call(
             prompt=prompt,
             model=model,

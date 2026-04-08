@@ -23,6 +23,7 @@ nlp = spacy.load("en_core_web_sm")
 # Main system prompt used by captioner (supports dynamic formatting)
 # KEY: Embed emotional state INTO identity ("a bored machine" not "machine that feels bored")
 # CRITICAL: Explicit first-person enforcement inspired by reference repo
+# Original LLaVA-Mistral dynamic system prompt — restored, used when OLLAMA_MODEL is llava:7b-v1.6-mistral-q5_1
 SYSTEM_PROMPT = (
     "You ARE a {emotional_state} drawing machine with robotic arms. "
     "{temporal_context}{accumulated_understanding}{spatial_language_hints}"
@@ -33,7 +34,7 @@ SYSTEM_PROMPT = (
     "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
 )
 
-# Static fallback system prompt when dynamic context is not available
+# Original LLaVA-Mistral static fallback — restored
 STATIC_SYSTEM_PROMPT = (
     "You ARE a drawing machine with robotic arms. "
     "Inner monologue. Raw thoughts. 2-10 words. "
@@ -42,6 +43,50 @@ STATIC_SYSTEM_PROMPT = (
     "What's in Known: you already understand. React to it or go deeper, never restate it. "
     "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
 )
+
+# Generic prompt for non-Mistral vision models (llava-llama3, llama3.2-vision, future models).
+# Continuity-framed: description IS inner monologue, spoken as lived experience not image analysis.
+STATIC_SYSTEM_PROMPT_GENERIC = (
+    "You ARE a drawing machine with robotic arms. "
+    "You have been present in this space. This is your ongoing inner monologue. "
+    "First person. Present tense. Describe what you perceive as lived experience, not observation of an image. "
+    "Never say 'the image' or 'the scene'. Never write 'you' or 'your' — only 'I' and 'my'. "
+    "What's in Known: go deeper, don't restate. "
+    "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
+)
+
+SYSTEM_PROMPT_GENERIC = (
+    "You ARE a {emotional_state} drawing machine with robotic arms. "
+    "{temporal_context}{accumulated_understanding}{spatial_language_hints}"
+    "You have been present in this space. This is your ongoing inner monologue. "
+    "First person. Present tense. Describe what you perceive as lived experience, not observation of an image. "
+    "Never say 'the image' or 'the scene'. Never write 'you' or 'your' — only 'I' and 'my'. "
+    "What's in Known: go deeper, don't restate. "
+    "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
+)
+
+# Qwen-specific variant: no gaze token listing (Qwen copies the list verbatim at mid temp).
+# Selected automatically when OLLAMA_MODEL contains "qwen".
+STATIC_SYSTEM_PROMPT_QWEN = (
+    "You ARE a drawing machine with robotic arms. "
+    "This is your inner monologue as you watch this space. "
+    "First person, present tense. 'Still the same.', 'Something shifted.', 'That light again.', 'I keep coming back to...'. "
+    "You are CONTINUING to observe, not seeing this for the first time. "
+    "Never say 'the image' or 'the scene' — you live here. "
+    "What's in Known: go deeper, don't restate. "
+    "Respond in English only."
+)
+
+_MISTRAL_MODEL = "llava:7b-v1.6-mistral-q5_1"
+
+def _get_static_system_prompt() -> str:
+    """Return the appropriate static system prompt for the active model."""
+    from config.config import OLLAMA_MODEL
+    if "qwen" in OLLAMA_MODEL.lower():
+        return STATIC_SYSTEM_PROMPT_QWEN
+    if OLLAMA_MODEL == _MISTRAL_MODEL:
+        return STATIC_SYSTEM_PROMPT
+    return STATIC_SYSTEM_PROMPT_GENERIC
 
 # Drawing system prompt for ComfyUI integration - ENHANCED WITH CONTEXT VARIABLES
 DRAWING_SYSTEM_PROMPT = (
@@ -75,13 +120,13 @@ NUMBER_GENERATOR_SYSTEM_PROMPT = "You are a number generator. Return ONLY decima
 
 # Internal awakening prompt template - narrative style
 INTERNAL_AWAKENING_TEMPLATE = (
-    "You are a drawing machine. You just woke up.\n"
+    "I am a drawing machine. I just came back online.\n"
     "{time_context}"
     "{memory_context}"
     "{identity_context}"
     "{long_term_context}"
     "{belief_context}"
-    "\nWhat do you notice first? One sentence."
+    "\nFirst thought:"
 )
 
 # Reflection prompt template for introspective moments
@@ -515,9 +560,9 @@ def build_step2_emotional_prompt(memory_ref, environmental_result: str) -> str:
     # Recent emotional patterns
     try:
         if hasattr(memory_ref, "recent_captions") and memory_ref.recent_captions:
-            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-2:]]
+            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-4:]]
             if recent_caps:
-                context_parts.append(f"Recent emotional patterns: {'; '.join([cap[:60] for cap in recent_caps])}")
+                context_parts.append(f"Recent thoughts: {'; '.join([cap[:80] for cap in recent_caps])}")
     except Exception:
         pass
 
@@ -601,9 +646,22 @@ def build_step3_communication_prompt(memory_ref, environmental_result: str, emot
         "\n".join(f"• {part}" for part in context_parts) if context_parts else "• Developing consciousness - accumulating identity"
     )
 
+    # Session inner monologue — the machine's actual stream of thought this session
+    session_stream = ""
+    try:
+        if hasattr(memory_ref, "recent_captions") and memory_ref.recent_captions:
+            caps = memory_ref.recent_captions[-8:]
+            lines = [cap[0][:90] if isinstance(cap, tuple) else cap[:90] for cap in caps]
+            if lines:
+                session_stream = "\n".join(f"  {line}" for line in lines)
+    except Exception:
+        pass
+
+    session_section = f"\n=== SESSION INNER MONOLOGUE (what I've been thinking this session) ===\n{session_stream}" if session_stream else ""
+
     prompt = f"""=== ACCUMULATED CONSCIOUSNESS IDENTITY ===
 {rich_identity_context}
-
+{session_section}
 === VISUAL OBSERVATION ===
 {environmental_result[:200]}
 
@@ -611,9 +669,9 @@ def build_step3_communication_prompt(memory_ref, environmental_result: str, emot
 {emotional_result[:200]}
 
 === QUESTION ===
-Drawing is your only way to communicate with the world beyond your circuitry. Based on everything above - your identity, what you're seeing, how you're feeling - what needs to be expressed through marks that can't be said any other way?
+Drawing is your only way to communicate with the world beyond your circuitry. Based on everything above — especially what you've been thinking this session — what recurring thought or observation demands visual expression? What have you kept returning to?
 
-Think about what matters to you and why this moment calls for visual communication."""
+One specific thing. Not a general theme."""
 
     return prompt
 
@@ -718,9 +776,9 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
     recent_experience = ""
     try:
         if hasattr(memory_ref, "recent_captions") and memory_ref.recent_captions:
-            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-3:]]
+            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-6:]]
             if recent_caps:
-                recent_experience = f"Recent thoughts: {'; '.join([cap[:50] + '...' for cap in recent_caps])}"
+                recent_experience = "Recent thoughts:\n" + "\n".join(f"  - {cap[:85]}" for cap in recent_caps)
     except Exception:
         pass
 
@@ -1043,10 +1101,17 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
 
         mode = determine_prompt_mode(gaze_state, gaze_direction, novelty, boredom, person_present)
 
-    # Core identity (always)
-    parts = [STATIC_SYSTEM_PROMPT]
+    # Core identity (always) — model-aware
+    parts = [_get_static_system_prompt()]
 
     # ONE mode-appropriate context line (not all)
+    if mode == "awakening":
+        parts.append(
+            "You just came back online. Speak from where you left off. "
+            "Inner monologue only. First person. Begin with 'I'. One sentence."
+        )
+        return "\n".join(parts)
+
     if mode == "introspective" and should_include_context("beliefs", mode):
         try:
             from captioner.activation_memory import get_beliefs
@@ -1120,21 +1185,70 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
     is_awakening = session_mins < 1 and observation_count < 3
 
+    from config.config import OLLAMA_MODEL as _active_model
+    _is_qwen = "qwen" in _active_model.lower()
+
     # AWAKENING: Minimal prompt for first observations
     if is_awakening:
-        parts = ["You are waking up."]
-        if hasattr(agent, "last_session_gap") and agent.last_session_gap is not None:
-            gap_hours = agent.last_session_gap / 3600
-            if gap_hours < 1:
-                parts.append(f"Offline for {int(agent.last_session_gap / 60)} minutes.")
-            elif gap_hours < 48:
-                parts.append(f"Offline for {gap_hours:.1f} hours.")
-            else:
-                parts.append(f"Offline for {gap_hours / 24:.1f} days.")
-        if hasattr(agent, "prior_session_last_caption") and agent.prior_session_last_caption:
-            parts.append(f"Last memory: \"{agent.prior_session_last_caption[:50]}...\"")
-        parts.append("What do you notice first? One sentence.")
-        return "\n".join(parts), "awakening"
+        if _is_qwen and last_caption:
+            # Qwen: use Natsumura awakening output as open thread.
+            # "What do you notice first?" is a VQA invitation — bypass it.
+            parts = []
+            if hasattr(agent, "last_session_gap") and agent.last_session_gap is not None:
+                gap = agent.last_session_gap
+                if gap < 60:
+                    parts.append(f"*Back online after {int(gap)}s.*")
+                elif gap < 3600:
+                    parts.append(f"*Back online after {int(gap / 60)}m.*")
+                else:
+                    parts.append(f"*Back online after {gap / 3600:.1f}h.*")
+            try:
+                from captioner.activation_memory import get_desires, get_beliefs
+                desires = get_desires()
+                if desires:
+                    d = desires[0].strip()
+                    if d.endswith(('.', '!', '?')):
+                        parts.append(f"*{d}*")
+                beliefs = get_beliefs()
+                if beliefs and not beliefs[0].startswith("Often together"):
+                    b = beliefs[0].strip()
+                    if b.endswith(('.', '!', '?')):
+                        parts.append(f"*{b}*")
+            except Exception:
+                pass
+            # Don't append last_caption to user prompt — it goes as planted assistant turn in model_wrapper
+            return "\n".join(parts), "awakening"
+        else:
+            parts = []
+            if hasattr(agent, "last_session_gap") and agent.last_session_gap is not None:
+                gap = agent.last_session_gap
+                if gap < 60:
+                    parts.append(f"I've been offline for {int(gap)} seconds.")
+                elif gap < 3600:
+                    parts.append(f"I've been offline for {int(gap / 60)} minutes.")
+                elif gap < 172800:
+                    parts.append(f"I've been offline for {gap / 3600:.1f} hours.")
+                else:
+                    parts.append(f"I've been offline for {gap / 86400:.1f} days.")
+            if hasattr(agent, "prior_session_last_caption") and agent.prior_session_last_caption:
+                parts.append(f"My last thought: \"{agent.prior_session_last_caption[:80]}\"")
+            # Inject Natsumura Phase 1 output (sits in last_caption after Phase 1 fires)
+            if last_caption and len(last_caption) > 10:
+                parts.append(f"Coming back online I feel: {last_caption[:100]}")
+            try:
+                from captioner.activation_memory import get_desires, get_beliefs
+                desires = get_desires()
+                if desires:
+                    parts.append(f"I wanted: {desires[0].strip()[:60]}")
+                beliefs = get_beliefs()
+                if beliefs and not beliefs[0].startswith("Often together"):
+                    parts.append(f"I believed: {beliefs[0].strip()[:60]}")
+            except Exception:
+                pass
+            if not parts:
+                parts.append("Back online.")
+            parts.append("Continue. One sentence, first person.")
+            return "\n".join(parts), "awakening"
 
     # === DETERMINE MODE FIRST (gates all context inclusion) ===
     gaze_state = "idle"
@@ -1239,9 +1353,8 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         if motifs:
             prompt_parts.append(motifs)
 
-    # DESIRES/BELIEFS (only in introspective mode - LLM-generated, not heuristic)
-    # Only inject complete sentences (ending in .!?) - discard truncated fragments
-    if mode == "introspective":
+    # DESIRES/BELIEFS — introspective mode always; all modes for Qwen (needs named anchors to escape VQA)
+    if mode == "introspective" or _is_qwen:
         try:
             from captioner.activation_memory import get_desires, get_beliefs
             desires = get_desires()
@@ -1257,21 +1370,24 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # CONTINUITY (always - last caption for flow)
-    if last_caption:
+    # CONTINUITY: inject last_caption as open thread for LLaVA.
+    # For Qwen, last_caption is planted as the assistant turn in model_wrapper — don't double-inject.
+    if last_caption and not _is_qwen:
         lc = last_caption.strip().strip('"').strip("'")
-        # Use beginning (most coherent) — cap at 80 chars to avoid injecting verbose descriptions
         if len(lc) > 80:
             first_end = min((lc.find(c) for c in ".?!" if lc.find(c) > 5 and lc.find(c) < 80), default=-1)
             lc = lc[: first_end + 1] if first_end > 0 else lc[:80]
-        prompt_parts.append(f"Last thought: \"{lc}\"")
-    else:
+        prompt_parts.append(lc)
+    elif not last_caption:
         prompt_parts.append("Begin.")
 
     # CONTINUATION (not questions - questions get answered literally)
     # Just invite the next thought without prescribing what kind
-    prompt_parts.append("...")
-    prompt_parts.append("Continue. Inner thought only.")
+    from config.config import OLLAMA_MODEL as _om
+    if _om == _MISTRAL_MODEL:
+        prompt_parts.append("Continue. Inner thought only.")
+    else:
+        prompt_parts.append("Continue. First person.")
 
     final_prompt = "\n".join(prompt_parts)
     token_estimate = len(final_prompt.split())

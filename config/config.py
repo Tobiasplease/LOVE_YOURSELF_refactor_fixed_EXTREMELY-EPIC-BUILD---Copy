@@ -62,11 +62,10 @@ LUNG_OFFSET_SCALE = -0.10
 
 OLLAMA_MODEL = "llava:7b-v1.6-mistral-q5_1"
 
-# Active model:
-# - "llava:7b-v1.6-mistral-q5_1" (Mistral base - works well with current prompts)
-# - "llava-llama3" (Llama 3 base - verbose, prompt leakage issues)
-#
-# To switch models, change OLLAMA_MODEL above.
+# Active model — changing this single line toggles the full prompt/parameter stack:
+# - "qwen2.5vl:7b"               — Qwen2.5-VL (absorbs context, better continuity)
+# - "llava:7b-v1.6-mistral-q5_1" — LLaVA Mistral (prior production baseline)
+# Model-specific params in config/model_settings.py; prompt/routing in captioner/.
 
 # === NARRATIVE/COMPRESSION MODEL ===
 # Text-only model for compression, reflection, and narrative tasks
@@ -308,7 +307,7 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 
 # === CAPTIONING TEMPERATURE SETTINGS ===
 # Control creativity and expressiveness in different types of responses
-CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 1.0))        # Regular observations (balanced: creative but not flowery)
+CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 1.0))        # Regular observations (1.0 for LLaVA; 0.85 for Qwen)
 DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.2))            # Drawing prompts (creative but focused)
 REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 1.1))      # Introspective moments (philosophical)
 ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) # First observations (slightly more grounded)

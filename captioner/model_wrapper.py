@@ -17,6 +17,33 @@ from utils.ollama import query_ollama, truncate_for_print
 
 from .prompt_interface import PromptInterface
 
+_VQA_STARTS = (
+    "The scene", "The room", "The image", "The light", "The dim",
+    "This scene", "This is a", "This is an", "In this", "I can see",
+    "I observe", "I see that", "The workspace", "The cluttered",
+    "The atmosphere", "The space",
+)
+
+def _is_plantable_prior(text: str) -> bool:
+    """Return True if the caption is safe to plant as an assistant turn for Qwen.
+    Rejects VQA-register text and garbage so those don't poison the voice chain.
+    """
+    t = text.strip()
+    if not t:
+        return False
+    # Reject known garbage tokens
+    if t.startswith("addCriterion") or t.startswith("[WARNING]") or t.startswith("Vision initializing"):
+        return False
+    # Reject second-person (Natsumura writing "your/you are")
+    first40 = t[:40].lower()
+    if "your " in first40 or "you are" in first40 or "you're " in first40:
+        return False
+    # Reject VQA image-description openings
+    for bad in _VQA_STARTS:
+        if t.startswith(bad):
+            return False
+    return True
+
 
 class MultimodalModel:
     """Simplified model wrapper - pure API handler."""
@@ -54,11 +81,12 @@ class MultimodalModel:
             print_message=f"[🐞] Prompt hash: {hash(prompt)}, mode: {prompt_mode}, preview: {truncate_for_print(prompt, 200)}",
         )
 
-        # Use Natsumura for introspective mode (text-only, narrative continuation)
-        if prompt_mode == "introspective":
+        # Introspective mode uses text-only Natsumura for LLaVA (no image needed).
+        # Qwen is a vision model — route ALL modes through the visual API path.
+        is_qwen = "qwen" in self.model_name.lower()
+        if prompt_mode == "introspective" and not is_qwen:
             result = self._call_natsumura_introspective(prompt, system_prompt, model_options)
         else:
-            # Use LLaVA for visual modes (observational, relational, etc.)
             result = self._call_ollama(prompt, image_path=image_path, system_prompt=system_prompt, model_options=model_options, prompt_type="caption")
 
         log_json_entry(
@@ -216,9 +244,18 @@ class MultimodalModel:
     ) -> str:
         """Pure API call handler - no prompt logic here."""
 
-        # Use provided options or get defaults
         if model_options is None:
             model_options = self.prompt_interface._get_base_model_options()
+
+        # For Qwen captions: plant prior caption as owned assistant turn so Qwen
+        # continues its voice rather than describing the prior caption as external context.
+        # Only plant if the prior caption is genuine first-person inner monologue —
+        # VQA register (starts with "The scene/room/image") or garbage poisons the voice.
+        prior_turn = None
+        if prompt_type == "caption" and "qwen" in self.model_name.lower() and self.memory_ref:
+            last = getattr(self.memory_ref, "last_caption", None)
+            if last and _is_plantable_prior(last):
+                prior_turn = last
 
         response = query_ollama(
             prompt=prompt,
@@ -229,6 +266,7 @@ class MultimodalModel:
             system_prompt=system_prompt,
             options=model_options,
             prompt_type=prompt_type,
+            prior_assistant_turn=prior_turn,
         )
 
         if not response:

@@ -285,9 +285,14 @@ class Captioner(MemoryMixin):
             if os.path.exists(self._last_caption_file):
                 with open(self._last_caption_file, "r") as f:
                     caption = f.read().strip()
-                    if caption and len(caption) > 5:
+                    # Reject garbage captions that would poison the awakening context
+                    garbage_starts = ("addCriterion", "[WARNING]", "Vision initializing", "自动")
+                    is_garbage = any(caption.startswith(g) for g in garbage_starts)
+                    if caption and len(caption) > 5 and not is_garbage:
                         self.prior_session_last_caption = caption
                         print(f"[💭] Loaded prior session thought: {caption[:50]}...")
+                    elif is_garbage:
+                        print(f"[💭] Prior session caption rejected (garbage): {caption[:30]}...")
         except Exception:
             pass
 
@@ -1045,26 +1050,27 @@ class Captioner(MemoryMixin):
             gap_seconds = self.last_session_gap
             gap_hours = gap_seconds / 3600
             if gap_seconds < 60:
-                time_context = f"You've been asleep for {int(gap_seconds)} seconds.\n"
+                time_context = f"I've been offline for {int(gap_seconds)} seconds.\n"
             elif gap_hours < 1:
-                time_context = f"You've been asleep for {int(gap_seconds / 60)} minutes.\n"
+                time_context = f"I've been offline for {int(gap_seconds / 60)} minutes.\n"
             elif gap_hours < 48:
-                time_context = f"You've been asleep for {gap_hours:.1f} hours.\n"
+                time_context = f"I've been offline for {gap_hours:.1f} hours.\n"
             else:
                 gap_days = gap_hours / 24
-                time_context = f"You've been asleep for {gap_days:.1f} days.\n"
+                time_context = f"I've been offline for {gap_days:.1f} days.\n"
         else:
-            time_context = "This is your first time waking up.\n"
+            time_context = "First time online.\n"
 
-        # Build narrative memory context
+        # Build narrative memory context — sanitize garbage captions from prior sessions
         memory_context = ""
-        if hasattr(self, "prior_session_last_caption") and self.prior_session_last_caption:
-            memory_context = f"The last thought you remember was: \"{self.prior_session_last_caption[:80]}...\"\n"
+        prior = getattr(self, "prior_session_last_caption", None)
+        if prior and not prior.startswith("addCriterion") and not prior.startswith("[WARNING]"):
+            memory_context = f"My last thought: \"{prior[:80]}...\"\n"
         elif hasattr(self, "get_old_session_memory_fragments"):
             try:
                 old_fragments = self.get_old_session_memory_fragments(k=1)
                 if old_fragments:
-                    memory_context = f"The last thought you remember was: \"{old_fragments[0][:80]}...\"\n"
+                    memory_context = f"My last thought: \"{old_fragments[0][:80]}...\"\n"
             except Exception:
                 pass
 
@@ -1078,9 +1084,9 @@ class Captioner(MemoryMixin):
 
             identity_parts = []
             if persistent_desire:
-                identity_parts.append(f"Before sleeping, you wanted: {persistent_desire}")
+                identity_parts.append(f"I wanted: {persistent_desire}")
             if persistent_belief:
-                identity_parts.append(f"You knew: {persistent_belief}")
+                identity_parts.append(f"I knew: {persistent_belief}")
             if identity_parts:
                 identity_context = "\n".join(identity_parts) + "\n"
         except Exception:
@@ -1089,7 +1095,7 @@ class Captioner(MemoryMixin):
         # Fallback to shallow beliefs count if no persistent identity
         if not identity_context and self.beliefs:
             belief_count = len(self.beliefs)
-            belief_context = f"You still carry {belief_count} beliefs from before.\n"
+            belief_context = f"I still carry {belief_count} beliefs.\n"
 
         # Include relevant long-term memories
         long_term_context = ""
@@ -1097,7 +1103,7 @@ class Captioner(MemoryMixin):
             from captioner.activation_memory import get_long_term_memories
             memories = get_long_term_memories(k=1)
             if memories:
-                long_term_context = f"From days past: {memories}\n"
+                long_term_context = f"I remember: {memories}\n"
         except Exception:
             pass
 
