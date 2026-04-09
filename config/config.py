@@ -317,7 +317,7 @@ ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) #
 # LOG_TYPES_TO_PRINT = ["caption", "reflection", "comfy_prompt", "decision", "mood_update", "new_drawing"]
 # To see debug information, add "debug" to LOG_TYPES_TO_PRINT
 LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_drawing", "debug"]
-CLEAN_LLM_OUTPUT = True  # Print only LLM response text without metadata prefixes
+CLEAN_LLM_OUTPUT = False  # Print only LLM response text without metadata prefixes
 PRINT_CLEAN_CAPTIONS = True  # Suppress verbose runtime messages, show only LLM captions
 USE_FOCUSED_PROMPTS = True  # Use streamlined caption prompts (vs verbose structured prompts)
 USE_NARRATIVE_PROMPTS = False  # EXPERIMENTAL: Disabled - reverted to original system
@@ -325,7 +325,7 @@ USE_NARRATIVE_PROMPTS = False  # EXPERIMENTAL: Disabled - reverted to original s
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
-DEBUG_OLLAMA_PROMPTS = False  # enable detailed Ollama debug output with prompt types and errors
+DEBUG_OLLAMA_PROMPTS = True  # enable detailed Ollama debug output with prompt types and errors
 OLLAMA_PRINT_FULL_RESPONSE = True  # print full responses in console output (ignores truncation)
 NO_HANDS = False
 

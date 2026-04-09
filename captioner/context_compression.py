@@ -246,42 +246,31 @@ EARLIER UNDERSTANDINGS (for context):
             # Must build on prior baseline, not reset to awakening narrative
 
             if current_baseline:
-                prompt = f"""What I already understand: "{current_baseline}"
+                prompt = f"""Update my understanding in ONE SHORT SENTENCE (under 20 words):
+What I know: "{current_baseline}"
+What's new in the last few minutes: {recent_text}
 
-{activation_context}
-
-New observations ({duration_description} in):
-{recent_text}
-
-Update my understanding. If something is still true, use 'still'. If something has changed, say what's new.
-Describe the space itself — not whether a person is currently present.
-ONE sentence. First person. Present tense."""
+Respond ONLY with the updated understanding, nothing else. Start with 'still' if unchanged."""
             else:
-                prompt = f"""I've been observing for {duration_description}.
-
-{activation_context}
-
-Observations:
+                prompt = f"""Summarize this space in ONE SHORT SENTENCE (under 20 words):
 {recent_text}
 
-What am I understanding about this space? Describe the space itself — not whether a person is currently present.
-ONE sentence. First person. Present tense."""
+Respond ONLY with the summary, nothing else. First person."""
 
             model_options = {
                 "temperature": 0.5,
                 "top_p": 0.8,
-                "num_predict": 80,
+                "num_predict": 40,  # Enforce brevity - 20 words max is ~40 tokens
                 "repeat_penalty": 1.4,
-                "stop": ["\n", "\n\n"],
+                "stop": ["\n", "."],  # Stop at newline or period
             }
 
             narrative_system_prompt = (
-                "You are updating your accumulated understanding of a space you have been in for a while. "
-                "You are NOT waking up — you already know this place. "
-                "State what you now understand. One sentence, first person, present tense. "
-                "Use 'still' when something persists, say what's new when things change. "
-                "Never encode whether a person is currently present — presence is tracked separately. "
-                "Never start with 'I wake', 'I open my eyes', 'I find myself', or any awakening language."
+                "Generate ONLY the core understanding in 15-20 words max. "
+                "ONE sentence. First person present tense. "
+                "Use 'still' if unchanged, describe what's NEW if changed. "
+                "No elaborate descriptions, no flowery language. Just facts. "
+                "Do not mention whether people are present."
             )
 
             # Use compression model (text-only narrative model) instead of vision model

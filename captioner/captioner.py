@@ -253,6 +253,7 @@ class Captioner(MemoryMixin):
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
         self.last_drawing_check_time: float = 0.0  # Allow immediate first check
+        self.last_memory_mode_time: float = time.time()  # Track memory mode trigger (every 4 min)
 
         # Track session continuity
         self.sessions_since_boot = 0
@@ -434,8 +435,31 @@ class Captioner(MemoryMixin):
                     print_message=f"[🐞] Requesting new caption for {img_path}",
                 )
                 previous_caption = getattr(self, "last_caption", "")
+
+                # Check if it's time for memory mode (every 240 seconds / 4 minutes)
+                time_since_memory = now - self.last_memory_mode_time
+                is_memory_mode_time = time_since_memory > 240  # 4 minutes
+
                 try:
-                    caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
+                    if is_memory_mode_time:
+                        # Memory mode: pull actual caption text from long-term memory
+                        from captioner.prompts import build_memory_mode_prompt, _get_static_system_prompt
+                        memory_prompt, caption_mode = build_memory_mode_prompt(self)
+                        caption = self.model._call_ollama(
+                            memory_prompt,
+                            image_path=None,  # Memory mode doesn't use current image
+                            system_prompt=_get_static_system_prompt(),
+                            model_options=self.model.prompt_interface._get_base_model_options(),
+                            prompt_type="memory"
+                        )
+                        self.last_memory_mode_time = now
+                        log_json_entry(
+                            LogType.DEBUG,
+                            {"message": "Memory mode triggered", "action": "memory_mode", "time_since_last": time_since_memory},
+                            print_message=f"[💭] Memory mode ({time_since_memory:.0f}s since last)",
+                        )
+                    else:
+                        caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
                 except Exception as cap_err:
                     print(f"[ERROR] Regular caption FAILED: {cap_err}")
                     import traceback
@@ -1129,7 +1153,7 @@ class Captioner(MemoryMixin):
         system_prompt = (
             "You are a drawing machine waking from sleep. "
             "Use the context: how long you slept, your last memory, your beliefs. "
-            "Inner monologue. First person. 1-3 sentences."
+            "Inner monologue. First person. One sentence only."
         )
 
         print(f"[🌅 AWAKENING] Calling Natsumura: {internal_prompt[:80]}...")
@@ -1139,12 +1163,18 @@ class Captioner(MemoryMixin):
             timeout=90,
             log_dir=config.MOOD_SNAPSHOT_FOLDER,
             system_prompt=system_prompt,
-            options={"temperature": 0.9, "top_p": 0.8, "num_predict": 150},
+            options={"temperature": 0.9, "top_p": 0.8, "num_predict": 40, "stop": ["\n", "."]},
             prompt_type="awakening",
         )
         print(f"[🌅 AWAKENING] Response: {response[:100] if response else 'EMPTY'}...")
 
-        return response
+        # Filter awakening output: must be brief, plantable inner monologue
+        from captioner.model_wrapper import _is_plantable_prior
+        if response and _is_plantable_prior(response) and len(response) <= 80:
+            return response.strip()
+        else:
+            # Fallback if output is garbage or too long
+            return "I'm waking up."
 
     def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
         """Generate comprehensive awakening with environmental description - THE ONLY awakening now."""

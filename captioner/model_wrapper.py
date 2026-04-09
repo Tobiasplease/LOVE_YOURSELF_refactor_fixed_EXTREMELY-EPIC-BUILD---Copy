@@ -18,15 +18,14 @@ from utils.ollama import query_ollama, truncate_for_print
 from .prompt_interface import PromptInterface
 
 _VQA_STARTS = (
-    "The scene", "The room", "The image", "The light", "The dim",
-    "This scene", "This is a", "This is an", "In this", "I can see",
-    "I observe", "I see that", "The workspace", "The cluttered",
-    "The atmosphere", "The space",
+    "the image", "the scene depicts", "the room appears",
+    "this image", "this scene", "appears to be", "appears to show",
+    "can be seen", "is shown", "depicts", "the workspace is",
 )
 
 def _is_plantable_prior(text: str) -> bool:
-    """Return True if the caption is safe to plant as an assistant turn for Qwen.
-    Rejects VQA-register text and garbage so those don't poison the voice chain.
+    """Return True if the caption is safe to plant in voice thread.
+    Rejects VQA-register text, Natsumura roleplay bleed, and garbage.
     """
     t = text.strip()
     if not t:
@@ -34,15 +33,107 @@ def _is_plantable_prior(text: str) -> bool:
     # Reject known garbage tokens
     if t.startswith("addCriterion") or t.startswith("[WARNING]") or t.startswith("Vision initializing"):
         return False
-    # Reject second-person (Natsumura writing "your/you are")
-    first40 = t[:40].lower()
-    if "your " in first40 or "you are" in first40 or "you're " in first40:
+
+    t_lower = t.lower()
+    first80 = t_lower[:80]
+
+    # Reject Natsumura roleplay bleed: "You:" prefix, asterisk actions, second-person
+    if t_lower.startswith("you:") or t_lower.startswith("you "):
         return False
+    if "*you " in t_lower or "*your " in t_lower:
+        return False
+    if "your " in first80 or "you are" in first80 or "you're " in first80:
+        return False
+
+    # Reject VQA analytical patterns (detailed description from observer perspective)
+    # These are NOT simple openings but actual analytical language
+    vqa_patterns = [
+        "it's clear that", "it is clear that", "it's obvious",
+        "appears to be", "appears to show", "seems to be",
+        "is filled with", "is cluttered", "is disorganized",
+        "is covered with", "contains", "features",
+        "as i stand", "as i look", "as i observe",
+        "looking at", "examining", "observing",
+        "can be seen", "is shown", "is depicted",
+    ]
+
+    for pattern in vqa_patterns:
+        if pattern in t_lower:
+            return False
+
     # Reject VQA image-description openings
     for bad in _VQA_STARTS:
-        if t.startswith(bad):
+        if t_lower.startswith(bad.lower()):
             return False
+
+    # Reject overly long captions (not inner monologue)
+    if len(t) > 150:
+        return False
+
     return True
+
+
+def _extract_first_sentence(text: str, min_chars: int = 15, max_chars: int = 80) -> str:
+    """Extract first complete sentence from text.
+
+    Returns first sentence ending with . ! or ? after min_chars.
+    If no sentence boundary found within max_chars, returns empty string.
+    """
+    text = text.strip()
+    if len(text) < min_chars:
+        return ""
+
+    # Find first sentence boundary
+    for end_idx, char in enumerate(text):
+        if char in ".!?" and end_idx >= min_chars:
+            return text[:end_idx + 1]
+
+    # No complete sentence found within reasonable length
+    return ""
+
+
+def build_caption_thread(agent, max_captions: int = 3) -> str:
+    """Build caption thread from recent captions.
+
+    Returns formatted dashed thread of filtered, truncated prior captions.
+    """
+    if not hasattr(agent, "recent_captions") or not agent.recent_captions:
+        return ""
+
+    valid_captions = []
+
+    # Pull recent captions, filter and truncate
+    for caption_entry in list(agent.recent_captions)[-max_captions:]:
+        if isinstance(caption_entry, dict):
+            caption_text = caption_entry.get("text", "")
+        else:
+            # Handle tuple format (caption, timestamp, mode)
+            caption_text = caption_entry[0] if caption_entry else ""
+
+        if not caption_text:
+            continue
+
+        # Filter through safety checks
+        if not _is_plantable_prior(caption_text):
+            continue
+
+        # Extract first sentence only
+        sentence = _extract_first_sentence(caption_text)
+        if not sentence:
+            continue
+
+        valid_captions.append(sentence)
+
+    # Format as dashed thread
+    if not valid_captions:
+        return ""
+
+    thread_lines = ["My thoughts:"]
+    for caption in valid_captions:
+        thread_lines.append(f"— {caption}")
+    thread_lines.append("—")
+
+    return "\n".join(thread_lines)
 
 
 class MultimodalModel:
@@ -257,6 +348,16 @@ class MultimodalModel:
             if last and _is_plantable_prior(last):
                 prior_turn = last
 
+        # Debug: print full prompt structure for review
+        if prompt_type in ("caption", "reflection", "drawing"):
+            print(f"\n{'='*80}\n[PROMPT] {prompt_type.upper()}\n{'='*80}")
+            if system_prompt:
+                print(f"SYSTEM:\n{system_prompt}\n")
+            print(f"USER:\n{prompt}\n")
+            if prior_turn:
+                print(f"[PLANTED PRIOR] (injected as assistant turn for voice continuity):\n{prior_turn}\n")
+            print(f"{'='*80}\n")
+
         response = query_ollama(
             prompt=prompt,
             model=self.model_name,
@@ -272,7 +373,13 @@ class MultimodalModel:
         if not response:
             response = ""
 
-        return self._clean_response(response)
+        cleaned = self._clean_response(response)
+
+        # Print the caption immediately after the prompt for continuity review
+        if prompt_type == "caption" and cleaned:
+            print(f"[RESPONSE] CAPTION:\n{cleaned}\n")
+
+        return cleaned
 
     def _clean_response(self, response: str) -> str:
         """Remove unwanted AI-generated prompt leakage from responses."""

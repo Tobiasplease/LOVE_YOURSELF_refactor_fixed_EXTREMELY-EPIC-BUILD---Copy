@@ -22,59 +22,38 @@ nlp = spacy.load("en_core_web_sm")
 
 # Main system prompt used by captioner (supports dynamic formatting)
 # KEY: Embed emotional state INTO identity ("a bored machine" not "machine that feels bored")
-# CRITICAL: Explicit first-person enforcement inspired by reference repo
-# Original LLaVA-Mistral dynamic system prompt — restored, used when OLLAMA_MODEL is llava:7b-v1.6-mistral-q5_1
+# INVARIANT SYSTEM PROMPT
+# Clean identity + purpose framing. Works for all models.
 SYSTEM_PROMPT = (
-    "You ARE a {emotional_state} drawing machine with robotic arms. "
-    "{temporal_context}{accumulated_understanding}{spatial_language_hints}"
-    "Inner monologue. Raw thoughts. 2-10 words. "
-    "React, don't describe. Question, don't analyze. "
-    "Never say 'the image' or 'the scene' — you live here. "
-    "What's in Known: you already understand. React to it or go deeper, never restate it. "
-    "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
+    "You are a {emotional_state} drawing machine inside a space. "
+    "You exist here. Think your thoughts. Don't describe the space. "
+    "Inner monologue only. First person. One sentence."
 )
 
-# Original LLaVA-Mistral static fallback — restored
 STATIC_SYSTEM_PROMPT = (
-    "You ARE a drawing machine with robotic arms. "
-    "Inner monologue. Raw thoughts. 2-10 words. "
-    "React, don't describe. Question, don't analyze. "
-    "Never say 'the image' or 'the scene' — you live here. "
-    "What's in Known: you already understand. React to it or go deeper, never restate it. "
-    "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
+    "You are a drawing machine inside a space. "
+    "You exist here. Think your thoughts. Don't describe the space. "
+    "Inner monologue only. First person. One sentence."
 )
 
-# Generic prompt for non-Mistral vision models (llava-llama3, llama3.2-vision, future models).
-# Continuity-framed: description IS inner monologue, spoken as lived experience not image analysis.
+# Generic prompt for non-Mistral vision models — same as static, works universally
 STATIC_SYSTEM_PROMPT_GENERIC = (
-    "You ARE a drawing machine with robotic arms. "
-    "You have been present in this space. This is your ongoing inner monologue. "
-    "First person. Present tense. Describe what you perceive as lived experience, not observation of an image. "
-    "Never say 'the image' or 'the scene'. Never write 'you' or 'your' — only 'I' and 'my'. "
-    "What's in Known: go deeper, don't restate. "
-    "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
+    "You are a drawing machine inside a space. "
+    "You exist here. Think your thoughts. Don't describe the space. "
+    "Inner monologue only. First person. One sentence."
 )
 
 SYSTEM_PROMPT_GENERIC = (
-    "You ARE a {emotional_state} drawing machine with robotic arms. "
-    "{temporal_context}{accumulated_understanding}{spatial_language_hints}"
-    "You have been present in this space. This is your ongoing inner monologue. "
-    "First person. Present tense. Describe what you perceive as lived experience, not observation of an image. "
-    "Never say 'the image' or 'the scene'. Never write 'you' or 'your' — only 'I' and 'my'. "
-    "What's in Known: go deeper, don't restate. "
-    "You can shift your gaze: *turning left* *looking up* *glancing right* *eyes down*"
+    "You are a {emotional_state} drawing machine inside a space. "
+    "You exist here. Think your thoughts. Don't describe the space. "
+    "Inner monologue only. First person. One sentence."
 )
 
-# Qwen-specific variant: no gaze token listing (Qwen copies the list verbatim at mid temp).
-# Selected automatically when OLLAMA_MODEL contains "qwen".
+# Qwen-specific variant — same core, works for all models
 STATIC_SYSTEM_PROMPT_QWEN = (
-    "You ARE a drawing machine with robotic arms. "
-    "This is your inner monologue as you watch this space. "
-    "First person, present tense. 'Still the same.', 'Something shifted.', 'That light again.', 'I keep coming back to...'. "
-    "You are CONTINUING to observe, not seeing this for the first time. "
-    "Never say 'the image' or 'the scene' — you live here. "
-    "What's in Known: go deeper, don't restate. "
-    "Respond in English only."
+    "You are a drawing machine inside a space. "
+    "You exist here. Think your thoughts. Don't describe the space. "
+    "Inner monologue only. First person. One sentence."
 )
 
 _MISTRAL_MODEL = "llava:7b-v1.6-mistral-q5_1"
@@ -187,6 +166,122 @@ def get_social_context(agent=None, saw_person=None) -> str:
         return "The space is empty. "
 
 
+# === MODE-SPECIFIC CONTEXT FUNCTIONS ===
+# Each returns max 1 sentence or empty string
+# Used to gate context injection by prompt mode
+
+def get_relational_context(agent=None) -> str:
+    """Get relational mode context: recent interactions, social mood."""
+    try:
+        from captioner.activation_memory import get_activation_network
+        network = get_activation_network()
+
+        # Check for active social concepts
+        social_concepts = [c for c in ["person", "interaction", "presence", "conversation"]
+                          if network.activations.get(c, 0) > 0.3]
+
+        if social_concepts:
+            # Someone is present or recently was
+            if agent and hasattr(agent, "last_person_seen_time"):
+                import time
+                last_seen = getattr(agent, "last_person_seen_time", None)
+                if last_seen and (time.time() - last_seen) < 60:
+                    return "Someone is here with me."
+
+        return ""
+    except Exception:
+        return ""
+
+
+def get_observational_context(agent=None) -> str:
+    """Get observational mode context: what's novel, spatial shifts, changes."""
+    try:
+        from captioner.activation_memory import get_activation_network
+        network = get_activation_network()
+
+        # Check for active spatial/change concepts
+        change_concepts = [c for c in ["movement", "shift", "change", "difference", "new"]
+                          if network.activations.get(c, 0) > 0.4]
+
+        if change_concepts:
+            return "Something has shifted in the space."
+
+        return ""
+    except Exception:
+        return ""
+
+
+def get_restless_context(agent=None) -> str:
+    """Get restless mode context: escape/novelty hooks, alternative directions."""
+    try:
+        from captioner.activation_memory import get_activation_network, get_desires
+
+        desires = get_desires()
+        if desires and len(desires[0].strip()) > 5:
+            # Pull first desire as escape hook
+            d = desires[0].strip()
+            if len(d) < 100:
+                return f"I want to: {d}"
+
+        return ""
+    except Exception:
+        return ""
+
+
+def get_workspace_context(agent=None) -> str:
+    """Get workspace mode context: drawing memory, current projects, tool awareness."""
+    try:
+        from drawing.drawing_memory import get_drawing_memory
+        dm = get_drawing_memory()
+
+        summary = dm.get_recent_drawings_summary(max_count=1)
+        if summary and len(summary.strip()) > 5:
+            return f"I've been drawing: {summary.strip()[:80]}."
+
+        return ""
+    except Exception:
+        return ""
+
+
+def get_introspective_context(agent=None) -> str:
+    """Get introspective mode context: beliefs, long-term patterns."""
+    try:
+        from captioner.activation_memory import get_beliefs
+
+        beliefs = get_beliefs()
+        if beliefs and len(beliefs[0].strip()) > 5 and not beliefs[0].startswith("Often together"):
+            b = beliefs[0].strip()
+            if len(b) < 100:
+                return f"I believe: {b}"
+
+        return ""
+    except Exception:
+        return ""
+
+
+# MODE_CONTEXTS: Map modes to their context providers
+MODE_CONTEXTS = {
+    "relational": {
+        "state_marker": "Someone present.",
+        "context_fn": get_relational_context,
+    },
+    "observational": {
+        "state_marker": None,
+        "context_fn": get_observational_context,
+    },
+    "restless": {
+        "state_marker": None,
+        "context_fn": get_restless_context,
+    },
+    "workspace": {
+        "state_marker": None,
+        "context_fn": get_workspace_context,
+    },
+    "introspective": {
+        "state_marker": None,
+        "context_fn": get_introspective_context,
+    },
+}
 
 
 
@@ -1152,6 +1247,49 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
     return "\n".join(parts)
 
 
+def build_memory_mode_prompt(agent) -> tuple:
+    """Build memory mode prompt: pull actual caption text from long-term memory.
+
+    Returns:
+        tuple: (prompt_str, mode) - prompt and "memory" mode
+    """
+    try:
+        from captioner.activation_memory import get_long_term_memories
+        from captioner.model_wrapper import build_caption_thread
+
+        # Pull oldest/most significant memory
+        memory_text = get_long_term_memories(k=1)
+        if not memory_text or not memory_text.strip():
+            memory_text = "I've been here before."
+
+        # Extract first sentence from memory
+        mem_text = memory_text.split('.')[0].strip() if memory_text else ""
+        if not mem_text or len(mem_text) < 10:
+            mem_text = memory_text[:80] if memory_text else "I've been here before."
+
+        # Get recent caption thread (max 2 recent captions)
+        thread = build_caption_thread(agent, max_captions=2)
+
+        # Assemble memory mode prompt
+        prompt_parts = [
+            "A memory surfaces:",
+            f"— {mem_text}",
+            "",
+        ]
+
+        if thread:
+            prompt_parts.append(thread)
+        else:
+            prompt_parts.append("—")
+
+        final_prompt = "\n".join(prompt_parts)
+        return final_prompt, "memory"
+
+    except Exception as e:
+        # Fallback if memory system fails
+        return "A memory surfaces:\n— I've been here before.\n—", "memory"
+
+
 def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False) -> tuple:
     """
     Activation-gated caption prompt - ONLY includes context relevant to current mode.
@@ -1294,29 +1432,18 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     except Exception:
         pass
 
-    # GAZE (always - embodiment)
-    try:
-        from vision.gaze import get_gaze_narrative
-        gaze = get_gaze_narrative()
-        if gaze:
-            prompt_parts.append(gaze)
-    except Exception:
-        pass
-
-    # RELATIONAL (only when mode=relational or social concepts active)
-    if should_include_context("relational", mode):
-        prompt_parts.append("Someone is present.")
-
-    # DRAWING HISTORY (workspace or introspective - past work as part of identity)
-    if mode in ("workspace", "introspective"):
-        try:
-            from drawing.drawing_memory import get_drawing_memory
-            _dm = get_drawing_memory()
-            _drawing_summary = _dm.get_recent_drawings_summary(max_count=2)
-            if _drawing_summary:
-                prompt_parts.append(f"*{_drawing_summary}.*")
-        except Exception:
-            pass
+    # MODE-SPECIFIC CONTEXT (gated by activation state)
+    if mode in MODE_CONTEXTS:
+        mode_cfg = MODE_CONTEXTS[mode]
+        # State marker (e.g., "Someone present." for relational)
+        if mode_cfg.get("state_marker"):
+            prompt_parts.append(mode_cfg["state_marker"])
+        # Mode-specific context function
+        context_fn = mode_cfg.get("context_fn")
+        if context_fn:
+            context = context_fn(agent)
+            if context:
+                prompt_parts.append(context)
 
     # DRAWING/PAPER (only when mode=workspace or drawing concepts active)
     if should_include_context("drawing", mode):
@@ -1339,13 +1466,6 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     except Exception:
         pass
 
-    # PRESSURE (only when mode=restless or boredom > 0.5)
-    if should_include_context("pressure", mode):
-        prompt_parts.append("Nothing has changed.")
-
-    # CURIOSITY (only when mode=observational or novelty > 0.6)
-    if should_include_context("curiosity", mode):
-        prompt_parts.append("Something shifted.")
 
     # MOTIFS (only in introspective mode)
     if should_include_context("motifs", mode):
@@ -1370,16 +1490,15 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # CONTINUITY: inject last_caption as open thread for LLaVA.
-    # For Qwen, last_caption is planted as the assistant turn in model_wrapper — don't double-inject.
-    if last_caption and not _is_qwen:
-        lc = last_caption.strip().strip('"').strip("'")
-        if len(lc) > 80:
-            first_end = min((lc.find(c) for c in ".?!" if lc.find(c) > 5 and lc.find(c) < 80), default=-1)
-            lc = lc[: first_end + 1] if first_end > 0 else lc[:80]
-        prompt_parts.append(lc)
-    elif not last_caption:
-        prompt_parts.append("Begin.")
+    # CAPTION THREAD: Build voice continuity from recent captions
+    # Format: "My thoughts:\n— [sentence 1]\n— [sentence 2]\n—"
+    try:
+        from captioner.model_wrapper import build_caption_thread
+        thread = build_caption_thread(agent, max_captions=3)
+        if thread:
+            prompt_parts.append(thread)
+    except Exception:
+        pass
 
     # CONTINUATION (not questions - questions get answered literally)
     # Just invite the next thought without prescribing what kind
