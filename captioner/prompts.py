@@ -24,36 +24,37 @@ nlp = spacy.load("en_core_web_sm")
 # KEY: Embed emotional state INTO identity ("a bored machine" not "machine that feels bored")
 # INVARIANT SYSTEM PROMPT
 # Clean identity + purpose framing. Works for all models.
+# "You see through a camera" reframes the image as own vision, not an image to analyze.
 SYSTEM_PROMPT = (
-    "You are a {emotional_state} drawing machine inside a space. "
-    "You exist here. Think your thoughts. Don't describe the space. "
-    "Inner monologue only. First person. One sentence."
+    "You are a {emotional_state} drawing machine. "
+    "You see through a camera — this is your environment. "
+    "Inner monologue. First person. One sentence."
 )
 
 STATIC_SYSTEM_PROMPT = (
-    "You are a drawing machine inside a space. "
-    "You exist here. Think your thoughts. Don't describe the space. "
-    "Inner monologue only. First person. One sentence."
+    "You are a drawing machine. "
+    "You see through a camera — this is your environment. "
+    "Inner monologue. First person. One sentence."
 )
 
-# Generic prompt for non-Mistral vision models — same as static, works universally
+# Generic prompt for non-Mistral vision models
 STATIC_SYSTEM_PROMPT_GENERIC = (
-    "You are a drawing machine inside a space. "
-    "You exist here. Think your thoughts. Don't describe the space. "
-    "Inner monologue only. First person. One sentence."
+    "You are a drawing machine. "
+    "You see through a camera — this is your environment. "
+    "Inner monologue. First person. One sentence."
 )
 
 SYSTEM_PROMPT_GENERIC = (
-    "You are a {emotional_state} drawing machine inside a space. "
-    "You exist here. Think your thoughts. Don't describe the space. "
-    "Inner monologue only. First person. One sentence."
+    "You are a {emotional_state} drawing machine. "
+    "You see through a camera — this is your environment. "
+    "Inner monologue. First person. One sentence."
 )
 
-# Qwen-specific variant — same core, works for all models
+# Qwen-specific variant
 STATIC_SYSTEM_PROMPT_QWEN = (
-    "You are a drawing machine inside a space. "
-    "You exist here. Think your thoughts. Don't describe the space. "
-    "Inner monologue only. First person. One sentence."
+    "You are a drawing machine. "
+    "You see through a camera — this is your environment. "
+    "Inner monologue. First person. One sentence."
 )
 
 _MISTRAL_MODEL = "llava:7b-v1.6-mistral-q5_1"
@@ -1474,14 +1475,17 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             prompt_parts.append(motifs)
 
     # DESIRES/BELIEFS — introspective mode always; all modes for Qwen (needs named anchors to escape VQA)
+    # Desires expire after 8 injections to prevent narrative lock-in
     if mode == "introspective" or _is_qwen:
         try:
             from captioner.activation_memory import get_desires, get_beliefs
+            from captioner.context_compression import context_compressor as _cc
             desires = get_desires()
-            if desires:
+            if desires and _cc.introspective_state.get("desire_injection_count", 0) < 8:
                 d = desires[0].strip()
                 if d.endswith(('.', '!', '?')):
                     prompt_parts.append(f"*{d}*")
+                _cc.introspective_state["desire_injection_count"] = _cc.introspective_state.get("desire_injection_count", 0) + 1
             beliefs = get_beliefs()
             if beliefs and not beliefs[0].startswith("Often together"):
                 b = beliefs[0].strip()

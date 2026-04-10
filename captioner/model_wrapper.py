@@ -17,17 +17,25 @@ from utils.ollama import query_ollama, truncate_for_print
 
 from .prompt_interface import PromptInterface
 
-_VQA_STARTS = (
-    "the image", "the scene depicts", "the room appears",
-    "this image", "this scene", "appears to be", "appears to show",
-    "can be seen", "is shown", "depicts", "the workspace is",
-)
-
 def _is_plantable_prior(text: str) -> bool:
     """Return True if the caption is safe to plant in voice thread.
-    Rejects VQA-register text, Natsumura roleplay bleed, and garbage.
+
+    PHILOSOPHY: An imperfect thread entry is vastly better than an empty thread.
+    Only reject things that are UNAMBIGUOUSLY not first-person inner monologue:
+    - Literal image analysis ("The image shows...", "can be seen")
+    - AI identity breaks ("As an AI", "artificial intelligence")
+    - Second-person / roleplay bleed ("You:", "your")
+    - Garbage tokens
+    Everything else passes. The sentence extractor handles truncation.
     """
     t = text.strip()
+    if not t:
+        return False
+    # Strip leading thread-echo dashes before all checks
+    if t.startswith("—"):
+        t = t[1:].strip()
+    if t.startswith("- "):
+        t = t[2:].strip()
     if not t:
         return False
     # Reject known garbage tokens
@@ -35,60 +43,67 @@ def _is_plantable_prior(text: str) -> bool:
         return False
 
     t_lower = t.lower()
-    first80 = t_lower[:80]
 
-    # Reject Natsumura roleplay bleed: "You:" prefix, asterisk actions, second-person
+    # Reject literal image-analysis register (the model talking ABOUT an image)
+    if t_lower.startswith("the image") or t_lower.startswith("this image") or t_lower.startswith("in this image"):
+        return False
+    if "can be seen" in t_lower or "is depicted" in t_lower:
+        return False
+
+    # AI identity breaks
+    if "artificial intelligence" in t_lower or "as an ai" in t_lower or "i am an ai" in t_lower:
+        return False
+
+    # Second-person / roleplay bleed
     if t_lower.startswith("you:") or t_lower.startswith("you "):
         return False
     if "*you " in t_lower or "*your " in t_lower:
         return False
-    if "your " in first80 or "you are" in first80 or "you're " in first80:
+
+    # Chatbot mode
+    if "i'm sorry" in t_lower or "i apologize" in t_lower:
         return False
 
-    # Reject VQA analytical patterns (detailed description from observer perspective)
-    # These are NOT simple openings but actual analytical language
-    vqa_patterns = [
-        "it's clear that", "it is clear that", "it's obvious",
-        "appears to be", "appears to show", "seems to be",
-        "is filled with", "is cluttered", "is disorganized",
-        "is covered with", "contains", "features",
-        "as i stand", "as i look", "as i observe",
-        "looking at", "examining", "observing",
-        "can be seen", "is shown", "is depicted",
-    ]
-
-    for pattern in vqa_patterns:
-        if pattern in t_lower:
-            return False
-
-    # Reject VQA image-description openings
-    for bad in _VQA_STARTS:
-        if t_lower.startswith(bad.lower()):
-            return False
-
-    # Reject overly long captions (not inner monologue)
-    if len(t) > 150:
+    # Near-empty
+    if len(t.split()) < 3:
         return False
 
     return True
 
 
-def _extract_first_sentence(text: str, min_chars: int = 15, max_chars: int = 80) -> str:
+def _extract_first_sentence(text: str, min_chars: int = 10, max_chars: int = 120) -> str:
     """Extract first complete sentence from text.
 
-    Returns first sentence ending with . ! or ? after min_chars.
-    If no sentence boundary found within max_chars, returns empty string.
+    Handles LLaVA's preferred punctuation: ... ; — as well as standard . ! ?
     """
     text = text.strip()
+    # Strip leading dash if model echoed the thread format
+    if text.startswith("—"):
+        text = text[1:].strip()
+    if text.startswith("- "):
+        text = text[2:].strip()
+
     if len(text) < min_chars:
         return ""
 
-    # Find first sentence boundary
-    for end_idx, char in enumerate(text):
-        if char in ".!?" and end_idx >= min_chars:
-            return text[:end_idx + 1]
+    for end_idx in range(min_chars, min(len(text), max_chars)):
+        char = text[end_idx]
 
-    # No complete sentence found within reasonable length
+        if char in ".!?":
+            # "..." — treat as sentence end (strip trailing dots)
+            if char == "." and end_idx + 2 < len(text) and text[end_idx + 1 : end_idx + 3] == "..":
+                return text[:end_idx].strip()
+            return text[: end_idx + 1].strip()
+
+        if char == ";":
+            return text[:end_idx].strip() + "."
+        if char == "—" and end_idx > min_chars:
+            return text[:end_idx].strip() + "."
+        if char == "-" and end_idx > 0 and text[end_idx - 1] == "-":
+            return text[: end_idx - 1].strip() + "."
+
+    # No boundary found — only use fallback if text actually had substantial content
+    # Don't fabricate sentences from fragments that had no natural ending
     return ""
 
 
@@ -98,12 +113,15 @@ def build_caption_thread(agent, max_captions: int = 3) -> str:
     Returns formatted dashed thread of filtered, truncated prior captions.
     """
     if not hasattr(agent, "recent_captions") or not agent.recent_captions:
+        print("[VOICE-THREAD] No recent_captions on agent")
         return ""
+
+    available = list(agent.recent_captions)[-max_captions:]
+    print(f"[VOICE-THREAD] Checking {len(available)} candidates")
 
     valid_captions = []
 
-    # Pull recent captions, filter and truncate
-    for caption_entry in list(agent.recent_captions)[-max_captions:]:
+    for caption_entry in available:
         if isinstance(caption_entry, dict):
             caption_text = caption_entry.get("text", "")
         else:
@@ -115,14 +133,18 @@ def build_caption_thread(agent, max_captions: int = 3) -> str:
 
         # Filter through safety checks
         if not _is_plantable_prior(caption_text):
+            print(f"[VOICE-THREAD] REJECTED by filter: {caption_text[:60]}...")
             continue
 
         # Extract first sentence only
         sentence = _extract_first_sentence(caption_text)
         if not sentence:
+            print(f"[VOICE-THREAD] REJECTED no sentence boundary: {caption_text[:60]}...")
             continue
 
         valid_captions.append(sentence)
+
+    print(f"[VOICE-THREAD] Loaded {len(valid_captions)} of {len(available)} into thread")
 
     # Format as dashed thread
     if not valid_captions:

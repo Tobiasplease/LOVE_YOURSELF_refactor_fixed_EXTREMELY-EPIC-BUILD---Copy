@@ -92,6 +92,8 @@ MODEL_GENERATION_OPTIONS = {
             "The image contains",
             "I can see an image",
             "The image appears",
+            "The image captures",
+            "The image presents",
             "appears to be a",
             "which suggests that",
             "indicating that",

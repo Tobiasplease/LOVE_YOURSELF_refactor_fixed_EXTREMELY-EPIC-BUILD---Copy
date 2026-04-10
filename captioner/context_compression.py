@@ -42,6 +42,7 @@ class ContextCompressionEngine:
             "current_belief": "",  # What I've learned about this place
             "discoveries": [],     # Striking/self-defining things discovered, persisted across sessions
             "last_introspection": 0.0,
+            "desire_injection_count": 0,  # Track how many times desire has been injected
         }
         self.introspection_interval = 3  # Every 3 compressions, do deeper introspection
 
@@ -260,17 +261,16 @@ Respond ONLY with the summary, nothing else. First person."""
             model_options = {
                 "temperature": 0.5,
                 "top_p": 0.8,
-                "num_predict": 40,  # Enforce brevity - 20 words max is ~40 tokens
+                "num_predict": 40,
                 "repeat_penalty": 1.4,
-                "stop": ["\n", "."],  # Stop at newline or period
+                "stop": ["\n", "\n\n"],
             }
 
             narrative_system_prompt = (
-                "Generate ONLY the core understanding in 15-20 words max. "
-                "ONE sentence. First person present tense. "
-                "Use 'still' if unchanged, describe what's NEW if changed. "
-                "No elaborate descriptions, no flowery language. Just facts. "
-                "Do not mention whether people are present."
+                "Describe a space in 15 words or fewer. "
+                "Physical facts only: objects, light, surfaces, layout. "
+                "No feelings, no narrative, no metaphors. "
+                "Example: 'Cluttered workshop, bright overhead lights, tiled walls, tools and electronics on metal shelves.'"
             )
 
             # Use compression model (text-only narrative model) instead of vision model
@@ -518,6 +518,8 @@ Complete each line in 10 words or less, ending with a period:
                 desire, belief, discovery = self._parse_introspection_response(response)
 
                 if desire:
+                    if desire != self.introspective_state.get("current_desire", ""):
+                        self.introspective_state["desire_injection_count"] = 0
                     self.introspective_state["current_desire"] = desire
                 if belief:
                     self.introspective_state["current_belief"] = belief
