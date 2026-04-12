@@ -506,28 +506,18 @@ def get_observational_context(agent=None) -> str:
 
 
 def get_restless_context(agent=None) -> str:
-    """Get restless mode context from real agent state.
-    Instead of hallucinated desires, surface temporal awareness
-    or drawing history to give restlessness something to anchor to."""
+    """Get restless mode context. Drawing history and session time are already
+    provided by build_identity_line(), so restless context only adds if there's
+    something unique to say (e.g. very long idle time without drawing)."""
     if not agent:
         return ""
 
-    # How long since last drawing?
-    try:
-        from drawing.drawing_memory import get_drawing_memory
-        dm = get_drawing_memory()
-        summary = dm.get_recent_drawings_summary(max_count=1)
-        if summary and len(summary.strip()) > 5:
-            return f"Last drawing: {summary.strip()[:80]}"
-    except Exception:
-        pass
-
-    # How long have I been idle?
+    # Only add context if it's been a LONG time without drawing
     try:
         import time
         session_mins = (time.time() - agent.true_session_start) / 60.0
-        if session_mins > 10:
-            return f"I have been watching for {int(session_mins)} minutes."
+        if session_mins > 30:
+            return f"Been watching for {casual_time_string(session_mins)} now."
     except Exception:
         pass
 

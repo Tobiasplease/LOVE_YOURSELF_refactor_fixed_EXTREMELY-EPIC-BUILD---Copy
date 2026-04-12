@@ -69,11 +69,16 @@ def _is_plantable_prior(text: str) -> bool:
     if "i'm sorry" in t_lower or "i apologize" in t_lower:
         return False
 
-    # Drawing title/idea mode (model stuck in art-catalogue register)
+    # Drawing title/idea/catalogue mode — reject any output that's about
+    # generating drawings rather than inner monologue
     drawing_prefixes = ["drawing title:", "drawing idea:", "new drawing:", "drawing complete",
                         "drawing description:", "drawing note:", "new observation:",
-                        "drawing in progress", "new subject detected"]
+                        "drawing in progress", "new subject detected", "drawing:",
+                        "draw:", "draws:", "i draw", "let's draw"]
     if any(t_lower.startswith(p) for p in drawing_prefixes):
+        return False
+    # Also catch "Draw:" or "Drawing:" mid-text
+    if "draw:" in t_lower or "drawing:" in t_lower or "draws:" in t_lower:
         return False
 
     # Near-empty
