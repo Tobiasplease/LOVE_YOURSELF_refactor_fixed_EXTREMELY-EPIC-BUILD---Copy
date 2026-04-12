@@ -704,10 +704,11 @@ class Captioner(MemoryMixin):
         )
         self.last_caption = caption  # already trimmed to complete sentence above
 
-        # Track recent captions for continuity thread (used by focused prompt)
-        # Store as (caption, timestamp, mode) for parallel thread display
+        # Track recent captions for continuity thread (used by flowing thread)
+        # Store as (caption, timestamp, mode, perception) for interleaved see/think display
         if caption and caption.strip():
-            self.recent_captions.append((caption.strip(), now, caption_mode))
+            last_perception = getattr(self, "_last_perception", "") or ""
+            self.recent_captions.append((caption.strip(), now, caption_mode, last_perception))
             if len(self.recent_captions) > 20:  # Keep last 20
                 self.recent_captions = self.recent_captions[-20:]
 

@@ -126,19 +126,29 @@ def _extract_first_sentence(text: str, min_chars: int = 10, max_chars: int = 120
     return ""
 
 
-def _get_valid_captions(agent, max_captions: int = 3):
-    """Extract valid, filtered caption sentences from agent's recent captions."""
+def _get_valid_captions(agent, max_captions: int = 3, include_perception: bool = False):
+    """Extract valid, filtered caption sentences from agent's recent captions.
+
+    If include_perception=True, returns list of (thought, perception) tuples.
+    Otherwise returns list of thought strings (backwards compatible).
+    """
     if not hasattr(agent, "recent_captions") or not agent.recent_captions:
         return []
 
     available = list(agent.recent_captions)[-max_captions:]
-    valid_captions = []
+    valid = []
 
     for caption_entry in available:
         if isinstance(caption_entry, dict):
             caption_text = caption_entry.get("text", "")
+            perception_text = caption_entry.get("perception", "")
+        elif isinstance(caption_entry, (list, tuple)):
+            caption_text = caption_entry[0] if len(caption_entry) > 0 else ""
+            # New format: (caption, timestamp, mode, perception)
+            perception_text = caption_entry[3] if len(caption_entry) > 3 else ""
         else:
-            caption_text = caption_entry[0] if caption_entry else ""
+            caption_text = str(caption_entry)
+            perception_text = ""
 
         if not caption_text:
             continue
@@ -146,10 +156,15 @@ def _get_valid_captions(agent, max_captions: int = 3):
             continue
 
         sentence = _extract_first_sentence(caption_text)
-        if sentence:
-            valid_captions.append(sentence)
+        if not sentence:
+            continue
 
-    return valid_captions
+        if include_perception:
+            valid.append((sentence, perception_text.strip() if perception_text else ""))
+        else:
+            valid.append(sentence)
+
+    return valid
 
 
 def build_caption_thread(agent, max_captions: int = 3) -> str:
@@ -165,25 +180,51 @@ def build_caption_thread(agent, max_captions: int = 3) -> str:
     return "\n".join(thread_lines)
 
 
-def build_flowing_thread(agent, max_captions: int = 3) -> str:
-    """Build flowing thought stream from recent captions.
+def _compress_perception(perception: str, max_len: int = 60) -> str:
+    """Compress a perception string to a short phrase for thread display."""
+    if not perception:
+        return ""
+    p = perception.strip()
+    # Remove common preambles
+    for preamble in ["In front of me is ", "In front of you is ", "Right now ", "The scene in front of you is "]:
+        if p.lower().startswith(preamble.lower()):
+            p = p[len(preamble):]
+            break
+    # Truncate at word boundary
+    if len(p) > max_len:
+        p = p[:max_len].rsplit(" ", 1)[0]
+    # Lowercase first char
+    if p and p[0].isupper():
+        p = p[0].lower() + p[1:]
+    return p.rstrip(".,;")
 
-    Returns: "...thought 1. Thought 2. Thought 3." or empty string.
-    Designed for the casual monologue prompt format.
+
+def build_flowing_thread(agent, max_captions: int = 3) -> str:
+    """Build flowing thought stream with interleaved see/think pairs.
+
+    Format: "...saw [compressed perception] — thought. Saw [next] — thought."
+    When perception is empty, just the thought is included.
     """
-    valid_captions = _get_valid_captions(agent, max_captions)
-    if not valid_captions:
+    pairs = _get_valid_captions(agent, max_captions, include_perception=True)
+    if not pairs:
         return ""
 
-    # Strip trailing periods/ellipses for cleaner joining
-    cleaned = []
-    for cap in valid_captions:
-        c = cap.rstrip(".")
-        if c.endswith("..."):
-            c = c[:-3].rstrip()
-        cleaned.append(c)
+    fragments = []
+    for thought, perception in pairs:
+        # Clean the thought
+        t = thought.rstrip(".")
+        if t.endswith("..."):
+            t = t[:-3].rstrip()
 
-    return "..." + ". ".join(cleaned) + "."
+        # Compress the perception
+        p = _compress_perception(perception)
+
+        if p:
+            fragments.append(f"{p} — {t}")
+        else:
+            fragments.append(t)
+
+    return "..." + ". ".join(fragments) + "."
 
 
 class MultimodalModel:
