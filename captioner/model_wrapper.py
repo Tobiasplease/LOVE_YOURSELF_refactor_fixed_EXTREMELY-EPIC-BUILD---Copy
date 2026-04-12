@@ -44,10 +44,15 @@ def _is_plantable_prior(text: str) -> bool:
 
     t_lower = t.lower()
 
-    # Reject literal image-analysis register (the model talking ABOUT an image)
-    if t_lower.startswith("the image") or t_lower.startswith("this image") or t_lower.startswith("in this image"):
+    # Reject literal image-analysis register (the model talking ABOUT an image/photograph)
+    image_words = ["the image", "this image", "in this image", "a photograph", "a photo of",
+                   "the photograph", "the photo", "an image of", "this photograph"]
+    if any(t_lower.startswith(w) for w in image_words):
         return False
-    if "can be seen" in t_lower or "is depicted" in t_lower:
+    # Reject VQA language anywhere in the text
+    if "can be seen" in t_lower or "is depicted" in t_lower or "in the image" in t_lower:
+        return False
+    if "appears to be" in t_lower and ("photograph" in t_lower or "photo" in t_lower or "image" in t_lower):
         return False
 
     # AI identity breaks
@@ -62,6 +67,13 @@ def _is_plantable_prior(text: str) -> bool:
 
     # Chatbot mode
     if "i'm sorry" in t_lower or "i apologize" in t_lower:
+        return False
+
+    # Drawing title/idea mode (model stuck in art-catalogue register)
+    drawing_prefixes = ["drawing title:", "drawing idea:", "new drawing:", "drawing complete",
+                        "drawing description:", "drawing note:", "new observation:",
+                        "drawing in progress", "new subject detected"]
+    if any(t_lower.startswith(p) for p in drawing_prefixes):
         return False
 
     # Near-empty
@@ -96,57 +108,48 @@ def _extract_first_sentence(text: str, min_chars: int = 10, max_chars: int = 120
             return text[: end_idx + 1].strip()
 
         if char == ";":
-            return text[:end_idx].strip() + "."
+            return text[:end_idx].strip() + "..."
         if char == "—" and end_idx > min_chars:
-            return text[:end_idx].strip() + "."
+            return text[:end_idx].strip() + "..."
         if char == "-" and end_idx > 0 and text[end_idx - 1] == "-":
-            return text[: end_idx - 1].strip() + "."
+            return text[: end_idx - 1].strip() + "..."
 
-    # No boundary found — only use fallback if text actually had substantial content
-    # Don't fabricate sentences from fragments that had no natural ending
+    # No boundary found — truncate at word boundary with ellipsis to imply continuity
+    truncated = text[:max_chars].rsplit(" ", 1)[0].strip()
+    if len(truncated) >= min_chars:
+        return truncated + "..."
     return ""
 
 
-def build_caption_thread(agent, max_captions: int = 3) -> str:
-    """Build caption thread from recent captions.
-
-    Returns formatted dashed thread of filtered, truncated prior captions.
-    """
+def _get_valid_captions(agent, max_captions: int = 3):
+    """Extract valid, filtered caption sentences from agent's recent captions."""
     if not hasattr(agent, "recent_captions") or not agent.recent_captions:
-        print("[VOICE-THREAD] No recent_captions on agent")
-        return ""
+        return []
 
     available = list(agent.recent_captions)[-max_captions:]
-    print(f"[VOICE-THREAD] Checking {len(available)} candidates")
-
     valid_captions = []
 
     for caption_entry in available:
         if isinstance(caption_entry, dict):
             caption_text = caption_entry.get("text", "")
         else:
-            # Handle tuple format (caption, timestamp, mode)
             caption_text = caption_entry[0] if caption_entry else ""
 
         if not caption_text:
             continue
-
-        # Filter through safety checks
         if not _is_plantable_prior(caption_text):
-            print(f"[VOICE-THREAD] REJECTED by filter: {caption_text[:60]}...")
             continue
 
-        # Extract first sentence only
         sentence = _extract_first_sentence(caption_text)
-        if not sentence:
-            print(f"[VOICE-THREAD] REJECTED no sentence boundary: {caption_text[:60]}...")
-            continue
+        if sentence:
+            valid_captions.append(sentence)
 
-        valid_captions.append(sentence)
+    return valid_captions
 
-    print(f"[VOICE-THREAD] Loaded {len(valid_captions)} of {len(available)} into thread")
 
-    # Format as dashed thread
+def build_caption_thread(agent, max_captions: int = 3) -> str:
+    """Build dashed caption thread (legacy format, used by single-pass path)."""
+    valid_captions = _get_valid_captions(agent, max_captions)
     if not valid_captions:
         return ""
 
@@ -154,8 +157,28 @@ def build_caption_thread(agent, max_captions: int = 3) -> str:
     for caption in valid_captions:
         thread_lines.append(f"— {caption}")
     thread_lines.append("—")
-
     return "\n".join(thread_lines)
+
+
+def build_flowing_thread(agent, max_captions: int = 3) -> str:
+    """Build flowing thought stream from recent captions.
+
+    Returns: "...thought 1. Thought 2. Thought 3." or empty string.
+    Designed for the casual monologue prompt format.
+    """
+    valid_captions = _get_valid_captions(agent, max_captions)
+    if not valid_captions:
+        return ""
+
+    # Strip trailing periods/ellipses for cleaner joining
+    cleaned = []
+    for cap in valid_captions:
+        c = cap.rstrip(".")
+        if c.endswith("..."):
+            c = c[:-3].rstrip()
+        cleaned.append(c)
+
+    return "..." + ". ".join(cleaned) + "."
 
 
 class MultimodalModel:
@@ -395,6 +418,10 @@ class MultimodalModel:
         if not response:
             response = ""
 
+        # Debug: show raw response for perception calls to diagnose empty results
+        if prompt_type == "perception":
+            print(f"[PERCEPTION RAW] len={len(response)}, response={repr(response[:200])}")
+
         cleaned = self._clean_response(response)
 
         # Print the caption immediately after the prompt for continuity review
@@ -402,6 +429,190 @@ class MultimodalModel:
             print(f"[RESPONSE] CAPTION:\n{cleaned}\n")
 
         return cleaned
+
+    def perceive(self, image_path: str, *, perception_prompt: str, mode: str = "observational") -> str:
+        """Pass 1: LLaVA sees the image and answers a directed perception question.
+
+        Returns a short grounded sentence about what it notices.
+        This output is NOT stored as a caption — it feeds into the monologue pass.
+        """
+        import random as _random
+        from captioner.prompts import get_perception_system_prompt
+
+        # Don't inherit base model stop sequences — they block "The image shows..."
+        # which is exactly what we WANT for perception. Use minimal stops only.
+        model_options = {
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "repeat_penalty": 1.3,
+            "num_predict": 120,
+            "num_ctx": 4096,
+            "seed": _random.randint(1, 1000000),
+            "stop": ["\n\nUser:", "\n\nHuman:", "\n\nAssistant:"],
+        }
+
+        perception_system_prompt = get_perception_system_prompt(mode)
+
+        print(f"\n{'='*80}\n[PERCEPTION] LLaVA ({mode})\n{'='*80}")
+        print(f"PROMPT: {perception_prompt}")
+        print(f"{'='*80}\n")
+
+        result = self._call_ollama(
+            perception_prompt,
+            image_path=image_path,
+            system_prompt=perception_system_prompt,
+            model_options=model_options,
+            prompt_type="perception",
+        )
+
+        # Clean up perception: strip image-analysis preamble, then truncate
+        cleaned = (result or "").strip()
+
+        # Detect refusals first — if LLaVA refuses, return empty immediately
+        refusal_phrases = [
+            "does not contain", "do not see", "cannot provide", "cannot confidently",
+            "not enough information", "no human figures", "no people visible",
+            "privacy concerns", "lacks any human", "no individual",
+            "don't have enough", "not clearly visible", "cannot determine",
+            "no person", "no one is", "unable to identify",
+        ]
+        if any(phrase in cleaned.lower() for phrase in refusal_phrases):
+            print(f"[PERCEPTION] LLaVA refused/uncertain, skipping: {cleaned[:60]}")
+            return ""
+
+        # Strip any leading clause that references "image"/"photo"/"picture"/etc.
+        # This catches all variants: "In this/the image...", "The image provided...",
+        # "The photo shows...", "The photograph captures...", etc.
+        # NOTE: photograph MUST come before photo in alternation to avoid partial match leaving "graph"
+        cleaned = re.sub(
+            r'^(?:In\s+(?:this|the)\s+)?(?:The\s+)?(?:image|photograph|photo|picture)(?:\s+provided)?\s*'
+            r'(?:,\s*I\s+can\s+\w+\s+)?'
+            r'(?:appears?\s+to\s+(?:show|be|depict|have\s+been\s+taken)\s*'
+            r'|shows?\s+|depicts?\s+|contains?\s+|presents?\s+|captures?\s+)?'
+            r'(?:the\s+following\s+(?:elements?|objects?|items?)\s*(?:present|visible)?\s*(?:in)?\s*)?'
+            r'[,.:;]?\s*',
+            '', cleaned, count=1, flags=re.IGNORECASE
+        )
+        # Strip "in the/this image" and "in the provided photo" wherever they appear
+        # e.g. "The ceiling in the image is peeling" → "The ceiling is peeling"
+        # e.g. "In the provided photo of what appears..." → "of what appears..."
+        cleaned = re.sub(r'\s*[Ii]n\s+(?:the|this)\s+(?:provided\s+)?(?:image|photograph|photo|picture)\s*(?:of\s+)?', ' ', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'^of\s+', '', cleaned.strip())  # Clean up leftover "of" at start
+        # Also strip "I can see/observe/describe" preamble
+        cleaned = re.sub(
+            r'^I\s+(?:can\s+)?(?:see|observe|describe|notice)\s+(?:that\s+)?',
+            '', cleaned, count=1, flags=re.IGNORECASE
+        )
+        # Strip "Compared to a previous version" or similar cross-reference
+        cleaned = re.sub(
+            r'^(?:Compared|According)\s+to\s+.*?[,]\s*',
+            '', cleaned, count=1, flags=re.IGNORECASE
+        )
+        # Strip numbered list markers and list preamble
+        cleaned = re.sub(r'^\d+\.\s*(?:\*\*\w+\*\*:?\s*)?', '', cleaned)
+        cleaned = re.sub(r'^Here\s+are\s+(?:the\s+)?(?:differences?|details?|observations?|changes?)\s*[:;]?\s*', '', cleaned, flags=re.IGNORECASE)
+        # Strip "Taken from" remnant after photo preamble removal
+        cleaned = re.sub(r'^[Tt]aken\s+from\s+', 'From ', cleaned)
+
+        # Nuclear option: if "image"/"photo"/"photograph" still appears anywhere
+        # after all stripping, try to excise the contaminated sentence
+        cleaned = cleaned.strip()
+        if cleaned:
+            cl = cleaned.lower()
+            if any(w in cl for w in ["image", "photo", "photograph", "picture"]):
+                # Try dropping the first sentence
+                first_end = -1
+                for i in range(10, min(len(cleaned), 150)):
+                    if cleaned[i] in ".!?":
+                        first_end = i + 1
+                        break
+                if first_end > 0:
+                    rest = cleaned[first_end:].strip()
+                    if len(rest) > 15:
+                        cleaned = rest
+
+        # Capitalize after stripping
+        cleaned = cleaned.strip()
+        if cleaned:
+            cleaned = cleaned[0].upper() + cleaned[1:]
+        # Truncate at sentence boundary within 200 chars, or word boundary
+        if len(cleaned) > 200:
+            # Try to find sentence end
+            for i in range(min(len(cleaned), 200), 40, -1):
+                if cleaned[i - 1] in ".!?":
+                    cleaned = cleaned[:i]
+                    break
+            else:
+                cleaned = cleaned[:200].rsplit(" ", 1)[0].strip()
+
+        print(f"[PERCEPTION] Result: {cleaned}\n")
+        return cleaned
+
+    def generate_monologue(self, perception: str, *, monologue_prompt: str, mode: str, agent=None) -> tuple:
+        """Pass 2: Text model generates inner monologue from perception + thread.
+
+        Returns:
+            tuple: (monologue_text, mode)
+        """
+        import random as _random
+        from config.config import MONOLOGUE_MODEL
+        from captioner.prompts import get_monologue_system_prompt
+
+        emotion_state = getattr(agent, "current_emotion_state", "calm") if agent else "calm"
+        system_prompt = get_monologue_system_prompt(mode, emotion_state)
+
+        model_options = {
+            "temperature": 0.4,
+            "top_p": 0.8,
+            "repeat_penalty": 1.25,
+            "num_predict": 80,
+            "num_ctx": 4096,
+            "seed": _random.randint(1, 1000000),
+            "stop": [
+                "\n\n",
+                "[Image", "[image",
+                "\n\nUser:", "\n\nHuman:", "\n\nAssistant:",
+                "[INST]", "[/INST]",
+            ],
+        }
+
+        print(f"\n{'='*80}\n[MONOLOGUE] {MONOLOGUE_MODEL}\n{'='*80}")
+        print(f"SYSTEM: {system_prompt}\n")
+        print(f"USER:\n{monologue_prompt}\n")
+        print(f"{'='*80}\n")
+
+        result = query_ollama(
+            prompt=monologue_prompt,
+            model=MONOLOGUE_MODEL,
+            image=None,
+            system_prompt=system_prompt,
+            timeout=60,
+            log_dir=MOOD_SNAPSHOT_FOLDER,
+            options=model_options,
+            prompt_type="monologue",
+        )
+
+        cleaned = self._clean_response(result) if result else ""
+
+        # Post-process monologue output
+        if cleaned:
+            # Strip markdown formatting that corrupts the thread
+            cleaned = re.sub(r'\*\*([^*]+)\*\*', r'\1', cleaned)  # **bold** → bold
+            cleaned = re.sub(r'\*([^*]+)\*', r'\1', cleaned)      # *italic* → italic
+            # Strip leading/trailing quotes
+            cleaned = cleaned.strip('"').strip()
+            # Fix leading "You" → "I"
+            if cleaned.startswith("You "):
+                cleaned = "I " + cleaned[4:]
+            elif cleaned.startswith("Your "):
+                cleaned = "My " + cleaned[5:]
+            # Fix mid-sentence "you"
+            cleaned = re.sub(r'\byou\b(?! ["\'])', 'I', cleaned, count=2)
+            cleaned = re.sub(r'\byour\b(?! ["\'])', 'my', cleaned, count=2)
+
+        print(f"[MONOLOGUE] Result: {cleaned}\n")
+
+        return (cleaned, mode)
 
     def _clean_response(self, response: str) -> str:
         """Remove unwanted AI-generated prompt leakage from responses."""

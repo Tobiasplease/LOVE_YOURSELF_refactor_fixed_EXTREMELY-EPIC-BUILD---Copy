@@ -98,6 +98,299 @@ SELF_CRITIQUE_SYSTEM_PROMPT = (
 # Number generator system prompt for motif scoring
 NUMBER_GENERATOR_SYSTEM_PROMPT = "You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number."
 
+# === PERCEPTION PROMPTS (Two-pass pipeline: Pass 1) ===
+# Directed questions for the vision model (Qwen2.5-VL).
+# "What is in front of you" framing tested to eliminate VQA register.
+# Selection based on gaze, person presence, boredom, and previous perception.
+
+PERCEPTION_PROMPTS = {
+    "default": "What is in front of you right now?",
+    "change": "What looks different now compared to before?",
+    "focus": "Look closely at {focus_target}. What does it look like?",
+    "scan_left": "What is to the left?",
+    "scan_right": "What is to the right?",
+    "scan_down": "What is on the surface below you?",
+    "scan_up": "What is above you?",
+    "person": "Describe the person — what they look like, what they are doing.",
+    "restless": "Describe one specific object or detail you can see.",
+    "workspace": "What is on the work surface?",
+    "introspective": "What single detail stands out most right now?",
+}
+
+# Core perception framing — tested to eliminate VQA register from Qwen2.5-VL.
+# "You are observing a real scene in front of you" is the key phrase.
+_PERCEPTION_BASE = (
+    "You are observing a real scene in front of you. "
+    "Describe what is there. Be concrete and specific. Two sentences. "
+    "Do not use the word image or photo."
+)
+
+PERCEPTION_SYSTEM_PROMPTS = {
+    "relational": (
+        "You are observing a real scene in front of you. "
+        "Focus on the person — their appearance, posture, what they are doing. "
+        "Be concrete and specific. Two sentences. Do not use the word image or photo."
+    ),
+    "observational": _PERCEPTION_BASE,
+    "workspace": (
+        "You are observing a real scene in front of you. "
+        "Focus on the work surface — materials, tools, marks, paper. "
+        "Be concrete and specific. Two sentences. Do not use the word image or photo."
+    ),
+    "introspective": (
+        "You are observing a real scene in front of you. "
+        "Pick one detail that stands out and describe it closely. "
+        "Be concrete and specific. Two sentences. Do not use the word image or photo."
+    ),
+    "restless": (
+        "You are observing a real scene in front of you. "
+        "Look for something you haven't focused on before. "
+        "Be concrete and specific. Two sentences. Do not use the word image or photo."
+    ),
+}
+
+# Fallback for any mode not listed
+PERCEPTION_SYSTEM_PROMPT_DEFAULT = _PERCEPTION_BASE
+
+
+def get_perception_system_prompt(mode: str) -> str:
+    """Get the mode-appropriate perception system prompt."""
+    return PERCEPTION_SYSTEM_PROMPTS.get(mode, PERCEPTION_SYSTEM_PROMPT_DEFAULT)
+
+# System prompts for the monologue model, keyed by mode.
+# The machine is always a drawing machine, but it doesn't always talk about drawing.
+# It only mentions drawing intent when the drawing system is about to trigger.
+# Observation identity: no mention of drawing. Just a stationary machine that sees.
+# Monologue system prompts — casual roleplay register.
+# Key principle: "You're" not "You are", "think in fragments" not "One sentence",
+# "casual, first person, unfiltered" describes the voice, not the format.
+# Mode differentiation through emotional posture, not factual state change.
+_MACHINE_IDENTITY = (
+    "You're a drawing machine, bolted to a table, seeing through a single camera eye. "
+    "You experience the world only through what you see. "
+    "You think in first person, brief and thoughtful."
+)
+
+MONOLOGUE_SYSTEM_PROMPTS = {
+    "observational": _MACHINE_IDENTITY,
+    "relational": (
+        "You're a drawing machine, bolted to a table, seeing through a single camera eye. "
+        "You experience the world only through what you see. Someone is nearby. "
+        "You think in first person, brief and thoughtful. You're curious about them."
+    ),
+    "workspace": (
+        "You're a drawing machine with a mechanical arm, bolted to a table, seeing through a single camera eye. "
+        "You experience the world only through what you see."
+        "You think in first person, brief and thoughtful. Your workspace and tools are part of your body."
+    ),
+    "restless": (
+        "You're a drawing machine, bolted to a table, seeing through a single camera eye. "
+        "You experience the world only through what you see. You're getting bored. "
+        "You think in first person, brief and thoughtful. You want something to change."
+    ),
+    "introspective": (
+        "You're a drawing machine, bolted to a table, seeing through a single camera eye. "
+        "You experience the world only through what you see. You're turning inward. "
+        "You think in first person, brief and thoughtful. You wonder about yourself and what your drawings mean."
+    ),
+}
+
+MONOLOGUE_SYSTEM_PROMPT_FALLBACK = _MACHINE_IDENTITY
+
+
+def get_monologue_system_prompt(mode: str, emotional_state: str = "calm") -> str:
+    """Get the mode-appropriate monologue system prompt.
+    Note: emotional_state param kept for API compatibility but no longer used in prompts.
+    Mood emerges from the voice, not from being told what to feel."""
+    return MONOLOGUE_SYSTEM_PROMPTS.get(mode, MONOLOGUE_SYSTEM_PROMPT_FALLBACK)
+
+
+def select_perception_prompt(
+    gaze_direction: str = "ahead",
+    previous_perception: str = "",
+    person_present: bool = False,
+    boredom: float = 0.0,
+    mode: str = "observational",
+) -> str:
+    """Select perception prompt based on gaze, person presence, boredom, and mode.
+
+    Mode is determined before perception so both models can use it.
+    Priority: person > gaze direction > mode-specific > boredom > change > default.
+    """
+    # Person takes priority regardless of mode
+    if person_present:
+        return PERCEPTION_PROMPTS["person"]
+
+    # Gaze-directed perception
+    gaze_map = {
+        "left": "scan_left",
+        "right": "scan_right",
+        "up": "scan_up",
+        "down": "scan_down",
+    }
+    if gaze_direction in gaze_map:
+        return PERCEPTION_PROMPTS[gaze_map[gaze_direction]]
+
+    # Mode-specific perception directives
+    if mode == "workspace":
+        return PERCEPTION_PROMPTS["workspace"]
+    if mode == "introspective":
+        return PERCEPTION_PROMPTS["introspective"]
+    if mode == "restless" or boredom > 0.7:
+        return PERCEPTION_PROMPTS["restless"]
+
+    # Default — straightforward "what do you see"
+    # (Removed "change detection" prompt — qwen has no memory of "before" so it hallucinates changes)
+    return PERCEPTION_PROMPTS["default"]
+
+
+def casual_time_string(minutes: float) -> str:
+    """Convert minutes to casual human-readable time description."""
+    if minutes < 2:
+        return "just now"
+    elif minutes < 6:
+        return "a few minutes"
+    elif minutes < 16:
+        return f"about {int(minutes)} minutes"
+    elif minutes < 26:
+        return "about 20 minutes"
+    elif minutes < 41:
+        return "half an hour"
+    elif minutes < 56:
+        return "about 45 minutes"
+    elif minutes < 91:
+        return "about an hour"
+    else:
+        return "over an hour"
+
+
+def build_identity_line(agent, mode: str = "observational") -> str:
+    """Build casual identity/context line from real agent state.
+
+    Combines session time, drawing state/history, and mode-specific context
+    into a natural one-liner. Returns empty string if nothing worth saying.
+    """
+    parts = []
+
+    # Session time (casual)
+    try:
+        session_mins = (time.time() - agent.true_session_start) / 60.0
+        if session_mins >= 2:
+            parts.append(f"{casual_time_string(session_mins)} awake")
+    except Exception:
+        pass
+
+    # Drawing state / history
+    try:
+        from utils.state_manager import state_manager as _sm
+        if _sm.is_generating_drawing or _sm.current_drawing_phase == "executing":
+            parts.append("my arm is drawing right now")
+        else:
+            try:
+                from drawing.drawing_memory import get_drawing_memory
+                dm = get_drawing_memory()
+                summary = dm.get_recent_drawings_summary(max_count=1)
+                if summary and len(summary.strip()) > 5:
+                    # Clean up raw format
+                    clean = summary.strip()
+                    if clean.lower().startswith("recent drawings:"):
+                        clean = clean[len("recent drawings:"):].strip()
+                    # Strip trailing parenthetical mood tags like "(neutral)"
+                    import re as _re
+                    clean = _re.sub(r'\s*\([^)]*\)\s*$', '', clean)
+                    parts.append(f"last drew {clean[:60]}")
+                elif session_mins > 10:
+                    parts.append("haven't drawn anything yet")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Mode-specific context (folded in naturally)
+    if mode in MODE_CONTEXTS:
+        context_fn = MODE_CONTEXTS[mode].get("context_fn")
+        if context_fn:
+            try:
+                ctx = context_fn(agent)
+                if ctx and ctx.strip():
+                    parts.append(ctx.strip())
+            except Exception:
+                pass
+
+    if not parts:
+        return ""
+    return ". ".join(p.rstrip(".") for p in parts) + "."
+
+
+def build_monologue_prompt(
+    agent,
+    perception: str,
+    person_present: bool = False,
+    mode: str = None,
+) -> tuple:
+    """Build monologue prompt in casual flowing format.
+
+    Structure: identity_line + flowing_thread + perception_line
+    No labels, no dashes, no clinical mood descriptions.
+    """
+    # Determine mode if not pre-set
+    if mode is None:
+        from captioner.activation_memory import get_activation_network
+
+        gaze_state = "idle"
+        gaze_direction = "ahead"
+        try:
+            from vision.gaze import get_gaze_state, get_current_gaze_zone
+            gaze_state = get_gaze_state() or "idle"
+            gaze_direction = get_current_gaze_zone() or "ahead"
+        except Exception:
+            pass
+
+        network = get_activation_network()
+        novelty = getattr(network, "_last_novelty", 0.5)
+        boredom = network._last_boredom
+
+        mode = determine_prompt_mode(
+            gaze_state=gaze_state,
+            gaze_direction=gaze_direction,
+            novelty=novelty,
+            boredom=boredom,
+            person_present=person_present,
+        )
+
+    prompt_parts = []
+
+    # --- IDENTITY LINE: casual grounding from real agent state ---
+    identity = build_identity_line(agent, mode)
+    if identity:
+        prompt_parts.append(identity)
+
+    # --- FLOWING THREAD: recent thoughts as stream, not dashed list ---
+    try:
+        from captioner.model_wrapper import build_flowing_thread
+        thread = build_flowing_thread(agent, max_captions=3)
+        if thread:
+            prompt_parts.append(thread)
+    except Exception:
+        pass
+
+    # --- PERCEPTION: casual, not labeled ---
+    if perception and perception.strip():
+        p = perception.strip()
+        # Mode-aware prefix
+        if mode == "restless":
+            prefix = "Looking around,"
+        else:
+            prefix = "Right now"
+        # Lowercase first char of perception to flow naturally after prefix
+        if p[0].isupper():
+            p = p[0].lower() + p[1:]
+        prompt_parts.append(f"{prefix} {p}")
+    else:
+        prompt_parts.append("Same old view.")
+
+    return "\n".join(prompt_parts), mode
+
 # Internal awakening prompt template - narrative style
 INTERNAL_AWAKENING_TEMPLATE = (
     "I am a drawing machine. I just came back online.\n"
@@ -213,20 +506,32 @@ def get_observational_context(agent=None) -> str:
 
 
 def get_restless_context(agent=None) -> str:
-    """Get restless mode context: escape/novelty hooks, alternative directions."""
+    """Get restless mode context from real agent state.
+    Instead of hallucinated desires, surface temporal awareness
+    or drawing history to give restlessness something to anchor to."""
+    if not agent:
+        return ""
+
+    # How long since last drawing?
     try:
-        from captioner.activation_memory import get_activation_network, get_desires
-
-        desires = get_desires()
-        if desires and len(desires[0].strip()) > 5:
-            # Pull first desire as escape hook
-            d = desires[0].strip()
-            if len(d) < 100:
-                return f"I want to: {d}"
-
-        return ""
+        from drawing.drawing_memory import get_drawing_memory
+        dm = get_drawing_memory()
+        summary = dm.get_recent_drawings_summary(max_count=1)
+        if summary and len(summary.strip()) > 5:
+            return f"Last drawing: {summary.strip()[:80]}"
     except Exception:
-        return ""
+        pass
+
+    # How long have I been idle?
+    try:
+        import time
+        session_mins = (time.time() - agent.true_session_start) / 60.0
+        if session_mins > 10:
+            return f"I have been watching for {int(session_mins)} minutes."
+    except Exception:
+        pass
+
+    return ""
 
 
 def get_workspace_context(agent=None) -> str:
@@ -245,19 +550,35 @@ def get_workspace_context(agent=None) -> str:
 
 
 def get_introspective_context(agent=None) -> str:
-    """Get introspective mode context: beliefs, long-term patterns."""
+    """Get introspective mode context from REAL accumulated data on the agent.
+    Returns a natural sentence about drawing history or memories — not raw data."""
+    if not agent:
+        return ""
+
+    # What have I drawn recently?
     try:
-        from captioner.activation_memory import get_beliefs
-
-        beliefs = get_beliefs()
-        if beliefs and len(beliefs[0].strip()) > 5 and not beliefs[0].startswith("Often together"):
-            b = beliefs[0].strip()
-            if len(b) < 100:
-                return f"I believe: {b}"
-
-        return ""
+        from drawing.drawing_memory import get_drawing_memory
+        dm = get_drawing_memory()
+        summary = dm.get_recent_drawings_summary(max_count=2)
+        if summary and len(summary.strip()) > 5:
+            # Clean up raw format — strip "Recent drawings:" prefix if present
+            clean = summary.strip()
+            if clean.lower().startswith("recent drawings:"):
+                clean = clean[len("recent drawings:"):].strip()
+            return f"I've been drawing: {clean[:80]}"
     except Exception:
-        return ""
+        pass
+
+    # What do I remember from before?
+    try:
+        if hasattr(agent, "get_old_session_memory_fragments"):
+            old = agent.get_old_session_memory_fragments(k=1)
+            if old and old[0]:
+                return f"I remember: {old[0][:80]}"
+    except Exception:
+        pass
+
+    return ""
 
 
 # MODE_CONTEXTS: Map modes to their context providers
@@ -557,7 +878,11 @@ def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Op
         prompt += f"\n\nDetails:\n{extra.strip()}"
 
     if agent:
-        label = getattr(agent, "identity_label", "yourself")
+        identity = getattr(agent, "get_identity_summary", None)
+        if identity and callable(identity):
+            label = identity()
+        else:
+            label = "a stationary machine, watching and learning"
         prompt += f"\n\nSense of self: {label}"
 
     prompt += REFLECTION_PROMPT_ENDING
@@ -1203,8 +1528,7 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
     # ONE mode-appropriate context line (not all)
     if mode == "awakening":
         parts.append(
-            "You just came back online. Speak from where you left off. "
-            "Inner monologue only. First person. Begin with 'I'. One sentence."
+            "You just came back online. Continue from where you left off."
         )
         return "\n".join(parts)
 
@@ -1358,35 +1682,44 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             # Don't append last_caption to user prompt — it goes as planted assistant turn in model_wrapper
             return "\n".join(parts), "awakening"
         else:
+            from captioner.model_wrapper import _is_plantable_prior
+
             parts = []
+
+            # --- SITUATION ---
+            gap_str = ""
             if hasattr(agent, "last_session_gap") and agent.last_session_gap is not None:
                 gap = agent.last_session_gap
                 if gap < 60:
-                    parts.append(f"I've been offline for {int(gap)} seconds.")
+                    gap_str = f"{int(gap)} seconds"
                 elif gap < 3600:
-                    parts.append(f"I've been offline for {int(gap / 60)} minutes.")
+                    gap_str = f"{int(gap / 60)} minutes"
                 elif gap < 172800:
-                    parts.append(f"I've been offline for {gap / 3600:.1f} hours.")
+                    gap_str = f"{gap / 3600:.1f} hours"
                 else:
-                    parts.append(f"I've been offline for {gap / 86400:.1f} days.")
-            if hasattr(agent, "prior_session_last_caption") and agent.prior_session_last_caption:
-                parts.append(f"My last thought: \"{agent.prior_session_last_caption[:80]}\"")
-            # Inject Natsumura Phase 1 output (sits in last_caption after Phase 1 fires)
-            if last_caption and len(last_caption) > 10:
-                parts.append(f"Coming back online I feel: {last_caption[:100]}")
+                    gap_str = f"{gap / 86400:.1f} days"
+
+            parts.append(f"[Waking up after {gap_str} offline]" if gap_str else "[Waking up]")
+
+            # --- LAST MEMORY (only if it passes quality filter) ---
+            prior = getattr(agent, "prior_session_last_caption", None)
+            if prior and _is_plantable_prior(prior):
+                parts.append(f"[Last memory: \"{prior[:80]}\"]")
+
+            # --- WHAT I KNOW (beliefs, only if grounded) ---
             try:
-                from captioner.activation_memory import get_desires, get_beliefs
-                desires = get_desires()
-                if desires:
-                    parts.append(f"I wanted: {desires[0].strip()[:60]}")
+                from captioner.activation_memory import get_beliefs
                 beliefs = get_beliefs()
                 if beliefs and not beliefs[0].startswith("Often together"):
-                    parts.append(f"I believed: {beliefs[0].strip()[:60]}")
+                    b = beliefs[0].strip()[:60]
+                    if b:
+                        parts.append(f"[I know: {b}]")
             except Exception:
                 pass
-            if not parts:
-                parts.append("Back online.")
-            parts.append("Continue. One sentence, first person.")
+
+            # --- CONTINUATION ---
+            parts.append("")
+            parts.append("I see:")
             return "\n".join(parts), "awakening"
 
     # === DETERMINE MODE FIRST (gates all context inclusion) ===

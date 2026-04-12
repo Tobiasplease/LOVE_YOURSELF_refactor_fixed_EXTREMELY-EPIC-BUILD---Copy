@@ -60,21 +60,28 @@ LUNG_OFFSET_SCALE = -0.10
 
 # === MOOD SYSTEM ===
 
-OLLAMA_MODEL = "llava:7b-v1.6-mistral-q5_1"
+OLLAMA_MODEL = "qwen2.5vl:7b"
 
 # Active model — changing this single line toggles the full prompt/parameter stack:
-# - "qwen2.5vl:7b"               — Qwen2.5-VL (absorbs context, better continuity)
+# - "qwen2.5vl:7b"               — Qwen2.5-VL (perception + drawing analysis)
 # - "llava:7b-v1.6-mistral-q5_1" — LLaVA Mistral (prior production baseline)
 # Model-specific params in config/model_settings.py; prompt/routing in captioner/.
 
 # === NARRATIVE/COMPRESSION MODEL ===
 # Text-only model for compression, reflection, and narrative tasks
 # Uses a storytelling-tuned model for better narrative continuity
-COMPRESSION_MODEL = "Tohur/natsumura-storytelling-rp-llama-3.1:8b"
+COMPRESSION_MODEL = "mistral-nemo"  # Was Natsumura (storytelling RP) which hallucinated fictional scenes during compression
 # Alternatives:
 # - "mistral:7b-instruct" (4GB, general purpose)
 # - "llama3.2:3b" (2GB, lighter)
 # - "tinyllama:latest" (637MB, basic - not recommended for narrative)
+
+# Monologue model — text-only model for inner voice generation
+# Used in the two-pass caption pipeline: LLaVA perceives, this model speaks
+# mistral-nemo: 12B instruction-following model. Follows system prompts faithfully,
+# produces natural first-person prose without RP artifacts or VQA relapse.
+# Previous: "Tohur/natsumura-storytelling-rp-llama-3.1:8b" (storytelling RP — fought brevity constraints)
+MONOLOGUE_MODEL = "mistral-nemo"
 
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log"))
 
@@ -307,8 +314,8 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 
 # === CAPTIONING TEMPERATURE SETTINGS ===
 # Control creativity and expressiveness in different types of responses
-CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 1.0))        # Regular observations (1.0 for LLaVA; 0.85 for Qwen)
-DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.2))            # Drawing prompts (creative but focused)
+CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 0.85))       # Regular observations (0.85 for Qwen)
+DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.0))            # Drawing prompts (lowered from 1.2 for Qwen's higher base entropy)
 REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 1.1))      # Introspective moments (philosophical)
 ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) # First observations (slightly more grounded)
 

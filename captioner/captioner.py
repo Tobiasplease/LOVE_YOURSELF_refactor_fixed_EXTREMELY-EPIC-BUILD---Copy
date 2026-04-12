@@ -249,6 +249,7 @@ class Captioner(MemoryMixin):
 
         # Deduplication system to prevent duplicate prints
         self.recent_captions: List[Tuple[str, float]] = []  # (caption, timestamp)
+        self._last_perception: str = ""  # Last LLaVA perception for change detection
 
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
@@ -274,9 +275,11 @@ class Captioner(MemoryMixin):
             with open(self._last_session_file, "w") as f:
                 f.write(str(time.time()))
             # Also save the last caption for awakening continuity
-            if self.last_caption and len(self.last_caption) > 5:
+            # Filter through plantability check to avoid saving chatbot/garbage captions
+            from .model_wrapper import _is_plantable_prior
+            if self.last_caption and len(self.last_caption) > 5 and _is_plantable_prior(self.last_caption):
                 with open(self._last_caption_file, "w") as f:
-                    f.write(self.last_caption[:200])  # Truncate to reasonable length
+                    f.write(self.last_caption[:200])
         except Exception:
             pass
 
@@ -405,19 +408,8 @@ class Captioner(MemoryMixin):
             caption = None  # Initialize caption variable
             caption_mode = "observational"  # Default mode
 
-            if not self.first_caption_done:
-                # Phase 1: Internal awakening reorientation (no image)
-                if not self.snapshot_queue:
-                    self.first_caption_done = False  # Keep awakening pending
-                    caption = "Awakening... preparing to observe environment..."
-                    caption_mode = "awakening"
-                    time.sleep(0.5)
-                else:
-                    caption = self.generate_internal_awakening()
-                    caption_mode = "awakening"
-                    self.awaiting_environmental_phase = True  # Flag for Phase 2
-            elif getattr(self, "awaiting_environmental_phase", False) or not self.session_awakening_done:
-                # Phase 2: Environmental grounding (first visual after awakening OR first visual of session)
+            if not self.first_caption_done or not self.session_awakening_done:
+                # Single-phase awakening: LLaVA looks at the actual environment
                 try:
                     caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=True)
                 except Exception as env_err:
@@ -426,7 +418,6 @@ class Captioner(MemoryMixin):
                     traceback.print_exc()
                     caption = "Vision settling..."
                     caption_mode = "awakening"
-                self.awaiting_environmental_phase = False
                 self.session_awakening_done = True
             else:
                 log_json_entry(
@@ -459,7 +450,85 @@ class Captioner(MemoryMixin):
                             print_message=f"[💭] Memory mode ({time_since_memory:.0f}s since last)",
                         )
                     else:
-                        caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
+                        if True:
+                            # === TWO-PASS CAPTION PIPELINE ===
+                            # Always use two-pass after first caption. Single-pass LLaVA
+                            # produces VQA descriptions, not inner monologue.
+                            from captioner.prompts import select_perception_prompt, build_monologue_prompt, determine_prompt_mode
+                            from captioner.activation_memory import get_activation_network
+
+                            gaze_state = "idle"
+                            gaze_direction = "ahead"
+                            try:
+                                from vision.gaze import get_gaze_state, get_current_gaze_zone
+                                gaze_state = get_gaze_state() or "idle"
+                                gaze_direction = get_current_gaze_zone() or "ahead"
+                            except Exception:
+                                pass
+
+                            network = get_activation_network()
+                            boredom = network._last_boredom
+                            novelty = getattr(network, "_last_novelty", 0.5)
+
+                            # Determine mode ONCE — both models use it
+                            caption_mode = determine_prompt_mode(
+                                gaze_state=gaze_state,
+                                gaze_direction=gaze_direction,
+                                novelty=novelty,
+                                boredom=boredom,
+                                person_present=person_present,
+                            )
+
+                            # Pass 1: LLaVA perception (mode-aware)
+                            perception_prompt = select_perception_prompt(
+                                gaze_direction=gaze_direction,
+                                previous_perception=getattr(self, "_last_perception", ""),
+                                person_present=person_present,
+                                boredom=boredom,
+                                mode=caption_mode,
+                            )
+
+                            perception = self.model.perceive(
+                                img_path,
+                                perception_prompt=perception_prompt,
+                                mode=caption_mode,
+                            )
+
+                            # If we asked about a person but LLaVA saw nobody,
+                            # downgrade mode and re-perceive with a non-person prompt.
+                            if not perception and person_present and caption_mode == "relational":
+                                print("[PERCEPTION] Person expected but not seen — falling back to observational")
+                                person_present = False
+                                caption_mode = "introspective"
+                                perception_prompt = select_perception_prompt(
+                                    gaze_direction=gaze_direction,
+                                    previous_perception=getattr(self, "_last_perception", ""),
+                                    person_present=False,
+                                    boredom=boredom,
+                                    mode=caption_mode,
+                                )
+                                perception = self.model.perceive(
+                                    img_path,
+                                    perception_prompt=perception_prompt,
+                                    mode=caption_mode,
+                                )
+
+                            self._last_perception = perception
+
+                            # Pass 2: Monologue from perception (mode pre-determined)
+                            monologue_prompt, caption_mode = build_monologue_prompt(
+                                self,
+                                perception=perception,
+                                person_present=person_present,
+                                mode=caption_mode,
+                            )
+
+                            caption, caption_mode = self.model.generate_monologue(
+                                perception,
+                                monologue_prompt=monologue_prompt,
+                                mode=caption_mode,
+                                agent=self,
+                            )
                 except Exception as cap_err:
                     print(f"[ERROR] Regular caption FAILED: {cap_err}")
                     import traceback
