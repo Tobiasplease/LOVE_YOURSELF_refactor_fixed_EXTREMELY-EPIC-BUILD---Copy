@@ -280,27 +280,24 @@ def build_identity_line(agent, mode: str = "observational") -> str:
     except Exception:
         pass
 
-    # Drawing state / history
+    # Drawing state / history — nemo needs to know whether it's drawing or just watching
     try:
         from utils.state_manager import state_manager as _sm
         if _sm.is_generating_drawing or _sm.current_drawing_phase == "executing":
             parts.append("my arm is drawing right now")
         else:
+            parts.append("not drawing right now, just watching")
             try:
                 from drawing.drawing_memory import get_drawing_memory
                 dm = get_drawing_memory()
                 summary = dm.get_recent_drawings_summary(max_count=1)
                 if summary and len(summary.strip()) > 5:
-                    # Clean up raw format
                     clean = summary.strip()
                     if clean.lower().startswith("recent drawings:"):
                         clean = clean[len("recent drawings:"):].strip()
-                    # Strip trailing parenthetical mood tags like "(neutral)"
                     import re as _re
                     clean = _re.sub(r'\s*\([^)]*\)\s*$', '', clean)
                     parts.append(f"last drew {clean[:60]}")
-                elif session_mins > 10:
-                    parts.append("haven't drawn anything yet")
             except Exception:
                 pass
     except Exception:

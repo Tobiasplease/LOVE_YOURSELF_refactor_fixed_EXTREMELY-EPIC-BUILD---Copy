@@ -499,7 +499,7 @@ class MultimodalModel:
 
         perception_system_prompt = get_perception_system_prompt(mode)
 
-        print(f"\n{'='*80}\n[PERCEPTION] LLaVA ({mode})\n{'='*80}")
+        print(f"\n{'='*80}\n[PERCEPTION] {self.model_name} ({mode})\n{'='*80}")
         print(f"PROMPT: {perception_prompt}")
         print(f"{'='*80}\n")
 
@@ -523,8 +523,20 @@ class MultimodalModel:
             "no person", "no one is", "unable to identify",
         ]
         if any(phrase in cleaned.lower() for phrase in refusal_phrases):
-            print(f"[PERCEPTION] LLaVA refused/uncertain, skipping: {cleaned[:60]}")
-            return ""
+            # Only refuse if the refusal phrase is the MAIN content, not just mentioned
+            # in passing. If there's substantial descriptive content before the refusal,
+            # keep the good part.
+            first_refusal_pos = min(
+                (cleaned.lower().find(p) for p in refusal_phrases if p in cleaned.lower()),
+                default=0
+            )
+            if first_refusal_pos > 40:
+                # Good content before the refusal — keep just the good part
+                cleaned = cleaned[:first_refusal_pos].rstrip(" ,;.")
+                print(f"[PERCEPTION] Trimmed refusal tail, keeping: {cleaned[:60]}")
+            else:
+                print(f"[PERCEPTION] {self.model_name} refused/uncertain, skipping: {cleaned[:60]}")
+                return ""
 
         # Strip any leading clause that references "image"/"photo"/"picture"/etc.
         # This catches all variants: "In this/the image...", "The image provided...",
