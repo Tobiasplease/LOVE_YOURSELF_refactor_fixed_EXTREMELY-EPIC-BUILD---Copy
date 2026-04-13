@@ -349,14 +349,14 @@ class DrawingController:
                         from utils.ollama import query_ollama
                         from config.config import MOOD_SNAPSHOT_FOLDER
 
-                        summary_prompt = f"Summarize what this drawing shows in 2-4 words:\n\n{drawing_prompt}\n\nSummary:"
+                        summary_prompt = f"Describe what this drawing depicts in one short sentence:\n\n{drawing_prompt}\n\nDescription:"
 
                         drawing_summary = query_ollama(
                             prompt=summary_prompt,
                             log_dir=MOOD_SNAPSHOT_FOLDER,
-                            system_prompt="You are summarizing visual content. Give only a brief 2-4 word description of the subject matter.",
+                            system_prompt="Describe the drawing's subject in one brief sentence. Be specific about what is shown, not abstract tags.",
                             prompt_type="drawing_summary",
-                            options={"temperature": 0.3, "num_predict": 20}
+                            options={"temperature": 0.3, "num_predict": 40}
                         ).strip()
 
                         print(f"[📝] Model-generated drawing summary: {drawing_summary}")

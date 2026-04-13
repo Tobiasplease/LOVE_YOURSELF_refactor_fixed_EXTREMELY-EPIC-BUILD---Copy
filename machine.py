@@ -6,6 +6,7 @@ import glob
 import os
 import random
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -380,6 +381,7 @@ _global_mood_engine = None
 _global_state_manager = None
 _global_start_time = None
 _global_run_id = None
+_caption_monitor_proc = None
 organic_left_arm = None
 
 
@@ -442,6 +444,13 @@ def emergency_cleanup():
             pass  # PyTorch not available, skip
         except Exception as e:
             print(f"[WARNING] Warning: Could not clear GPU cache: {e}")
+
+        # Terminate caption monitor if running
+        try:
+            if _caption_monitor_proc and _caption_monitor_proc.poll() is None:
+                _caption_monitor_proc.terminate()
+        except Exception:
+            pass
 
         print("[SUCCESS] Emergency cleanup completed")
         cleanup_completed = True
@@ -654,6 +663,26 @@ log_json_entry(
     {"message": f"Images folder: {run_id}-images/"},
     print_message=f"🖼️ Images folder: {run_id}-images/",
 )
+
+# Launch caption monitor in a separate terminal window
+_caption_monitor_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug", "caption_monitor.py")
+_caption_monitor_proc = None
+if os.path.exists(_caption_monitor_script):
+    try:
+        _caption_monitor_proc = subprocess.Popen(
+            ["x-terminal-emulator", "-e", sys.executable, _caption_monitor_script],
+            start_new_session=True,
+        )
+        print("[INIT] Caption monitor launched in separate terminal")
+    except FileNotFoundError:
+        try:
+            _caption_monitor_proc = subprocess.Popen(
+                ["gnome-terminal", "--", sys.executable, _caption_monitor_script],
+                start_new_session=True,
+            )
+            print("[INIT] Caption monitor launched in separate terminal")
+        except FileNotFoundError:
+            print("[INIT] Could not find a terminal emulator to launch caption monitor")
 
 debug_print("Initializing mood engine", "INIT")
 mood_engine = MoodEngine()

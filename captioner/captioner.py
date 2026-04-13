@@ -80,16 +80,17 @@ def _parse_gaze_direction(caption: str) -> Optional[str]:
         "surface": "down",
     }
 
-    # Expanded gaze verbs
+    # Expanded gaze verbs — includes casual monologue language from nemo
     gaze_verbs = [
         "glancing", "looking", "gazing", "turning", "eyes", "glance", "look", "gaze",
         "staring", "peering", "watching", "observing", "focusing", "scanning", "shifting",
         "pondering", "studying", "examining", "noticing", "drifts", "drift", "lingers",
-        "rests", "settles", "wanders", "moves", "shifts"
+        "rests", "settles", "wanders", "moves", "shifts",
+        "check", "checking", "see", "seeing", "notice", "noticed",
     ]
 
-    # Pattern 0: Search/scan detection - "looking around", "scanning the room", "around"
-    search_patterns = ["around", "scanning", "surveying", "searching", "sweeping"]
+    # Pattern 0: Search/scan detection
+    search_patterns = ["around", "scanning", "surveying", "searching", "sweeping", "pan around"]
     for search_word in search_patterns:
         if search_word in text_lower:
             return "search"
@@ -132,7 +133,22 @@ def _parse_gaze_direction(caption: str) -> Optional[str]:
             if loc_word in text_lower:
                 return dir_name
 
-    # Pattern 4: Legacy LOOK: format (backward compatibility)
+    # Pattern 4: Casual intent language ("let me look at the ceiling", "should check the desk")
+    intent_patterns = [
+        r'(?:let me|should|want to|going to|need to)\s+(?:look|check|see|examine|study)\s+(?:at\s+)?(?:the\s+)?(\w+)',
+        r'(?:keeps?\s+)?(?:catching|drawing)\s+my\s+(?:eye|attention|gaze).*?(?:the\s+)?(\w+)',
+        r'(?:back to|look at|staring at|looking at)\s+(?:the\s+|that\s+)?(\w+)',
+    ]
+    for pattern in intent_patterns:
+        match = re.search(pattern, text_lower)
+        if match:
+            found = match.group(1)
+            if found in directions:
+                return directions[found]
+            if found in location_to_direction:
+                return location_to_direction[found]
+
+    # Pattern 5: Legacy LOOK: format (backward compatibility)
     look_match = re.search(r'look:\s*(\w+)', text_lower)
     if look_match:
         direction = look_match.group(1)
@@ -250,6 +266,7 @@ class Captioner(MemoryMixin):
         # Deduplication system to prevent duplicate prints
         self.recent_captions: List[Tuple[str, float]] = []  # (caption, timestamp)
         self._last_perception: str = ""  # Last LLaVA perception for change detection
+        self._drawing_intentions: List[str] = []  # Accumulated drawing-related musings
 
         self.last_caption_time: float = 0.0
         self.last_reason_time: float = time.time()  # Delay first reflection
@@ -712,6 +729,21 @@ class Captioner(MemoryMixin):
             if len(self.recent_captions) > 20:  # Keep last 20
                 self.recent_captions = self.recent_captions[-20:]
 
+        # Detect and store drawing intentions from monologue output
+        # These accumulate separately and feed into the drawing prompt when drawing triggers
+        if caption and caption.strip():
+            cap_lower = caption.lower()
+            drawing_keywords = ["draw", "sketch", "capture", "next piece", "should paint",
+                                "want to draw", "would look good", "inspire", "my next",
+                                "on paper", "with my arm", "lines and", "bold strokes"]
+            if any(kw in cap_lower for kw in drawing_keywords):
+                if not hasattr(self, "_drawing_intentions"):
+                    self._drawing_intentions = []
+                self._drawing_intentions.append(caption.strip()[:150])
+                if len(self._drawing_intentions) > 10:
+                    self._drawing_intentions = self._drawing_intentions[-10:]
+                print(f"[🎨 INTENT] Stored drawing intention: {caption.strip()[:80]}")
+
         # Now update the timestamp since we have a new caption
         self.last_caption_time = now
 
@@ -930,7 +962,13 @@ class Captioner(MemoryMixin):
             print(f"[DEBUG] Step 4: Drawing system ready, building context...")
         memory_context = self.get_recent_memory()
         reflection_context = self.get_last_reflection()
-        extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
+        # Include accumulated drawing intentions — things nemo has been musing about drawing
+        drawing_intentions = ""
+        if hasattr(self, "_drawing_intentions") and self._drawing_intentions:
+            intentions = self._drawing_intentions[-5:]  # Last 5 drawing-related thoughts
+            drawing_intentions = "Drawing ideas I've been thinking about:\n" + "\n".join(f"  - {i}" for i in intentions)
+            print(f"[🎨] Feeding {len(intentions)} drawing intentions into prompt")
+        extra_context = f"{drawing_intentions}\n\n{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
         if not CLEAN_LLM_OUTPUT:
             print(f"[DEBUG] Step 7: Context built, starting drawing generation...")
 

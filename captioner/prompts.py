@@ -166,8 +166,9 @@ def get_perception_system_prompt(mode: str) -> str:
 # "casual, first person, unfiltered" describes the voice, not the format.
 # Mode differentiation through emotional posture, not factual state change.
 _MACHINE_IDENTITY = (
-    "You're a drawing machine, bolted to a table, seeing through a single camera eye. "
-    "You experience the world only through what you see. "
+    "You're a machine that observes and sometimes draws. "
+    "You're bolted to a table, seeing through a single camera eye. "
+    "Your eye can look left, right, up, or down. "
     "You think in first person, brief and thoughtful."
 )
 
@@ -371,20 +372,13 @@ def build_monologue_prompt(
     except Exception:
         pass
 
-    # --- PERCEPTION: casual, not labeled ---
+    # --- PERCEPTION: bracketed to demarcate visual ground truth ---
+    # Brackets create a structural boundary so nemo distinguishes
+    # "what my eye actually sees" from identity/thread context.
     if perception and perception.strip():
-        p = perception.strip()
-        # Mode-aware prefix
-        if mode == "restless":
-            prefix = "Looking around,"
-        else:
-            prefix = "Right now"
-        # Lowercase first char of perception to flow naturally after prefix
-        if p[0].isupper():
-            p = p[0].lower() + p[1:]
-        prompt_parts.append(f"{prefix} {p}")
+        prompt_parts.append(f"[What I see right now: {perception.strip()}]")
     else:
-        prompt_parts.append("Same old view.")
+        prompt_parts.append("[What I see right now: nothing new, same view.]")
 
     return "\n".join(prompt_parts), mode
 
@@ -538,9 +532,11 @@ def get_workspace_context(agent=None) -> str:
 
 def get_introspective_context(agent=None) -> str:
     """Get introspective mode context from REAL accumulated data on the agent.
-    Returns a natural sentence about drawing history or memories — not raw data."""
+    Combines drawing history + long-term memories for genuine reflection material."""
     if not agent:
         return ""
+
+    fragments = []
 
     # What have I drawn recently?
     try:
@@ -548,24 +544,38 @@ def get_introspective_context(agent=None) -> str:
         dm = get_drawing_memory()
         summary = dm.get_recent_drawings_summary(max_count=2)
         if summary and len(summary.strip()) > 5:
-            # Clean up raw format — strip "Recent drawings:" prefix if present
             clean = summary.strip()
             if clean.lower().startswith("recent drawings:"):
                 clean = clean[len("recent drawings:"):].strip()
-            return f"I've been drawing: {clean[:80]}"
+            import re as _re
+            clean = _re.sub(r'\s*\([^)]*\)\s*$', '', clean)
+            fragments.append(f"I've been drawing: {clean[:60]}")
     except Exception:
         pass
 
-    # What do I remember from before?
+    # What do I remember from previous sessions? (real stored observations)
     try:
-        if hasattr(agent, "get_old_session_memory_fragments"):
-            old = agent.get_old_session_memory_fragments(k=1)
-            if old and old[0]:
-                return f"I remember: {old[0][:80]}"
+        from captioner.activation_memory import get_long_term_memories
+        lt_memories = get_long_term_memories(k=1)
+        if lt_memories and lt_memories.strip() and len(lt_memories.strip()) > 10:
+            # Clean up — take just the first line, strip any formatting
+            mem_line = lt_memories.strip().split("\n")[0].strip()
+            if len(mem_line) > 10:
+                fragments.append(f"I remember: {mem_line[:80]}")
     except Exception:
         pass
 
-    return ""
+    # Fallback: session memory fragments
+    if not fragments:
+        try:
+            if hasattr(agent, "get_old_session_memory_fragments"):
+                old = agent.get_old_session_memory_fragments(k=1)
+                if old and old[0]:
+                    fragments.append(f"I remember: {old[0][:80]}")
+        except Exception:
+            pass
+
+    return ". ".join(fragments) if fragments else ""
 
 
 # MODE_CONTEXTS: Map modes to their context providers

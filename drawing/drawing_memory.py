@@ -51,7 +51,7 @@ class DrawingMemory:
 
         entry = {
             'timestamp': time.time(),
-            'compressed_summary': compressed_summary[:50],  # Max 50 chars
+            'compressed_summary': compressed_summary[:120],  # Max 120 chars — enough for a real sentence
             'theme_tags': (theme_tags or [])[:3],  # Max 3 tags
             'emotional_tone': (emotional_tone or '')[:30],  # Max 30 chars
             'narrative_thread': (narrative_thread or '')[:50],  # Max 50 chars

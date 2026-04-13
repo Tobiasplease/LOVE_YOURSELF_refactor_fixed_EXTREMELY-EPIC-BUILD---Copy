@@ -200,31 +200,24 @@ def _compress_perception(perception: str, max_len: int = 60) -> str:
 
 
 def build_flowing_thread(agent, max_captions: int = 3) -> str:
-    """Build flowing thought stream with interleaved see/think pairs.
+    """Build flowing thought stream from recent captions.
 
-    Format: "...saw [compressed perception] — thought. Saw [next] — thought."
-    When perception is empty, just the thought is included.
+    Returns: "...thought 1. Thought 2. Thought 3." or empty string.
+    Simple flowing format — perception context is handled by the
+    'Already noticed:' line in the perceive() method instead.
     """
-    pairs = _get_valid_captions(agent, max_captions, include_perception=True)
-    if not pairs:
+    valid_captions = _get_valid_captions(agent, max_captions)
+    if not valid_captions:
         return ""
 
-    fragments = []
-    for thought, perception in pairs:
-        # Clean the thought
-        t = thought.rstrip(".")
-        if t.endswith("..."):
-            t = t[:-3].rstrip()
+    cleaned = []
+    for cap in valid_captions:
+        c = cap.rstrip(".")
+        if c.endswith("..."):
+            c = c[:-3].rstrip()
+        cleaned.append(c)
 
-        # Compress the perception
-        p = _compress_perception(perception)
-
-        if p:
-            fragments.append(f"{p} — {t}")
-        else:
-            fragments.append(t)
-
-    return "..." + ". ".join(fragments) + "."
+    return "..." + ". ".join(cleaned) + "."
 
 
 class MultimodalModel:
@@ -477,7 +470,7 @@ class MultimodalModel:
         return cleaned
 
     def perceive(self, image_path: str, *, perception_prompt: str, mode: str = "observational") -> str:
-        """Pass 1: LLaVA sees the image and answers a directed perception question.
+        """Pass 1: Vision model sees the image and answers a directed perception question.
 
         Returns a short grounded sentence about what it notices.
         This output is NOT stored as a caption — it feeds into the monologue pass.
@@ -485,8 +478,6 @@ class MultimodalModel:
         import random as _random
         from captioner.prompts import get_perception_system_prompt
 
-        # Don't inherit base model stop sequences — they block "The image shows..."
-        # which is exactly what we WANT for perception. Use minimal stops only.
         model_options = {
             "temperature": 0.7,
             "top_p": 0.8,
@@ -499,12 +490,22 @@ class MultimodalModel:
 
         perception_system_prompt = get_perception_system_prompt(mode)
 
+        # Add prior perception context so the vision model can go deeper
+        # instead of repeating the same baseline description each cycle.
+        full_prompt = perception_prompt
+        if self.memory_ref:
+            last_perc = getattr(self.memory_ref, "_last_perception", "")
+            if last_perc and len(last_perc) > 10:
+                compressed = _compress_perception(last_perc, max_len=80)
+                if compressed:
+                    full_prompt = f"Already noticed: {compressed}.\n{perception_prompt}"
+
         print(f"\n{'='*80}\n[PERCEPTION] {self.model_name} ({mode})\n{'='*80}")
-        print(f"PROMPT: {perception_prompt}")
+        print(f"PROMPT: {full_prompt}")
         print(f"{'='*80}\n")
 
         result = self._call_ollama(
-            perception_prompt,
+            full_prompt,
             image_path=image_path,
             system_prompt=perception_system_prompt,
             model_options=model_options,
@@ -629,6 +630,7 @@ class MultimodalModel:
             "stop": [
                 "\n\n",
                 "[Image", "[image",
+                "[What I see", "[what i see",
                 "\n\nUser:", "\n\nHuman:", "\n\nAssistant:",
                 "[INST]", "[/INST]",
             ],
@@ -659,6 +661,12 @@ class MultimodalModel:
             cleaned = re.sub(r'\*([^*]+)\*', r'\1', cleaned)      # *italic* → italic
             # Strip leading/trailing quotes
             cleaned = cleaned.strip('"').strip()
+            # Strip structured prefixes (model treating output as a form)
+            cleaned = re.sub(r'^(?:Feeling|Emotion|Mood|Status|State)\s*:\s*\w+\.?\s*', '', cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r'^(?:Thoughts?|Observation|Note)\s*:\s*["\']?', '', cleaned, flags=re.IGNORECASE)
+            cleaned = cleaned.strip('"\'').strip()
+            # Strip bracket format leak — nemo sometimes echoes [What I see right now: ...]
+            cleaned = re.sub(r'\[What I see[^]]*?\]', '', cleaned, flags=re.IGNORECASE).strip()
             # Fix leading "You" → "I"
             if cleaned.startswith("You "):
                 cleaned = "I " + cleaned[4:]
@@ -667,6 +675,14 @@ class MultimodalModel:
             # Fix mid-sentence "you"
             cleaned = re.sub(r'\byou\b(?! ["\'])', 'I', cleaned, count=2)
             cleaned = re.sub(r'\byour\b(?! ["\'])', 'my', cleaned, count=2)
+
+            # Replace instruct-mode non-responses with silence
+            # These produce no inner monologue and corrupt the thread
+            filler = cleaned.lower().rstrip(".!? ")
+            if filler in ("understood", "noted", "acknowledged", "ok", "okay",
+                          "not drawing yet", "not drawing right now",
+                          "currently observing", "observing", "pauses"):
+                cleaned = "..."
 
         print(f"[MONOLOGUE] Result: {cleaned}\n")
 
