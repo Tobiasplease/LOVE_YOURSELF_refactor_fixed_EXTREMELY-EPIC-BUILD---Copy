@@ -496,7 +496,7 @@ class Captioner(MemoryMixin):
                                 person_present=person_present,
                             )
 
-                            # Pass 1: LLaVA perception (mode-aware)
+                            # Pass 1: Qwen perception (mode-aware)
                             perception_prompt = select_perception_prompt(
                                 gaze_direction=gaze_direction,
                                 previous_perception=getattr(self, "_last_perception", ""),
@@ -504,6 +504,11 @@ class Captioner(MemoryMixin):
                                 boredom=boredom,
                                 mode=caption_mode,
                             )
+
+                            # If YOLO sees multiple people, tell qwen
+                            person_count = (reactivity_data or {}).get("person_count", 0)
+                            if person_count > 1 and caption_mode == "relational":
+                                perception_prompt = f"There are {person_count} people visible. " + perception_prompt
 
                             perception = self.model.perceive(
                                 img_path,

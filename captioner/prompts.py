@@ -111,7 +111,7 @@ PERCEPTION_PROMPTS = {
     "scan_right": "What is to the right?",
     "scan_down": "What is on the surface below you?",
     "scan_up": "What is above you?",
-    "person": "Describe the person — what they look like, what they are doing.",
+    "person": "Describe the people you can see — what they look like, what they are doing.",
     "restless": "Describe one specific object or detail you can see.",
     "workspace": "What is on the work surface?",
     "introspective": "What single detail stands out most right now?",
@@ -128,7 +128,8 @@ _PERCEPTION_BASE = (
 PERCEPTION_SYSTEM_PROMPTS = {
     "relational": (
         "You are observing a real scene in front of you. "
-        "Focus on the person — their appearance, posture, what they are doing. "
+        "Focus on the people — their appearance, posture, what they are doing. "
+        "If there are multiple people, describe each. "
         "Be concrete and specific. Two sentences. Do not use the word image or photo."
     ),
     "observational": _PERCEPTION_BASE,

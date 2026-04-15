@@ -77,6 +77,7 @@ class ObjectDetectionThread(threading.Thread):
             detected = set()
             best_person_bbox = None
             best_person_conf = 0.0
+            person_count = 0
 
             for box in results.boxes:
                 cls_id = int(box.cls[0])
@@ -91,6 +92,7 @@ class ObjectDetectionThread(threading.Thread):
                     continue
 
                 detected.add(label)
+                person_count += 1
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f"{label} ({conf:.2f})", (x1, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
@@ -100,7 +102,7 @@ class ObjectDetectionThread(threading.Thread):
                     best_person_bbox = (x1, y1, x2, y2)
                     best_person_conf = conf
 
-            DetectionMemory.update(list(detected), time.time(), clean_frame, best_person_bbox, best_person_conf)
+            DetectionMemory.update(list(detected), time.time(), clean_frame, best_person_bbox, best_person_conf, person_count=person_count)
 
             time.sleep(self.update_interval)
 

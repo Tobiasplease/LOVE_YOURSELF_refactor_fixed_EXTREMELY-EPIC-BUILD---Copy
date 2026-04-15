@@ -1438,6 +1438,10 @@ try:
         person_context = person_detection.get_consciousness_context()
         reactivity_with_view["person_consciousness"] = person_context
 
+        # Add person count from YOLO for multi-person awareness
+        from perception.detection_memory import DetectionMemory
+        reactivity_with_view["person_count"] = DetectionMemory.get_person_count()
+
         # Update captioner with every frame (decoupled from mood system)
         # Uses unified PersonDetectionState with spatial memory (visible/remembered/absent)
         captioner.update(
