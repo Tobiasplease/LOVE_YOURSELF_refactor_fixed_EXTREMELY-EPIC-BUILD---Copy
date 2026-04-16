@@ -326,6 +326,15 @@ class DrawingController:
                                 print_message="[📄] Early paper check: NO PAPER - skipping ComfyUI generation",
                             )
                             state_manager.last_no_paper_skip_ts = time.time()
+                            # Record failure so the monologue model knows why it couldn't draw
+                            try:
+                                from drawing.drawing_memory import get_drawing_memory
+                                get_drawing_memory().record_failure(
+                                    reason="no paper",
+                                    prompt=getattr(state_manager, 'current_drawing_prompt', None),
+                                )
+                            except Exception:
+                                pass
                             return
                         else:
                             print("[📄] Early paper check: PAPER PRESENT - proceeding with ComfyUI")

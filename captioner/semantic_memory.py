@@ -1,0 +1,839 @@
+"""
+captioner/semantic_memory.py
+----------------------------
+Persistent concept-level memory using ChromaDB.
+
+Gives the machine a growing relationship with objects, people, and spatial
+features it encounters across sessions. Each "concept" is something the machine
+has noticed more than once — a sign, a person, a piece of ceiling damage.
+
+Design principles:
+  - No LLM calls in this module. All classification via heuristics.
+  - One data store (ChromaDB with metadata), no separate SQLite.
+  - Injection format optimized for legibility: one clean sentence per concept.
+  - Graceful when empty — adds nothing to prompts until it has real signal.
+"""
+
+import os
+import re
+import time
+import threading
+from typing import Dict, List, Optional, Tuple
+
+import chromadb
+
+from config.config import MOOD_SNAPSHOT_FOLDER
+
+# --- Storage paths ---
+CHROMADB_PATH = os.path.join(MOOD_SNAPSHOT_FOLDER, "chromadb")
+
+# --- Thresholds ---
+SIMILARITY_THRESHOLD = 0.5  # Cosine distance: 0 = identical, 1 = orthogonal. 0.5 keeps matches tight.
+PERSON_SIMILARITY_THRESHOLD = 0.7  # Looser threshold for person concepts — Qwen describes people inconsistently
+NOVELTY_MIN_LENGTH = 15  # Perceptions shorter than this are too vague to store
+DUPLICATE_DISTANCE = 0.3  # Below this distance, observations are near-identical
+MAX_OBSERVATIONS_PER_CONCEPT = 10  # Keep only the N most recent observations per concept
+
+# --- Familiarity tiers ---
+TIER_NEW = 3  # seen < 3 times
+TIER_FAMILIAR = 10  # seen 3-10 times
+# above 10 = very familiar
+
+# Singleton
+_instance = None
+_lock = threading.Lock()
+
+
+def get_semantic_memory() -> "SemanticMemory":
+    global _instance
+    if _instance is None:
+        with _lock:
+            if _instance is None:
+                _instance = SemanticMemory()
+    return _instance
+
+
+class SemanticMemory:
+    def __init__(self):
+        os.makedirs(CHROMADB_PATH, exist_ok=True)
+        self._client = chromadb.PersistentClient(path=CHROMADB_PATH)
+
+        # Concepts: each document is the canonical description of a concept.
+        # Metadata carries structured state (times_seen, last_seen, etc.)
+        self._concepts = self._client.get_or_create_collection(
+            name="concepts",
+            metadata={"hnsw:space": "cosine"},
+        )
+
+        # Observations: individual thoughts/perceptions linked to concepts.
+        # Each document is one observation. Metadata links it to a concept_id.
+        self._observations = self._client.get_or_create_collection(
+            name="observations",
+            metadata={"hnsw:space": "cosine"},
+        )
+
+        self._obs_counter = self._observations.count()
+        self._session_id = f"session_{int(time.time())}"
+
+        print(f"[SEMANTIC] Loaded: {self._concepts.count()} concepts, {self._observations.count()} observations")
+
+    # ------------------------------------------------------------------
+    # Core: match perception to known concepts
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _mentions_person(text: str) -> bool:
+        """Check if text describes a person."""
+        t = text.lower()
+        return any(w in t for w in [
+            "person", "someone", "individual", "man", "woman",
+            "people", "figure", "they are", "he is", "she is",
+            "sitting", "standing", "typing", "working", "looking",
+            "seated", "focused on", "wearing",
+        ])
+
+    def match_perception(self, perception: str) -> Optional[Dict]:
+        """Find the best matching concept for a perception string.
+
+        Returns dict with keys: id, name, times_seen, last_observation, distance
+        or None if no match above threshold.
+
+        Person descriptions get a looser threshold since Qwen describes the same
+        person differently each cycle. If the perception mentions a person, we
+        also check all results (not just top-1) for an existing person concept.
+        """
+        if not perception or len(perception.strip()) < NOVELTY_MIN_LENGTH:
+            return None
+
+        if self._concepts.count() == 0:
+            return None
+
+        is_person = self._mentions_person(perception)
+        threshold = PERSON_SIMILARITY_THRESHOLD if is_person else SIMILARITY_THRESHOLD
+
+        n_results = min(3, self._concepts.count()) if is_person else 1
+        results = self._concepts.query(
+            query_texts=[perception],
+            n_results=n_results,
+            include=["documents", "metadatas", "distances"],
+        )
+
+        if not results["ids"][0]:
+            return None
+
+        # For person perceptions, prefer an existing person concept even if
+        # it's not the top similarity hit — this prevents creating duplicate
+        # person concepts when Qwen describes the same person differently.
+        if is_person and n_results > 1:
+            for i in range(len(results["ids"][0])):
+                dist = results["distances"][0][i]
+                doc = results["documents"][0][i]
+                if dist <= threshold and self._mentions_person(doc):
+                    meta = results["metadatas"][0][i]
+                    return {
+                        "id": results["ids"][0][i],
+                        "name": doc,
+                        "times_seen": meta.get("times_seen", 1),
+                        "last_seen": meta.get("last_seen", 0),
+                        "session_count": meta.get("session_count", 1),
+                        "last_observation": meta.get("last_observation", ""),
+                        "distance": dist,
+                    }
+
+        # Standard path: take top result if within threshold
+        distance = results["distances"][0][0]
+        if distance > threshold:
+            return None
+
+        meta = results["metadatas"][0][0]
+        return {
+            "id": results["ids"][0][0],
+            "name": results["documents"][0][0],
+            "times_seen": meta.get("times_seen", 1),
+            "last_seen": meta.get("last_seen", 0),
+            "session_count": meta.get("session_count", 1),
+            "last_observation": meta.get("last_observation", ""),
+            "distance": distance,
+        }
+
+    # ------------------------------------------------------------------
+    # Core: update or create concept from perception + monologue
+    # ------------------------------------------------------------------
+
+    def after_perception(self, perception: str) -> Optional[str]:
+        """Called after vision model perceives. Returns a memory injection line
+        for the monologue prompt, or None if nothing relevant.
+
+        This is the main integration point — it decides what the machine
+        "remembers" about what it's currently seeing.
+        """
+        if not perception or len(perception.strip()) < NOVELTY_MIN_LENGTH:
+            return None
+
+        # Clean vision-model artifacts before matching
+        cleaned = self._clean_perception(perception)
+        match = self.match_perception(cleaned)
+        if match is None:
+            return None
+
+        # Update the concept: bump times_seen, update last_seen
+        self._bump_concept(match["id"])
+
+        return self._format_injection(match, perception=cleaned)
+
+    def after_monologue(self, perception: str, monologue: str):
+        """Called after monologue generation. Stores observations and
+        creates new concepts when the machine notices something novel.
+
+        Args:
+            perception: what the vision model saw (grounded)
+            monologue: what nemo said about it (interpreted)
+        """
+        if not perception or len(perception.strip()) < NOVELTY_MIN_LENGTH:
+            return
+        if not monologue or monologue.strip() in ("...", "Processing..."):
+            return
+
+        # Clean perception before processing
+        perception = self._clean_perception(perception)
+
+        match = self.match_perception(perception)
+
+        if match is not None:
+            # Known concept — only store if monologue actually references it.
+            # Check: does the monologue embed close to this concept?
+            # This prevents "I'm bored" from being stored as an observation about the ceiling.
+            try:
+                relevance = self._concepts.query(
+                    query_texts=[monologue],
+                    n_results=1,
+                    include=["distances"],
+                )
+                if relevance["distances"][0] and relevance["distances"][0][0] < SIMILARITY_THRESHOLD:
+                    self._store_observation(match["id"], monologue)
+                    self._update_last_observation(match["id"], monologue)
+            except Exception:
+                # Fallback: store anyway if relevance check fails
+                self._store_observation(match["id"], monologue)
+                self._update_last_observation(match["id"], monologue)
+        else:
+            # Potentially new concept — only create if perception is specific enough
+            if self._is_noteworthy(perception):
+                # Guard against person-concept fragmentation:
+                # If this perception describes a person and we already have a person concept,
+                # funnel into the existing one instead of creating a duplicate.
+                if self._mentions_person(perception):
+                    existing_person = self._find_any_person_concept()
+                    if existing_person is not None:
+                        self._bump_concept(existing_person["id"])
+                        self._store_observation(existing_person["id"], monologue)
+                        self._update_last_observation(existing_person["id"], monologue)
+                        return
+                self._create_concept(perception, monologue)
+
+    def _find_any_person_concept(self) -> Optional[Dict]:
+        """Find the most-seen existing person concept, if any.
+
+        Used to prevent creating duplicate person concepts — if we already
+        track a person, new person perceptions should merge into it.
+        """
+        all_data = self._concepts.get(include=["documents", "metadatas"])
+        if not all_data["ids"]:
+            return None
+
+        best = None
+        best_seen = 0
+        for cid, doc, meta in zip(all_data["ids"], all_data["documents"], all_data["metadatas"]):
+            if self._mentions_person(doc) and meta.get("times_seen", 0) > best_seen:
+                best_seen = meta["times_seen"]
+                best = {"id": cid, "name": doc, "times_seen": best_seen}
+
+        return best
+
+    # ------------------------------------------------------------------
+    # Session start: load familiar concepts for early prompts
+    # ------------------------------------------------------------------
+
+    def get_session_greeting(self, limit: int = 3) -> Optional[str]:
+        """Get a memory line for session start — what the machine already knows
+        about its environment. Returns None if too few concepts exist.
+        """
+        if self._concepts.count() < 2:
+            return None
+
+        # Get most-seen concepts
+        all_concepts = self._concepts.get(include=["documents", "metadatas"])
+        if not all_concepts["ids"]:
+            return None
+
+        # Sort by times_seen descending
+        indexed = list(zip(all_concepts["ids"], all_concepts["documents"], all_concepts["metadatas"]))
+        indexed.sort(key=lambda x: x[2].get("times_seen", 0), reverse=True)
+
+        top = indexed[:limit]
+        names = [doc for _, doc, _ in top]
+
+        if len(names) == 1:
+            return f"I know this place — {names[0]}."
+        else:
+            joined = ", ".join(names[:-1]) + f", and {names[-1]}"
+            return f"I know this place — {joined}."
+
+    # ------------------------------------------------------------------
+    # Injection formatting — the most important part
+    # ------------------------------------------------------------------
+
+    def _get_relevant_observation(self, perception: str, concept_id: str = None) -> str:
+        """Find the most semantically relevant stored observation for what the machine
+        is currently seeing. Uses ChromaDB's embedding space instead of keyword filtering.
+
+        If concept_id is provided, searches only that concept's observations.
+        Otherwise searches all observations — enabling cross-concept connections.
+        """
+        if not perception or self._observations.count() < 1:
+            return ""
+
+        try:
+            query_args = {
+                "query_texts": [perception],
+                "n_results": min(5, self._observations.count()),
+                "include": ["documents", "distances", "metadatas"],
+            }
+            if concept_id:
+                query_args["where"] = {"concept_id": concept_id}
+
+            results = self._observations.query(**query_args)
+
+            if not results["ids"][0]:
+                return ""
+
+            # Filter: skip filler, skip very short, skip corrupted
+            filler_markers = ["bored", "restless", "getting tired", "same scene",
+                              "still here", "same old", "nothing new", "feeling restless",
+                              "(in first person)", "i'm here to help", "drawing:"]
+
+            for doc, dist in zip(results["documents"][0], results["distances"][0]):
+                if len(doc) < 15:
+                    continue
+                doc_lower = doc.lower()
+                if any(m in doc_lower for m in filler_markers):
+                    continue
+                return doc
+
+        except Exception:
+            pass
+
+        return ""
+
+    def _get_related_thoughts(self, perception: str, exclude_concept_id: str = None, limit: int = 2) -> List[str]:
+        """Find observations from OTHER concepts that are semantically related
+        to the current perception. This creates cross-concept connections.
+
+        "The ceiling is cracked" might surface thoughts about the exposed wires
+        or the peeling paint — related but from different concepts.
+        """
+        if not perception or self._observations.count() < 3:
+            return []
+
+        try:
+            results = self._observations.query(
+                query_texts=[perception],
+                n_results=min(10, self._observations.count()),
+                include=["documents", "distances", "metadatas"],
+            )
+
+            if not results["ids"][0]:
+                return []
+
+            filler_markers = ["bored", "restless", "getting tired", "same scene",
+                              "still here", "same old", "nothing new",
+                              "(in first person)", "i'm here to help"]
+
+            related = []
+            for doc, dist, meta in zip(results["documents"][0], results["distances"][0], results["metadatas"][0]):
+                # Skip the matched concept's own observations
+                if meta.get("concept_id") == exclude_concept_id:
+                    continue
+                # Skip too similar (just a restatement) or too distant (unrelated)
+                if dist < 0.2 or dist > 0.8:
+                    continue
+                if len(doc) < 15:
+                    continue
+                doc_lower = doc.lower()
+                if any(m in doc_lower for m in filler_markers):
+                    continue
+                related.append(self._truncate_observation(doc, 50))
+                if len(related) >= limit:
+                    break
+
+            return related
+
+        except Exception:
+            return []
+
+    def _format_injection(self, match: Dict, perception: str = "") -> str:
+        """Format a matched concept into a clean, legible injection line.
+
+        Uses semantic similarity to find the most relevant stored thought,
+        and can pull related thoughts from other concepts for richer context.
+        """
+        name = match["name"]
+        times = match["times_seen"]
+
+        if times < TIER_NEW:
+            return f"I've noticed this before — {name}."
+
+        # Use semantic search to find the most relevant observation for current context
+        relevant_obs = self._get_relevant_observation(perception, concept_id=match["id"]) if perception else ""
+
+        if times < TIER_FAMILIAR:
+            if relevant_obs and len(relevant_obs) > 10:
+                short_obs = self._truncate_observation(relevant_obs, 60)
+                return f"I've seen this before — {name}. {short_obs}"
+            return f"I've seen this a few times — {name}."
+
+        # Very familiar — include cross-concept connections if available
+        parts = [f"I know this — {name}."]
+
+        if relevant_obs and len(relevant_obs) > 10:
+            parts.append(self._truncate_observation(relevant_obs, 50))
+
+        # Pull one related thought from a different concept
+        if perception and times > TIER_FAMILIAR * 2:
+            related = self._get_related_thoughts(perception, exclude_concept_id=match["id"], limit=1)
+            if related:
+                parts.append(related[0])
+
+        return " ".join(parts)
+
+    @staticmethod
+    def _truncate_observation(text: str, max_len: int) -> str:
+        """Truncate an observation to max_len at a sentence or word boundary."""
+        text = text.strip()
+        if len(text) <= max_len:
+            return text
+        # Try sentence boundary
+        for i in range(min(len(text), max_len), 15, -1):
+            if text[i - 1] in ".!?":
+                return text[:i]
+        # Word boundary
+        truncated = text[:max_len].rsplit(" ", 1)[0]
+        return truncated.rstrip(",.;:") + "..."
+
+    # ------------------------------------------------------------------
+    # Concept CRUD
+    # ------------------------------------------------------------------
+
+    def _create_concept(self, perception: str, monologue: str):
+        """Create a new concept from a noteworthy perception."""
+        concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
+        canonical_name = self._extract_canonical_name(perception)
+        now = time.time()
+
+        self._concepts.add(
+            ids=[concept_id],
+            documents=[canonical_name],
+            metadatas=[{
+                "times_seen": 1,
+                "first_seen": now,
+                "last_seen": now,
+                "session_count": 1,
+                "last_session": self._session_id,
+                "last_observation": monologue[:200] if monologue else "",
+            }],
+        )
+
+        # Store the first observation
+        self._store_observation(concept_id, monologue)
+
+        print(f"[SEMANTIC] New concept: '{canonical_name}' (id={concept_id})")
+
+    def _bump_concept(self, concept_id: str):
+        """Increment times_seen and update timestamps for a known concept."""
+        existing = self._concepts.get(ids=[concept_id], include=["metadatas"])
+        if not existing["ids"]:
+            return
+
+        meta = existing["metadatas"][0]
+        meta["times_seen"] = meta.get("times_seen", 0) + 1
+        meta["last_seen"] = time.time()
+
+        # Track session boundaries
+        if meta.get("last_session") != self._session_id:
+            meta["session_count"] = meta.get("session_count", 0) + 1
+            meta["last_session"] = self._session_id
+
+        self._concepts.update(ids=[concept_id], metadatas=[meta])
+
+    def _update_last_observation(self, concept_id: str, monologue: str):
+        """Update a concept's last_observation field."""
+        existing = self._concepts.get(ids=[concept_id], include=["metadatas"])
+        if not existing["ids"]:
+            return
+
+        meta = existing["metadatas"][0]
+        meta["last_observation"] = monologue[:200]
+        self._concepts.update(ids=[concept_id], metadatas=[meta])
+
+    def _store_observation(self, concept_id: str, text: str):
+        """Store an observation linked to a concept, with quality and relevance checks.
+
+        Only stores observations that are:
+        1. Substantive (not filler/emotional noise)
+        2. Actually about the concept (semantically close to concept name)
+        3. Saying something new (not duplicating existing observations)
+        """
+        if not text or len(text.strip()) < 15:
+            return
+
+        # Quality gate: reject monologue filler that isn't about anything specific
+        text_lower = text.lower().strip()
+        if text_lower.startswith(("feeling ", "still ", "bored", "...", "sigh")):
+            # Only reject if the ENTIRE text is filler — if there's substance after, keep it
+            # Check: does it contain any concrete nouns or specific references?
+            concrete_markers = ["ceiling", "wall", "shelf", "sign", "light", "plant", "desk",
+                                "person", "chair", "bag", "wire", "crack", "hole", "window",
+                                "door", "screen", "monitor", "book", "shadow", "dust"]
+            if not any(m in text_lower for m in concrete_markers):
+                return  # Pure emotional filler — don't store
+
+        # Relevance gate: check the observation is semantically about this concept
+        try:
+            concept_data = self._concepts.get(ids=[concept_id], include=["documents"])
+            if concept_data["documents"]:
+                concept_name = concept_data["documents"][0]
+                # Query: how close is this monologue to the concept's name?
+                relevance = self._concepts.query(
+                    query_texts=[text],
+                    n_results=1,
+                    include=["distances"],
+                )
+                if relevance["distances"][0] and relevance["distances"][0][0] > 0.8:
+                    return  # Monologue is about something completely different from this concept
+        except Exception:
+            pass
+
+        # Duplicate gate: don't store if too similar to existing observations
+        existing = self._observations.get(
+            where={"concept_id": concept_id},
+            include=["documents"],
+        )
+
+        if existing["documents"]:
+            try:
+                results = self._observations.query(
+                    query_texts=[text],
+                    n_results=1,
+                    where={"concept_id": concept_id},
+                    include=["distances"],
+                )
+                if results["distances"][0] and results["distances"][0][0] < DUPLICATE_DISTANCE:
+                    return  # Too similar to an existing observation
+            except Exception:
+                pass
+
+            # Prune old observations if we have too many for this concept
+            if len(existing["documents"]) >= MAX_OBSERVATIONS_PER_CONCEPT:
+                self._prune_oldest_observations(concept_id)
+
+        obs_id = f"obs_{self._obs_counter}"
+        self._obs_counter += 1
+
+        self._observations.add(
+            ids=[obs_id],
+            documents=[text[:300]],
+            metadatas=[{
+                "concept_id": concept_id,
+                "timestamp": time.time(),
+                "session_id": self._session_id,
+            }],
+        )
+
+    def _prune_oldest_observations(self, concept_id: str):
+        """Remove the oldest observations for a concept, keeping MAX_OBSERVATIONS_PER_CONCEPT."""
+        existing = self._observations.get(
+            where={"concept_id": concept_id},
+            include=["metadatas"],
+        )
+        if not existing["ids"]:
+            return
+
+        # Sort by timestamp, delete the oldest
+        indexed = list(zip(existing["ids"], existing["metadatas"]))
+        indexed.sort(key=lambda x: x[1].get("timestamp", 0))
+
+        to_delete = len(indexed) - MAX_OBSERVATIONS_PER_CONCEPT + 1  # +1 to make room
+        if to_delete > 0:
+            delete_ids = [idx for idx, _ in indexed[:to_delete]]
+            self._observations.delete(ids=delete_ids)
+
+    # ------------------------------------------------------------------
+    # Noteworthy filter — gates concept creation
+    # ------------------------------------------------------------------
+
+    def _is_noteworthy(self, perception: str) -> bool:
+        """Decide if a perception describes something specific enough to become a concept.
+
+        Rejects generic room descriptions and vague statements.
+        Accepts: specific objects, people, spatial features with detail.
+        """
+        text = perception.lower().strip()
+
+        # Too short = too vague
+        if len(text) < 20:
+            return False
+
+        # Reject pure filler and generic scene descriptions
+        filler_patterns = [
+            r"^same\b", r"^nothing\b", r"^unclear\b", r"^still\b",
+            r"^a (?:room|space|area|place)\b",
+            r"^(?:the )?(?:usual|same|familiar) ",
+            r"^(?:the )?scene\b",
+            r"(?:no people|with no people|no one|nobody)\b",
+            r"^(?:the )?(?:room|workspace|studio|area|space) (?:is|has|looks|appears)\b",
+            # Generic whole-room descriptors — no specific object
+            r"^(?:a |an )?(?:cluttered|messy|tidy|bright|dark|dimly lit|well lit)\s+(?:indoor\s+)?(?:room|workspace|studio|area|space|environment|setting)\b",
+        ]
+        for pat in filler_patterns:
+            if re.search(pat, text):
+                return False
+
+        # Accept if it has spatial specificity (location phrases)
+        spatial_markers = [
+            "on the", "near the", "above the", "below the", "next to",
+            "behind the", "in front of", "corner", "left", "right",
+            "wall", "shelf", "desk", "ceiling", "floor", "window", "door",
+        ]
+        has_spatial = any(m in text for m in spatial_markers)
+
+        # Accept if it mentions a person
+        person_markers = ["person", "someone", "man", "woman", "face", "people", "they", "he ", "she "]
+        has_person = any(m in text for m in person_markers)
+
+        # Accept if it has descriptive specificity (color, text, distinctive features)
+        detail_markers = [
+            "red", "blue", "green", "yellow", "black", "white", "brown", "orange",
+            "sign", "text", "label", "sticker", "poster", "writing",
+            "damaged", "broken", "new", "old", "large", "small",
+            "says", "reads", "written",
+        ]
+        has_detail = any(m in text for m in detail_markers)
+
+        # Need at least spatial + detail, or person mention
+        return has_person or (has_spatial and has_detail)
+
+    # ------------------------------------------------------------------
+    # Name extraction
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _clean_perception(text: str) -> str:
+        """Strip vision-model artifacts from perception text before any processing.
+
+        Removes "of the image", "in this image", verbose editorial tails, etc.
+        """
+        # Strip "of/in the image" references
+        text = re.sub(r'\s*(?:of|in|from)\s+(?:the|this)\s+(?:image|photo|picture|frame)\s*', ' ', text, flags=re.IGNORECASE)
+        # Strip editorial tails: "adding a pop of color...", "which appears to be..."
+        text = re.sub(r',\s*(?:adding|which|creating|making|giving|providing)\b.*$', '', text, flags=re.IGNORECASE)
+        # Strip "is prominently placed/positioned/located"
+        text = re.sub(r'\s+is\s+(?:prominently|strategically|carefully)\s+(?:placed|positioned|located)\b', '', text, flags=re.IGNORECASE)
+        # Collapse double spaces from stripping
+        text = re.sub(r'\s{2,}', ' ', text)
+        return text.strip()
+
+    @staticmethod
+    def _extract_canonical_name(perception: str) -> str:
+        """Extract a short canonical name from a perception.
+
+        "A red sign on the wall with white text" → "Red sign on the wall with white text"
+        "Someone in a camo jacket sitting at the desk" → "Person in a camo jacket at the desk"
+        """
+        text = SemanticMemory._clean_perception(perception.strip())
+
+        # Truncate to first sentence if multi-sentence
+        for i in range(min(len(text), 60), 10, -1):
+            if text[i - 1] in ".!?":
+                text = text[:i - 1]
+                break
+
+        # Strip leading locative preambles: "On the left side of the room, there is..."
+        text = re.sub(r'^On\s+the\s+\w+\s+side(?:\s+of\s+the\s+\w+)?\s*,?\s*(?:there\s+is\s+)?', '', text, flags=re.IGNORECASE)
+        # Strip leading articles and filler
+        text = re.sub(r'^(?:There(?:\'s| is| are) )?(?:a |an |the )?', '', text, flags=re.IGNORECASE)
+        # Strip "noticeable detail is" type preambles
+        text = re.sub(r'^(?:noticeable|notable|interesting)\s+(?:detail|feature|element)\s+(?:is\s+)?(?:the\s+)?', '', text, flags=re.IGNORECASE)
+
+        # Capitalize first letter
+        if text:
+            text = text[0].upper() + text[1:]
+
+        # Truncate at reasonable length — concept names should be short
+        if len(text) > 55:
+            text = text[:55].rsplit(" ", 1)[0]
+
+        # Strip trailing punctuation
+        text = text.rstrip(",.;:!? ")
+
+        return text
+
+    # ------------------------------------------------------------------
+    # Debug / introspection
+    # ------------------------------------------------------------------
+
+    def get_all_concepts(self) -> List[Dict]:
+        """Return all concepts with metadata, sorted by times_seen descending."""
+        all_data = self._concepts.get(include=["documents", "metadatas"])
+        if not all_data["ids"]:
+            return []
+
+        concepts = []
+        for cid, doc, meta in zip(all_data["ids"], all_data["documents"], all_data["metadatas"]):
+            concepts.append({
+                "id": cid,
+                "name": doc,
+                "times_seen": meta.get("times_seen", 0),
+                "first_seen": meta.get("first_seen", 0),
+                "last_seen": meta.get("last_seen", 0),
+                "session_count": meta.get("session_count", 0),
+                "last_observation": meta.get("last_observation", ""),
+            })
+
+        concepts.sort(key=lambda x: x["times_seen"], reverse=True)
+        return concepts
+
+    def get_concept_observations(self, concept_id: str) -> List[Dict]:
+        """Return all observations for a concept, sorted by timestamp."""
+        obs = self._observations.get(
+            where={"concept_id": concept_id},
+            include=["documents", "metadatas"],
+        )
+        if not obs["ids"]:
+            return []
+
+        result = []
+        for oid, doc, meta in zip(obs["ids"], obs["documents"], obs["metadatas"]):
+            result.append({
+                "id": oid,
+                "text": doc,
+                "timestamp": meta.get("timestamp", 0),
+                "session_id": meta.get("session_id", ""),
+            })
+
+        result.sort(key=lambda x: x["timestamp"])
+        return result
+
+    def recall_tangent(self, current_perception: str = "") -> Optional[str]:
+        """Surface one old observation that's adjacent to — but different from —
+        what the machine is currently seeing.
+
+        Uses semantic distance to find the sweet spot: not a restatement of
+        the current perception (too close), not completely unrelated (noise),
+        but a thought that connects sideways to what's being observed.
+        """
+        if self._observations.count() < 5 or not current_perception:
+            return None
+
+        try:
+            cleaned = self._clean_perception(current_perception)
+
+            # Query observations by semantic similarity to current perception
+            results = self._observations.query(
+                query_texts=[cleaned],
+                n_results=min(15, self._observations.count()),
+                include=["documents", "distances", "metadatas"],
+            )
+
+            if not results["ids"][0]:
+                return None
+
+            now = time.time()
+            filler_markers = [
+                "bored", "restless", "getting tired", "same scene",
+                "still here", "same old", "nothing new", "feeling restless",
+                "(in first person)", "i'm here to help", "drawing:",
+                "feeling bored", "getting tired of",
+            ]
+
+            # Find the best candidate in the "adjacent" distance range
+            # Too close (< 0.3) = just restating what we see
+            # Too far (> 0.9) = unrelated noise
+            # Sweet spot (0.3 - 0.7) = connected but different perspective
+            last_tangent = getattr(self, '_last_tangent', '')
+
+            for doc, dist, meta in zip(results["documents"][0], results["distances"][0], results["metadatas"][0]):
+                if dist < 0.3 or dist > 0.7:
+                    continue
+                age = now - meta.get("timestamp", now)
+                if age < 300:
+                    continue  # Too recent
+                if len(doc) < 15:
+                    continue
+                doc_lower = doc.lower()
+                if any(m in doc_lower for m in filler_markers):
+                    continue
+                if doc == last_tangent:
+                    continue  # Avoid immediate repeats
+
+                self._last_tangent = doc
+                return self._truncate_observation(doc, 50)
+
+        except Exception:
+            pass
+
+        return None
+
+    def delete_concept(self, concept_id: str) -> bool:
+        """Delete a concept and all its observations."""
+        existing = self._concepts.get(ids=[concept_id])
+        if not existing["ids"]:
+            return False
+
+        # Delete observations linked to this concept
+        obs = self._observations.get(where={"concept_id": concept_id})
+        if obs["ids"]:
+            self._observations.delete(ids=obs["ids"])
+
+        self._concepts.delete(ids=[concept_id])
+        return True
+
+    def merge_concepts(self, keep_id: str, absorb_id: str) -> bool:
+        """Merge two concepts: absorb_id's observations move into keep_id, then absorb_id is deleted.
+
+        The kept concept gets the combined times_seen and the earliest first_seen.
+        """
+        keep = self._concepts.get(ids=[keep_id], include=["metadatas"])
+        absorb = self._concepts.get(ids=[absorb_id], include=["metadatas"])
+        if not keep["ids"] or not absorb["ids"]:
+            return False
+
+        keep_meta = keep["metadatas"][0]
+        absorb_meta = absorb["metadatas"][0]
+
+        # Combine counts
+        keep_meta["times_seen"] = keep_meta.get("times_seen", 0) + absorb_meta.get("times_seen", 0)
+        keep_meta["session_count"] = max(keep_meta.get("session_count", 0), absorb_meta.get("session_count", 0))
+        keep_meta["first_seen"] = min(keep_meta.get("first_seen", 0), absorb_meta.get("first_seen", 0))
+        keep_meta["last_seen"] = max(keep_meta.get("last_seen", 0), absorb_meta.get("last_seen", 0))
+
+        self._concepts.update(ids=[keep_id], metadatas=[keep_meta])
+
+        # Re-tag absorbed observations to the kept concept
+        obs = self._observations.get(where={"concept_id": absorb_id}, include=["metadatas"])
+        if obs["ids"]:
+            new_metas = []
+            for meta in obs["metadatas"]:
+                meta["concept_id"] = keep_id
+                new_metas.append(meta)
+            self._observations.update(ids=obs["ids"], metadatas=new_metas)
+
+        # Delete the absorbed concept
+        self._concepts.delete(ids=[absorb_id])
+        return True
+
+    def stats(self) -> Dict:
+        return {
+            "concepts": self._concepts.count(),
+            "observations": self._observations.count(),
+            "session": self._session_id,
+        }

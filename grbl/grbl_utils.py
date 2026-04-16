@@ -1143,18 +1143,9 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         print_message=f"[✅] G-code execution complete: {executed_lines} lines executed",
     )
 
-    # IMMEDIATELY unlock gaze system after GRBL execution completes
-    try:
-        from vision.gaze import set_drawing_mode
-        print("[DEBUG] About to call set_drawing_mode(active=False)...")
-        set_drawing_mode(active=False)
-        print("[👁️] ✅ Gaze unlocked immediately after GRBL execution")
-    except Exception as e:
-        print(f"[❌] Could not unlock gaze system after execution: {e}")
-        import traceback
-        traceback.print_exc()
-
     # === DRAWING COMPLETION RITUAL ===
+    # NOTE: Gaze stays locked to drawing surface through the entire completion ritual
+    # (homing, pen-up, pause). Unlocked at the end of the ritual, not here.
     
     # Step 1: End drawing state (releases drawing context from captions)
     try:
@@ -1597,6 +1588,16 @@ def process_svg_to_grbl(
                 else:
                     print("[📄] Post-home paper check skipped (disabled)")
 
+                # Lock gaze to drawing surface immediately after paper check passes
+                # This eliminates the gap where gaze could track a person between
+                # paper search ending and execute_gcode_file engaging its own lock
+                try:
+                    from config.config import USE_SERVO, TILT_MIN
+                    from vision.gaze import set_drawing_mode
+                    if USE_SERVO:
+                        set_drawing_mode(active=True, drawing_pan=90, drawing_tilt=TILT_MIN + 2)
+                except Exception:
+                    pass
 
                 # Execute G-code in a separate thread to prevent blocking captions
                 print(f"🎯 [DEBUG] Starting threaded G-code execution for file: {output_file_adjusted}")

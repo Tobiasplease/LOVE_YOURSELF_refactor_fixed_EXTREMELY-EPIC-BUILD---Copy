@@ -262,8 +262,15 @@ def casual_time_string(minutes: float) -> str:
         return "about 45 minutes"
     elif minutes < 91:
         return "about an hour"
+    elif minutes < 150:
+        return "about 2 hours"
+    elif minutes < 210:
+        return "about 3 hours"
+    elif minutes < 300:
+        return "about 4 hours"
     else:
-        return "over an hour"
+        hours = int(minutes / 60)
+        return f"about {hours} hours"
 
 
 def build_identity_line(agent, mode: str = "observational") -> str:
@@ -285,36 +292,40 @@ def build_identity_line(agent, mode: str = "observational") -> str:
     # Drawing state / history — nemo needs to know whether it's drawing or just watching
     try:
         from utils.state_manager import state_manager as _sm
-        if _sm.is_generating_drawing or _sm.current_drawing_phase == "executing":
-            parts.append("my arm is drawing right now")
+        if _sm.is_generating_drawing:
+            parts.append("my arm is working on a drawing right now")
+        elif _sm.current_drawing_phase == "executing":
+            parts.append("my arm is physically drawing right now")
         else:
             parts.append("not drawing right now, just watching")
             try:
                 from drawing.drawing_memory import get_drawing_memory
                 dm = get_drawing_memory()
-                summary = dm.get_recent_drawings_summary(max_count=1)
-                if summary and len(summary.strip()) > 5:
-                    clean = summary.strip()
-                    if clean.lower().startswith("recent drawings:"):
-                        clean = clean[len("recent drawings:"):].strip()
-                    import re as _re
-                    clean = _re.sub(r'\s*\([^)]*\)\s*$', '', clean)
-                    parts.append(f"last drew {clean[:60]}")
+
+                # Check for recent drawing failure (no paper, etc.)
+                failure = dm.get_last_failure()
+                if failure:
+                    import time as _time
+                    failure_age = _time.time() - failure.get('timestamp', 0)
+                    if failure_age < 600:  # Within last 10 minutes — still relevant
+                        reason = failure.get('reason', 'unknown')
+                        if 'paper' in reason.lower():
+                            parts.append("wanted to draw but there's no paper")
+                        else:
+                            parts.append("tried to draw but couldn't")
+
+                # Last completed drawing — use actual prompt description
+                desc = dm.get_last_drawing_description()
+                if desc:
+                    parts.append(f"last drew {desc}")
             except Exception:
                 pass
     except Exception:
         pass
 
-    # Mode-specific context (folded in naturally)
-    if mode in MODE_CONTEXTS:
-        context_fn = MODE_CONTEXTS[mode].get("context_fn")
-        if context_fn:
-            try:
-                ctx = context_fn(agent)
-                if ctx and ctx.strip():
-                    parts.append(ctx.strip())
-            except Exception:
-                pass
+    # Mode-specific context removed — drawing history, memories, and spatial context
+    # are now handled by the identity line itself, semantic memory, compression baseline,
+    # and introspection injection. The old MODE_CONTEXTS dict duplicated these.
 
     if not parts:
         return ""
@@ -363,6 +374,71 @@ def build_monologue_prompt(
     identity = build_identity_line(agent, mode)
     if identity:
         prompt_parts.append(identity)
+
+    # --- GATED CONTEXT: mode determines what extra context appears ---
+    # Not every cycle needs every piece of context. Overloading the prompt
+    # produces flat, confused output. Each mode gets only what's relevant.
+
+    if mode == "relational":
+        # Person present — semantic memory for person recognition, nothing else
+        try:
+            from captioner.semantic_memory import get_semantic_memory
+            memory_line = get_semantic_memory().after_perception(perception)
+            if memory_line:
+                prompt_parts.append(memory_line)
+        except Exception:
+            pass
+
+    elif mode == "observational":
+        # Something novel — semantic memory for recognition, keep it light
+        try:
+            from captioner.semantic_memory import get_semantic_memory
+            memory_line = get_semantic_memory().after_perception(perception)
+            if memory_line:
+                prompt_parts.append(memory_line)
+        except Exception:
+            pass
+
+    else:
+        # Introspective (default) — this is where inner state matters
+        # Semantic memory: what I know about what I'm seeing
+        try:
+            from captioner.semantic_memory import get_semantic_memory
+            memory_line = get_semantic_memory().after_perception(perception)
+            if memory_line:
+                prompt_parts.append(memory_line)
+        except Exception:
+            pass
+
+        # Compression baseline: accumulated understanding of this session
+        try:
+            from captioner.context_compression import context_compressor
+            baseline = context_compressor.get_baseline_context()
+            if baseline and len(baseline.strip()) > 15:
+                prompt_parts.append(baseline.strip())
+        except Exception:
+            pass
+
+        # Introspection: current desire/belief
+        try:
+            from captioner.context_compression import context_compressor
+            inner = context_compressor.get_inner_line()
+            if inner:
+                prompt_parts.append(inner)
+        except Exception:
+            pass
+
+        # Tangent recall: old forgotten thought, only when bored
+        try:
+            from captioner.activation_memory import get_activation_network
+            network = get_activation_network()
+            if network._last_boredom > 0.6:
+                from captioner.semantic_memory import get_semantic_memory
+                tangent = get_semantic_memory().recall_tangent(perception)
+                if tangent:
+                    prompt_parts.append(f"I remember: {tangent}")
+        except Exception:
+            pass
 
     # --- FLOWING THREAD: recent thoughts as stream, not dashed list ---
     try:
@@ -589,10 +665,8 @@ MODE_CONTEXTS = {
         "state_marker": None,
         "context_fn": get_observational_context,
     },
-    "restless": {
-        "state_marker": None,
-        "context_fn": get_restless_context,
-    },
+    # "restless" mode removed — boredom is context, not a mode.
+    # The model decides its own emotional response to sustained watching.
     "workspace": {
         "state_marker": None,
         "context_fn": get_workspace_context,
@@ -1436,30 +1510,29 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str,
                           person_present: bool) -> str:
     """Determine prompt mode based on situational context.
 
-    Modes (priority order):
+    Modes:
     1. relational - actively tracking a person
     2. observational - something new is happening (high novelty)
-    3. restless - bored, wants change
-    4. workspace - looking down at desk
-    5. introspective - default idle wandering
+    3. workspace - looking down at desk
+    4. introspective - default for everything else, including boredom
+
+    Boredom is NOT a separate mode. The model receives boredom as context
+    (via the identity line) and decides its own response — restlessness,
+    introspection, fascination with details, irritation, whatever emerges.
     """
     # Priority 1: Actively tracking someone
     if gaze_state == "tracking":
         return "relational"
 
-    # Priority 2: Something novel is happening (raised threshold for more selectivity)
+    # Priority 2: Something novel is happening
     if novelty > 0.65:
         return "observational"
 
-    # Priority 3: Restless/bored (raised threshold to favor introspective mode)
-    if boredom > 0.75:
-        return "restless"
-
-    # Priority 4: Looking at workspace
+    # Priority 3: Looking at workspace
     if gaze_direction in ("down", "down-left", "down-right"):
         return "workspace"
 
-    # Default: Introspective wandering
+    # Default: Introspective — the model decides its own emotional response
     return "introspective"
 
 

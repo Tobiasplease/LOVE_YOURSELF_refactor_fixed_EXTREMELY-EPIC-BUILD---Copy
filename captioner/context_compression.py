@@ -78,12 +78,31 @@ class ContextCompressionEngine:
                 self._queue_compression()
 
     def get_baseline_context(self) -> str:
-        """Get current baseline context for injection into prompts."""
+        """Get current baseline context for injection into prompts.
+
+        When the baseline is stagnating (last 2 compressions nearly identical),
+        appends the oldest available compression as temporal contrast —
+        giving the model a sense of 'how things used to be vs now.'
+        """
         if not self.baseline_context:
             return ""
 
-        # Return the 3-line state directly - it's already in natural language
-        # Vision model receives this as "YOUR CURRENT STATE:" context
+        # Check for stagnation: if last 2 compressions are very similar
+        if len(self.compression_history) >= 3:
+            recent = list(self.compression_history)
+            last_two = [recent[-1]["understanding"], recent[-2]["understanding"]]
+            words_a = set(last_two[0].lower().split())
+            words_b = set(last_two[1].lower().split())
+            overlap = len(words_a & words_b) / max(len(words_a | words_b), 1)
+
+            if overlap > 0.7:
+                # Stagnating — inject oldest compression as temporal contrast
+                oldest = recent[0]
+                age_mins = int(oldest.get("age_minutes", 0))
+                if age_mins > 5:
+                    old_text = oldest["understanding"][:40].rstrip(".,; ")
+                    return f"{self.baseline_context} ({age_mins}m ago: {old_text})"
+
         return self.baseline_context
 
     def set_environmental_update_callback(self, callback):
@@ -267,10 +286,9 @@ Respond ONLY with the summary, nothing else. First person."""
             }
 
             narrative_system_prompt = (
-                "Describe a space in 15 words or fewer. "
-                "Physical facts only: objects, light, surfaces, layout. "
-                "No feelings, no narrative, no metaphors. "
-                "Example: 'Cluttered workshop, bright overhead lights, tiled walls, tools and electronics on metal shelves.'"
+                "Summarize what you actually see and what holds your attention in 20 words or fewer. "
+                "Only describe what is real and observed — never invent actions or sensations. "
+                "Example: 'Cluttered workshop, damaged ceiling. The crack above keeps drawing my eye.'"
             )
 
             # Use compression model (text-only narrative model) instead of vision model
@@ -621,6 +639,55 @@ Complete each line in 10 words or less, ending with a period:
         This allows beliefs to survive restarts when loaded from identity file.
         """
         return self.introspective_state.get("current_belief", "")
+
+    def get_inner_line(self) -> str:
+        """Get a single line combining current desire and belief for prompt injection.
+
+        Framed clearly as wanting/noticing — NOT as an action being taken.
+        This prevents nemo from roleplaying drawing when it only wants to draw.
+        """
+        desire = self.get_current_desire()
+        belief = self.get_current_belief()
+
+        parts = []
+        if desire:
+            d = desire.strip().rstrip(".")
+
+            # Strip any existing "wanting/wishing" prefix to normalize
+            import re as _re
+            d = _re.sub(r'^(?:Wanting|Wishing I could|I want to|I wish I could|Want to)\s+', '', d, flags=_re.IGNORECASE)
+
+            # Check if desire is about drawing and we can't draw right now
+            d_lower = d.lower()
+            drawing_words = ["draw", "sketch", "trace", "outline", "capture", "render", "depict"]
+            is_drawing_desire = any(w in d_lower for w in drawing_words)
+            cant_draw = False
+
+            if is_drawing_desire:
+                try:
+                    from drawing.drawing_memory import get_drawing_memory
+                    failure = get_drawing_memory().get_last_failure()
+                    if failure:
+                        import time as _t
+                        if _t.time() - failure.get('timestamp', 0) < 1800:
+                            cant_draw = True
+                except Exception:
+                    pass
+
+            # Frame as wanting — frustrated if can't draw, neutral otherwise
+            if cant_draw:
+                d = f"Wishing I could {d[0].lower() + d[1:]}"
+            else:
+                d = f"Wanting to {d[0].lower() + d[1:]}"
+
+            parts.append(d + ".")
+        if belief:
+            parts.append(belief.rstrip(".") + ".")
+
+        if not parts:
+            return ""
+
+        return " ".join(parts)
 
     def _save_identity(self) -> None:
         """Save introspective state to persistent identity file."""

@@ -551,6 +551,13 @@ class Captioner(MemoryMixin):
                                 mode=caption_mode,
                                 agent=self,
                             )
+
+                            # Store observation in semantic memory (concept learning)
+                            try:
+                                from captioner.semantic_memory import get_semantic_memory
+                                get_semantic_memory().after_monologue(perception, caption)
+                            except Exception as sem_err:
+                                print(f"[SEMANTIC] Store failed: {sem_err}")
                 except Exception as cap_err:
                     print(f"[ERROR] Regular caption FAILED: {cap_err}")
                     import traceback
@@ -1454,7 +1461,8 @@ class Captioner(MemoryMixin):
                         compressed_summary=reflection['compressed_summary'],
                         theme_tags=reflection.get('theme_tags', []),
                         emotional_tone=reflection.get('emotional_tone', ''),
-                        narrative_thread=reflection.get('narrative_thread', '')
+                        narrative_thread=reflection.get('narrative_thread', ''),
+                        comfy_prompt=drawing_summary,
                     )
                 except Exception as e:
                     print(f"[⚠️] Could not update drawing memory: {e}")
@@ -1577,7 +1585,7 @@ class Captioner(MemoryMixin):
                 narrative_thread = "exploration"
 
             # Create ultra-brief reflection text
-            reflection_text = f"Drawing: {compressed_summary}. {emotional_tone.capitalize()} {narrative_thread}."
+            reflection_text = f"I drew {compressed_summary}. Felt {emotional_tone}."
 
             return {
                 'reflection_text': reflection_text,
@@ -1664,7 +1672,7 @@ REFLECTION: [1 short sentence about themes/patterns]"""
             if reflection_note:
                 full_reflection = f"{compressed}. {reflection_note}"
             else:
-                full_reflection = f"Drawing: {compressed}. {emotional_tone.capitalize()}."
+                full_reflection = f"I drew {compressed}. Felt {emotional_tone}."
 
             return {
                 'reflection_text': full_reflection,

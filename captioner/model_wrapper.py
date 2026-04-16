@@ -159,6 +159,27 @@ def _get_valid_captions(agent, max_captions: int = 3, include_perception: bool =
         if not sentence:
             continue
 
+        # Filter captions that compound badly in the thread.
+        s_lower = sentence.lower()
+
+        # Drawing-intent musings create false memories ("I drew X" from "I want to draw X")
+        if any(kw in s_lower for kw in [
+            "should draw", "want to draw", "could draw", "would draw",
+            "next drawing", "my next piece", "i'll draw", "i will draw",
+            "draw it", "draw them", "draw this", "draw that",
+            "sketch it", "sketch the", "capture it in", "put it on paper",
+            "[drawing idea", "drawing idea:",
+        ]):
+            continue
+
+        # Time/status statements compound into fictional timelines when they
+        # re-enter the thread. "about 14 minutes" + "about 20 minutes" + "about 45 minutes"
+        # all in the same prompt creates a fake time progression.
+        if re.search(r'^about \d+ (?:minutes?|hours?) (?:awake|now|in|active)', s_lower):
+            continue
+        if re.search(r'^\d+ (?:minutes?|hours?) (?:awake|since|passed)', s_lower):
+            continue
+
         if include_perception:
             valid.append((sentence, perception_text.strip() if perception_text else ""))
         else:
@@ -556,6 +577,12 @@ class MultimodalModel:
         # e.g. "The ceiling in the image is peeling" → "The ceiling is peeling"
         # e.g. "In the provided photo of what appears..." → "of what appears..."
         cleaned = re.sub(r'\s*[Ii]n\s+(?:the|this)\s+(?:provided\s+)?(?:image|photograph|photo|picture)\s*(?:of\s+)?', ' ', cleaned, flags=re.IGNORECASE)
+        # Strip "camera" references — the machine doesn't think in terms of cameras
+        # "facing away from the camera" → "facing away"
+        # "with their back to the camera" → "with their back to me"
+        cleaned = re.sub(r'\s*(?:facing|turned)\s+(?:away\s+from|towards?)\s+the\s+camera\b', '', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\b(?:to|from)\s+the\s+(?:camera|viewer)\b', ' to me', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\s{2,}', ' ', cleaned)
         cleaned = re.sub(r'^of\s+', '', cleaned.strip())  # Clean up leftover "of" at start
         # Also strip "I can see/observe/describe" preamble
         cleaned = re.sub(
@@ -667,21 +694,52 @@ class MultimodalModel:
             cleaned = cleaned.strip('"\'').strip()
             # Strip bracket format leak — nemo sometimes echoes [What I see right now: ...]
             cleaned = re.sub(r'\[What I see[^]]*?\]', '', cleaned, flags=re.IGNORECASE).strip()
-            # Fix leading "You" → "I"
+            # Strip "(In first person)" / "(In First Person)" directive echoing
+            cleaned = re.sub(r'\(In [Ff]irst [Pp]erson\)\s*', '', cleaned).strip()
+            # Strip orphaned leading quotes left after stripping
+            cleaned = re.sub(r'^["\']\s*', '', cleaned).strip()
+            # Fix "you/your" → first person
+            # Object position: after verbs/prepositions → "me" not "I"
+            # e.g. "makes you feel" → "makes me feel", "for you" → "for me"
+            cleaned = re.sub(r'\b(makes?|lets?|gives?|for|to|with|about|around|near|behind|before|after|at|thank) you\b', r'\1 me', cleaned, flags=re.IGNORECASE)
+            # Subject position: start of sentence or after conjunctions → "I"
             if cleaned.startswith("You "):
                 cleaned = "I " + cleaned[4:]
             elif cleaned.startswith("Your "):
                 cleaned = "My " + cleaned[5:]
-            # Fix mid-sentence "you"
             cleaned = re.sub(r'\byou\b(?! ["\'])', 'I', cleaned, count=2)
             cleaned = re.sub(r'\byour\b(?! ["\'])', 'my', cleaned, count=2)
+            # Fix verb agreement after you→I substitution
+            cleaned = re.sub(r'\bI are\b', 'I am', cleaned)
+            cleaned = re.sub(r'\bI were\b', 'I was', cleaned)
+
+            # Strip instruct-mode filler from the start of responses
+            # "Understood. Currently observing..." → "Currently observing..."
+            cleaned = re.sub(
+                r'^(?:Understood|Noted|Acknowledged|Okay|Ok|Ready)[.!,]?\s*',
+                '', cleaned, flags=re.IGNORECASE
+            ).strip()
+            # Strip chatbot-mode preamble
+            cleaned = re.sub(
+                r'^(?:I\'m here to help|Let\'s break down|Let me describe|Let\'s engage)[^.]*\.\s*',
+                '', cleaned, flags=re.IGNORECASE
+            ).strip()
+            # Strip meta-commentary about first person perspective
+            cleaned = re.sub(
+                r'(?:Noticed I mentioned|Reminder:)[^.]*\.\s*',
+                '', cleaned, flags=re.IGNORECASE
+            ).strip()
 
             # Replace instruct-mode non-responses with silence
             # These produce no inner monologue and corrupt the thread
-            filler = cleaned.lower().rstrip(".!? ")
-            if filler in ("understood", "noted", "acknowledged", "ok", "okay",
+            filler = cleaned.lower().rstrip(".!?:; ")
+            if filler in ("", "understood", "noted", "acknowledged", "ok", "okay",
                           "not drawing yet", "not drawing right now",
-                          "currently observing", "observing", "pauses"):
+                          "currently observing", "observing", "pauses",
+                          "drawing", "drawing begins", "drawing starts",
+                          "drawing complete", "drawing done",
+                          "starts drawing", "begins drawing",
+                          "feeling restless"):
                 cleaned = "..."
 
         print(f"[MONOLOGUE] Result: {cleaned}\n")
