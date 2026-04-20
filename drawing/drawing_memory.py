@@ -177,7 +177,6 @@ class DrawingMemory:
         if not self._history:
             return {}
 
-        # Aggregate theme tags
         all_tags = []
         all_tones = []
 
@@ -192,6 +191,108 @@ class DrawingMemory:
             'recent_tones': all_tones,
             'drawing_count': len(self._history)
         }
+
+    def get_artistic_arc(self) -> str:
+        """Synthesize the trajectory of recent work via LLM.
+
+        Reads the chronological sequence of drawings and produces a short
+        narrative of where the work has been and where it's heading.
+        On-demand call — acceptable since drawings happen every 5-30 min.
+        """
+        if len(self._history) < 2:
+            return ""
+
+        import time
+
+        # Build chronological sequence (history is newest-first, reverse it)
+        drawings_chronological = list(reversed(self._history))
+        lines = []
+        for i, entry in enumerate(drawings_chronological, 1):
+            desc = self._strip_comfy_preamble(entry.get('comfy_prompt', ''))
+            if not desc:
+                desc = entry.get('compressed_summary', 'unknown subject')
+            if len(desc) > 80:
+                desc = desc[:80].rsplit(" ", 1)[0] + "..."
+
+            tone = entry.get('emotional_tone', '')
+            thread = entry.get('narrative_thread', '')
+
+            elapsed = time.time() - entry.get('timestamp', time.time())
+            if elapsed < 3600:
+                age = f"{int(elapsed / 60)}m ago"
+            else:
+                age = f"{int(elapsed / 3600)}h ago"
+
+            line = f"{i}. {desc}"
+            if tone:
+                line += f" ({tone})"
+            if thread:
+                line += f" — {thread}"
+            line += f" [{age}]"
+            lines.append(line)
+
+        try:
+            from utils.ollama import query_ollama
+            from config.config import MOOD_SNAPSHOT_FOLDER
+
+            try:
+                from config.config import COMPRESSION_MODEL
+                model = COMPRESSION_MODEL
+            except (ImportError, AttributeError):
+                model = None
+
+            prompt = f"""Your recent drawings, oldest to newest:
+{chr(10).join(lines)}
+
+In 2-3 sentences, describe the arc of this work. Not a list — a narrative.
+Where did it start? How has it shifted? What direction is it moving?
+Write as "I" — this is your own artistic development."""
+
+            result = query_ollama(
+                prompt=prompt,
+                model=model,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                system_prompt="You are a drawing machine reflecting on your own body of work. Be direct and specific about the trajectory. 2-3 sentences max.",
+                prompt_type="artistic_arc",
+                options={"temperature": 0.5, "num_predict": 80},
+            )
+
+            if result and len(result.strip()) > 15:
+                return result.strip()
+
+        except Exception as e:
+            print(f"[⚠️] Artistic arc generation failed: {e}")
+
+        return ""
+
+    def get_artistic_arc_context(self, drawing_intentions: List[str] = None) -> str:
+        """Build unified artistic context: arc + accumulated drawing musings.
+
+        Args:
+            drawing_intentions: spontaneous drawing-related thoughts from caption stream
+        """
+        parts = []
+
+        arc = self.get_artistic_arc()
+        if arc:
+            parts.append(f"Your artistic arc so far: {arc}")
+
+        if drawing_intentions:
+            recent = drawing_intentions[-5:]
+            parts.append("Drawing ideas you've been thinking about:\n" + "\n".join(f"  - {i[:120]}" for i in recent))
+
+        return "\n\n".join(parts)
+
+    @staticmethod
+    def _strip_comfy_preamble(desc: str) -> str:
+        """Strip the standard ComfyUI preamble from a prompt."""
+        for prefix in ["Black ink line drawing on white paper. ",
+                       "Black ink line drawing on white paper.",
+                       "Black ink drawing on white paper. ",
+                       "black ink line drawing on white paper. "]:
+            if desc.lower().startswith(prefix.lower()):
+                return desc[len(prefix):]
+        return desc
 
 
 # Global singleton

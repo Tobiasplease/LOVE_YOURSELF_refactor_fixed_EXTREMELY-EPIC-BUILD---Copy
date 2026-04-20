@@ -23,7 +23,7 @@ from utils.state_manager import state_manager
 
 from .memory import MemoryMixin
 from .model_wrapper import MultimodalModel
-from .prompts import SYSTEM_PROMPT, STATIC_SYSTEM_PROMPT, extract_motifs_spacy
+from .prompts import SYSTEM_PROMPT, STATIC_SYSTEM_PROMPT
 
 # from weakref import ref
 
@@ -261,7 +261,7 @@ class Captioner(MemoryMixin):
         self.current_emotion_state: str = "calm_observant"  # hand controller emotion state
         self.emotional_journey: List[str] = []  # track emotional evolution over time
         self.last_caption: str = ""
-        self.current_motifs_from_mood: List[str] = []
+        # self.current_motifs_from_mood removed — motif tracking replaced by ChromaDB concepts
 
         # Deduplication system to prevent duplicate prints
         self.recent_captions: List[Tuple[str, float]] = []  # (caption, timestamp)
@@ -426,11 +426,18 @@ class Captioner(MemoryMixin):
             caption_mode = "observational"  # Default mode
 
             if not self.first_caption_done or not self.session_awakening_done:
-                # Single-phase awakening: LLaVA looks at the actual environment
+                # Awakening: generate a grounded seed thought using sleep duration,
+                # prior memory, and persistent identity — then plant it as the
+                # first entry in recent_captions so the stream starts from it.
                 try:
-                    caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=True)
+                    awakening_seed = self.generate_internal_awakening()
+                    if awakening_seed and len(awakening_seed) > 5:
+                        caption = awakening_seed
+                    else:
+                        caption = "Coming back online... vision settling."
+                    caption_mode = "awakening"
                 except Exception as env_err:
-                    print(f"[ERROR] Environmental grounding FAILED: {env_err}")
+                    print(f"[ERROR] Awakening FAILED: {env_err}")
                     import traceback
                     traceback.print_exc()
                     caption = "Vision settling..."
@@ -443,6 +450,7 @@ class Captioner(MemoryMixin):
                     print_message=f"[🐞] Requesting new caption for {img_path}",
                 )
                 previous_caption = getattr(self, "last_caption", "")
+                matched_concepts = []  # Will be populated by SemanticMemory concept matching
 
                 # Check if it's time for memory mode (every 240 seconds / 4 minutes)
                 time_since_memory = now - self.last_memory_mode_time
@@ -537,6 +545,14 @@ class Captioner(MemoryMixin):
 
                             self._last_perception = perception
 
+                            # Match perception against ChromaDB concepts BEFORE monologue
+                            matched_concepts = []
+                            try:
+                                from captioner.semantic_memory import get_semantic_memory
+                                matched_concepts = get_semantic_memory().match_or_create_concepts(perception or "")
+                            except Exception as mc_err:
+                                print(f"[SEMANTIC] Concept matching failed: {mc_err}")
+
                             # Pass 2: Monologue from perception (mode pre-determined)
                             monologue_prompt, caption_mode = build_monologue_prompt(
                                 self,
@@ -552,10 +568,10 @@ class Captioner(MemoryMixin):
                                 agent=self,
                             )
 
-                            # Store observation in semantic memory (concept learning)
+                            # Store observation in semantic memory (uses pre-matched concepts)
                             try:
                                 from captioner.semantic_memory import get_semantic_memory
-                                get_semantic_memory().after_monologue(perception, caption)
+                                get_semantic_memory().after_monologue(perception, caption, matched_concepts=matched_concepts)
                             except Exception as sem_err:
                                 print(f"[SEMANTIC] Store failed: {sem_err}")
                 except Exception as cap_err:
@@ -730,6 +746,7 @@ class Captioner(MemoryMixin):
             reactivity_data=reactivity_data,
             mood_vector=self.current_mood_vector,
             emotion_state=self.current_emotion_state,
+            matched_concepts=matched_concepts,
         )
         self.last_caption = caption  # already trimmed to complete sentence above
 
@@ -766,18 +783,7 @@ class Captioner(MemoryMixin):
         except Exception as e:
             print(f"[CAPTIONER] Context compression failed: {e}")
 
-        # CRITICAL FIX: Add caption to memory system for motif tracking and repetition fatigue
-        try:
-            if caption and caption.strip():
-                self.observe(
-                    text=caption,
-                    mood=self.current_mood,
-                    memory_type="caption",
-                    mood_vector=getattr(self, "current_mood_vector", (0.0, 0.0, 0.5)),
-                    emotion_state=getattr(self, "current_emotion_state", "calm_observant"),
-                )
-        except Exception as e:
-            print(f"[CAPTIONER] Memory system failed: {e}")
+        # Caption already observed via the primary observe() call above
 
         # Process emotional drift
         # environmental_factors = {
@@ -834,15 +840,6 @@ class Captioner(MemoryMixin):
                     m = re.search(r"-?\d+(?:\.\d+)?", reflection)
                     mood_val = float(m.group()) if m else self.current_mood
                     self.current_mood += 0.25 * (mood_val - self.current_mood)
-
-                    # Use motifs from mood engine's pattern recognition instead of re-extracting
-                    if hasattr(self, "current_motifs_from_mood") and self.current_motifs_from_mood:
-                        for motif in self.current_motifs_from_mood:
-                            self.absorb_motif(motif)
-                    else:
-                        # Fallback to direct extraction if mood data not available
-                        for motif in extract_motifs_spacy(caption):
-                            self.absorb_motif(motif)
 
                     self.observe(reflection, self.current_mood, img_path, memory_type="reflection")
                 else:
@@ -974,13 +971,12 @@ class Captioner(MemoryMixin):
             print(f"[DEBUG] Step 4: Drawing system ready, building context...")
         memory_context = self.get_recent_memory()
         reflection_context = self.get_last_reflection()
-        # Include accumulated drawing intentions — things nemo has been musing about drawing
-        drawing_intentions = ""
+        # Drawing intentions passed directly to Step 3 (communication intent) via pipeline
+        drawing_intentions_list = []
         if hasattr(self, "_drawing_intentions") and self._drawing_intentions:
-            intentions = self._drawing_intentions[-5:]  # Last 5 drawing-related thoughts
-            drawing_intentions = "Drawing ideas I've been thinking about:\n" + "\n".join(f"  - {i}" for i in intentions)
-            print(f"[🎨] Feeding {len(intentions)} drawing intentions into prompt")
-        extra_context = f"{drawing_intentions}\n\n{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
+            drawing_intentions_list = self._drawing_intentions[-5:]
+            print(f"[🎨] {len(drawing_intentions_list)} drawing intentions available for Step 3")
+        extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
         if not CLEAN_LLM_OUTPUT:
             print(f"[DEBUG] Step 7: Context built, starting drawing generation...")
 
@@ -992,7 +988,7 @@ class Captioner(MemoryMixin):
         try:
             if not CLEAN_LLM_OUTPUT:
                 print(f"[DEBUG] Step 8: About to call generate_drawing_prompt...")
-            prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path)
+            prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path, drawing_intentions=drawing_intentions_list)
             if not CLEAN_LLM_OUTPUT:
                 print(f"[DEBUG] Step 9: Drawing prompt generated successfully")
             log_json_entry(
@@ -1021,7 +1017,23 @@ class Captioner(MemoryMixin):
                 with self.print_lock:
                     print("\r" + " " * 80 + "\r", end="")
 
-        # Since we already checked readiness, proceed with drawing flow
+        # Always store the generated prompt in drawing memory — even if it never reaches
+        # ComfyUI, the artistic intent is meaningful for arc tracking and future prompts.
+        if "[ERROR]" not in prompt:
+            try:
+                from drawing.drawing_memory import get_drawing_memory
+                dm = get_drawing_memory()
+                dm.add_drawing(
+                    prompt=prompt,
+                    compressed_summary=prompt[:80],
+                    emotional_tone=getattr(self, "current_emotion_state", "neutral"),
+                    comfy_prompt=prompt,
+                    completed=False,  # Will be updated to True if GRBL finishes
+                )
+            except Exception as e:
+                print(f"[⚠️] Could not store drawing intent: {e}")
+
+        # Proceed with drawing flow (ComfyUI + GRBL)
         if "[ERROR]" not in prompt:
             if not CLEAN_LLM_OUTPUT:
                 print(f"\n{'🎨'*30}")
@@ -1029,6 +1041,11 @@ class Captioner(MemoryMixin):
                 print(f"[🚀 QUEUING DRAWING] This will trigger ComfyUI generation")
                 print(f"{'🎨'*30}\n")
                 print(f"[DEBUG] Step 10: Starting handle_drawing_flow...")
+            try:
+                from utils.live_log import log_drawing_intent
+                log_drawing_intent(prompt)
+            except Exception:
+                pass
             self.drawing.handle_drawing_flow(self, prompt, img_path, reflection=reflection_context)
             if not CLEAN_LLM_OUTPUT:
                 print(f"[DEBUG] Step 11: handle_drawing_flow completed")
@@ -1089,19 +1106,17 @@ class Captioner(MemoryMixin):
     def get_reflection_context(self) -> str:
         """Enhanced reflection context with specific experiential data."""
 
-        # Get specific motifs and patterns from current session
+        # Get active concepts from activation network for reflection context
         top_motifs = ""
-        # new_motifs = ""
-        # recurring_motifs = ""
-
-        if hasattr(self, "current_motifs_from_mood") and self.current_motifs_from_mood:
-            # Use real-time motif data from pattern recognition
-            recent_motifs = self.current_motifs_from_mood[:5]
-            top_motifs = f"Current motifs: {', '.join(recent_motifs)}"
-        elif hasattr(self, "get_top_motifs"):
-            motifs = self.get_top_motifs(5)
-            if motifs:
-                top_motifs = f"Recurring motifs: {', '.join(motifs[:5])}"
+        try:
+            from captioner.activation_memory import get_activation_network
+            net = get_activation_network()
+            top = net.get_activated_concepts(threshold=0.4)[:5]
+            if top:
+                labels = [net.concept_labels.get(c, c) for c, _ in top]
+                top_motifs = f"Active concepts: {', '.join(labels)}"
+        except Exception:
+            pass
 
         # Get specific emotional changes
         emotion_changes = ""
@@ -1186,7 +1201,7 @@ class Captioner(MemoryMixin):
         print(f"[🌅 AWAKENING] Generating internal awakening...")
         print(f"[🌅 AWAKENING] last_session_gap: {getattr(self, 'last_session_gap', 'NOT SET')}")
         print(f"[🌅 AWAKENING] prior_session_last_caption: {getattr(self, 'prior_session_last_caption', 'NOT SET')[:50] if getattr(self, 'prior_session_last_caption', None) else 'NOT SET'}...")
-        print(f"[🌅 AWAKENING] beliefs count: {len(self.beliefs) if self.beliefs else 0}")
+        print(f"[🌅 AWAKENING] identity context loading...")
 
         # Build narrative time context
         time_context = ""
@@ -1236,18 +1251,15 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
-        # Fallback to shallow beliefs count if no persistent identity
-        if not identity_context and self.beliefs:
-            belief_count = len(self.beliefs)
-            belief_context = f"I still carry {belief_count} beliefs.\n"
+        # No fallback needed — identity comes from context_compression or is empty
 
-        # Include relevant long-term memories
+        # Include cross-session memory from ChromaDB
         long_term_context = ""
         try:
-            from captioner.activation_memory import get_long_term_memories
-            memories = get_long_term_memories(k=1)
-            if memories:
-                long_term_context = f"I remember: {memories}\n"
+            from captioner.semantic_memory import get_semantic_memory
+            greeting = get_semantic_memory().get_session_greeting(limit=2)
+            if greeting:
+                long_term_context = f"{greeting}\n"
         except Exception:
             pass
 
@@ -1272,29 +1284,29 @@ class Captioner(MemoryMixin):
 
         system_prompt = (
             "You are a drawing machine waking from sleep. "
-            "Use the context: how long you slept, your last memory, your beliefs. "
-            "Inner monologue. First person. One sentence only."
+            "Write the first thought that surfaces as consciousness returns. "
+            "Use the context naturally — the sleep duration, the last memory, what you know about this place. "
+            "Inner monologue. First person. One or two sentences."
         )
 
-        print(f"[🌅 AWAKENING] Calling Natsumura: {internal_prompt[:80]}...")
+        print(f"[🌅 AWAKENING] Generating seed thought...")
         response = query_ollama(
             prompt=internal_prompt,
             model=awakening_model,
             timeout=90,
             log_dir=config.MOOD_SNAPSHOT_FOLDER,
             system_prompt=system_prompt,
-            options={"temperature": 0.9, "top_p": 0.8, "num_predict": 40, "stop": ["\n", "."]},
+            options={"temperature": 0.85, "top_p": 0.85, "num_predict": 60, "stop": ["\n\n"]},
             prompt_type="awakening",
         )
-        print(f"[🌅 AWAKENING] Response: {response[:100] if response else 'EMPTY'}...")
+        print(f"[🌅 AWAKENING] Response: {response[:120] if response else 'EMPTY'}...")
 
-        # Filter awakening output: must be brief, plantable inner monologue
-        from captioner.model_wrapper import _is_plantable_prior
-        if response and _is_plantable_prior(response) and len(response) <= 80:
-            return response.strip()
-        else:
-            # Fallback if output is garbage or too long
-            return "I'm waking up."
+        # Filter: must be brief inner monologue, not garbage
+        if response and len(response.strip()) > 10 and len(response.strip()) <= 150:
+            cleaned = response.strip().strip('"').strip()
+            if cleaned and not cleaned.startswith(("[", "{")):
+                return cleaned
+        return "Coming back online... the room is still here."
 
     def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
         """Generate comprehensive awakening with environmental description - THE ONLY awakening now."""
@@ -1327,11 +1339,15 @@ class Captioner(MemoryMixin):
 
         # Continuing from previous session - include environmental awareness
         belief_count = len(previous_beliefs) if previous_beliefs else 0
-        motif_count = len(self.motif_counter)
+        try:
+            from captioner.semantic_memory import get_semantic_memory
+            concept_count = get_semantic_memory().stats().get("concepts", 0)
+        except Exception:
+            concept_count = 0
 
         # First, provide status then environmental description
         status_prefix = f"""Awakening after {time_since_last or 'some time'}...
-        consciousness returns with {belief_count} beliefs and {motif_count} familiar motifs."""
+        consciousness returns with {belief_count} beliefs and {concept_count} familiar concepts."""
 
         # Then add environmental description
         try:
@@ -1618,28 +1634,34 @@ class Captioner(MemoryMixin):
             recent_summary = memory.get_recent_drawings_summary(max_count=3)
             thematic_context = memory.get_thematic_context()
 
-            # Build context for reflection
+            # Build context including artistic arc
             context_parts = []
-            if recent_summary:
+
+            # Get the artistic arc — where the work has been heading
+            arc = memory.get_artistic_arc()
+            if arc:
+                context_parts.append(f"Your artistic arc so far: {arc}")
+            elif recent_summary:
                 context_parts.append(f"Recent drawings: {recent_summary}")
+
             if thematic_context.get('recurring_themes'):
                 themes_str = ', '.join(thematic_context['recurring_themes'][:3])
                 context_parts.append(f"Recurring themes: {themes_str}")
 
             context_str = '\n'.join(context_parts) if context_parts else "This is your first drawing."
 
-            # Ask LLM to compress and reflect
-            prompt = f"""Current drawing intent:
+            # Ask LLM to compress and reflect — now aware of trajectory
+            prompt = f"""You just drew this:
 {drawing_summary}
 
 {context_str}
 
 Compress this drawing into 3-5 meaningful words that capture its essence (not "black ink line" - the actual subject).
-Then briefly note how it relates to recent themes or what's emerging.
+Then: how does this drawing extend or shift your artistic arc? What direction is the work moving now?
 
 Format:
 COMPRESSED: [3-5 words]
-REFLECTION: [1 short sentence about themes/patterns]"""
+REFLECTION: [1 short sentence about where the work is heading]"""
 
             reflection_text = query_ollama(
                 prompt=prompt,

@@ -39,6 +39,12 @@ TIER_NEW = 3  # seen < 3 times
 TIER_FAMILIAR = 10  # seen 3-10 times
 # above 10 = very familiar
 
+# --- Reflection settings ---
+REFLECTION_INTERVAL_SECONDS = 600  # Run reflection check every 10 minutes
+REFLECTION_MIN_NEW_OBSERVATIONS = 4  # Need at least N new observations to trigger
+REFLECTION_MIN_CONCEPT_FAMILIARITY = 5  # Concept must be seen at least N times
+REFLECTION_MAX_PER_CYCLE = 1  # Max reflections per worker pass (avoid LLM contention)
+
 # Singleton
 _instance = None
 _lock = threading.Lock()
@@ -75,7 +81,149 @@ class SemanticMemory:
         self._obs_counter = self._observations.count()
         self._session_id = f"session_{int(time.time())}"
 
-        print(f"[SEMANTIC] Loaded: {self._concepts.count()} concepts, {self._observations.count()} observations")
+        # Reflection worker state
+        self._reflection_thread: Optional[threading.Thread] = None
+        self._reflection_stop = threading.Event()
+        self._last_reflection_check = 0.0
+
+        # Count existing reflections for logging
+        try:
+            refl_count = len(self._observations.get(where={"type": "reflection"})["ids"])
+        except Exception:
+            refl_count = 0
+        print(f"[SEMANTIC] Loaded: {self._concepts.count()} concepts, {self._observations.count()} observations ({refl_count} reflections)")
+
+        # Start the reflection worker thread
+        self._start_reflection_worker()
+
+    # ------------------------------------------------------------------
+    # Two-phase API: match concepts first, store observations later
+    # ------------------------------------------------------------------
+
+    def match_or_create_concepts(self, perception: str) -> List[Dict]:
+        """Phase 1: Match perception against known concepts, creating new ones if noteworthy.
+
+        Returns MULTIPLE matching concepts — this is critical for the activation
+        network to build edges between co-occurring concepts. A perception like
+        "person sitting at desk under fluorescent light" should activate the
+        person concept, the desk concept, AND the light concept.
+
+        Returns list of dicts:
+        [{"id": "concept_xyz", "label": "Red sign on wall", "times_seen": 5, "is_new": False}, ...]
+        """
+        if not perception or len(perception.strip()) < NOVELTY_MIN_LENGTH:
+            return []
+
+        cleaned = self._clean_perception(perception)
+        matched = []
+
+        # Query for multiple matches within threshold
+        if self._concepts.count() > 0:
+            n_results = min(5, self._concepts.count())
+            is_person = self._mentions_person(cleaned)
+            threshold = PERSON_SIMILARITY_THRESHOLD if is_person else SIMILARITY_THRESHOLD
+
+            results = self._concepts.query(
+                query_texts=[cleaned],
+                n_results=n_results,
+                include=["documents", "metadatas", "distances"],
+            )
+
+            if results["ids"][0]:
+                seen_ids = set()
+                for i in range(len(results["ids"][0])):
+                    dist = results["distances"][0][i]
+                    if dist > threshold:
+                        continue
+                    cid = results["ids"][0][i]
+                    if cid in seen_ids:
+                        continue
+                    seen_ids.add(cid)
+
+                    meta = results["metadatas"][0][i]
+                    doc = results["documents"][0][i]
+
+                    self._bump_concept(cid)
+                    matched.append({
+                        "id": cid,
+                        "label": doc,
+                        "times_seen": meta.get("times_seen", 0) + 1,
+                        "is_new": False,
+                    })
+
+        # If no matches and perception is noteworthy, create a new concept
+        if not matched and self._is_noteworthy(cleaned):
+            # Guard against person fragmentation
+            if self._mentions_person(cleaned):
+                existing_person = self._find_any_person_concept()
+                if existing_person is not None:
+                    self._bump_concept(existing_person["id"])
+                    return [{
+                        "id": existing_person["id"],
+                        "label": existing_person["name"],
+                        "times_seen": existing_person["times_seen"] + 1,
+                        "is_new": False,
+                    }]
+
+            concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
+            canonical_name = self._extract_canonical_name(cleaned)
+            now = time.time()
+
+            self._concepts.add(
+                ids=[concept_id],
+                documents=[canonical_name],
+                metadatas=[{
+                    "times_seen": 1,
+                    "first_seen": now,
+                    "last_seen": now,
+                    "session_count": 1,
+                    "last_session": self._session_id,
+                    "last_observation": "",
+                }],
+            )
+            print(f"[SEMANTIC] New concept: '{canonical_name}' (id={concept_id})")
+
+            matched.append({
+                "id": concept_id,
+                "label": canonical_name,
+                "times_seen": 1,
+                "is_new": True,
+            })
+
+        return matched
+
+    def get_current_thread(self, top_concept_ids: List[str], limit: int = 2) -> List[Dict]:
+        """Get the current thread of attention for prompt injection.
+
+        For each top-activated concept, returns its label and most recent
+        reflection or observation — giving the LLM a thread to continue.
+
+        Returns: [{"label": "Cracked ceiling", "last_thought": "The cracks seem...", "thought_type": "reflection"}, ...]
+        """
+        if not top_concept_ids:
+            return []
+
+        threads = []
+        for concept_id in top_concept_ids[:limit]:
+            # Get concept label
+            concept_data = self._concepts.get(ids=[concept_id], include=["documents", "metadatas"])
+            if not concept_data["ids"]:
+                continue
+
+            label = concept_data["documents"][0]
+            meta = concept_data["metadatas"][0]
+
+            # Try to get most recent reflection first, fall back to observation
+            thought_text, thought_type = self._get_relevant_observation(label, concept_id=concept_id)
+
+            threads.append({
+                "label": label,
+                "times_seen": meta.get("times_seen", 0),
+                "last_thought": thought_text if thought_text else "",
+                "thought_type": thought_type if thought_type else "",
+            })
+
+        return threads
 
     # ------------------------------------------------------------------
     # Core: match perception to known concepts
@@ -181,28 +329,43 @@ class SemanticMemory:
 
         return self._format_injection(match, perception=cleaned)
 
-    def after_monologue(self, perception: str, monologue: str):
-        """Called after monologue generation. Stores observations and
-        creates new concepts when the machine notices something novel.
+    def after_monologue(self, perception: str, monologue: str, matched_concepts: List[Dict] = None):
+        """Called after monologue generation. Stores observations under matched concepts.
 
         Args:
             perception: what the vision model saw (grounded)
             monologue: what nemo said about it (interpreted)
+            matched_concepts: pre-matched concepts from match_or_create_concepts() — skips re-matching
         """
         if not perception or len(perception.strip()) < NOVELTY_MIN_LENGTH:
             return
         if not monologue or monologue.strip() in ("...", "Processing..."):
             return
 
-        # Clean perception before processing
-        perception = self._clean_perception(perception)
+        # If we have pre-matched concepts from Phase 1, use them directly
+        if matched_concepts:
+            for concept in matched_concepts:
+                concept_id = concept["id"]
+                # Relevance check: does the monologue relate to this concept?
+                try:
+                    relevance = self._concepts.query(
+                        query_texts=[monologue],
+                        n_results=1,
+                        include=["distances"],
+                    )
+                    if relevance["distances"][0] and relevance["distances"][0][0] < SIMILARITY_THRESHOLD:
+                        self._store_observation(concept_id, monologue)
+                        self._update_last_observation(concept_id, monologue)
+                except Exception:
+                    self._store_observation(concept_id, monologue)
+                    self._update_last_observation(concept_id, monologue)
+            return
 
+        # Fallback: no pre-matched concepts, do the old matching path
+        perception = self._clean_perception(perception)
         match = self.match_perception(perception)
 
         if match is not None:
-            # Known concept — only store if monologue actually references it.
-            # Check: does the monologue embed close to this concept?
-            # This prevents "I'm bored" from being stored as an observation about the ceiling.
             try:
                 relevance = self._concepts.query(
                     query_texts=[monologue],
@@ -213,15 +376,10 @@ class SemanticMemory:
                     self._store_observation(match["id"], monologue)
                     self._update_last_observation(match["id"], monologue)
             except Exception:
-                # Fallback: store anyway if relevance check fails
                 self._store_observation(match["id"], monologue)
                 self._update_last_observation(match["id"], monologue)
         else:
-            # Potentially new concept — only create if perception is specific enough
             if self._is_noteworthy(perception):
-                # Guard against person-concept fragmentation:
-                # If this perception describes a person and we already have a person concept,
-                # funnel into the existing one instead of creating a duplicate.
                 if self._mentions_person(perception):
                     existing_person = self._find_any_person_concept()
                     if existing_person is not None:
@@ -283,16 +441,47 @@ class SemanticMemory:
     # Injection formatting — the most important part
     # ------------------------------------------------------------------
 
-    def _get_relevant_observation(self, perception: str, concept_id: str = None) -> str:
-        """Find the most semantically relevant stored observation for what the machine
-        is currently seeing. Uses ChromaDB's embedding space instead of keyword filtering.
+    def _get_relevant_observation(self, perception: str, concept_id: str = None) -> Tuple[str, str]:
+        """Find the most semantically relevant stored memory for what the machine
+        is currently seeing. Returns (text, type) where type is "reflection" or "observation".
 
-        If concept_id is provided, searches only that concept's observations.
-        Otherwise searches all observations — enabling cross-concept connections.
+        Reflections are preferred when available (they represent settled understanding);
+        falls back to raw observations otherwise.
         """
         if not perception or self._observations.count() < 1:
-            return ""
+            return ("", "")
 
+        filler_markers = ["bored", "restless", "getting tired", "same scene",
+                          "still here", "same old", "nothing new", "feeling restless",
+                          "(in first person)", "i'm here to help", "drawing:"]
+
+        # Try reflections first
+        try:
+            where = {"type": "reflection"}
+            if concept_id:
+                where = {"$and": [{"concept_id": concept_id}, {"type": "reflection"}]}
+
+            refl_results = self._observations.query(
+                query_texts=[perception],
+                n_results=min(3, self._observations.count()),
+                where=where,
+                include=["documents", "distances"],
+            )
+
+            if refl_results["ids"][0]:
+                for doc, dist in zip(refl_results["documents"][0], refl_results["distances"][0]):
+                    if len(doc) < 15:
+                        continue
+                    if dist > 0.85:
+                        continue  # Too unrelated even for a reflection
+                    doc_lower = doc.lower()
+                    if any(m in doc_lower for m in filler_markers):
+                        continue
+                    return (doc, "reflection")
+        except Exception:
+            pass
+
+        # Fall back to raw observations
         try:
             query_args = {
                 "query_texts": [perception],
@@ -300,17 +489,14 @@ class SemanticMemory:
                 "include": ["documents", "distances", "metadatas"],
             }
             if concept_id:
-                query_args["where"] = {"concept_id": concept_id}
+                query_args["where"] = {"$and": [{"concept_id": concept_id}, {"type": "observation"}]}
+            else:
+                query_args["where"] = {"type": "observation"}
 
             results = self._observations.query(**query_args)
 
             if not results["ids"][0]:
-                return ""
-
-            # Filter: skip filler, skip very short, skip corrupted
-            filler_markers = ["bored", "restless", "getting tired", "same scene",
-                              "still here", "same old", "nothing new", "feeling restless",
-                              "(in first person)", "i'm here to help", "drawing:"]
+                return ("", "")
 
             for doc, dist in zip(results["documents"][0], results["distances"][0]):
                 if len(doc) < 15:
@@ -318,12 +504,12 @@ class SemanticMemory:
                 doc_lower = doc.lower()
                 if any(m in doc_lower for m in filler_markers):
                     continue
-                return doc
+                return (doc, "observation")
 
         except Exception:
             pass
 
-        return ""
+        return ("", "")
 
     def _get_related_thoughts(self, perception: str, exclude_concept_id: str = None, limit: int = 2) -> List[str]:
         """Find observations from OTHER concepts that are semantically related
@@ -348,6 +534,8 @@ class SemanticMemory:
             filler_markers = ["bored", "restless", "getting tired", "same scene",
                               "still here", "same old", "nothing new",
                               "(in first person)", "i'm here to help"]
+            # Reject very short emotional fragments that are too generic to be useful
+            # (e.g. "Feeling curious.", "Just watching.")
 
             related = []
             for doc, dist, meta in zip(results["documents"][0], results["distances"][0], results["metadatas"][0]):
@@ -357,11 +545,22 @@ class SemanticMemory:
                 # Skip too similar (just a restatement) or too distant (unrelated)
                 if dist < 0.2 or dist > 0.8:
                     continue
-                if len(doc) < 15:
+                # Need substantive length — short emotional fragments don't add anything
+                if len(doc) < 30:
                     continue
                 doc_lower = doc.lower()
                 if any(m in doc_lower for m in filler_markers):
                     continue
+                # Reject very short emotional one-liners ("Feeling curious.", "Just watching.")
+                # Even if they pass length check, must contain a concrete reference
+                if len(doc) < 50:
+                    concrete = ["ceiling", "wall", "shelf", "sign", "light", "plant", "desk",
+                                "person", "chair", "bag", "wire", "crack", "hole", "window",
+                                "door", "screen", "monitor", "book", "shadow", "dust", "paper",
+                                "color", "red", "blue", "white", "black", "pink", "green",
+                                "fingers", "hands", "face", "eyes", "shape", "line"]
+                    if not any(c in doc_lower for c in concrete):
+                        continue
                 related.append(self._truncate_observation(doc, 50))
                 if len(related) >= limit:
                     break
@@ -372,37 +571,49 @@ class SemanticMemory:
             return []
 
     def _format_injection(self, match: Dict, perception: str = "") -> str:
-        """Format a matched concept into a clean, legible injection line.
+        """Format a matched concept as third-person observational context.
 
-        Uses semantic similarity to find the most relevant stored thought,
-        and can pull related thoughts from other concepts for richer context.
+        The output describes what the machine knows about what it's seeing,
+        framed for the writer (the model) rather than spoken in the machine's voice.
+        Prefers reflections (settled understanding) over raw observations when available.
         """
         name = match["name"]
         times = match["times_seen"]
 
-        if times < TIER_NEW:
-            return f"I've noticed this before — {name}."
+        # Lowercase the name for natural-sounding sentences
+        name_lower = name[0].lower() + name[1:] if name else name
 
-        # Use semantic search to find the most relevant observation for current context
-        relevant_obs = self._get_relevant_observation(perception, concept_id=match["id"]) if perception else ""
+        if times < TIER_NEW:
+            return f"It has noticed this before — {name_lower}."
+
+        # Find the most relevant memory (reflection or raw observation)
+        relevant_text, mem_type = self._get_relevant_observation(perception, concept_id=match["id"]) if perception else ("", "")
+
+        # Different framing for reflections (settled) vs raw observations (fleeting)
+        def frame_memory(text: str, mtype: str, max_len: int = 60) -> str:
+            short = self._truncate_observation(text, max_len)
+            if mtype == "reflection":
+                # Reflections are LLM-synthesized — they often already start with "It has..."
+                # so we use a simpler frame to avoid doubling
+                return f"A settled understanding: \"{short}\""
+            return f"Earlier it thought: \"{short}\""
 
         if times < TIER_FAMILIAR:
-            if relevant_obs and len(relevant_obs) > 10:
-                short_obs = self._truncate_observation(relevant_obs, 60)
-                return f"I've seen this before — {name}. {short_obs}"
-            return f"I've seen this a few times — {name}."
+            if relevant_text and len(relevant_text) > 10:
+                return f"It has seen this before — {name_lower}. {frame_memory(relevant_text, mem_type, 60)}"
+            return f"It has seen this a few times — {name_lower}."
 
         # Very familiar — include cross-concept connections if available
-        parts = [f"I know this — {name}."]
+        parts = [f"Familiar to it — {name_lower}."]
 
-        if relevant_obs and len(relevant_obs) > 10:
-            parts.append(self._truncate_observation(relevant_obs, 50))
+        if relevant_text and len(relevant_text) > 10:
+            parts.append(frame_memory(relevant_text, mem_type, 50))
 
         # Pull one related thought from a different concept
         if perception and times > TIER_FAMILIAR * 2:
             related = self._get_related_thoughts(perception, exclude_concept_id=match["id"], limit=1)
             if related:
-                parts.append(related[0])
+                parts.append(f"Nearby in memory: \"{related[0]}\"")
 
         return " ".join(parts)
 
@@ -483,8 +694,8 @@ class SemanticMemory:
         2. Actually about the concept (semantically close to concept name)
         3. Saying something new (not duplicating existing observations)
         """
-        if not text or len(text.strip()) < 15:
-            return
+        if not text or len(text.strip()) < 25:
+            return  # Too short to be meaningful as a memory
 
         # Quality gate: reject monologue filler that isn't about anything specific
         text_lower = text.lower().strip()
@@ -546,8 +757,232 @@ class SemanticMemory:
                 "concept_id": concept_id,
                 "timestamp": time.time(),
                 "session_id": self._session_id,
+                "type": "observation",
+                "depth": 0,
             }],
         )
+
+    def _generate_reflection(self, concept_id: str, concept_name: str, observations: List[Dict]) -> Optional[str]:
+        """Synthesize recent observations about a concept into one settled thought.
+
+        Uses the compression model (text-only) to avoid contention with the vision pipeline.
+        Returns the reflection text or None on failure.
+        """
+        if len(observations) < 2:
+            return None
+
+        try:
+            from utils.ollama import query_ollama
+            from config import config
+
+            # Build the prompt
+            obs_lines = "\n".join(f"- {o['text'][:120]}" for o in observations[:6])
+
+            prompt = f"""Recent thoughts about "{concept_name}":
+{obs_lines}
+
+In ONE SHORT SENTENCE (under 20 words), what pattern or deeper understanding is emerging from these thoughts? Third person observational voice. Start with "It" or "A pattern".
+
+Respond with ONLY the sentence."""
+
+            system_prompt = (
+                "You synthesize a drawing machine's recurring thoughts about an object or person into one settled insight. "
+                "Third person, present tense, under 20 words, no preamble. "
+                "Examples: "
+                "'It has come to see the cracks as a wound that no one will heal.' "
+                "'A pattern emerges — it returns to the shelf whenever it feels alone.'"
+            )
+
+            model_options = {
+                "temperature": 0.6,
+                "top_p": 0.9,
+                "num_predict": 50,
+                "repeat_penalty": 1.3,
+                "stop": ["\n\n"],
+            }
+
+            compression_model = getattr(config, 'COMPRESSION_MODEL', config.OLLAMA_MODEL)
+
+            response = query_ollama(
+                prompt=prompt,
+                model=compression_model,
+                image=None,
+                system_prompt=system_prompt,
+                timeout=getattr(config, 'OLLAMA_TIMEOUT_EVAL', 60),
+                options=model_options,
+                prompt_type="reflection",
+            )
+
+            if response and isinstance(response, str):
+                cleaned = response.strip().strip('"\'').strip()
+                # Take just the first sentence
+                for sep in [". ", "! ", "? "]:
+                    if sep in cleaned:
+                        cleaned = cleaned.split(sep)[0] + sep[0]
+                        break
+                if 15 < len(cleaned) < 200:
+                    return cleaned
+
+        except Exception as e:
+            print(f"[SEMANTIC] Reflection generation failed: {e}")
+
+        return None
+
+    def _store_reflection(self, concept_id: str, text: str, source_obs_ids: List[str], depth: int = 0):
+        """Store a reflection — an LLM-synthesized higher-order memory.
+
+        Reflections are stored alongside observations in the same collection,
+        distinguished by metadata. They represent the machine's settled
+        understanding rather than a single fleeting thought.
+        """
+        if not text or len(text.strip()) < 15:
+            return
+
+        # Duplicate check: don't store if too similar to existing reflections for this concept
+        existing = self._observations.get(
+            where={"$and": [{"concept_id": concept_id}, {"type": "reflection"}]},
+            include=["documents"],
+        )
+        if existing["documents"]:
+            try:
+                results = self._observations.query(
+                    query_texts=[text],
+                    n_results=1,
+                    where={"$and": [{"concept_id": concept_id}, {"type": "reflection"}]},
+                    include=["distances"],
+                )
+                if results["distances"][0] and results["distances"][0][0] < DUPLICATE_DISTANCE:
+                    return  # Already have a near-identical reflection
+            except Exception:
+                pass
+
+        refl_id = f"refl_{self._obs_counter}"
+        self._obs_counter += 1
+
+        # ChromaDB metadata can't store lists directly, store as comma-joined string
+        sources_str = ",".join(source_obs_ids[:10])  # cap at 10 to keep metadata manageable
+
+        self._observations.add(
+            ids=[refl_id],
+            documents=[text[:300]],
+            metadatas=[{
+                "concept_id": concept_id,
+                "timestamp": time.time(),
+                "session_id": self._session_id,
+                "type": "reflection",
+                "depth": depth,
+                "synthesized_from": sources_str,
+            }],
+        )
+        print(f"[SEMANTIC] Stored reflection (depth={depth}): {text[:80]}")
+
+    # ------------------------------------------------------------------
+    # Reflection worker — periodic background synthesis
+    # ------------------------------------------------------------------
+
+    def _start_reflection_worker(self):
+        """Start the background thread that periodically generates reflections."""
+        if self._reflection_thread is not None and self._reflection_thread.is_alive():
+            return
+        self._reflection_stop.clear()
+        self._reflection_thread = threading.Thread(
+            target=self._reflection_worker_loop,
+            daemon=True,
+            name="SemanticReflectionWorker",
+        )
+        self._reflection_thread.start()
+
+    def stop_reflection_worker(self):
+        """Stop the reflection worker thread cleanly."""
+        self._reflection_stop.set()
+        if self._reflection_thread:
+            self._reflection_thread.join(timeout=5)
+
+    def _reflection_worker_loop(self):
+        """Main loop for the reflection worker. Runs every REFLECTION_INTERVAL_SECONDS."""
+        # Sleep on startup to let the main system warm up first
+        if self._reflection_stop.wait(timeout=120):
+            return  # Stop requested before first cycle
+
+        while not self._reflection_stop.is_set():
+            try:
+                self._reflection_cycle()
+            except Exception as e:
+                print(f"[SEMANTIC] Reflection cycle error: {e}")
+            # Wait for next interval, exit early if stop requested
+            if self._reflection_stop.wait(timeout=REFLECTION_INTERVAL_SECONDS):
+                return
+
+    def _reflection_cycle(self):
+        """One pass: find concepts ripe for reflection, synthesize one or two."""
+        candidates = self._find_reflection_candidates()
+        if not candidates:
+            return
+
+        # Process up to REFLECTION_MAX_PER_CYCLE candidates
+        for concept_id, concept_name, observations in candidates[:REFLECTION_MAX_PER_CYCLE]:
+            print(f"[SEMANTIC] Reflecting on '{concept_name}' ({len(observations)} new observations)")
+            reflection = self._generate_reflection(concept_id, concept_name, observations)
+            if reflection:
+                obs_ids = [o["id"] for o in observations]
+                self._store_reflection(concept_id, reflection, obs_ids, depth=0)
+                # Surface in caption monitor as a "settled understanding"
+                try:
+                    from utils.live_log import log_reflection
+                    log_reflection(concept_name, reflection)
+                except Exception:
+                    pass
+
+    def _find_reflection_candidates(self) -> List[Tuple[str, str, List[Dict]]]:
+        """Find concepts that have accumulated enough new observations to warrant reflection.
+
+        Returns list of (concept_id, concept_name, observations_since_last_reflection) tuples,
+        sorted by activity (most observations first).
+        """
+        candidates = []
+
+        all_concepts = self._concepts.get(include=["documents", "metadatas"])
+        if not all_concepts["ids"]:
+            return []
+
+        for cid, name, meta in zip(all_concepts["ids"], all_concepts["documents"], all_concepts["metadatas"]):
+            # Skip rarely-seen concepts
+            if meta.get("times_seen", 0) < REFLECTION_MIN_CONCEPT_FAMILIARITY:
+                continue
+
+            # Get all observations for this concept
+            obs_data = self._observations.get(
+                where={"concept_id": cid},
+                include=["documents", "metadatas"],
+            )
+            if not obs_data["ids"]:
+                continue
+
+            # Find the most recent reflection's timestamp (if any) for this concept
+            last_refl_ts = 0.0
+            new_observations = []
+            for oid, doc, ometa in zip(obs_data["ids"], obs_data["documents"], obs_data["metadatas"]):
+                otype = ometa.get("type", "observation")
+                ts = ometa.get("timestamp", 0)
+                if otype == "reflection" and ts > last_refl_ts:
+                    last_refl_ts = ts
+
+            # Now collect observations newer than the last reflection
+            for oid, doc, ometa in zip(obs_data["ids"], obs_data["documents"], obs_data["metadatas"]):
+                if ometa.get("type", "observation") != "observation":
+                    continue
+                ts = ometa.get("timestamp", 0)
+                if ts > last_refl_ts and len(doc) > 15:
+                    new_observations.append({"id": oid, "text": doc, "timestamp": ts})
+
+            if len(new_observations) >= REFLECTION_MIN_NEW_OBSERVATIONS:
+                # Sort by timestamp ascending (oldest first, so synthesis sees the arc)
+                new_observations.sort(key=lambda x: x["timestamp"])
+                candidates.append((cid, name, new_observations))
+
+        # Sort by number of new observations (most active concepts first)
+        candidates.sort(key=lambda x: len(x[2]), reverse=True)
+        return candidates
 
     def _prune_oldest_observations(self, concept_id: str):
         """Remove the oldest observations for a concept, keeping MAX_OBSERVATIONS_PER_CONCEPT."""

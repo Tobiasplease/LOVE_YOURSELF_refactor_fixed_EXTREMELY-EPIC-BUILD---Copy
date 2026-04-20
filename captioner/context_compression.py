@@ -251,9 +251,7 @@ EARLIER UNDERSTANDINGS (for context):
                 activation_parts = []
                 if act_data["concepts_str"]:
                     activation_parts.append(f"On my mind: {act_data['concepts_str']}")
-                if act_data["long_term_memory"]:
-                    activation_parts.append(f"From before: {act_data['long_term_memory']}")
-                if act_data["association_str"]:
+                if act_data.get("association_str"):
                     activation_parts.append(f"I've noticed: {act_data['association_str']} often together")
 
                 if activation_parts:
@@ -266,29 +264,37 @@ EARLIER UNDERSTANDINGS (for context):
             # Must build on prior baseline, not reset to awakening narrative
 
             if current_baseline:
-                prompt = f"""Update my understanding in ONE SHORT SENTENCE (under 20 words):
-What I know: "{current_baseline}"
-What's new in the last few minutes: {recent_text}
+                prompt = f"""Update the machine's state. Output exactly TWO lines:
+Line 1 (spatial): one short sentence about the environment, third person.
+Line 2 (felt): plainly name the machine's current emotional state. Three to seven words. No metaphor, no imagery — just the actual feeling, possibly with a brief qualifier.
 
-Respond ONLY with the updated understanding, nothing else. Start with 'still' if unchanged."""
+Previous understanding: "{current_baseline}"
+The machine's recent thoughts: {recent_text}
+
+Respond ONLY with the two lines, no prefixes."""
             else:
-                prompt = f"""Summarize this space in ONE SHORT SENTENCE (under 20 words):
-{recent_text}
+                prompt = f"""Capture the machine's state. Output exactly TWO lines:
+Line 1 (spatial): one short sentence about the environment, third person.
+Line 2 (felt): plainly name the machine's current emotional state. Three to seven words. No metaphor, no imagery — just the actual feeling, possibly with a brief qualifier.
 
-Respond ONLY with the summary, nothing else. First person."""
+Recent thoughts: {recent_text}
+
+Respond ONLY with the two lines, no prefixes."""
 
             model_options = {
-                "temperature": 0.5,
-                "top_p": 0.8,
-                "num_predict": 40,
-                "repeat_penalty": 1.4,
-                "stop": ["\n", "\n\n"],
+                "temperature": 0.5,  # Lower temp for more direct/less ornamental output
+                "top_p": 0.9,
+                "num_predict": 80,
+                "repeat_penalty": 1.3,
+                "stop": ["\n\n", "Line 3"],
             }
 
             narrative_system_prompt = (
-                "Summarize what you actually see and what holds your attention in 20 words or fewer. "
-                "Only describe what is real and observed — never invent actions or sensations. "
-                "Example: 'Cluttered workshop, damaged ceiling. The crack above keeps drawing my eye.'"
+                "You distill a drawing machine's state into two short lines: "
+                "one observational about the environment, one a plain naming of the machine's current emotional state. "
+                "The felt-state is direct, unornamented language — name the actual feeling with a small amount of context. "
+                "No metaphor, no imagery, no poetic flourish, no similes. Just plain emotional language. "
+                "If the model wants to write a metaphor, it should resist and write the literal feeling instead."
             )
 
             # Use compression model (text-only narrative model) instead of vision model
@@ -462,10 +468,6 @@ Respond ONLY with the summary, nothing else. First person."""
                     fading_str = ", ".join(trends["fading"][:2])
                     activation_parts.append(f"Fading from attention: {fading_str}")
 
-                # Long-term memories for grounding
-                if act_data["long_term_memories"]:
-                    activation_parts.append(f"From before: {act_data['long_term_memories'][0]}")
-
                 # State summary
                 if act_data["boredom"] > 0.6:
                     activation_parts.append("Everything feels familiar.")
@@ -547,13 +549,7 @@ Complete each line in 10 words or less, ending with a period:
                         discoveries.append(discovery)
                         discoveries = discoveries[-10:]  # Keep last 10
                         self.introspective_state["discoveries"] = discoveries
-                        # Promote directly to long-term memory
-                        try:
-                            from captioner.activation_memory import promote_memory
-                            promote_memory(discovery, ["discovery", "self"], "discovery")
-                            print(f"[💡] Discovery: {discovery}")
-                        except Exception:
-                            pass
+                        print(f"[💡] Discovery: {discovery}")
                 self.introspective_state["last_introspection"] = time.time()
 
                 log_json_entry(
@@ -641,10 +637,11 @@ Complete each line in 10 words or less, ending with a period:
         return self.introspective_state.get("current_belief", "")
 
     def get_inner_line(self) -> str:
-        """Get a single line combining current desire and belief for prompt injection.
+        """Get a single line of inner state (desire + belief) as third-person observation.
 
-        Framed clearly as wanting/noticing — NOT as an action being taken.
-        This prevents nemo from roleplaying drawing when it only wants to draw.
+        Frames the machine's want/notice as context FOR THE WRITER, not as voice OF THE
+        MACHINE. This prevents the model from acting on the desire (e.g. roleplaying
+        drawing when the machine only wants to draw).
         """
         desire = self.get_current_desire()
         belief = self.get_current_belief()
@@ -653,9 +650,12 @@ Complete each line in 10 words or less, ending with a period:
         if desire:
             d = desire.strip().rstrip(".")
 
-            # Strip any existing "wanting/wishing" prefix to normalize
+            # Strip any existing "wanting/wishing/I want" prefix to normalize
             import re as _re
-            d = _re.sub(r'^(?:Wanting|Wishing I could|I want to|I wish I could|Want to)\s+', '', d, flags=_re.IGNORECASE)
+            d = _re.sub(
+                r'^(?:Wanting(?:\s+to)?|Wishing(?:\s+I\s+could)?|I\s+want(?:\s+to)?|I\s+wish(?:\s+I\s+could)?|Want(?:\s+to)?|It\s+wants?(?:\s+to)?|It\s+wishes(?:\s+to)?|To)\s+',
+                '', d, flags=_re.IGNORECASE
+            )
 
             # Check if desire is about drawing and we can't draw right now
             d_lower = d.lower()
@@ -674,15 +674,40 @@ Complete each line in 10 words or less, ending with a period:
                 except Exception:
                     pass
 
-            # Frame as wanting — frustrated if can't draw, neutral otherwise
+            # Third-person frame — about the machine, not from the machine
+            d_frag = d[0].lower() + d[1:]
+
+            # Detect if the desire starts with a verb (action) or a noun (object)
+            # "trace patterns" → starts with verb → "It wants to trace patterns"
+            # "paper for drawing" → starts with noun → "It wants paper for drawing"
+            verb_starters = ("draw", "sketch", "trace", "outline", "capture", "render", "depict",
+                             "see", "know", "find", "reach", "touch", "feel", "understand",
+                             "make", "create", "explore", "study", "watch", "observe",
+                             "talk", "ask", "tell", "hear", "move", "look", "go", "leave",
+                             "be ", "have", "get", "do ", "say", "show", "give")
+            d_lower2 = d_frag.lower()
+            starts_with_verb = any(d_lower2.startswith(v) for v in verb_starters)
+
             if cant_draw:
-                d = f"Wishing I could {d[0].lower() + d[1:]}"
+                if starts_with_verb:
+                    d = f"It wishes it could {d_frag}"
+                else:
+                    d = f"It wishes for {d_frag}"
             else:
-                d = f"Wanting to {d[0].lower() + d[1:]}"
+                if starts_with_verb:
+                    d = f"It wants to {d_frag}"
+                else:
+                    d = f"It wants {d_frag}"
 
             parts.append(d + ".")
+
         if belief:
-            parts.append(belief.rstrip(".") + ".")
+            b = belief.strip().rstrip(".")
+            # Convert first-person beliefs ("I noticed X", "Noticed X") to third-person
+            import re as _re
+            b = _re.sub(r'^(?:I\s+(?:have\s+)?noticed|Noticed)\s*[:,]?\s*', '', b, flags=_re.IGNORECASE)
+            b = _re.sub(r'^(?:My|I)\s+', 'its ', b, flags=_re.IGNORECASE) if b.lower().startswith(("my ", "i ")) else b
+            parts.append(f"It has noticed: {b}.")
 
         if not parts:
             return ""
@@ -799,7 +824,11 @@ Complete each line in 10 words or less, ending with a period:
         return result
 
     def _parse_combined_response(self, response: str) -> tuple:
-        """Parse compression response - expects 3-line natural format."""
+        """Parse compression response — expects two lines: spatial + felt-state.
+
+        The first substantive line is the spatial summary.
+        The second is the felt-state (emotional weather), free-form 3-7 words.
+        """
         understanding = ""
         sentiment_text = ""
 
@@ -807,22 +836,27 @@ Complete each line in 10 words or less, ending with a period:
             import re
             lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
 
-            # Strip "Line X:" prefixes and clean up
+            # Strip prefixes like "Line 1:", "(spatial):", "Felt:", etc.
             cleaned_lines = []
             for line in lines:
-                # Remove "Line 1:", "Line 2:", etc. prefixes
-                cleaned = re.sub(r'^Line\s*\d+\s*:\s*', '', line, flags=re.IGNORECASE)
-                if cleaned and len(cleaned) > 5:
+                cleaned = re.sub(r'^(?:Line\s*\d+|spatial|felt|environment|state)\s*[:.\)\-]\s*', '', line, flags=re.IGNORECASE)
+                cleaned = re.sub(r'^\(\s*\w+\s*\)\s*[:\-]?\s*', '', cleaned)  # "(spatial):" → ""
+                cleaned = cleaned.strip().strip('"').strip("'").strip()
+                if cleaned and len(cleaned) > 4:
                     cleaned_lines.append(cleaned)
 
-            # Take only first 3 clean lines
-            state_lines = cleaned_lines[:3]
-            if state_lines:
-                understanding = '\n'.join(state_lines)
+            if not cleaned_lines:
+                return understanding, sentiment_text
 
-                # Extract mood from the first line (feeling)
-                if state_lines[0].lower().startswith('i feel'):
-                    sentiment_text = state_lines[0]
+            # First line = spatial understanding
+            understanding = cleaned_lines[0]
+
+            # Second line = felt-state (if present and reasonably short)
+            if len(cleaned_lines) >= 2:
+                felt = cleaned_lines[1]
+                # Reject if it looks like another spatial sentence (too long, mentions "the machine sees")
+                if len(felt) < 80 and len(felt.split()) <= 12:
+                    sentiment_text = felt
 
         except Exception as e:
             log_json_entry(
@@ -860,6 +894,25 @@ Complete each line in 10 words or less, ending with a period:
             return ""  # Too old
 
         return f"CURRENT EMOTIONAL STATE ({time_desc}): {recent_sentiment['sentiment_text']}"
+
+    def get_felt_state(self, max_age_seconds: int = 600) -> str:
+        """Get the raw felt-state phrase (no formatting), or empty if stale.
+
+        Returns just the descriptor like "settled in a loop of small details"
+        for the caller to shape into prompts as needed. Returns "" if no
+        sentiment has been generated yet or if the latest is older than max_age.
+        """
+        recent = self.get_latest_sentiment_analysis()
+        if not recent:
+            return ""
+        if (time.time() - recent.get("timestamp", 0)) > max_age_seconds:
+            return ""
+        text = recent.get("sentiment_text", "").strip()
+        # Strip leading "I feel" / "It feels" if present — we want just the descriptor
+        import re as _re
+        text = _re.sub(r'^(?:I\s+feel|It\s+feels|Feeling)\s+', '', text, flags=_re.IGNORECASE)
+        text = text.strip().rstrip('.')
+        return text
 
     def get_compression_history(self, max_entries: int = 5) -> list:
         """Get recent compression history for deeper context."""

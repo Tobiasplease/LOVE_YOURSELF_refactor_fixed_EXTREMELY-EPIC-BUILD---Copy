@@ -146,20 +146,15 @@ HTML_TEMPLATE = """
             <svg id="network"></svg>
             <div class="legend">
                 <div class="legend-item">
-                    <div class="legend-color" style="background: #ff6b6b;"></div>
-                    <span>Static (boring if repeated)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #4ecdc4;"></div>
-                    <span>Dynamic (ongoing concern)</span>
-                </div>
-                <div class="legend-item">
                     <div class="legend-color" style="background: #ffd93d;"></div>
-                    <span>Social (engagement)</span>
+                    <span>Person / social</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: #a8a8a8;"></div>
-                    <span>Neutral (moderate boredom)</span>
+                    <span>Object / environment</span>
+                </div>
+                <div class="legend-item" style="font-size:0.8em; color:#666; margin-top:8px">
+                    <span>Node size = activation level</span>
                 </div>
             </div>
         </div>
@@ -192,11 +187,8 @@ HTML_TEMPLATE = """
             <h3>🧠 Compression State</h3>
             <div id="compression"></div>
 
-            <h3>💭 Desires</h3>
+            <h3>💭 Identity</h3>
             <div id="desires"></div>
-
-            <h3>📅 Long-term Memories</h3>
-            <div id="long-term-memories" class="concept-list"></div>
 
             <h3>Recent Session Memories</h3>
             <div id="memories"></div>
@@ -207,32 +199,26 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        // Semantic categories for boredom weighting (same as Python)
-        const STATIC_CONCEPTS = new Set([
-            "table", "desk", "chair", "wall", "floor", "ceiling", "door", "window",
-            "shelf", "cabinet", "drawer", "screen", "monitor", "keyboard", "mouse",
-            "lamp", "light", "book", "paper", "pen", "pencil", "notebook", "box",
-            "cup", "mug", "bottle", "plant", "clock", "frame", "picture", "poster",
-            "room", "office", "workspace", "corner", "surface", "clutter", "mess",
-        ]);
-        const DYNAMIC_CONCEPTS = new Set([
-            "threat", "fear", "danger", "worry", "anxiety", "tension", "unease",
-            "movement", "motion", "change", "shift", "sound", "noise",
-            "presence", "arrival", "departure", "approach", "visit",
-            "interest", "curiosity", "wonder", "excitement", "energy",
-            "work", "activity", "action", "task", "project",
-        ]);
-        const SOCIAL_CONCEPTS = new Set([
-            "person", "someone", "man", "woman", "human", "people", "visitor",
-            "face", "hand", "body", "figure", "silhouette", "they", "them",
-            "friend", "stranger", "guest", "observer", "watcher",
-        ]);
+        // Concept labels cache — populated from snapshot data
+        let conceptLabels = {};
 
-        function getConceptCategory(concept) {
-            if (STATIC_CONCEPTS.has(concept)) return 'static';
-            if (DYNAMIC_CONCEPTS.has(concept)) return 'dynamic';
-            if (SOCIAL_CONCEPTS.has(concept)) return 'social';
+        // Person detection keywords for label-based categorization
+        const PERSON_WORDS = ["person", "someone", "man", "woman", "people", "figure",
+                              "sitting", "standing", "wearing", "seated", "individual",
+                              "working", "typing", "looking", "human", "he ", "she "];
+
+        function getConceptCategory(conceptId) {
+            const label = (conceptLabels[conceptId] || '').toLowerCase();
+            if (!label) return 'default';
+            if (PERSON_WORDS.some(w => label.includes(w))) return 'social';
             return 'default';
+        }
+
+        function getConceptLabel(conceptId) {
+            const label = conceptLabels[conceptId];
+            if (!label) return conceptId;
+            // Truncate long labels for display
+            return label.length > 30 ? label.substring(0, 27) + '...' : label;
         }
 
         const width = document.getElementById('graph').clientWidth;
@@ -248,14 +234,11 @@ HTML_TEMPLATE = """
             .scaleExtent([0.3, 3])
             .on('zoom', (event) => g.attr('transform', event.transform)));
 
-        // Color by semantic category (boredom contribution)
-        function getCategoryColor(concept) {
-            const cat = getConceptCategory(concept);
+        function getCategoryColor(conceptId) {
+            const cat = getConceptCategory(conceptId);
             switch(cat) {
-                case 'static': return '#ff6b6b';   // Red - boring when repeated
-                case 'dynamic': return '#4ecdc4';  // Teal - ongoing concern
-                case 'social': return '#ffd93d';   // Yellow - engagement
-                default: return '#a8a8a8';         // Gray - neutral
+                case 'social': return '#ffd93d';   // Yellow - person/engagement
+                default: return '#a8a8a8';         // Gray - default
             }
         }
 
@@ -279,6 +262,9 @@ HTML_TEMPLATE = """
         let nodePositions = {};  // Preserve positions across updates
 
         function updateGraph(data) {
+            // Update concept labels cache
+            conceptLabels = data.concept_labels || {};
+
             // Build nodes from activations
             const newNodes = Object.entries(data.activations || {})
                 .filter(([_, v]) => v > 0.05)
@@ -352,7 +338,7 @@ HTML_TEMPLATE = """
                 .attr('r', d => sizeScale(d.activation))
                 .attr('fill', d => getCategoryColor(d.id));
 
-            // Update labels
+            // Update labels — show human-readable concept names
             label = label.data(newNodes, d => d.id);
             label.exit().remove();
             label = label.enter()
@@ -360,7 +346,7 @@ HTML_TEMPLATE = """
                 .attr('class', 'node-label')
                 .attr('dy', 4)
                 .merge(label)
-                .text(d => d.id);
+                .text(d => getConceptLabel(d.id));
 
             // Tick function - also save positions
             simulation.on('tick', () => {
@@ -392,23 +378,18 @@ HTML_TEMPLATE = """
             document.getElementById('active-count').textContent = newNodes.length;
             document.getElementById('edge-count').textContent = links.length;
 
-            // Top concepts with category labels
+            // Top concepts with human-readable labels
             const topConcepts = [...newNodes]
                 .sort((a, b) => b.activation - a.activation)
                 .slice(0, 10);
-            const categoryLabels = {
-                'static': '🔴',   // Boring
-                'dynamic': '🟢', // Concern
-                'social': '🟡',  // Social
-                'default': '⚪'   // Neutral
-            };
             document.getElementById('top-concepts').innerHTML = topConcepts
                 .map(c => {
                     const cat = getConceptCategory(c.id);
-                    const icon = categoryLabels[cat];
+                    const icon = cat === 'social' ? '🟡' : '⚪';
+                    const label = getConceptLabel(c.id);
                     return `
                     <div class="concept-item">
-                        <span class="concept-name">${icon} ${c.id}</span>
+                        <span class="concept-name">${icon} ${label}</span>
                         <span class="concept-value">${c.activation.toFixed(2)}</span>
                     </div>`;
                 }).join('');
@@ -444,23 +425,23 @@ HTML_TEMPLATE = """
             }
             document.getElementById('compression').innerHTML = compressionHtml || '<div style="color:#666">No compression data yet</div>';
 
-            // Desires
-            const selfModel = data.self_model || {};
-            const desires = selfModel.desires || [];
-            document.getElementById('desires').innerHTML = desires.length > 0
-                ? desires.map(d => `<div class="belief-item" style="border-color:#27ae60">${d}</div>`).join('')
-                : '<div style="color:#666">No desires recorded yet</div>';
-
-            // Long-term memories
-            const ltMemories = data.long_term_memories || [];
-            document.getElementById('long-term-memories').innerHTML = ltMemories.length > 0
-                ? ltMemories.slice(-5).reverse().map(m => `
-                    <div class="memory-item" style="border-color:#e67e22">
-                        <div class="memory-time">${m.time_ago || m.significance || 'archived'}</div>
-                        <div>${m.text || ''}</div>
-                    </div>
-                `).join('')
-                : '<div style="color:#666">No long-term memories yet</div>';
+            // Identity — desires and beliefs from introspection (not raw captions)
+            const identity = data.identity || {};
+            let identityHtml = '';
+            if (identity.current_desire) {
+                identityHtml += `<div class="belief-item" style="border-color:#27ae60">Wants: ${identity.current_desire}</div>`;
+            }
+            if (identity.current_belief) {
+                identityHtml += `<div class="belief-item" style="border-color:#3498db">Noticed: ${identity.current_belief}</div>`;
+            }
+            if (identity.desire_history && identity.desire_history.length > 1) {
+                const prev = identity.desire_history.slice(0, -1).reverse().slice(0, 2);
+                prev.forEach(d => {
+                    const txt = (typeof d === 'string') ? d : (d.text || d.desire || JSON.stringify(d));
+                    identityHtml += `<div class="memory-item" style="border-color:#27ae60; opacity:0.6"><div class="memory-time">previous</div><div>${txt}</div></div>`;
+                });
+            }
+            document.getElementById('desires').innerHTML = identityHtml || '<div style="color:#666">No introspection yet</div>';
 
             lastUpdate = Date.now();
         }
@@ -570,36 +551,18 @@ def get_state():
                         beliefs.append(f"The {c1} and {c2} are connected.")
             beliefs = beliefs[:5]
 
-        # Format long-term memories
-        long_term_memories = []
-        for mem in snapshot.get('long_term_memories', [])[-5:]:
-            age_days = (now - mem.get('timestamp', now)) / 86400
-            if age_days < 1:
-                time_ago = "earlier today"
-            elif age_days < 2:
-                time_ago = "yesterday"
-            elif age_days < 7:
-                time_ago = f"{int(age_days)} days ago"
-            else:
-                time_ago = f"{int(age_days/7)} weeks ago"
-            long_term_memories.append({
-                'text': mem.get('text', '')[:100],
-                'time_ago': time_ago,
-                'significance': mem.get('significance', 'observation'),
-            })
-
         return jsonify({
             'activations': snapshot.get('activations', {}),
             'edges': snapshot.get('edges', {}),
             'spatial_tags': snapshot.get('spatial_tags', {}),
+            'concept_labels': snapshot.get('concept_labels', {}),
             'beliefs': beliefs,
             'trends': snapshot.get('trends', {}),
             'recent_memories': list(reversed(recent_memories)),
-            'long_term_memories': list(reversed(long_term_memories)),
             'novelty': snapshot.get('novelty', 0.5),
             'boredom': snapshot.get('boredom', 0.0),
             'compression': snapshot.get('compression', {}),
-            'self_model': snapshot.get('self_model', {}),
+            'identity': snapshot.get('identity', {}),
             'snapshot_age': snapshot_age,
         })
     except Exception as e:

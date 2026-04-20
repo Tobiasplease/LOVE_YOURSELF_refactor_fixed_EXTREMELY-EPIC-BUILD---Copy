@@ -338,10 +338,10 @@ class MultimodalModel:
             traceback.print_exc()
             return "[WARNING] Reflection generation failed"
 
-    def generate_drawing_prompt(self, *, extra: Optional[str] = None, image_path: Optional[str] = None) -> str:
+    def generate_drawing_prompt(self, *, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: list = None) -> str:
         """Generate drawing prompt using centralized prompt interface with VISUAL GROUNDING."""
         prompt, model_options, system_prompt = self.prompt_interface.build_drawing_prompt_with_options(
-            self.memory_ref, extra=extra, image_path=image_path
+            self.memory_ref, extra=extra, image_path=image_path, drawing_intentions=drawing_intentions
         )
 
         if prompt is None:

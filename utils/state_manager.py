@@ -94,16 +94,7 @@ class StateManager:
                     "boredom": captioner.boredom,
                     "novelty_score": captioner.novelty_score,
                     "awakening_done": captioner.awakening_done,
-                    # Memory system
-                    "motif_counter": dict(captioner.motif_counter),
-                    "motif_first_seen": captioner.motif_first_seen,
-                    "motif_last_seen": captioner.motif_last_seen,
-                    "motif_confidence": captioner.motif_confidence,
-                    "motif_confirmed": captioner.motif_confirmed,
-                    "current_motifs": list(captioner.current_motifs),
-                    # Identity/Beliefs
-                    "beliefs": captioner.beliefs,
-                    "belief_history": captioner.belief_history,
+                    # Memory system (motif tracking removed — now handled by ChromaDB)
                     # Temporal spine (GPT-5's additions)
                     "boot_ts": getattr(captioner, "boot_ts", time.time()),
                     "timeline": list(captioner.timeline) if hasattr(captioner, "timeline") else [],
@@ -201,21 +192,10 @@ class StateManager:
             # Skip boredom and novelty_score - they're now properties that access memory system
             captioner.awakening_done = cap_state.get("awakening_done", False)
 
-            # Restore memory system
-            from collections import Counter, deque
+            # Motif/belief restore removed — now handled by ChromaDB semantic memory
+            from collections import deque
 
-            captioner.motif_counter = Counter(cap_state.get("motif_counter", {}))
-            captioner.motif_first_seen = cap_state.get("motif_first_seen", {})
-            captioner.motif_last_seen = cap_state.get("motif_last_seen", {})
-            captioner.motif_confidence = cap_state.get("motif_confidence", {})
-            captioner.motif_confirmed = cap_state.get("motif_confirmed", {})
-            captioner.current_motifs = set(cap_state.get("current_motifs", []))
-
-            # Restore identity
-            captioner.beliefs = cap_state.get("beliefs", {})
-            captioner.belief_history = cap_state.get("belief_history", [])
-
-            # Restore temporal spine (GPT-5's additions)
+            # Restore temporal spine
             captioner.boot_ts = cap_state.get("boot_ts", time.time())
             if "timeline" in cap_state:
                 captioner.timeline = deque(cap_state["timeline"], maxlen=50000)
@@ -289,13 +269,11 @@ class StateManager:
                     "action": "state_timing",
                     "save_datetime": save_datetime,
                     "session_gap_seconds": captioner.last_session_gap,
-                    "beliefs_count": len(captioner.beliefs),
-                    "motifs_count": len(captioner.motif_counter),
                 },
                 print_message=f"[🕐] State was saved at: {save_datetime}, gap: {captioner.last_session_gap:.1f} seconds",
             )
 
-            print(f"[SUCCESS] Restored captioner state: {len(captioner.beliefs)} beliefs, {len(captioner.motif_counter)} motifs")
+            print(f"[SUCCESS] Restored captioner state")
             return True
 
         except Exception as e:
