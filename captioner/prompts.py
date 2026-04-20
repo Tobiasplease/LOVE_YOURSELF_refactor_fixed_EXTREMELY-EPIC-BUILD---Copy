@@ -469,10 +469,18 @@ def build_monologue_prompt(
         if hasattr(agent, "recent_captions") and agent.recent_captions:
             last_caption = agent.recent_captions[-1][0]
             if last_caption and last_caption.strip():
-                # Truncate at word boundary, not mid-word
+                # Truncate at sentence boundary to avoid mid-phrase cuts
                 trimmed = last_caption.strip()
                 if len(trimmed) > 140:
-                    trimmed = trimmed[:140].rsplit(" ", 1)[0]
+                    # Try sentence boundary
+                    cut = trimmed
+                    for i in range(min(len(cut), 140), 30, -1):
+                        if cut[i - 1] in ".!?":
+                            cut = cut[:i]
+                            break
+                    else:
+                        cut = cut[:140].rsplit(" ", 1)[0].rstrip(",.;:") + "..."
+                    trimmed = cut
                 prompt_parts.append(f"\nIts last thought was: \"{trimmed}\"")
     except Exception:
         pass

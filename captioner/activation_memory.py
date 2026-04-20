@@ -35,6 +35,18 @@ EDGE_PERSISTENCE_FILE = os.path.join(MOOD_SNAPSHOT_FOLDER, "activation_edges.jso
 VISUALIZER_SNAPSHOT_FILE = os.path.join(MOOD_SNAPSHOT_FOLDER, "activation_snapshot.json")
 
 
+def _truncate_at_sentence(text: str, max_len: int) -> str:
+    """Truncate text at a sentence boundary, falling back to word boundary with ellipsis."""
+    text = text.strip()
+    if len(text) <= max_len:
+        return text
+    for i in range(min(len(text), max_len), 15, -1):
+        if text[i - 1] in ".!?":
+            return text[:i]
+    truncated = text[:max_len].rsplit(" ", 1)[0]
+    return truncated.rstrip(",.;:") + "..."
+
+
 class ActivationNetwork:
     """Spreading activation network for concept associations.
 
@@ -682,10 +694,12 @@ def get_current_thread() -> str:
         thought = thread.get("last_thought", "")
         thought_type = thread.get("thought_type", "")
         if thought:
+            # Truncate at sentence boundary to avoid mid-phrase cuts
+            short = _truncate_at_sentence(thought, 80)
             if thought_type == "reflection":
-                parts.append(f"Its attention is on: {label}. A settled understanding: \"{thought[:80]}\"")
+                parts.append(f"Its attention is on: {label}. A settled understanding: \"{short}\"")
             else:
-                parts.append(f"Its attention is on: {label}. Earlier it thought: \"{thought[:80]}\"")
+                parts.append(f"Its attention is on: {label}. Earlier it thought: \"{short}\"")
         else:
             parts.append(f"Its attention is on: {label}.")
 

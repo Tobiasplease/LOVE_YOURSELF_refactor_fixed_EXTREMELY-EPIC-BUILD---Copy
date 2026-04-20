@@ -1097,18 +1097,28 @@ Respond with ONLY the sentence."""
         # Strip leading articles and filler
         text = re.sub(r'^(?:There(?:\'s| is| are) )?(?:a |an |the )?', '', text, flags=re.IGNORECASE)
         # Strip "noticeable detail is" type preambles
-        text = re.sub(r'^(?:noticeable|notable|interesting)\s+(?:detail|feature|element)\s+(?:is\s+)?(?:the\s+)?', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'^(?:noticeable|notable|interesting|striking|most striking|most noticeable|most prominent)\s+(?:detail|feature|element)\s+(?:is\s+)?(?:the\s+)?', '', text, flags=re.IGNORECASE)
+        # Strip "in front of you is" preambles from perception model
+        text = re.sub(r'^(?:in front of you is\s+)', '', text, flags=re.IGNORECASE)
 
         # Capitalize first letter
         if text:
             text = text[0].upper() + text[1:]
 
-        # Truncate at reasonable length — concept names should be short
+        # Truncate at reasonable length — prefer sentence boundary
         if len(text) > 55:
-            text = text[:55].rsplit(" ", 1)[0]
+            # Try sentence boundary first
+            for i in range(min(len(text), 55), 15, -1):
+                if text[i - 1] in ".!?":
+                    text = text[:i - 1]
+                    break
+            else:
+                text = text[:55].rsplit(" ", 1)[0]
 
-        # Strip trailing punctuation
+        # Strip trailing punctuation and dangling prepositions
         text = text.rstrip(",.;:!? ")
+        # Remove trailing dangling words (with, and, or, the, a, in, on, of, to, for, is)
+        text = re.sub(r'\s+(?:with|and|or|the|a|an|in|on|of|to|for|is|are|has|that|which)$', '', text, flags=re.IGNORECASE)
 
         return text
 

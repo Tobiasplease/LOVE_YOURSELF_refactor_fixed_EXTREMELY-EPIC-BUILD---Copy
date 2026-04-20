@@ -1019,6 +1019,7 @@ class Captioner(MemoryMixin):
 
         # Always store the generated prompt in drawing memory — even if it never reaches
         # ComfyUI, the artistic intent is meaningful for arc tracking and future prompts.
+        # Also reset the drawing cooldown so prompts don't stack up when there's no paper.
         if "[ERROR]" not in prompt:
             try:
                 from drawing.drawing_memory import get_drawing_memory
@@ -1032,6 +1033,11 @@ class Captioner(MemoryMixin):
                 )
             except Exception as e:
                 print(f"[⚠️] Could not store drawing intent: {e}")
+
+            # Reset cooldown on prompt generation, not just physical completion.
+            # Without this, failed/skipped drawings don't reset the timer and
+            # prompts queue up rapidly when ComfyUI isn't running or paper is absent.
+            self.drawing.last_drawing_time = time.time()
 
         # Proceed with drawing flow (ComfyUI + GRBL)
         if "[ERROR]" not in prompt:
