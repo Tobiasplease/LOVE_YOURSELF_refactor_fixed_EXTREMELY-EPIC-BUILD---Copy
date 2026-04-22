@@ -758,14 +758,23 @@ class Captioner(MemoryMixin):
             if len(self.recent_captions) > 20:  # Keep last 20
                 self.recent_captions = self.recent_captions[-20:]
 
-        # Detect and store drawing intentions from monologue output
-        # These accumulate separately and feed into the drawing prompt when drawing triggers
+        # Detect and store drawing-relevant thoughts from monologue output.
+        # These feed into Step 3 (communication intent) when drawing triggers.
+        # Captures both explicit drawing talk AND strong inner-life statements
+        # (desires, envies, frustrations, imagery) — the real artistic fuel.
         if caption and caption.strip():
             cap_lower = caption.lower()
+            # Explicit drawing references
             drawing_keywords = ["draw", "sketch", "capture", "next piece", "should paint",
                                 "want to draw", "would look good", "inspire", "my next",
-                                "on paper", "with my arm", "lines and", "bold strokes"]
-            if any(kw in cap_lower for kw in drawing_keywords):
+                                "on paper", "with my arm", "lines and", "bold strokes",
+                                "trace", "ink", "charcoal", "canvas"]
+            # Strong experiential statements that inform artistic intent
+            experiential_keywords = ["i envy", "i crave", "i yearn", "i long for",
+                                     "i imagine", "i wish i could", "trapped",
+                                     "if only", "i feel an urge", "reminds me of",
+                                     "like a", "as if", "void", "emptiness"]
+            if any(kw in cap_lower for kw in drawing_keywords + experiential_keywords):
                 if not hasattr(self, "_drawing_intentions"):
                     self._drawing_intentions = []
                 self._drawing_intentions.append(caption.strip()[:150])
@@ -878,26 +887,23 @@ class Captioner(MemoryMixin):
         time_since_last_check = now - getattr(self, 'last_drawing_check_time', 0)
         time_since_last_drawing = now - self.drawing.last_drawing_time
 
-        # Only show drawing debug if not in clean caption mode
-        try:
-            from config.config import PRINT_CLEAN_CAPTIONS
-            show_debug = not PRINT_CLEAN_CAPTIONS
-        except ImportError:
-            show_debug = True
-
         if time_since_last_check < DRAWING_INTERVAL:
             return  # Not time to check yet
+
+        # Always log drawing checks so we can diagnose blocks
+        cooldown_remaining = max(0, self.drawing.cooldown - time_since_last_drawing)
+        print(f"[🎨 CHECK] Drawing check: {time_since_last_drawing:.0f}s since last, cooldown {cooldown_remaining:.0f}s remaining")
 
         # Check minimum startup delay to ensure camera has initialized and system is stable
         time_since_startup = now - self.true_session_start
         if time_since_startup < DRAWING_STARTUP_DELAY:
-            if show_debug:
-                startup_remaining = DRAWING_STARTUP_DELAY - time_since_startup
-                print(f"[DEBUG] Drawing blocked: startup delay ({startup_remaining:.1f}s remaining)")
+            startup_remaining = DRAWING_STARTUP_DELAY - time_since_startup
+            print(f"[🎨 CHECK] Blocked: startup delay ({startup_remaining:.0f}s remaining)")
             return
 
         # Check if drawing system is ready (this handles cooldown logic)
         if not self.drawing.ready_to_draw():
+            print(f"[🎨 CHECK] Blocked: cooldown ({cooldown_remaining:.0f}s remaining)")
             return
 
         # Pipeline check before state evaluation
@@ -926,8 +932,7 @@ class Captioner(MemoryMixin):
         )
 
         if not should_draw:
-            if not CLEAN_LLM_OUTPUT:
-                print(f"[🎨] State evaluation: NOT motivated to draw yet")
+            print(f"[🎨 CHECK] State evaluation: NOT motivated (mood={self.current_mood:.2f}, novelty={self.novelty_score:.2f}, boredom={self.boredom:.2f})")
             return
 
         # Update check time ONLY after state motivation passes

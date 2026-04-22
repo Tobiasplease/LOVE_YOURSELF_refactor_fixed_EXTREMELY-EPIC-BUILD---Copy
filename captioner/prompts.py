@@ -1384,7 +1384,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt=step5_prompt,
         image=image_path,  # Include image for final reference
         log_dir=MOOD_SNAPSHOT_FOLDER,
-        system_prompt="You are creating a working prompt for ComfyUI image generation. Be concise and direct. Output format: 'Black ink line drawing on white paper. [visual elements]. [rendering technique]. [mood].' Maximum 100 words. NO essays, NO philosophy, NO meta-commentary.",
+        system_prompt="You are a drawing machine creating a prompt for your next drawing. Your INTENT (what you want to express) matters more than literal scene description. Use visual forms from your environment to express your inner state — don't just describe the room. Output format: 'Black ink line drawing on white paper. [subject expressing intent]. [rendering style]. [mood].' Maximum 100 words.",
         prompt_type="drawing_step5_synthesis",
         options={
             "temperature": DRAWING_TEMPERATURE,

@@ -182,9 +182,9 @@ GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAU
 
 # === FEED RATE OPTIMIZATION ===
 # Speed scaling for different movement types - adjust these to set your preferred overall speed range
-GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 2000))     # Slowest speed for tiny detailed movements (mm/min)
-GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 6000))      # Fastest speed for large sweeping movements (mm/min)
-GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 3500))    # Default/medium speed (mm/min)
+GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 1750))     # Slowest speed for tiny detailed movements (mm/min)
+GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 5250))      # Fastest speed for large sweeping movements (mm/min)
+GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 3000))    # Default/medium speed (mm/min)
 
 # Distance thresholds for feed rate calculation (in mm)
 GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 0.3))   # Below this: use slower speeds (reduced from 1.0mm)
@@ -262,6 +262,11 @@ DRAWING_BOREDOM_WEIGHT = 0.4   # How much boredom influences decision
 DRAWING_MOOD_WEIGHT = 0.3      # How much mood influences decision
 DRAWING_PERSON_WEIGHT = 0.4    # How much person presence influences decision
 DRAWING_PERSON_BONUS = 0.2     # Additional motivation boost when person detected
+
+# Drawing scale target — vpype layout dimensions matching the warp quad's aspect ratio.
+# The warp quad spans ~69mm wide × 38mm tall. This target fills most of it.
+# Change this value to adjust physical drawing size without touching warp calibration.
+DRAWING_SCALE_TARGET = "65x35mm"
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.55  # Raised to 0.55 to avoid detecting hands/arms as person

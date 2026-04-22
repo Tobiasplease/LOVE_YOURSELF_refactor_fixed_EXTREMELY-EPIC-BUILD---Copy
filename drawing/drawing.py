@@ -202,6 +202,30 @@ class DrawingController:
             print(f"Forced drawing at: {DRAWING_MAX_INTERVAL}s ({DRAWING_MAX_INTERVAL/60:.1f} minutes)")
             print(f"{'='*60}\n")
 
+        # Surface a clean line in the live caption monitor + episodic log
+        try:
+            from utils.live_log import log_drawing_complete
+            # Strip the standard ComfyUI preamble for readability
+            desc = (prompt or "").strip()
+            for prefix in ("Black ink line drawing on white paper. ",
+                           "Black ink line drawing on white paper.",
+                           "black ink line drawing on white paper. "):
+                if desc.lower().startswith(prefix.lower()):
+                    desc = desc[len(prefix):]
+                    break
+            if len(desc) > 200:
+                desc = desc[:200].rsplit(" ", 1)[0] + "..."
+            log_drawing_complete(desc)
+            try:
+                from utils.episodic_log import episodic_log
+                # Truncate further for episodic — just the subject
+                short = desc[:60].rsplit(" ", 1)[0] if len(desc) > 60 else desc
+                episodic_log.record("drew", f"finished a drawing of {short}")
+            except Exception:
+                pass
+        except Exception:
+            pass
+
         # LCD display is now handled in handle_drawing_flow with the drawing summary
 
     # ------------------------------------------------------------------
@@ -266,33 +290,17 @@ class DrawingController:
         *,
         reflection: Optional[str] = None,
     ) -> None:
-        """Captioner passes the prompt already built – we just queue it."""
-        self.last_reflection = reflection
-        try:
-            novelty = getattr(agent, "novelty_score", 0.0)
-            boredom = getattr(agent, "boredom", 0.0)
-            if not self.should_draw(
-                mood=agent.current_mood,
-                novelty=novelty,
-                boredom=boredom,
-                reflection=reflection,
-            ):
-                print_message = f"[🎨] Not inspired (novelty:{novelty},boredom:{boredom},mood:{agent.current_mood:.2f})"
-                log_json_entry(
-                    LogType.DECISION,
-                    {
-                        "decision": "skip_drawing",
-                        "reason": "not_inspired",
-                        "mood": agent.current_mood,
-                        "novelty": novelty,
-                        "boredom": boredom,
-                        "ready_to_draw": self.ready_to_draw(),
-                        "cooldown_remaining": max(0, self.cooldown - (time.time() - self.last_drawing_time)),
-                    },
-                    print_message=print_message,
-                )
-                return
+        """Captioner passes the prompt already built – we just queue it.
 
+        NOTE: The captioner has already evaluated should_draw() and approved.
+        Do NOT re-check here — the cooldown was reset after prompt generation,
+        so a second check would always fail.
+        """
+        self.last_reflection = reflection
+        novelty = getattr(agent, "novelty_score", 0.0)
+        boredom = getattr(agent, "boredom", 0.0)
+
+        try:
             # === EARLY PAPER CHECK (before ComfyUI generation to save resources) ===
             try:
                 from config.config import ENABLE_EARLY_PAPER_CHECK, ENABLE_PAPER_DETECTION
@@ -305,13 +313,11 @@ class DrawingController:
                         print("[📄] Running early paper check before ComfyUI generation...")
                         paper_present = check_paper_before_drawing(camera, servos, None)
 
-                        # Restore gaze to idle after paper check (release drawing mode lock)
                         try:
                             from vision.gaze import set_drawing_mode
                             set_drawing_mode(active=False)
-                            print("[📄] Gaze restored to idle after early paper check")
-                        except Exception as gaze_e:
-                            print(f"[📄] Warning: Could not restore gaze: {gaze_e}")
+                        except Exception:
+                            pass
 
                         if not paper_present:
                             log_json_entry(
@@ -326,13 +332,17 @@ class DrawingController:
                                 print_message="[📄] Early paper check: NO PAPER - skipping ComfyUI generation",
                             )
                             state_manager.last_no_paper_skip_ts = time.time()
-                            # Record failure so the monologue model knows why it couldn't draw
                             try:
                                 from drawing.drawing_memory import get_drawing_memory
                                 get_drawing_memory().record_failure(
                                     reason="no paper",
                                     prompt=getattr(state_manager, 'current_drawing_prompt', None),
                                 )
+                            except Exception:
+                                pass
+                            try:
+                                from utils.live_log import log_drawing_failed
+                                log_drawing_failed("no paper")
                             except Exception:
                                 pass
                             return
@@ -343,23 +353,17 @@ class DrawingController:
             except Exception as e:
                 print(f"[📄] Early paper check error (proceeding anyway): {e}")
 
-            # NOTE: register_drawing() is now called AFTER GRBL execution completes, not here
-            # This ensures cooldown starts after physical drawing, not after prompt generation
-
             # Record a concise drawing intent into memory for future reference
             try:
                 from config.config import INCLUDE_DRAWING_HISTORY
 
                 if INCLUDE_DRAWING_HISTORY and hasattr(agent, "observe"):
-                    # Extract drawing summary from the model's own response
-                    drawing_summary = "drawing based on current observations"  # fallback
+                    drawing_summary = "drawing based on current observations"
                     try:
-                        # Ask the model to summarize what it's drawing
                         from utils.ollama import query_ollama
                         from config.config import MOOD_SNAPSHOT_FOLDER
 
                         summary_prompt = f"Describe what this drawing depicts in one short sentence:\n\n{drawing_prompt}\n\nDescription:"
-
                         drawing_summary = query_ollama(
                             prompt=summary_prompt,
                             log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -367,41 +371,22 @@ class DrawingController:
                             prompt_type="drawing_summary",
                             options={"temperature": 0.3, "num_predict": 40}
                         ).strip()
-
                         print(f"[📝] Model-generated drawing summary: {drawing_summary}")
-
-                        # Update state_manager's current_drawing_prompt with the concise summary
-                        # so introspection references the summary instead of the full ComfyUI prompt
                         state_manager.current_drawing_prompt = drawing_summary
 
-                        # Send drawing summary to LCD display for better readability
                         try:
                             from utils.caption_display import send_caption_to_display
                             send_caption_to_display(f"Drawing: {drawing_summary}")
-                            print(f"[LCD] Sent drawing summary to display: {drawing_summary}")
-                        except Exception as lcd_e:
-                            print(f"[LCD] Failed to send drawing summary: {lcd_e}")
+                        except Exception:
+                            pass
 
                     except Exception as e:
                         print(f"[⚠️] Summary generation failed: {e}")
                         drawing_summary = "drawing based on current observations"
 
-                        # Send fallback to LCD display
-                        try:
-                            from utils.caption_display import send_caption_to_display
-                            send_caption_to_display(f"Drawing: {drawing_summary}")
-                            print(f"[LCD] Sent fallback drawing summary to display: {drawing_summary}")
-                        except Exception as lcd_e:
-                            print(f"[LCD] Failed to send drawing summary: {lcd_e}")
-
                     agent.observe(f"Drawing intent: {drawing_summary}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
-                    print(f"[📝] Stored drawing intent in memory: {drawing_summary}")
-                else:
-                    print(f"[⚠️] Drawing intent not stored: INCLUDE_DRAWING_HISTORY={INCLUDE_DRAWING_HISTORY}, agent.observe exists={hasattr(agent, 'observe')}")
             except Exception as e:
                 print(f"[❌] Failed to store drawing intent: {e}")
-                import traceback
-                traceback.print_exc()
 
             log_json_entry(
                 LogType.DECISION,
@@ -409,14 +394,13 @@ class DrawingController:
                     "decision": "trigger_drawing",
                     "reason": "inspired",
                     "mood": agent.current_mood,
-                    "novelty": getattr(agent, "novelty_score", 0.0),
-                    "boredom": getattr(agent, "boredom", 0.0),
+                    "novelty": novelty,
+                    "boredom": boredom,
                     "drawing_prompt": drawing_prompt,
                     "reflection": (reflection or "").strip(),
                 },
                 print_message=f"[🎨] Drawing prompt:\n{drawing_prompt}",
             )
-            # Always echo full drawing prompt to console regardless of log filters
             try:
                 print("[🖼️ Drawing Prompt]\n" + drawing_prompt)
             except Exception:

@@ -16,12 +16,12 @@ from .grbl_utils import (
 )
 
 
-def svg_to_grbl(svg_input, output_gcode=None, execute_grbl=True, scale_to="50x50mm"):
+def svg_to_grbl(svg_input, output_gcode=None, execute_grbl=True, scale_to=None):
     """
     Convert SVG to G-code and optionally execute on GRBL hardware
     Legacy wrapper for compatibility with image_monitor
 
-    IMPORTANT: Always defaults to 50x50mm scaling for safety
+    Defaults to DRAWING_SCALE_TARGET from config (65x35mm landscape, matching warp quad)
 
     Args:
         svg_input: Path to input SVG file
@@ -33,6 +33,12 @@ def svg_to_grbl(svg_input, output_gcode=None, execute_grbl=True, scale_to="50x50
     Returns:
         str: Path to generated G-code file if successful, None if failed
     """
+    if scale_to is None:
+        try:
+            from config.config import DRAWING_SCALE_TARGET
+            scale_to = DRAWING_SCALE_TARGET
+        except (ImportError, AttributeError):
+            scale_to = "65x35mm"
     return process_svg_to_grbl(svg_input, output_gcode, execute_grbl, scale_to=scale_to)
 
 
