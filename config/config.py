@@ -181,14 +181,16 @@ GRBL_MAX_SEGMENT_SIZE = int(os.getenv("GRBL_MAX_SEGMENT_SIZE", 150))  # Lines pe
 GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAUSE", "false").lower() in ("1", "true", "yes")
 
 # === FEED RATE OPTIMIZATION ===
-# Speed scaling for different movement types - adjust these to set your preferred overall speed range
-GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 1750))     # Slowest speed for tiny detailed movements (mm/min)
-GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 5250))      # Fastest speed for large sweeping movements (mm/min)
-GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 3000))    # Default/medium speed (mm/min)
+# Drawing speed scaling — detail preservation is the priority.
+# Small/detailed moves get slow speeds; large strokes and traversals get fast speeds.
+# Traversals (pen up) always use max regardless of distance.
+GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 400))       # Slowest speed for micro-detail clusters (mm/min)
+GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 3500))      # Fastest speed for long strokes and traversals (mm/min)
+GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 1000))    # Default/medium drawing speed (mm/min)
 
 # Distance thresholds for feed rate calculation (in mm)
-GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 0.3))   # Below this: use slower speeds (reduced from 1.0mm)
-GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 6.0))  # Above this: use max speed
+GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 1.0))   # Below this: detail speeds (slow)
+GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 8.0))   # Above this: max drawing speed
 
 # === PEN LIFT OPTIMIZATION ===
 # Servo values for different pen operations - lower S = more lift (pen higher)
@@ -263,10 +265,10 @@ DRAWING_MOOD_WEIGHT = 0.3      # How much mood influences decision
 DRAWING_PERSON_WEIGHT = 0.4    # How much person presence influences decision
 DRAWING_PERSON_BONUS = 0.2     # Additional motivation boost when person detected
 
-# Drawing scale target — vpype layout dimensions matching the warp quad's aspect ratio.
-# The warp quad spans ~69mm wide × 38mm tall. This target fills most of it.
-# Change this value to adjust physical drawing size without touching warp calibration.
-DRAWING_SCALE_TARGET = "65x35mm"
+# Drawing scale target — vpype layout dimensions for the centerline SVG.
+# The warp transform maps this to the physical quad (~70x38mm).
+# Larger = more detail but more distortion at edges. Tune empirically.
+DRAWING_SCALE_TARGET = "50x50mm"
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.55  # Raised to 0.55 to avoid detecting hands/arms as person

@@ -202,22 +202,38 @@ def build_caption_thread(agent, max_captions: int = 3) -> str:
 
 
 def _compress_perception(perception: str, max_len: int = 60) -> str:
-    """Compress a perception string to a short phrase for thread display."""
+    """Compress a perception string to a short noun-phrase for the 'Already noticed' buffer."""
     if not perception:
         return ""
     p = perception.strip()
-    # Remove common preambles
-    for preamble in ["In front of me is ", "In front of you is ", "Right now ", "The scene in front of you is "]:
-        if p.lower().startswith(preamble.lower()):
-            p = p[len(preamble):]
+    # Strip Qwen preambles to get to the actual content
+    preambles = [
+        r"^(?:The\s+)?scene\s+in\s+front\s+of\s+(?:you|me)\s+(?:is|appears\s+to\s+be)\s+",
+        r"^In\s+front\s+of\s+(?:you|me)\s+is\s+",
+        r"^(?:The\s+)?(?:most\s+)?(?:striking|significant|noticeable)\s+(?:detail|feature|thing)"
+        r"(?:\s+(?:in|of)\s+(?:the\s+)?(?:scene|room))?\s+(?:is|that\s+stands\s+out\s+is)\s+(?:the\s+)?",
+        r"^(?:The\s+)?person\s+(?:in\s+the\s+scene\s+)?(?:is|appears)\s+",
+        r"^Right\s+now\s+",
+        r"^(?:A\s+)?(?:significant|notable)\s+detail\s+(?:that\s+)?stands?\s+out\s+is\s+(?:the\s+)?",
+    ]
+    for pat in preambles:
+        p_new = re.sub(pat, '', p, flags=re.IGNORECASE)
+        if p_new != p:
+            p = p_new
             break
-    # Truncate at word boundary
+    # Prefer truncation at sentence boundary over mid-phrase
     if len(p) > max_len:
-        p = p[:max_len].rsplit(" ", 1)[0]
-    # Lowercase first char
+        for i in range(min(len(p), max_len), 15, -1):
+            if p[i - 1] in ".!?":
+                p = p[:i]
+                break
+        else:
+            p = p[:max_len].rsplit(" ", 1)[0]
+    # Strip dangling articles/prepositions at the end
+    p = re.sub(r'\s+(?:with|and|or|the|a|an|in|on|of|to|for|is|at|that)$', '', p, flags=re.IGNORECASE)
     if p and p[0].isupper():
         p = p[0].lower() + p[1:]
-    return p.rstrip(".,;")
+    return p.rstrip(".,;:")
 
 
 def build_flowing_thread(agent, max_captions: int = 3) -> str:
@@ -511,15 +527,10 @@ class MultimodalModel:
 
         perception_system_prompt = get_perception_system_prompt(mode)
 
-        # Add prior perception context so the vision model can go deeper
-        # instead of repeating the same baseline description each cycle.
+        # Qwen is an eye, not a mind. It sees the frame and describes what's
+        # there. No concept context, no memory injection — those contaminate
+        # perception with suggestions that Qwen parrots back as hallucinations.
         full_prompt = perception_prompt
-        if self.memory_ref:
-            last_perc = getattr(self.memory_ref, "_last_perception", "")
-            if last_perc and len(last_perc) > 10:
-                compressed = _compress_perception(last_perc, max_len=80)
-                if compressed:
-                    full_prompt = f"Already noticed: {compressed}.\n{perception_prompt}"
 
         print(f"\n{'='*80}\n[PERCEPTION] {self.model_name} ({mode})\n{'='*80}")
         print(f"PROMPT: {full_prompt}")

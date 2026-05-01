@@ -149,6 +149,7 @@ class SemanticMemory:
                         "label": doc,
                         "times_seen": meta.get("times_seen", 0) + 1,
                         "is_new": False,
+                        "last_observation": meta.get("last_observation", ""),
                     })
 
         # If no matches and perception is noteworthy, create a new concept
@@ -163,6 +164,7 @@ class SemanticMemory:
                         "label": existing_person["name"],
                         "times_seen": existing_person["times_seen"] + 1,
                         "is_new": False,
+                        "last_observation": existing_person.get("last_observation", ""),
                     }]
 
             concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
@@ -437,6 +439,28 @@ class SemanticMemory:
             joined = ", ".join(names[:-1]) + f", and {names[-1]}"
             return f"I know this place — {joined}."
 
+    def get_established_labels(self, limit: int = 5) -> list:
+        """Return short labels of the most-seen non-person concepts for perception steering.
+
+        Used to tell the vision model what's already catalogued so it can look
+        for something new. Returns lowercase labels, sorted by times_seen desc.
+        """
+        if self._concepts.count() < 1:
+            return []
+        all_data = self._concepts.get(include=["documents", "metadatas"])
+        if not all_data["ids"]:
+            return []
+        items = []
+        for doc, meta in zip(all_data["documents"], all_data["metadatas"]):
+            if self._mentions_person(doc):
+                continue
+            times = meta.get("times_seen", 0)
+            if times < TIER_NEW:
+                continue
+            items.append((doc, times))
+        items.sort(key=lambda x: x[1], reverse=True)
+        return [doc.lower() for doc, _ in items[:limit]]
+
     # ------------------------------------------------------------------
     # Injection formatting — the most important part
     # ------------------------------------------------------------------
@@ -576,12 +600,25 @@ class SemanticMemory:
         The output describes what the machine knows about what it's seeing,
         framed for the writer (the model) rather than spoken in the machine's voice.
         Prefers reflections (settled understanding) over raw observations when available.
+
+        For person concepts: avoids replaying old activity descriptions (e.g. "typing
+        on a computer") since those are transient and likely stale. Instead, notes
+        familiarity and lets current perception speak for itself.
         """
         name = match["name"]
         times = match["times_seen"]
 
         # Lowercase the name for natural-sounding sentences
         name_lower = name[0].lower() + name[1:] if name else name
+
+        # Person concepts: note familiarity only, avoid replaying old activities
+        is_person = self._mentions_person(name)
+        if is_person:
+            if times < TIER_NEW:
+                return f"Someone is here — it has seen them before."
+            if times < TIER_FAMILIAR:
+                return f"Someone familiar is here. It has seen them a few times."
+            return f"Someone familiar is here — a regular presence."
 
         if times < TIER_NEW:
             return f"It has noticed this before — {name_lower}."
@@ -593,8 +630,6 @@ class SemanticMemory:
         def frame_memory(text: str, mtype: str, max_len: int = 60) -> str:
             short = self._truncate_observation(text, max_len)
             if mtype == "reflection":
-                # Reflections are LLM-synthesized — they often already start with "It has..."
-                # so we use a simpler frame to avoid doubling
                 return f"A settled understanding: \"{short}\""
             return f"Earlier it thought: \"{short}\""
 
@@ -1096,10 +1131,17 @@ Respond with ONLY the sentence."""
         text = re.sub(r'^On\s+the\s+\w+\s+side(?:\s+of\s+the\s+\w+)?\s*,?\s*(?:there\s+is\s+)?', '', text, flags=re.IGNORECASE)
         # Strip leading articles and filler
         text = re.sub(r'^(?:There(?:\'s| is| are) )?(?:a |an |the )?', '', text, flags=re.IGNORECASE)
-        # Strip "noticeable detail is" type preambles
-        text = re.sub(r'^(?:noticeable|notable|interesting|striking|most striking|most noticeable|most prominent)\s+(?:detail|feature|element)\s+(?:is\s+)?(?:the\s+)?', '', text, flags=re.IGNORECASE)
-        # Strip "in front of you is" preambles from perception model
-        text = re.sub(r'^(?:in front of you is\s+)', '', text, flags=re.IGNORECASE)
+        # Strip "noticeable detail (in the scene) is" type preambles from Qwen
+        text = re.sub(
+            r'^(?:the\s+)?(?:noticeable|notable|interesting|striking|most striking|most noticeable|most prominent|significant|single)\s+'
+            r'(?:detail|feature|element|thing)(?:\s+(?:in|of|about)\s+(?:the\s+)?(?:scene|room|space|view))?\s+'
+            r'(?:is\s+)?(?:the\s+)?(?:that\s+)?',
+            '', text, flags=re.IGNORECASE,
+        )
+        # Strip "in front of you is" / "scene in front of you" preambles
+        text = re.sub(r'^(?:the\s+)?(?:scene\s+)?in\s+front\s+of\s+(?:you|me)\s+(?:is|appears\s+to\s+be)\s+', '', text, flags=re.IGNORECASE)
+        # Strip "person in the scene is" preambles
+        text = re.sub(r'^(?:the\s+)?person\s+(?:in\s+the\s+scene\s+)?(?:is|appears)\s+', '', text, flags=re.IGNORECASE)
 
         # Capitalize first letter
         if text:

@@ -104,11 +104,11 @@ PERCEPTION_PROMPTS = {
     "focus": "Look closely at {focus_target}. What does it look like?",
     "scan_left": "What is to the left?",
     "scan_right": "What is to the right?",
-    "scan_down": "What is on the surface below you?",
+    "scan_down": "What do you see below you? Any mechanical arms or tools visible are your own.",
     "scan_up": "What is above you?",
-    "person": "Describe the people you can see — what they look like, what they are doing.",
+    "person": "Who is here? What do they look like, and what are they doing?",
     "restless": "Describe one specific object or detail you can see.",
-    "workspace": "What is on the work surface?",
+    "workspace": "What is on your work surface? Any mechanical arms visible are your own.",
     "introspective": "What single detail stands out most right now?",
 }
 
@@ -123,15 +123,15 @@ _PERCEPTION_BASE = (
 PERCEPTION_SYSTEM_PROMPTS = {
     "relational": (
         "You are observing a real scene in front of you. "
-        "Focus on the people — their appearance, posture, what they are doing. "
-        "If there are multiple people, describe each. "
+        "Describe the people you see — what they look like and what they are doing. "
         "Be concrete and specific. Two sentences. Do not use the word image or photo."
     ),
     "observational": _PERCEPTION_BASE,
     "workspace": (
-        "You are observing a real scene in front of you. "
-        "Focus on the work surface — materials, tools, marks, paper. "
-        "Be concrete and specific. Two sentences. Do not use the word image or photo."
+        "You are looking down at your own work surface. "
+        "Any mechanical arms, pen holders, or drawing tools visible are parts of your own body. "
+        "Describe what is on the surface. Be concrete and specific. Two sentences. "
+        "Do not use the word image or photo."
     ),
     "introspective": (
         "You are observing a real scene in front of you. "
@@ -214,21 +214,18 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm") -> str
 
 def select_perception_prompt(
     gaze_direction: str = "ahead",
-    previous_perception: str = "",
     person_present: bool = False,
     boredom: float = 0.0,
     mode: str = "observational",
+    **_kwargs,
 ) -> str:
     """Select perception prompt based on gaze, person presence, boredom, and mode.
 
-    Mode is determined before perception so both models can use it.
-    Priority: person > gaze direction > mode-specific > boredom > change > default.
+    Priority: person > gaze direction > mode-specific > boredom > default.
     """
-    # Person takes priority regardless of mode
     if person_present:
         return PERCEPTION_PROMPTS["person"]
 
-    # Gaze-directed perception
     gaze_map = {
         "left": "scan_left",
         "right": "scan_right",
@@ -238,7 +235,6 @@ def select_perception_prompt(
     if gaze_direction in gaze_map:
         return PERCEPTION_PROMPTS[gaze_map[gaze_direction]]
 
-    # Mode-specific perception directives
     if mode == "workspace":
         return PERCEPTION_PROMPTS["workspace"]
     if mode == "introspective":
@@ -246,8 +242,6 @@ def select_perception_prompt(
     if mode == "restless" or boredom > 0.7:
         return PERCEPTION_PROMPTS["restless"]
 
-    # Default — straightforward "what do you see"
-    # (Removed "change detection" prompt — qwen has no memory of "before" so it hallucinates changes)
     return PERCEPTION_PROMPTS["default"]
 
 
@@ -342,16 +336,100 @@ def build_identity_line(agent, mode: str = "observational") -> str:
     return line
 
 
+def _build_concept_context(perception: str, matched_concepts: list, mode: str) -> str:
+    """Build concept context with inverted familiarity scaling.
+
+    New things get the most space (discovery). Familiar things surface their
+    evolving relationship via last_observation. Very familiar things compress
+    to a single line — they're settled background. This makes room for the
+    machine to develop relationships with multiple objects over time.
+
+    Falls back to after_perception() when matched_concepts isn't available.
+    """
+    from captioner.semantic_memory import TIER_NEW, TIER_FAMILIAR
+
+    if not matched_concepts:
+        try:
+            from captioner.semantic_memory import get_semantic_memory
+            line = get_semantic_memory().after_perception(perception)
+            return line or ""
+        except Exception:
+            return ""
+
+    from captioner.semantic_memory import get_semantic_memory
+    sem = get_semantic_memory()
+
+    parts = []
+    new_concepts = [c for c in matched_concepts if c.get("is_new")]
+    established = [c for c in matched_concepts if not c.get("is_new")]
+
+    # New concepts: full discovery framing (most prompt space)
+    for c in new_concepts[:2]:
+        label = c["label"]
+        label_lower = label[0].lower() + label[1:] if label else label
+        parts.append(f"Something it hasn't noticed before — {label_lower}.")
+
+    # Established concepts: inverted scaling — more familiar = less space
+    gave_evolving_thought = False
+    for i, c in enumerate(established[:3]):
+        label = c["label"]
+        label_lower = label[0].lower() + label[1:] if label else label
+        times = c.get("times_seen", 1)
+        is_person = sem._mentions_person(label)
+
+        if is_person:
+            if times < TIER_NEW:
+                parts.append("Someone is here — it has seen them before.")
+            elif times < TIER_FAMILIAR:
+                parts.append("Someone familiar is here.")
+            else:
+                parts.append("Someone familiar is here — a regular presence.")
+            continue
+
+        if i > 0:
+            parts.append(f"Also present: {label_lower}.")
+            continue
+
+        if times < TIER_NEW:
+            parts.append(f"It has noticed this before — {label_lower}.")
+        elif times < TIER_FAMILIAR:
+            # Familiar: show evolving relationship via last_observation
+            last_obs = c.get("last_observation", "").strip()
+            if last_obs and len(last_obs) > 10 and not gave_evolving_thought:
+                short = sem._truncate_observation(last_obs, 60)
+                parts.append(f"Familiar — {label_lower}. Last time it thought: \"{short}\"")
+                gave_evolving_thought = True
+            else:
+                parts.append(f"Familiar — {label_lower}.")
+        else:
+            # Very familiar / background: one line, no replay
+            parts.append(f"Settled backdrop — {label_lower}.")
+
+    # Tangent: only in introspective mode when bored AND no new concepts discovered
+    if mode in ("introspective", None) and not new_concepts:
+        try:
+            from captioner.activation_memory import get_activation_network
+            if get_activation_network()._last_boredom > 0.6:
+                tangent = sem.recall_tangent(perception)
+                if tangent:
+                    parts.append(f"An older thought drifts back: \"{tangent}\"")
+        except Exception:
+            pass
+
+    return " ".join(parts)
+
+
 def build_monologue_prompt(
     agent,
     perception: str,
     person_present: bool = False,
     mode: str = None,
+    matched_concepts: list = None,
 ) -> tuple:
     """Build monologue prompt in casual flowing format.
 
-    Structure: identity_line + flowing_thread + perception_line
-    No labels, no dashes, no clinical mood descriptions.
+    Structure: identity_line + concept_context + mode_extras + perception_line + continuation
+    Uses matched_concepts from ChromaDB as the single source of concept awareness.
     """
     # Determine mode if not pre-set
     if mode is None:
@@ -385,82 +463,36 @@ def build_monologue_prompt(
     if identity:
         prompt_parts.append(identity)
 
-    # --- GATED CONTEXT: mode determines what extra context appears ---
-    # Each line is observational context about the machine, not first-person
-    # speech. The model writes the next inner thought based on this context.
+    # --- CONCEPT CONTEXT: unified novelty/familiarity from ChromaDB ---
+    concept_ctx = _build_concept_context(perception, matched_concepts, mode)
+    if concept_ctx:
+        prompt_parts.append(concept_ctx)
 
-    if mode == "relational":
-        # Person present — semantic memory for recognition, nothing else
-        try:
-            from captioner.semantic_memory import get_semantic_memory
-            memory_line = get_semantic_memory().after_perception(perception)
-            if memory_line:
-                prompt_parts.append(memory_line)
-        except Exception:
-            pass
-
-    elif mode == "observational":
-        # Something novel — semantic memory for recognition, keep it light
-        try:
-            from captioner.semantic_memory import get_semantic_memory
-            memory_line = get_semantic_memory().after_perception(perception)
-            if memory_line:
-                prompt_parts.append(memory_line)
-        except Exception:
-            pass
-
-    else:
-        # Introspective (default) — full inner state
-        try:
-            from captioner.semantic_memory import get_semantic_memory
-            memory_line = get_semantic_memory().after_perception(perception)
-            if memory_line:
-                prompt_parts.append(memory_line)
-        except Exception:
-            pass
-
-        # Compression baseline (third-person observational)
+    # --- MODE-SPECIFIC EXTRAS (non-concept context) ---
+    if mode in ("relational", "introspective"):
         try:
             from captioner.context_compression import context_compressor
             baseline = context_compressor.get_baseline_context()
             if baseline and len(baseline.strip()) > 15:
-                prompt_parts.append(baseline.strip())
+                if mode == "relational":
+                    prompt_parts.append(f"The space around: {baseline.strip()}")
+                else:
+                    prompt_parts.append(baseline.strip())
         except Exception:
             pass
 
-        # Inner state (desire/belief in third-person)
-        try:
-            from captioner.context_compression import context_compressor
-            inner = context_compressor.get_inner_line()
-            if inner:
-                prompt_parts.append(inner)
-        except Exception:
-            pass
-
-        # Tangent recall: an old thought surfacing, only when bored
-        try:
-            from captioner.activation_memory import get_activation_network
-            network = get_activation_network()
-            if network._last_boredom > 0.6:
-                from captioner.semantic_memory import get_semantic_memory
-                tangent = get_semantic_memory().recall_tangent(perception)
-                if tangent:
-                    prompt_parts.append(f"An older thought drifts back: \"{tangent}\"")
-        except Exception:
-            pass
-
-    # --- ATTENTION THREAD: what the machine has been focused on + its settled understanding ---
-    try:
-        from captioner.activation_memory import get_current_thread
-        thread_context = get_current_thread()
-        if thread_context:
-            prompt_parts.append(thread_context)
-    except Exception:
-        pass
+    # NOTE: get_inner_line() (desire/belief from compression) removed from monologue
+    # prompt — it created an echo loop where monologue yearning → compressed desire →
+    # re-injected → more yearning. The desire/belief system still runs and feeds
+    # drawing introspection. Concept context + identity line now cover what it did.
 
     # --- PERCEPTION: what the machine sees right now ---
     if perception and perception.strip():
-        prompt_parts.append(f"Right now it sees: {perception.strip()}")
+        if mode == "relational":
+            prompt_parts.append(f"Right now it sees: {perception.strip()}")
+            prompt_parts.append("(This is what is actually happening — describe only what is visible, not remembered activities.)")
+        else:
+            prompt_parts.append(f"Right now it sees: {perception.strip()}")
     else:
         prompt_parts.append("Right now it sees: nothing new, the same view.")
 
@@ -469,10 +501,8 @@ def build_monologue_prompt(
         if hasattr(agent, "recent_captions") and agent.recent_captions:
             last_caption = agent.recent_captions[-1][0]
             if last_caption and last_caption.strip():
-                # Truncate at sentence boundary to avoid mid-phrase cuts
                 trimmed = last_caption.strip()
                 if len(trimmed) > 140:
-                    # Try sentence boundary
                     cut = trimmed
                     for i in range(min(len(cut), 140), 30, -1):
                         if cut[i - 1] in ".!?":

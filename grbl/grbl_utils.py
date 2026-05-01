@@ -595,9 +595,9 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
     try:
         cmd = ["vpype", "read", svg_file]
 
-        # Scale drawing to fit target dimensions (no margins — warp transform handles positioning)
+        # Scale drawing to fit target dimensions
         if scale_to:
-            cmd.extend(["layout", "--fit-to-margins", "0mm", scale_to])
+            cmd.extend(["layout", "--fit-to-margins", "1cm", scale_to])
 
         cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesimplify", "--tolerance", "0.05mm", "linesort", "gwrite", "--profile", "gcodemm", output_file])
 

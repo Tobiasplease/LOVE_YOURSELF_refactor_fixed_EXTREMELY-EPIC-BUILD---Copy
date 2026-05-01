@@ -31,11 +31,11 @@ class GCodeOptimizer:
                  enable_feed_optimization=True,
                  enable_pen_optimization=True,
                  enable_stroke_filtering=True,
-                 base_feed_rate=5000,
-                 min_feed_rate=1500,
-                 max_feed_rate=8000,
+                 base_feed_rate=1500,
+                 min_feed_rate=600,
+                 max_feed_rate=4000,
                  small_move_threshold=1.0,
-                 large_move_threshold=10.0,
+                 large_move_threshold=8.0,
                  cluster_distance_threshold=5.0,
                  cluster_sequence_min=3,
                  micro_stroke_threshold=0.15,
@@ -97,30 +97,37 @@ class GCodeOptimizer:
 
         return x, y
 
-    def calculate_optimal_feed_rate(self, distance: float) -> int:
-        """Calculate optimal feed rate based on movement distance - small movements should be FASTER"""
+    def calculate_optimal_feed_rate(self, distance: float, is_traversal: bool = False) -> int:
+        """Calculate optimal feed rate based on movement distance and type.
+
+        Drawing moves: smaller = slower for detail preservation, larger = faster.
+        Traversal moves (pen up): always fast since pen isn't touching paper.
+        Micro-moves have a floor so clusters don't stall the machine.
+        """
         if not self.enable_feed_optimization:
             return self.base_feed_rate
 
-        # INVERTED LOGIC: Smaller movements = higher feed rates
-        # Complex drawings with tiny movements should go fast, not slow!
-
-        if distance < self.micro_stroke_threshold:
-            # Micro-movements get the highest speed - they're often in clusters
+        if is_traversal:
             return self.max_feed_rate
 
+        # Micro-movements: use a floor speed to avoid stalling on dense clusters
+        # but still slower than base — these are detail work
+        micro_floor = self.min_feed_rate + (self.base_feed_rate - self.min_feed_rate) * 0.3
+        if distance < self.micro_stroke_threshold:
+            return int(micro_floor)
+
         if distance <= self.small_move_threshold:
-            # Small movements get faster feed rates (inverted scaling)
-            factor = 1.0 - (distance / self.small_move_threshold)  # Inverted: smaller = higher factor
-            feed_rate = self.base_feed_rate + (self.max_feed_rate - self.base_feed_rate) * factor
+            # Small detail moves: scale from micro_floor up to base_feed_rate
+            factor = distance / self.small_move_threshold
+            feed_rate = micro_floor + (self.base_feed_rate - micro_floor) * factor
             return int(feed_rate)
         elif distance >= self.large_move_threshold:
-            # Large movements can be slower for better control
-            feed_rate = max(self.min_feed_rate, self.base_feed_rate * 0.8)
+            # Long drawing strokes: fastest drawing speed
+            return self.max_feed_rate
         else:
-            # Medium movements: interpolate between base and slower for large moves
+            # Medium moves: interpolate from base up to max
             factor = (distance - self.small_move_threshold) / (self.large_move_threshold - self.small_move_threshold)
-            feed_rate = self.base_feed_rate - (self.base_feed_rate * 0.2 * factor)  # Gradually slower
+            feed_rate = self.base_feed_rate + (self.max_feed_rate - self.base_feed_rate) * factor
 
         return int(feed_rate)
 
@@ -286,6 +293,7 @@ class GCodeOptimizer:
         optimized_lines = []
         last_x, last_y = 0.0, 0.0
         last_feed_rate = None
+        pen_is_down = False
 
         # Detect pen lift clusters for optimization
         clusters = self.detect_pen_clusters(lines)
@@ -317,13 +325,12 @@ class GCodeOptimizer:
             # Handle movement commands
             if line.startswith(("G01", "G1", "G00", "G0")):
                 x, y = self.parse_coordinates(line)
+                is_traversal = not pen_is_down or line.startswith(("G00", "G0 "))
 
                 if x is not None and y is not None:
-                    # Calculate distance and optimal feed rate
                     distance = self.calculate_distance(last_x, last_y, x, y)
-                    optimal_feed_rate = self.calculate_optimal_feed_rate(distance)
+                    optimal_feed_rate = self.calculate_optimal_feed_rate(distance, is_traversal=is_traversal)
 
-                    # Insert feed rate command if it changed significantly
                     if (self.enable_feed_optimization and
                         (last_feed_rate is None or abs(optimal_feed_rate - last_feed_rate) > 200)):
                         optimized_lines.append(f"F{optimal_feed_rate}")
@@ -335,6 +342,7 @@ class GCodeOptimizer:
 
             # Handle pen control commands with cluster optimization
             elif "PEN UP" in line or "PEN DOWN" in line:
+                pen_is_down = "PEN DOWN" in line
                 if self.enable_pen_optimization and i in cluster_ranges:
                     # Use optimized pen values for clustered movements
                     if "PEN UP" in line:
@@ -429,6 +437,7 @@ def create_optimizer_from_config() -> GCodeOptimizer:
             GRBL_ENABLE_PEN_OPTIMIZATION,
             GRBL_FEED_RATE_MIN,
             GRBL_FEED_RATE_MAX,
+            GRBL_BASE_FEED_RATE,
             GRBL_SMALL_MOVE_THRESHOLD,
             GRBL_LARGE_MOVE_THRESHOLD,
             GRBL_CLUSTER_DISTANCE_THRESHOLD,
@@ -445,6 +454,7 @@ def create_optimizer_from_config() -> GCodeOptimizer:
             enable_feed_optimization=GRBL_ENABLE_FEED_OPTIMIZATION,
             enable_pen_optimization=GRBL_ENABLE_PEN_OPTIMIZATION,
             enable_stroke_filtering=GRBL_ENABLE_STROKE_FILTERING,
+            base_feed_rate=GRBL_BASE_FEED_RATE,
             min_feed_rate=GRBL_FEED_RATE_MIN,
             max_feed_rate=GRBL_FEED_RATE_MAX,
             small_move_threshold=GRBL_SMALL_MOVE_THRESHOLD,

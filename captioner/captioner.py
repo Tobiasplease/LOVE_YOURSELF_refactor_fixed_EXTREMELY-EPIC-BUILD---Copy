@@ -265,7 +265,7 @@ class Captioner(MemoryMixin):
 
         # Deduplication system to prevent duplicate prints
         self.recent_captions: List[Tuple[str, float]] = []  # (caption, timestamp)
-        self._last_perception: str = ""  # Last LLaVA perception for change detection
+        self._last_perception: str = ""  # Last perception (kept for recent_captions tuples + early-session fallback)
         self._drawing_intentions: List[str] = []  # Accumulated drawing-related musings
 
         self.last_caption_time: float = 0.0
@@ -507,7 +507,6 @@ class Captioner(MemoryMixin):
                             # Pass 1: Qwen perception (mode-aware)
                             perception_prompt = select_perception_prompt(
                                 gaze_direction=gaze_direction,
-                                previous_perception=getattr(self, "_last_perception", ""),
                                 person_present=person_present,
                                 boredom=boredom,
                                 mode=caption_mode,
@@ -532,7 +531,6 @@ class Captioner(MemoryMixin):
                                 caption_mode = "introspective"
                                 perception_prompt = select_perception_prompt(
                                     gaze_direction=gaze_direction,
-                                    previous_perception=getattr(self, "_last_perception", ""),
                                     person_present=False,
                                     boredom=boredom,
                                     mode=caption_mode,
@@ -559,6 +557,7 @@ class Captioner(MemoryMixin):
                                 perception=perception,
                                 person_present=person_present,
                                 mode=caption_mode,
+                                matched_concepts=matched_concepts,
                             )
 
                             caption, caption_mode = self.model.generate_monologue(

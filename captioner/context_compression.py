@@ -265,7 +265,7 @@ EARLIER UNDERSTANDINGS (for context):
 
             if current_baseline:
                 prompt = f"""Update the machine's state. Output exactly TWO lines:
-Line 1 (spatial): one short sentence about the environment, third person.
+Line 1 (spatial): one short sentence about the physical environment — the room, surfaces, objects, lighting. Do NOT describe what people are doing (their actions change too quickly to summarize). Third person.
 Line 2 (felt): plainly name the machine's current emotional state. Three to seven words. No metaphor, no imagery — just the actual feeling, possibly with a brief qualifier.
 
 Previous understanding: "{current_baseline}"
@@ -274,7 +274,7 @@ The machine's recent thoughts: {recent_text}
 Respond ONLY with the two lines, no prefixes."""
             else:
                 prompt = f"""Capture the machine's state. Output exactly TWO lines:
-Line 1 (spatial): one short sentence about the environment, third person.
+Line 1 (spatial): one short sentence about the physical environment — the room, surfaces, objects, lighting. Do NOT describe what people are doing (their actions change too quickly to summarize). Third person.
 Line 2 (felt): plainly name the machine's current emotional state. Three to seven words. No metaphor, no imagery — just the actual feeling, possibly with a brief qualifier.
 
 Recent thoughts: {recent_text}

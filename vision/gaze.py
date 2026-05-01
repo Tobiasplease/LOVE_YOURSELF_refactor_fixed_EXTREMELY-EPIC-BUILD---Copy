@@ -909,6 +909,12 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             last_state_change = now
             print(f"[👁️] Person no longer detected after {time_in_aware:.1f}s - returning to idle")
             state = "idle"
+            # Record event for episodic timeline
+            try:
+                from utils.episodic_log import episodic_log
+                episodic_log.record("person_left", "they're gone now")
+            except Exception:
+                pass
         elif time_in_aware > AWARE_MAX_DURATION:
             # Natural falloff - look AWAY from where the person was
             # Pick a direction opposite to current gaze
@@ -1024,6 +1030,12 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             print("[👁️] Person detected while idle - entering 'aware' state")
             state = "aware"
             deactivate_search_mode()
+            # Record event for episodic timeline
+            try:
+                from utils.episodic_log import episodic_log
+                episodic_log.record("person_arrived", "someone arrived")
+            except Exception:
+                pass
             # Movement will be handled by aware state on next frame
 
         # During break: look at the break target (away from person)

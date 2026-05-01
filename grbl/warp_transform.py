@@ -23,19 +23,19 @@ import math
 # PRE_OFFSET_Y = 0.0
 
 # Modified settings: scaled and positioned for drawing area
-# History: 1.66/-4/-14.5 → 1.45/-8/-8 → 1.0/-12/0 → 1.0/-6/-6 → BASELINE
-# Reverting to baseline to test professor's quad mapping alone
-PRE_SCALE_X = 1.0   # baseline (no scaling)
-PRE_SCALE_Y = 1.0   # baseline (no scaling)
-PRE_OFFSET_X = 0.0   # baseline (no offset)
-PRE_OFFSET_Y = 0.0   # baseline (no offset)
+# History: 1.66/-4/-14.5 → 1.45/-8/-8 → 1.0/-12/0 → 1.0/-6/-6 → BASELINE → 1.2/0/0
+# Vertical stretch to counteract hydraulic-press flattening in physical output
+PRE_SCALE_X = 1.0    # no horizontal scaling
+PRE_SCALE_Y = 1.2    # stretch vertically 20% to counteract flattening
+PRE_OFFSET_X = 0.0   # no offset (tune if drawing is off-center horizontally)
+PRE_OFFSET_Y = 0.0   # no offset (tune if drawing is off-center vertically)
 PRE_PIVOT_X = None  # e.g., 0.0 to use origin, or None for center
 PRE_PIVOT_Y = None
 PRE_CLAMP_TO_DOMAIN = False
 
 # Rotation correction (degrees, positive = clockwise when looking down at paper)
 # If drawings appear rotated to the left, increase this value
-PRE_ROTATION_DEG = 20.0  # 5° to the right (was 15.0)
+PRE_ROTATION_DEG = 13.0  # Reduced from 20° — was overcorrecting, causing visible clockwise tilt
 
 def find_max_xy_from_lines(lines):
     max_x = float('-inf')
@@ -107,8 +107,8 @@ def map_to_quad(x, y, x_max=40, y_max=40):
 
 def warp_transform_line(gcode_line, max_x, max_y):
     """Apply inverse warp transform to G-code coordinates"""
-    # TEMPORARY SCALING FIX - easily reversible by setting to 1.0
-    SCALE_FACTOR = 1.0  # Increase output size (set to 1.0 to disable)
+    # Post-transform scale — increase for larger drawings on paper
+    SCALE_FACTOR = 1.15  # Increase output size (was 1.08, bumped for more paper coverage)
 
     # POSITION OFFSET - easily toggleable positioning adjustment (legacy)
     # NOTE: Applied in machine/GRBL coordinates AFTER mapping and scaling.
@@ -129,7 +129,7 @@ def warp_transform_line(gcode_line, max_x, max_y):
     NUDGE_RIGHT_MM = 0.0
     NUDGE_LEFT_MM = 0.0
     NUDGE_UP_MM = 0.0
-    NUDGE_DOWN_MM = 0.0
+    NUDGE_DOWN_MM = 3.0  # Shift drawing toward robot base — was exceeding far edge of paper
 
     x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
     y_match = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
