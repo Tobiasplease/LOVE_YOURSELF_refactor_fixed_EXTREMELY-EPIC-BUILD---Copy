@@ -36,11 +36,11 @@ MAX_TILT_VELOCITY = 12.0  # Maximum degrees per update for tilt servo
 VELOCITY_SMOOTHING = 0.3  # Less smoothing = faster response (0.0 = instant, 1.0 = never change)
 
 # Dynamic pause timing for idle movement
-IDLE_PAUSE_LONG = 8.0  # Occasional longer contemplative pauses
-IDLE_LONG_PAUSE_CHANCE = 0.15  # 15% chance for a longer pause
-IDLE_STILLNESS_MIN = 2.0  # Minimum stillness duration (seconds)
-IDLE_STILLNESS_MAX = 5.0  # Maximum stillness duration (seconds)
-IDLE_STILLNESS_CHANCE = 0.70  # 70% of movements end in stillness (helps frame diff)
+IDLE_PAUSE_LONG = 6.0  # Occasional longer contemplative pauses
+IDLE_LONG_PAUSE_CHANCE = 0.10  # 10% chance for a longer pause
+IDLE_STILLNESS_MIN = 1.0  # Minimum stillness duration (seconds)
+IDLE_STILLNESS_MAX = 3.0  # Maximum stillness duration (seconds)
+IDLE_STILLNESS_CHANCE = 0.35  # 35% of movements end in stillness — more alive
 
 # Override dead zone for precise face tracking
 PRECISE_DEAD_ZONE = 0.2  # Ultra-small dead zone for highly responsive face tracking (overrides config DEAD_ZONE)
@@ -149,32 +149,32 @@ PHYSICS_PATTERNS = {
         "orbital_strength": 1.2,  # Slightly less wandering
     },
     "calm_observant": {
-        "mass": 0.7,           # Medium - measured movement
-        "spring_constant": 10.0,  # Moderate pull
-        "damping": 4.0,        # Smoother, less bounce
-        "tremor_amplitude": 0.6,  # Reduced tremor for calmer idle
-        "orbital_strength": 0.9,  # Less wandering - more stillness
+        "mass": 0.6,           # Medium-light - responsive movement
+        "spring_constant": 11.0,  # Moderate-strong pull
+        "damping": 3.5,        # Less damping — more drift and life
+        "tremor_amplitude": 0.9,  # Noticeable tremor — alive
+        "orbital_strength": 1.3,  # Full wandering force
     },
     "quiet_detached": {
-        "mass": 1.0,           # Heavy - slow to start
-        "spring_constant": 6.0,   # Weak pull - drifting
-        "damping": 5.0,        # High damping - no bounce
-        "tremor_amplitude": 0.4,  # Subtle tremor
-        "orbital_strength": 0.7,  # Reduced wandering
+        "mass": 0.8,           # Medium - still moves
+        "spring_constant": 7.0,   # Moderate pull
+        "damping": 4.0,        # Moderate damping
+        "tremor_amplitude": 0.6,  # Visible tremor
+        "orbital_strength": 1.0,  # Still wanders
     },
     "withdrawn_distant": {
-        "mass": 1.5,           # Very heavy - sluggish
-        "spring_constant": 4.0,   # Weak pull - slow drifting
-        "damping": 6.0,        # Heavy damping - drowsy
-        "tremor_amplitude": 0.3,  # Minimal tremor
-        "orbital_strength": 0.5,  # Minimal wandering - almost still
+        "mass": 1.2,           # Heavy but not dead
+        "spring_constant": 5.0,   # Weak-moderate pull
+        "damping": 5.0,        # Damped but not frozen
+        "tremor_amplitude": 0.4,  # Subtle tremor
+        "orbital_strength": 0.7,  # Reduced but present wandering
     },
 }
 
 TRACKING_PHYSICS = {
-    "mass": 0.15,            # Very light for immediate response
-    "spring_constant": 35.0,  # Strong pull toward target
-    "damping": 3.0,          # Less damping = faster movement
+    "mass": 0.1,             # Very light for immediate response
+    "spring_constant": 45.0,  # Strong pull toward face target
+    "damping": 2.5,          # Low damping — fast, responsive tracking
     "tremor_amplitude": 0.0,
     "orbital_strength": 0.0,
 }
@@ -235,7 +235,7 @@ def update_physics_step(dt: float, is_tracking: bool = False, is_still: bool = F
             vel *= 0.85  # Decay velocity faster during stillness
 
         vel += acceleration * dt
-        max_vel = 15.0 if is_tracking else 12.0
+        max_vel = 25.0 if is_tracking else 12.0
         vel = max(-max_vel, min(max_vel, vel))
         pos += vel * dt
 
@@ -407,6 +407,41 @@ def get_current_nudge() -> tuple:
     # Smooth decay using cosine curve (fast at start, slow at end)
     decay = 0.5 * (1 + math.cos(math.pi * elapsed / nudge_duration))
     return (pan_nudge * decay, tilt_nudge * decay)
+
+
+def nudge_toward_concept(pan_zone: str = None, tilt_zone: str = None):
+    """Nudge gaze toward a concept's known spatial location.
+
+    Called when a concept with spatial metadata enters the machine's attention.
+    Uses the existing nudge system — a decaying bias on idle movement, not a
+    hard override. Tracking and drawing modes are unaffected.
+    """
+    global pan_nudge, tilt_nudge, nudge_start_time, nudge_duration
+    global state, drawing_sequence_active
+
+    # Don't nudge during tracking or drawing — only during idle
+    if state in ("tracking", "grace", "aware") or drawing_sequence_active:
+        return
+
+    # Map zone names to nudge offsets (degrees from center)
+    pan_offsets = {"left": 15.0, "right": -15.0, "ahead": 0.0}
+    tilt_offsets = {"up": 12.0, "down": -12.0}
+
+    new_pan = pan_offsets.get(pan_zone, 0.0)
+    new_tilt = tilt_offsets.get(tilt_zone, 0.0)
+
+    if new_pan == 0.0 and new_tilt == 0.0:
+        return
+
+    pan_nudge = new_pan
+    tilt_nudge = new_tilt
+    nudge_start_time = time.time()
+    nudge_duration = 6.0
+
+    direction = pan_zone or ""
+    if tilt_zone:
+        direction = f"{direction} {tilt_zone}".strip()
+    print(f"[👁️] Nudge toward concept: {direction} (pan={new_pan:+.0f}° tilt={new_tilt:+.0f}°)")
 
 
 # === SEARCHING STATE FUNCTIONS ===
@@ -752,9 +787,9 @@ def update_organic_movement(now):
         pan_micro_target = clamp(pan_micro_target, pan_min, pan_max)
         tilt_micro_target = clamp(tilt_micro_target, tilt_min, tilt_max)
     else:
-        # Original behavior - full contemplative range
-        pan_range = (PAN_MAX - PAN_MIN) * 0.6
-        tilt_range = (TILT_MAX - TILT_MIN) * 0.4
+        # Full contemplative range — use most of the servo range
+        pan_range = (PAN_MAX - PAN_MIN) * 0.85
+        tilt_range = (TILT_MAX - TILT_MIN) * 0.55
 
         pan_center = (PAN_MIN + PAN_MAX) / 2
         tilt_center = (TILT_MIN + TILT_MAX) / 2 + 5  # Slight downward bias
@@ -837,6 +872,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
     if person_present:
         if state != "tracking":
             last_state_change = now
+            # Coming from aware/idle — kill residual velocity for clean handoff to face tracking
+            physics_state.pan_velocity = 0.0
+            physics_state.tilt_velocity = 0.0
 
         state = "tracking"
         last_seen_time = now
@@ -860,7 +898,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         # Physics tracking: set target, snap immediately to tracking params
         physics_state.pan_target = target_x
         physics_state.tilt_target = target_y
-        physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.8)  # Immediate snap
+        physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.9)  # Near-instant snap to face tracking physics
 
         pan, tilt = update_physics_step(dt, is_tracking=True)
         servo_x = pan
@@ -958,7 +996,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
                 person_target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * person_y_norm
 
                 # INCREMENTAL UPDATES: Cap how far target can move per step to prevent overshoot
-                MAX_TARGET_STEP = 3.0  # Max degrees per update
+                MAX_TARGET_STEP = 6.0  # Max degrees per update — responsive enough to follow a moving person
                 current_pan = physics_state.pan_target if physics_state.pan_target else physics_state.pan
                 current_tilt = physics_state.tilt_target if physics_state.tilt_target else physics_state.tilt
                 pan_diff = person_target_x - current_pan
@@ -999,11 +1037,11 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             # Aware state with person bbox: faster tracking with higher update frequency
             aware_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"]).copy()
             if person_bbox is not None:
-                # Tracking person bbox - responsive but stable
-                aware_params["mass"] *= 1.1           # Slightly heavier
-                aware_params["spring_constant"] *= 0.8  # Responsive pull toward target
-                aware_params["damping"] *= 1.3        # Moderate damping
-                aware_params["tremor_amplitude"] *= 0.2  # Minimal tremor while tracking
+                # Tracking person bbox — responsive, follows body movement
+                aware_params["mass"] *= 0.7           # Lighter — quicker to respond
+                aware_params["spring_constant"] *= 1.2  # Stronger pull toward target
+                aware_params["damping"] *= 1.1        # Light damping — smooth but not sluggish
+                aware_params["tremor_amplitude"] *= 0.15  # Minimal tremor while tracking
                 aware_params["orbital_strength"] *= 0.1  # Almost no wandering while tracking
             else:
                 # No bbox - use normal subdued parameters
@@ -1115,15 +1153,15 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
                 FREQUENCY_SCALE = {
                     "energized_engaged": 2.5,
                     "alert_curious": 2.0,
-                    "calm_observant": 1.5,
-                    "quiet_detached": 1.0,
-                    "withdrawn_distant": 0.7,
+                    "calm_observant": 1.6,
+                    "quiet_detached": 1.3,
+                    "withdrawn_distant": 1.0,
                 }
                 freq_scale = FREQUENCY_SCALE.get(current_emotion_state, 1.2)
 
                 global pan_frequency, tilt_frequency
-                base_pan_freq = 0.25  # Slightly slower for more deliberate movement
-                base_tilt_freq = 0.15  # Slower tilt to reduce jitter
+                base_pan_freq = 0.38  # Faster base for more alive movement
+                base_tilt_freq = 0.22  # Faster tilt — still slower than pan for natural feel
                 pan_frequency = base_pan_freq * freq_scale
                 tilt_frequency = base_tilt_freq * freq_scale
 

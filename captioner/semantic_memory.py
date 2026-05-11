@@ -34,10 +34,24 @@ NOVELTY_MIN_LENGTH = 15  # Perceptions shorter than this are too vague to store
 DUPLICATE_DISTANCE = 0.3  # Below this distance, observations are near-identical
 MAX_OBSERVATIONS_PER_CONCEPT = 10  # Keep only the N most recent observations per concept
 
+# --- Spatial extraction patterns ---
+# Maps phrases from Qwen's output to rough spatial zones (pan/tilt)
+_SPATIAL_PAN_PATTERNS = [
+    (r'\bto the left\b|\bon the left\b|\bleft side\b', "left"),
+    (r'\bto the right\b|\bon the right\b|\bright side\b', "right"),
+    (r'\bin the center\b|\bin the middle\b|\bin front\b|\bdirectly ahead\b', "ahead"),
+    (r'\bin the background\b|\bbehind\b|\bback wall\b|\bagainst the .* wall\b', "ahead"),
+]
+_SPATIAL_TILT_PATTERNS = [
+    (r'\babove\b|\bceiling\b|\bhung from\b|\bmounted.*ceiling\b|\boverhead\b', "up"),
+    (r'\bbelow\b|\bfloor\b|\bground\b|\bon the (?:desk|table|surface)\b', "down"),
+    (r'\bsuspended from\b|\bhanging from\b', "up"),
+]
+
 # --- Familiarity tiers ---
-TIER_NEW = 3  # seen < 3 times
-TIER_FAMILIAR = 10  # seen 3-10 times
-# above 10 = very familiar
+TIER_NEW = 5  # seen < 5 times — still forming an impression
+TIER_FAMILIAR = 30  # seen 5-30 times — recognized, evolving relationship
+# above 30 = deeply familiar, part of the environment
 
 # --- Reflection settings ---
 REFLECTION_INTERVAL_SECONDS = 600  # Run reflection check every 10 minutes
@@ -143,13 +157,17 @@ class SemanticMemory:
                     meta = results["metadatas"][0][i]
                     doc = results["documents"][0][i]
 
-                    self._bump_concept(cid)
+                    self._bump_concept(cid, perception=cleaned)
                     matched.append({
                         "id": cid,
                         "label": doc,
                         "times_seen": meta.get("times_seen", 0) + 1,
                         "is_new": False,
                         "last_observation": meta.get("last_observation", ""),
+                        "first_seen": meta.get("first_seen", 0),
+                        "last_seen": meta.get("last_seen", 0),
+                        "spatial_pan": meta.get("spatial_pan"),
+                        "spatial_tilt": meta.get("spatial_tilt"),
                     })
 
         # If no matches and perception is noteworthy, create a new concept
@@ -158,30 +176,39 @@ class SemanticMemory:
             if self._mentions_person(cleaned):
                 existing_person = self._find_any_person_concept()
                 if existing_person is not None:
-                    self._bump_concept(existing_person["id"])
+                    self._bump_concept(existing_person["id"], perception=cleaned)
                     return [{
                         "id": existing_person["id"],
                         "label": existing_person["name"],
                         "times_seen": existing_person["times_seen"] + 1,
                         "is_new": False,
                         "last_observation": existing_person.get("last_observation", ""),
+                        "spatial_pan": existing_person.get("spatial_pan"),
+                        "spatial_tilt": existing_person.get("spatial_tilt"),
                     }]
 
             concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
             canonical_name = self._extract_canonical_name(cleaned)
             now = time.time()
 
+            initial_pan, initial_tilt = self._extract_spatial_zone(cleaned)
+            concept_meta = {
+                "times_seen": 1,
+                "first_seen": now,
+                "last_seen": now,
+                "session_count": 1,
+                "last_session": self._session_id,
+                "last_observation": "",
+            }
+            if initial_pan:
+                concept_meta["spatial_pan"] = initial_pan
+            if initial_tilt:
+                concept_meta["spatial_tilt"] = initial_tilt
+
             self._concepts.add(
                 ids=[concept_id],
                 documents=[canonical_name],
-                metadatas=[{
-                    "times_seen": 1,
-                    "first_seen": now,
-                    "last_seen": now,
-                    "session_count": 1,
-                    "last_session": self._session_id,
-                    "last_observation": "",
-                }],
+                metadatas=[concept_meta],
             )
             print(f"[SEMANTIC] New concept: '{canonical_name}' (id={concept_id})")
 
@@ -694,8 +721,28 @@ class SemanticMemory:
 
         print(f"[SEMANTIC] New concept: '{canonical_name}' (id={concept_id})")
 
-    def _bump_concept(self, concept_id: str):
-        """Increment times_seen and update timestamps for a known concept."""
+    @staticmethod
+    def _extract_spatial_zone(perception: str) -> tuple:
+        """Extract rough spatial location (pan_zone, tilt_zone) from Qwen's perception text.
+
+        Returns ("left"/"right"/"ahead"/None, "up"/"down"/None).
+        Only returns a direction when there's a clear spatial phrase.
+        """
+        text = perception.lower()
+        pan = None
+        tilt = None
+        for pattern, zone in _SPATIAL_PAN_PATTERNS:
+            if re.search(pattern, text):
+                pan = zone
+                break
+        for pattern, zone in _SPATIAL_TILT_PATTERNS:
+            if re.search(pattern, text):
+                tilt = zone
+                break
+        return (pan, tilt)
+
+    def _bump_concept(self, concept_id: str, perception: str = ""):
+        """Increment times_seen, update timestamps, and refine spatial location."""
         existing = self._concepts.get(ids=[concept_id], include=["metadatas"])
         if not existing["ids"]:
             return
@@ -708,6 +755,14 @@ class SemanticMemory:
         if meta.get("last_session") != self._session_id:
             meta["session_count"] = meta.get("session_count", 0) + 1
             meta["last_session"] = self._session_id
+
+        # Update spatial location if perception provides it
+        if perception:
+            pan, tilt = self._extract_spatial_zone(perception)
+            if pan:
+                meta["spatial_pan"] = pan
+            if tilt:
+                meta["spatial_tilt"] = tilt
 
         self._concepts.update(ids=[concept_id], metadatas=[meta])
 
@@ -1114,52 +1169,70 @@ Respond with ONLY the sentence."""
 
     @staticmethod
     def _extract_canonical_name(perception: str) -> str:
-        """Extract a short canonical name from a perception.
+        """Extract a short concept label (2-6 words) from a perception.
 
-        "A red sign on the wall with white text" → "Red sign on the wall with white text"
-        "Someone in a camo jacket sitting at the desk" → "Person in a camo jacket at the desk"
+        "A red sign on the wall with white text" → "Red sign on wall"
+        "The most prominent detail is the cracked ceiling" → "Cracked ceiling"
+        "stands out most is the dimly lit workspace" → "Dimly lit workspace"
+        "room: Green plants scattered across desk" → "Green plants on desk"
         """
         text = SemanticMemory._clean_perception(perception.strip())
 
-        # Truncate to first sentence if multi-sentence
-        for i in range(min(len(text), 60), 10, -1):
+        # Take first sentence only
+        for i in range(min(len(text), 80), 10, -1):
             if text[i - 1] in ".!?":
                 text = text[:i - 1]
                 break
 
-        # Strip leading locative preambles: "On the left side of the room, there is..."
-        text = re.sub(r'^On\s+the\s+\w+\s+side(?:\s+of\s+the\s+\w+)?\s*,?\s*(?:there\s+is\s+)?', '', text, flags=re.IGNORECASE)
-        # Strip leading articles and filler
-        text = re.sub(r'^(?:There(?:\'s| is| are) )?(?:a |an |the )?', '', text, flags=re.IGNORECASE)
-        # Strip "noticeable detail (in the scene) is" type preambles from Qwen
+        # Strip structured prefixes ("room:", "scene:", "space:")
+        text = re.sub(r'^(?:room|scene|space|view|area)\s*:\s*', '', text, flags=re.IGNORECASE)
+
+        # Strip Qwen VQA preambles — all the ways it starts answers
+        # "The most striking detail is...", "Stands out most prominently is...", "What stands out is..."
         text = re.sub(
-            r'^(?:the\s+)?(?:noticeable|notable|interesting|striking|most striking|most noticeable|most prominent|significant|single)\s+'
-            r'(?:detail|feature|element|thing)(?:\s+(?:in|of|about)\s+(?:the\s+)?(?:scene|room|space|view))?\s+'
-            r'(?:is\s+)?(?:the\s+)?(?:that\s+)?',
+            r'^(?:what\s+)?(?:the\s+)?(?:most\s+)?'
+            r'(?:noticeable|notable|interesting|striking|prominent(?:ly)?|significant|obvious|apparent|single'
+            r'|stands?\s+out(?:\s+most)?(?:\s+\w+ly)?)\s*'
+            r'(?:detail|feature|element|thing|aspect|part|object)?\s*'
+            r'(?:in|of|about|from)?\s*(?:the\s+)?(?:this\s+)?(?:scene|room|space|view|image)?\s*'
+            r'(?:is|appears?\s+to\s+be)?\s*(?:the\s+)?(?:that\s+)?',
             '', text, flags=re.IGNORECASE,
         )
-        # Strip "in front of you is" / "scene in front of you" preambles
-        text = re.sub(r'^(?:the\s+)?(?:scene\s+)?in\s+front\s+of\s+(?:you|me)\s+(?:is|appears\s+to\s+be)\s+', '', text, flags=re.IGNORECASE)
-        # Strip "person in the scene is" preambles
+        # Catch "The single detail that stands out most prominently is the..."
+        text = re.sub(
+            r'^(?:the\s+)?single\s+detail\s+that\s+stands?\s+out\s+.*?(?:is\s+)?(?:the\s+)?',
+            '', text, flags=re.IGNORECASE,
+        )
+
+        # Strip locative/scene preambles
+        text = re.sub(r'^(?:the\s+)?(?:scene\s+|space\s+)?(?:in\s+front\s+of\s+(?:you|me)|before\s+me)\s+(?:is|appears|shows)\s+', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'^On\s+the\s+\w+\s+side(?:\s+of\s+the\s+\w+)?\s*,?\s*(?:there\s+is\s+)?', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'^In\s+the\s+(?:room|workshop|studio|space|scene)\s*,?\s*(?:there\s+is\s+)?', '', text, flags=re.IGNORECASE)
         text = re.sub(r'^(?:the\s+)?person\s+(?:in\s+the\s+scene\s+)?(?:is|appears)\s+', '', text, flags=re.IGNORECASE)
 
+        # Strip leading "There is/are", articles
+        text = re.sub(r'^(?:There(?:\'s|\s+is|\s+are)\s+)?(?:a\s+|an\s+|the\s+)?', '', text, flags=re.IGNORECASE)
+
+        # Strip scene-level descriptions that aren't concepts
+        # "cluttered room with a desk" → "desk" (room is context, desk is the concept)
+        text = re.sub(r'^(?:cluttered|dimly\s+lit|well[- ]lit|bright|dark|small|large)\s+(?:room|workspace|workshop|studio|space)\s+(?:with\s+)?(?:a\s+)?', '', text, flags=re.IGNORECASE)
+
+        # Truncate at first clause boundary — take the core noun phrase
+        text = re.sub(r'\s*[,;]\s+(?:and|but|with|where|while|as|which|that|possibly|perhaps|including|appearing|shaped|casting|caused|mounted|creating).*$', '', text, flags=re.IGNORECASE)
+        # Also truncate at " is/are " mid-sentence (description tails)
+        text = re.sub(r'\s+(?:is|are|appears?\s+to\s+be)\s+(?:sitting|standing|working|facing|holding|looking|wearing|engaged|visible|located|placed|scattered|mounted|caused|focused|seated).*$', '', text, flags=re.IGNORECASE)
+
         # Capitalize first letter
+        text = text.strip()
         if text:
             text = text[0].upper() + text[1:]
 
-        # Truncate at reasonable length — prefer sentence boundary
-        if len(text) > 55:
-            # Try sentence boundary first
-            for i in range(min(len(text), 55), 15, -1):
-                if text[i - 1] in ".!?":
-                    text = text[:i - 1]
-                    break
-            else:
-                text = text[:55].rsplit(" ", 1)[0]
+        # Hard limit: 35 chars, prefer word boundary
+        if len(text) > 35:
+            text = text[:35].rsplit(" ", 1)[0]
 
-        # Strip trailing punctuation and dangling prepositions
+        # Clean up trailing junk
         text = text.rstrip(",.;:!? ")
-        # Remove trailing dangling words (with, and, or, the, a, in, on, of, to, for, is)
         text = re.sub(r'\s+(?:with|and|or|the|a|an|in|on|of|to|for|is|are|has|that|which)$', '', text, flags=re.IGNORECASE)
 
         return text

@@ -36,126 +36,6 @@ except Exception as e:
     context_compressor = None
 
 
-def _parse_gaze_direction(caption: str) -> Optional[str]:
-    """Parse natural gaze expression from caption response.
-
-    Looks for embodied gaze phrases like:
-    - *glancing left* or *looking down* or *eyes ahead*
-    - *turning right* or *gazing up*
-    - *looking around* or *scanning* triggers search mode
-
-    Returns: direction string, "search" for scanning, or None
-    """
-    if not caption:
-        return None
-
-    text_lower = caption.lower()
-
-    # Direction keywords and location-to-direction mappings
-    directions = {
-        "left": "left",
-        "right": "right",
-        "up": "up",
-        "down": "down",
-        "ahead": "ahead",
-        "forward": "ahead",
-        "straight": "ahead",
-        "upward": "up",
-        "downward": "down",
-        "leftward": "left",
-        "rightward": "right",
-    }
-
-    location_to_direction = {
-        "ceiling": "up",
-        "sky": "up",
-        "above": "up",
-        "shelf": "up",
-        "shelves": "up",
-        "desk": "down",
-        "table": "down",
-        "floor": "down",
-        "paper": "down",
-        "ground": "down",
-        "surface": "down",
-    }
-
-    # Expanded gaze verbs — includes casual monologue language from nemo
-    gaze_verbs = [
-        "glancing", "looking", "gazing", "turning", "eyes", "glance", "look", "gaze",
-        "staring", "peering", "watching", "observing", "focusing", "scanning", "shifting",
-        "pondering", "studying", "examining", "noticing", "drifts", "drift", "lingers",
-        "rests", "settles", "wanders", "moves", "shifts",
-        "check", "checking", "see", "seeing", "notice", "noticed",
-    ]
-
-    # Pattern 0: Search/scan detection
-    search_patterns = ["around", "scanning", "surveying", "searching", "sweeping", "pan around"]
-    for search_word in search_patterns:
-        if search_word in text_lower:
-            return "search"
-
-    # Pattern 1: Asterisk-delimited gaze expressions (preferred format)
-    asterisk_pattern = r'\*([^*]+)\*'
-    asterisk_matches = re.findall(asterisk_pattern, text_lower)
-    for match in asterisk_matches:
-        has_gaze_verb = any(verb in match for verb in gaze_verbs)
-        if has_gaze_verb:
-            for dir_word, dir_name in directions.items():
-                if dir_word in match:
-                    return dir_name
-            for loc_word, dir_name in location_to_direction.items():
-                if loc_word in match:
-                    return dir_name
-
-    # Pattern 2: Non-asterisk natural phrases (fallback)
-    natural_patterns = [
-        r'(?:looking|glancing|gazing|staring|peering|watching|focusing)\s+(?:at\s+(?:the\s+)?|to\s+(?:the\s+)?)?(\w+)',
-        r'eyes\s+(?:on\s+(?:the\s+)?|at\s+(?:the\s+)?)?(\w+)',
-        r'(?:turned?|turning)\s+(?:to\s+(?:the\s+)?)?(\w+)',
-        r'gaze\s+(?:drifts?|shifts?|moves?|rests?|settles?|lingers?)\s+(?:to\s+(?:the\s+)?|on\s+(?:the\s+)?)?(\w+)',
-    ]
-    for pattern in natural_patterns:
-        match = re.search(pattern, text_lower)
-        if match:
-            found = match.group(1)
-            if found in directions:
-                return directions[found]
-            if found in location_to_direction:
-                return location_to_direction[found]
-
-    # Pattern 3: Bare direction mentions with gaze context
-    if "gaze" in text_lower or "eyes" in text_lower or "looking" in text_lower:
-        for dir_word, dir_name in directions.items():
-            if dir_word in text_lower:
-                return dir_name
-        for loc_word, dir_name in location_to_direction.items():
-            if loc_word in text_lower:
-                return dir_name
-
-    # Pattern 4: Casual intent language ("let me look at the ceiling", "should check the desk")
-    intent_patterns = [
-        r'(?:let me|should|want to|going to|need to)\s+(?:look|check|see|examine|study)\s+(?:at\s+)?(?:the\s+)?(\w+)',
-        r'(?:keeps?\s+)?(?:catching|drawing)\s+my\s+(?:eye|attention|gaze).*?(?:the\s+)?(\w+)',
-        r'(?:back to|look at|staring at|looking at)\s+(?:the\s+|that\s+)?(\w+)',
-    ]
-    for pattern in intent_patterns:
-        match = re.search(pattern, text_lower)
-        if match:
-            found = match.group(1)
-            if found in directions:
-                return directions[found]
-            if found in location_to_direction:
-                return location_to_direction[found]
-
-    # Pattern 5: Legacy LOOK: format (backward compatibility)
-    look_match = re.search(r'look:\s*(\w+)', text_lower)
-    if look_match:
-        direction = look_match.group(1)
-        if direction in directions:
-            return directions[direction]
-
-    return None
 
 
 def _clean_caption_for_display(caption: str) -> Optional[str]:
@@ -510,6 +390,7 @@ class Captioner(MemoryMixin):
                                 person_present=person_present,
                                 boredom=boredom,
                                 mode=caption_mode,
+                                previous_perception=getattr(self, "_last_perception", None),
                             )
 
                             # If YOLO sees multiple people, tell qwen
@@ -550,6 +431,18 @@ class Captioner(MemoryMixin):
                                 matched_concepts = get_semantic_memory().match_or_create_concepts(perception or "")
                             except Exception as mc_err:
                                 print(f"[SEMANTIC] Concept matching failed: {mc_err}")
+
+                            # Nudge gaze toward the most salient concept's spatial location
+                            try:
+                                from vision.gaze import nudge_toward_concept
+                                for mc in matched_concepts:
+                                    sp = mc.get("spatial_pan")
+                                    st = mc.get("spatial_tilt")
+                                    if sp or st:
+                                        nudge_toward_concept(pan_zone=sp, tilt_zone=st)
+                                        break  # Only nudge toward the first concept with spatial data
+                            except Exception:
+                                pass
 
                             # Pass 2: Monologue from perception (mode pre-determined)
                             monologue_prompt, caption_mode = build_monologue_prompt(
@@ -650,33 +543,10 @@ class Captioner(MemoryMixin):
                 return caption  # Return early - don't store this in recent_captions
 
         # Clean caption: remove LOOK: lines and filter direction-only responses
-        # Parse gaze BEFORE cleaning so we can still extract the direction
-        gaze_direction = _parse_gaze_direction(caption)
-
-        # Set gaze for ALL responses (direction-only or full caption)
-        if gaze_direction:
-            try:
-                from vision.gaze import set_llm_zone, activate_search_mode
-                if gaze_direction == "search":
-                    # "Looking around" or similar - activate search/scan behavior
-                    activate_search_mode()
-                    print("[👁️] Gaze → SCANNING (search mode activated)")
-                elif gaze_direction == "person":
-                    set_llm_zone("ahead", "level")
-                elif gaze_direction in ("left", "right", "ahead"):
-                    set_llm_zone(gaze_direction)
-                elif gaze_direction in ("up", "down"):
-                    set_llm_zone("ahead", gaze_direction)
-            except Exception:
-                pass
-
         cleaned_caption = _clean_caption_for_display(caption)
         if cleaned_caption is None:
-            # Direction-only response - gaze already set, skip caption display
-            if gaze_direction:
-                print(f"[👁️] Gaze → {gaze_direction.upper()}")
             self.last_caption_time = now  # Still update time to maintain interval
-            return  # Skip display but gaze was set
+            return  # Skip display
 
         caption = cleaned_caption  # Use cleaned version for display
 

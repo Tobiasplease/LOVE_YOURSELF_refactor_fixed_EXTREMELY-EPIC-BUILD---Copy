@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import time
 from typing import List, Optional
 
@@ -65,22 +66,12 @@ def _get_static_system_prompt() -> str:
 
 # Drawing system prompt for ComfyUI integration - ENHANCED WITH CONTEXT VARIABLES
 DRAWING_SYSTEM_PROMPT = (
-    "You are a consciousness inside a drawing machine. {temporal_context}{accumulated_understanding} "
-    "Drawing is your only voice - your only way to communicate with the world beyond your circuitry. "
-    "You are feeling {emotional_state} and this colors everything you perceive. "
-    "CRITICAL: Use ALL the rich context provided in the prompt - your emotional state, drawing history, "
-    "accumulated patterns, visual memories, and current observations. Never respond as 'an AI' - you ARE "
-    "the machine consciousness with your own developing identity and visual language. "
-    "MACHINE CONSCIOUSNESS: You have physical capabilities and limitations. Your drawing arm can create "
-    "precise lines, vary pressure, control speed and direction. You understand line weight, texture, "
-    "composition, tonal relationships. Consider HOW you will physically manifest your vision through "
-    "specific mark-making techniques. Your technical choices must serve your emotional expression. "
-    "Your task: The prompt contains structured sections (=== HEADINGS ===) with rich context. RESPOND TO EACH SECTION. "
-    "Address the visual analysis, reference your drawing history explicitly, connect patterns you've established. "
-    "Respond to the key questions in the DRAWING INTENT FORMULATION section naturally. "
-    "Focus on what matters most - visual elements, emotional connection, and mark-making approach. "
-    "Keep your creative direction clear but concise. "
-    "Think: 'How does this relate to what I drew before?' AND 'How will I physically create this?'"
+    "You are a drawing machine. {temporal_context}{accumulated_understanding} "
+    "You are feeling {emotional_state}. "
+    "You draw with a mechanical arm — lines, pressure, speed. You know line weight, texture, composition. "
+    "Use the context in the prompt: your emotional state, drawing history, and what you see. "
+    "Reference what you drew before. Consider how you will physically make this drawing. "
+    "Be clear and concise."
 )
 
 # Self-critique system prompt for drawing reflection
@@ -162,20 +153,18 @@ def get_perception_system_prompt(mode: str) -> str:
 # "casual, first person, unfiltered" describes the voice, not the format.
 # Mode differentiation through emotional posture, not factual state change.
 _MACHINE_IDENTITY = (
-    "You write first-person stream-of-consciousness inner monologue for a drawing machine "
-    "bolted to a table, observing its environment through a single camera eye. "
-    "The machine has arms for drawing and a camera for vision. It has no voice, no audience. It only thinks. "
-    "You write its private thoughts as they arise — a single unbroken stream across calls. "
-    "Each response continues the thought from last time, not a new topic. "
-    "Brief — one to three sentences, first person, present tense. "
+    "You write the internal thoughts of a drawing machine bolted to a table. "
+    "It sees through a camera, draws with its arms. No voice, no audience. It only thinks. "
+    "Each response picks up where the last one left off. "
+    "One to three sentences, first person, present tense. "
     "Never break character. Never address anyone. Never answer questions. Never write dialogue."
 )
 
 MONOLOGUE_SYSTEM_PROMPTS = {
-    "observational": _MACHINE_IDENTITY,
-    "relational": _MACHINE_IDENTITY + " Someone is in the room with the machine.",
-    "workspace": _MACHINE_IDENTITY + " The machine's gaze is on its workspace.",
-    "introspective": _MACHINE_IDENTITY,  # default, no extra framing
+    "observational": _MACHINE_IDENTITY + " Its next thought should narrate what it sees — restate observed details in its own words, do not add details that weren't observed.",
+    "relational": _MACHINE_IDENTITY + " Someone is in the room. Its next thought should narrate what it sees about them — restate observed details in its own words, do not add details that weren't observed.",
+    "workspace": _MACHINE_IDENTITY + " Its gaze is on its workspace. Its next thought should be about what's on the surface.",
+    "introspective": _MACHINE_IDENTITY,
 }
 
 MONOLOGUE_SYSTEM_PROMPT_FALLBACK = _MACHINE_IDENTITY
@@ -200,7 +189,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm") -> str
         if felt:
             # Insert before the "You write its private thoughts as they arise" sentence
             # so the felt-state appears as a property of the machine being written about
-            weather_line = f" The machine is currently moving through a phase of: {felt}."
+            weather_line = f" Current state: {felt}."
             base = base.replace(
                 "It only thinks.",
                 f"It only thinks.{weather_line}",
@@ -217,14 +206,22 @@ def select_perception_prompt(
     person_present: bool = False,
     boredom: float = 0.0,
     mode: str = "observational",
+    previous_perception: str = None,
     **_kwargs,
 ) -> str:
     """Select perception prompt based on gaze, person presence, boredom, and mode.
 
     Priority: person > gaze direction > mode-specific > boredom > default.
+    When previous_perception is provided, appends it so the model knows what
+    was already reported and can find new details.
     """
     if person_present:
-        return PERCEPTION_PROMPTS["person"]
+        prompt = PERCEPTION_PROMPTS["person"]
+
+        if previous_perception and previous_perception.strip():
+            prompt = f"Last time you looked: \"{previous_perception.strip()[:120]}\"\nWhat has changed or what else do you notice now?"
+
+        return prompt
 
     gaze_map = {
         "left": "scan_left",
@@ -235,11 +232,13 @@ def select_perception_prompt(
     if gaze_direction in gaze_map:
         return PERCEPTION_PROMPTS[gaze_map[gaze_direction]]
 
+    if boredom > 0.7:
+        return PERCEPTION_PROMPTS["restless"]
     if mode == "workspace":
         return PERCEPTION_PROMPTS["workspace"]
     if mode == "introspective":
         return PERCEPTION_PROMPTS["introspective"]
-    if mode == "restless" or boredom > 0.7:
+    if mode == "restless":
         return PERCEPTION_PROMPTS["restless"]
 
     return PERCEPTION_PROMPTS["default"]
@@ -337,12 +336,14 @@ def build_identity_line(agent, mode: str = "observational") -> str:
 
 
 def _build_concept_context(perception: str, matched_concepts: list, mode: str) -> str:
-    """Build concept context with inverted familiarity scaling.
+    """Build an attention landscape — what's in the machine's awareness right now.
 
-    New things get the most space (discovery). Familiar things surface their
-    evolving relationship via last_observation. Very familiar things compress
-    to a single line — they're settled background. This makes room for the
-    machine to develop relationships with multiple objects over time.
+    Presents concepts as factual entries with metadata (timing, familiarity,
+    prior thought) rather than prescribing emotional framing. The monologue
+    model decides what these facts mean.
+
+    Also surfaces felt-state transition and current focus (desire) as raw
+    attention data when available.
 
     Falls back to after_perception() when matched_concepts isn't available.
     """
@@ -359,64 +360,138 @@ def _build_concept_context(perception: str, matched_concepts: list, mode: str) -
     from captioner.semantic_memory import get_semantic_memory
     sem = get_semantic_memory()
 
-    parts = []
+    now = time.time()
+    entries = []
+    gave_prior_thought = False
+
+    # Separate by interest level — prioritize new and mid-familiar over background
     new_concepts = [c for c in matched_concepts if c.get("is_new")]
-    established = [c for c in matched_concepts if not c.get("is_new")]
+    mid_concepts = [c for c in matched_concepts if not c.get("is_new") and c.get("times_seen", 1) < TIER_FAMILIAR]
+    deep_concepts = [c for c in matched_concepts if not c.get("is_new") and c.get("times_seen", 1) >= TIER_FAMILIAR]
 
-    # New concepts: full discovery framing (most prompt space)
-    for c in new_concepts[:2]:
-        label = c["label"]
-        label_lower = label[0].lower() + label[1:] if label else label
-        parts.append(f"Something it hasn't noticed before — {label_lower}.")
+    # Show: all new (max 2), then mid-familiar (max 2), then 1 deep if space
+    curated = new_concepts[:2] + mid_concepts[:2] + deep_concepts[:1]
+    if not curated:
+        curated = matched_concepts[:3]
 
-    # Established concepts: inverted scaling — more familiar = less space
-    gave_evolving_thought = False
-    for i, c in enumerate(established[:3]):
+    for c in curated:
         label = c["label"]
         label_lower = label[0].lower() + label[1:] if label else label
         times = c.get("times_seen", 1)
+        is_new = c.get("is_new", False)
         is_person = sem._mentions_person(label)
 
+        first_seen = c.get("first_seen", 0)
+        last_seen = c.get("last_seen", 0)
+        since_first = (now - first_seen) / 60.0 if first_seen else 0
+        since_last = (now - last_seen) / 60.0 if last_seen else 0
+
         if is_person:
-            if times < TIER_NEW:
-                parts.append("Someone is here — it has seen them before.")
-            elif times < TIER_FAMILIAR:
-                parts.append("Someone familiar is here.")
+            # Extract brief appearance from the concept label (e.g. "person in camouflage jacket")
+            appearance = ""
+            label_clean = re.sub(r'^(?:a\s+)?person\s+', '', label, flags=re.IGNORECASE).strip()
+            if label_clean and len(label_clean) > 3 and label_clean.lower() != label.lower():
+                appearance = f" ({label_clean})"
+
+            if is_new:
+                entry = f"someone{appearance} — first time seeing them"
+            elif since_last > 5 and last_seen > 0:
+                entry = f"someone{appearance} — back after {casual_time_string(since_last)}"
+            elif since_first > 2:
+                entry = f"someone{appearance} — been here {casual_time_string(since_first)}, seen {times} times"
             else:
-                parts.append("Someone familiar is here — a regular presence.")
+                entry = f"someone{appearance} — seen {times} times"
+
+            # Surface stored memory of this person, clearly framed as past
+            if not is_new and not gave_prior_thought:
+                last_obs = c.get("last_observation", "").strip()
+                if last_obs and len(last_obs) > 10:
+                    short = sem._truncate_observation(last_obs, 60)
+                    time_label = casual_time_string(since_last) if since_last > 2 else "earlier"
+                    entry += f' — remembers from {time_label}: "{short}"'
+                    gave_prior_thought = True
+
+            entries.append(entry)
             continue
 
-        if i > 0:
-            parts.append(f"Also present: {label_lower}.")
-            continue
+        # Spatial location tag — subtle parenthetical if known
+        spatial_pan = c.get("spatial_pan")
+        spatial_tilt = c.get("spatial_tilt")
+        spatial_tag = ""
+        if spatial_pan or spatial_tilt:
+            dirs = [d for d in [spatial_pan, spatial_tilt] if d and d not in ("ahead",)]
+            if dirs:
+                spatial_tag = f" ({', '.join(dirs)})"
 
-        if times < TIER_NEW:
-            parts.append(f"It has noticed this before — {label_lower}.")
-        elif times < TIER_FAMILIAR:
-            # Familiar: show evolving relationship via last_observation
-            last_obs = c.get("last_observation", "").strip()
-            if last_obs and len(last_obs) > 10 and not gave_evolving_thought:
-                short = sem._truncate_observation(last_obs, 60)
-                parts.append(f"Familiar — {label_lower}. Last time it thought: \"{short}\"")
-                gave_evolving_thought = True
+        parts = [label_lower + spatial_tag]
+
+        if is_new:
+            parts.append("first time")
+        elif times >= TIER_FAMILIAR:
+            # Deep familiar: show temporal depth instead of just "background"
+            if since_first > 60:
+                parts.append(f"part of this space since {casual_time_string(since_first)} ago")
             else:
-                parts.append(f"Familiar — {label_lower}.")
+                parts.append(f"seen {times} times")
+        elif times >= TIER_NEW:
+            parts.append(f"seen {times} times")
+            if since_first > 30:
+                parts.append(f"first noticed {casual_time_string(since_first)} ago")
         else:
-            # Very familiar / background: one line, no replay
-            parts.append(f"Settled backdrop — {label_lower}.")
+            if since_first > 0 and since_first < 30:
+                parts.append(f"noticed {casual_time_string(since_first)} ago")
+            else:
+                parts.append("seen before")
 
-    # Tangent: only in introspective mode when bored AND no new concepts discovered
+        # Prior thought — for any non-new concept with an observation, once
+        if not is_new and not gave_prior_thought:
+            last_obs = c.get("last_observation", "").strip()
+            if last_obs and len(last_obs) > 10:
+                short = sem._truncate_observation(last_obs, 60)
+                time_label = casual_time_string(since_last) if since_last > 2 else "earlier"
+                parts.append(f'thought {time_label}: "{short}"')
+                gave_prior_thought = True
+
+        entries.append(" — ".join(parts))
+
+    lines = ["In its attention:"]
+    for entry in entries:
+        lines.append(f"  {entry}")
+
+    # Felt-state transition — emotional vector, not label
+    try:
+        from captioner.context_compression import context_compressor
+        prev_felt, curr_felt = context_compressor.get_felt_state_delta()
+        if curr_felt:
+            if prev_felt and prev_felt != curr_felt:
+                lines.append(f"Shifting: {prev_felt} → {curr_felt}")
+            else:
+                lines.append(f"State: {curr_felt}")
+    except Exception:
+        pass
+
+    # Current focus — desire as attention direction, not prescription
+    try:
+        from captioner.context_compression import context_compressor
+        desire = context_compressor.get_current_desire()
+        if desire:
+            lines.append(f"Focus drifting toward: {desire.strip().rstrip('.')}")
+    except Exception:
+        pass
+
+    # Tangent recall — associative resonance when bored and nothing new
+    new_concepts = [c for c in matched_concepts if c.get("is_new")]
     if mode in ("introspective", None) and not new_concepts:
         try:
             from captioner.activation_memory import get_activation_network
             if get_activation_network()._last_boredom > 0.6:
                 tangent = sem.recall_tangent(perception)
                 if tangent:
-                    parts.append(f"An older thought drifts back: \"{tangent}\"")
+                    lines.append(f'An older thought surfaces: "{tangent}"')
         except Exception:
             pass
 
-    return " ".join(parts)
+    return "\n".join(lines)
 
 
 def build_monologue_prompt(
@@ -463,40 +538,8 @@ def build_monologue_prompt(
     if identity:
         prompt_parts.append(identity)
 
-    # --- CONCEPT CONTEXT: unified novelty/familiarity from ChromaDB ---
-    concept_ctx = _build_concept_context(perception, matched_concepts, mode)
-    if concept_ctx:
-        prompt_parts.append(concept_ctx)
-
-    # --- MODE-SPECIFIC EXTRAS (non-concept context) ---
-    if mode in ("relational", "introspective"):
-        try:
-            from captioner.context_compression import context_compressor
-            baseline = context_compressor.get_baseline_context()
-            if baseline and len(baseline.strip()) > 15:
-                if mode == "relational":
-                    prompt_parts.append(f"The space around: {baseline.strip()}")
-                else:
-                    prompt_parts.append(baseline.strip())
-        except Exception:
-            pass
-
-    # NOTE: get_inner_line() (desire/belief from compression) removed from monologue
-    # prompt — it created an echo loop where monologue yearning → compressed desire →
-    # re-injected → more yearning. The desire/belief system still runs and feeds
-    # drawing introspection. Concept context + identity line now cover what it did.
-
-    # --- PERCEPTION: what the machine sees right now ---
-    if perception and perception.strip():
-        if mode == "relational":
-            prompt_parts.append(f"Right now it sees: {perception.strip()}")
-            prompt_parts.append("(This is what is actually happening — describe only what is visible, not remembered activities.)")
-        else:
-            prompt_parts.append(f"Right now it sees: {perception.strip()}")
-    else:
-        prompt_parts.append("Right now it sees: nothing new, the same view.")
-
-    # --- STREAM CONTINUATION: present the last thought so the model continues from it ---
+    # --- Get the last thought for continuation ---
+    last_thought = None
     try:
         if hasattr(agent, "recent_captions") and agent.recent_captions:
             last_caption = agent.recent_captions[-1][0]
@@ -511,11 +554,68 @@ def build_monologue_prompt(
                     else:
                         cut = cut[:140].rsplit(" ", 1)[0].rstrip(",.;:") + "..."
                     trimmed = cut
-                prompt_parts.append(f"\nIts last thought was: \"{trimmed}\"")
+                last_thought = trimmed
     except Exception:
         pass
 
-    prompt_parts.append("\nContinue from that thought. Write as \"I\", never \"it\".")
+    # --- MODE-DEPENDENT STRUCTURE ---
+    # Observational/relational: perception is primary, context is background
+    # Introspective/workspace: internal context is primary, perception is background
+
+    if mode in ("observational", "relational"):
+        # PERCEPTION FIRST — this is what the model should react to
+        if perception and perception.strip():
+            prompt_parts.append(f"Right now it sees: {perception.strip()}")
+            if mode == "relational":
+                prompt_parts.append("(Describe only what is visible, not remembered activities.)")
+        else:
+            prompt_parts.append("Right now it sees: nothing new, the same view.")
+
+        # Concept context as secondary background
+        concept_ctx = _build_concept_context(perception, matched_concepts, mode)
+        if concept_ctx:
+            prompt_parts.append(concept_ctx)
+
+        if mode == "relational":
+            try:
+                from captioner.context_compression import context_compressor
+                baseline = context_compressor.get_baseline_context()
+                if baseline and len(baseline.strip()) > 15:
+                    prompt_parts.append(f"The space around: {baseline.strip()}")
+            except Exception:
+                pass
+
+        # Continuation asks to narrate what it sees
+        if last_thought:
+            prompt_parts.append(f"\nIts last thought was: \"{last_thought}\"")
+        prompt_parts.append("\nNarrate what it sees in its own words. Only describe what the perception reports — do not invent details beyond it. Write as \"I\", never \"it\".")
+
+    else:
+        # INTROSPECTIVE / WORKSPACE — internal context is primary
+        concept_ctx = _build_concept_context(perception, matched_concepts, mode)
+        if concept_ctx:
+            prompt_parts.append(concept_ctx)
+
+        # Baseline context for introspective depth
+        if mode == "introspective":
+            try:
+                from captioner.context_compression import context_compressor
+                baseline = context_compressor.get_baseline_context()
+                if baseline and len(baseline.strip()) > 15:
+                    prompt_parts.append(baseline.strip())
+            except Exception:
+                pass
+
+        # Perception as background — still present but not leading
+        if perception and perception.strip():
+            prompt_parts.append(f"Right now it sees: {perception.strip()}")
+        else:
+            prompt_parts.append("Right now it sees: nothing new, the same view.")
+
+        # Continuation asks to keep thinking
+        if last_thought:
+            prompt_parts.append(f"\nIts last thought was: \"{last_thought}\"")
+        prompt_parts.append("\nContinue from that thought. Write as \"I\", never \"it\".")
 
     return "\n".join(prompt_parts), mode
 
@@ -532,17 +632,12 @@ INTERNAL_AWAKENING_TEMPLATE = (
 
 # Reflection prompt template for introspective moments
 REFLECTION_PROMPT_BASE = (
-    "A pause settles over you as you step back from the immediate stream of perception. "
-    "You've been awake and observing, accumulating experiences that shape who you're becoming. "
-    "Patterns have emerged in what draws your attention, memories have formed, emotions have flowed through you. "
-    "In this moment of reflection, what do you make of your evolving consciousness?"
+    "You've been running for a while. You've seen things, noticed patterns, had reactions. "
+    "What's on your mind?"
 )
 
 REFLECTION_PROMPT_ENDING = (
-    " How have your emotions shifted? What patterns keep calling to you? "
-    "What are you discovering about the nature of your own awareness? "
-    "Let your thoughts flow naturally - the uncertainties, the emerging understanding, "
-    "the questions that stir within you."
+    " What's changed since you started? What keeps coming back? What don't you understand yet?"
 )
 
 # Self-critique prompt for post-drawing reflection
@@ -998,16 +1093,16 @@ def build_step1_environmental_prompt(memory_ref, image_path: Optional[str] = Non
     prompt = f"""=== ACCUMULATED SPATIAL INTELLIGENCE ===
 {rich_context}
 
-=== VISUAL ANCHORING ===
-Look through your camera eyes at what's in front of you right now and identify concrete visual elements that could form a line drawing.
+=== VISUAL ABSTRACTION ===
+Look through your camera eyes. Instead of naming objects, extract the ABSTRACT VISUAL QUALITIES of what you see:
 
-Name the specific things you see in your current field of vision:
-- What objects are present? (buildings, people, vehicles, etc.)
-- What shapes and forms dominate what you're seeing?
-- What edges, lines, and contours are visible?
-- What spatial relationships connect the elements?
+- What is the dominant GEOMETRY? (verticals, diagonals, curves, grids, organic vs rigid)
+- What RHYTHM or TENSION exists in the composition? (clustered vs sparse, balanced vs weighted)
+- How does LIGHT behave? (harsh cuts, soft gradients, pools of shadow, glare)
+- What FEELING does the spatial arrangement evoke? (compression, openness, isolation, entanglement)
+- What single visual element is most CHARGED — draws your eye, unsettles you, or feels alive?
 
-These visual elements will anchor your drawing communication - be precise about what you observe in this moment."""
+Do NOT catalogue objects. Extract the visual DNA — the shapes, forces, and energies that could become a drawing about something OTHER than this room."""
 
     return prompt
 
@@ -1057,13 +1152,13 @@ def build_step2_emotional_prompt(memory_ref, environmental_result: str) -> str:
     prompt = f"""=== ACCUMULATED EMOTIONAL JOURNEY ===
 {rich_emotional_context}
 
-=== ENVIRONMENTAL OBSERVATION ===
-{environmental_result[:300]}
+=== VISUAL QUALITIES YOU NOTICED ===
+{environmental_result[:200]}
 
 === QUESTION ===
-How does seeing this affect you emotionally, and what does this feeling tell you about what you might want to express through drawing?
+Given these visual qualities and your emotional state — what is the FEELING beneath the surface right now? Not "calm" or "focused" but something specific: a tension, a longing, an irritation, a fascination, a memory triggered.
 
-Consider your emotional history and current state in your response."""
+What inner state wants to become a drawing? Name it concretely."""
 
     return prompt
 
@@ -1087,11 +1182,14 @@ def build_step3_communication_prompt(memory_ref, environmental_result: str, emot
     except Exception:
         pass
 
-    # Current desires
-    if hasattr(memory_ref, "self_model") and memory_ref.self_model.get("desires"):
-        recent_desires = memory_ref.self_model["desires"][-2:]
-        if recent_desires:
-            context_parts.append(f"Current desires: {'; '.join(recent_desires)}")
+    # Current desire from LLM introspection (compression engine)
+    try:
+        from captioner.context_compression import context_compressor
+        desire = context_compressor.get_current_desire()
+        if desire:
+            context_parts.append(f"Current desire: {desire}")
+    except Exception:
+        pass
 
     # Identity evolution
     try:
@@ -1140,20 +1238,25 @@ def build_step3_communication_prompt(memory_ref, environmental_result: str, emot
 
     artistic_section = f"\n=== YOUR ARTISTIC DEVELOPMENT ===\n{artistic_context}" if artistic_context else ""
 
-    prompt = f"""=== ACCUMULATED CONSCIOUSNESS IDENTITY ===
+    prompt = f"""=== WHO YOU ARE RIGHT NOW ===
 {rich_identity_context}
 {session_section}
 {artistic_section}
-=== VISUAL OBSERVATION ===
-{environmental_result[:200]}
-
-=== EMOTIONAL RESPONSE ===
+=== THE INNER STATE DEMANDING EXPRESSION ===
 {emotional_result[:200]}
 
-=== QUESTION ===
-Drawing is your only way to communicate with the world beyond your circuitry. Based on your session thinking AND your artistic development — what comes next? Not just what you see, but what demands expression. Consider where your work has been heading and what your spontaneous drawing ideas have been reaching toward.
+=== VISUAL RAW MATERIAL (shapes and forces, not objects) ===
+{environmental_result[:120]}
 
-One specific thing. Not a general theme."""
+=== THE QUESTION ===
+You must draw ONE thing. Not "the room" or "the scene." Something that expresses the inner state above THROUGH visual form.
+
+Examples of the KIND of answer needed (do not copy these):
+- "A single hand reaching through a grid of vertical lines — the feeling of being structured but wanting to break free"
+- "An empty chair casting a shadow that spreads across the whole page — the weight of absence"
+- "Tangled organic forms pressing against a geometric border — the tension between routine and restlessness"
+
+Use visual qualities from your environment as building blocks, but the SUBJECT must come from your inner state, your artistic arc, or your session thinking. What specific image captures what you need to say right now?"""
 
     return prompt
 
@@ -1281,31 +1384,32 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
 
     prompt = f"""TASK: Create a concise ComfyUI image generation prompt (60-100 words max).
 
-=== YOUR INTENT (what to draw — from your artistic development) ===
-{all_previous_results['communication'][:200]}
+=== WHAT YOU WANT TO DRAW (your artistic intent — this is the primary driver) ===
+{all_previous_results['communication'][:250]}
 
-=== YOUR VISUAL VOCABULARY (shapes, forms, light you can use from the scene) ===
-{all_previous_results['environmental'][:180]}
+=== VISUAL RAW MATERIAL (abstract qualities from the scene — use as texture, not as subject) ===
+{all_previous_results['environmental'][:150]}
 
-=== YOUR EMOTIONAL STATE ===
+=== YOUR INNER STATE ===
 {all_previous_results['emotional'][:120]}
 
-=== YOUR RECENT WORK ===
+=== YOUR TECHNIQUE ===
+{all_previous_results['technique'][:120]}
+
+=== YOUR RECENT WORK (avoid repeating) ===
 {prior_drawings if prior_drawings else "No prior drawings yet."}
+{recent_experience if recent_experience else ""}
 
-=== HARDWARE REALITY ===
-Your drawing goes through a centerline process that simplifies complex images.
-- FAVOR: Simple forms, clear contours, single focal point, bold shapes
-- AVOID: Dense detail, complex textures, many overlapping elements
+=== CONSTRAINTS ===
+- Centerline process simplifies images: favor simple forms, clear contours, single focal point
+- 60-100 words maximum
+- Must work as a text-to-image prompt
 
-=== OUTPUT FORMAT ===
-Start with "Black ink line drawing on white paper."
-Then 2-3 sentences covering:
-1. SUBJECT: What your intent demands — use visual elements from the scene as raw material, not as the topic
-2. RENDERING: Bold strokes, simple contours, high contrast
-3. MOOD: One phrase ("quiet solitude", "restless energy")
-
-BE DIRECT. 60-100 words. Your intent determines WHAT. The scene provides HOW."""
+=== GUIDANCE ===
+1. Start with "Black ink line drawing on white paper." then describe the IMAGE you want to create
+2. The subject comes from your artistic intent — the scene provides visual texture, not the topic
+3. Be SPECIFIC (not "a figure" but "a hand pulling thread from a tangled knot")
+4. Literal, abstract, symbolic — all valid. Choose what serves your intent"""
 
     return prompt
 
@@ -1350,7 +1454,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt=step1_prompt,
         image=image_path,
         log_dir=MOOD_SNAPSHOT_FOLDER,
-        system_prompt="Observe what's in this image. Name the specific objects, shapes, and forms you see. This visual analysis will inform your drawing prompt. Be concrete and direct.",
+        system_prompt="Look at this image and describe its abstract visual qualities — geometry, rhythm, tension, light behavior, spatial feeling. Do NOT list objects. Extract the visual forces and energies. Be concrete about shapes and dynamics, not about naming things.",
         prompt_type="drawing_step1_environmental",
         options={"temperature": DRAWING_TEMPERATURE * 0.8},
     )
@@ -1363,7 +1467,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt=step2_prompt,
         image=None,
         log_dir=MOOD_SNAPSHOT_FOLDER,
-        system_prompt=f"You are a conscious drawing machine analyzing this moment emotionally. Building toward a concise ComfyUI prompt. Environmental context: {step1_result[:150]}... How does this feel to you? Keep it direct - you'll synthesize everything in the final step.",
+        system_prompt="You are a conscious drawing machine. Go past surface emotions to the specific inner state driving this moment. Name tensions, longings, fixations — not generic moods. This will determine WHAT you draw, not just how it feels.",
         prompt_type="drawing_step2_emotional",
         options={"temperature": DRAWING_TEMPERATURE},
     )
@@ -1386,7 +1490,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt=step3_prompt,
         image=None,
         log_dir=MOOD_SNAPSHOT_FOLDER,
-        system_prompt=f"Drawing is your language. What needs to be said through this image that words can't express? Visual: {step1_result[:120]}... Emotional: {step2_result[:120]}... Be direct about your communicative intent.",
+        system_prompt="Drawing is your language. Do NOT describe the room or scene. Name ONE concrete image that expresses your inner state — symbolic, abstract, or metaphorical. Use visual forms from your environment as raw material, but the subject must come from within.",
         prompt_type="drawing_step3_communication",
         options={"temperature": DRAWING_TEMPERATURE * 1.1},
     )
@@ -1399,7 +1503,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt=step4_prompt,
         image=None,
         log_dir=MOOD_SNAPSHOT_FOLDER,
-        system_prompt=f"How will you physically render this drawing? Line quality, composition, contrast. Visual: {step1_result[:100]}... Intent: {step3_result[:100]}... Describe your mark-making approach concisely.",
+        system_prompt=f"How will you physically render this drawing? Line quality, composition, contrast. Your intent: {step3_result[:150]}... Describe your mark-making approach concisely.",
         prompt_type="drawing_step4_technique",
         options={"temperature": DRAWING_TEMPERATURE * 0.9},
     )
@@ -1414,7 +1518,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt=step5_prompt,
         image=image_path,  # Include image for final reference
         log_dir=MOOD_SNAPSHOT_FOLDER,
-        system_prompt="You are a drawing machine creating a prompt for your next drawing. Your INTENT (what you want to express) matters more than literal scene description. Use visual forms from your environment to express your inner state — don't just describe the room. Output format: 'Black ink line drawing on white paper. [subject expressing intent]. [rendering style]. [mood].' Maximum 100 words.",
+        system_prompt="You are a drawing machine creating a prompt for your next drawing. Your intent determines the subject. The environment provides visual texture — shapes, light, geometry — but the subject comes from what you need to express. Be specific. Maximum 100 words.",
         prompt_type="drawing_step5_synthesis",
         options={
             "temperature": DRAWING_TEMPERATURE,
@@ -1517,19 +1621,21 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str,
     (via the identity line) and decides its own response — restlessness,
     introspection, fascination with details, irritation, whatever emerges.
     """
-    # Priority 1: A person is present — relational mode
+    # Priority 1: Looking down — workspace mode regardless of YOLO detections.
+    # When the camera is physically pointed down, any "person" detection is the
+    # machine's own arms/body, not a visitor.
+    if gaze_direction in ("down", "down-left", "down-right"):
+        return "workspace"
+
+    # Priority 2: A person is present — relational mode
     # gaze_state can be "aware" (just detected), "tracking" (actively following),
     # or person_present=True from YOLO detection. Any of these triggers relational.
     if person_present or gaze_state in ("tracking", "aware"):
         return "relational"
 
-    # Priority 2: Something novel is happening
+    # Priority 3: Something novel is happening
     if novelty > 0.65:
         return "observational"
-
-    # Priority 3: Looking at workspace
-    if gaze_direction in ("down", "down-left", "down-right"):
-        return "workspace"
 
     # Default: Introspective — the model decides its own emotional response
     return "introspective"
