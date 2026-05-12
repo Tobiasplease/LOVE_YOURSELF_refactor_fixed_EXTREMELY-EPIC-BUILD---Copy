@@ -339,12 +339,14 @@ class Captioner(MemoryMixin):
                 try:
                     if is_memory_mode_time:
                         # Memory mode: pull actual caption text from long-term memory
-                        from captioner.prompts import build_memory_mode_prompt, _get_static_system_prompt
+                        from captioner.prompts import build_memory_mode_prompt
+                        from captioner.prompts import _MACHINE_IDENTITY
                         memory_prompt, caption_mode = build_memory_mode_prompt(self)
+                        memory_system = _MACHINE_IDENTITY + " A memory is surfacing. The machine's next thought should be about something it remembers — past tense, clearly framed as memory, not something happening now."
                         caption = self.model._call_ollama(
                             memory_prompt,
                             image_path=None,  # Memory mode doesn't use current image
-                            system_prompt=_get_static_system_prompt(),
+                            system_prompt=memory_system,
                             model_options=self.model.prompt_interface._get_base_model_options(),
                             prompt_type="memory"
                         )

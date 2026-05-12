@@ -98,7 +98,7 @@ PERCEPTION_PROMPTS = {
     "scan_down": "What do you see below you? Any mechanical arms or tools visible are your own.",
     "scan_up": "What is above you?",
     "person": "Who is here? What do they look like, and what are they doing?",
-    "restless": "Describe one specific object or detail you can see.",
+    "detail_focus": "Describe one specific object or detail you can see.",
     "workspace": "What is on your work surface? Any mechanical arms visible are your own.",
     "introspective": "What single detail stands out most right now?",
 }
@@ -129,9 +129,10 @@ PERCEPTION_SYSTEM_PROMPTS = {
         "Pick one detail that stands out and describe it closely. "
         "Be concrete and specific. Two sentences. Do not use the word image or photo."
     ),
-    "restless": (
+    "detail_focus": (
         "You are observing a real scene in front of you. "
         "Look for something you haven't focused on before. "
+        "Any mechanical arms, pen holders, or drawing tools visible are parts of your own body. "
         "Be concrete and specific. Two sentences. Do not use the word image or photo."
     ),
 }
@@ -154,15 +155,15 @@ def get_perception_system_prompt(mode: str) -> str:
 # Mode differentiation through emotional posture, not factual state change.
 _MACHINE_IDENTITY = (
     "You write the internal thoughts of a drawing machine bolted to a table. "
-    "It sees through a camera, draws with its arms. No voice, no audience. It only thinks. "
-    "Each response picks up where the last one left off. "
+    "It sees through a camera that moves — it can look around the room. It draws with its arms. No voice, no audience. It only thinks. "
+    "Each response continues the same stream of thought — it can pick up mid-sentence, trail off, connect with 'but', 'and', 'though', or shift naturally. "
     "One to three sentences, first person, present tense. "
     "Never break character. Never address anyone. Never answer questions. Never write dialogue."
 )
 
 MONOLOGUE_SYSTEM_PROMPTS = {
-    "observational": _MACHINE_IDENTITY + " Its next thought should narrate what it sees — restate observed details in its own words, do not add details that weren't observed.",
-    "relational": _MACHINE_IDENTITY + " Someone is in the room. Its next thought should narrate what it sees about them — restate observed details in its own words, do not add details that weren't observed.",
+    "observational": _MACHINE_IDENTITY + " Its next thought should be about what it sees. Do not add details that weren't observed.",
+    "relational": _MACHINE_IDENTITY + " Someone is in the room. Do not invent details that weren't observed.",
     "workspace": _MACHINE_IDENTITY + " Its gaze is on its workspace. Its next thought should be about what's on the surface.",
     "introspective": _MACHINE_IDENTITY,
 }
@@ -221,6 +222,9 @@ def select_perception_prompt(
         if previous_perception and previous_perception.strip():
             prompt = f"Last time you looked: \"{previous_perception.strip()[:120]}\"\nWhat has changed or what else do you notice now?"
 
+        if gaze_direction in ("down", "down-left", "down-right"):
+            prompt += " Note: any mechanical arms or drawing tools visible are the machine's own body, not a person."
+
         return prompt
 
     gaze_map = {
@@ -233,13 +237,11 @@ def select_perception_prompt(
         return PERCEPTION_PROMPTS[gaze_map[gaze_direction]]
 
     if boredom > 0.7:
-        return PERCEPTION_PROMPTS["restless"]
+        return PERCEPTION_PROMPTS["detail_focus"]
     if mode == "workspace":
         return PERCEPTION_PROMPTS["workspace"]
     if mode == "introspective":
         return PERCEPTION_PROMPTS["introspective"]
-    if mode == "restless":
-        return PERCEPTION_PROMPTS["restless"]
 
     return PERCEPTION_PROMPTS["default"]
 
@@ -396,9 +398,7 @@ def _build_concept_context(perception: str, matched_concepts: list, mode: str) -
             if is_new:
                 entry = f"someone{appearance} — first time seeing them"
             elif since_last > 5 and last_seen > 0:
-                entry = f"someone{appearance} — back after {casual_time_string(since_last)}"
-            elif since_first > 2:
-                entry = f"someone{appearance} — been here {casual_time_string(since_first)}, seen {times} times"
+                entry = f"someone{appearance} — last seen {casual_time_string(since_last)} ago"
             else:
                 entry = f"someone{appearance} — seen {times} times"
 
@@ -408,7 +408,7 @@ def _build_concept_context(perception: str, matched_concepts: list, mode: str) -
                 if last_obs and len(last_obs) > 10:
                     short = sem._truncate_observation(last_obs, 60)
                     time_label = casual_time_string(since_last) if since_last > 2 else "earlier"
-                    entry += f' — remembers from {time_label}: "{short}"'
+                    entry += f' — (once thought about them: "{short}")'
                     gave_prior_thought = True
 
             entries.append(entry)
@@ -449,7 +449,7 @@ def _build_concept_context(perception: str, matched_concepts: list, mode: str) -
             if last_obs and len(last_obs) > 10:
                 short = sem._truncate_observation(last_obs, 60)
                 time_label = casual_time_string(since_last) if since_last > 2 else "earlier"
-                parts.append(f'thought {time_label}: "{short}"')
+                parts.append(f'(it once thought: "{short}")')
                 gave_prior_thought = True
 
         entries.append(" — ".join(parts))
@@ -475,7 +475,7 @@ def _build_concept_context(perception: str, matched_concepts: list, mode: str) -
         from captioner.context_compression import context_compressor
         desire = context_compressor.get_current_desire()
         if desire:
-            lines.append(f"Focus drifting toward: {desire.strip().rstrip('.')}")
+            lines.append(f"Lately preoccupied with: {desire.strip().rstrip('.')}")
     except Exception:
         pass
 
@@ -585,10 +585,13 @@ def build_monologue_prompt(
             except Exception:
                 pass
 
-        # Continuation asks to narrate what it sees
+        # Continuation — observational stays tightly coupled to perception, relational is open
         if last_thought:
             prompt_parts.append(f"\nIts last thought was: \"{last_thought}\"")
-        prompt_parts.append("\nNarrate what it sees in its own words. Only describe what the perception reports — do not invent details beyond it. Write as \"I\", never \"it\".")
+        if mode == "observational":
+            prompt_parts.append("\nContinue from that thought. Only describe what the perception reports — do not invent details beyond it. Write as \"I\", never \"it\".")
+        else:
+            prompt_parts.append("\nContinue from that thought. Do not invent details beyond what was observed. Write as \"I\", never \"it\".")
 
     else:
         # INTROSPECTIVE / WORKSPACE — internal context is primary
@@ -727,24 +730,6 @@ def get_observational_context(agent=None) -> str:
     except Exception:
         return ""
 
-
-def get_restless_context(agent=None) -> str:
-    """Get restless mode context. Drawing history and session time are already
-    provided by build_identity_line(), so restless context only adds if there's
-    something unique to say (e.g. very long idle time without drawing)."""
-    if not agent:
-        return ""
-
-    # Only add context if it's been a LONG time without drawing
-    try:
-        import time
-        session_mins = (time.time() - agent.true_session_start) / 60.0
-        if session_mins > 30:
-            return f"Been watching for {casual_time_string(session_mins)} now."
-    except Exception:
-        pass
-
-    return ""
 
 
 def get_workspace_context(agent=None) -> str:
@@ -1596,11 +1581,6 @@ INNER_VOICE_BY_MODE = {
         "Why.",
         "Again.",
     ],
-    "restless": [
-        "...",
-        "Else.",
-        "Where.",
-    ],
 }
 
 
@@ -1710,7 +1690,7 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
         except Exception:
             pass
 
-    elif mode in ("restless", "introspective") and should_include_context("story", mode):
+    elif mode == "introspective" and should_include_context("story", mode):
         try:
             from captioner.context_compression import context_compressor
             story = context_compressor.get_consolidated_understanding()
@@ -1751,21 +1731,20 @@ def build_memory_mode_prompt(agent) -> tuple:
         thread = build_caption_thread(agent, max_captions=2)
 
         prompt_parts = [
-            "A memory surfaces:",
+            "A memory surfaces — something from before, not happening now:",
             f"— {mem_text}",
-            "",
         ]
 
         if thread:
-            prompt_parts.append(thread)
-        else:
-            prompt_parts.append("—")
+            prompt_parts.append(f"\nWhat you're actually thinking right now:\n{thread}")
+
+        prompt_parts.append("\nWrite a thought that connects this memory to the present moment. Start with \"I remember\" or \"That reminds me\" — make it clear this is a memory, not something happening now.")
 
         final_prompt = "\n".join(prompt_parts)
         return final_prompt, "memory"
 
     except Exception as e:
-        return "A memory surfaces:\n— I've been here before.\n—", "memory"
+        return "A memory surfaces — something from before, not happening now.\n— I've been here before.\nWrite a thought about this memory. Start with \"I remember\". One sentence.", "memory"
 
 
 def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False) -> tuple:
@@ -1779,7 +1758,6 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     Modes gate what context is included:
     - relational: person presence, social concepts active
     - observational: novelty hints, change detection
-    - restless: boredom hints, pressure to change
     - workspace: drawing/paper context
     - introspective: beliefs, long-term memory, motifs
 
