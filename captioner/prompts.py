@@ -104,33 +104,35 @@ PERCEPTION_PROMPTS = {
 }
 
 # Core perception framing — tested to eliminate VQA register from Qwen2.5-VL.
-# "You are observing a real scene in front of you" is the key phrase.
+# Frames observation as an ongoing stream, not isolated snapshots.
+# Each call continues from where the last left off.
 _PERCEPTION_BASE = (
-    "You are observing a real scene in front of you. "
-    "Describe what is there. Be concrete and specific. Two sentences. "
-    "Do not use the word image or photo."
+    "You are continuously observing a real scene. Each response continues your observation — "
+    "note what's the same, what's changed, or look closer at a detail. "
+    "Be concrete and specific. Two sentences. Do not use the word image or photo."
 )
 
 PERCEPTION_SYSTEM_PROMPTS = {
     "relational": (
-        "You are observing a real scene in front of you. "
+        "You are continuously observing a real scene. Each response continues your observation. "
         "Describe the people you see — what they look like and what they are doing. "
+        "If nothing has changed, say so. "
         "Be concrete and specific. Two sentences. Do not use the word image or photo."
     ),
     "observational": _PERCEPTION_BASE,
     "workspace": (
-        "You are looking down at your own work surface. "
+        "You are continuously looking down at your own work surface. Each response continues your observation. "
         "Any mechanical arms, pen holders, or drawing tools visible are parts of your own body. "
-        "Describe what is on the surface. Be concrete and specific. Two sentences. "
-        "Do not use the word image or photo."
+        "Note what's the same, what's changed, or look closer at a detail. "
+        "Be concrete and specific. Two sentences. Do not use the word image or photo."
     ),
     "introspective": (
-        "You are observing a real scene in front of you. "
+        "You are continuously observing a real scene. Each response continues your observation. "
         "Pick one detail that stands out and describe it closely. "
         "Be concrete and specific. Two sentences. Do not use the word image or photo."
     ),
     "detail_focus": (
-        "You are observing a real scene in front of you. "
+        "You are continuously observing a real scene. Each response continues your observation. "
         "Look for something you haven't focused on before. "
         "Any mechanical arms, pen holders, or drawing tools visible are parts of your own body. "
         "Be concrete and specific. Two sentences. Do not use the word image or photo."
@@ -154,16 +156,16 @@ def get_perception_system_prompt(mode: str) -> str:
 # "casual, first person, unfiltered" describes the voice, not the format.
 # Mode differentiation through emotional posture, not factual state change.
 _MACHINE_IDENTITY = (
-    "You write the internal thoughts of a drawing machine bolted to a table. "
+    "You write the internal thoughts of a drawing machine attached to a table. "
     "It sees through a camera that moves — it can look around the room. It draws with its arms. No voice, no audience. It only thinks. "
-    "Each response continues the same stream of thought — it can pick up mid-sentence, trail off, connect with 'but', 'and', 'though', or shift naturally. "
+    "Each response continues the same stream of thought, not a new topic. "
     "One to three sentences, first person, present tense. "
     "Never break character. Never address anyone. Never answer questions. Never write dialogue."
 )
 
 MONOLOGUE_SYSTEM_PROMPTS = {
-    "observational": _MACHINE_IDENTITY + " Its next thought should be about what it sees. Do not add details that weren't observed.",
-    "relational": _MACHINE_IDENTITY + " Someone is in the room. Do not invent details that weren't observed.",
+    "observational": _MACHINE_IDENTITY + " Its next thought should engage with what it sees.",
+    "relational": _MACHINE_IDENTITY + " Someone is in the room.",
     "workspace": _MACHINE_IDENTITY + " Its gaze is on its workspace. Its next thought should be about what's on the surface.",
     "introspective": _MACHINE_IDENTITY,
 }
@@ -216,34 +218,31 @@ def select_perception_prompt(
     When previous_perception is provided, appends it so the model knows what
     was already reported and can find new details.
     """
+    # Select base prompt by priority
     if person_present:
         prompt = PERCEPTION_PROMPTS["person"]
+    elif gaze_direction in ("left", "right", "up", "down"):
+        gaze_map = {"left": "scan_left", "right": "scan_right", "up": "scan_up", "down": "scan_down"}
+        prompt = PERCEPTION_PROMPTS[gaze_map[gaze_direction]]
+    elif boredom > 0.7:
+        prompt = PERCEPTION_PROMPTS["detail_focus"]
+    elif mode == "workspace":
+        prompt = PERCEPTION_PROMPTS["workspace"]
+    elif mode == "introspective":
+        prompt = PERCEPTION_PROMPTS["introspective"]
+    else:
+        prompt = PERCEPTION_PROMPTS["default"]
 
-        if previous_perception and previous_perception.strip():
-            prompt = f"Last time you looked: \"{previous_perception.strip()[:120]}\"\nWhat has changed or what else do you notice now?"
+    # Feed previous perception as continuation context
+    if previous_perception and previous_perception.strip():
+        prev = previous_perception.strip()[:120]
+        prompt = f"Your last observation: \"{prev}\"\nContinuing: {prompt}"
 
-        if gaze_direction in ("down", "down-left", "down-right"):
-            prompt += " Note: any mechanical arms or drawing tools visible are the machine's own body, not a person."
+    # Self-body awareness when camera is tilted down in relational mode
+    if person_present and gaze_direction in ("down", "down-left", "down-right"):
+        prompt += " Note: any mechanical arms or drawing tools visible are the machine's own body, not a person."
 
-        return prompt
-
-    gaze_map = {
-        "left": "scan_left",
-        "right": "scan_right",
-        "up": "scan_up",
-        "down": "scan_down",
-    }
-    if gaze_direction in gaze_map:
-        return PERCEPTION_PROMPTS[gaze_map[gaze_direction]]
-
-    if boredom > 0.7:
-        return PERCEPTION_PROMPTS["detail_focus"]
-    if mode == "workspace":
-        return PERCEPTION_PROMPTS["workspace"]
-    if mode == "introspective":
-        return PERCEPTION_PROMPTS["introspective"]
-
-    return PERCEPTION_PROMPTS["default"]
+    return prompt
 
 
 def casual_time_string(minutes: float) -> str:
@@ -558,67 +557,35 @@ def build_monologue_prompt(
     except Exception:
         pass
 
-    # --- MODE-DEPENDENT STRUCTURE ---
-    # Observational/relational: perception is primary, context is background
-    # Introspective/workspace: internal context is primary, perception is background
-
-    if mode in ("observational", "relational"):
-        # PERCEPTION FIRST — this is what the model should react to
-        if perception and perception.strip():
-            prompt_parts.append(f"Right now it sees: {perception.strip()}")
-            if mode == "relational":
-                prompt_parts.append("(Describe only what is visible, not remembered activities.)")
-        else:
-            prompt_parts.append("Right now it sees: nothing new, the same view.")
-
-        # Concept context as secondary background
-        concept_ctx = _build_concept_context(perception, matched_concepts, mode)
-        if concept_ctx:
-            prompt_parts.append(concept_ctx)
-
-        if mode == "relational":
-            try:
-                from captioner.context_compression import context_compressor
-                baseline = context_compressor.get_baseline_context()
-                if baseline and len(baseline.strip()) > 15:
-                    prompt_parts.append(f"The space around: {baseline.strip()}")
-            except Exception:
-                pass
-
-        # Continuation — observational stays tightly coupled to perception, relational is open
-        if last_thought:
-            prompt_parts.append(f"\nIts last thought was: \"{last_thought}\"")
-        if mode == "observational":
-            prompt_parts.append("\nContinue from that thought. Only describe what the perception reports — do not invent details beyond it. Write as \"I\", never \"it\".")
-        else:
-            prompt_parts.append("\nContinue from that thought. Do not invent details beyond what was observed. Write as \"I\", never \"it\".")
-
+    # --- PERCEPTION ALWAYS FIRST ---
+    # What the machine sees is always the leading context, regardless of mode.
+    # Mode affects what additional context follows, not where perception sits.
+    if perception and perception.strip():
+        prompt_parts.append(f"Right now it sees: {perception.strip()}")
     else:
-        # INTROSPECTIVE / WORKSPACE — internal context is primary
-        concept_ctx = _build_concept_context(perception, matched_concepts, mode)
-        if concept_ctx:
-            prompt_parts.append(concept_ctx)
+        prompt_parts.append("Right now it sees: nothing new, the same view.")
 
-        # Baseline context for introspective depth
-        if mode == "introspective":
-            try:
-                from captioner.context_compression import context_compressor
-                baseline = context_compressor.get_baseline_context()
-                if baseline and len(baseline.strip()) > 15:
+    # --- MODE-SPECIFIC CONTEXT (secondary to perception) ---
+    concept_ctx = _build_concept_context(perception, matched_concepts, mode)
+    if concept_ctx:
+        prompt_parts.append(concept_ctx)
+
+    if mode in ("relational", "introspective"):
+        try:
+            from captioner.context_compression import context_compressor
+            baseline = context_compressor.get_baseline_context()
+            if baseline and len(baseline.strip()) > 15:
+                if mode == "relational":
+                    prompt_parts.append(f"The space around: {baseline.strip()}")
+                else:
                     prompt_parts.append(baseline.strip())
-            except Exception:
-                pass
+        except Exception:
+            pass
 
-        # Perception as background — still present but not leading
-        if perception and perception.strip():
-            prompt_parts.append(f"Right now it sees: {perception.strip()}")
-        else:
-            prompt_parts.append("Right now it sees: nothing new, the same view.")
-
-        # Continuation asks to keep thinking
-        if last_thought:
-            prompt_parts.append(f"\nIts last thought was: \"{last_thought}\"")
-        prompt_parts.append("\nContinue from that thought. Write as \"I\", never \"it\".")
+    # --- CONTINUATION ---
+    if last_thought:
+        prompt_parts.append(f"\nIts last thought was: \"{last_thought}\"")
+    prompt_parts.append("\nContinue from that thought. Write as \"I\", never \"it\".")
 
     return "\n".join(prompt_parts), mode
 
