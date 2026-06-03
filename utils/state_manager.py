@@ -211,11 +211,7 @@ class StateManager:
                 "self_model",
                 {
                     "location_understanding": "unknown space",
-                    "purpose_understanding": "I observe and create drawings",
-                    "desires": [],
-                    "identity_fragments": [],
                     "environmental_certainty": 0.0,
-                    "location_history": [],
                 },
             )
 

@@ -46,19 +46,6 @@ class MoodEngine:
         """Analyze mood using 3D valence/arousal/clarity system via Ollama."""
         saw_person = "person" in caption.lower() or "individual" in caption.lower()
 
-        # === RECURSIVE EMOTIONAL MEMORY INTEGRATION ===
-        emotional_context = None
-        if memory_context and hasattr(memory_context, "get_emotional_journey_context"):
-            # Get emotional journey and similar emotional memories for recursive feedback
-            current_emotion = self.get_emotion_for_hand_controller()
-            emotional_journey = memory_context.get_emotional_journey_context(30)  # Last 30 minutes
-            similar_memories = memory_context.get_emotionally_similar_memories(current_emotion, 2)
-            mood_trends = memory_context.get_mood_trend_analysis()
-
-            emotional_context = f"{emotional_journey} | {mood_trends}"
-            if similar_memories:
-                emotional_context += f" | Similar emotional memories: {' | '.join(similar_memories[:2])}"
-
         # Simple mood analysis (3D analysis moved to context compression)
         scalar_mood = self.analyze_caption_sentiment(caption)
 

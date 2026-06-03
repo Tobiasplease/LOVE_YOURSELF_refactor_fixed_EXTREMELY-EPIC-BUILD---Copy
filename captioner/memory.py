@@ -60,11 +60,7 @@ class MemoryMixin:
             "self_model",
             {
                 "location_understanding": "unknown space",
-                "purpose_understanding": "I observe and create drawings",
-                "desires": [],
-                "identity_fragments": [],
                 "environmental_certainty": 0.0,
-                "location_history": [],
             },
         )
 
@@ -126,9 +122,6 @@ class MemoryMixin:
             # Save comprehensive snapshot for real-time visualizer
             save_comprehensive_snapshot(agent=self)
 
-        # Extract desires/purpose from monologue text
-        self.extract_desires_and_purpose(text)
-
         # Apply temporal mood effects
         temporal_mood_modifier = self.get_temporal_mood_modifier()
         if temporal_mood_modifier != 0.0:
@@ -136,17 +129,9 @@ class MemoryMixin:
             if hasattr(self, "current_mood"):
                 self.current_mood = entry["mood"]
 
-    def get_contextual_recall(self, gaze_zone: str = "ahead", mode: str = "introspective") -> str:
-        """Get contextual memory recall for prompt injection."""
-        return recall_for_prompt(gaze_zone, mode)
-
     def get_activation_beliefs(self) -> List[str]:
         """Get natural language beliefs from activation network."""
         return self._activation_network.get_beliefs()
-
-    def get_drawing_memory_context(self) -> str:
-        """Get formatted memory context for drawing prompts."""
-        return self._contextual_memory.format_drawing_context()
 
     def estimate_novelty(self, reactivity_metrics: Optional[Dict[str, float]] = None) -> float:
         """Get novelty score — primarily driven by activation network."""
@@ -201,67 +186,6 @@ class MemoryMixin:
                     temporal_boredom = 0.0
 
                 self._boredom = max(self._boredom, temporal_boredom)
-
-    def get_emotionally_similar_memories(self, current_emotion: str, k: int = 3) -> List[str]:
-        """Retrieve memories formed in similar emotional states."""
-        similar_memories = []
-        for entry in reversed(self.memory_queue):
-            stored_emotion = entry.get("emotion_state", "calm_observant")
-            if stored_emotion == current_emotion and len(entry["text"]) > 15:
-                similar_memories.append(entry["text"])
-                if len(similar_memories) >= k:
-                    break
-        return similar_memories
-
-    def get_emotional_journey_context(self, lookback_minutes: int = 30) -> str:
-        """Get a narrative of emotional evolution over recent time period."""
-        cutoff_time = now() - (lookback_minutes * 60)
-        recent_emotions = []
-
-        for entry in self.memory_queue:
-            if entry.get("timestamp", 0) > cutoff_time:
-                emotion = entry.get("emotion_state", "unknown")
-                timestamp = entry.get("timestamp", 0)
-                time_desc = describe_time_gap(timestamp)
-                recent_emotions.append((emotion, time_desc))
-
-        if len(recent_emotions) < 2:
-            return "My emotional state has been stable recently"
-
-        transitions = []
-        prev_emotion = None
-        for emotion, time_desc in recent_emotions:
-            if prev_emotion and emotion != prev_emotion:
-                transitions.append(f"{prev_emotion} → {emotion} ({time_desc})")
-            prev_emotion = emotion
-
-        if not transitions:
-            return f"I have been consistently {recent_emotions[-1][0]} for the past {lookback_minutes} minutes"
-        else:
-            return f"My emotions have evolved: {' → '.join(transitions[-2:])}"
-
-    def get_mood_trend_analysis(self) -> str:
-        """Analyze 3D mood trends over recent memory."""
-        if len(self.memory_queue) < 5:
-            return "Insufficient emotional history for trend analysis"
-
-        recent_moods = []
-        for entry in list(self.memory_queue)[-10:]:
-            mood_vector = entry.get("mood_vector", (0.0, 0.0, 0.5))
-            recent_moods.append(mood_vector)
-
-        if len(recent_moods) < 3:
-            return "Building emotional baseline"
-
-        valences = [m[0] for m in recent_moods]
-        arousals = [m[1] for m in recent_moods]
-        clarities = [m[2] for m in recent_moods]
-
-        v_trend = "rising" if valences[-1] > valences[0] else "falling" if valences[-1] < valences[0] else "stable"
-        a_trend = "increasing" if arousals[-1] > arousals[0] else "decreasing" if arousals[-1] < arousals[0] else "steady"
-        c_trend = "sharpening" if clarities[-1] > clarities[0] else "clouding" if clarities[-1] < clarities[0] else "consistent"
-
-        return f"Emotional trends: valence {v_trend}, arousal {a_trend}, clarity {c_trend}"
 
     def get_current_session_memory_snippets(self, k: int = 3) -> List[str]:
         """Get only memories from the current session."""
@@ -411,26 +335,6 @@ class MemoryMixin:
             if confidence > 0.1 or self.self_model["environmental_certainty"] < 0.3:
                 self.self_model["location_understanding"] = best_location
                 self.self_model["environmental_certainty"] = min(1.0, self.self_model["environmental_certainty"] + confidence * 0.1)
-                self.self_model["location_history"].append({"location": best_location, "confidence": confidence, "timestamp": time.time()})
-                self.self_model["location_history"] = self.self_model["location_history"][-5:]
-
-    def extract_desires_and_purpose(self, caption: str):
-        """Extract expressions of desire, intention, or purpose from internal thoughts."""
-        desire_patterns = [
-            "i want to", "i want ", "i wish ", "i hope to", "i hope ",
-            "i need to", "i would like to", "i'd like to", "i must ", "i have to ",
-        ]
-
-        caption_lower = caption.lower()
-
-        for pattern in desire_patterns:
-            if pattern in caption_lower:
-                desire_text = caption.strip()
-                existing_prefixes = {d[:50].lower() for d in self.self_model["desires"]}
-                if desire_text[:50].lower() not in existing_prefixes:
-                    self.self_model["desires"].append(desire_text)
-                    self.self_model["desires"] = self.self_model["desires"][-10:]
-                break
 
     # === ACTIVATION MEMORY PERSISTENCE ===
     def save_activation_state(self):

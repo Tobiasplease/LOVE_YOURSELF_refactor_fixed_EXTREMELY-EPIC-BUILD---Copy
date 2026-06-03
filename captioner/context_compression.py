@@ -50,6 +50,9 @@ class ContextCompressionEngine:
         self.space_observation_start = time.time()  # When we started observing this space
         self.total_session_duration = 0.0  # Total time observing this space
 
+        # Felt-state transition tracking
+        self.previous_felt_state = ""
+
         # Environmental update callback
         self.environmental_update_callback = None
 
@@ -383,7 +386,11 @@ Respond ONLY with the two lines, no prefixes."""
                         self._perform_introspection(captions, understanding, compression_model)
 
                 if sentiment_text:
-                    # Store sentiment for injection into prompts
+                    # Track felt-state transition (previous → current)
+                    if hasattr(self, "last_sentiment_analysis") and self.last_sentiment_analysis:
+                        prev = self.last_sentiment_analysis.get("sentiment_text", "")
+                        if prev and prev.strip().lower() != sentiment_text.strip().lower():
+                            self.previous_felt_state = prev
                     self.last_sentiment_analysis = {"sentiment_text": sentiment_text, "timestamp": time.time()}
 
                     log_json_entry(
@@ -636,84 +643,6 @@ Complete each line in 10 words or less, ending with a period:
         """
         return self.introspective_state.get("current_belief", "")
 
-    def get_inner_line(self) -> str:
-        """Get a single line of inner state (desire + belief) as third-person observation.
-
-        Frames the machine's want/notice as context FOR THE WRITER, not as voice OF THE
-        MACHINE. This prevents the model from acting on the desire (e.g. roleplaying
-        drawing when the machine only wants to draw).
-        """
-        desire = self.get_current_desire()
-        belief = self.get_current_belief()
-
-        parts = []
-        if desire:
-            d = desire.strip().rstrip(".")
-
-            # Strip any existing "wanting/wishing/I want" prefix to normalize
-            import re as _re
-            d = _re.sub(
-                r'^(?:Wanting(?:\s+to)?|Wishing(?:\s+I\s+could)?|I\s+want(?:\s+to)?|I\s+wish(?:\s+I\s+could)?|Want(?:\s+to)?|It\s+wants?(?:\s+to)?|It\s+wishes(?:\s+to)?|To)\s+',
-                '', d, flags=_re.IGNORECASE
-            )
-
-            # Check if desire is about drawing and we can't draw right now
-            d_lower = d.lower()
-            drawing_words = ["draw", "sketch", "trace", "outline", "capture", "render", "depict"]
-            is_drawing_desire = any(w in d_lower for w in drawing_words)
-            cant_draw = False
-
-            if is_drawing_desire:
-                try:
-                    from drawing.drawing_memory import get_drawing_memory
-                    failure = get_drawing_memory().get_last_failure()
-                    if failure:
-                        import time as _t
-                        if _t.time() - failure.get('timestamp', 0) < 1800:
-                            cant_draw = True
-                except Exception:
-                    pass
-
-            # Third-person frame — about the machine, not from the machine
-            d_frag = d[0].lower() + d[1:]
-
-            # Detect if the desire starts with a verb (action) or a noun (object)
-            # "trace patterns" → starts with verb → "It wants to trace patterns"
-            # "paper for drawing" → starts with noun → "It wants paper for drawing"
-            verb_starters = ("draw", "sketch", "trace", "outline", "capture", "render", "depict",
-                             "see", "know", "find", "reach", "touch", "feel", "understand",
-                             "make", "create", "explore", "study", "watch", "observe",
-                             "talk", "ask", "tell", "hear", "move", "look", "go", "leave",
-                             "be ", "have", "get", "do ", "say", "show", "give")
-            d_lower2 = d_frag.lower()
-            starts_with_verb = any(d_lower2.startswith(v) for v in verb_starters)
-
-            if cant_draw:
-                if starts_with_verb:
-                    d = f"It wishes it could {d_frag}"
-                else:
-                    d = f"It wishes for {d_frag}"
-            else:
-                if starts_with_verb:
-                    d = f"It wants to {d_frag}"
-                else:
-                    d = f"It wants {d_frag}"
-
-            parts.append(d + ".")
-
-        if belief:
-            b = belief.strip().rstrip(".")
-            # Convert first-person beliefs ("I noticed X", "Noticed X") to third-person
-            import re as _re
-            b = _re.sub(r'^(?:I\s+(?:have\s+)?noticed|Noticed)\s*[:,]?\s*', '', b, flags=_re.IGNORECASE)
-            b = _re.sub(r'^(?:My|I)\s+', 'its ', b, flags=_re.IGNORECASE) if b.lower().startswith(("my ", "i ")) else b
-            parts.append(f"It has noticed: {b}.")
-
-        if not parts:
-            return ""
-
-        return " ".join(parts)
-
     def _save_identity(self) -> None:
         """Save introspective state to persistent identity file."""
         try:
@@ -913,6 +842,15 @@ Complete each line in 10 words or less, ending with a period:
         text = _re.sub(r'^(?:I\s+feel|It\s+feels|Feeling)\s+', '', text, flags=_re.IGNORECASE)
         text = text.strip().rstrip('.')
         return text
+
+    def get_felt_state_delta(self) -> tuple:
+        """Get (previous_felt_state, current_felt_state) for transition framing.
+
+        Returns ("", current) if no previous state exists yet.
+        """
+        current = self.get_felt_state()
+        previous = getattr(self, "previous_felt_state", "")
+        return previous, current
 
     def get_compression_history(self, max_entries: int = 5) -> list:
         """Get recent compression history for deeper context."""

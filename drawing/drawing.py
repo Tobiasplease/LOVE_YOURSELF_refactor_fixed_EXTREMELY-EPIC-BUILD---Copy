@@ -423,10 +423,46 @@ class DrawingController:
             )
 
     # ------------------------------------------------------------------
+    # VRAM management
+    # ------------------------------------------------------------------
+    def _unload_ollama_models(self) -> None:
+        """Unload all Ollama models from VRAM to free space for ComfyUI/Flux."""
+        import requests as req
+        try:
+            from config.config import OLLAMA_MODEL
+            models_to_unload = [OLLAMA_MODEL]
+            try:
+                from config.config import COMPRESSION_MODEL, MONOLOGUE_MODEL
+                for m in (COMPRESSION_MODEL, MONOLOGUE_MODEL):
+                    if m and m not in models_to_unload:
+                        models_to_unload.append(m)
+            except ImportError:
+                pass
+
+            for model in models_to_unload:
+                try:
+                    resp = req.post(
+                        "http://localhost:11434/api/generate",
+                        json={"model": model, "keep_alive": 0},
+                        timeout=5,
+                    )
+                    if resp.ok:
+                        print(f"[🧹] Unloaded {model} from VRAM for ComfyUI")
+                    else:
+                        print(f"[⚠️] Failed to unload {model}: {resp.status_code}")
+                except Exception as e:
+                    print(f"[⚠️] Could not unload {model}: {e}")
+        except Exception as e:
+            print(f"[⚠️] Ollama model unload failed: {e}")
+
+    # ------------------------------------------------------------------
     # ComfyUI invocation helper
     # ------------------------------------------------------------------
     def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str) -> None:
         try:
+            # Unload Ollama models from VRAM so ComfyUI/Flux can allocate
+            self._unload_ollama_models()
+
             # Don't pause idle movements yet - let them continue with "generating" pattern
             # We'll only pause when actual G-code execution starts
             try:

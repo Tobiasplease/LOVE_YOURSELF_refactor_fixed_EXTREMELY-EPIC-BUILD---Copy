@@ -200,22 +200,6 @@ class ActivationNetwork:
             return [f"Often together: {', '.join(associations)}"]
         return []
 
-    def get_spatial_belief(self, concept_id: str) -> Optional[str]:
-        """Get spatial belief for a concept if consistently tagged."""
-        zone = self.spatial_tags.get(concept_id)
-        if not zone or zone == "ahead":
-            return None
-
-        zone_words = {
-            "left": "to my left",
-            "right": "to my right",
-            "up": "above",
-            "down": "below me",
-        }
-        direction = zone_words.get(zone, zone)
-        label = self.concept_labels.get(concept_id, concept_id)
-        return f"The {label} is {direction}."
-
     def calculate_boredom(self, concept_data: List[Dict] = None) -> float:
         """Calculate boredom from concept metadata rather than word lists.
 

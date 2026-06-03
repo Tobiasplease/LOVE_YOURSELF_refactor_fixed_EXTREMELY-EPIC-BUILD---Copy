@@ -30,7 +30,7 @@ FLIP_X = True   # Test flipping pan direction
 FLIP_Y = True
 
 # === FACE DETECTION ===
-CONFIDENCE_THRESHOLD = 0.8  # Higher threshold to distinguish real faces from pareidolia
+CONFIDENCE_THRESHOLD = 0.55  # Lower threshold — face tracking needs to trigger reliably for eye contact
 DEAD_ZONE = 1  # Very small dead zone for highly responsive centering
 
 # === IDLE GAZE SETTINGS ===
@@ -184,9 +184,9 @@ GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAU
 # Drawing speed scaling — detail preservation is the priority.
 # Small/detailed moves get slow speeds; large strokes and traversals get fast speeds.
 # Traversals (pen up) always use max regardless of distance.
-GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 400))       # Slowest speed for micro-detail clusters (mm/min)
-GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 3500))      # Fastest speed for long strokes and traversals (mm/min)
-GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 1000))    # Default/medium drawing speed (mm/min)
+GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 300))       # Slowest speed for micro-detail clusters (mm/min)
+GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 2000))      # Fastest speed for long strokes and traversals (mm/min)
+GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 700))     # Default/medium drawing speed (mm/min)
 
 # Distance thresholds for feed rate calculation (in mm)
 GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 1.0))   # Below this: detail speeds (slow)

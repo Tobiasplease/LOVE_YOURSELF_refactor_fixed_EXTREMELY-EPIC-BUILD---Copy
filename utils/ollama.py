@@ -173,7 +173,35 @@ def _wait_for_drawing_completion() -> None:
         log_json_entry(
             LogType.INFO, {"message": "ComfyUI generation completed - resuming Ollama calls"}, print_message="▶️ Ollama resumed - generation complete"
         )
-    
+
+        # Free ComfyUI's VRAM (Flux weights) so Ollama can reload
+        try:
+            resp = requests.post(
+                "http://localhost:8188/free",
+                json={"unload_models": True, "free_memory": True},
+                timeout=10,
+            )
+            if resp.ok:
+                print("[🧹] Freed ComfyUI/Flux models from VRAM")
+            else:
+                print(f"[⚠️] ComfyUI /free returned {resp.status_code}")
+        except Exception as e:
+            print(f"[⚠️] Could not free ComfyUI VRAM: {e}")
+
+        # Preload the vision model first so it gets VRAM priority over the text-only model
+        try:
+            resp = requests.post(
+                "http://localhost:11434/api/generate",
+                json={"model": OLLAMA_MODEL, "prompt": "", "keep_alive": "5m"},
+                timeout=120,
+            )
+            if resp.ok:
+                print(f"[🔄] Preloaded {OLLAMA_MODEL} into VRAM (vision priority)")
+            else:
+                print(f"[⚠️] Failed to preload {OLLAMA_MODEL}: {resp.status_code}")
+        except Exception as e:
+            print(f"[⚠️] Could not preload {OLLAMA_MODEL}: {e}")
+
     # Do NOT block during CNC execution - captions should continue during physical drawing
 
 

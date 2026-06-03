@@ -956,6 +956,9 @@ else:
 debug_print("System initialization complete", "INIT")
 
 best_box = None
+last_face_box = None  # Persisted face box for flicker suppression
+last_face_time = 0.0  # When we last had a valid face detection
+FACE_PERSIST_DURATION = 0.3  # Hold face box for 300ms after losing detection
 
 # Track last printed caption timestamp to prevent duplicates
 last_printed_caption_time = 0.0
@@ -1329,11 +1332,19 @@ try:
                 best_box = box.astype("int")
                 best_conf = conf
 
+        # Face detection persistence — suppress single-frame dropouts
+        if best_box is not None:
+            last_face_box = tuple(best_box)
+            last_face_time = now
+        elif last_face_box is not None and (now - last_face_time) < FACE_PERSIST_DURATION:
+            best_box = last_face_box  # Hold previous face box through brief dropouts
+        else:
+            last_face_box = None
+
         # Update person detection state for consciousness context
         if best_box is not None:
-            # Convert box to (x1, y1, x2, y2) format
-            x1, y1, x2, y2 = best_box
-            person_detection.update_face_detection(best_conf, (x1, y1, x2, y2))
+            x1, y1, x2, y2 = best_box if isinstance(best_box, tuple) else tuple(best_box)
+            person_detection.update_face_detection(best_conf if best_conf > 0 else 0.5, (x1, y1, x2, y2))
         else:
             person_detection.update_face_detection(0.0)
 
