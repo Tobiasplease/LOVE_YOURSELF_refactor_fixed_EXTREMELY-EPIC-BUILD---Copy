@@ -357,117 +357,71 @@ class Captioner(MemoryMixin):
                             print_message=f"[💭] Memory mode ({time_since_memory:.0f}s since last)",
                         )
                     else:
-                        if True:
-                            # === TWO-PASS CAPTION PIPELINE ===
-                            # Always use two-pass after first caption. Single-pass LLaVA
-                            # produces VQA descriptions, not inner monologue.
-                            from captioner.prompts import select_perception_prompt, build_monologue_prompt, determine_prompt_mode
-                            from captioner.activation_memory import get_activation_network
+                        # === SINGLE-PASS CAPTION PIPELINE ===
+                        # Qwen sees the image directly and thinks.
+                        # Mode-gated context from build_simple_caption_prompt provides
+                        # the right framing (relational/observational/introspective/workspace).
+                        # No separate perception pass — the image IS the perception.
+                        from captioner.prompts import build_simple_caption_prompt, get_monologue_system_prompt
+                        from config.config import OLLAMA_MODEL
 
-                            gaze_state = "idle"
-                            gaze_direction = "ahead"
-                            try:
-                                from vision.gaze import get_gaze_state, get_current_gaze_zone
-                                gaze_state = get_gaze_state() or "idle"
-                                gaze_direction = get_current_gaze_zone() or "ahead"
-                            except Exception:
-                                pass
+                        user_prompt, caption_mode = build_simple_caption_prompt(
+                            self,
+                            person_present=person_present,
+                        )
 
-                            network = get_activation_network()
-                            boredom = network._last_boredom
-                            novelty = getattr(network, "_last_novelty", 0.5)
+                        system_prompt = get_monologue_system_prompt(caption_mode)
 
-                            # Determine mode ONCE — both models use it
-                            caption_mode = determine_prompt_mode(
-                                gaze_state=gaze_state,
-                                gaze_direction=gaze_direction,
-                                novelty=novelty,
-                                boredom=boredom,
-                                person_present=person_present,
-                            )
+                        print(f"\n{'='*80}\n[SINGLE-PASS] {OLLAMA_MODEL} ({caption_mode})\n{'='*80}")
+                        print(f"SYSTEM: {system_prompt}\n")
+                        print(f"USER:\n{user_prompt}\n")
+                        print(f"{'='*80}\n")
 
-                            # Pass 1: Qwen perception (mode-aware)
-                            perception_prompt = select_perception_prompt(
-                                gaze_direction=gaze_direction,
-                                person_present=person_present,
-                                boredom=boredom,
-                                mode=caption_mode,
-                                previous_perception=getattr(self, "_last_perception", None),
-                            )
+                        from utils.ollama import query_ollama
+                        import random as _random
+                        caption = query_ollama(
+                            prompt=user_prompt,
+                            model=OLLAMA_MODEL,
+                            image=img_path,
+                            system_prompt=system_prompt,
+                            timeout=60,
+                            log_dir=MOOD_SNAPSHOT_FOLDER,
+                            options={
+                                "temperature": 0.7,
+                                "top_p": 0.8,
+                                "repeat_penalty": 1.5,
+                                "num_predict": 120,
+                                "num_ctx": 4096,
+                                "seed": _random.randint(1, 1000000),
+                            },
+                            prompt_type="caption",
+                        )
 
-                            # If YOLO sees multiple people, tell qwen
-                            person_count = (reactivity_data or {}).get("person_count", 0)
-                            if person_count > 1 and caption_mode == "relational":
-                                perception_prompt = f"There are {person_count} people visible. " + perception_prompt
+                        # Match output against ChromaDB concepts (replaces perception-based matching)
+                        try:
+                            from captioner.semantic_memory import get_semantic_memory
+                            matched_concepts = get_semantic_memory().match_or_create_concepts(caption or "")
+                        except Exception as mc_err:
+                            print(f"[SEMANTIC] Concept matching failed: {mc_err}")
 
-                            perception = self.model.perceive(
-                                img_path,
-                                perception_prompt=perception_prompt,
-                                mode=caption_mode,
-                            )
+                        # Nudge gaze toward concept spatial location
+                        try:
+                            from vision.gaze import nudge_toward_concept
+                            for mc in (matched_concepts or []):
+                                sp = mc.get("spatial_pan")
+                                st = mc.get("spatial_tilt")
+                                if sp or st:
+                                    nudge_toward_concept(pan_zone=sp, tilt_zone=st)
+                                    break
+                        except Exception:
+                            pass
 
-                            # If we asked about a person but LLaVA saw nobody,
-                            # downgrade mode and re-perceive with a non-person prompt.
-                            if not perception and person_present and caption_mode == "relational":
-                                print("[PERCEPTION] Person expected but not seen — falling back to observational")
-                                person_present = False
-                                caption_mode = "introspective"
-                                perception_prompt = select_perception_prompt(
-                                    gaze_direction=gaze_direction,
-                                    person_present=False,
-                                    boredom=boredom,
-                                    mode=caption_mode,
-                                )
-                                perception = self.model.perceive(
-                                    img_path,
-                                    perception_prompt=perception_prompt,
-                                    mode=caption_mode,
-                                )
-
-                            self._last_perception = perception
-
-                            # Match perception against ChromaDB concepts BEFORE monologue
-                            matched_concepts = []
-                            try:
-                                from captioner.semantic_memory import get_semantic_memory
-                                matched_concepts = get_semantic_memory().match_or_create_concepts(perception or "")
-                            except Exception as mc_err:
-                                print(f"[SEMANTIC] Concept matching failed: {mc_err}")
-
-                            # Nudge gaze toward the most salient concept's spatial location
-                            try:
-                                from vision.gaze import nudge_toward_concept
-                                for mc in matched_concepts:
-                                    sp = mc.get("spatial_pan")
-                                    st = mc.get("spatial_tilt")
-                                    if sp or st:
-                                        nudge_toward_concept(pan_zone=sp, tilt_zone=st)
-                                        break  # Only nudge toward the first concept with spatial data
-                            except Exception:
-                                pass
-
-                            # Pass 2: Monologue from perception (mode pre-determined)
-                            monologue_prompt, caption_mode = build_monologue_prompt(
-                                self,
-                                perception=perception,
-                                person_present=person_present,
-                                mode=caption_mode,
-                                matched_concepts=matched_concepts,
-                            )
-
-                            caption, caption_mode = self.model.generate_monologue(
-                                perception,
-                                monologue_prompt=monologue_prompt,
-                                mode=caption_mode,
-                                agent=self,
-                            )
-
-                            # Store observation in semantic memory (uses pre-matched concepts)
-                            try:
-                                from captioner.semantic_memory import get_semantic_memory
-                                get_semantic_memory().after_monologue(perception, caption, matched_concepts=matched_concepts)
-                            except Exception as sem_err:
-                                print(f"[SEMANTIC] Store failed: {sem_err}")
+                        # Store in semantic memory
+                        try:
+                            from captioner.semantic_memory import get_semantic_memory
+                            get_semantic_memory().after_monologue("", caption, matched_concepts=matched_concepts or [])
+                        except Exception as sem_err:
+                            print(f"[SEMANTIC] Store failed: {sem_err}")
                 except Exception as cap_err:
                     print(f"[ERROR] Regular caption FAILED: {cap_err}")
                     import traceback

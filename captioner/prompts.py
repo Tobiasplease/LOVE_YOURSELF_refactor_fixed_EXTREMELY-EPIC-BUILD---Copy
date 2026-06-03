@@ -152,21 +152,20 @@ def get_perception_system_prompt(mode: str) -> str:
 # It only mentions drawing intent when the drawing system is about to trigger.
 # Observation identity: no mention of drawing. Just a stationary machine that sees.
 # Monologue system prompts — casual roleplay register.
-# Key principle: "You're" not "You are", "think in fragments" not "One sentence",
-# "casual, first person, unfiltered" describes the voice, not the format.
-# Mode differentiation through emotional posture, not factual state change.
+# Monologue system prompts — second person, addressing Qwen directly as the machine.
+# Mode differentiation through posture, not factual state change.
 _MACHINE_IDENTITY = (
-    "You write the internal thoughts of a drawing machine attached to a table. "
-    "It sees through a camera that moves — it can look around the room. It draws with its arms. No voice, no audience. It only thinks. "
-    "Each response continues the same stream of thought, not a new topic. "
+    "You are a drawing machine attached to a table. "
+    "You see through a camera that moves — you can look around the room. You draw with your arms. No voice, no audience. You only think. "
+    "Each response continues your stream of thought, not a new topic. "
     "One to three sentences, first person, present tense. "
     "Never break character. Never address anyone. Never answer questions. Never write dialogue."
 )
 
 MONOLOGUE_SYSTEM_PROMPTS = {
-    "observational": _MACHINE_IDENTITY + " Its next thought should engage with what it sees.",
+    "observational": _MACHINE_IDENTITY + " Your next thought should engage with what you see.",
     "relational": _MACHINE_IDENTITY + " Someone is in the room.",
-    "workspace": _MACHINE_IDENTITY + " Its gaze is on its workspace. Its next thought should be about what's on the surface.",
+    "workspace": _MACHINE_IDENTITY + " Your gaze is on your workspace.",
     "introspective": _MACHINE_IDENTITY,
 }
 
@@ -273,19 +272,14 @@ def casual_time_string(minutes: float) -> str:
 
 
 def build_identity_line(agent, mode: str = "observational") -> str:
-    """Build third-person observational status line about the machine.
-
-    Describes the machine's current state to the writer (the model) so it can
-    write the next inner thought. Third person throughout to avoid perspective
-    clash with the chat API's user/assistant alternation.
-    """
+    """Build second-person status line about the machine's current state."""
     parts = []
 
     # Session time
     try:
         session_mins = (time.time() - agent.true_session_start) / 60.0
         if session_mins >= 2:
-            parts.append(f"awake {casual_time_string(session_mins)}")
+            parts.append(f"You have been awake {casual_time_string(session_mins)}")
     except Exception:
         pass
 
@@ -293,9 +287,9 @@ def build_identity_line(agent, mode: str = "observational") -> str:
     try:
         from utils.state_manager import state_manager as _sm
         if _sm.is_generating_drawing:
-            parts.append("its arm is working on a drawing right now")
+            parts.append("your arm is working on a drawing right now")
         elif _sm.current_drawing_phase == "executing":
-            parts.append("its arm is physically drawing right now")
+            parts.append("your arm is physically drawing right now")
         else:
             parts.append("not drawing right now, just watching")
             try:
@@ -310,14 +304,14 @@ def build_identity_line(agent, mode: str = "observational") -> str:
                     if failure_age < 600:
                         reason = failure.get('reason', 'unknown')
                         if 'paper' in reason.lower():
-                            parts.append("it wanted to draw but there's no paper")
+                            parts.append("you wanted to draw but there's no paper")
                         else:
-                            parts.append("it tried to draw but couldn't")
+                            parts.append("you tried to draw but couldn't")
 
                 # Last completed drawing — use actual prompt description
                 desc = dm.get_last_drawing_description()
                 if desc:
-                    parts.append(f"last drew {desc}")
+                    parts.append(f"you last drew {desc}")
             except Exception:
                 pass
     except Exception:
@@ -325,12 +319,7 @@ def build_identity_line(agent, mode: str = "observational") -> str:
 
     if not parts:
         return ""
-    # Build as "The machine has been awake X. It's not drawing... Last drew Y."
-    first = parts[0]
-    if first.startswith("awake"):
-        first = f"The machine has been {first}"
-    rest = parts[1:]
-    line = ". ".join([first.rstrip(".")] + [p.rstrip(".") for p in rest]) + "."
+    line = ". ".join([p.rstrip(".") for p in parts]) + "."
     # Capitalize each sentence
     line = ". ".join(s.strip().capitalize() if s.strip() else s for s in line.split(". "))
     return line
@@ -453,7 +442,7 @@ def _build_concept_context(perception: str, matched_concepts: list, mode: str) -
 
         entries.append(" — ".join(parts))
 
-    lines = ["In its attention:"]
+    lines = ["In your attention:"]
     for entry in entries:
         lines.append(f"  {entry}")
 
@@ -537,33 +526,70 @@ def build_monologue_prompt(
     if identity:
         prompt_parts.append(identity)
 
-    # --- Get the last thought for continuation ---
-    last_thought = None
+    # --- Build flowing thought stream (interleaved see/think pairs) ---
+    # Proven format from commit 7977753: "...saw [thing] — thought. saw [thing] — thought."
+    thought_thread = None
     try:
         if hasattr(agent, "recent_captions") and agent.recent_captions:
-            last_caption = agent.recent_captions[-1][0]
-            if last_caption and last_caption.strip():
-                trimmed = last_caption.strip()
-                if len(trimmed) > 140:
-                    cut = trimmed
-                    for i in range(min(len(cut), 140), 30, -1):
-                        if cut[i - 1] in ".!?":
-                            cut = cut[:i]
+            seen = set()
+            fragments = []
+            for entry in agent.recent_captions[-6:]:
+                if not isinstance(entry, (list, tuple)) or len(entry) < 1:
+                    continue
+                thought = entry[0] or ""
+                perc = entry[3] if len(entry) > 3 else ""
+
+                if not thought.strip() or len(thought.strip()) < 8:
+                    continue
+
+                # Extract first complete sentence (not hard char truncation)
+                t = thought.strip()
+                sentence = t
+                for i in range(min(15, len(t)), min(len(t), 140)):
+                    if t[i] in ".!?":
+                        sentence = t[:i+1]
+                        break
+                else:
+                    # No sentence end found — truncate at word boundary with ...
+                    if len(t) > 140:
+                        sentence = t[:140].rsplit(" ", 1)[0] + "..."
+
+                # Deduplicate
+                norm = sentence[:50]
+                if norm in seen:
+                    continue
+                seen.add(norm)
+
+                # Compress perception to short phrase
+                p = ""
+                if perc and perc.strip():
+                    p = perc.strip()
+                    for preamble in ["In front of you ", "In front of me ", "The scene shows ", "The scene in front of ",
+                                     "You see ", "Right now ", "A cluttered ", "The room "]:
+                        if p.lower().startswith(preamble.lower()):
+                            p = p[len(preamble):]
                             break
-                    else:
-                        cut = cut[:140].rsplit(" ", 1)[0].rstrip(",.;:") + "..."
-                    trimmed = cut
-                last_thought = trimmed
+                    if len(p) > 50:
+                        p = p[:50].rsplit(" ", 1)[0]
+                    if p and p[0].isupper():
+                        p = p[0].lower() + p[1:]
+                    p = p.rstrip(".,;:")
+
+                if p:
+                    fragments.append(f"{p} — {sentence}")
+                else:
+                    fragments.append(sentence)
+
+            if fragments:
+                thought_thread = "..." + " ".join(fragments[-4:])
     except Exception:
         pass
 
     # --- PERCEPTION ALWAYS FIRST ---
-    # What the machine sees is always the leading context, regardless of mode.
-    # Mode affects what additional context follows, not where perception sits.
     if perception and perception.strip():
-        prompt_parts.append(f"Right now it sees: {perception.strip()}")
+        prompt_parts.append(f"You see: {perception.strip()}")
     else:
-        prompt_parts.append("Right now it sees: nothing new, the same view.")
+        prompt_parts.append("You see: nothing new, the same view.")
 
     # --- MODE-SPECIFIC CONTEXT (secondary to perception) ---
     concept_ctx = _build_concept_context(perception, matched_concepts, mode)
@@ -582,10 +608,10 @@ def build_monologue_prompt(
         except Exception:
             pass
 
-    # --- CONTINUATION ---
-    if last_thought:
-        prompt_parts.append(f"\nIts last thought was: \"{last_thought}\"")
-    prompt_parts.append("\nContinue from that thought. Write as \"I\", never \"it\".")
+    # --- CONTINUATION: thread of unique prior thoughts + pickup ---
+    if thought_thread:
+        prompt_parts.append(f"\nYour thinking so far:\n{thought_thread}\n...")
+    prompt_parts.append("Pick up where you left off.")
 
     return "\n".join(prompt_parts), mode
 
@@ -1749,76 +1775,26 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     from config.config import OLLAMA_MODEL as _active_model
     _is_qwen = "qwen" in _active_model.lower()
 
-    # AWAKENING: Minimal prompt for first observations
+    # AWAKENING: Skip build_simple_caption_prompt entirely.
+    # The awakening seed thought is already generated by generate_internal_awakening()
+    # and stored in recent_captions. Just let the normal path run — it will pick up
+    # the seed thought via the thought thread and continue naturally.
+    # After 3 observations, is_awakening=False and mode gating takes over.
     if is_awakening:
-        if _is_qwen and last_caption:
-            # Qwen: use Natsumura awakening output as open thread.
-            # "What do you notice first?" is a VQA invitation — bypass it.
-            parts = []
-            if hasattr(agent, "last_session_gap") and agent.last_session_gap is not None:
-                gap = agent.last_session_gap
-                if gap < 60:
-                    parts.append(f"*Back online after {int(gap)}s.*")
-                elif gap < 3600:
-                    parts.append(f"*Back online after {int(gap / 60)}m.*")
-                else:
-                    parts.append(f"*Back online after {gap / 3600:.1f}h.*")
-            try:
-                from captioner.activation_memory import get_desires, get_beliefs
-                desires = get_desires()
-                if desires:
-                    d = desires[0].strip()
-                    if d.endswith(('.', '!', '?')):
-                        parts.append(f"*{d}*")
-                beliefs = get_beliefs()
-                if beliefs and not beliefs[0].startswith("Often together"):
-                    b = beliefs[0].strip()
-                    if b.endswith(('.', '!', '?')):
-                        parts.append(f"*{b}*")
-            except Exception:
-                pass
-            # Don't append last_caption to user prompt — it goes as planted assistant turn in model_wrapper
-            return "\n".join(parts), "awakening"
-        else:
-            from captioner.model_wrapper import _is_plantable_prior
-
-            parts = []
-
-            # --- SITUATION ---
-            gap_str = ""
-            if hasattr(agent, "last_session_gap") and agent.last_session_gap is not None:
-                gap = agent.last_session_gap
-                if gap < 60:
-                    gap_str = f"{int(gap)} seconds"
-                elif gap < 3600:
-                    gap_str = f"{int(gap / 60)} minutes"
-                elif gap < 172800:
-                    gap_str = f"{gap / 3600:.1f} hours"
-                else:
-                    gap_str = f"{gap / 86400:.1f} days"
-
-            parts.append(f"[Waking up after {gap_str} offline]" if gap_str else "[Waking up]")
-
-            # --- LAST MEMORY (only if it passes quality filter) ---
-            prior = getattr(agent, "prior_session_last_caption", None)
-            if prior and _is_plantable_prior(prior):
-                parts.append(f"[Last memory: \"{prior[:80]}\"]")
-
-            # --- WHAT I KNOW (beliefs, only if grounded) ---
-            try:
-                from captioner.activation_memory import get_beliefs
-                beliefs = get_beliefs()
-                if beliefs and not beliefs[0].startswith("Often together"):
-                    b = beliefs[0].strip()[:60]
-                    if b:
-                        parts.append(f"[I know: {b}]")
-            except Exception:
-                pass
-
-            # --- CONTINUATION ---
-            parts.append("")
-            parts.append("I see:")
-            return "\n".join(parts), "awakening"
+        # Minimal context — just the awakening seed as the thread
+        parts = []
+        try:
+            if hasattr(agent, "recent_captions") and agent.recent_captions:
+                last = agent.recent_captions[-1]
+                seed = last[0] if isinstance(last, (list, tuple)) else last
+                if seed and seed.strip():
+                    parts.append(f"Your last thought: {seed.strip()[:140]}")
+        except Exception:
+            pass
+        if not parts:
+            parts.append("You just came back online.")
+        parts.append("...")
+        return "\n".join(parts), "awakening"
 
     # === DETERMINE MODE FIRST (gates all context inclusion) ===
     gaze_state = "idle"
@@ -1844,97 +1820,61 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     if not config.PRINT_CLEAN_CAPTIONS:
         print(f"[MODE] {mode} (novelty={novelty:.2f}, boredom={boredom:.2f}, gaze={gaze_state})")
 
-    # === BUILD PROMPT WITH MODE-GATED CONTEXT ===
+    # === BUILD PROMPT — THOUGHT THREAD IS PRIMARY ===
+    # The thread is the model's own voice and the main continuation signal.
+    # Only inject context that's genuinely dynamic and changing.
     prompt_parts = []
 
-    # ACCUMULATED UNDERSTANDING (always - the machine's built-up knowledge of this space)
-    try:
-        from captioner.context_compression import context_compressor
-        baseline = context_compressor.get_baseline_context()
-        if baseline and baseline.strip():
-            known_line = f"Known: {baseline.strip()}"
-            # Whisper a brief trajectory if the understanding has meaningfully shifted
-            history = list(context_compressor.compression_history)
-            if history:
-                prev = history[-1].get("understanding", "").strip()
-                if prev and prev[:40] != baseline.strip()[:40]:
-                    prev_short = prev[:40].rsplit(" ", 1)[0] if len(prev) > 40 else prev
-                    known_line += f"\nBefore: {prev_short}..."
-            prompt_parts.append(known_line)
-    except Exception:
-        pass
-
-    # MODE-SPECIFIC CONTEXT (gated by activation state)
-    if mode in MODE_CONTEXTS:
-        mode_cfg = MODE_CONTEXTS[mode]
-        # State marker (e.g., "Someone present." for relational)
-        if mode_cfg.get("state_marker"):
-            prompt_parts.append(mode_cfg["state_marker"])
-        # Mode-specific context function
-        context_fn = mode_cfg.get("context_fn")
-        if context_fn:
-            context = context_fn(agent)
-            if context:
-                prompt_parts.append(context)
-
-    # DRAWING/PAPER (only when mode=workspace or drawing concepts active)
-    if should_include_context("drawing", mode):
-        try:
-            from utils.drawing_state import DrawingState
-            drawing_info = DrawingState.get_drawing_info()
-            if drawing_info:
-                desc = drawing_info.get("description", "something")
-                prompt_parts.append(f"*Your arm is moving—{desc}.*")
-        except Exception:
-            pass
-
-    # PAPER STATE (always current — not just within 120s of skip)
-    try:
-        from utils.state_manager import state_manager as _sm
-        if not _sm.paper_present:
-            prompt_parts.append("*No paper on the desk.*")
-        elif _sm.last_no_paper_skip_ts > 0 and (_time.time() - _sm.last_no_paper_skip_ts) < 120:
-            prompt_parts.append("*No paper.*")
-    except Exception:
-        pass
-
-
-    # MOTIFS (only in introspective mode)
-    if should_include_context("motifs", mode):
-        motifs = _get_persistent_motifs(agent)
-        if motifs:
-            prompt_parts.append(motifs)
-
-    # DESIRES/BELIEFS — introspective mode always; all modes for Qwen (needs named anchors to escape VQA)
-    # Desires expire after 8 injections to prevent narrative lock-in
-    if mode == "introspective" or _is_qwen:
-        try:
-            from captioner.activation_memory import get_desires, get_beliefs
-            from captioner.context_compression import context_compressor as _cc
-            desires = get_desires()
-            if desires and _cc.introspective_state.get("desire_injection_count", 0) < 8:
-                d = desires[0].strip()
-                if d.endswith(('.', '!', '?')):
-                    prompt_parts.append(f"*{d}*")
-                _cc.introspective_state["desire_injection_count"] = _cc.introspective_state.get("desire_injection_count", 0) + 1
-            beliefs = get_beliefs()
-            if beliefs and not beliefs[0].startswith("Often together"):
-                b = beliefs[0].strip()
-                if b.endswith(('.', '!', '?')):
-                    prompt_parts.append(f"*{b}*")
-        except Exception:
-            pass
-
-    # STREAM CONTINUATION: present the last thought as trailing edge
+    # THOUGHT THREAD FIRST — the model reads its own prior thoughts and extends
     try:
         if hasattr(agent, "recent_captions") and agent.recent_captions:
-            last_caption = agent.recent_captions[-1][0]
-            if last_caption and last_caption.strip():
-                prompt_parts.append(f"\nThe stream so far, trailing off:\n\"...{last_caption.strip()[:120]}")
+            seen = set()
+            thoughts = []
+            for entry in agent.recent_captions[-6:]:
+                cap = entry[0] if isinstance(entry, (list, tuple)) else entry
+                if not cap or not cap.strip() or len(cap.strip()) < 8:
+                    continue
+                # Extract first complete sentence
+                t = cap.strip()
+                sentence = t
+                for i in range(min(15, len(t)), min(len(t), 140)):
+                    if t[i] in ".!?":
+                        sentence = t[:i+1]
+                        break
+                else:
+                    if len(t) > 140:
+                        sentence = t[:140].rsplit(" ", 1)[0] + "..."
+                # Deduplicate
+                norm = sentence[:50]
+                if norm not in seen:
+                    seen.add(norm)
+                    thoughts.append(sentence)
+            if thoughts:
+                stream = " ...".join(thoughts[-4:])
+                prompt_parts.append(f"Your thinking so far:\n{stream}\n...")
     except Exception:
         pass
 
-    prompt_parts.append("\nPick up where it left off.")
+    # MINIMAL DYNAMIC CONTEXT — only what's actively changing
+    # Felt state transition (if shifting)
+    try:
+        from captioner.context_compression import context_compressor
+        prev_felt, curr_felt = context_compressor.get_felt_state_delta()
+        if curr_felt:
+            if prev_felt and prev_felt != curr_felt:
+                prompt_parts.append(f"({prev_felt} → {curr_felt})")
+            else:
+                prompt_parts.append(f"({curr_felt})")
+    except Exception:
+        pass
+
+    # Drawing state (only if actively drawing or just finished)
+    try:
+        from utils.state_manager import state_manager as _sm
+        if _sm.is_generating_drawing or _sm.current_drawing_phase == "executing":
+            prompt_parts.append("(Your arm is drawing right now.)")
+    except Exception:
+        pass
 
     final_prompt = "\n".join(prompt_parts)
     token_estimate = len(final_prompt.split())

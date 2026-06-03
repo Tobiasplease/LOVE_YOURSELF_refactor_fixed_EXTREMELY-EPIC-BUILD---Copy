@@ -645,44 +645,45 @@ class MultimodalModel:
         print(f"[PERCEPTION] Result: {cleaned}\n")
         return cleaned
 
-    def generate_monologue(self, perception: str, *, monologue_prompt: str, mode: str, agent=None) -> tuple:
-        """Pass 2: Text model generates inner monologue from perception + thread.
+    def generate_monologue(self, perception: str, *, monologue_prompt: str, mode: str, agent=None, image_path: str = None) -> tuple:
+        """Pass 2: Generate inner monologue from perception + context.
+
+        Uses the same vision model as perception (Qwen) with the image still available,
+        so the monologue is visually grounded. No model swap needed.
 
         Returns:
             tuple: (monologue_text, mode)
         """
         import random as _random
-        from config.config import MONOLOGUE_MODEL
+        from config.config import OLLAMA_MODEL
         from captioner.prompts import get_monologue_system_prompt
 
         emotion_state = getattr(agent, "current_emotion_state", "calm") if agent else "calm"
         system_prompt = get_monologue_system_prompt(mode, emotion_state)
 
         model_options = {
-            "temperature": 0.4,
+            "temperature": 0.7,
             "top_p": 0.8,
-            "repeat_penalty": 1.25,
-            "num_predict": 80,
+            "repeat_penalty": 1.5,
+            "num_predict": 120,
             "num_ctx": 4096,
             "seed": _random.randint(1, 1000000),
             "stop": [
                 "\n\n",
-                "[Image", "[image",
-                "[What I see", "[what i see",
                 "\n\nUser:", "\n\nHuman:", "\n\nAssistant:",
-                "[INST]", "[/INST]",
             ],
         }
 
-        print(f"\n{'='*80}\n[MONOLOGUE] {MONOLOGUE_MODEL}\n{'='*80}")
+        monologue_model = OLLAMA_MODEL  # Same model as perception — no swap
+        print(f"\n{'='*80}\n[MONOLOGUE] {monologue_model} (with image)\n{'='*80}")
         print(f"SYSTEM: {system_prompt}\n")
         print(f"USER:\n{monologue_prompt}\n")
         print(f"{'='*80}\n")
 
         result = query_ollama(
             prompt=monologue_prompt,
-            model=MONOLOGUE_MODEL,
-            image=None,
+            model=monologue_model,
+            image=image_path,
             system_prompt=system_prompt,
             timeout=60,
             log_dir=MOOD_SNAPSHOT_FOLDER,
