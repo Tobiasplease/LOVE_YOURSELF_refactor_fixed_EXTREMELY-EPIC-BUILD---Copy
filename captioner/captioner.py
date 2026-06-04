@@ -387,10 +387,10 @@ class Captioner(MemoryMixin):
                             timeout=60,
                             log_dir=MOOD_SNAPSHOT_FOLDER,
                             options={
-                                "temperature": 0.7,
+                                "temperature": 1.0,
                                 "top_p": 0.8,
                                 "repeat_penalty": 1.5,
-                                "num_predict": 120,
+                                "num_predict": 60,
                                 "num_ctx": 4096,
                                 "seed": _random.randint(1, 1000000),
                             },

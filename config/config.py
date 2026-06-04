@@ -60,7 +60,7 @@ LUNG_OFFSET_SCALE = -0.10
 
 # === MOOD SYSTEM ===
 
-OLLAMA_MODEL = "qwen2.5vl:7b"
+OLLAMA_MODEL = "qwen3.5:9b"
 
 # Active model — changing this single line toggles the full prompt/parameter stack:
 # - "qwen2.5vl:7b"               — Qwen2.5-VL (perception + drawing analysis)

@@ -257,24 +257,25 @@ def query_ollama(
         elif isinstance(image, bytes):
             img_b64 = base64.b64encode(image).decode("utf-8")
 
-    # Qwen chat path: plant prior caption as true assistant turn so Qwen continues
-    # its own voice instead of describing the prior caption as external context.
-    use_chat_api = prior_assistant_turn is not None and "qwen" in model.lower()
+    # Qwen3.5+ requires chat API with think:false to get direct responses.
+    # Older Qwen models also benefit from chat API for planted prior turns.
+    is_qwen35 = "qwen3" in model.lower()
+    use_chat_api = is_qwen35 or (prior_assistant_turn is not None and "qwen" in model.lower())
 
     if use_chat_api:
         messages = []
         if system_prompt and system_prompt.strip():
             messages.append({"role": "system", "content": system_prompt})
-        # Proper multi-turn: bootstrap user → planted assistant → current user+image
-        # If assistant is last message Qwen does prefix-completion which echoes prompt text.
-        # The last message MUST be a user message so Qwen generates a fresh assistant response.
-        messages.append({"role": "user", "content": "..."})
-        # Trim prior caption to first sentence so it anchors voice without heavy context
-        prior_clean = prior_assistant_turn.strip()
-        sent_end = min((prior_clean.find(c) for c in ".?!" if prior_clean.find(c) > 8), default=-1)
-        prior_anchor = prior_clean[: sent_end + 1] if sent_end > 0 else prior_clean[:80]
-        messages.append({"role": "assistant", "content": prior_anchor})
-        # Current moment: full context prompt + image — Qwen generates the NEXT inner thought
+
+        if prior_assistant_turn and not is_qwen35:
+            # Legacy Qwen2.5: plant prior caption as assistant turn for voice continuity
+            messages.append({"role": "user", "content": "..."})
+            prior_clean = prior_assistant_turn.strip()
+            sent_end = min((prior_clean.find(c) for c in ".?!" if prior_clean.find(c) > 8), default=-1)
+            prior_anchor = prior_clean[: sent_end + 1] if sent_end > 0 else prior_clean[:80]
+            messages.append({"role": "assistant", "content": prior_anchor})
+
+        # Current prompt + image
         current_user: dict = {"role": "user", "content": prompt}
         if img_b64:
             current_user["images"] = [img_b64]
@@ -283,13 +284,16 @@ def query_ollama(
         payload: dict = {"model": model, "messages": messages, "stream": use_streaming}
         if options:
             payload["options"] = options
+        if is_qwen35:
+            payload["think"] = False
         endpoint = "http://localhost:11434/api/chat"
 
-        log_json_entry(
-            LogType.DEBUG,
-            {"message": "Using /api/chat with planted prior turn", "prior_preview": prior_assistant_turn[:60]},
-            print_message=f"[💬] Qwen chat mode — prior: {prior_assistant_turn[:60]}",
-        )
+        if prior_assistant_turn:
+            log_json_entry(
+                LogType.DEBUG,
+                {"message": "Using /api/chat with planted prior turn", "prior_preview": prior_assistant_turn[:60]},
+                print_message=f"[💬] Qwen chat mode — prior: {prior_assistant_turn[:60]}",
+            )
     else:
         payload = {"model": model, "prompt": prompt, "stream": use_streaming}
         if options:
