@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# from utils.ollama import query_ollama
 
 """drawing.py – final version
 
@@ -32,7 +31,8 @@ from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from grbl.idle_movement_manager import pause_for_drawing
-from utils.ollama import query_ollama, truncate_for_print
+from utils.inference import query_model
+from utils.ollama import truncate_for_print
 from utils.state_manager import state_manager
 
 from .comfy import create_impostor_controller
@@ -241,7 +241,7 @@ class DrawingController:
                 original_prompt=self.last_drawing_prompt, reflection=self.last_reflection or "No specific reflection recorded"
             )
 
-            critique_response = query_ollama(
+            critique_response = query_model(
                 prompt=critique_prompt,
                 image=image_path,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -360,11 +360,11 @@ class DrawingController:
                 if INCLUDE_DRAWING_HISTORY and hasattr(agent, "observe"):
                     drawing_summary = "drawing based on current observations"
                     try:
-                        from utils.ollama import query_ollama
+                        from utils.inference import query_model
                         from config.config import MOOD_SNAPSHOT_FOLDER
 
                         summary_prompt = f"Describe what this drawing depicts in one short sentence:\n\n{drawing_prompt}\n\nDescription:"
-                        drawing_summary = query_ollama(
+                        drawing_summary = query_model(
                             prompt=summary_prompt,
                             log_dir=MOOD_SNAPSHOT_FOLDER,
                             system_prompt="Describe the drawing's subject in one brief sentence. Be specific about what is shown, not abstract tags.",
@@ -426,34 +426,13 @@ class DrawingController:
     # VRAM management
     # ------------------------------------------------------------------
     def _unload_ollama_models(self) -> None:
-        """Unload all Ollama models from VRAM to free space for ComfyUI/Flux."""
-        import requests as req
+        """Unload inference model from VRAM to free space for ComfyUI/Flux."""
+        from utils.inference import unload_model
         try:
-            from config.config import OLLAMA_MODEL
-            models_to_unload = [OLLAMA_MODEL]
-            try:
-                from config.config import COMPRESSION_MODEL, MONOLOGUE_MODEL
-                for m in (COMPRESSION_MODEL, MONOLOGUE_MODEL):
-                    if m and m not in models_to_unload:
-                        models_to_unload.append(m)
-            except ImportError:
-                pass
-
-            for model in models_to_unload:
-                try:
-                    resp = req.post(
-                        "http://localhost:11434/api/generate",
-                        json={"model": model, "keep_alive": 0},
-                        timeout=5,
-                    )
-                    if resp.ok:
-                        print(f"[🧹] Unloaded {model} from VRAM for ComfyUI")
-                    else:
-                        print(f"[⚠️] Failed to unload {model}: {resp.status_code}")
-                except Exception as e:
-                    print(f"[⚠️] Could not unload {model}: {e}")
+            unload_model()
+            print("[VRAM] Inference model unloaded for ComfyUI")
         except Exception as e:
-            print(f"[⚠️] Ollama model unload failed: {e}")
+            print(f"[VRAM] Model unload failed: {e}")
 
     # ------------------------------------------------------------------
     # ComfyUI invocation helper

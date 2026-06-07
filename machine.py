@@ -64,6 +64,7 @@ from perception.object_detection import ObjectDetectionThread
 from perception.person_detection_state import get_person_detection_state
 from safety.aruco_detector import get_aruco_detector
 from reactivity.camera_reactive import CameraReactivityEngine
+from captioner.frame_buffer import frame_buffer
 from utils.continuity import describe_duration
 from utils.error_tracking import get_failure_tracker
 from utils.state_manager import state_manager
@@ -1224,6 +1225,9 @@ try:
 
         # Store full-resolution frame for LLM captioning
         full_res_frame = frame.copy()
+
+        # Feed frame buffer for video temporal analysis
+        frame_buffer.push(frame)
 
         # Keep full resolution for preview (was: frame = cv2.resize(frame, (320, 240)))
 

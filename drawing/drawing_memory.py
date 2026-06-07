@@ -56,14 +56,26 @@ class DrawingMemory:
         """Add a new drawing to memory with compressed metadata."""
         import time
 
+        # Ensure compressed_summary is meaningful, fall back to cleaned comfy_prompt
+        if not compressed_summary or len(compressed_summary.strip()) < 5:
+            cleaned = (comfy_prompt or "")
+            for prefix in ["Black ink line drawing on white paper. ",
+                           "Black ink line drawing on white paper.",
+                           "Black ink drawing on white paper. ",
+                           "black ink line drawing on white paper. "]:
+                if cleaned.lower().startswith(prefix.lower()):
+                    cleaned = cleaned[len(prefix):]
+                    break
+            compressed_summary = cleaned[:120] if cleaned.strip() else "untitled drawing"
+
         entry = {
             'timestamp': time.time(),
             'compressed_summary': compressed_summary[:120],
             'theme_tags': (theme_tags or [])[:3],
             'emotional_tone': (emotional_tone or '')[:30],
             'narrative_thread': (narrative_thread or '')[:50],
-            'comfy_prompt': (comfy_prompt or '')[:200],  # The actual prompt sent to ComfyUI
-            'completed': completed,  # Did GRBL actually finish drawing this?
+            'comfy_prompt': (comfy_prompt or '')[:200],
+            'completed': completed,
         }
 
         self._history.insert(0, entry)
@@ -95,21 +107,22 @@ class DrawingMemory:
 
         recent = self._history[:max_count]
 
-        # Build ultra-compact summary — only use real ComfyUI prompts
+        # Build ultra-compact summary — prefer compressed_summary over raw comfy_prompt
         parts = []
         for entry in recent:
-            desc = entry.get('comfy_prompt', '')
-            if not desc:
-                continue  # Skip entries without real prompts — tag-clouds cause confabulation
-            # Strip the standard ComfyUI preamble to get the actual subject
-            for prefix in ["Black ink line drawing on white paper. ",
-                           "Black ink line drawing on white paper.",
-                           "Black ink drawing on white paper. ",
-                           "black ink line drawing on white paper. "]:
-                if desc.lower().startswith(prefix.lower()):
-                    desc = desc[len(prefix):]
-                    break
-            # Truncate to a reasonable length
+            desc = entry.get('compressed_summary', '')
+            if not desc or len(desc.strip()) < 5:
+                desc = entry.get('comfy_prompt', '')
+                if not desc:
+                    continue
+                # Strip the standard ComfyUI preamble to get the actual subject
+                for prefix in ["Black ink line drawing on white paper. ",
+                               "Black ink line drawing on white paper.",
+                               "Black ink drawing on white paper. ",
+                               "black ink line drawing on white paper. "]:
+                    if desc.lower().startswith(prefix.lower()):
+                        desc = desc[len(prefix):]
+                        break
             if len(desc) > 80:
                 desc = desc[:80].rsplit(" ", 1)[0] + "..."
             parts.append(desc.strip())
@@ -232,7 +245,7 @@ class DrawingMemory:
             lines.append(line)
 
         try:
-            from utils.ollama import query_ollama
+            from utils.inference import query_model
             from config.config import MOOD_SNAPSHOT_FOLDER
 
             try:
@@ -248,7 +261,7 @@ In 2-3 sentences, describe the arc of this work. Not a list — a narrative.
 Where did it start? How has it shifted? What direction is it moving?
 Write as "I" — this is your own artistic development."""
 
-            result = query_ollama(
+            result = query_model(
                 prompt=prompt,
                 model=model,
                 log_dir=MOOD_SNAPSHOT_FOLDER,

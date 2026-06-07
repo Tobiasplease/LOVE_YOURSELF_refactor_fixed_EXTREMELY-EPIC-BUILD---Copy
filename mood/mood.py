@@ -10,7 +10,7 @@ import numpy as np  # type: ignore
 from config.config import MOOD_SNAPSHOT_FOLDER
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
-from utils.ollama import query_ollama
+from utils.inference import query_model
 from utils.pattern_recognition import PatternRecognitionEngine
 
 

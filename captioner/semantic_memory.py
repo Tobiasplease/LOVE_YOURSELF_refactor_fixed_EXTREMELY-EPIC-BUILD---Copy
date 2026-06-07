@@ -862,7 +862,7 @@ class SemanticMemory:
             return None
 
         try:
-            from utils.ollama import query_ollama
+            from utils.inference import query_model
             from config import config
 
             # Build the prompt
@@ -893,7 +893,7 @@ Respond with ONLY the sentence."""
 
             compression_model = getattr(config, 'COMPRESSION_MODEL', config.OLLAMA_MODEL)
 
-            response = query_ollama(
+            response = query_model(
                 prompt=prompt,
                 model=compression_model,
                 image=None,
@@ -1234,6 +1234,36 @@ Respond with ONLY the sentence."""
         # Clean up trailing junk
         text = text.rstrip(",.;:!? ")
         text = re.sub(r'\s+(?:with|and|or|the|a|an|in|on|of|to|for|is|are|has|that|which)$', '', text, flags=re.IGNORECASE)
+
+        # Final validation: must be a noun phrase (object label), not a sentence fragment
+        # Reject multi-sentence fragments (inner monologue leaking through)
+        if "." in text or "?" in text or "!" in text:
+            text = text.split(".")[0].split("?")[0].split("!")[0].strip()
+        words = text.split()
+        if len(words) > 6:
+            text = " ".join(words[:5])
+            text = re.sub(r'\s+(?:that|which|who|where|when|while|and|but|or)$', '', text, flags=re.IGNORECASE)
+            words = text.split()
+        if len(words) < 2 or len(text.strip()) < 3:
+            return ""
+
+        # Reject verb-led fragments ("Pulses in the dark", "Focusing on edges")
+        if re.match(r'^(?:Pulses?|Glows?|Shines?|Sits?|Stands?|Hangs?|Lies?|Moves?|Flickers?|Drifts?|Floats?|Rests?|Focus\w*|Trac\w*|Watch\w*|Look\w*|Shift\w*|Trembl\w*|Sway\w*|Fad\w*|Cast\w*|Catch\w*|Cutt\w*|Bleed\w*|Hover\w*)\b', text):
+            return ""
+
+        # Reject pronoun-led fragments ("They look up", "I can see")
+        if re.match(r'^(?:They|I|We|He|She|It|My|Their|Our|This|That|These|Those)\b', text):
+            return ""
+
+        # Reject sentence fragments with conjugated verbs ("Blur is fading", "Chair leg trembles")
+        if re.search(r'\b(?:is|are|was|were|am|has|have|had|does|did|will|would|can|could|should|might)\s', text):
+            return ""
+        if re.search(r'(?:trembles?|sways?|shifts?|fades?|moves?|hovers?|hangs?|sits?|looks?|appears?|seems?|feels?|remains?|catches?)\b', text):
+            return ""
+
+        # Reject if starts with ellipsis or punctuation
+        if text.startswith('.') or text.startswith(','):
+            return ""
 
         return text
 

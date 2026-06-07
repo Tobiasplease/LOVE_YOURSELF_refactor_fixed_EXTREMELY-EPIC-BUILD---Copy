@@ -340,9 +340,9 @@ class Captioner(MemoryMixin):
                     if is_memory_mode_time:
                         # Memory mode: pull actual caption text from long-term memory
                         from captioner.prompts import build_memory_mode_prompt
-                        from captioner.prompts import _MACHINE_IDENTITY
+                        from captioner.prompts import get_monologue_system_prompt
                         memory_prompt, caption_mode = build_memory_mode_prompt(self)
-                        memory_system = _MACHINE_IDENTITY + " A memory is surfacing. The machine's next thought should be about something it remembers — past tense, clearly framed as memory, not something happening now."
+                        memory_system = get_monologue_system_prompt("introspective") + " A memory is surfacing. Think about something you remember — past tense, framed as memory."
                         caption = self.model._call_ollama(
                             memory_prompt,
                             image_path=None,  # Memory mode doesn't use current image
@@ -363,7 +363,8 @@ class Captioner(MemoryMixin):
                         # the right framing (relational/observational/introspective/workspace).
                         # No separate perception pass — the image IS the perception.
                         from captioner.prompts import build_simple_caption_prompt, get_monologue_system_prompt
-                        from config.config import OLLAMA_MODEL
+                        from config.config import INFERENCE_BACKEND, MOTION_THRESHOLD, OLLAMA_MODEL, VIDEO_MODE_ENABLED
+                        from utils.inference import query_model, query_model_video
 
                         user_prompt, caption_mode = build_simple_caption_prompt(
                             self,
@@ -372,30 +373,58 @@ class Captioner(MemoryMixin):
 
                         system_prompt = get_monologue_system_prompt(caption_mode)
 
-                        print(f"\n{'='*80}\n[SINGLE-PASS] {OLLAMA_MODEL} ({caption_mode})\n{'='*80}")
+                        backend_tag = "LLAMA" if INFERENCE_BACKEND == "llama_server" else "OLLAMA"
+                        print(f"\n{'='*80}\n[{backend_tag}] {OLLAMA_MODEL} ({caption_mode})\n{'='*80}")
                         print(f"SYSTEM: {system_prompt}\n")
                         print(f"USER:\n{user_prompt}\n")
                         print(f"{'='*80}\n")
 
-                        from utils.ollama import query_ollama
                         import random as _random
-                        caption = query_ollama(
-                            prompt=user_prompt,
-                            model=OLLAMA_MODEL,
-                            image=img_path,
-                            system_prompt=system_prompt,
-                            timeout=60,
-                            log_dir=MOOD_SNAPSHOT_FOLDER,
-                            options={
-                                "temperature": 1.0,
-                                "top_p": 0.8,
-                                "repeat_penalty": 1.5,
-                                "num_predict": 60,
-                                "num_ctx": 4096,
-                                "seed": _random.randint(1, 1000000),
-                            },
-                            prompt_type="caption",
-                        )
+
+                        gen_options = {
+                            "temperature": 0.9,
+                            "top_p": 0.85,
+                            "repeat_penalty": 1.15,
+                            "num_predict": 80,
+                            "num_ctx": 4096,
+                            "seed": _random.randint(1, 1000000),
+                        }
+
+                        # Video mode: check frame buffer for motion
+                        use_video = False
+                        if VIDEO_MODE_ENABLED and INFERENCE_BACKEND == "llama_server":
+                            from captioner.frame_buffer import frame_buffer
+                            recent_meta = frame_buffer.get_recent_with_metadata(seconds=10, max_frames=6)
+                            if recent_meta:
+                                max_diff = max(f["diff_score"] for f in recent_meta)
+                                if max_diff > MOTION_THRESHOLD:
+                                    use_video = True
+
+                        if use_video:
+                            video_frames = [f["jpeg"] for f in recent_meta]
+                            duration = recent_meta[-1]["timestamp"] - recent_meta[0]["timestamp"]
+                            print(f"[VIDEO] {len(video_frames)} frames over {duration:.1f}s, max_diff={max_diff:.4f}")
+                            # Temporal grounding: tell the model it's seeing time pass
+                            video_prompt = f"You're seeing the last {duration:.0f} seconds. Something moved.\n{user_prompt}"
+                            caption = query_model_video(
+                                prompt=video_prompt,
+                                frames=video_frames,
+                                fps=2.0,
+                                system_prompt=system_prompt,
+                                options=gen_options,
+                                timeout=60,
+                            )
+                        else:
+                            caption = query_model(
+                                prompt=user_prompt,
+                                model=OLLAMA_MODEL,
+                                image=img_path,
+                                system_prompt=system_prompt,
+                                timeout=60,
+                                log_dir=MOOD_SNAPSHOT_FOLDER,
+                                options=gen_options,
+                                prompt_type="caption",
+                            )
 
                         # Match output against ChromaDB concepts (replaces perception-based matching)
                         try:
@@ -1031,7 +1060,7 @@ class Captioner(MemoryMixin):
     def generate_internal_awakening(self) -> str:
         """Phase 1 awakening: Pure internal reorientation without visual input."""
         from config import config
-        from utils.ollama import query_ollama
+        from utils.inference import query_model
 
         # Build narrative awakening context
         print(f"[🌅 AWAKENING] Generating internal awakening...")
@@ -1089,15 +1118,8 @@ class Captioner(MemoryMixin):
 
         # No fallback needed — identity comes from context_compression or is empty
 
-        # Include cross-session memory from ChromaDB
+        # NOTE: get_session_greeting disabled — concept labels are unreliable
         long_term_context = ""
-        try:
-            from captioner.semantic_memory import get_semantic_memory
-            greeting = get_semantic_memory().get_session_greeting(limit=2)
-            if greeting:
-                long_term_context = f"{greeting}\n"
-        except Exception:
-            pass
 
         # Import consolidated awakening template
         from .prompts import INTERNAL_AWAKENING_TEMPLATE
@@ -1126,7 +1148,7 @@ class Captioner(MemoryMixin):
         )
 
         print(f"[🌅 AWAKENING] Generating seed thought...")
-        response = query_ollama(
+        response = query_model(
             prompt=internal_prompt,
             model=awakening_model,
             timeout=90,
@@ -1462,7 +1484,7 @@ class Captioner(MemoryMixin):
         """
         try:
             from drawing.drawing_memory import get_drawing_memory
-            from utils.ollama import query_ollama
+            from utils.inference import query_model
             from config.config import MOOD_SNAPSHOT_FOLDER
 
             # Get recent drawing history
@@ -1499,7 +1521,7 @@ Format:
 COMPRESSED: [3-5 words]
 REFLECTION: [1 short sentence about where the work is heading]"""
 
-            reflection_text = query_ollama(
+            reflection_text = query_model(
                 prompt=prompt,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 system_prompt="You are reflecting on your own drawing practice. Be concise and direct. Focus on subjects and themes, not technique.",

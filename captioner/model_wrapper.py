@@ -13,7 +13,8 @@ from config.config import (
 )
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
-from utils.ollama import query_ollama, truncate_for_print
+from utils.inference import query_model
+from utils.ollama import truncate_for_print
 
 from .prompt_interface import PromptInterface
 
@@ -429,7 +430,7 @@ class MultimodalModel:
             print_message=f"[🌸] Natsumura introspective: {truncate_for_print(prompt, 100)}",
         )
 
-        response = query_ollama(
+        response = query_model(
             prompt=prompt,
             model=natsumura_model,
             image=None,  # No image for introspective mode
@@ -479,7 +480,7 @@ class MultimodalModel:
                 print(f"[PLANTED PRIOR] (injected as assistant turn for voice continuity):\n{prior_turn}\n")
             print(f"{'='*80}\n")
 
-        response = query_ollama(
+        response = query_model(
             prompt=prompt,
             model=self.model_name,
             image=image_path,
@@ -680,7 +681,7 @@ class MultimodalModel:
         print(f"USER:\n{monologue_prompt}\n")
         print(f"{'='*80}\n")
 
-        result = query_ollama(
+        result = query_model(
             prompt=monologue_prompt,
             model=monologue_model,
             image=image_path,

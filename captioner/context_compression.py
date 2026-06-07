@@ -17,7 +17,8 @@ from config import config
 from config.model_settings import get_model_options
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
-from utils.ollama import query_ollama, truncate_for_print
+from utils.inference import query_model
+from utils.ollama import truncate_for_print
 
 IDENTITY_FILE = os.path.join(config.MOOD_SNAPSHOT_FOLDER, "machine_identity.json")
 
@@ -303,7 +304,7 @@ Respond ONLY with the two lines, no prefixes."""
             # Use compression model (text-only narrative model) instead of vision model
             compression_model = getattr(config, 'COMPRESSION_MODEL', config.OLLAMA_MODEL)
 
-            response = query_ollama(
+            response = query_model(
                 prompt=prompt,
                 model=compression_model,
                 image=None,  # Text-only compression
@@ -531,7 +532,7 @@ Complete each line in 10 words or less, ending with a period:
                 "repeat_penalty": 1.2,
             }
 
-            response = query_ollama(
+            response = query_model(
                 prompt=prompt,
                 model=model,
                 image=None,

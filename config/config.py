@@ -60,6 +60,15 @@ LUNG_OFFSET_SCALE = -0.10
 
 # === MOOD SYSTEM ===
 
+# === INFERENCE BACKEND ===
+# "ollama" — Ollama daemon (default, legacy)
+# "llama_server" — direct llama-server (supports video via super-frames)
+INFERENCE_BACKEND = os.getenv("INFERENCE_BACKEND", "ollama")
+VIDEO_MODE_ENABLED = os.getenv("VIDEO_MODE_ENABLED", "false").lower() == "true"
+VIDEO_MODE = os.getenv("VIDEO_MODE", "superframe")  # "superframe" (Conv3D, richer temporal) or "multi" (plain multi-image)
+MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # Frame diff below this = static, use single image
+LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
+
 OLLAMA_MODEL = "qwen3.5:9b"
 
 # Active model — changing this single line toggles the full prompt/parameter stack:

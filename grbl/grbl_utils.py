@@ -1238,7 +1238,7 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
                 # Use the captioner system to generate reflection
                 try:
                     from captioner.captioner import Captioner
-                    from utils.ollama import query_ollama
+                    from utils.inference import query_model
                     from config import config
                     
                     # Create critique using reflection system
@@ -1247,7 +1247,7 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
                     # Import consolidated system prompt
                     from captioner.prompts import SELF_CRITIQUE_SYSTEM_PROMPT
                     
-                    self_critique = query_ollama(
+                    self_critique = query_model(
                         critique_prompt,
                         model=config.OLLAMA_MODEL,
                         system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
