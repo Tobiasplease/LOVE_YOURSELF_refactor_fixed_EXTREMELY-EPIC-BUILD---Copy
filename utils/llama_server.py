@@ -40,9 +40,9 @@ from utils.progress_bar import ProgressBar
 
 # Server configuration
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
-LLAMA_SERVER_BIN = os.getenv("LLAMA_SERVER_BIN", "./llama.cpp/build/bin/llama-server")
-LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", "")
-LLAMA_MMPROJ_PATH = os.getenv("LLAMA_MMPROJ_PATH", "")
+LLAMA_SERVER_BIN = os.getenv("LLAMA_SERVER_BIN", os.path.expanduser("~/llama.cpp/build/bin/llama-server"))
+LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", os.path.expanduser("~/models/qwen3.5-9b/Qwen3.5-9B-Q5_K_M.gguf"))
+LLAMA_MMPROJ_PATH = os.getenv("LLAMA_MMPROJ_PATH", os.path.expanduser("~/models/qwen3.5-9b/mmproj-F16.gguf"))
 LLAMA_CTX_SIZE = int(os.getenv("LLAMA_CTX_SIZE", "65536"))
 LLAMA_GPU_LAYERS = int(os.getenv("LLAMA_GPU_LAYERS", "99"))
 
@@ -431,6 +431,7 @@ def _query_superframe(
     """
     from llama_video import Preprocessor, Settings
     from llama_video.client import LlamaServerClient
+    from llama_video.types import Frame
     import cv2
     import numpy as np
     import asyncio
@@ -439,11 +440,20 @@ def _query_superframe(
     preprocessor = Preprocessor(settings.model)
 
     temp_frames = []
-    for frame_bytes in frames:
+    for i, frame_bytes in enumerate(frames):
         nparr = np.frombuffer(frame_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is not None:
-            temp_frames.append(img)
+            # llama_video expects Frame objects with RGB numpy data
+            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            h, w = rgb.shape[:2]
+            temp_frames.append(Frame(
+                data=rgb,
+                index=i,
+                timestamp=i / fps,
+                width=w,
+                height=h,
+            ))
 
     if not temp_frames:
         return "[WARNING] No valid frames to process"
@@ -452,12 +462,15 @@ def _query_superframe(
 
     client = LlamaServerClient(settings.server)
 
+    # Prepend system prompt to user prompt since caption_video doesn't support it
+    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+
     async def _caption():
         try:
             return await client.caption_video(
                 video_input,
-                prompt=prompt,
-                system_prompt=system_prompt,
+                prompt=full_prompt,
+                temperature=options.get("temperature", 0.9) if options else 0.9,
             )
         finally:
             await client.close()

@@ -63,9 +63,9 @@ LUNG_OFFSET_SCALE = -0.10
 # === INFERENCE BACKEND ===
 # "ollama" — Ollama daemon (default, legacy)
 # "llama_server" — direct llama-server (supports video via super-frames)
-INFERENCE_BACKEND = os.getenv("INFERENCE_BACKEND", "ollama")
-VIDEO_MODE_ENABLED = os.getenv("VIDEO_MODE_ENABLED", "false").lower() == "true"
-VIDEO_MODE = os.getenv("VIDEO_MODE", "superframe")  # "superframe" (Conv3D, richer temporal) or "multi" (plain multi-image)
+INFERENCE_BACKEND = os.getenv("INFERENCE_BACKEND", "llama_server")
+VIDEO_MODE_ENABLED = os.getenv("VIDEO_MODE_ENABLED", "true").lower() == "true"
+VIDEO_MODE = os.getenv("VIDEO_MODE", "multi")  # "multi" (plain multi-image) or "superframe" (Conv3D — needs llama_video client fix for enable_thinking)
 MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # Frame diff below this = static, use single image
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 

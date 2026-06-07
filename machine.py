@@ -688,6 +688,19 @@ if os.path.exists(_caption_monitor_script):
 debug_print("Initializing mood engine", "INIT")
 mood_engine = MoodEngine()
 _global_mood_engine = mood_engine
+# Ensure inference backend is running
+from config.config import INFERENCE_BACKEND
+if INFERENCE_BACKEND == "llama_server":
+    from utils.llama_server import is_server_running, start_server
+    if not is_server_running():
+        print("[INIT] Starting llama-server...")
+        if not start_server():
+            print("[INIT] llama-server failed to start — falling back to Ollama")
+            import config.config as _cfg
+            _cfg.INFERENCE_BACKEND = "ollama"
+    else:
+        print("[INIT] llama-server already running")
+
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
 captioner.load_prior_session_caption()  # Load last thought from prior session for awakening
