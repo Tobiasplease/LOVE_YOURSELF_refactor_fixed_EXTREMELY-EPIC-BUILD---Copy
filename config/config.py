@@ -65,7 +65,7 @@ LUNG_OFFSET_SCALE = -0.10
 # "llama_server" — direct llama-server (supports video via super-frames)
 INFERENCE_BACKEND = os.getenv("INFERENCE_BACKEND", "llama_server")
 VIDEO_MODE_ENABLED = os.getenv("VIDEO_MODE_ENABLED", "true").lower() == "true"
-VIDEO_MODE = os.getenv("VIDEO_MODE", "multi")  # "multi" (plain multi-image) or "superframe" (Conv3D — needs llama_video client fix for enable_thinking)
+VIDEO_MODE = os.getenv("VIDEO_MODE", "superframe")  # "multi" (plain multi-image) or "superframe" (Conv3D temporal encoding via llama-video)
 MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # Frame diff below this = static, use single image
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 

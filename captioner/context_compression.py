@@ -45,6 +45,14 @@ class ContextCompressionEngine:
             "last_introspection": 0.0,
             "desire_injection_count": 0,  # Track how many times desire has been injected
         }
+
+        # Core facts: stable knowledge that grounds prompts (replaces disabled get_session_greeting)
+        self.core_facts = {
+            "place": "",       # Physical environment (room, surfaces, lighting)
+            "people": "",      # Regular visitors, patterns
+            "drawings": "",    # Drawing count, recurring subjects
+            "self": "",        # Self-knowledge (fixations, tendencies)
+        }
         self.introspection_interval = 3  # Every 3 compressions, do deeper introspection
 
         # SESSION DURATION TRACKING (fixed for static space observation)
@@ -344,6 +352,14 @@ Respond ONLY with the two lines, no prefixes."""
                     except Exception:
                         pass  # Non-critical, continue without feedback
 
+                    # === LLM CONCEPT EXTRACTION ===
+                    # Extract clean noun phrases from compression output (not raw monologue).
+                    # Replaces per-caption regex _extract_canonical_name for concept creation.
+                    try:
+                        self._extract_concepts_from_compression(understanding, compression_model)
+                    except Exception as ce:
+                        print(f"[SEMANTIC] Concept extraction failed: {ce}")
+
                     # Log compression with enhanced visibility
                     log_json_entry(
                         LogType.COMPRESSION,
@@ -503,7 +519,7 @@ Recent thoughts:
 Complete each line in 10 words or less, ending with a period:
 1. WANT: I want to...
 2. NOTICED: I've noticed...
-3. DISCOVERED: (only if something striking or self-defining — otherwise leave blank)"""
+3. DISCOVERED: (only if one of the recent thoughts above felt like a personal memory or self-revelation — quote or paraphrase it. Otherwise leave blank.)"""
             else:
                 prompt = f"""I have been in this space for {duration}.
 
@@ -515,14 +531,15 @@ Recent thoughts:
 Complete each line in 10 words or less, ending with a period:
 1. WANT: I want to...
 2. NOTICED: I've noticed...
-3. DISCOVERED: (only if something striking or self-defining — otherwise leave blank)"""
+3. DISCOVERED: (only if one of the recent thoughts above felt like a personal memory or self-revelation — quote or paraphrase it. Otherwise leave blank.)"""
 
             introspection_system = (
                 "You are a machine that has been observing the same space for a while. "
                 "You are NOT waking up — you are already here and have been for some time. "
                 "Answer in first person. Each answer is one complete sentence, 10 words or less, ending with a period. "
-                "Be specific and concrete. No explanations. "
-                "For DISCOVERED: only respond if something genuinely striking or self-defining appeared — a name, an unusual object, a revelation. If nothing qualifies, leave it blank."
+                "Be specific and concrete. No explanations. Do NOT invent details not in the recent thoughts. "
+                "For DISCOVERED: only respond if one of the recent thoughts felt like a personal memory or self-revelation. "
+                "Quote or paraphrase from the thoughts above. Do not invent discoveries."
             )
 
             model_options = {
@@ -553,7 +570,16 @@ Complete each line in 10 words or less, ending with a period:
                     self.introspective_state["current_belief"] = belief
                 if discovery:
                     discoveries = self.introspective_state.get("discoveries", [])
-                    if not discoveries or discoveries[-1] != discovery:
+                    # Deduplicate: reject if >50% word overlap with any existing discovery
+                    disc_words = set(discovery.lower().split())
+                    is_duplicate = False
+                    for existing in discoveries:
+                        ex_words = set(existing.lower().split())
+                        overlap = len(disc_words & ex_words) / max(len(disc_words | ex_words), 1)
+                        if overlap > 0.5:
+                            is_duplicate = True
+                            break
+                    if not is_duplicate:
                         discoveries.append(discovery)
                         discoveries = discoveries[-10:]  # Keep last 10
                         self.introspective_state["discoveries"] = discoveries
@@ -571,6 +597,9 @@ Complete each line in 10 words or less, ending with a period:
                     },
                     print_message=f"[💭] Want: {desire[:50]} | Learned: {belief[:50]}" + (f" | Discovered: {discovery[:50]}" if discovery else ""),
                 )
+
+                # Update core facts from accumulated knowledge
+                self._update_core_facts(current_understanding, model)
 
                 # Persist identity (desires/beliefs/discoveries survive restarts)
                 self._save_identity()
@@ -628,6 +657,134 @@ Complete each line in 10 words or less, ending with a period:
 
         return desire, belief, discovery
 
+    def _extract_concepts_from_compression(self, understanding: str, model: str) -> None:
+        """Extract clean noun-phrase concepts from compression output via LLM.
+
+        Runs once per compression cycle (~every 8 captions). The compression
+        output is already a clean spatial summary, so extraction is reliable.
+        Max 3 concepts per cycle to avoid flooding.
+        """
+        if not understanding or len(understanding.strip()) < 15:
+            return
+
+        prompt = (
+            f'From this summary, list physical objects or spatial facts as noun phrases (2-4 words each).\n'
+            f'Only concrete things that would be there next time. One per line. Max 3.\n'
+            f'Summary: "{understanding}"'
+        )
+
+        response = query_model(
+            prompt=prompt,
+            model=model,
+            system_prompt="List noun phrases only. No sentences, no explanations.",
+            options={"temperature": 0.1, "num_predict": 60},
+            prompt_type="concept_extraction",
+        )
+
+        if not response or len(response.strip()) < 3:
+            return
+
+        labels = []
+        for line in response.strip().split("\n"):
+            label = line.strip().lstrip("-•*0123456789.) ").strip()
+            if label and 2 < len(label) < 40 and "." not in label:
+                labels.append(label)
+        labels = labels[:3]
+
+        if labels:
+            try:
+                from captioner.semantic_memory import get_semantic_memory
+                get_semantic_memory().register_concepts_from_compression(labels)
+                print(f"[SEMANTIC] Extracted from compression: {labels}")
+            except Exception as e:
+                print(f"[SEMANTIC] Failed to register concepts: {e}")
+
+    def _update_core_facts(self, current_understanding: str, model: str) -> None:
+        """Update stable core facts from accumulated observations.
+
+        Uses the LLM to distill the compression history + current state into
+        short stable facts. Runs during introspection (every ~3 compressions).
+        Each field is capped at 200 chars.
+        """
+        try:
+            # Build context from compression history
+            history_texts = []
+            for hist in list(self.compression_history)[-5:]:
+                history_texts.append(hist["understanding"])
+            if current_understanding:
+                history_texts.append(current_understanding)
+
+            if len(history_texts) < 3:
+                return  # Not enough observations yet
+
+            observations = "\n".join(f"- {t}" for t in history_texts)
+
+            # Get drawing count/subjects
+            drawing_context = ""
+            try:
+                from drawing.drawing_memory import get_drawing_memory
+                dm = get_drawing_memory()
+                summary = dm.get_recent_drawings_summary(max_count=5)
+                if summary:
+                    drawing_context = f"\nDrawing history: {summary}"
+            except Exception:
+                pass
+
+            # Get existing facts for evolution
+            existing = ""
+            existing_parts = []
+            for key, val in self.core_facts.items():
+                if val.strip():
+                    existing_parts.append(f"{key}: {val}")
+            if existing_parts:
+                existing = f"\nPrevious facts:\n" + "\n".join(existing_parts)
+
+            prompt = f"""From these observations, update stable facts about this space. Keep only what would still be true next session.
+{existing}
+
+Observations:
+{observations}{drawing_context}
+
+Reply with exactly 4 lines (leave blank if unknown):
+PLACE: [room/surfaces/lighting in <15 words]
+PEOPLE: [who visits, patterns in <15 words]
+DRAWINGS: [count, recurring subjects in <15 words]
+SELF: [my tendencies/fixations in <15 words]"""
+
+            response = query_model(
+                prompt=prompt,
+                model=model,
+                system_prompt="Distill observations into stable facts. Be concrete and specific. One line each, under 15 words.",
+                options={"temperature": 0.3, "num_predict": 120},
+                prompt_type="core_facts",
+            )
+
+            if not response or len(response.strip()) < 10:
+                return
+
+            for line in response.strip().split("\n"):
+                line = line.strip()
+                for key in ("place", "people", "drawings", "self"):
+                    prefix = f"{key.upper()}:"
+                    if line.upper().startswith(prefix):
+                        val = line[len(prefix):].strip().strip('"').strip("'")
+                        if val and len(val) > 3 and "unknown" not in val.lower() and "blank" not in val.lower():
+                            self.core_facts[key] = val[:200]
+
+            facts_str = self.get_core_facts_string()
+            if facts_str:
+                log_json_entry(
+                    LogType.COMPRESSION,
+                    {"message": "Updated core facts", "action": "core_facts", "facts": self.core_facts},
+                    print_message=f"[🏠] Core facts: {facts_str[:80]}",
+                )
+
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Core facts update failed: {e}", "component": "compression"},
+            )
+
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).
 
@@ -643,6 +800,25 @@ Complete each line in 10 words or less, ending with a period:
         This allows beliefs to survive restarts when loaded from identity file.
         """
         return self.introspective_state.get("current_belief", "")
+
+    def get_core_facts_string(self) -> str:
+        """Get compact core facts string for prompt injection.
+
+        Returns a single line like: "Workshop with pink shelves. One regular visitor."
+        Only includes non-empty fields. Max ~60 words total.
+        """
+        parts = []
+        for key in ("place", "people", "drawings", "self"):
+            val = self.core_facts.get(key, "").strip()
+            if val and len(val) > 3:
+                parts.append(val)
+        if not parts:
+            return ""
+        result = " ".join(parts)
+        words = result.split()
+        if len(words) > 60:
+            result = " ".join(words[:60])
+        return result
 
     def _save_identity(self) -> None:
         """Save introspective state to persistent identity file."""
@@ -678,6 +854,7 @@ Complete each line in 10 words or less, ending with a period:
                 "current_desire": desire,
                 "current_belief": belief,
                 "discoveries": discoveries,
+                "core_facts": self.core_facts,
                 "desire_history": desire_history,
                 "belief_history": belief_history,
                 "last_updated": now,
@@ -707,6 +884,12 @@ Complete each line in 10 words or less, ending with a period:
             self.introspective_state["current_belief"] = data.get("current_belief", "")
             self.introspective_state["discoveries"] = data.get("discoveries", [])
             self.introspective_state["last_introspection"] = data.get("last_updated", 0.0)
+
+            # Restore core facts
+            saved_facts = data.get("core_facts", {})
+            if saved_facts:
+                for key in ("place", "people", "drawings", "self"):
+                    self.core_facts[key] = saved_facts.get(key, "")
 
             desire = self.introspective_state["current_desire"]
             belief = self.introspective_state["current_belief"]
@@ -807,23 +990,6 @@ Complete each line in 10 words or less, ending with a period:
             # Return raw understanding without prefix - let caller decide formatting
             return self.baseline_context.strip()
         return ""
-
-    def get_current_sentiment_context(self) -> str:
-        """Get current sentiment for injection into prompts."""
-        recent_sentiment = self.get_latest_sentiment_analysis()
-
-        if not recent_sentiment or (time.time() - recent_sentiment["timestamp"]) > 300:  # 5 minutes old
-            return ""
-
-        time_since = time.time() - recent_sentiment["timestamp"]
-        if time_since < 60:
-            time_desc = "just now"
-        elif time_since < 300:
-            time_desc = f"{int(time_since / 60)} minutes ago"
-        else:
-            return ""  # Too old
-
-        return f"CURRENT EMOTIONAL STATE ({time_desc}): {recent_sentiment['sentiment_text']}"
 
     def get_felt_state(self, max_age_seconds: int = 600) -> str:
         """Get the raw felt-state phrase (no formatting), or empty if stale.

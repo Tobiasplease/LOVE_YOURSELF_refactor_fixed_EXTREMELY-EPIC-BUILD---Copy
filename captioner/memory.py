@@ -20,7 +20,6 @@ from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 from captioner.activation_memory import (
     get_activation_network,
     get_contextual_memory,
-    recall_for_prompt,
     get_beliefs as activation_get_beliefs,
     boost_from_compression,
     save_state as save_activation_state,

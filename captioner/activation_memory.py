@@ -557,62 +557,6 @@ def should_include_context(context_type: str, mode: str = "introspective") -> bo
     return False
 
 
-def generate_state_summary() -> str:
-    """Generate state summary based on activation network.
-
-    Uses concept labels for human-readable output.
-    """
-    network = get_activation_network()
-    top_concepts = network.get_activated_concepts(threshold=0.3)
-
-    if not top_concepts:
-        return ""
-
-    boredom = network._last_boredom
-
-    # Check for social/person concepts via labels
-    for cid, act in top_concepts:
-        label = network.concept_labels.get(cid, "").lower()
-        if any(w in label for w in ["person", "someone", "man", "woman", "people"]):
-            return "Someone is present."
-
-    if boredom > 0.7:
-        return "Everything feels the same."
-
-    if boredom > 0.4:
-        return "Familiar."
-
-    return ""
-
-
-def observe_and_store(concept_ids: List[str], text: str, gaze_zone: str = "ahead", concept_data: List[Dict] = None) -> Tuple[float, float]:
-    """Convenience function: observe concept IDs and store memory. Returns (novelty, boredom)."""
-    if not concept_ids:
-        return 0.5, 0.0
-
-    network = get_activation_network()
-    memory = get_contextual_memory()
-
-    novelty = network.observe(concept_ids, gaze_zone, concept_data)
-    boredom = network.calculate_boredom(concept_data or [])
-    memory.store(text, concept_ids, gaze_zone)
-
-    try:
-        network.save_visualizer_snapshot(
-            memories=[{"text": m.get("text", "")[:100], "timestamp": m.get("timestamp", 0)} for m in memory.memories[-10:]],
-        )
-    except Exception:
-        pass
-
-    return novelty, boredom
-
-
-def recall_for_prompt(gaze_zone: str = "ahead", mode: str = "introspective") -> str:
-    """Convenience function: get formatted memory recall for prompt injection."""
-    memory = get_contextual_memory()
-    recalls = memory.recall(current_gaze=gaze_zone, mode=mode, k=2)
-    return "\n".join(recalls) if recalls else ""
-
 
 def get_beliefs() -> List[str]:
     """Get LLM-generated beliefs from compression introspection.
@@ -649,45 +593,6 @@ def get_desires() -> List[str]:
         pass
     return []
 
-
-def get_current_thread() -> str:
-    """Get the current thread of attention for prompt injection.
-
-    Queries top-activated concepts and their most recent reflections/observations
-    from SemanticMemory. Returns a formatted string for the monologue prompt.
-    """
-    network = get_activation_network()
-    top = network.get_activated_concepts(threshold=0.4)[:2]
-    if not top:
-        return ""
-
-    concept_ids = [cid for cid, _ in top]
-
-    try:
-        from captioner.semantic_memory import get_semantic_memory
-        threads = get_semantic_memory().get_current_thread(concept_ids)
-    except Exception:
-        return ""
-
-    if not threads:
-        return ""
-
-    parts = []
-    for thread in threads:
-        label = thread["label"]
-        thought = thread.get("last_thought", "")
-        thought_type = thread.get("thought_type", "")
-        if thought:
-            # Truncate at sentence boundary to avoid mid-phrase cuts
-            short = _truncate_at_sentence(thought, 80)
-            if thought_type == "reflection":
-                parts.append(f"Its attention is on: {label}. A settled understanding: \"{short}\"")
-            else:
-                parts.append(f"Its attention is on: {label}. Earlier it thought: \"{short}\"")
-        else:
-            parts.append(f"Its attention is on: {label}.")
-
-    return " ".join(parts)
 
 
 def boost_from_compression(compression_text: str):

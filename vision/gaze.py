@@ -947,12 +947,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             last_state_change = now
             print(f"[👁️] Person no longer detected after {time_in_aware:.1f}s - returning to idle")
             state = "idle"
-            # Record event for episodic timeline
-            try:
-                from utils.episodic_log import episodic_log
-                episodic_log.record("person_left", "they're gone now")
-            except Exception:
-                pass
+            # DON'T fire person_left here — this is usually just losing YOLO tracking
+            # (camera panned, brief occlusion). Real departure is confirmed by
+            # the hard timeout in PersonDetectionState (60s without re-detection).
         elif time_in_aware > AWARE_MAX_DURATION:
             # Natural falloff - look AWAY from where the person was
             # Pick a direction opposite to current gaze
@@ -1068,10 +1065,26 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             print("[👁️] Person detected while idle - entering 'aware' state")
             state = "aware"
             deactivate_search_mode()
-            # Record event for episodic timeline
+            # Only record arrival if person has been genuinely absent for >90 seconds
+            # (not just a brief tracking gap from camera movement or occlusion)
             try:
                 from utils.episodic_log import episodic_log
-                episodic_log.record("person_arrived", "someone arrived")
+                last_arrival = episodic_log.get_last_event("person_arrived")
+                last_departure = episodic_log.get_last_event("person_left")
+                genuine_new_arrival = True
+                if last_arrival:
+                    time_since_arrival = now - last_arrival["timestamp"]
+                    if time_since_arrival < 90:
+                        genuine_new_arrival = False  # Re-detection, not new arrival
+                    elif last_departure:
+                        gap = now - last_departure["timestamp"]
+                        if gap < 90:
+                            genuine_new_arrival = False  # Brief absence, same visit
+                if genuine_new_arrival:
+                    episodic_log.record("person_arrived", "someone arrived")
+                    print("[👤] Genuine new arrival recorded")
+                else:
+                    print(f"[👤] Re-detected (not a new arrival)")
             except Exception:
                 pass
             # Movement will be handled by aware state on next frame

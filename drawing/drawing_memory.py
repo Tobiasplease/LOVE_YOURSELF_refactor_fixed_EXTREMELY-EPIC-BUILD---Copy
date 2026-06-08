@@ -100,12 +100,15 @@ class DrawingMemory:
         """Get the most recent drawing failure, if any."""
         return getattr(self, '_last_failure', None)
 
-    def get_recent_drawings_summary(self, max_count: int = 3) -> str:
+    def get_recent_drawings_summary(self, max_count: int = 3, completed_only: bool = True) -> str:
         """Get a very compressed summary of recent drawings for prompt context."""
         if not self._history:
             return ""
 
-        recent = self._history[:max_count]
+        if completed_only:
+            recent = [d for d in self._history if d.get("completed", False)][:max_count]
+        else:
+            recent = self._history[:max_count]
 
         # Build ultra-compact summary — prefer compressed_summary over raw comfy_prompt
         parts = []

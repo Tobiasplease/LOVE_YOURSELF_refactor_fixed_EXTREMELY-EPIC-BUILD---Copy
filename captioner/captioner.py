@@ -363,7 +363,10 @@ class Captioner(MemoryMixin):
                         # the right framing (relational/observational/introspective/workspace).
                         # No separate perception pass — the image IS the perception.
                         from captioner.prompts import build_simple_caption_prompt, get_monologue_system_prompt
-                        from config.config import INFERENCE_BACKEND, MOTION_THRESHOLD, OLLAMA_MODEL, VIDEO_MODE_ENABLED
+                        from config import config as _cfg
+                        MOTION_THRESHOLD = _cfg.MOTION_THRESHOLD
+                        OLLAMA_MODEL = _cfg.OLLAMA_MODEL
+                        VIDEO_MODE_ENABLED = _cfg.VIDEO_MODE_ENABLED
                         from utils.inference import query_model, query_model_video
 
                         user_prompt, caption_mode = build_simple_caption_prompt(
@@ -373,7 +376,7 @@ class Captioner(MemoryMixin):
 
                         system_prompt = get_monologue_system_prompt(caption_mode)
 
-                        backend_tag = "LLAMA" if INFERENCE_BACKEND == "llama_server" else "OLLAMA"
+                        backend_tag = "LLAMA" if _cfg.INFERENCE_BACKEND == "llama_server" else "OLLAMA"
                         print(f"\n{'='*80}\n[{backend_tag}] {OLLAMA_MODEL} ({caption_mode})\n{'='*80}")
                         print(f"SYSTEM: {system_prompt}\n")
                         print(f"USER:\n{user_prompt}\n")
@@ -392,7 +395,7 @@ class Captioner(MemoryMixin):
 
                         # Video mode: check frame buffer for motion
                         use_video = False
-                        if VIDEO_MODE_ENABLED and INFERENCE_BACKEND == "llama_server":
+                        if VIDEO_MODE_ENABLED and _cfg.INFERENCE_BACKEND == "llama_server":
                             from captioner.frame_buffer import frame_buffer
                             recent_meta = frame_buffer.get_recent_with_metadata(seconds=10, max_frames=6)
                             if recent_meta:
@@ -839,10 +842,9 @@ class Captioner(MemoryMixin):
         if not CLEAN_LLM_OUTPUT:
             print(f"[DEBUG] Step 7: Context built, starting drawing generation...")
 
-        # Start loading animation for drawing prompt
+        # No loading animation for drawing — the 5-step pipeline prints its own progress
         loading_stop = threading.Event()
-        loading_thread = threading.Thread(target=loading_animation, daemon=True)
-        loading_thread.start()
+        loading_thread = None
 
         try:
             if not CLEAN_LLM_OUTPUT:
@@ -868,13 +870,12 @@ class Captioner(MemoryMixin):
             )
             prompt = "[ERROR] Drawing prompt generation failed"
         finally:
-            # Stop loading animation and wait for it to fully terminate
             loading_stop.set()
-            loading_thread.join(timeout=2.0)  # Increased timeout
-            if loading_thread.is_alive():
-                # Force clear animation remnants if thread still running
-                with self.print_lock:
-                    print("\r" + " " * 80 + "\r", end="")
+            if loading_thread:
+                loading_thread.join(timeout=2.0)
+                if loading_thread.is_alive():
+                    with self.print_lock:
+                        print("\r" + " " * 80 + "\r", end="")
 
         # Always store the generated prompt in drawing memory — even if it never reaches
         # ComfyUI, the artistic intent is meaningful for arc tracking and future prompts.
@@ -885,7 +886,7 @@ class Captioner(MemoryMixin):
                 dm = get_drawing_memory()
                 dm.add_drawing(
                     prompt=prompt,
-                    compressed_summary=prompt[:80],
+                    compressed_summary="",  # Will be set by LLM reflection after actual execution
                     emotional_tone=getattr(self, "current_emotion_state", "neutral"),
                     comfy_prompt=prompt,
                     completed=False,  # Will be updated to True if GRBL finishes
@@ -1118,8 +1119,15 @@ class Captioner(MemoryMixin):
 
         # No fallback needed — identity comes from context_compression or is empty
 
-        # NOTE: get_session_greeting disabled — concept labels are unreliable
+        # Core facts replace disabled get_session_greeting
         long_term_context = ""
+        try:
+            from captioner.context_compression import context_compressor
+            core_str = context_compressor.get_core_facts_string()
+            if core_str and len(core_str) > 5:
+                long_term_context = f"What I know about this place: {core_str}\n"
+        except Exception:
+            pass
 
         # Import consolidated awakening template
         from .prompts import INTERNAL_AWAKENING_TEMPLATE

@@ -13,7 +13,7 @@ Also re-exports start_server / stop_server for VRAM lifecycle management.
 
 from typing import List, Optional, Union
 
-from config.config import INFERENCE_BACKEND, LLAMA_SERVER_URL
+from config import config as _cfg
 
 
 def query_model(
@@ -34,7 +34,7 @@ def query_model(
     Query the active inference backend with a prompt and optional image.
     Drop-in replacement for query_ollama() — same signature, routes by config.
     """
-    if INFERENCE_BACKEND == "llama_server":
+    if _cfg.INFERENCE_BACKEND == "llama_server":
         from utils.llama_server import query_llama_server
         return query_llama_server(
             prompt=prompt,
@@ -82,7 +82,7 @@ def query_model_video(
     Query with multiple video frames. Only works with llama-server backend.
     Falls back to single-frame (last frame) on Ollama.
     """
-    if INFERENCE_BACKEND == "llama_server":
+    if _cfg.INFERENCE_BACKEND == "llama_server":
         from utils.llama_server import query_llama_server_video
         return query_llama_server_video(
             prompt=prompt,
@@ -113,7 +113,7 @@ def query_model_video(
 
 def unload_model() -> None:
     """Free VRAM before ComfyUI generation."""
-    if INFERENCE_BACKEND == "llama_server":
+    if _cfg.INFERENCE_BACKEND == "llama_server":
         from utils.llama_server import stop_server
         stop_server()
     else:
@@ -130,7 +130,7 @@ def unload_model() -> None:
 
 def reload_model() -> None:
     """Reload model into VRAM after ComfyUI is done."""
-    if INFERENCE_BACKEND == "llama_server":
+    if _cfg.INFERENCE_BACKEND == "llama_server":
         from utils.llama_server import start_server, is_server_running
         if not is_server_running():
             start_server()

@@ -170,9 +170,10 @@ class SemanticMemory:
                         "spatial_tilt": meta.get("spatial_tilt"),
                     })
 
-        # If no matches and perception is noteworthy, create a new concept
+        # If no matches and it mentions a person, bump the existing person concept
+        # New concept creation is now handled by compression-time LLM extraction
+        # (register_concepts_from_compression), not per-caption regex.
         if not matched and self._is_noteworthy(cleaned):
-            # Guard against person fragmentation
             if self._mentions_person(cleaned):
                 existing_person = self._find_any_person_concept()
                 if existing_person is not None:
@@ -186,38 +187,6 @@ class SemanticMemory:
                         "spatial_pan": existing_person.get("spatial_pan"),
                         "spatial_tilt": existing_person.get("spatial_tilt"),
                     }]
-
-            concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
-            canonical_name = self._extract_canonical_name(cleaned)
-            now = time.time()
-
-            initial_pan, initial_tilt = self._extract_spatial_zone(cleaned)
-            concept_meta = {
-                "times_seen": 1,
-                "first_seen": now,
-                "last_seen": now,
-                "session_count": 1,
-                "last_session": self._session_id,
-                "last_observation": "",
-            }
-            if initial_pan:
-                concept_meta["spatial_pan"] = initial_pan
-            if initial_tilt:
-                concept_meta["spatial_tilt"] = initial_tilt
-
-            self._concepts.add(
-                ids=[concept_id],
-                documents=[canonical_name],
-                metadatas=[concept_meta],
-            )
-            print(f"[SEMANTIC] New concept: '{canonical_name}' (id={concept_id})")
-
-            matched.append({
-                "id": concept_id,
-                "label": canonical_name,
-                "times_seen": 1,
-                "is_new": True,
-            })
 
         return matched
 
@@ -337,27 +306,6 @@ class SemanticMemory:
     # Core: update or create concept from perception + monologue
     # ------------------------------------------------------------------
 
-    def after_perception(self, perception: str) -> Optional[str]:
-        """Called after vision model perceives. Returns a memory injection line
-        for the monologue prompt, or None if nothing relevant.
-
-        This is the main integration point — it decides what the machine
-        "remembers" about what it's currently seeing.
-        """
-        if not perception or len(perception.strip()) < NOVELTY_MIN_LENGTH:
-            return None
-
-        # Clean vision-model artifacts before matching
-        cleaned = self._clean_perception(perception)
-        match = self.match_perception(cleaned)
-        if match is None:
-            return None
-
-        # Update the concept: bump times_seen, update last_seen
-        self._bump_concept(match["id"])
-
-        return self._format_injection(match, perception=cleaned)
-
     def after_monologue(self, perception: str, monologue: str, matched_concepts: List[Dict] = None):
         """Called after monologue generation. Stores observations under matched concepts.
 
@@ -440,53 +388,6 @@ class SemanticMemory:
     # ------------------------------------------------------------------
     # Session start: load familiar concepts for early prompts
     # ------------------------------------------------------------------
-
-    def get_session_greeting(self, limit: int = 3) -> Optional[str]:
-        """Get a memory line for session start — what the machine already knows
-        about its environment. Returns None if too few concepts exist.
-        """
-        if self._concepts.count() < 2:
-            return None
-
-        # Get most-seen concepts
-        all_concepts = self._concepts.get(include=["documents", "metadatas"])
-        if not all_concepts["ids"]:
-            return None
-
-        # Sort by times_seen descending
-        indexed = list(zip(all_concepts["ids"], all_concepts["documents"], all_concepts["metadatas"]))
-        indexed.sort(key=lambda x: x[2].get("times_seen", 0), reverse=True)
-
-        top = indexed[:limit]
-        names = [doc for _, doc, _ in top]
-
-        if len(names) == 1:
-            return f"I know this place — {names[0]}."
-        else:
-            joined = ", ".join(names[:-1]) + f", and {names[-1]}"
-            return f"I know this place — {joined}."
-
-    def get_established_labels(self, limit: int = 5) -> list:
-        """Return short labels of the most-seen non-person concepts for perception steering.
-
-        Used to tell the vision model what's already catalogued so it can look
-        for something new. Returns lowercase labels, sorted by times_seen desc.
-        """
-        if self._concepts.count() < 1:
-            return []
-        all_data = self._concepts.get(include=["documents", "metadatas"])
-        if not all_data["ids"]:
-            return []
-        items = []
-        for doc, meta in zip(all_data["documents"], all_data["metadatas"]):
-            if self._mentions_person(doc):
-                continue
-            times = meta.get("times_seen", 0)
-            if times < TIER_NEW:
-                continue
-            items.append((doc, times))
-        items.sort(key=lambda x: x[1], reverse=True)
-        return [doc.lower() for doc, _ in items[:limit]]
 
     # ------------------------------------------------------------------
     # Injection formatting — the most important part
@@ -1266,6 +1167,53 @@ Respond with ONLY the sentence."""
             return ""
 
         return text
+
+    # ------------------------------------------------------------------
+    # Batch concept registration (called from compression, not per-caption)
+    # ------------------------------------------------------------------
+
+    def register_concepts_from_compression(self, labels: list[str]) -> None:
+        """Register pre-cleaned concept labels extracted by LLM during compression.
+
+        For each label: if a similar concept exists (by embedding similarity), bump it.
+        Otherwise create a new concept. This bypasses _extract_canonical_name entirely.
+        """
+        for label in labels:
+            label = label.strip()
+            if not label or len(label) < 3 or len(label) > 40:
+                continue
+            # Reject sentence fragments
+            if "." in label or "?" in label or "!" in label:
+                continue
+
+            # Check for existing similar concept
+            if self._concepts.count() > 0:
+                results = self._concepts.query(
+                    query_texts=[label],
+                    n_results=1,
+                    include=["documents", "metadatas", "distances"],
+                )
+                if results["ids"][0] and results["distances"][0][0] < SIMILARITY_THRESHOLD:
+                    self._bump_concept(results["ids"][0][0])
+                    continue
+
+            # Create new concept
+            concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
+            now = time.time()
+            self._concepts.add(
+                ids=[concept_id],
+                documents=[label],
+                metadatas=[{
+                    "times_seen": 1,
+                    "first_seen": now,
+                    "last_seen": now,
+                    "session_count": 1,
+                    "last_session": self._session_id,
+                    "last_observation": "",
+                    "source": "compression",
+                }],
+            )
+            print(f"[SEMANTIC] New concept (from compression): '{label}'")
 
     # ------------------------------------------------------------------
     # Debug / introspection

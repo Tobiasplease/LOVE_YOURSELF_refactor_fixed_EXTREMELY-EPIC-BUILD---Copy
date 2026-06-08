@@ -240,6 +240,11 @@ class PersonDetectionState:
                 self.person_presence_duration = 0.0
                 self.recent_departures = [t for t in self.recent_departures if now - t < 300]
                 print(f"[👤] Person marked absent after sweep ({len(self.scan_zones_visited)} zones scanned)")
+                try:
+                    from utils.episodic_log import episodic_log
+                    episodic_log.record("person_left", "confirmed gone after sweep")
+                except Exception:
+                    pass
             elif time_since > self.remembered_timeout:
                 # Hard timeout - even without sweep, don't remember forever
                 self.person_state = "absent"
@@ -249,6 +254,11 @@ class PersonDetectionState:
                 self.person_presence_duration = 0.0
                 self.recent_departures = [t for t in self.recent_departures if now - t < 300]
                 print(f"[👤] Person marked absent after timeout (60s)")
+                try:
+                    from utils.episodic_log import episodic_log
+                    episodic_log.record("person_left", "gone after 60s timeout")
+                except Exception:
+                    pass
             else:
                 # Stay in "remembered" state - person might still be here
                 self.person_state = "remembered"

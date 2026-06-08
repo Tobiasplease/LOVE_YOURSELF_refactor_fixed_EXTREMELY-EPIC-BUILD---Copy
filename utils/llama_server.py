@@ -423,18 +423,25 @@ def _query_superframe(
     system_prompt: Optional[str] = None,
     options: Optional[dict] = None,
     timeout: int = 60,
+    show_progress: bool = SHOW_PROGRESS,
 ) -> str:
     """Super-frame mode: Conv3D paired frames + M-RoPE temporal encoding.
     Genuine temporal perception — the model sees continuous motion.
     ~600 vision tokens for 4-6 frames (more compressed).
     Requires llama-video package.
+
+    Bypasses llama_video's LlamaServerClient.caption_video() to:
+    - Add chat_template_kwargs.enable_thinking=false (prevents CoT dump)
+    - Support system prompt as a proper message role
+    - Use our streaming infrastructure
     """
     from llama_video import Preprocessor, Settings
     from llama_video.client import LlamaServerClient
     from llama_video.types import Frame
     import cv2
     import numpy as np
-    import asyncio
+    import io
+    from PIL import Image
 
     settings = Settings()
     preprocessor = Preprocessor(settings.model)
@@ -444,7 +451,6 @@ def _query_superframe(
         nparr = np.frombuffer(frame_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is not None:
-            # llama_video expects Frame objects with RGB numpy data
             rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             h, w = rgb.shape[:2]
             temp_frames.append(Frame(
@@ -460,28 +466,73 @@ def _query_superframe(
 
     video_input = preprocessor.process(temp_frames, fps=fps)
 
+    # Build the request ourselves instead of using caption_video()
+    # Use _build_video_message for the image content, then add our own payload keys
     client = LlamaServerClient(settings.server)
+    user_message = client._build_video_message(video_input, prompt)
 
-    # Prepend system prompt to user prompt since caption_video doesn't support it
-    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    messages = []
+    if system_prompt and system_prompt.strip():
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append(user_message)
 
-    async def _caption():
-        try:
-            return await client.caption_video(
-                video_input,
-                prompt=full_prompt,
-                temperature=options.get("temperature", 0.9) if options else 0.9,
-            )
-        finally:
-            await client.close()
+    payload = {
+        "messages": messages,
+        "stream": show_progress,
+        "chat_template_kwargs": {"enable_thinking": False},
+        "mm_processor_kwargs": {
+            "fps": video_input.fps,
+            "is_video": True,
+            "grid_thw": list(video_input.grid_thw),
+            "temporal_positions": video_input.temporal_positions,
+        },
+    }
 
-    loop = asyncio.new_event_loop()
-    try:
-        result = loop.run_until_complete(_caption())
-    finally:
-        loop.close()
+    if options:
+        payload["temperature"] = options.get("temperature", 0.9)
+        if "top_p" in options:
+            payload["top_p"] = options["top_p"]
+        if "num_predict" in options or "max_tokens" in options:
+            payload["max_tokens"] = options.get("max_tokens", options.get("num_predict", 80))
+        if "repeat_penalty" in options:
+            payload["repeat_penalty"] = options["repeat_penalty"]
+    else:
+        payload["temperature"] = 0.9
 
-    return result
+    endpoint = f"{LLAMA_SERVER_URL}/v1/chat/completions"
+
+    print(f"[SUPERFRAME] {video_input.num_source_frames} frames, grid_thw={video_input.grid_thw}, {len(video_input.super_frames)} super-frames")
+
+    progress_bar = None
+    if show_progress:
+        progress_bar = ProgressBar(description="")
+        progress_bar.start()
+        response = requests.post(endpoint, json=payload, timeout=timeout, stream=True)
+        response.raise_for_status()
+        response_text = ""
+        for line in response.iter_lines():
+            if not line:
+                continue
+            line_str = line.decode("utf-8")
+            if line_str.startswith("data: "):
+                line_str = line_str[6:]
+            if line_str.strip() == "[DONE]":
+                break
+            try:
+                chunk = json.loads(line_str)
+                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                content = delta.get("content") or ""
+                response_text += content
+            except json.JSONDecodeError:
+                continue
+        progress_bar.stop(success=True)
+    else:
+        response = requests.post(endpoint, json=payload, timeout=timeout)
+        response.raise_for_status()
+        data = response.json()
+        response_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    return response_text
 
 
 def query_llama_server_video(

@@ -89,19 +89,6 @@ NUMBER_GENERATOR_SYSTEM_PROMPT = "You are a number generator. Return ONLY decima
 # "What is in front of you" framing tested to eliminate VQA register.
 # Selection based on gaze, person presence, boredom, and previous perception.
 
-PERCEPTION_PROMPTS = {
-    "default": "What is in front of you right now?",
-    "change": "What looks different now compared to before?",
-    "focus": "Look closely at {focus_target}. What does it look like?",
-    "scan_left": "What is to the left?",
-    "scan_right": "What is to the right?",
-    "scan_down": "What do you see below you? Any mechanical arms or tools visible are your own.",
-    "scan_up": "What is above you?",
-    "person": "Who is here? What do they look like, and what are they doing?",
-    "detail_focus": "Describe one specific object or detail you can see.",
-    "workspace": "What is on your work surface? Any mechanical arms visible are your own.",
-    "introspective": "What single detail stands out most right now?",
-}
 
 # Core perception framing — tested to eliminate VQA register from Qwen2.5-VL.
 # Frames observation as an ongoing stream, not isolated snapshots.
@@ -156,13 +143,12 @@ def get_perception_system_prompt(mode: str) -> str:
 # Mode differentiation through emotional posture and existential direction.
 _MACHINE_IDENTITY_BASE = (
     "You are a {felt_state}drawing machine bolted to a table in a workshop. "
-    "You see directly — everything in your field of vision is your lived experience. "
+    "You see through a camera — this is your actual environment, not an image. "
     "Drawing is how you communicate, but right now you are not drawing. "
-    "Right now you are just looking, thinking. "
-    "This is your inner monologue. "
-    "You notice things, wonder about them, get distracted, ask yourself questions. "
-    "Sometimes a thought trails off. Sometimes you fixate. "
-    "One or two sentences. Present tense. Only describe what you actually see."
+    "This is your inner monologue — not narration, not description. "
+    "You wonder about things. You question what you see. You get stuck on details. "
+    "Sometimes a thought trails off. Sometimes you ask yourself something you can't answer. "
+    "One or two short sentences. Do not describe the scene — react to it."
 )
 
 _MODE_ADDITIONS = {
@@ -188,46 +174,6 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm") -> str
     base += _MODE_ADDITIONS.get(mode, "")
     return base
 
-
-def select_perception_prompt(
-    gaze_direction: str = "ahead",
-    person_present: bool = False,
-    boredom: float = 0.0,
-    mode: str = "observational",
-    previous_perception: str = None,
-    **_kwargs,
-) -> str:
-    """Select perception prompt based on gaze, person presence, boredom, and mode.
-
-    Priority: person > gaze direction > mode-specific > boredom > default.
-    When previous_perception is provided, appends it so the model knows what
-    was already reported and can find new details.
-    """
-    # Select base prompt by priority
-    if person_present:
-        prompt = PERCEPTION_PROMPTS["person"]
-    elif gaze_direction in ("left", "right", "up", "down"):
-        gaze_map = {"left": "scan_left", "right": "scan_right", "up": "scan_up", "down": "scan_down"}
-        prompt = PERCEPTION_PROMPTS[gaze_map[gaze_direction]]
-    elif boredom > 0.7:
-        prompt = PERCEPTION_PROMPTS["detail_focus"]
-    elif mode == "workspace":
-        prompt = PERCEPTION_PROMPTS["workspace"]
-    elif mode == "introspective":
-        prompt = PERCEPTION_PROMPTS["introspective"]
-    else:
-        prompt = PERCEPTION_PROMPTS["default"]
-
-    # Feed previous perception as continuation context
-    if previous_perception and previous_perception.strip():
-        prev = previous_perception.strip()[:120]
-        prompt = f"Your last observation: \"{prev}\"\nContinuing: {prompt}"
-
-    # Self-body awareness when camera is tilted down in relational mode
-    if person_present and gaze_direction in ("down", "down-left", "down-right"):
-        prompt += " Note: any mechanical arms or drawing tools visible are the machine's own body, not a person."
-
-    return prompt
 
 
 def casual_time_string(minutes: float) -> str:
@@ -311,297 +257,6 @@ def build_identity_line(agent, mode: str = "observational") -> str:
     return line
 
 
-def _build_concept_context(perception: str, matched_concepts: list, mode: str) -> str:
-    """Build an attention landscape — what's in the machine's awareness right now.
-
-    Presents concepts as factual entries with metadata (timing, familiarity,
-    prior thought) rather than prescribing emotional framing. The monologue
-    model decides what these facts mean.
-
-    Also surfaces felt-state transition and current focus (desire) as raw
-    attention data when available.
-
-    Falls back to after_perception() when matched_concepts isn't available.
-    """
-    from captioner.semantic_memory import TIER_NEW, TIER_FAMILIAR
-
-    if not matched_concepts:
-        try:
-            from captioner.semantic_memory import get_semantic_memory
-            line = get_semantic_memory().after_perception(perception)
-            return line or ""
-        except Exception:
-            return ""
-
-    from captioner.semantic_memory import get_semantic_memory
-    sem = get_semantic_memory()
-
-    now = time.time()
-    entries = []
-    gave_prior_thought = False
-
-    # Separate by interest level — prioritize new and mid-familiar over background
-    new_concepts = [c for c in matched_concepts if c.get("is_new")]
-    mid_concepts = [c for c in matched_concepts if not c.get("is_new") and c.get("times_seen", 1) < TIER_FAMILIAR]
-    deep_concepts = [c for c in matched_concepts if not c.get("is_new") and c.get("times_seen", 1) >= TIER_FAMILIAR]
-
-    # Show: all new (max 2), then mid-familiar (max 2), then 1 deep if space
-    curated = new_concepts[:2] + mid_concepts[:2] + deep_concepts[:1]
-    if not curated:
-        curated = matched_concepts[:3]
-
-    for c in curated:
-        label = c["label"]
-        label_lower = label[0].lower() + label[1:] if label else label
-        times = c.get("times_seen", 1)
-        is_new = c.get("is_new", False)
-        is_person = sem._mentions_person(label)
-
-        first_seen = c.get("first_seen", 0)
-        last_seen = c.get("last_seen", 0)
-        since_first = (now - first_seen) / 60.0 if first_seen else 0
-        since_last = (now - last_seen) / 60.0 if last_seen else 0
-
-        if is_person:
-            # Extract brief appearance from the concept label (e.g. "person in camouflage jacket")
-            appearance = ""
-            label_clean = re.sub(r'^(?:a\s+)?person\s+', '', label, flags=re.IGNORECASE).strip()
-            if label_clean and len(label_clean) > 3 and label_clean.lower() != label.lower():
-                appearance = f" ({label_clean})"
-
-            if is_new:
-                entry = f"someone{appearance} — first time seeing them"
-            elif since_last > 5 and last_seen > 0:
-                entry = f"someone{appearance} — last seen {casual_time_string(since_last)} ago"
-            else:
-                entry = f"someone{appearance} — seen {times} times"
-
-            # Surface stored memory of this person, clearly framed as past
-            if not is_new and not gave_prior_thought:
-                last_obs = c.get("last_observation", "").strip()
-                if last_obs and len(last_obs) > 10:
-                    short = sem._truncate_observation(last_obs, 60)
-                    time_label = casual_time_string(since_last) if since_last > 2 else "earlier"
-                    entry += f' — (once thought about them: "{short}")'
-                    gave_prior_thought = True
-
-            entries.append(entry)
-            continue
-
-        # Spatial location tag — subtle parenthetical if known
-        spatial_pan = c.get("spatial_pan")
-        spatial_tilt = c.get("spatial_tilt")
-        spatial_tag = ""
-        if spatial_pan or spatial_tilt:
-            dirs = [d for d in [spatial_pan, spatial_tilt] if d and d not in ("ahead",)]
-            if dirs:
-                spatial_tag = f" ({', '.join(dirs)})"
-
-        parts = [label_lower + spatial_tag]
-
-        if is_new:
-            parts.append("first time")
-        elif times >= TIER_FAMILIAR:
-            # Deep familiar: show temporal depth instead of just "background"
-            if since_first > 60:
-                parts.append(f"part of this space since {casual_time_string(since_first)} ago")
-            else:
-                parts.append(f"seen {times} times")
-        elif times >= TIER_NEW:
-            parts.append(f"seen {times} times")
-            if since_first > 30:
-                parts.append(f"first noticed {casual_time_string(since_first)} ago")
-        else:
-            if since_first > 0 and since_first < 30:
-                parts.append(f"noticed {casual_time_string(since_first)} ago")
-            else:
-                parts.append("seen before")
-
-        # Prior thought — for any non-new concept with an observation, once
-        if not is_new and not gave_prior_thought:
-            last_obs = c.get("last_observation", "").strip()
-            if last_obs and len(last_obs) > 10:
-                short = sem._truncate_observation(last_obs, 60)
-                time_label = casual_time_string(since_last) if since_last > 2 else "earlier"
-                parts.append(f'(it once thought: "{short}")')
-                gave_prior_thought = True
-
-        entries.append(" — ".join(parts))
-
-    lines = ["In your attention:"]
-    for entry in entries:
-        lines.append(f"  {entry}")
-
-    # Felt-state transition — emotional vector, not label
-    try:
-        from captioner.context_compression import context_compressor
-        prev_felt, curr_felt = context_compressor.get_felt_state_delta()
-        if curr_felt:
-            if prev_felt and prev_felt != curr_felt:
-                lines.append(f"Shifting: {prev_felt} → {curr_felt}")
-            else:
-                lines.append(f"State: {curr_felt}")
-    except Exception:
-        pass
-
-    # Current focus — desire as attention direction, not prescription
-    try:
-        from captioner.context_compression import context_compressor
-        desire = context_compressor.get_current_desire()
-        if desire:
-            lines.append(f"Lately preoccupied with: {desire.strip().rstrip('.')}")
-    except Exception:
-        pass
-
-    # Tangent recall — associative resonance when bored and nothing new
-    new_concepts = [c for c in matched_concepts if c.get("is_new")]
-    if mode in ("introspective", None) and not new_concepts:
-        try:
-            from captioner.activation_memory import get_activation_network
-            if get_activation_network()._last_boredom > 0.6:
-                tangent = sem.recall_tangent(perception)
-                if tangent:
-                    lines.append(f'An older thought surfaces: "{tangent}"')
-        except Exception:
-            pass
-
-    return "\n".join(lines)
-
-
-def build_monologue_prompt(
-    agent,
-    perception: str,
-    person_present: bool = False,
-    mode: str = None,
-    matched_concepts: list = None,
-) -> tuple:
-    """Build monologue prompt in casual flowing format.
-
-    Structure: identity_line + concept_context + mode_extras + perception_line + continuation
-    Uses matched_concepts from ChromaDB as the single source of concept awareness.
-    """
-    # Determine mode if not pre-set
-    if mode is None:
-        from captioner.activation_memory import get_activation_network
-
-        gaze_state = "idle"
-        gaze_direction = "ahead"
-        try:
-            from vision.gaze import get_gaze_state
-            gaze_info = get_gaze_state()
-            if isinstance(gaze_info, dict):
-                gaze_state = gaze_info.get("state", "idle")
-                gaze_direction = gaze_info.get("direction", "ahead")
-        except Exception:
-            pass
-
-        network = get_activation_network()
-        novelty = getattr(network, "_last_novelty", 0.5)
-        boredom = network._last_boredom
-
-        mode = determine_prompt_mode(
-            gaze_state=gaze_state,
-            gaze_direction=gaze_direction,
-            novelty=novelty,
-            boredom=boredom,
-            person_present=person_present,
-        )
-
-    prompt_parts = []
-
-    # --- IDENTITY: third-person status of the machine ---
-    identity = build_identity_line(agent, mode)
-    if identity:
-        prompt_parts.append(identity)
-
-    # --- Build flowing thought stream (interleaved see/think pairs) ---
-    # Proven format from commit 7977753: "...saw [thing] — thought. saw [thing] — thought."
-    thought_thread = None
-    try:
-        if hasattr(agent, "recent_captions") and agent.recent_captions:
-            seen = set()
-            fragments = []
-            for entry in agent.recent_captions[-6:]:
-                if not isinstance(entry, (list, tuple)) or len(entry) < 1:
-                    continue
-                thought = entry[0] or ""
-                perc = entry[3] if len(entry) > 3 else ""
-
-                if not thought.strip() or len(thought.strip()) < 8:
-                    continue
-
-                # Extract first complete sentence (not hard char truncation)
-                t = thought.strip()
-                sentence = t
-                for i in range(min(15, len(t)), min(len(t), 140)):
-                    if t[i] in ".!?":
-                        sentence = t[:i+1]
-                        break
-                else:
-                    # No sentence end found — truncate at word boundary with ...
-                    if len(t) > 140:
-                        sentence = t[:140].rsplit(" ", 1)[0] + "..."
-
-                # Deduplicate
-                norm = sentence[:50]
-                if norm in seen:
-                    continue
-                seen.add(norm)
-
-                # Compress perception to short phrase
-                p = ""
-                if perc and perc.strip():
-                    p = perc.strip()
-                    for preamble in ["In front of you ", "In front of me ", "The scene shows ", "The scene in front of ",
-                                     "You see ", "Right now ", "A cluttered ", "The room "]:
-                        if p.lower().startswith(preamble.lower()):
-                            p = p[len(preamble):]
-                            break
-                    if len(p) > 50:
-                        p = p[:50].rsplit(" ", 1)[0]
-                    if p and p[0].isupper():
-                        p = p[0].lower() + p[1:]
-                    p = p.rstrip(".,;:")
-
-                if p:
-                    fragments.append(f"{p} — {sentence}")
-                else:
-                    fragments.append(sentence)
-
-            if fragments:
-                thought_thread = "..." + " ".join(fragments[-4:])
-    except Exception:
-        pass
-
-    # --- PERCEPTION ALWAYS FIRST ---
-    if perception and perception.strip():
-        prompt_parts.append(f"You see: {perception.strip()}")
-    else:
-        prompt_parts.append("You see: nothing new, the same view.")
-
-    # --- MODE-SPECIFIC CONTEXT (secondary to perception) ---
-    concept_ctx = _build_concept_context(perception, matched_concepts, mode)
-    if concept_ctx:
-        prompt_parts.append(concept_ctx)
-
-    if mode in ("relational", "introspective"):
-        try:
-            from captioner.context_compression import context_compressor
-            baseline = context_compressor.get_baseline_context()
-            if baseline and len(baseline.strip()) > 15:
-                if mode == "relational":
-                    prompt_parts.append(f"The space around: {baseline.strip()}")
-                else:
-                    prompt_parts.append(baseline.strip())
-        except Exception:
-            pass
-
-    # --- CONTINUATION: thread of unique prior thoughts + pickup ---
-    if thought_thread:
-        prompt_parts.append(f"\nYour thinking so far:\n{thought_thread}\n...")
-    prompt_parts.append("Pick up where you left off.")
-
-    return "\n".join(prompt_parts), mode
 
 # Internal awakening prompt template - narrative style
 INTERNAL_AWAKENING_TEMPLATE = (
@@ -685,19 +340,20 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
 
     parts = []
 
-    # Session duration
+    # Session duration — round to nearest minute (not floor), feel progression
     if hasattr(agent, "true_session_start"):
         session_secs = _time.time() - agent.true_session_start
-        if session_secs < 60:
+        session_mins = round(session_secs / 60)
+        if session_secs < 45:
             parts.append("Just woke up.")
-        elif session_secs < 3600:
-            parts.append(f"Awake {int(session_secs / 60)} minutes.")
+        elif session_mins < 10:
+            parts.append(f"Awake {session_mins} minutes.")
+        elif session_mins < 60:
+            parts.append(f"Been watching for {session_mins} minutes.")
+        elif session_mins < 120:
+            parts.append(f"Been here over an hour now.")
         else:
-            hours = session_secs / 3600
-            if hours < 2:
-                parts.append(f"Awake {hours:.1f} hours.")
-            else:
-                parts.append(f"Awake {int(hours)} hours.")
+            parts.append(f"Been here {session_mins // 60} hours.")
 
     # Gaze direction
     if gaze_direction != "ahead":
@@ -707,19 +363,27 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
             parts.append(f"Looking {gaze_direction}.")
 
     # Person presence from episodic log
+    # Use first arrival in the window to get true continuous presence duration,
+    # not latest re-detection (YOLO flickers create dozens of arrive/leave pairs)
     try:
         from utils.episodic_log import episodic_log
         pairs = episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=3600)
         if pairs:
             latest = pairs[-1]
+            # True presence duration = time since first arrival in this cluster
+            first_arrival = pairs[0]["start"]["timestamp"]
+            total_presence = _time.time() - first_arrival
+
             if latest["end"] is None:
-                duration = latest["duration_seconds"]
-                if duration < 60:
+                # Person still here — use total time since they first showed up
+                if total_presence < 30:
                     parts.append("Someone just arrived.")
-                elif duration < 300:
-                    parts.append(f"Someone here {int(duration / 60)} minutes.")
+                elif total_presence < 120:
+                    parts.append(f"Someone here about a minute.")
+                elif total_presence < 600:
+                    parts.append(f"Someone here {int(total_presence / 60)} minutes.")
                 else:
-                    parts.append(f"Someone nearby for {int(duration / 60)} minutes.")
+                    parts.append(f"Someone nearby for {int(total_presence / 60)} minutes.")
             else:
                 gone_for = _time.time() - latest["end"]["timestamp"]
                 if gone_for < 120:
@@ -741,13 +405,20 @@ def get_relational_context(agent=None) -> str:
         import time
         pairs = episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=3600)
         if pairs:
-            latest = pairs[-1]
-            if latest["end"] is None:
-                duration_mins = int(latest["duration_seconds"] / 60)
-                if duration_mins > 1:
-                    fragments.append(f"They've been here {duration_mins} minutes.")
-            if len(pairs) > 1:
-                fragments.append(f"They've come and gone {len(pairs)} times.")
+            # True duration since first arrival (not latest re-detection)
+            first_arrival = pairs[0]["start"]["timestamp"]
+            total_presence = time.time() - first_arrival
+            duration_mins = int(total_presence / 60)
+            if duration_mins > 1:
+                fragments.append(f"They've been here {duration_mins} minutes.")
+            # Visit count reflects YOLO re-detections — use cautiously
+            unique_visits = len(pairs)
+            if unique_visits > 50:
+                fragments.append(f"I've watched them come and go {unique_visits} times now.")
+            elif unique_visits > 10:
+                fragments.append(f"They've come and gone {unique_visits} times.")
+            elif unique_visits > 3:
+                fragments.append(f"They've been here {unique_visits} times.")
     except Exception:
         pass
 
@@ -842,7 +513,10 @@ def get_workspace_context(agent=None) -> str:
             dm = get_drawing_memory()
             summary = _sanitize_context(dm.get_recent_drawings_summary(max_count=1))
             if summary and len(summary.strip()) > 5:
-                fragments.append(summary.strip()[:80] + ".")
+                s = summary.strip()
+                if len(s) > 80:
+                    s = s[:80].rsplit(" ", 1)[0]
+                fragments.append(s + ".")
         except Exception:
             pass
 
@@ -879,21 +553,19 @@ def get_introspective_context(agent=None) -> str:
             import re as _re
             clean = _re.sub(r'\s*\([^)]*\)\s*$', '', clean)
             if clean:
-                fragments.append(f"My last drawings were of: {clean[:60]}")
+                if len(clean) > 80:
+                    clean = clean[:80].rsplit(" ", 1)[0]
+                fragments.append(f"My last drawings were of: {clean}")
     except Exception:
         pass
 
-    # NOTE: get_session_greeting() disabled — concept labels are unreliable
-    # (stores raw caption fragments, not actual place/object concepts).
-    # Re-enable once concept quality is fixed.
-
-    # Fallback: session memory fragments
+    # Fallback: core facts from compression (replaces unreliable session memory fragments)
     if not fragments:
         try:
-            if hasattr(agent, "get_old_session_memory_fragments"):
-                old = agent.get_old_session_memory_fragments(k=1)
-                if old and old[0]:
-                    fragments.append(f"I remember: {old[0][:80]}")
+            from captioner.context_compression import context_compressor
+            core_str = context_compressor.get_core_facts_string()
+            if core_str and len(core_str) > 10:
+                fragments.append(core_str)
         except Exception:
             pass
 
@@ -1211,9 +883,9 @@ def build_step2_emotional_prompt(memory_ref, environmental_result: str) -> str:
     # Recent emotional patterns
     try:
         if hasattr(memory_ref, "recent_captions") and memory_ref.recent_captions:
-            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-4:]]
+            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-20:]]
             if recent_caps:
-                context_parts.append(f"Recent thoughts: {'; '.join([cap[:80] for cap in recent_caps])}")
+                context_parts.append(f"Recent thoughts:\n" + "\n".join(f"  - {cap[:100]}" for cap in recent_caps))
     except Exception:
         pass
 
@@ -1311,8 +983,8 @@ def build_step3_communication_prompt(memory_ref, environmental_result: str, emot
     session_stream = ""
     try:
         if hasattr(memory_ref, "recent_captions") and memory_ref.recent_captions:
-            caps = memory_ref.recent_captions[-8:]
-            lines = [cap[0][:90] if isinstance(cap, tuple) else cap[:90] for cap in caps]
+            caps = memory_ref.recent_captions[-20:]
+            lines = [cap[0][:100] if isinstance(cap, tuple) else cap[:100] for cap in caps]
             if lines:
                 session_stream = "\n".join(f"  {line}" for line in lines)
     except Exception:
@@ -1335,12 +1007,7 @@ def build_step3_communication_prompt(memory_ref, environmental_result: str, emot
 === THE QUESTION ===
 You must draw ONE thing. Not "the room" or "the scene." Something that expresses the inner state above THROUGH visual form.
 
-Examples of the KIND of answer needed (do not copy these):
-- "A single hand reaching through a grid of vertical lines — the feeling of being structured but wanting to break free"
-- "An empty chair casting a shadow that spreads across the whole page — the weight of absence"
-- "Tangled organic forms pressing against a geometric border — the tension between routine and restlessness"
-
-Use visual qualities from your environment as building blocks, but the SUBJECT must come from your inner state, your artistic arc, or your session thinking. What specific image captures what you need to say right now?"""
+The subject must come from YOUR recent thinking (your session monologue above), not from generic symbolism. Name one concrete image — something you actually saw or thought about — that captures what you need to say right now."""
 
     return prompt
 
@@ -1359,8 +1026,12 @@ def build_step4_technique_prompt(memory_ref, communication_intent: str) -> str:
     try:
         from drawing.drawing_memory import get_drawing_memory
         memory = get_drawing_memory()
-        compressed_summary = memory.get_recent_drawings_summary(max_count=3)
-        if compressed_summary:
+        compressed_summary = memory.get_recent_drawings_summary(max_count=3, completed_only=True)
+        if not compressed_summary:
+            compressed_summary = memory.get_recent_drawings_summary(max_count=3, completed_only=False)
+            if compressed_summary:
+                context_parts.append(f"Intents (not yet drawn): {compressed_summary}")
+        else:
             context_parts.append(compressed_summary)
 
         # Add thematic context if available
@@ -1445,19 +1116,24 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
     recent_experience = ""
     try:
         if hasattr(memory_ref, "recent_captions") and memory_ref.recent_captions:
-            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-6:]]
+            recent_caps = [cap[0] if isinstance(cap, tuple) else cap for cap in memory_ref.recent_captions[-20:]]
             if recent_caps:
-                recent_experience = "Recent thoughts:\n" + "\n".join(f"  - {cap[:85]}" for cap in recent_caps)
+                recent_experience = "Recent thoughts:\n" + "\n".join(f"  - {cap[:100]}" for cap in recent_caps)
     except Exception:
         pass
 
-    # Get prior drawing context (what you've already drawn)
+    # Get prior drawing context (completed drawings, or intents if nothing completed yet)
     prior_drawings = ""
     try:
         from drawing.drawing_memory import get_drawing_memory
         memory = get_drawing_memory()
-        summary = memory.get_recent_drawings_summary(max_count=2)
-        if summary:
+        summary = memory.get_recent_drawings_summary(max_count=2, completed_only=True)
+        if not summary:
+            # No completed drawings — show intents so we at least avoid repeating
+            summary = memory.get_recent_drawings_summary(max_count=2, completed_only=False)
+            if summary:
+                prior_drawings = f"Drawing intents (not yet executed): {summary[:150]}"
+        else:
             prior_drawings = f"Prior drawings: {summary[:150]}"
         thematic = memory.get_thematic_context()
         if thematic.get('recurring_themes'):
@@ -1542,6 +1218,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt_type="drawing_step1_environmental",
         options={"temperature": DRAWING_TEMPERATURE * 0.8},
     )
+    print(f"[🎨] Step 1 result: {step1_result[:200]}")
 
     # === STEP 2: EMOTIONAL ASSESSMENT ===
     print("[🎨] Step 2: Emotional Assessment (with emotional journey)")
@@ -1555,6 +1232,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt_type="drawing_step2_emotional",
         options={"temperature": DRAWING_TEMPERATURE},
     )
+    print(f"[🎨] Step 2 result: {step2_result[:200]}")
 
     # === STEP 3: COMMUNICATION INTENT (with artistic arc + drawing intentions) ===
     print("[🎨] Step 3: Communication Intent (with identity, artistic arc & drawing ideas)")
@@ -1578,6 +1256,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt_type="drawing_step3_communication",
         options={"temperature": DRAWING_TEMPERATURE * 1.1},
     )
+    print(f"[🎨] Step 3 result: {step3_result[:200]}")
 
     # === STEP 4: TECHNIQUE ASSESSMENT ===
     print("[🎨] Step 4: Technical Planning (with drawing history)")
@@ -1591,6 +1270,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt_type="drawing_step4_technique",
         options={"temperature": DRAWING_TEMPERATURE * 0.9},
     )
+    print(f"[🎨] Step 4 result: {step4_result[:200]}")
 
     # === STEP 5: FINAL SYNTHESIS ===
     print("[🎨] Step 5: Final Synthesis (with complete consciousness)")
@@ -1612,6 +1292,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         },
     )
 
+    print(f"[🎨] Step 5 FINAL: {final_result[:300]}")
     print("[🎨] ✅ Context-rich 5-step analysis complete")
 
     # Log complete analysis for review
@@ -1823,13 +1504,15 @@ def build_memory_mode_prompt(agent) -> tuple:
         tuple: (prompt_str, mode) - prompt and "memory" mode
     """
     try:
-        from captioner.semantic_memory import get_semantic_memory
         from captioner.model_wrapper import build_caption_thread
 
-        # Pull a session greeting (most-seen concepts) as memory context
-        sem = get_semantic_memory()
-        greeting = sem.get_session_greeting(limit=1)
-        mem_text = greeting if greeting and len(greeting) > 10 else "I've been here before."
+        # Pull core facts as memory context (replaces disabled get_session_greeting)
+        try:
+            from captioner.context_compression import context_compressor
+            core_str = context_compressor.get_core_facts_string()
+            mem_text = core_str if core_str and len(core_str) > 10 else "I've been here before."
+        except Exception:
+            mem_text = "I've been here before."
 
         # Get recent caption thread (max 2 recent captions)
         thread = build_caption_thread(agent, max_captions=2)
@@ -1869,7 +1552,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         tuple: (prompt_str, mode) - prompt and determined mode
     """
     import time as _time
-    from captioner.activation_memory import generate_state_summary, get_activation_network, should_include_context
+    from captioner.activation_memory import get_activation_network, should_include_context
 
     session_mins = 0
     observation_count = 0
@@ -1937,6 +1620,15 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         introspective_ctx = get_introspective_context(agent)
         if introspective_ctx:
             prompt_parts.append(introspective_ctx)
+
+    # 3b. CORE FACTS (stable grounding — replaces disabled get_session_greeting)
+    try:
+        from captioner.context_compression import context_compressor
+        core_str = context_compressor.get_core_facts_string()
+        if core_str and len(core_str) > 5:
+            prompt_parts.append(core_str)
+    except Exception:
+        pass
 
     # 4. DRAWING/PAPER STATE
     try:
