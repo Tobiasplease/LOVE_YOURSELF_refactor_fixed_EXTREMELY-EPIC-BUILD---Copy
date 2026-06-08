@@ -1,0 +1,11 @@
+# Custom ByteTrack config for LOVE_YOURSELF
+# Tuned for single-person workshop tracking with pan/tilt camera
+
+tracker_type: bytetrack
+track_high_thresh: 0.3       # Slightly higher than default — reduce false tracks
+track_low_thresh: 0.1
+new_track_thresh: 0.3        # Match default high thresh — don't start tracks easily
+track_buffer: 120            # 120 frames × 0.25s = 30 seconds of lost track tolerance
+                             # Survives camera panning away during aware breaks
+match_thresh: 0.7            # Slightly tighter matching
+fuse_score: true

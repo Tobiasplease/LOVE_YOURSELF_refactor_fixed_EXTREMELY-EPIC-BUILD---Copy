@@ -58,11 +58,11 @@ class ObjectDetectionThread(threading.Thread):
 
             clean_frame = frame.copy()
             try:
-                # Use smaller inference size and CPU fallback when needed
+                # ByteTrack tracking: persist=True maintains track IDs across frames
                 if self.force_cpu:
-                    results = self.model(frame, verbose=False, imgsz=512, device="cpu")[0]
+                    results = self.model.track(frame, persist=True, tracker="config/bytetrack_custom.yaml", verbose=False, imgsz=512, device="cpu")[0]
                 else:
-                    results = self.model(frame, verbose=False, imgsz=512)[0]
+                    results = self.model.track(frame, persist=True, tracker="config/bytetrack_custom.yaml", verbose=False, imgsz=512)[0]
             except Exception as e:
                 if "CUDA out of memory" in str(e) or "CUDA" in str(e):
                     print("[YOLOv8] CUDA OOM detected. Falling back to CPU for detection.")
@@ -70,39 +70,53 @@ class ObjectDetectionThread(threading.Thread):
                     time.sleep(self.update_interval)
                     continue
                 else:
-                    # Non-fatal: log and skip this cycle
                     print(f"[YOLOv8] Detection error: {e}")
                     time.sleep(self.update_interval)
                     continue
             detected = set()
             best_person_bbox = None
             best_person_conf = 0.0
+            best_person_track_id = None
             person_count = 0
+            person_tracks = {}  # {track_id: (bbox, confidence)}
 
             for box in results.boxes:
                 cls_id = int(box.cls[0])
                 label = self.model.names[cls_id]
                 conf = float(box.conf[0])
 
-                # Only process person detections (class ID 0 in COCO dataset)
-                if cls_id != 0:  # 0 = person in YOLO COCO classes
+                if cls_id != 0:
                     continue
 
                 if conf < YOLO_CONFIDENCE_THRESHOLD:
                     continue
 
+                # Get persistent tracking ID from ByteTrack
+                track_id = int(box.id[0]) if box.id is not None else None
+
                 detected.add(label)
                 person_count += 1
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, f"{label} ({conf:.2f})", (x1, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                # Track the highest confidence person detection
+                id_label = f"#{track_id}" if track_id is not None else "?"
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, f"person {id_label} ({conf:.2f})", (x1, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+                if track_id is not None:
+                    person_tracks[track_id] = ((x1, y1, x2, y2), conf)
+
                 if conf > best_person_conf:
                     best_person_bbox = (x1, y1, x2, y2)
                     best_person_conf = conf
+                    best_person_track_id = track_id
 
-            DetectionMemory.update(list(detected), time.time(), clean_frame, best_person_bbox, best_person_conf, person_count=person_count)
+            DetectionMemory.update(
+                list(detected), time.time(), clean_frame,
+                best_person_bbox, best_person_conf,
+                person_count=person_count,
+                best_track_id=best_person_track_id,
+                person_tracks=person_tracks,
+            )
 
             time.sleep(self.update_interval)
 
