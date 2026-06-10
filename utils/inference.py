@@ -34,6 +34,11 @@ def query_model(
     Query the active inference backend with a prompt and optional image.
     Drop-in replacement for query_ollama() — same signature, routes by config.
     """
+    # Empty log_dir crashes log_ollama_call (os.makedirs('')) — default it here
+    # so call sites don't all have to pass it.
+    if not log_dir:
+        log_dir = _cfg.MOOD_SNAPSHOT_FOLDER
+
     if _cfg.INFERENCE_BACKEND == "llama_server":
         from utils.llama_server import query_llama_server
         return query_llama_server(

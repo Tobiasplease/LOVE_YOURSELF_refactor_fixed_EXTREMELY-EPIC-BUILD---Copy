@@ -77,6 +77,10 @@ def log_ollama_call(
     Returns:
         Path to the log file
     """
+    # Guard: empty log_dir would crash makedirs downstream and kill the LLM call
+    if not log_dir or not log_dir.strip():
+        log_dir = "mood_snapshots"
+
     # Truncate very long prompts and responses for readability
 
     truncated_prompt = truncate_for_print(prompt, 500)

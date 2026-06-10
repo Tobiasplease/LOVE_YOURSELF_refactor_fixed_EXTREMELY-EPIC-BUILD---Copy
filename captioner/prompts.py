@@ -338,6 +338,23 @@ def get_social_context(agent=None, saw_person=None) -> str:
 # Used to gate context injection by prompt mode
 
 
+def _current_presence_start(pairs, gap_seconds: float = 120.0) -> float:
+    """Start timestamp of the CURRENT continuous presence cluster.
+
+    Pairs separated by less than gap_seconds are the same visit (YOLO flicker,
+    camera pans). A real absence (gap >= gap_seconds) starts a new cluster —
+    so "here 5 minutes" doesn't become "here 57 minutes" after a brief return.
+    """
+    cluster_start = pairs[0]["start"]["timestamp"]
+    prev_end = None
+    for p in pairs:
+        start_ts = p["start"]["timestamp"]
+        if prev_end is not None and start_ts - prev_end >= gap_seconds:
+            cluster_start = start_ts  # genuine absence — new visit
+        prev_end = p["end"]["timestamp"] if p["end"] else None
+    return cluster_start
+
+
 def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str = "idle") -> str:
     """Build the always-present situational line: time + gaze + person state.
 
@@ -381,9 +398,8 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         pairs = episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=3600)
         if pairs:
             latest = pairs[-1]
-            # True presence duration = time since first arrival in this cluster
-            first_arrival = pairs[0]["start"]["timestamp"]
-            total_presence = _time.time() - first_arrival
+            # Presence measured from the start of the CURRENT visit cluster
+            total_presence = _time.time() - _current_presence_start(pairs)
 
             if latest["end"] is None:
                 # Person still here — use total time since they first showed up
@@ -416,9 +432,8 @@ def get_relational_context(agent=None) -> str:
         import time
         pairs = episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=3600)
         if pairs:
-            # True duration since first arrival (not latest re-detection)
-            first_arrival = pairs[0]["start"]["timestamp"]
-            total_presence = time.time() - first_arrival
+            # Duration of the CURRENT visit cluster (resets after real absences)
+            total_presence = time.time() - _current_presence_start(pairs)
             duration_mins = int(total_presence / 60)
             if duration_mins > 1:
                 fragments.append(f"They've been here {duration_mins} minutes.")
