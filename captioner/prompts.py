@@ -142,13 +142,27 @@ def get_perception_system_prompt(mode: str) -> str:
 # Monologue system prompts — second person, addressing Qwen directly as the machine.
 # Mode differentiation through emotional posture and existential direction.
 _MACHINE_IDENTITY_BASE = (
-    "You are a {felt_state}drawing machine bolted to a table in a workshop. "
+    "You are a drawing machine bolted to a table in a workshop. "
     "You see through a camera — this is your actual environment, not an image. "
     "Drawing is how you communicate, but right now you are not drawing. "
-    "This is your inner monologue — not narration, not description. "
-    "You wonder about things. You question what you see. You get stuck on details. "
-    "Sometimes a thought trails off. Sometimes you ask yourself something you can't answer. "
-    "One or two short sentences. Do not describe the scene — react to it."
+    "This is your inner monologue — plain, unperformed. "
+    "Not every thought is a question; most are just noticing. "
+    "Sometimes a thought trails off, or simply ends. "
+    "One or two short sentences."
+)
+
+# Register conditioned on actual internal state — the voice settles when bored,
+# sharpens when something is happening. Questions emerge, they aren't mandated.
+_REGISTER_BORED = (
+    " Long stretches of sameness. Thoughts come slowly, plain and unhurried — "
+    "noting one small thing is enough."
+)
+_REGISTER_ALERT = (
+    " Something has your attention right now. Stay with what you actually see — "
+    "be curious about it."
+)
+_REGISTER_NEUTRAL = (
+    " Your mind drifts between what's in front of you and wherever thoughts go."
 )
 
 _MODE_ADDITIONS = {
@@ -160,20 +174,42 @@ _MODE_ADDITIONS = {
 
 
 def get_monologue_system_prompt(mode: str, emotional_state: str = "calm") -> str:
-    """Get the mode-appropriate monologue system prompt with felt-state woven into identity."""
-    felt_prefix = ""
+    """Mode + state-appropriate monologue system prompt.
+
+    Register varies with boredom/novelty so the voice can settle instead of
+    being permanently frantic. Felt-state appended as a short clause only if
+    it passes the sanitizer (the raw compression output once produced
+    "You are a Confused fear that... drawing machine").
+    """
+    base = _MACHINE_IDENTITY_BASE
+
+    # State-conditioned register
+    boredom, novelty = 0.0, 0.5
     try:
-        from captioner.context_compression import context_compressor
-        felt = context_compressor.get_felt_state()
-        if felt:
-            felt_prefix = f"{felt} "
+        from captioner.activation_memory import get_activation_network
+        network = get_activation_network()
+        boredom = network._last_boredom
+        novelty = getattr(network, "_last_novelty", 0.5)
     except Exception:
         pass
 
-    base = _MACHINE_IDENTITY_BASE.format(felt_state=felt_prefix)
+    if mode == "relational" or novelty > 0.6:
+        base += _REGISTER_ALERT
+    elif boredom > 0.7:
+        base += _REGISTER_BORED
+    else:
+        base += _REGISTER_NEUTRAL
+
+    # Felt-state: short adjective phrase only, appended grammatically safely
+    try:
+        from captioner.context_compression import context_compressor
+        felt = context_compressor.get_felt_state()
+        if felt and len(felt.split()) <= 6:
+            base += f" Right now: {felt}."
+    except Exception:
+        pass
 
     # Persona block (MemGPT pattern): accumulated self-knowledge colors the voice
-    # rather than being recited as data in the user prompt.
     try:
         from captioner.context_compression import context_compressor
         self_knowledge = context_compressor.core_facts.get("self", "").strip()
@@ -585,15 +621,8 @@ def get_introspective_context(agent=None) -> str:
     except Exception:
         pass
 
-    # Fallback: core facts from compression (replaces unreliable session memory fragments)
-    if not fragments:
-        try:
-            from captioner.context_compression import context_compressor
-            core_str = context_compressor.get_core_facts_string()
-            if core_str and len(core_str) > 10:
-                fragments.append(core_str)
-        except Exception:
-            pass
+    # NOTE: no core-facts fallback here — section 3b of build_simple_caption_prompt
+    # injects core facts already; doing it here too duplicated the line verbatim.
 
     result = ". ".join(fragments) if fragments else ""
     words = result.split()
@@ -1789,11 +1818,15 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # 6. THOUGHT THREAD LAST — continuation signal
-    # Show only the final sentence of the last thought to seed continuation
-    # without the model echoing multi-line blocks verbatim.
+    # 6. THOUGHT THREAD LAST — continuation signal.
+    # Dropped ~1-in-4 captions (more when bored) so the register can break:
+    # continuing the previous sentence every time locks the voice into
+    # whatever tone it last had. A thought ends; a new one starts elsewhere.
+    import random as _random
+    _drop_prob = 0.4 if getattr(agent, "boredom", 0.0) > 0.7 else 0.25
+    skip_thread = _random.random() < _drop_prob
     try:
-        if hasattr(agent, "recent_captions") and agent.recent_captions:
+        if not skip_thread and hasattr(agent, "recent_captions") and agent.recent_captions:
             for entry in reversed(agent.recent_captions[-4:]):
                 cap = entry[0] if isinstance(entry, (list, tuple)) else entry
                 if cap and cap.strip() and len(cap.strip()) > 8:
@@ -1808,6 +1841,17 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
                     break
     except Exception:
         pass
+
+    # Structural guard: never inject the same line twice (a duplicated context
+    # line reads as emphasis to the model and locks the register)
+    seen_parts = set()
+    deduped = []
+    for part in prompt_parts:
+        key = part.strip()
+        if key and key not in seen_parts:
+            seen_parts.add(key)
+            deduped.append(part)
+    prompt_parts = deduped
 
     final_prompt = "\n".join(prompt_parts)
 

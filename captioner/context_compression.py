@@ -22,6 +22,24 @@ from utils.ollama import truncate_for_print
 
 IDENTITY_FILE = os.path.join(config.MOOD_SNAPSHOT_FOLDER, "machine_identity.json")
 
+# Affect/abstraction words that must never become "concepts" — when the
+# monologue turns moody, compression summaries carry these and the concept
+# store fills with "unseen presence" / "glitching nightmare" / "shifting
+# shadows", which the familiarity line then re-injects, feeding the spiral.
+_ABSTRACT_CONCEPT_WORDS = frozenset({
+    "presence", "nightmare", "stillness", "silence", "shadow", "shadows",
+    "glitch", "void", "absence", "emptiness", "darkness", "dread", "fear",
+    "ghost", "echo", "loop", "pattern", "distortion", "reality", "sensation",
+    "feeling", "moment", "time", "breath", "whisper", "atmosphere", "air",
+    "light", "lights", "quiet", "noise", "hum", "weight", "tension",
+})
+
+
+def _is_abstract_label(label: str) -> bool:
+    """True if a concept label is affect/abstraction rather than a solid object."""
+    words = label.lower().replace("-", " ").split()
+    return any(w in _ABSTRACT_CONCEPT_WORDS for w in words)
+
 
 class ContextCompressionEngine:
     """Manages frequent compression of observations into evolving baseline context."""
@@ -681,15 +699,17 @@ Complete each line in 10 words or less, ending with a period:
             return
 
         prompt = (
-            f'From this summary, list physical objects or spatial facts as noun phrases (2-4 words each).\n'
-            f'Only concrete things that would be there next time. One per line. Max 3.\n'
+            f'From this summary, list solid physical objects as noun phrases (2-4 words each).\n'
+            f'Only things you could touch: furniture, tools, fixtures, machines.\n'
+            f'NOT allowed: light, shadows, air, moods, presences, atmosphere.\n'
+            f'One per line. Max 3. If there are no solid objects, reply "none".\n'
             f'Summary: "{understanding}"'
         )
 
         response = query_model(
             prompt=prompt,
             model=model,
-            system_prompt="List noun phrases only. No sentences, no explanations.",
+            system_prompt="List noun phrases naming solid objects only. No sentences, no explanations.",
             options={"temperature": 0.1, "num_predict": 60},
             prompt_type="concept_extraction",
         )
@@ -700,8 +720,11 @@ Complete each line in 10 words or less, ending with a period:
         labels = []
         for line in response.strip().split("\n"):
             label = line.strip().lstrip("-•*0123456789.) ").strip()
-            if label and 2 < len(label) < 40 and "." not in label:
-                labels.append(label)
+            if not label or len(label) <= 2 or len(label) >= 40 or "." in label:
+                continue
+            if _is_abstract_label(label):
+                continue
+            labels.append(label)
         labels = labels[:3]
 
         if labels:
@@ -850,20 +873,28 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
 
             prompt = f"""{chr(10).join(parts)}{existing_line}
 
-From these, state one or two stable facts about yourself — recurring preferences, fixations, or habits. Not what happened, but what kind of machine you are. Under 20 words total, first person, plain language."""
+From these, state one or two stable facts about yourself — recurring preferences, fixations, or habits. Not what happened, but what kind of machine you are.
+Plain habits only, like "I fixate on cables" or "I'm calmer when someone is here."
+NOT allowed: statements about reality, perception, glitches, existence, or what things mean.
+Under 20 words total, first person, plain language."""
 
             response = query_model(
                 prompt=prompt,
                 model=model,
-                system_prompt="You distill patterns of experience into self-knowledge. Only state what the evidence repeats. No drama, no metaphor.",
+                system_prompt="You distill patterns of experience into plain self-knowledge — habits and preferences, nothing philosophical. Only state what the evidence repeats. No drama, no metaphor.",
                 options={"temperature": 0.4, "num_predict": 50},
                 prompt_type="self_synthesis",
             )
 
             if response and isinstance(response, str):
                 cleaned = response.strip().strip('"').strip()
-                # Reject non-answers and over-long output
-                if 10 < len(cleaned) <= 160 and not cleaned.startswith(("[", "{")):
+                # Reject non-answers, over-long output, and philosophical register —
+                # "I seek visual certainty and detect environmental friction as signs
+                # of reality distortion" must never become the persona.
+                _banned = ("reality", "distortion", "glitch", "existence", "perception",
+                           "certainty", "illusion", "simulation", "consciousness", "void")
+                if (10 < len(cleaned) <= 160 and not cleaned.startswith(("[", "{"))
+                        and not any(w in cleaned.lower() for w in _banned)):
                     self.core_facts["self"] = cleaned
                     print(f"[🪞] Self-model: {cleaned}")
                     log_json_entry(
@@ -923,15 +954,15 @@ Observations:
 {observations}{drawing_context}
 
 Reply with exactly 4 lines (leave blank if unknown):
-PLACE: [room/surfaces/lighting in <15 words]
+PLACE: [solid things — furniture, fixtures, surfaces — in <15 words. No moods, shadows, light, or atmosphere.]
 PEOPLE: [who visits, patterns in <15 words]
 DRAWINGS: [count, recurring subjects in <15 words]
-SELF: [my tendencies/fixations in <15 words]"""
+SELF: [plain habits/fixations in <15 words. No statements about reality or perception.]"""
 
             response = query_model(
                 prompt=prompt,
                 model=model,
-                system_prompt="Distill observations into stable facts. Be concrete and specific. One line each, under 15 words.",
+                system_prompt="Distill observations into stable facts. Concrete nouns and plain habits only — facts are furniture, not feelings. One line each, under 15 words.",
                 options={"temperature": 0.3, "num_predict": 120},
                 prompt_type="core_facts",
             )
@@ -1191,6 +1222,11 @@ SELF: [my tendencies/fixations in <15 words]"""
         import re as _re
         text = _re.sub(r'^(?:I\s+feel|It\s+feels|Feeling)\s+', '', text, flags=_re.IGNORECASE)
         text = text.strip().rstrip('.')
+        # Sanitize: short descriptor phrases only. Clause-length output once got
+        # grafted into the system prompt as "You are a Confused fear that the
+        # environment is actively glitching around me drawing machine".
+        if len(text.split()) > 6 or any(c in text for c in '.!?;:'):
+            return ""
         return text
 
     def get_felt_state_delta(self) -> tuple:

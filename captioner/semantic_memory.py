@@ -1179,12 +1179,20 @@ Respond with ONLY the sentence."""
         For each label: if a similar concept exists (by embedding similarity), bump it.
         Otherwise create a new concept. This bypasses _extract_canonical_name entirely.
         """
+        try:
+            from captioner.context_compression import _is_abstract_label
+        except Exception:
+            _is_abstract_label = lambda l: False
+
         for label in labels:
             label = label.strip()
             if not label or len(label) < 3 or len(label) > 40:
                 continue
             # Reject sentence fragments
             if "." in label or "?" in label or "!" in label:
+                continue
+            # Reject affect/abstraction labels ("unseen presence", "glitching nightmare")
+            if _is_abstract_label(label):
                 continue
 
             # Check for existing similar concept

@@ -390,11 +390,13 @@ class Captioner(MemoryMixin):
 
                         import random as _random
 
+                        # Bored = sparser, flatter thoughts; engaged = more room
+                        _is_bored = self.boredom > 0.7
                         gen_options = {
-                            "temperature": 0.9,
+                            "temperature": 0.85 if _is_bored else 0.9,
                             "top_p": 0.85,
                             "repeat_penalty": 1.15,
-                            "num_predict": 80,
+                            "num_predict": 45 if _is_bored else 80,
                             "num_ctx": 4096,
                             "seed": _random.randint(1, 1000000),
                         }
