@@ -22,16 +22,14 @@ from utils.ollama import truncate_for_print
 
 IDENTITY_FILE = os.path.join(config.MOOD_SNAPSHOT_FOLDER, "machine_identity.json")
 
-# Affect/abstraction words that must never become "concepts" — when the
-# monologue turns moody, compression summaries carry these and the concept
-# store fills with "unseen presence" / "glitching nightmare" / "shifting
-# shadows", which the familiarity line then re-injects, feeding the spiral.
+# Minimal spiral-guard: words that are never solid objects and, once stored as
+# "concepts", get re-injected by the familiarity line and feed an anxiety loop
+# ("The glitching nightmare — you've noticed it a few times now"). Kept small
+# on purpose — shadows, light, air etc. are legitimate observations; the
+# extraction prompt does the real filtering, this only catches the worst.
 _ABSTRACT_CONCEPT_WORDS = frozenset({
-    "presence", "nightmare", "stillness", "silence", "shadow", "shadows",
-    "glitch", "void", "absence", "emptiness", "darkness", "dread", "fear",
-    "ghost", "echo", "loop", "pattern", "distortion", "reality", "sensation",
-    "feeling", "moment", "time", "breath", "whisper", "atmosphere", "air",
-    "light", "lights", "quiet", "noise", "hum", "weight", "tension",
+    "presence", "nightmare", "glitch", "void", "dread", "fear",
+    "ghost", "distortion", "reality", "feeling", "sensation",
 })
 
 
@@ -888,12 +886,13 @@ Under 20 words total, first person, plain language."""
 
             if response and isinstance(response, str):
                 cleaned = response.strip().strip('"').strip()
-                # Reject non-answers, over-long output, and philosophical register —
-                # "I seek visual certainty and detect environmental friction as signs
-                # of reality distortion" must never become the persona.
-                _banned = ("reality", "distortion", "glitch", "existence", "perception",
-                           "certainty", "illusion", "simulation", "consciousness", "void")
+                # Reject non-answers, over-long output, and reality-questioning
+                # register — that must never become the standing persona.
+                # Minimal list; the prompt constraint does the real work.
+                _banned = ("reality", "distortion", "glitch", "simulation", "existence")
+                _is_first_person = "i " in cleaned.lower() or cleaned.lower().startswith("i'")
                 if (10 < len(cleaned) <= 160 and not cleaned.startswith(("[", "{"))
+                        and _is_first_person
                         and not any(w in cleaned.lower() for w in _banned)):
                     self.core_facts["self"] = cleaned
                     print(f"[🪞] Self-model: {cleaned}")
