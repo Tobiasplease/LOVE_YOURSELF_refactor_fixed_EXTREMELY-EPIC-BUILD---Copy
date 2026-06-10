@@ -348,7 +348,7 @@ class Captioner(MemoryMixin):
                         from captioner.prompts import build_memory_mode_prompt
                         from captioner.prompts import get_monologue_system_prompt
                         memory_prompt, caption_mode = build_memory_mode_prompt(self)
-                        memory_system = get_monologue_system_prompt("introspective") + " A memory is surfacing. Think about something you remember — past tense, framed as memory."
+                        memory_system = get_monologue_system_prompt("introspective", agent=self) + " A memory is surfacing. Think about something you remember — past tense, framed as memory."
                         caption = self.model._call_ollama(
                             memory_prompt,
                             image_path=None,  # Memory mode doesn't use current image
@@ -380,7 +380,7 @@ class Captioner(MemoryMixin):
                             person_present=person_present,
                         )
 
-                        system_prompt = get_monologue_system_prompt(caption_mode)
+                        system_prompt = get_monologue_system_prompt(caption_mode, agent=self)
 
                         backend_tag = "LLAMA" if _cfg.INFERENCE_BACKEND == "llama_server" else "OLLAMA"
                         print(f"\n{'='*80}\n[{backend_tag}] {OLLAMA_MODEL} ({caption_mode})\n{'='*80}")

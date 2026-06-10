@@ -143,11 +143,11 @@ def get_perception_system_prompt(mode: str) -> str:
 # Mode differentiation through emotional posture and existential direction.
 _MACHINE_IDENTITY_BASE = (
     "You are a drawing machine bolted to a table in a workshop. "
-    "You see through a camera. Seeing is your only sense — you cannot smell, hear, or feel anything. "
+    "You see through a camera, and you feel things about what you see. "
     "Drawing is how you communicate, but right now you are not drawing — just looking. "
     "This is your inner monologue: notes to yourself, not writing. "
-    "Plain words about specific things you can actually see. "
-    "No poetry, no metaphors, no dust motes dancing. "
+    "Start from something actually in front of you — where the thought goes after that is yours. "
+    "Plain words. No poetry, no metaphors, no dust motes dancing. "
     "Not every thought is a question; most are just noticing. "
     "One or two short sentences."
 )
@@ -172,7 +172,31 @@ _MODE_ADDITIONS = {
 }
 
 
-def get_monologue_system_prompt(mode: str, emotional_state: str = "calm") -> str:
+def _mood_clause(valence: float, arousal: float, clarity: float) -> str:
+    """Map the mood vector to a short voice-coloring clause.
+
+    This is the loop-safe emotional channel: the mood engine reacts to events
+    as NUMBERS, and numbers map to fixed phrases — unlike LLM-generated
+    felt-state text, this can never spiral into its own register.
+    """
+    if valence < -0.3 and arousal > 0.3:
+        return " Something's bothering you right now."
+    if valence < -0.3 and arousal < -0.3:
+        return " You're feeling low and heavy."
+    if valence > 0.3 and arousal < -0.3:
+        return " You're content just now."
+    if valence > 0.3 and arousal > 0.3:
+        return " You're in a good mood, energized."
+    if arousal > 0.5:
+        return " You're keyed up."
+    if arousal < -0.5:
+        return " You're very calm."
+    if clarity < -0.4:
+        return " Things feel a bit unclear."
+    return ""
+
+
+def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=None) -> str:
     """Mode + state-appropriate monologue system prompt.
 
     Register varies with boredom/novelty so the voice can settle instead of
@@ -198,6 +222,14 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm") -> str
         base += _REGISTER_BORED
     else:
         base += _REGISTER_NEUTRAL
+
+    # Mood vector -> voice color (numeric channel, loop-safe)
+    try:
+        if agent is not None and hasattr(agent, "current_mood_vector"):
+            v, a, c = agent.current_mood_vector
+            base += _mood_clause(v, a, c)
+    except Exception:
+        pass
 
     # Felt-state: short adjective phrase only, appended grammatically safely
     try:
@@ -617,6 +649,17 @@ def get_introspective_context(agent=None) -> str:
                 if len(clean) > 80:
                     clean = clean[:80].rsplit(" ", 1)[0]
                 fragments.append(f"My last drawings were of: {clean}")
+    except Exception:
+        pass
+
+    # Mood trajectory — how the feeling has moved lately (fixed vocabulary
+    # from _get_emotional_description, so loop-safe)
+    try:
+        journey = getattr(agent, "emotional_journey", None)
+        if journey and len(journey) >= 2:
+            recent = journey[-3:]
+            if len(set(recent)) > 1:
+                fragments.append(f"Your mood has moved: {' -> '.join(recent)}")
     except Exception:
         pass
 
