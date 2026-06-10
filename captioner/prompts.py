@@ -171,6 +171,17 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm") -> str
         pass
 
     base = _MACHINE_IDENTITY_BASE.format(felt_state=felt_prefix)
+
+    # Persona block (MemGPT pattern): accumulated self-knowledge colors the voice
+    # rather than being recited as data in the user prompt.
+    try:
+        from captioner.context_compression import context_compressor
+        self_knowledge = context_compressor.core_facts.get("self", "").strip()
+        if self_knowledge and len(self_knowledge) > 10:
+            base += f" {self_knowledge}"
+    except Exception:
+        pass
+
     base += _MODE_ADDITIONS.get(mode, "")
     return base
 
@@ -574,6 +585,64 @@ def get_introspective_context(agent=None) -> str:
     if len(words) > 60:
         result = " ".join(words[:60]) + "..."
     return result
+
+
+_PERSON_WORDS = ("person", "someone", "man", "woman", "people", "figure", "visitor")
+
+
+def get_familiarity_line(agent) -> str:
+    """One line of concept recognition from the previous caption's matched concepts.
+
+    Makes accumulated familiarity visible: "That pink shelf again — it's always there."
+    Guards against the old triple-echo bug: max 1 concept, only every 3rd caption,
+    never the same concept twice in a row, persons excluded (situational line covers them).
+    """
+    matched = getattr(agent, "_last_matched_concepts", None)
+    if not matched:
+        return ""
+
+    # Occasional, not constant — every 3rd caption
+    counter = getattr(agent, "_familiarity_counter", 0) + 1
+    agent._familiarity_counter = counter
+    if counter % 3 != 0:
+        return ""
+
+    last_injected = getattr(agent, "_last_familiarity_id", None)
+
+    candidates = []
+    for c in matched:
+        label = (c.get("label") or "").strip()
+        if not label or len(label) < 3:
+            continue
+        if any(w in label.lower() for w in _PERSON_WORDS):
+            continue
+        if c.get("id") == last_injected:
+            continue
+        candidates.append(c)
+
+    if not candidates:
+        return ""
+
+    # Prefer genuinely new, else the most familiar
+    new = [c for c in candidates if c.get("is_new")]
+    pick = new[0] if new else max(candidates, key=lambda c: c.get("times_seen", 0))
+
+    times = pick.get("times_seen", 0)
+    sessions = pick.get("session_count", 1)
+    label = pick["label"]
+    label_lower = label[0].lower() + label[1:]
+
+    if pick.get("is_new"):
+        line = f"Something you haven't noticed before: {label_lower}."
+    elif times >= 10 and sessions >= 2:
+        line = f"That {label_lower} again — it's always there."
+    elif times >= 3:
+        line = f"The {label_lower} — you've noticed it a few times now."
+    else:
+        return ""
+
+    agent._last_familiarity_id = pick.get("id")
+    return line
 
 
 # MODE_CONTEXTS: Map modes to their context providers.
@@ -1506,13 +1575,33 @@ def build_memory_mode_prompt(agent) -> tuple:
     try:
         from captioner.model_wrapper import build_caption_thread
 
-        # Pull core facts as memory context (replaces disabled get_session_greeting)
+        # Genuine remembering: quote an actual stored thought from ChromaDB.
+        # Falls back to core facts while the store is thin.
+        mem_text = ""
+        is_real_memory = False
         try:
-            from captioner.context_compression import context_compressor
-            core_str = context_compressor.get_core_facts_string()
-            mem_text = core_str if core_str and len(core_str) > 10 else "I've been here before."
+            from captioner.semantic_memory import get_semantic_memory
+            old = get_semantic_memory().get_random_old_memory(min_age_seconds=3600)
+            if old and old.get("text") and len(old["text"]) > 20:
+                age = old["age_seconds"]
+                if age < 7200:
+                    age_str = "Earlier today"
+                elif age < 86400 * 2:
+                    age_str = "Yesterday" if age > 64800 else "Hours ago"
+                else:
+                    age_str = f"{int(age / 86400)} days ago"
+                mem_text = f'{age_str} you thought: "{old["text"]}"'
+                is_real_memory = True
         except Exception:
-            mem_text = "I've been here before."
+            pass
+
+        if not mem_text:
+            try:
+                from captioner.context_compression import context_compressor
+                core_str = context_compressor.get_core_facts_string()
+                mem_text = core_str if core_str and len(core_str) > 10 else "I've been here before."
+            except Exception:
+                mem_text = "I've been here before."
 
         # Get recent caption thread (max 2 recent captions)
         thread = build_caption_thread(agent, max_captions=2)
@@ -1525,7 +1614,10 @@ def build_memory_mode_prompt(agent) -> tuple:
         if thread:
             prompt_parts.append(f"\nWhat you're actually thinking right now:\n{thread}")
 
-        prompt_parts.append("\nWrite a thought that connects this memory to the present moment. Start with \"I remember\" or \"That reminds me\" — make it clear this is a memory, not something happening now.")
+        if is_real_memory:
+            prompt_parts.append("\nThat was a real thought you had. Sit with it — has anything changed since then? Write a thought connecting it to now. Past tense for the memory, present for the moment.")
+        else:
+            prompt_parts.append("\nWrite a thought that connects this memory to the present moment. Start with \"I remember\" or \"That reminds me\" — make it clear this is a memory, not something happening now.")
 
         final_prompt = "\n".join(prompt_parts)
         return final_prompt, "memory"
@@ -1630,6 +1722,11 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     except Exception:
         pass
 
+    # 3c. FAMILIARITY (recognition of known concepts — occasional, max 1 line)
+    fam_line = get_familiarity_line(agent)
+    if fam_line:
+        prompt_parts.append(fam_line)
+
     # 4. DRAWING/PAPER STATE
     try:
         from utils.state_manager import state_manager as _sm
@@ -1652,12 +1749,16 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     except Exception:
         pass
 
-    # 5b. DESIRE (from compression introspection — what the machine is preoccupied with)
+    # 5b. DESIRE (gated — only first 3 captions after a desire changes).
+    # Unconditional injection caused the May 2026 yearning echo loop:
+    # monologue yearning → compressed into desire → re-injected → more yearning.
     try:
         from captioner.context_compression import context_compressor
         desire = context_compressor.get_current_desire()
-        if desire and len(desire) > 5:
+        inj_count = context_compressor.introspective_state.get("desire_injection_count", 0)
+        if desire and len(desire) > 5 and inj_count < 3:
             prompt_parts.append(f"Preoccupied with: {desire}")
+            context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
     except Exception:
         pass
 

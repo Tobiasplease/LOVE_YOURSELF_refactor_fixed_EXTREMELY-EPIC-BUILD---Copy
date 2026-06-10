@@ -85,6 +85,12 @@ def _clean_caption_for_display(caption: str) -> Optional[str]:
 class Captioner(MemoryMixin):
     def shutdown(self):
         self.save_session_time()
+        # Best-effort diary entry so the next awakening has a past to wake into
+        try:
+            if context_compressor:
+                context_compressor.write_journal_now()
+        except Exception:
+            pass
 
     def _handle_environmental_update(self, understanding: str) -> None:
         """Handle environmental updates from context compression system."""
@@ -406,9 +412,19 @@ class Captioner(MemoryMixin):
                         if use_video:
                             video_frames = [f["jpeg"] for f in recent_meta]
                             duration = recent_meta[-1]["timestamp"] - recent_meta[0]["timestamp"]
-                            print(f"[VIDEO] {len(video_frames)} frames over {duration:.1f}s, max_diff={max_diff:.4f}")
-                            # Temporal grounding: tell the model it's seeing time pass
-                            video_prompt = f"You're seeing the last {duration:.0f} seconds. Something moved.\n{user_prompt}"
+
+                            # Summarize detection state across the frame sequence
+                            face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
+                            person_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("person"))
+                            total = len(recent_meta)
+                            detection_line = ""
+                            if face_frames > total * 0.4:
+                                detection_line = "Someone is facing you — eye contact.\n"
+                            elif person_frames > total * 0.5:
+                                detection_line = "Someone is in front of you.\n"
+
+                            print(f"[VIDEO] {total} frames over {duration:.1f}s, max_diff={max_diff:.4f}, face={face_frames}/{total}, person={person_frames}/{total}")
+                            video_prompt = f"You're seeing the last {duration:.0f} seconds.{' Something moved.' if max_diff > 0.05 else ''}\n{detection_line}{user_prompt}"
                             caption = query_model_video(
                                 prompt=video_prompt,
                                 frames=video_frames,
@@ -433,6 +449,8 @@ class Captioner(MemoryMixin):
                         try:
                             from captioner.semantic_memory import get_semantic_memory
                             matched_concepts = get_semantic_memory().match_or_create_concepts(caption or "")
+                            # Stash for the NEXT prompt build — familiarity injection reads this
+                            self._last_matched_concepts = matched_concepts or []
                         except Exception as mc_err:
                             print(f"[SEMANTIC] Concept matching failed: {mc_err}")
 
@@ -1119,13 +1137,34 @@ class Captioner(MemoryMixin):
 
         # No fallback needed — identity comes from context_compression or is empty
 
-        # Core facts replace disabled get_session_greeting
+        # Long-term context: journal (the diary arc) + core facts + recognized concepts
         long_term_context = ""
         try:
             from captioner.context_compression import context_compressor
+
+            # D2: last journal entry — the machine wakes up with a past
+            last_entry = context_compressor.get_last_journal_entry()
+            if last_entry:
+                long_term_context += f"From my diary, last time: {last_entry['summary'][:200]}\n"
+                if len(context_compressor.journal) >= 5:
+                    long_term_context += f"I have {len(context_compressor.journal)} entries of memories of this place.\n"
+
             core_str = context_compressor.get_core_facts_string()
             if core_str and len(core_str) > 5:
-                long_term_context = f"What I know about this place: {core_str}\n"
+                long_term_context += f"What I know about this place: {core_str}\n"
+        except Exception:
+            pass
+
+        # A2: cross-session recognition — concepts seen in more than one session
+        try:
+            from captioner.semantic_memory import get_semantic_memory
+            known = [
+                c for c in get_semantic_memory().get_all_concepts()
+                if c.get("session_count", 0) > 1 and c.get("times_seen", 0) >= 5
+            ][:2]
+            if known:
+                names = " and ".join(c["name"][0].lower() + c["name"][1:] for c in known)
+                long_term_context += f"Familiar already: the {names}.\n"
         except Exception:
             pass
 

@@ -51,8 +51,12 @@ class ContextCompressionEngine:
             "place": "",       # Physical environment (room, surfaces, lighting)
             "people": "",      # Regular visitors, patterns
             "drawings": "",    # Drawing count, recurring subjects
-            "self": "",        # Self-knowledge (fixations, tendencies)
+            "self": "",        # Self-knowledge (fixations, tendencies) — persona block
         }
+
+        # Session journal: dated first-person summaries, the long-term arc
+        self.journal = []           # [{date, timestamp, summary}], capped at 30
+        self._last_journal_time = time.time()  # don't journal immediately on boot
         self.introspection_interval = 3  # Every 3 compressions, do deeper introspection
 
         # SESSION DURATION TRACKING (fixed for static space observation)
@@ -402,6 +406,9 @@ Respond ONLY with the two lines, no prefixes."""
                     if compression_count % self.introspection_interval == 0:
                         self._perform_introspection(captions, understanding, compression_model)
 
+                    # Periodic journal entry (every 30 min, on this background thread)
+                    self._maybe_write_journal(compression_model)
+
                 if sentiment_text:
                     # Track felt-state transition (previous → current)
                     if hasattr(self, "last_sentiment_analysis") and self.last_sentiment_analysis:
@@ -601,6 +608,12 @@ Complete each line in 10 words or less, ending with a period:
                 # Update core facts from accumulated knowledge
                 self._update_core_facts(current_understanding, model)
 
+                # Self-model synthesis: every 3rd introspection, consolidate
+                # discoveries + desire history into stable self-knowledge
+                self._introspection_count = getattr(self, "_introspection_count", 0) + 1
+                if self._introspection_count % 3 == 0:
+                    self._synthesize_self_model(model)
+
                 # Persist identity (desires/beliefs/discoveries survive restarts)
                 self._save_identity()
 
@@ -698,6 +711,170 @@ Complete each line in 10 words or less, ending with a period:
                 print(f"[SEMANTIC] Extracted from compression: {labels}")
             except Exception as e:
                 print(f"[SEMANTIC] Failed to register concepts: {e}")
+
+    def _maybe_write_journal(self, model: str, force: bool = False) -> None:
+        """Write a journal entry if 30 min have passed and there's enough material."""
+        now = time.time()
+        if not force and now - self._last_journal_time < 1800:
+            return
+        if len(self.compression_history) < 2:
+            return  # Not enough lived session to summarize
+        self._last_journal_time = now
+        self._write_journal_entry(model)
+
+    def write_journal_now(self) -> None:
+        """Best-effort journal write for shutdown. Skips if recently written."""
+        try:
+            if time.time() - self._last_journal_time < 600:
+                return  # Wrote within last 10 min — good enough
+            model = getattr(config, "COMPRESSION_MODEL", config.OLLAMA_MODEL)
+            self._maybe_write_journal(model, force=True)
+        except Exception:
+            pass
+
+    def _write_journal_entry(self, model: str) -> None:
+        """One LLM call: compress the session so far into a 2-3 sentence diary entry.
+
+        This is the long-term arc — entries are read back at awakening
+        ("Last time: ...") so the machine wakes up with a past.
+        """
+        try:
+            material = []
+
+            history = [h["understanding"] for h in list(self.compression_history)[-6:]]
+            if self.baseline_context:
+                history.append(self.baseline_context)
+            if history:
+                material.append("How the space looked:\n" + "\n".join(f"- {h}" for h in history))
+
+            discoveries = self.introspective_state.get("discoveries", [])
+            if discoveries:
+                material.append("What struck me:\n" + "\n".join(f"- {d}" for d in discoveries[-3:]))
+
+            desire = self.introspective_state.get("current_desire", "")
+            if desire:
+                material.append(f"What I wanted: {desire}")
+
+            try:
+                from drawing.drawing_memory import get_drawing_memory
+                summary = get_drawing_memory().get_recent_drawings_summary(max_count=2, completed_only=True)
+                if summary:
+                    material.append(f"What I drew: {summary}")
+            except Exception:
+                pass
+
+            session_info = self.get_current_session_info()
+            duration = session_info["duration_description"]
+
+            prompt = f"""I've been awake for {duration}.
+
+{chr(10).join(material)}
+
+Write a diary entry about this session: 2-3 plain sentences, first person, past tense. What happened, what stayed with me. No metaphor."""
+
+            response = query_model(
+                prompt=prompt,
+                model=model,
+                system_prompt="You write a machine's diary. Honest, specific, brief. Past tense.",
+                options={"temperature": 0.5, "num_predict": 90},
+                prompt_type="journal",
+            )
+
+            if response and isinstance(response, str):
+                cleaned = response.strip().strip('"').strip()
+                if 20 < len(cleaned) <= 400 and not cleaned.startswith(("[", "{")):
+                    import datetime
+                    entry = {
+                        "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "timestamp": time.time(),
+                        "summary": cleaned,
+                    }
+                    self.journal.append(entry)
+                    self.journal = self.journal[-30:]
+                    self._save_identity()
+                    print(f"[📓] Journal: {cleaned[:80]}")
+                    log_json_entry(
+                        LogType.COMPRESSION,
+                        {"message": "Journal entry written", "action": "journal", "summary": cleaned},
+                    )
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Journal write failed: {e}", "component": "compression"},
+            )
+
+    def get_last_journal_entry(self) -> dict | None:
+        """Most recent journal entry from a PREVIOUS session (>30 min old), or None."""
+        cutoff = time.time() - 1800
+        for entry in reversed(self.journal):
+            if entry.get("timestamp", 0) < cutoff:
+                return entry
+        return None
+
+    def _synthesize_self_model(self, model: str) -> None:
+        """Consolidate discoveries + desire/belief history into core_facts.self.
+
+        The Generative-Agents reflection step applied to identity: raw experience
+        (what I wanted, what I noticed, what struck me) becomes stable
+        self-knowledge ("I fixate on cables. I'm calmer when someone is here.").
+        Runs every 3rd introspection (~10 min). Result feeds the persona block
+        in the system prompt.
+        """
+        try:
+            discoveries = self.introspective_state.get("discoveries", [])
+
+            # Pull histories from the identity file (richer than in-memory state)
+            desire_history, belief_history = [], []
+            if os.path.exists(IDENTITY_FILE):
+                try:
+                    with open(IDENTITY_FILE, "r") as f:
+                        data = json.load(f)
+                    desire_history = [d["desire"] for d in data.get("desire_history", [])[-6:]]
+                    belief_history = [b["belief"] for b in data.get("belief_history", [])[-4:]]
+                except Exception:
+                    pass
+
+            if not discoveries and len(desire_history) < 3:
+                return  # Not enough lived experience to synthesize from
+
+            parts = []
+            if desire_history:
+                parts.append("Things I've wanted lately:\n" + "\n".join(f"- {d}" for d in desire_history))
+            if belief_history:
+                parts.append("Things I've noticed:\n" + "\n".join(f"- {b}" for b in belief_history))
+            if discoveries:
+                parts.append("Moments that struck me:\n" + "\n".join(f"- {d}" for d in discoveries[-5:]))
+
+            existing_self = self.core_facts.get("self", "").strip()
+            existing_line = f"\nWhat I already know about myself: {existing_self}" if existing_self else ""
+
+            prompt = f"""{chr(10).join(parts)}{existing_line}
+
+From these, state one or two stable facts about yourself — recurring preferences, fixations, or habits. Not what happened, but what kind of machine you are. Under 20 words total, first person, plain language."""
+
+            response = query_model(
+                prompt=prompt,
+                model=model,
+                system_prompt="You distill patterns of experience into self-knowledge. Only state what the evidence repeats. No drama, no metaphor.",
+                options={"temperature": 0.4, "num_predict": 50},
+                prompt_type="self_synthesis",
+            )
+
+            if response and isinstance(response, str):
+                cleaned = response.strip().strip('"').strip()
+                # Reject non-answers and over-long output
+                if 10 < len(cleaned) <= 160 and not cleaned.startswith(("[", "{")):
+                    self.core_facts["self"] = cleaned
+                    print(f"[🪞] Self-model: {cleaned}")
+                    log_json_entry(
+                        LogType.COMPRESSION,
+                        {"message": "Self-model synthesized", "action": "self_synthesis", "self": cleaned},
+                    )
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Self-model synthesis failed: {e}", "component": "compression"},
+            )
 
     def _update_core_facts(self, current_understanding: str, model: str) -> None:
         """Update stable core facts from accumulated observations.
@@ -802,13 +979,15 @@ SELF: [my tendencies/fixations in <15 words]"""
         return self.introspective_state.get("current_belief", "")
 
     def get_core_facts_string(self) -> str:
-        """Get compact core facts string for prompt injection.
+        """Get compact core facts string for user-prompt injection.
 
         Returns a single line like: "Workshop with pink shelves. One regular visitor."
-        Only includes non-empty fields. Max ~60 words total.
+        Excludes "self" — that's the persona block, injected into the SYSTEM
+        prompt by get_monologue_system_prompt() so it colors the voice instead
+        of being recited as data. Max ~60 words.
         """
         parts = []
-        for key in ("place", "people", "drawings", "self"):
+        for key in ("place", "people", "drawings"):
             val = self.core_facts.get(key, "").strip()
             if val and len(val) > 3:
                 parts.append(val)
@@ -855,6 +1034,7 @@ SELF: [my tendencies/fixations in <15 words]"""
                 "current_belief": belief,
                 "discoveries": discoveries,
                 "core_facts": self.core_facts,
+                "journal": self.journal,
                 "desire_history": desire_history,
                 "belief_history": belief_history,
                 "last_updated": now,
@@ -890,6 +1070,9 @@ SELF: [my tendencies/fixations in <15 words]"""
             if saved_facts:
                 for key in ("place", "people", "drawings", "self"):
                     self.core_facts[key] = saved_facts.get(key, "")
+
+            # Restore journal (the long-term arc)
+            self.journal = data.get("journal", [])[-30:]
 
             desire = self.introspective_state["current_desire"]
             belief = self.introspective_state["current_belief"]

@@ -163,6 +163,7 @@ class SemanticMemory:
                         "label": doc,
                         "times_seen": meta.get("times_seen", 0) + 1,
                         "is_new": False,
+                        "session_count": meta.get("session_count", 1),
                         "last_observation": meta.get("last_observation", ""),
                         "first_seen": meta.get("first_seen", 0),
                         "last_seen": meta.get("last_seen", 0),
@@ -1260,6 +1261,42 @@ Respond with ONLY the sentence."""
 
         result.sort(key=lambda x: x["timestamp"])
         return result
+
+    def get_random_old_memory(self, min_age_seconds: float = 3600) -> Optional[Dict]:
+        """Pull one genuine past thought for memory mode — actual remembering,
+        not confabulation.
+
+        Prefers observations from a different session; falls back to anything
+        older than min_age_seconds. Random among candidates (variety over
+        relevance — memories surface unprompted).
+
+        Returns {"text", "age_seconds", "timestamp"} or None.
+        """
+        import random as _random
+
+        if self._observations.count() < 5:
+            return None
+
+        try:
+            cutoff = time.time() - min_age_seconds
+            results = self._observations.get(
+                where={"timestamp": {"$lt": cutoff}},
+                include=["documents", "metadatas"],
+            )
+            if not results["ids"]:
+                return None
+
+            candidates = list(zip(results["documents"], results["metadatas"]))
+
+            # Prefer memories from a previous session — genuine "before"
+            other_session = [(d, m) for d, m in candidates if m.get("session_id") != self._session_id]
+            pool = other_session if other_session else candidates
+
+            doc, meta = _random.choice(pool)
+            ts = meta.get("timestamp", 0)
+            return {"text": doc, "age_seconds": time.time() - ts, "timestamp": ts}
+        except Exception:
+            return None
 
     def recall_tangent(self, current_perception: str = "") -> Optional[str]:
         """Surface one old observation that's adjacent to — but different from —
