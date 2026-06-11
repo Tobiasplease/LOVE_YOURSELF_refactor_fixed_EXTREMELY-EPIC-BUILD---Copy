@@ -401,15 +401,27 @@ class Captioner(MemoryMixin):
                             "seed": _random.randint(1, 1000000),
                         }
 
-                        # Video mode: check frame buffer for motion
+                        # Video mode: check frame buffer for motion.
+                        # Scene motion (room changed) and ego motion (camera moved)
+                        # are separated — looking around is not an event.
                         use_video = False
+                        scene_diff = 0.0
+                        ego_count = 0
                         if VIDEO_MODE_ENABLED and _cfg.INFERENCE_BACKEND == "llama_server":
                             from captioner.frame_buffer import frame_buffer
                             recent_meta = frame_buffer.get_recent_with_metadata(seconds=10, max_frames=6)
                             if recent_meta:
                                 max_diff = max(f["diff_score"] for f in recent_meta)
+                                scene_diffs = [f["diff_score"] for f in recent_meta
+                                               if not f.get("detection", {}).get("ego_motion")]
+                                scene_diff = max(scene_diffs) if scene_diffs else 0.0
+                                ego_count = sum(1 for f in recent_meta
+                                                if f.get("detection", {}).get("ego_motion"))
                                 if max_diff > MOTION_THRESHOLD:
                                     use_video = True
+
+                        # Stash for the next prompt build — stillness invites dwelling
+                        self._last_scene_diff = scene_diff
 
                         if use_video:
                             video_frames = [f["jpeg"] for f in recent_meta]
@@ -425,8 +437,16 @@ class Captioner(MemoryMixin):
                             elif person_frames > total * 0.5:
                                 detection_line = "Someone is in front of you.\n"
 
-                            print(f"[VIDEO] {total} frames over {duration:.1f}s, max_diff={max_diff:.4f}, face={face_frames}/{total}, person={person_frames}/{total}")
-                            video_prompt = f"You're seeing the last {duration:.0f} seconds.{' Something moved.' if max_diff > 0.05 else ''}\n{detection_line}{user_prompt}"
+                            # Motion framing: room motion is an event; own motion isn't
+                            if scene_diff > MOTION_THRESHOLD:
+                                motion_line = " Something moved in the room."
+                            elif ego_count >= 2:
+                                motion_line = " The view changed because you were looking around — the room itself may be still."
+                            else:
+                                motion_line = ""
+
+                            print(f"[VIDEO] {total} frames over {duration:.1f}s, scene_diff={scene_diff:.4f}, ego={ego_count}/{total}, face={face_frames}/{total}, person={person_frames}/{total}")
+                            video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{detection_line}{user_prompt}"
                             caption = query_model_video(
                                 prompt=video_prompt,
                                 frames=video_frames,

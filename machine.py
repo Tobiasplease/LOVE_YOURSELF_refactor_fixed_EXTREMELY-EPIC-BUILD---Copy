@@ -1239,8 +1239,7 @@ try:
         # Store full-resolution frame for LLM captioning
         full_res_frame = frame.copy()
 
-        # Feed frame buffer for video temporal analysis
-        frame_buffer.push(frame)
+        # Frame buffer push moved after detection processing (see below)
 
         # Keep full resolution for preview (was: frame = cv2.resize(frame, (320, 240)))
 
@@ -1376,6 +1375,22 @@ try:
             person_detection.update_yolo_detection(False)
 
         # Note: best_box is only for FACE tracking, YOLO detection is passed separately
+
+        # Feed frame buffer with detection snapshot for temporal awareness.
+        # Servo position lets the buffer flag ego-motion (camera moved vs scene moved).
+        try:
+            from vision.gaze import physics_state as _gaze_phys
+            _cam_pan, _cam_tilt = _gaze_phys.pan, _gaze_phys.tilt
+        except Exception:
+            _cam_pan, _cam_tilt = None, None
+        frame_buffer.push(frame, detection={
+            "face": best_box is not None,
+            "person": "person" in labels,
+            "person_count": DetectionMemory.get_person_count(),
+            "track_id": DetectionMemory.get_best_track_id(),
+            "pan": _cam_pan,
+            "tilt": _cam_tilt,
+        })
 
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:
             # Check if mood analysis is already running to prevent overlapping threads

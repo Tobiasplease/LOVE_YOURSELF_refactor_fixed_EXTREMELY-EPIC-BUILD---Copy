@@ -1860,13 +1860,30 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # 6. THOUGHT THREAD LAST — continuation signal.
-    # Dropped ~1-in-4 captions (more when bored) so the register can break:
-    # continuing the previous sentence every time locks the voice into
-    # whatever tone it last had. A thought ends; a new one starts elsewhere.
+    # 6. THOUGHT THREAD LAST — continuation signal with three states:
+    #   dwell — scene is still: stay with the thought, push it one step further
+    #           (builds multi-caption threads instead of perpetual scanning)
+    #   normal — tail of last thought as a loose continuation seed
+    #   drop — no thread, register can break and start fresh elsewhere
     import random as _random
-    _drop_prob = 0.4 if getattr(agent, "boredom", 0.0) > 0.7 else 0.25
-    skip_thread = _random.random() < _drop_prob
+
+    scene_diff = getattr(agent, "_last_scene_diff", None)
+    scene_still = scene_diff is not None and scene_diff < 0.03
+
+    dwelling = getattr(agent, "_dwell_count", 0) > 0
+    if dwelling:
+        agent._dwell_count -= 1
+    elif scene_still and mode in ("observational", "workspace", "introspective") and _random.random() < 0.3:
+        # Room is quiet — a chance to go deeper for this caption and the next
+        agent._dwell_count = 1
+        dwelling = True
+
+    if dwelling:
+        skip_thread = False
+    else:
+        _drop_prob = 0.4 if getattr(agent, "boredom", 0.0) > 0.7 else 0.25
+        skip_thread = _random.random() < _drop_prob
+
     try:
         if not skip_thread and hasattr(agent, "recent_captions") and agent.recent_captions:
             for entry in reversed(agent.recent_captions[-4:]):
@@ -1880,6 +1897,8 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
                         if len(tail) > 80:
                             tail = tail[:80].rsplit(" ", 1)[0]
                         prompt_parts.append(f"...{tail}.")
+                        if dwelling:
+                            prompt_parts.append("Stay with that thought — take it one step further instead of starting a new one.")
                     break
     except Exception:
         pass
