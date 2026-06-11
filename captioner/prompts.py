@@ -158,7 +158,8 @@ _REGISTER_BORED = (
     " Nothing much is happening. Think small: one plain detail, or just that nothing's new."
 )
 _REGISTER_ALERT = (
-    " Something has your attention. Look at it properly — what it is, where it is, what changed."
+    " Something has your attention. Look at it properly and let it land — "
+    "you don't have to find change where there is none."
 )
 _REGISTER_NEUTRAL = (
     " You're just watching. A detail here, a half-thought there."

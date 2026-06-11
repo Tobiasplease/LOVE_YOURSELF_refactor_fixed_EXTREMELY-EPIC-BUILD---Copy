@@ -424,28 +424,41 @@ class Captioner(MemoryMixin):
                         self._last_scene_diff = scene_diff
 
                         if use_video:
-                            video_frames = [f["jpeg"] for f in recent_meta]
-                            duration = recent_meta[-1]["timestamp"] - recent_meta[0]["timestamp"]
+                            # Prefer camera-steady frames: ego-motion frames inside a
+                            # super-frame pair encode the whole room as shifting, which
+                            # the model perceives as everything moving. Only fall back
+                            # to the full set when the camera moved the whole time.
+                            steady_meta = [f for f in recent_meta
+                                           if not f.get("detection", {}).get("ego_motion")]
+                            send_meta = steady_meta if len(steady_meta) >= 3 else recent_meta
+
+                            video_frames = [f["jpeg"] for f in send_meta]
+                            duration = send_meta[-1]["timestamp"] - send_meta[0]["timestamp"]
 
                             # Summarize detection state across the frame sequence
-                            face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
-                            person_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("person"))
-                            total = len(recent_meta)
+                            face_frames = sum(1 for f in send_meta if f.get("detection", {}).get("face"))
+                            person_frames = sum(1 for f in send_meta if f.get("detection", {}).get("person"))
+                            total = len(send_meta)
                             detection_line = ""
                             if face_frames > total * 0.4:
                                 detection_line = "Someone is facing you — eye contact.\n"
                             elif person_frames > total * 0.5:
                                 detection_line = "Someone is in front of you.\n"
 
-                            # Motion framing: room motion is an event; own motion isn't
-                            if scene_diff > MOTION_THRESHOLD:
+                            # Tiered motion framing. Baseline diff (noise, micro-shifts)
+                            # runs 0.03-0.08 — claiming "something moved" at that level
+                            # made the model file constant change reports. Stillness is
+                            # stated explicitly: it licenses "nothing new" thoughts.
+                            if scene_diff > 0.08:
                                 motion_line = " Something moved in the room."
-                            elif ego_count >= 2:
-                                motion_line = " The view changed because you were looking around — the room itself may be still."
+                            elif scene_diff < 0.03 and ego_count < 2:
+                                motion_line = " The room is still."
+                            elif ego_count >= 2 and scene_diff < 0.03:
+                                motion_line = " The view changed because you were looking around — the room itself is still."
                             else:
                                 motion_line = ""
 
-                            print(f"[VIDEO] {total} frames over {duration:.1f}s, scene_diff={scene_diff:.4f}, ego={ego_count}/{total}, face={face_frames}/{total}, person={person_frames}/{total}")
+                            print(f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_diff={scene_diff:.4f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}")
                             video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{detection_line}{user_prompt}"
                             caption = query_model_video(
                                 prompt=video_prompt,
