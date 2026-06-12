@@ -179,18 +179,21 @@ def _mood_clause(valence: float, arousal: float, clarity: float) -> str:
     This is the loop-safe emotional channel: the mood engine reacts to events
     as NUMBERS, and numbers map to fixed phrases — unlike LLM-generated
     felt-state text, this can never spiral into its own register.
+
+    Scales match the actual engine output: valence rarely exceeds +-0.15
+    (keyword sentiment caps at +-0.3), arousal is 0..1 with base ~0.3.
     """
-    if valence < -0.3 and arousal > 0.3:
+    if valence < -0.06 and arousal > 0.5:
         return " Something's bothering you right now."
-    if valence < -0.3 and arousal < -0.3:
+    if valence < -0.06 and arousal < 0.2:
         return " You're feeling low and heavy."
-    if valence > 0.3 and arousal < -0.3:
+    if valence > 0.06 and arousal < 0.22:
         return " You're content just now."
-    if valence > 0.3 and arousal > 0.3:
+    if valence > 0.06 and arousal > 0.5:
         return " You're in a good mood, energized."
-    if arousal > 0.5:
+    if arousal > 0.65:
         return " You're keyed up."
-    if arousal < -0.5:
+    if arousal < 0.12:
         return " You're very calm."
     if clarity < -0.4:
         return " Things feel a bit unclear."
@@ -1868,8 +1871,9 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     #   drop — no thread, register can break and start fresh elsewhere
     import random as _random
 
-    scene_diff = getattr(agent, "_last_scene_diff", None)
-    scene_still = scene_diff is not None and scene_diff < 0.03
+    # Scene stillness from person-angle tracking (camera-compensated), not pixel
+    # diff — the camera sways constantly, pixel diff is always high.
+    scene_still = getattr(agent, "_last_scene_motion", None) is False
 
     dwelling = getattr(agent, "_dwell_count", 0) > 0
     if dwelling:

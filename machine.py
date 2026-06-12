@@ -1383,6 +1383,17 @@ try:
             _cam_pan, _cam_tilt = _gaze_phys.pan, _gaze_phys.tilt
         except Exception:
             _cam_pan, _cam_tilt = None, None
+
+        # Person world-angle: camera-compensated position, so person movement is
+        # measurable regardless of where the camera points. Pixel diff can't do
+        # this — even 1 degree of camera sway shifts every pixel.
+        _person_angle = None
+        if "person" in labels and _cam_pan is not None:
+            _pb = DetectionMemory.get_person_bbox()
+            if _pb:
+                _cx = (_pb[0] + _pb[2]) / 2.0
+                _person_angle = _cam_pan + ((_cx / frame.shape[1]) - 0.5) * 60.0  # ~60 deg horizontal FOV
+
         frame_buffer.push(frame, detection={
             "face": best_box is not None,
             "person": "person" in labels,
@@ -1390,6 +1401,7 @@ try:
             "track_id": DetectionMemory.get_best_track_id(),
             "pan": _cam_pan,
             "tilt": _cam_tilt,
+            "person_angle": _person_angle,
         })
 
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:

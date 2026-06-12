@@ -58,9 +58,11 @@ class MoodEngine:
         # Combine simple analysis with traditional factors
         self.current_mood = np.clip(scalar_mood + traditional_change, 0.0, 1.0)
 
-        # CRITICAL: Update 3D mood vector from sentiment analysis (was missing!)
-        # Map sentiment to valence, use caption content for arousal/clarity
-        valence = scalar_mood  # Direct mapping from sentiment
+        # Update 3D mood vector. Keyword sentiment alone flatlines at ~0 with a
+        # grounded caption register (no emotion adjectives to match), so real
+        # events feed the vector too: company lifts valence, presence and
+        # novelty raise arousal. These are state signals, not text — loop-safe.
+        valence = np.clip(scalar_mood + (0.08 if saw_person else -0.01), -1.0, 1.0)
 
         # Calculate arousal from action/energy words in caption
         energy_words = ["energetic", "excited", "dynamic", "movement", "active", "engaged", "focus", "intense", "alert", "vibrant"]
@@ -72,7 +74,8 @@ class MoodEngine:
         for word in calm_words:
             if word in caption.lower():
                 arousal_score -= 0.1
-        arousal = np.clip(0.3 + arousal_score, 0.0, 1.0)  # Base arousal + content adjustment
+        arousal_score += (0.15 if saw_person else 0.0) + 0.2 * novelty
+        arousal = np.clip(0.3 + arousal_score, 0.0, 1.0)  # Base arousal + content + events
 
         clarity = np.clip((len(caption.split()) - 10) / 20, -1.0, 1.0)  # Caption length suggests clarity
 

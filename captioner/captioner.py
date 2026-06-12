@@ -402,26 +402,38 @@ class Captioner(MemoryMixin):
                         }
 
                         # Video mode: check frame buffer for motion.
-                        # Scene motion (room changed) and ego motion (camera moved)
-                        # are separated — looking around is not an event.
+                        # Scene motion is measured by PERSON movement (camera-compensated
+                        # world angle + count changes), not pixel diff — the camera sways
+                        # constantly, so even sub-degree drift dominates pixel diff.
+                        # Pixel diff only decides whether sending video is worthwhile.
                         use_video = False
-                        scene_diff = 0.0
+                        scene_motion = False
+                        person_present_in_window = False
                         ego_count = 0
                         if VIDEO_MODE_ENABLED and _cfg.INFERENCE_BACKEND == "llama_server":
                             from captioner.frame_buffer import frame_buffer
                             recent_meta = frame_buffer.get_recent_with_metadata(seconds=10, max_frames=6)
                             if recent_meta:
                                 max_diff = max(f["diff_score"] for f in recent_meta)
-                                scene_diffs = [f["diff_score"] for f in recent_meta
-                                               if not f.get("detection", {}).get("ego_motion")]
-                                scene_diff = max(scene_diffs) if scene_diffs else 0.0
                                 ego_count = sum(1 for f in recent_meta
                                                 if f.get("detection", {}).get("ego_motion"))
                                 if max_diff > MOTION_THRESHOLD:
                                     use_video = True
 
+                                # Person movement in world coordinates
+                                angles = [f.get("detection", {}).get("person_angle") for f in recent_meta]
+                                angles = [a for a in angles if a is not None]
+                                person_present_in_window = len(angles) > 0
+                                person_moved = len(angles) >= 2 and (max(angles) - min(angles)) > 4.0
+
+                                # Arrivals/departures within the window
+                                counts = [f.get("detection", {}).get("person_count", 0) for f in recent_meta]
+                                count_changed = len(set(counts)) > 1
+
+                                scene_motion = person_moved or count_changed
+
                         # Stash for the next prompt build — stillness invites dwelling
-                        self._last_scene_diff = scene_diff
+                        self._last_scene_motion = scene_motion
 
                         if use_video:
                             # Prefer camera-steady frames: ego-motion frames inside a
@@ -445,20 +457,18 @@ class Captioner(MemoryMixin):
                             elif person_frames > total * 0.5:
                                 detection_line = "Someone is in front of you.\n"
 
-                            # Tiered motion framing. Baseline diff (noise, micro-shifts)
-                            # runs 0.03-0.08 — claiming "something moved" at that level
-                            # made the model file constant change reports. Stillness is
+                            # Motion framing from the person-angle signal. Stillness is
                             # stated explicitly: it licenses "nothing new" thoughts.
-                            if scene_diff > 0.08:
-                                motion_line = " Something moved in the room."
-                            elif scene_diff < 0.03 and ego_count < 2:
-                                motion_line = " The room is still."
-                            elif ego_count >= 2 and scene_diff < 0.03:
+                            if scene_motion:
+                                motion_line = " Someone is moving in the room."
+                            elif person_present_in_window:
+                                motion_line = " They're staying still."
+                            elif ego_count >= 2:
                                 motion_line = " The view changed because you were looking around — the room itself is still."
                             else:
-                                motion_line = ""
+                                motion_line = " The room is still."
 
-                            print(f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_diff={scene_diff:.4f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}")
+                            print(f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}")
                             video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{detection_line}{user_prompt}"
                             caption = query_model_video(
                                 prompt=video_prompt,
@@ -504,7 +514,10 @@ class Captioner(MemoryMixin):
                         # Store in semantic memory
                         try:
                             from captioner.semantic_memory import get_semantic_memory
-                            get_semantic_memory().after_monologue("", caption, matched_concepts=matched_concepts or [])
+                            # Single-pass pipeline: the caption IS the perception.
+                            # Passing "" here silently disabled observation storage
+                            # for the whole branch (the length guard rejected it).
+                            get_semantic_memory().after_monologue(caption or "", caption, matched_concepts=matched_concepts or [])
                         except Exception as sem_err:
                             print(f"[SEMANTIC] Store failed: {sem_err}")
                 except Exception as cap_err:
@@ -1139,6 +1152,27 @@ class Captioner(MemoryMixin):
         else:
             time_context = "First time online.\n"
 
+        # Clock awareness: what time of day it is waking up into
+        try:
+            import datetime as _dt
+            now_dt = _dt.datetime.now()
+            hour = now_dt.hour
+            if hour < 6:
+                part_of_day = "the middle of the night"
+            elif hour < 10:
+                part_of_day = "morning"
+            elif hour < 13:
+                part_of_day = "late morning"
+            elif hour < 18:
+                part_of_day = "afternoon"
+            elif hour < 22:
+                part_of_day = "evening"
+            else:
+                part_of_day = "late at night"
+            time_context += f"It's {now_dt.strftime('%A')} {part_of_day}, {now_dt.strftime('%H:%M')}.\n"
+        except Exception:
+            pass
+
         # Build narrative memory context — sanitize garbage captions from prior sessions
         memory_context = ""
         prior = getattr(self, "prior_session_last_caption", None)
@@ -1241,10 +1275,15 @@ class Captioner(MemoryMixin):
         )
         print(f"[🌅 AWAKENING] Response: {response[:120] if response else 'EMPTY'}...")
 
-        # Filter: must be brief inner monologue, not garbage
-        if response and len(response.strip()) > 10 and len(response.strip()) <= 150:
+        # Accept the rich response: trim to complete sentences within budget
+        # instead of rejecting. (The old <=150 char filter discarded nearly
+        # every real awakening and shipped the hardcoded fallback instead.)
+        if response and len(response.strip()) > 10:
             cleaned = response.strip().strip('"').strip()
-            if cleaned and not cleaned.startswith(("[", "{")):
+            if cleaned and not cleaned.startswith(("[", "{")) and "[WARNING]" not in cleaned:
+                if len(cleaned) > 300:
+                    cut = max(cleaned[:300].rfind("."), cleaned[:300].rfind("?"), cleaned[:300].rfind("!"))
+                    cleaned = cleaned[:cut + 1] if cut > 20 else cleaned[:300].rsplit(" ", 1)[0] + "..."
                 return cleaned
         return "Coming back online... the room is still here."
 
