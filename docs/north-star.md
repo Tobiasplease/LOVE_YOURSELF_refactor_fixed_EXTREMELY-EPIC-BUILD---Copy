@@ -100,6 +100,21 @@ sitting there), so the past surfaces when the present rhymes with it.
 Agency should expand where authentic: the machine already steers its gaze;
 its desires should weigh into when it draws.
 
+## Principle 6 — Salience arbitrates between worlds
+
+External awareness and internal development are not balanced; they are
+time-multiplexed by salience. A live event (scene motion, an arrival, eye
+contact, a new location) strips the prompt to the present — no memory, no
+preoccupation, no dwelling. A quiet stretch fills the prompt with interior
+material and gives the reflection loop the room. The failure modes guard
+each other: endless object-listing can't happen because quiet moments get
+interiority instead of inventory; solipsism can't happen because events
+physically displace the inner material from the prompt. Attention itself
+breathes — caption cadence tightens when something happens, stretches when
+nothing does. The machine should be hardest to distract exactly when
+nothing is happening, and impossible not to interrupt when you walk up
+to it.
+
 ## How we'll know it's working
 
 Not by reading one good caption. Over a week of running:
