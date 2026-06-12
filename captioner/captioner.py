@@ -357,9 +357,13 @@ class Captioner(MemoryMixin):
             pass
 
         # Eye contact is salient at its onset — someone holding your gaze for
-        # ten minutes is presence, not an event
+        # ten minutes is presence, not an event. The sustained state still
+        # reaches the prompt (prompts.py eye-contact line) — it used to live
+        # only in the video path, which face-tracking saccades always skip,
+        # so someone staring at the machine went entirely unmentioned
         eye_onset = info["eye_contact"] and not self._prev_eye_contact
         self._prev_eye_contact = info["eye_contact"]
+        self._eye_contact_now = info["eye_contact"]
 
         self._last_scene_motion = info["scene_motion"]
         self._salience_hot = bool(info["scene_motion"] or arrival or eye_onset)
@@ -577,15 +581,11 @@ class Captioner(MemoryMixin):
                             video_frames = [f["jpeg"] for f in send_meta]
                             duration = send_meta[-1]["timestamp"] - send_meta[0]["timestamp"]
 
-                            # Summarize detection state across the frame sequence
+                            # (eye contact / presence now live in the main prompt via
+                            # _assess_scene — one channel per fact)
                             face_frames = sum(1 for f in send_meta if f.get("detection", {}).get("face"))
                             person_frames = sum(1 for f in send_meta if f.get("detection", {}).get("person"))
                             total = len(send_meta)
-                            detection_line = ""
-                            if face_frames > total * 0.4:
-                                detection_line = "Someone is facing you — eye contact.\n"
-                            elif person_frames > total * 0.5:
-                                detection_line = "Someone is in front of you.\n"
 
                             # Motion framing from the person-angle signal. Stillness is
                             # stated explicitly: it licenses "nothing new" thoughts.
@@ -599,7 +599,7 @@ class Captioner(MemoryMixin):
                                 motion_line = " The room is still."
 
                             print(f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}")
-                            video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{detection_line}{user_prompt}"
+                            video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{user_prompt}"
                             caption = query_model_video(
                                 prompt=video_prompt,
                                 frames=video_frames,
@@ -886,6 +886,14 @@ class Captioner(MemoryMixin):
                 return
         except Exception:
             pass
+
+        # Never step away to conceive a drawing mid-moment: the 5-step
+        # analysis monopolizes the inference server for minutes (caption
+        # stalls of 20-83s observed June 12) — exactly when reactivity
+        # matters most. Quiet stretches are when drawings get conceived.
+        if self._salience_hot:
+            print("[🎨 CHECK] Deferred: something is happening — staying with the room")
+            return
 
         # STATE-MOTIVATED EVALUATION
         # Get current system state for decision

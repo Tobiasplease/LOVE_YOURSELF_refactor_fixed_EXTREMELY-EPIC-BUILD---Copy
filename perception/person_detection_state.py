@@ -57,7 +57,11 @@ class PersonDetectionState:
         self.person_state = "absent"
 
         # Extended timeouts for gaze-aware logic
-        self.remembered_timeout = 60.0  # Remember presence when not looking at last location
+        # 180s (was 60): YOLO misses a still, distant person for stretches at
+        # idle cadence — the 60s hard timeout churned phantom departures
+        # ("come and gone 14 times" while one person sat at the desk).
+        # Genuine exits are caught much faster by the sweep path above.
+        self.remembered_timeout = 180.0  # Remember presence when not looking at last location
         self.looking_away_timeout = 8.0  # Normal timeout when looking at last known location
 
         # Sweep-based departure detection
@@ -253,10 +257,10 @@ class PersonDetectionState:
                 self.recent_departures.append(now)
                 self.person_presence_duration = 0.0
                 self.recent_departures = [t for t in self.recent_departures if now - t < 300]
-                print(f"[👤] Person marked absent after timeout (60s)")
+                print(f"[👤] Person marked absent after timeout ({int(self.remembered_timeout)}s)")
                 try:
                     from utils.episodic_log import episodic_log
-                    episodic_log.record("person_left", "gone after 60s timeout")
+                    episodic_log.record("person_left", "gone after timeout")
                 except Exception:
                     pass
             else:

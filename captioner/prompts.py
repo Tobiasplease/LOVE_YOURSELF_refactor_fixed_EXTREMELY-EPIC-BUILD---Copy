@@ -555,8 +555,13 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
             # Presence measured from the start of the CURRENT visit cluster
             total_presence = _time.time() - _current_presence_start(pairs)
 
-            if latest["end"] is None:
-                # Person still here — use total time since they first showed up
+            # The live gaze state wins over the episodic record: a re-detection
+            # inside the 90s debounce writes no new arrival event, so the log
+            # can say "departed" while the person stands right there
+            engaged = gaze_state in ("tracking", "aware", "grace")
+
+            if latest["end"] is None or engaged:
+                # Person here — use total time since they first showed up
                 if total_presence < 30:
                     parts.append("Someone just arrived.")
                 elif total_presence < 120:
@@ -591,14 +596,11 @@ def get_relational_context(agent=None) -> str:
             duration_mins = int(total_presence / 60)
             if duration_mins > 1:
                 fragments.append(f"They've been here {duration_mins} minutes.")
-            # Visit count reflects YOLO re-detections — use cautiously
-            unique_visits = len(pairs)
-            if unique_visits > 50:
-                fragments.append(f"I've watched them come and go {unique_visits} times now.")
-            elif unique_visits > 10:
-                fragments.append(f"They've come and gone {unique_visits} times.")
-            elif unique_visits > 3:
-                fragments.append(f"They've been here {unique_visits} times.")
+            # Visit-count line removed June 12: pair counts are YOLO
+            # re-detection churn, not visits — "they've come and gone 14
+            # times" (one person, sitting still) fed straight into the
+            # monologue as narrative. Real visit history belongs to the
+            # episodic rework, not this line.
     except Exception:
         pass
 
@@ -1841,6 +1843,11 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         event_line = getattr(agent, "_salience_event", None)
         if event_line:
             prompt_parts.append(event_line)
+
+    # 1c. EYE CONTACT (sustained state, live-gated by detection): someone
+    # holding the machine's gaze is present-tense truth the model must know
+    elif getattr(agent, "_eye_contact_now", False):
+        prompt_parts.append("They're looking straight at you.")
 
     # 2. MODE-GATED CONTEXT
     if mode in MODE_CONTEXTS:
