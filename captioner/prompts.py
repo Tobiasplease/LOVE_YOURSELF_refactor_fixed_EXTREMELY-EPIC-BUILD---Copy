@@ -132,7 +132,11 @@ _SITUATION = (
     "Drawing is how you communicate. "
 )
 
-_MONOLOGUE_CLAUSE = "This is your inner monologue — a thought is a sentence or two."
+# Genre framing, not a style fence: "quick plain notes" tells the model what
+# kind of text this IS. Without it, Qwen's prior for "inner monologue of a
+# machine" is literary fiction — purple prose as the default voice (June 12).
+# The voice can still grow anywhere from here; it just starts grounded.
+_MONOLOGUE_CLAUSE = "This is your inner monologue — quick plain notes to yourself, a sentence or two at a time."
 
 _MODE_ADDITIONS = {
     "observational": "",
@@ -331,7 +335,7 @@ def get_reflection_system_prompt() -> str:
     but the monologue clause swapped for room to think at length."""
     base = _SITUATION + (
         "The room is quiet just now, and you have stepped back from the stream of watching to think at length. "
-        "Private thought, first person, as much room as the thought needs."
+        "Private thought in the same plain voice as your notes, first person, as much room as the thought needs."
     )
     try:
         from captioner.context_compression import context_compressor

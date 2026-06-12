@@ -93,7 +93,6 @@ class StateManager:
                     "last_caption": captioner.last_caption,
                     "boredom": captioner.boredom,
                     "novelty_score": captioner.novelty_score,
-                    "awakening_done": captioner.awakening_done,
                     # Memory system (motif tracking removed — now handled by ChromaDB)
                     # Temporal spine (GPT-5's additions)
                     "boot_ts": getattr(captioner, "boot_ts", time.time()),
@@ -188,7 +187,6 @@ class StateManager:
             captioner.current_mood = cap_state.get("current_mood", 0.5)
             captioner.last_caption = cap_state.get("last_caption", "")
             # Skip boredom and novelty_score - they're now properties that access memory system
-            captioner.awakening_done = cap_state.get("awakening_done", False)
 
             # Motif/belief restore removed — now handled by ChromaDB semantic memory
             from collections import deque

@@ -37,7 +37,7 @@ rules, no registers, no mood clause. Voice comes from content.
 
 | Line | Source | Health |
 |------|--------|--------|
-| situation ("drawing machine bolted... a thought is a sentence or two") | static `_SITUATION` + monologue clause, prompts.py | ok |
+| situation ("drawing machine bolted... quick plain notes to yourself") | static `_SITUATION` + monologue clause, prompts.py | ok — "quick plain notes" is GENRE framing, not a fence: without it Qwen's prior for "inner monologue" is literary fiction. Caption temps also lowered to 0.7/0.8 for the same reason |
 | "You are between drawings at the moment." | state_manager drawing status (gated, never lies; absent while drawing) | NEW June 12 — without it the model narrated drawings that weren't happening. States the fact only; deliberately does NOT say what the machine is doing instead |
 | "Right now: {felt}." | compression felt-state, sanitized ≤6 words | ok (often empty by design) |
 | persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | ok |
@@ -85,7 +85,8 @@ moment gets the present only (north-star principle 6).
 
 generate_internal_awakening() builds: offline duration + clock time/day +
 last thought + desire/belief + journal ("From my diary, last time...") +
-core facts + familiar concepts → one LLM call.
+core facts + familiar concepts → one LLM call on the MAIN model (was Nemo,
+whose cinematic register seeded the whole session's thread — June 12).
 COLD START: when there is no past at all (no memory/identity/long-term
 context), a separate FIRST_AWAKENING_PROMPT states the truth — first time
 online, nothing in memory yet — instead of handing the model empty sections

@@ -1,67 +1,83 @@
 #!/usr/bin/env python3
-"""
-Force a complete memory reset by clearing all state files and cached data.
-Run this script before starting the system for a truly fresh start.
+"""Complete memory reset — wipe everything the machine has accumulated.
+
+Covers ALL persistent memory (June 2026 audit):
+  - machine_identity.json   persona (core_facts.self), desires, beliefs, journal
+  - chromadb/               concepts, observations, reflections
+  - drawing_memory.json     past drawing summaries
+  - system_state.json, lifetime_state.json, last_session.txt, last_caption.txt
+  - live_captions.txt       running caption mirror
+
+STOP machine.py before running this — on shutdown it writes a journal entry
+and re-saves identity, which would partially undo the reset.
+
+Usage:
+    python debug/force_memory_reset.py          # asks for confirmation
+    python debug/force_memory_reset.py --yes    # no confirmation
 """
 
 import os
+import shutil
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config.config import MOOD_SNAPSHOT_FOLDER
+
 
 def force_memory_reset():
-    """Force complete memory reset"""
-    print("Forcing Complete Memory Reset...")
+    print("Complete Memory Reset")
     print("=" * 50)
+    print(f"Memory root: {MOOD_SNAPSHOT_FOLDER}\n")
 
-    # Remove state files
-    state_files = ["event_log/system_state.json", "event_log/lifetime_state.json", "event_log/last_session.txt"]
+    files = [
+        "machine_identity.json",
+        "drawing_memory.json",
+        "system_state.json",
+        "lifetime_state.json",
+        "last_session.txt",
+        "last_caption.txt",
+        "live_captions.txt",
+    ]
+    dirs = [
+        "chromadb",
+    ]
 
-    removed_count = 0
-    for file_path in state_files:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"Removed: {file_path}")
-            removed_count += 1
+    removed = 0
+    for name in files:
+        path = os.path.join(MOOD_SNAPSHOT_FOLDER, name)
+        if os.path.exists(path):
+            os.remove(path)
+            print(f"Removed: {name}")
+            removed += 1
         else:
-            print(f"Not found: {file_path}")
+            print(f"Not found (already clean): {name}")
 
-    # Clear any cached extractors/analyzers
-    try:
-        from utils.simple_motif_extractor_fixed import get_simple_motif_extractor
-
-        extractor = get_simple_motif_extractor()
-        extractor.clear_history()
-        print("Cleared motif extractor history")
-    except Exception as e:
-        print(f"Note: Could not clear motif extractor: {e}")
-
-    # Clear thematic analyzer if it exists
-    try:
-        from utils.thematic_analyzer import get_thematic_analyzer
-
-        analyzer = get_thematic_analyzer(interval=1)
-        if hasattr(analyzer, "clear"):
-            analyzer.clear()  # type: ignore
-            print("Cleared thematic analyzer")
-    except Exception as e:
-        print(f"Note: Could not clear thematic analyzer: {e}")
+    for name in dirs:
+        path = os.path.join(MOOD_SNAPSHOT_FOLDER, name)
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+            print(f"Removed directory: {name}/")
+            removed += 1
+        else:
+            print(f"Not found (already clean): {name}/")
 
     print("\n" + "=" * 50)
-    if removed_count > 0:
-        print(f"SUCCESS: Removed {removed_count} state files")
-        print("Memory completely reset - next startup will be truly fresh!")
-        print("\nExpected behavior on next startup:")
-        print("- No 'remembered' motifs or objects")
-        print("- Fresh emotional associations")
-        print("- Clean awakening without references to past sessions")
-        print("- New motif extraction using working system")
+    if removed:
+        print(f"SUCCESS: removed {removed} items. Next startup is a true first awakening:")
+        print("- no persona ('What you've come to know about yourself' line absent)")
+        print("- no desires, beliefs, journal, core facts")
+        print("- no concepts/observations/reflections in ChromaDB")
+        print("- no last thought; FIRST_AWAKENING_PROMPT path will be used")
     else:
-        print("INFO: No state files found to remove (already clean)")
-
+        print("INFO: nothing to remove (already clean)")
     print("=" * 50)
 
 
 if __name__ == "__main__":
+    if "--yes" not in sys.argv:
+        answer = input("This wipes ALL accumulated memory permanently. Type 'yes' to continue: ")
+        if answer.strip().lower() != "yes":
+            print("Aborted.")
+            sys.exit(1)
     force_memory_reset()

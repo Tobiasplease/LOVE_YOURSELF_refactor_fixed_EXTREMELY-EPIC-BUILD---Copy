@@ -340,7 +340,7 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 # Control creativity and expressiveness in different types of responses
 CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 0.85))       # Regular observations (0.85 for Qwen)
 DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.0))            # Drawing prompts (lowered from 1.2 for Qwen's higher base entropy)
-REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 0.85))     # Long-form reflection loop (0.85 for Qwen's higher base entropy)
+REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 0.75))     # Long-form reflection loop — stored output, keep it grounded (Qwen drifts ornate at higher temps)
 ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) # First observations (slightly more grounded)
 
 # === OUTPUT SETTINGS ===

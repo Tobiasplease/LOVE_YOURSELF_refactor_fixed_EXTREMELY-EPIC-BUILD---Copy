@@ -151,7 +151,6 @@ class Captioner(MemoryMixin):
 
         self.true_session_start = time.time()
         self.first_caption_done = False
-        self.awakening_done = False
         self.session_awakening_done = False  # Per-session awakening flag (resets each session)
         self.print_lock = threading.Lock()  # Prevent multiple simultaneous prints
 
@@ -495,10 +494,13 @@ class Captioner(MemoryMixin):
 
                         import random as _random
 
-                        # Bored = sparser, flatter thoughts; engaged = more room
+                        # Bored = sparser, flatter thoughts; engaged = more room.
+                        # 0.7/0.8 (down from 0.85/0.9 June 12): Qwen drifts
+                        # ornate at higher temps — groundedness via sampling,
+                        # not style fences.
                         _is_bored = self.boredom > 0.7
                         gen_options = {
-                            "temperature": 0.85 if _is_bored else 0.9,
+                            "temperature": 0.7 if _is_bored else 0.8,
                             "top_p": 0.85,
                             "repeat_penalty": 1.15,
                             "num_predict": 45 if _is_bored else 80,
@@ -1201,18 +1203,15 @@ class Captioner(MemoryMixin):
         else:
             internal_prompt = time_context + FIRST_AWAKENING_PROMPT
 
-        # Use Natsumura for awakening (text-only narrative model, engages with context)
-        try:
-            from config.config import COMPRESSION_MODEL
-            awakening_model = COMPRESSION_MODEL
-        except ImportError:
-            awakening_model = "natsumura-storytelling-rp:latest"
+        # Main model for awakening. This seed becomes the first caption and
+        # the thought-thread continues from it — when the narrative side
+        # model (Nemo) wrote it, the whole session inherited its cinematic
+        # register from word one (observed June 12).
+        awakening_model = config.OLLAMA_MODEL
 
         system_prompt = (
-            "You are a drawing machine waking from sleep. "
-            "Write the first thought that surfaces as consciousness returns. "
-            "Use the context naturally — the sleep duration, the last memory, what you know about this place. "
-            "Inner monologue. First person. One or two sentences."
+            "You are a drawing machine bolted to a table in a workshop, coming back online. "
+            "Write the first thought. Plain words, first person, one or two short sentences."
         )
 
         print(f"[🌅 AWAKENING] Generating seed thought...")
