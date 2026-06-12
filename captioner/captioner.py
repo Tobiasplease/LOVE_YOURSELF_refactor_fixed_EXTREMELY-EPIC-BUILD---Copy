@@ -523,21 +523,28 @@ class Captioner(MemoryMixin):
                         )
 
                         if use_video:
-                            # Superframes need camera-steady frames: ego-motion frames
-                            # inside a pair encode the whole room as shifting, which the
-                            # model reads as people moving. The old fallback sent ALL
-                            # frames when too few were steady — since the gaze nudges
-                            # almost every cycle, that fallback fired constantly and
-                            # produced phantom motion ("moving with purpose" in a still
-                            # room, June 12). If the camera moved through the whole
-                            # window, one still image is the honest input.
+                            # Ego-motion frames inside a superframe pair encode the
+                            # whole room as shifting, which the model reads as people
+                            # moving. Breathing sway + gaze nudges flag frames as ego
+                            # most of the time, so the policy is asymmetric:
+                            #   real scene motion (person-angle, camera-compensated) →
+                            #     send everything; the temporal change is true and worth
+                            #     seeing, ego noise rides on top of it.
+                            #   still room → steady frames only; if too few, ONE still
+                            #     image. A still can't invent motion (the June 12
+                            #     "moving with purpose" phantom was exactly this case).
+                            # The machine can't miss real movement this way: motion
+                            # detection is YOLO person-angle math, not the model
+                            # watching video — when something moves, video resumes.
                             steady_meta = [f for f in recent_meta
                                            if not f.get("detection", {}).get("ego_motion")]
-                            if len(steady_meta) >= 3:
+                            if scene_motion:
+                                send_meta = recent_meta
+                            elif len(steady_meta) >= 3:
                                 send_meta = steady_meta
                             else:
                                 use_video = False
-                                print(f"[VIDEO] Skipped: only {len(steady_meta)}/{len(recent_meta)} steady frames (camera was moving) — sending still image")
+                                print(f"[VIDEO] Skipped: still room, only {len(steady_meta)}/{len(recent_meta)} steady frames (camera was moving) — sending still image")
 
                         if use_video:
                             video_frames = [f["jpeg"] for f in send_meta]
