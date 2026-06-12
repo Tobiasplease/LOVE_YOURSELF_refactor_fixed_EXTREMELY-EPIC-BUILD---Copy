@@ -255,6 +255,12 @@ UARM_START_PLAY_FILE = os.path.join(
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 7  # seconds between full caption cycles
+# Ego-compensated scene motion (vision/scene_motion.py): fraction of the frame
+# still moving after the camera's own movement is optically undone.
+# Calibrate with debug/test_scene_motion.py if it over/under-triggers.
+SCENE_MOTION_RESIDUAL_THRESHOLD = 0.03  # >3% of pixels moving = something is happening (synthetic: small object ~0.02, camera pan alone 0.00)
+SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
+
 # Attention breathes (north-star principle 6): cadence tightens when something
 # is happening, stretches when nothing has happened for a while
 CAPTION_INTERVAL_LIVE = 4  # cadence while salience is hot (motion, arrival, fresh eye contact)

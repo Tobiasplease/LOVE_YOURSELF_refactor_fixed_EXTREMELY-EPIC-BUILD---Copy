@@ -42,6 +42,9 @@ class FrameBuffer:
         self._last_pan: Optional[float] = None
         self._last_tilt: Optional[float] = None
 
+        from vision.scene_motion import SceneMotionEstimator
+        self._motion_estimator = SceneMotionEstimator()
+
     def push(self, frame: np.ndarray, detection: Optional[dict] = None) -> None:
         """Push a frame into the buffer. Rate-limited to target_fps.
         Frames are stored as JPEG bytes to keep memory bounded.
@@ -57,18 +60,29 @@ class FrameBuffer:
 
         # Compute frame diff score for "interestingness"
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        small = cv2.resize(gray, (160, 120))
+        small = cv2.resize(gray, (320, 240))
         diff_score = 0.0
         if self._last_frame_gray is not None:
             diff = cv2.absdiff(small, self._last_frame_gray)
             diff_score = float(diff.mean()) / 255.0
         self._last_frame_gray = small
 
+        det = dict(detection or {})
+
+        # Ego-compensated scene motion: optical flow estimates the camera's
+        # own movement between pushes and undoes it; what still changes is
+        # true scene motion, measurable even mid-sway. residual_motion is
+        # None when flow couldn't be estimated — consumers fall back to the
+        # servo-delta heuristic.
+        try:
+            flow = self._motion_estimator.update(small)
+            det["residual_motion"] = flow["residual_fraction"] if flow["valid"] else None
+        except Exception:
+            det["residual_motion"] = None
+
         # Ego-motion: if the servo moved since the last push, this frame's diff
         # is (mostly) self-caused — the camera looked around, the room may be
-        # still. Downstream uses this to separate "something moved" from
-        # "I moved".
-        det = dict(detection or {})
+        # still. Still used to pick steady frames for superframe pairing.
         pan, tilt = det.get("pan"), det.get("tilt")
         if pan is not None and tilt is not None and self._last_pan is not None:
             angular_delta = abs(pan - self._last_pan) + abs(tilt - self._last_tilt)
@@ -136,6 +150,7 @@ class FrameBuffer:
         self._last_frame_gray = None
         self._last_pan = None
         self._last_tilt = None
+        self._motion_estimator.reset()
 
 
 # Singleton

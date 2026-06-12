@@ -301,6 +301,7 @@ class Captioner(MemoryMixin):
         info = {
             "recent_meta": [],
             "max_diff": 0.0,
+            "max_residual": 0.0,
             "ego_count": 0,
             "scene_motion": False,
             "person_present_in_window": False,
@@ -317,6 +318,15 @@ class Captioner(MemoryMixin):
             info["max_diff"] = max(f["diff_score"] for f in recent_meta)
             info["ego_count"] = sum(1 for f in recent_meta if f.get("detection", {}).get("ego_motion"))
 
+            # Ego-compensated optical flow (vision/scene_motion.py): true scene
+            # motion measurable even while the camera sways, person or not
+            from config.config import SCENE_MOTION_MIN_FRAMES, SCENE_MOTION_RESIDUAL_THRESHOLD
+            residuals = [f.get("detection", {}).get("residual_motion") for f in recent_meta]
+            residuals = [r for r in residuals if r is not None]
+            flow_available = len(residuals) > 0
+            flow_motion = sum(1 for r in residuals if r > SCENE_MOTION_RESIDUAL_THRESHOLD) >= SCENE_MOTION_MIN_FRAMES
+            info["max_residual"] = max(residuals) if residuals else 0.0
+
             # Person movement in world coordinates (camera sway is compensated;
             # pixel diff can't separate scene motion from camera motion)
             angles = [f.get("detection", {}).get("person_angle") for f in recent_meta]
@@ -324,11 +334,13 @@ class Captioner(MemoryMixin):
             info["person_present_in_window"] = len(angles) > 0
             person_moved = len(angles) >= 2 and (max(angles) - min(angles)) > 4.0
 
-            # Arrivals/departures within the window
+            # Person-count changes only count when flow agrees something moved
+            # (or flow is unavailable) — YOLO flicker on a still person used to
+            # read as constant arrivals/departures
             counts = [f.get("detection", {}).get("person_count", 0) for f in recent_meta]
             count_changed = len(set(counts)) > 1
 
-            info["scene_motion"] = person_moved or count_changed
+            info["scene_motion"] = person_moved or flow_motion or (count_changed and not flow_available)
 
             face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
             info["eye_contact"] = face_frames > len(recent_meta) * 0.4
@@ -571,7 +583,7 @@ class Captioner(MemoryMixin):
                             else:
                                 motion_line = " The room is still."
 
-                            print(f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}")
+                            print(f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}")
                             video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{detection_line}{user_prompt}"
                             caption = query_model_video(
                                 prompt=video_prompt,

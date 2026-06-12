@@ -100,11 +100,22 @@ sentence within 300 chars instead of rejecting.
 
 Pixel diff CANNOT separate scene from camera motion — 1° of servo sway moves
 every pixel ~10px. Roles now:
+- EGO-COMPENSATED FLOW (vision/scene_motion.py, NEW June 12): optical flow
+  estimates the camera's own movement between frame-buffer pushes (2fps),
+  warps it away, and measures what still changes — true scene motion,
+  person or not, measurable even mid-sway. `residual_motion` in every
+  frame snapshot; threshold SCENE_MOTION_RESIDUAL_THRESHOLD (calibrate
+  with debug/test_scene_motion.py). Synthetic check: camera pan alone
+  reads 0.000, pan + moving object reads 0.022.
 - pixel diff: only decides whether sending video is worth considering
 - ego_motion flag (servo delta >2°/frame): breathing sway (~1-1.2°) + gaze
-  nudges flag frames OFTEN — that's expected
-- person_angle (camera_pan + bbox offset × FOV): TRUE scene motion — person
-  angular movement >4° in window, or person-count change
+  nudges flag frames OFTEN — that's expected; only used to pick steady
+  frames for superframe pairing
+- person_angle (camera_pan + bbox offset × FOV): person-specific scene
+  motion — angular movement >4° in window
+- person-count changes only count as motion when flow agrees something
+  moved (YOLO flicker on a still person used to read as constant
+  arrivals/departures)
 - VIDEO POLICY (asymmetric, June 12): real scene motion → send all frames
   (temporal change is true, ego noise rides on top); still room → steady
   frames only, or fall back to ONE still image (a still can't invent
