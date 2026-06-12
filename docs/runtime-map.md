@@ -38,6 +38,7 @@ rules, no registers, no mood clause. Voice comes from content.
 | Line | Source | Health |
 |------|--------|--------|
 | situation ("drawing machine bolted... a thought is a sentence or two") | static `_SITUATION` + monologue clause, prompts.py | ok |
+| "You are between drawings at the moment." | state_manager drawing status (gated, never lies; absent while drawing) | NEW June 12 — without it the model narrated drawings that weren't happening. States the fact only; deliberately does NOT say what the machine is doing instead |
 | "Right now: {felt}." | compression felt-state, sanitized ≤6 words | ok (often empty by design) |
 | persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | ok |
 | mode addition ("You're aware of someone...") | mode selection | ok |
@@ -78,13 +79,17 @@ moment gets the present only (north-star principle 6).
 | during introspection | core facts update | core_facts place/people/drawings |
 | per compression | concept extraction (LLM, solid objects) | ChromaDB concepts |
 | every 30 min + shutdown | journal entry | machine_identity.json journal |
-| every ~20 quiet min | REFLECTION LOOP (captioner/reflection.py): long-form thought (600-token budget) on rotating subjects — room / visitor / drawings / time / itself; context = today's compressions + previous reflections + journal + drawings + desire; uses the main model; skipped while drawing | ChromaDB `reflections` collection + REFLECTION log entry; surfaces into quiet captions via echo line |
+| every ~20 quiet min | REFLECTION LOOP (captioner/reflection.py): long-form thought (600-token budget) on rotating subjects — room / visitor / drawings / time / itself; context = today's compressions + previous reflections + journal + drawings + desire; uses the main model; skipped while drawing; POSTPONED while the store is empty (reflecting on nothing invents a past that would echo forever) | ChromaDB `reflections` collection + REFLECTION log entry; surfaces into quiet captions via echo line |
 
 ## Awakening (first caption of a session)
 
 generate_internal_awakening() builds: offline duration + clock time/day +
 last thought + desire/belief + journal ("From my diary, last time...") +
 core facts + familiar concepts → one LLM call.
+COLD START: when there is no past at all (no memory/identity/long-term
+context), a separate FIRST_AWAKENING_PROMPT states the truth — first time
+online, nothing in memory yet — instead of handing the model empty sections
+to fill with priors (the dust-motes register).
 HISTORY: until June 12 a 150-char filter rejected nearly every response and
 shipped the hardcoded "Coming back online..." fallback. Now trims to
 sentence within 300 chars instead of rejecting.

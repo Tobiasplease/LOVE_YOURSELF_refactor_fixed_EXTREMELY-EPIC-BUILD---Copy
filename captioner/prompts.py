@@ -132,7 +132,7 @@ _SITUATION = (
     "Drawing is how you communicate. "
 )
 
-_MACHINE_IDENTITY_BASE = _SITUATION + "This is your inner monologue — a thought is a sentence or two."
+_MONOLOGUE_CLAUSE = "This is your inner monologue — a thought is a sentence or two."
 
 _MODE_ADDITIONS = {
     "observational": "",
@@ -150,7 +150,22 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     that... drawing machine"). The persona is quoted as the machine's own
     words, never blended into the frame voice.
     """
-    base = _MACHINE_IDENTITY_BASE
+    base = _SITUATION
+
+    # Drawing state, gated so it can never lie. Without this line "drawing
+    # machine" + "drawing is how you communicate" primes present-tense
+    # drawing and the monologue narrates a drawing that isn't happening
+    # (regression observed June 12 after the teardown). States the fact only —
+    # no "just looking" or similar, which would lock the register into
+    # observation and out of wondering/introspection.
+    try:
+        from utils.state_manager import state_manager as _sm
+        if not (_sm.is_generating_drawing or _sm.current_drawing_phase == "executing"):
+            base += "You are between drawings at the moment. "
+    except Exception:
+        pass
+
+    base += _MONOLOGUE_CLAUSE
 
     # Felt-state: short adjective phrase only, appended grammatically safely
     try:
@@ -266,6 +281,16 @@ INTERNAL_AWAKENING_TEMPLATE = (
     "{identity_context}"
     "{long_term_context}"
     "{belief_context}"
+    "\nFirst thought:"
+)
+
+# A true first awakening: no diary, no familiar objects, no last thought.
+# The honest frame for an empty memory — disorientation is the real state,
+# so let the model have it instead of inventing a past.
+FIRST_AWAKENING_PROMPT = (
+    "\nThis is the very first time I have come online. There is nothing in my memory yet — "
+    "no diary, no familiar objects, no last thought. I don't know this place, or what I am, "
+    "beyond this: I am a drawing machine, and I can see.\n"
     "\nFirst thought:"
 )
 

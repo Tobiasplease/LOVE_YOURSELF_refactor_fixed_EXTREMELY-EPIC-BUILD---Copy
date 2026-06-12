@@ -1184,16 +1184,22 @@ class Captioner(MemoryMixin):
             pass
 
         # Import consolidated awakening template
-        from .prompts import INTERNAL_AWAKENING_TEMPLATE
+        from .prompts import FIRST_AWAKENING_PROMPT, INTERNAL_AWAKENING_TEMPLATE
 
-        # Internal awakening prompt with narrative placeholders
-        internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(
-            time_context=time_context,
-            memory_context=memory_context,
-            belief_context=belief_context,
-            identity_context=identity_context,
-            long_term_context=long_term_context
-        )
+        # A true first awakening has no past at all. Empty context sections
+        # invite the model to fill the void with its priors (dust motes) —
+        # the honest framing is that nothing has been seen yet.
+        has_past = bool(memory_context or identity_context or long_term_context)
+        if has_past:
+            internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(
+                time_context=time_context,
+                memory_context=memory_context,
+                belief_context=belief_context,
+                identity_context=identity_context,
+                long_term_context=long_term_context,
+            )
+        else:
+            internal_prompt = time_context + FIRST_AWAKENING_PROMPT
 
         # Use Natsumura for awakening (text-only narrative model, engages with context)
         try:

@@ -146,8 +146,17 @@ class ReflectionLoop:
         from captioner.semantic_memory import get_semantic_memory
         from utils.inference import query_model
 
+        data = self._gather_context()
+        # Nothing lived yet — reflecting on an empty store just invents a
+        # past, and a stored invention echoes back into captions forever.
+        # Wait until at least some real material exists.
+        if not (data.get("today") or data.get("journal") or data.get("reflections")):
+            print("[REFLECT] Nothing lived yet — postponing reflection until there is real material.")
+            self.last_reflection_time = time.time() - REFLECTION_LOOP_INTERVAL + 300  # retry in 5 min
+            return
+
         subject, question = self._next_subject()
-        prompt = build_reflection_loop_prompt(question, self._gather_context())
+        prompt = build_reflection_loop_prompt(question, data)
         system_prompt = get_reflection_system_prompt()
 
         print(f"[REFLECT] Stepping back to think about {subject}...")
