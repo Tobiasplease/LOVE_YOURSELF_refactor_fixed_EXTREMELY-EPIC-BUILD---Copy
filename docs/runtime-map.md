@@ -84,6 +84,15 @@ every pixel ~10px. Roles now:
 - dwell trigger: scene_motion is False → 30% chance of 2-caption
   "stay with that thought" development
 
+## Design rule: memory must never override live perception
+
+Core facts are injected into every prompt as ground truth — so they must be
+PATTERNS ("one regular visitor, most days") never SNAPSHOTS ("two people sit
+facing each other"). A stored snapshot made the model see people for hours
+after they left (June 12). People-facts are excluded from the per-caption
+prompt entirely: present-tense presence belongs to the live detection layer
+(situational line); the people-pattern only reaches awakening/memory mode.
+
 ## Known-weak / watch list
 
 - **Mood engine** (mood/mood.py): keyword sentiment over a register that no
