@@ -99,11 +99,18 @@ sentence within 300 chars instead of rejecting.
 
 Pixel diff CANNOT separate scene from camera motion — 1° of servo sway moves
 every pixel ~10px. Roles now:
-- pixel diff: only decides whether to send video frames at all
-- ego_motion flag (servo delta >2°/frame): excludes frames from superframe
-  pairing (a pan inside a pair encodes the whole room as moving)
+- pixel diff: only decides whether sending video is worth considering
+- ego_motion flag (servo delta >2°/frame): breathing sway (~1-1.2°) + gaze
+  nudges flag frames OFTEN — that's expected
 - person_angle (camera_pan + bbox offset × FOV): TRUE scene motion — person
   angular movement >4° in window, or person-count change
+- VIDEO POLICY (asymmetric, June 12): real scene motion → send all frames
+  (temporal change is true, ego noise rides on top); still room → steady
+  frames only, or fall back to ONE still image (a still can't invent
+  motion — the "moving with purpose" phantom came from ego frames inside
+  superframe pairs). Motion detection is YOLO math, never the model
+  watching video, so movement always switches video back on.
+  Verify: `[VIDEO] Skipped: still room...` lines in console.
 - dwell trigger: scene_motion is False → 30% chance of 2-caption
   "stay with that thought" development
 
