@@ -1688,7 +1688,7 @@ def build_memory_mode_prompt(agent) -> tuple:
         if not mem_text:
             try:
                 from captioner.context_compression import context_compressor
-                core_str = context_compressor.get_core_facts_string()
+                core_str = context_compressor.get_core_facts_string(include_people=True)
                 mem_text = core_str if core_str and len(core_str) > 10 else "I've been here before."
             except Exception:
                 mem_text = "I've been here before."

@@ -947,6 +947,10 @@ Under 20 words total, first person, plain language."""
                 existing = f"\nPrevious facts:\n" + "\n".join(existing_parts)
 
             prompt = f"""From these observations, update stable facts about this space. Keep only what would still be true next session.
+
+IMPORTANT: Facts are PATTERNS and HISTORY, never a description of the current scene.
+"One visitor comes most days" is a fact. "Two people sit facing each other" is a
+snapshot — snapshots must not be stored, they poison future perception.
 {existing}
 
 Observations:
@@ -954,8 +958,8 @@ Observations:
 
 Reply with exactly 4 lines (leave blank if unknown):
 PLACE: [solid things — furniture, fixtures, surfaces — in <15 words. No moods, shadows, light, or atmosphere.]
-PEOPLE: [who visits, patterns in <15 words]
-DRAWINGS: [count, recurring subjects in <15 words]
+PEOPLE: [visit patterns over time, past tense, in <15 words — never who is present right now]
+DRAWINGS: [how many made, recurring subjects, in <15 words — never what's on the desk right now]
 SELF: [plain habits/fixations in <15 words. No statements about reality or perception.]"""
 
             response = query_model(
@@ -1008,16 +1012,19 @@ SELF: [plain habits/fixations in <15 words. No statements about reality or perce
         """
         return self.introspective_state.get("current_belief", "")
 
-    def get_core_facts_string(self) -> str:
-        """Get compact core facts string for user-prompt injection.
+    def get_core_facts_string(self, include_people: bool = False) -> str:
+        """Get compact core facts string for prompt injection.
 
-        Returns a single line like: "Workshop with pink shelves. One regular visitor."
-        Excludes "self" — that's the persona block, injected into the SYSTEM
-        prompt by get_monologue_system_prompt() so it colors the voice instead
-        of being recited as data. Max ~60 words.
+        Excludes "self" — that's the persona block (system prompt).
+        Excludes "people" by default: who is present RIGHT NOW is the live
+        detection layer's job. A stored people-fact injected per caption
+        once made the model see "two people sitting" for hours after they
+        left (and mannequins forever). Awakening/memory-mode pass
+        include_people=True, where it's framed as knowledge, not scene.
         """
+        keys = ("place", "people", "drawings") if include_people else ("place", "drawings")
         parts = []
-        for key in ("place", "people", "drawings"):
+        for key in keys:
             val = self.core_facts.get(key, "").strip()
             if val and len(val) > 3:
                 parts.append(val)

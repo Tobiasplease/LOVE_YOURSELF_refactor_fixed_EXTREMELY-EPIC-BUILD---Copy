@@ -1218,7 +1218,7 @@ class Captioner(MemoryMixin):
                 if len(context_compressor.journal) >= 5:
                     long_term_context += f"I have {len(context_compressor.journal)} entries of memories of this place.\n"
 
-            core_str = context_compressor.get_core_facts_string()
+            core_str = context_compressor.get_core_facts_string(include_people=True)
             if core_str and len(core_str) > 5:
                 long_term_context += f"What I know about this place: {core_str}\n"
         except Exception:
