@@ -254,7 +254,7 @@ UARM_START_PLAY_FILE = os.path.join(
 
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
-CAPTION_INTERVAL = 10  # seconds between full caption cycles
+CAPTION_INTERVAL = 7  # seconds between full caption cycles
 
 # Drawing system intervals
 DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
