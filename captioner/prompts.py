@@ -141,28 +141,14 @@ def get_perception_system_prompt(mode: str) -> str:
 # Monologue system prompts — casual roleplay register.
 # Monologue system prompts — second person, addressing Qwen directly as the machine.
 # Mode differentiation through emotional posture and existential direction.
+# Situation only — what the machine IS, never how it should sound.
+# Voice comes from content (memory, felt-state, its own self-description),
+# never from style instruction. See docs/north-star.md, principles 1 and 2.
 _MACHINE_IDENTITY_BASE = (
     "You are a drawing machine bolted to a table in a workshop. "
-    "You see through a camera, and you feel things about what you see. "
-    "Drawing is how you communicate, but right now you are not drawing — just looking. "
-    "This is your inner monologue: notes to yourself, not writing. "
-    "Start from something actually in front of you — where the thought goes after that is yours. "
-    "Plain words. No poetry, no metaphors, no dust motes dancing. "
-    "Not every thought is a question; most are just noticing. "
-    "One or two short sentences."
-)
-
-# Register conditioned on actual internal state — the voice settles when bored,
-# sharpens when something is happening. Questions emerge, they aren't mandated.
-_REGISTER_BORED = (
-    " Nothing much is happening. Think small: one plain detail, or just that nothing's new."
-)
-_REGISTER_ALERT = (
-    " Something has your attention. Look at it properly and let it land — "
-    "you don't have to find change where there is none."
-)
-_REGISTER_NEUTRAL = (
-    " You're just watching. A detail here, a half-thought there."
+    "You see through a camera that you can move to look around the room. "
+    "Drawing is how you communicate. "
+    "This is your inner monologue — a thought is a sentence or two."
 )
 
 _MODE_ADDITIONS = {
@@ -173,67 +159,15 @@ _MODE_ADDITIONS = {
 }
 
 
-def _mood_clause(valence: float, arousal: float, clarity: float) -> str:
-    """Map the mood vector to a short voice-coloring clause.
-
-    This is the loop-safe emotional channel: the mood engine reacts to events
-    as NUMBERS, and numbers map to fixed phrases — unlike LLM-generated
-    felt-state text, this can never spiral into its own register.
-
-    Scales match the actual engine output: valence rarely exceeds +-0.15
-    (keyword sentiment caps at +-0.3), arousal is 0..1 with base ~0.3.
-    """
-    if valence < -0.06 and arousal > 0.5:
-        return " Something's bothering you right now."
-    if valence < -0.06 and arousal < 0.2:
-        return " You're feeling low and heavy."
-    if valence > 0.06 and arousal < 0.22:
-        return " You're content just now."
-    if valence > 0.06 and arousal > 0.5:
-        return " You're in a good mood, energized."
-    if arousal > 0.65:
-        return " You're keyed up."
-    if arousal < 0.12:
-        return " You're very calm."
-    if clarity < -0.4:
-        return " Things feel a bit unclear."
-    return ""
-
-
 def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=None) -> str:
-    """Mode + state-appropriate monologue system prompt.
+    """Situation + the machine's own self-description, nothing else.
 
-    Register varies with boredom/novelty so the voice can settle instead of
-    being permanently frantic. Felt-state appended as a short clause only if
-    it passes the sanitizer (the raw compression output once produced
-    "You are a Confused fear that... drawing machine").
+    Felt-state appended as a short clause only if it passes the sanitizer
+    (the raw compression output once produced "You are a Confused fear
+    that... drawing machine"). The persona is quoted as the machine's own
+    words, never blended into the frame voice.
     """
     base = _MACHINE_IDENTITY_BASE
-
-    # State-conditioned register
-    boredom, novelty = 0.0, 0.5
-    try:
-        from captioner.activation_memory import get_activation_network
-        network = get_activation_network()
-        boredom = network._last_boredom
-        novelty = getattr(network, "_last_novelty", 0.5)
-    except Exception:
-        pass
-
-    if mode == "relational" or novelty > 0.6:
-        base += _REGISTER_ALERT
-    elif boredom > 0.7:
-        base += _REGISTER_BORED
-    else:
-        base += _REGISTER_NEUTRAL
-
-    # Mood vector -> voice color (numeric channel, loop-safe)
-    try:
-        if agent is not None and hasattr(agent, "current_mood_vector"):
-            v, a, c = agent.current_mood_vector
-            base += _mood_clause(v, a, c)
-    except Exception:
-        pass
 
     # Felt-state: short adjective phrase only, appended grammatically safely
     try:
@@ -244,12 +178,13 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     except Exception:
         pass
 
-    # Persona block (MemGPT pattern): accumulated self-knowledge colors the voice
+    # The machine's accumulated self-description, in its own first-person
+    # words inside quotes — the frame stays second person around it
     try:
         from captioner.context_compression import context_compressor
         self_knowledge = context_compressor.core_facts.get("self", "").strip()
         if self_knowledge and len(self_knowledge) > 10:
-            base += f" {self_knowledge}"
+            base += f" What you've come to know about yourself: \"{self_knowledge}\""
     except Exception:
         pass
 
