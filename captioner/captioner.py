@@ -340,10 +340,12 @@ class Captioner(MemoryMixin):
             counts = [f.get("detection", {}).get("person_count", 0) for f in recent_meta]
             count_changed = len(set(counts)) > 1
 
-            info["scene_motion"] = person_moved or flow_motion or (count_changed and not flow_available)
+            # bool() everywhere: person_angle arrives as numpy float, so bare
+            # comparisons yield numpy bools that crash JSON logging downstream
+            info["scene_motion"] = bool(person_moved or flow_motion or (count_changed and not flow_available))
 
             face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
-            info["eye_contact"] = face_frames > len(recent_meta) * 0.4
+            info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4)
 
         # A genuine arrival in the last 45s stays live even once motion settles
         arrival = False
@@ -360,7 +362,7 @@ class Captioner(MemoryMixin):
         self._prev_eye_contact = info["eye_contact"]
 
         self._last_scene_motion = info["scene_motion"]
-        self._salience_hot = info["scene_motion"] or arrival or eye_onset
+        self._salience_hot = bool(info["scene_motion"] or arrival or eye_onset)
         if self._salience_hot:
             self._last_salience_time = time.time()
         info["salience_hot"] = self._salience_hot

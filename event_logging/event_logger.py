@@ -305,6 +305,17 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
 _LOG_WRITE_LOCK = threading.Lock()
 
 
+def _coerce_jsonable(obj):
+    """Last-resort serializer: numpy scalars expose .item(), everything else
+    becomes its string representation rather than killing the log entry."""
+    if hasattr(obj, "item"):
+        try:
+            return obj.item()
+        except Exception:
+            pass
+    return str(obj)
+
+
 def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> None:
     """
     Append a JSON entry to a log file. Crash- and thread-safe:
@@ -318,7 +329,12 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
       serialize writers (locking the data file itself broke once recovery
       replaced its inode — June 12 corruption cascade).
     """
-    json.dumps(entry)  # fail fast, before the file is involved
+    # Numpy scalars (bools/floats from the vision layer) ride along in log
+    # data constantly — coerce them instead of refusing the whole entry
+    # (622 caption entries were lost to "type bool is not JSON serializable",
+    # and before atomic writes the same TypeError mid-dump corrupted files)
+    serialized = json.dumps(entry, indent=2, ensure_ascii=False, default=_coerce_jsonable)
+    entry = json.loads(serialized)
 
     filepath = os.path.join(log_dir, filename)
     os.makedirs(log_dir, exist_ok=True)
