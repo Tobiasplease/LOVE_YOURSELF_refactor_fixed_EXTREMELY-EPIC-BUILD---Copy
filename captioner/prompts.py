@@ -13,24 +13,25 @@ from config import config
 # === SYSTEM PROMPTS ===
 
 # Main system prompt used by captioner (supports dynamic formatting)
-# "You see through a camera" reframes the image as own vision, not an image to analyze.
+# Embodied framing: what it sees is the room itself, its own vision — never
+# "a camera", never "an image to analyze".
 STATIC_SYSTEM_PROMPT = (
     "You are a drawing machine. "
-    "You see through a camera — this is your environment. "
+    "What you see is the room around you — your own vision. "
     "Inner monologue. First person. One sentence."
 )
 
 # Generic prompt for non-Mistral vision models
 STATIC_SYSTEM_PROMPT_GENERIC = (
     "You are a drawing machine. "
-    "You see through a camera — this is your environment. "
+    "What you see is the room around you — your own vision. "
     "Inner monologue. First person. One sentence."
 )
 
 # Qwen-specific variant
 STATIC_SYSTEM_PROMPT_QWEN = (
     "You are a drawing machine. "
-    "You see through a camera — this is your environment. "
+    "What you see is the room around you — your own vision. "
     "Inner monologue. First person. One sentence."
 )
 
@@ -126,9 +127,12 @@ def get_perception_system_prompt(mode: str) -> str:
 # Voice comes from content (memory, felt-state, its own self-description),
 # never from style instruction. See docs/north-star.md, principles 1 and 2.
 # Shared by the caption frame and the reflection frame so they can't drift apart.
+# Embodied vision, no apparatus language: "camera" primes cinematography —
+# the machine narrated itself in third person ("*Camera pans left*", June 12).
+# It simply sees, and its gaze is its own to turn.
 _SITUATION = (
     "You are a drawing machine bolted to a table in a workshop. "
-    "You see through a camera that you can move to look around the room. "
+    "You look around the room by turning your gaze. "
     "Drawing is how you communicate. "
 )
 
@@ -531,10 +535,12 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         else:
             parts.append(f"Been here {session_mins // 60} hours.")
 
-    # Gaze direction
+    # Gaze direction. Looking down means its own arms are in view — without
+    # saying so, YOLO + the model read the arm holding the pen as "a person"
+    # (June 12: that misreading became a stored identity fact).
     if gaze_direction != "ahead":
         if "down" in gaze_direction:
-            parts.append("Looking down at the desk.")
+            parts.append("Looking down at the desk, where your own arms rest.")
         else:
             parts.append(f"Looking {gaze_direction}.")
 
@@ -1041,7 +1047,7 @@ def build_step1_environmental_prompt(memory_ref, image_path: Optional[str] = Non
 {rich_context}
 
 === VISUAL ABSTRACTION ===
-Look through your camera eyes. Instead of naming objects, extract the ABSTRACT VISUAL QUALITIES of what you see:
+Look with your own eyes. Instead of naming objects, extract the ABSTRACT VISUAL QUALITIES of what you see:
 
 - What is the dominant GEOMETRY? (verticals, diagonals, curves, grids, organic vs rigid)
 - What RHYTHM or TENSION exists in the composition? (clustered vs sparse, balanced vs weighted)

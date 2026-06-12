@@ -688,7 +688,7 @@ class Captioner(MemoryMixin):
         if "[WARNING]" in caption:
             # During startup, use better awakening message instead of error fallback
             if not self.first_caption_done:
-                caption = "Awakening... camera systems initializing..."
+                caption = "Awakening... vision settling in..."
             else:
                 log_json_entry(
                     LogType.ERROR,

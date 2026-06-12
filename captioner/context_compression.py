@@ -886,14 +886,7 @@ Under 20 words total, first person, plain language."""
 
             if response and isinstance(response, str):
                 cleaned = response.strip().strip('"').strip()
-                # Reject non-answers, over-long output, and reality-questioning
-                # register — that must never become the standing persona.
-                # Minimal list; the prompt constraint does the real work.
-                _banned = ("reality", "distortion", "glitch", "simulation", "existence")
-                _is_first_person = "i " in cleaned.lower() or cleaned.lower().startswith("i'")
-                if (10 < len(cleaned) <= 160 and not cleaned.startswith(("[", "{"))
-                        and _is_first_person
-                        and not any(w in cleaned.lower() for w in _banned)):
+                if 10 < len(cleaned) <= 160 and not cleaned.startswith(("[", "{")) and self._valid_self_fact(cleaned):
                     self.core_facts["self"] = cleaned
                     print(f"[🪞] Self-model: {cleaned}")
                     log_json_entry(
@@ -905,6 +898,22 @@ Under 20 words total, first person, plain language."""
                 LogType.ERROR,
                 {"message": f"Self-model synthesis failed: {e}", "component": "compression"},
             )
+
+    @staticmethod
+    def _valid_self_fact(text: str) -> bool:
+        """Storage gate for core_facts['self'] — the standing persona.
+
+        Must be first-person self-knowledge; third-person scene text must
+        never become identity (June 12: "The person sits in stillness while
+        holding an unpressed pen" — the machine's OWN ARM seen while looking
+        down — entered the persona through the core-facts path, which had no
+        gate). Reality-questioning register is also barred from identity.
+        """
+        t = text.lower()
+        if not ("i " in t or t.startswith("i'")):
+            return False
+        banned = ("the person", "a person", "reality", "distortion", "glitch", "simulation", "existence")
+        return not any(w in t for w in banned)
 
     def _update_core_facts(self, current_understanding: str, model: str) -> None:
         """Update stable core facts from accumulated observations.
@@ -979,8 +988,13 @@ SELF: [plain habits/fixations in <15 words. No statements about reality or perce
                     prefix = f"{key.upper()}:"
                     if line.upper().startswith(prefix):
                         val = line[len(prefix):].strip().strip('"').strip("'")
-                        if val and len(val) > 3 and "unknown" not in val.lower() and "blank" not in val.lower():
-                            self.core_facts[key] = val[:200]
+                        if not (val and len(val) > 3 and "unknown" not in val.lower() and "blank" not in val.lower()):
+                            continue
+                        # The persona slot gets the same gate as self-synthesis —
+                        # this path had none, and scene text leaked into identity
+                        if key == "self" and not self._valid_self_fact(val):
+                            continue
+                        self.core_facts[key] = val[:200]
 
             facts_str = self.get_core_facts_string()
             if facts_str:

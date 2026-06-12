@@ -37,7 +37,8 @@ rules, no registers, no mood clause. Voice comes from content.
 
 | Line | Source | Health |
 |------|--------|--------|
-| situation ("drawing machine bolted... quick plain notes to yourself") | static `_SITUATION` + monologue clause, prompts.py | ok — "quick plain notes" is GENRE framing, not a fence: without it Qwen's prior for "inner monologue" is literary fiction. Caption temps also lowered to 0.7/0.8 for the same reason |
+| situation ("drawing machine bolted... turning your gaze... quick plain notes") | static `_SITUATION` + monologue clause, prompts.py | ok — "quick plain notes" is GENRE framing, not a fence: without it Qwen's prior for "inner monologue" is literary fiction. Caption temps also lowered to 0.7/0.8 for the same reason. NO "camera" language anywhere — it primes cinematography ("*Camera pans left*", third-person self-narration) |
+| persona storage gate | `_valid_self_fact` in context_compression.py — BOTH persona writers (self-synthesis AND core-facts SELF line) require first person, bar "the person"/reality-register | NEW June 12 — the core-facts path had no gate and stored "The person sits... holding an unpressed pen" (its own arm) as identity |
 | "You are between drawings at the moment." | state_manager drawing status (gated, never lies; absent while drawing) | NEW June 12 — without it the model narrated drawings that weren't happening. States the fact only; deliberately does NOT say what the machine is doing instead |
 | "Right now: {felt}." | compression felt-state, sanitized ≤6 words | ok (often empty by design) |
 | persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | ok |
@@ -55,7 +56,7 @@ moment gets the present only (north-star principle 6).
 
 | Line | Source | Health |
 |------|--------|--------|
-| "Been watching 18 minutes. Looking left." | session clock + gaze | ok |
+| "Been watching 18 minutes. Looking left." / "Looking down at the desk, where your own arms rest." | session clock + gaze; the arms clause keeps the model from reading its own arm as a person | ok |
 | "Someone here 5 minutes." | episodic log, visit-clustered | ok |
 | "They've come and gone N times." | episodic pairs (debounced 90s) | ok |
 | [interior] introspective ctx ("My last drawings were of...") | drawing_memory, completed only | ok |
@@ -113,6 +114,12 @@ every pixel ~10px. Roles now:
   Verify: `[VIDEO] Skipped: still room...` lines in console.
 - dwell trigger: scene_motion is False → 30% chance of 2-caption
   "stay with that thought" development
+- OWN-BODY GUARD (machine.py): tilt <75° (looking >15° down) + no face →
+  YOLO person-hits are the machine's own arms, not a visitor. Suppresses
+  person/person_count/person_angle in the frame snapshot, the gaze
+  aware-state (so no phantom episodic arrivals), and person_present to the
+  captioner. June 12: an own-arm hit became both phantom arrivals AND a
+  stored identity fact
 
 ## Design rule: memory must never override live perception
 

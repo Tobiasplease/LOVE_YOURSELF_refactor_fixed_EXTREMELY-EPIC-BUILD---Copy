@@ -1384,11 +1384,19 @@ try:
         except Exception:
             _cam_pan, _cam_tilt = None, None
 
+        # Own-body guard: looking well down (>15° below center) puts the
+        # machine's own arms in view, and YOLO reads them as a person. A
+        # faceless person-hit while tilted down is its own body, not a
+        # visitor — without this, phantom arrivals enter the episodic log
+        # and (June 12) "the person holding an unpressed pen" — its own
+        # arm — was stored as an identity fact.
+        own_body_likely = _cam_tilt is not None and _cam_tilt < 75 and best_box is None
+
         # Person world-angle: camera-compensated position, so person movement is
         # measurable regardless of where the camera points. Pixel diff can't do
         # this — even 1 degree of camera sway shifts every pixel.
         _person_angle = None
-        if "person" in labels and _cam_pan is not None:
+        if "person" in labels and _cam_pan is not None and not own_body_likely:
             _pb = DetectionMemory.get_person_bbox()
             if _pb:
                 _cx = (_pb[0] + _pb[2]) / 2.0
@@ -1396,8 +1404,8 @@ try:
 
         frame_buffer.push(frame, detection={
             "face": best_box is not None,
-            "person": "person" in labels,
-            "person_count": DetectionMemory.get_person_count(),
+            "person": ("person" in labels) and not own_body_likely,
+            "person_count": 0 if own_body_likely else DetectionMemory.get_person_count(),
             "track_id": DetectionMemory.get_best_track_id(),
             "pan": _cam_pan,
             "tilt": _cam_tilt,
@@ -1422,7 +1430,8 @@ try:
         # Get person state with SMOOTHED detection (persists through grace period)
         person_state = person_detection.get_person_state()
         person_direction = person_state.get("direction")
-        smoothed_person_detected = person_state.get("is_present", False)
+        # own_body_likely: arms in view while looking down are not a visitor
+        smoothed_person_detected = person_state.get("is_present", False) and not own_body_likely
         # Use smoothed bbox that persists through grace period - prevents tracking dropout
         smoothed_bbox = person_detection.get_smoothed_bbox()
 
@@ -1446,7 +1455,7 @@ try:
 
         # Refresh person state after servo update
         person_state = person_detection.get_person_state()
-        person_is_present = person_state["is_present"]
+        person_is_present = person_state["is_present"] and not own_body_likely
 
         # Switch YOLO to fast mode when actively tracking person, slow mode when idle
         # This ensures bbox updates keep pace with camera movement during tracking
