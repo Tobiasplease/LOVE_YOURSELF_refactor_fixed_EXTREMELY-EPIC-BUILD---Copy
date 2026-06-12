@@ -1083,9 +1083,17 @@ class Captioner(MemoryMixin):
         return "\n".join(f"- {s}" for s in snippets)
 
     def get_last_reflection(self) -> str:
-        entries = self.get_memory_entries_by_type("reflection")
-        if entries:
-            return entries[-1].get("text", "")
+        """Most recent long-form reflection, from the reflection loop's
+        ChromaDB store. (Used as drawing-pipeline context; the old source —
+        session-memory entries written by the retired reason_about_caption
+        path — went permanently empty after the June 12 rebuild.)"""
+        try:
+            from captioner.semantic_memory import get_semantic_memory
+            recent = get_semantic_memory().get_recent_reflections(limit=1)
+            if recent:
+                return recent[0].get("text", "")
+        except Exception:
+            pass
         return ""
 
     def generate_internal_awakening(self) -> str:
