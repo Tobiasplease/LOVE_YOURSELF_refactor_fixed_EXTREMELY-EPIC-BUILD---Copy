@@ -255,6 +255,11 @@ UARM_START_PLAY_FILE = os.path.join(
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 7  # seconds between full caption cycles
+# Attention breathes (north-star principle 6): cadence tightens when something
+# is happening, stretches when nothing has happened for a while
+CAPTION_INTERVAL_LIVE = 4  # cadence while salience is hot (motion, arrival, fresh eye contact)
+CAPTION_INTERVAL_QUIET = 12  # cadence after a long quiet stretch
+CAPTION_QUIET_AFTER = 120  # seconds without salience before the cadence stretches
 
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet

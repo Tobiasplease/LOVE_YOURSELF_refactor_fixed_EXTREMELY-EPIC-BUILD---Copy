@@ -1799,6 +1799,13 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     if not config.PRINT_CLEAN_CAPTIONS:
         print(f"[MODE] {mode} (gaze={gaze_state})")
 
+    # === SALIENCE GATE (north-star principle 6) ===
+    # A live event — scene motion, an arrival, fresh eye contact — strips the
+    # prompt to the present: no memory, familiarity, desire, baseline or
+    # dwelling. Interior material belongs to quiet stretches; events
+    # physically displace it.
+    live = bool(getattr(agent, "_salience_hot", False))
+
     # === BUILD PROMPT — SITUATIONAL, CONTEXT, FELT STATE, THREAD ===
     prompt_parts = []
 
@@ -1815,30 +1822,32 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             if context:
                 prompt_parts.append(context)
 
-    # 3. INTROSPECTIVE CONTEXT (always available for non-introspective modes)
-    if mode not in ("introspective", "awakening"):
+    # 3. INTROSPECTIVE CONTEXT (non-introspective modes, quiet moments only)
+    if not live and mode not in ("introspective", "awakening"):
         introspective_ctx = get_introspective_context(agent)
         if introspective_ctx:
             prompt_parts.append(introspective_ctx)
 
-    # 3b. CORE FACTS (stable grounding — replaces disabled get_session_greeting)
-    try:
-        from captioner.context_compression import context_compressor
-        core_str = context_compressor.get_core_facts_string()
-        if core_str and len(core_str) > 5:
-            prompt_parts.append(core_str)
-    except Exception:
-        pass
+    # 3b. CORE FACTS (stable grounding — quiet moments only)
+    if not live:
+        try:
+            from captioner.context_compression import context_compressor
+            core_str = context_compressor.get_core_facts_string()
+            if core_str and len(core_str) > 5:
+                prompt_parts.append(core_str)
+        except Exception:
+            pass
 
     # 3c. FAMILIARITY (recognition of known concepts — occasional, max 1 line)
     # or a past reflection surfacing by relevance — never both in one caption
-    fam_line = get_familiarity_line(agent)
-    if fam_line:
-        prompt_parts.append(fam_line)
-    else:
-        echo_line = get_reflection_echo_line(agent)
-        if echo_line:
-            prompt_parts.append(echo_line)
+    if not live:
+        fam_line = get_familiarity_line(agent)
+        if fam_line:
+            prompt_parts.append(fam_line)
+        else:
+            echo_line = get_reflection_echo_line(agent)
+            if echo_line:
+                prompt_parts.append(echo_line)
 
     # 4. DRAWING/PAPER STATE
     try:
@@ -1862,21 +1871,23 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     except Exception:
         pass
 
-    # 5b. DESIRE (gated — only first 3 captions after a desire changes).
-    # Unconditional injection caused the May 2026 yearning echo loop:
-    # monologue yearning → compressed into desire → re-injected → more yearning.
-    try:
-        from captioner.context_compression import context_compressor
-        desire = context_compressor.get_current_desire()
-        inj_count = context_compressor.introspective_state.get("desire_injection_count", 0)
-        if desire and len(desire) > 5 and inj_count < 3:
-            prompt_parts.append(f"Preoccupied with: {desire}")
-            context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
-    except Exception:
-        pass
+    # 5b. DESIRE (gated — only first 3 captions after a desire changes, never
+    # during live moments). Unconditional injection caused the May 2026
+    # yearning echo loop: monologue yearning → compressed into desire →
+    # re-injected → more yearning.
+    if not live:
+        try:
+            from captioner.context_compression import context_compressor
+            desire = context_compressor.get_current_desire()
+            inj_count = context_compressor.introspective_state.get("desire_injection_count", 0)
+            if desire and len(desire) > 5 and inj_count < 3:
+                prompt_parts.append(f"Preoccupied with: {desire}")
+                context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
+        except Exception:
+            pass
 
     # 5c. BASELINE CONTEXT (rolling environmental understanding — what you already know)
-    if mode in ("observational", "workspace"):
+    if not live and mode in ("observational", "workspace"):
         try:
             from captioner.context_compression import context_compressor
             baseline = _sanitize_context(context_compressor.get_baseline_context() or "")
@@ -1899,7 +1910,11 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     scene_still = getattr(agent, "_last_scene_motion", None) is False
 
     dwelling = getattr(agent, "_dwell_count", 0) > 0
-    if dwelling:
+    if live:
+        # A live moment interrupts any dwelling — the present takes the prompt
+        agent._dwell_count = 0
+        dwelling = False
+    elif dwelling:
         agent._dwell_count -= 1
     elif scene_still and mode in ("observational", "workspace", "introspective") and _random.random() < 0.3:
         # Room is quiet — a chance to go deeper for this caption and the next

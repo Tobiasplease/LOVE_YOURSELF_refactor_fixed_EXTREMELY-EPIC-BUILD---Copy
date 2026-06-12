@@ -12,7 +12,17 @@ from typing import Deque, Dict, List, Optional, Tuple
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 
-from config.config import CAPTION_INTERVAL, CLEAN_LLM_OUTPUT, DRAWING_INTERVAL, DRAWING_STARTUP_DELAY, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS
+from config.config import (
+    CAPTION_INTERVAL,
+    CAPTION_INTERVAL_LIVE,
+    CAPTION_INTERVAL_QUIET,
+    CAPTION_QUIET_AFTER,
+    CLEAN_LLM_OUTPUT,
+    DRAWING_INTERVAL,
+    DRAWING_STARTUP_DELAY,
+    MOOD_SNAPSHOT_FOLDER,
+    OLLAMA_SHOW_PROGRESS,
+)
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
@@ -159,6 +169,11 @@ class Captioner(MemoryMixin):
 
         self.last_caption_time: float = 0.0
         self.last_drawing_check_time: float = 0.0  # Allow immediate first check
+
+        # Salience state (north-star principle 6) — set by _assess_scene each cycle
+        self._salience_hot: bool = False
+        self._last_salience_time: float = time.time()
+        self._prev_eye_contact: bool = False
         self.last_memory_mode_time: float = time.time()  # Track memory mode trigger (every 4 min)
 
         # Track session continuity
@@ -278,9 +293,89 @@ class Captioner(MemoryMixin):
                 # Wait longer on startup to allow main loop to populate frames
                 time.sleep(0.5 if not self.first_caption_done else 0.05)
 
+    def _assess_scene(self) -> dict:
+        """One pass over the recent frame buffer, BEFORE the prompt is built:
+        scene motion (person-angle, camera-compensated), presence, eye contact,
+        and the salience verdict that gates prompt interiority and caption
+        cadence (north-star principle 6).
+        """
+        info = {
+            "recent_meta": [],
+            "max_diff": 0.0,
+            "ego_count": 0,
+            "scene_motion": False,
+            "person_present_in_window": False,
+            "eye_contact": False,
+        }
+        try:
+            from captioner.frame_buffer import frame_buffer
+            info["recent_meta"] = frame_buffer.get_recent_with_metadata(seconds=10, max_frames=6)
+        except Exception:
+            pass
+
+        recent_meta = info["recent_meta"]
+        if recent_meta:
+            info["max_diff"] = max(f["diff_score"] for f in recent_meta)
+            info["ego_count"] = sum(1 for f in recent_meta if f.get("detection", {}).get("ego_motion"))
+
+            # Person movement in world coordinates (camera sway is compensated;
+            # pixel diff can't separate scene motion from camera motion)
+            angles = [f.get("detection", {}).get("person_angle") for f in recent_meta]
+            angles = [a for a in angles if a is not None]
+            info["person_present_in_window"] = len(angles) > 0
+            person_moved = len(angles) >= 2 and (max(angles) - min(angles)) > 4.0
+
+            # Arrivals/departures within the window
+            counts = [f.get("detection", {}).get("person_count", 0) for f in recent_meta]
+            count_changed = len(set(counts)) > 1
+
+            info["scene_motion"] = person_moved or count_changed
+
+            face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
+            info["eye_contact"] = face_frames > len(recent_meta) * 0.4
+
+        # A genuine arrival in the last 45s stays live even once motion settles
+        arrival = False
+        try:
+            from utils.episodic_log import episodic_log
+            ev = episodic_log.get_last_event("person_arrived")
+            arrival = bool(ev and time.time() - ev.get("timestamp", 0) < 45)
+        except Exception:
+            pass
+
+        # Eye contact is salient at its onset — someone holding your gaze for
+        # ten minutes is presence, not an event
+        eye_onset = info["eye_contact"] and not self._prev_eye_contact
+        self._prev_eye_contact = info["eye_contact"]
+
+        self._last_scene_motion = info["scene_motion"]
+        self._salience_hot = info["scene_motion"] or arrival or eye_onset
+        if self._salience_hot:
+            self._last_salience_time = time.time()
+        info["salience_hot"] = self._salience_hot
+        return info
+
+    def _current_caption_interval(self, now: float) -> float:
+        """Attention breathes: tight when something is happening, stretched
+        when nothing has happened for a while. A fresh arrival snaps the
+        cadence back immediately, even mid-stretch."""
+        hot = self._salience_hot
+        if not hot:
+            try:
+                from utils.episodic_log import episodic_log
+                ev = episodic_log.get_last_event("person_arrived")
+                hot = bool(ev and now - ev.get("timestamp", 0) < 45)
+            except Exception:
+                pass
+        if hot:
+            return CAPTION_INTERVAL_LIVE
+        if now - self._last_salience_time > CAPTION_QUIET_AFTER:
+            return CAPTION_INTERVAL_QUIET
+        return CAPTION_INTERVAL
+
     def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None, person_present: bool = False) -> None:
         now = time.time()
-        if now - self.last_caption_time < CAPTION_INTERVAL:
+        if now - self.last_caption_time < self._current_caption_interval(now):
             return
 
         # Store reactivity data for subconscious layer access
@@ -382,6 +477,9 @@ class Captioner(MemoryMixin):
                         VIDEO_MODE_ENABLED = _cfg.VIDEO_MODE_ENABLED
                         from utils.inference import query_model, query_model_video
 
+                        # Salience first — it decides how interior this caption gets
+                        scene = self._assess_scene()
+
                         user_prompt, caption_mode = build_simple_caption_prompt(
                             self,
                             person_present=person_present,
@@ -408,39 +506,19 @@ class Captioner(MemoryMixin):
                             "seed": _random.randint(1, 1000000),
                         }
 
-                        # Video mode: check frame buffer for motion.
-                        # Scene motion is measured by PERSON movement (camera-compensated
-                        # world angle + count changes), not pixel diff — the camera sways
-                        # constantly, so even sub-degree drift dominates pixel diff.
-                        # Pixel diff only decides whether sending video is worthwhile.
-                        use_video = False
-                        scene_motion = False
-                        person_present_in_window = False
-                        ego_count = 0
-                        if VIDEO_MODE_ENABLED and _cfg.INFERENCE_BACKEND == "llama_server":
-                            from captioner.frame_buffer import frame_buffer
-                            recent_meta = frame_buffer.get_recent_with_metadata(seconds=10, max_frames=6)
-                            if recent_meta:
-                                max_diff = max(f["diff_score"] for f in recent_meta)
-                                ego_count = sum(1 for f in recent_meta
-                                                if f.get("detection", {}).get("ego_motion"))
-                                if max_diff > MOTION_THRESHOLD:
-                                    use_video = True
-
-                                # Person movement in world coordinates
-                                angles = [f.get("detection", {}).get("person_angle") for f in recent_meta]
-                                angles = [a for a in angles if a is not None]
-                                person_present_in_window = len(angles) > 0
-                                person_moved = len(angles) >= 2 and (max(angles) - min(angles)) > 4.0
-
-                                # Arrivals/departures within the window
-                                counts = [f.get("detection", {}).get("person_count", 0) for f in recent_meta]
-                                count_changed = len(set(counts)) > 1
-
-                                scene_motion = person_moved or count_changed
-
-                        # Stash for the next prompt build — stillness invites dwelling
-                        self._last_scene_motion = scene_motion
+                        # Video decision from the salience assessment: pixel diff only
+                        # decides whether sending video frames is worthwhile (scene
+                        # motion itself is person-angle based, computed in _assess_scene)
+                        recent_meta = scene["recent_meta"]
+                        scene_motion = scene["scene_motion"]
+                        person_present_in_window = scene["person_present_in_window"]
+                        ego_count = scene["ego_count"]
+                        use_video = (
+                            VIDEO_MODE_ENABLED
+                            and _cfg.INFERENCE_BACKEND == "llama_server"
+                            and bool(recent_meta)
+                            and scene["max_diff"] > MOTION_THRESHOLD
+                        )
 
                         if use_video:
                             # Prefer camera-steady frames: ego-motion frames inside a
@@ -649,7 +727,13 @@ class Captioner(MemoryMixin):
 
             log_json_entry(
                 LogType.CAPTION,
-                {"caption": caption, "image_path": img_path, "mood": self.current_mood},
+                {
+                    "caption": caption,
+                    "image_path": img_path,
+                    "mood": self.current_mood,
+                    "salience_hot": self._salience_hot,
+                    "caption_interval": self._current_caption_interval(time.time()),
+                },
                 print_message=print_msg,
             )
             try:
