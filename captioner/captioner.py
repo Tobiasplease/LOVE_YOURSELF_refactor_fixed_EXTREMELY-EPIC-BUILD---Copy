@@ -403,6 +403,31 @@ class Captioner(MemoryMixin):
             return CAPTION_INTERVAL_QUIET
         return CAPTION_INTERVAL
 
+    @staticmethod
+    def _write_face_context_crop(frame: np.ndarray, face_box, img_path: str) -> Optional[str]:
+        """Crop a generous face-centered region (~3x the face box, never
+        tighter than 320px) and save it beside the full frame. Used during
+        eye contact so the model sees the face at readable resolution."""
+        try:
+            x1, y1, x2, y2 = [int(v) for v in face_box]
+            h, w = frame.shape[:2]
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            half = max(int(max(x2 - x1, y2 - y1) * 1.6), 160)
+            xa, xb = max(0, cx - half), min(w, cx + half)
+            ya, yb = max(0, cy - half), min(h, cy + half)
+            crop = frame[ya:yb, xa:xb]
+            if crop.size == 0:
+                return None
+            if crop.shape[0] < 448:
+                scale = 448 / crop.shape[0]
+                crop = cv2.resize(crop, (int(crop.shape[1] * scale), 448))
+            crop_path = img_path.replace(".jpg", "_face.jpg")
+            cv2.imwrite(crop_path, crop)
+            print(f"[👁️] Eye contact — sending face-context crop ({xb-xa}x{yb-ya} from {w}x{h})")
+            return crop_path
+        except Exception:
+            return None
+
     def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None, person_present: bool = False) -> None:
         now = time.time()
         if now - self.last_caption_time < self._current_caption_interval(now):
@@ -609,10 +634,20 @@ class Captioner(MemoryMixin):
                                 timeout=60,
                             )
                         else:
+                            # Eye contact: send the face, not a wide shot where it
+                            # is a hundred-pixel smudge — the VLM can read an
+                            # expression when it's actually given the pixels
+                            send_path = img_path
+                            if getattr(self, "_eye_contact_now", False) and reactivity_data:
+                                face_box = reactivity_data.get("face_box")
+                                if face_box is not None:
+                                    crop_path = self._write_face_context_crop(frame, face_box, img_path)
+                                    if crop_path:
+                                        send_path = crop_path
                             caption = query_model(
                                 prompt=user_prompt,
                                 model=OLLAMA_MODEL,
-                                image=img_path,
+                                image=send_path,
                                 system_prompt=system_prompt,
                                 timeout=60,
                                 log_dir=MOOD_SNAPSHOT_FOLDER,

@@ -1505,6 +1505,10 @@ try:
         # Add person count from YOLO for multi-person awareness
         from perception.detection_memory import DetectionMemory
         reactivity_with_view["person_count"] = DetectionMemory.get_person_count()
+        # Face bbox rides with the frame so the captioner can crop a
+        # face-context image during eye contact (expressions are unreadable
+        # in a wide shot where the face is a hundred pixels)
+        reactivity_with_view["face_box"] = face_box
 
         # Update captioner with every frame (decoupled from mood system)
         # Uses unified PersonDetectionState with spatial memory (visible/remembered/absent)
