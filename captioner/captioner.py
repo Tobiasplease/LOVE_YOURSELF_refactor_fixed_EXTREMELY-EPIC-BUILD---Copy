@@ -523,14 +523,23 @@ class Captioner(MemoryMixin):
                         )
 
                         if use_video:
-                            # Prefer camera-steady frames: ego-motion frames inside a
-                            # super-frame pair encode the whole room as shifting, which
-                            # the model perceives as everything moving. Only fall back
-                            # to the full set when the camera moved the whole time.
+                            # Superframes need camera-steady frames: ego-motion frames
+                            # inside a pair encode the whole room as shifting, which the
+                            # model reads as people moving. The old fallback sent ALL
+                            # frames when too few were steady — since the gaze nudges
+                            # almost every cycle, that fallback fired constantly and
+                            # produced phantom motion ("moving with purpose" in a still
+                            # room, June 12). If the camera moved through the whole
+                            # window, one still image is the honest input.
                             steady_meta = [f for f in recent_meta
                                            if not f.get("detection", {}).get("ego_motion")]
-                            send_meta = steady_meta if len(steady_meta) >= 3 else recent_meta
+                            if len(steady_meta) >= 3:
+                                send_meta = steady_meta
+                            else:
+                                use_video = False
+                                print(f"[VIDEO] Skipped: only {len(steady_meta)}/{len(recent_meta)} steady frames (camera was moving) — sending still image")
 
+                        if use_video:
                             video_frames = [f["jpeg"] for f in send_meta]
                             duration = send_meta[-1]["timestamp"] - send_meta[0]["timestamp"]
 
