@@ -642,10 +642,32 @@ class SemanticMemory:
     # Concept CRUD
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _valid_concept_label(label: str) -> bool:
+        """Storage gate for concept names. Captions sometimes arrive with
+        markdown scaffolding or situational fragments, and those were being
+        stored verbatim ('* **Senses:** The hum of', 'Awake 2 minutes', '',
+        'none' — June 12). A concept is a plain name for a thing."""
+        label = (label or "").strip()
+        if not 3 <= len(label) <= 40:
+            return False
+        if any(ch in label for ch in "*#`_:[]{}|"):
+            return False
+        if not any(ch.isalpha() for ch in label):
+            return False
+        lowered = label.lower()
+        if lowered in ("none", "nothing", "unknown", "n/a"):
+            return False
+        if lowered.startswith(("awake ", "looking ", "just woke", "someone ")):
+            return False
+        return True
+
     def _create_concept(self, perception: str, monologue: str):
         """Create a new concept from a noteworthy perception."""
-        concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
         canonical_name = self._extract_canonical_name(perception)
+        if not self._valid_concept_label(canonical_name):
+            return
+        concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
         now = time.time()
 
         self._concepts.add(
@@ -1007,7 +1029,7 @@ class SemanticMemory:
 
         for label in labels:
             label = label.strip()
-            if not label or len(label) < 3 or len(label) > 40:
+            if not self._valid_concept_label(label):
                 continue
             # Reject sentence fragments
             if "." in label or "?" in label or "!" in label:

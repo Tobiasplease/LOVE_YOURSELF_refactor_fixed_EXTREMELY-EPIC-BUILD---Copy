@@ -1834,6 +1834,14 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     if sit_line:
         prompt_parts.append(sit_line)
 
+    # 1b. THE EVENT (live moments only) — salience strips the interior, so
+    # the present has to say what just happened; an event invites a reaction
+    # where an empty prompt invites atmosphere
+    if live:
+        event_line = getattr(agent, "_salience_event", None)
+        if event_line:
+            prompt_parts.append(event_line)
+
     # 2. MODE-GATED CONTEXT
     if mode in MODE_CONTEXTS:
         context_fn = MODE_CONTEXTS[mode].get("context_fn")

@@ -364,6 +364,19 @@ class Captioner(MemoryMixin):
         if self._salience_hot:
             self._last_salience_time = time.time()
         info["salience_hot"] = self._salience_hot
+
+        # Salience strips the prompt to the present — but the present must
+        # then SAY what just happened, or the model fills the vacuum with
+        # atmosphere instead of reacting. One plain event line, strongest
+        # signal wins, all present-tense truths.
+        event = None
+        if eye_onset:
+            event = "They just looked straight at you."
+        elif arrival:
+            event = "Someone just walked in."
+        elif info["scene_motion"]:
+            event = "They're moving right now." if info["person_present_in_window"] else "Something just moved in the room."
+        self._salience_event = event
         return info
 
     def _current_caption_interval(self, now: float) -> float:

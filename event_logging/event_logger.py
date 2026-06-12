@@ -4,6 +4,7 @@ import json
 import os
 import random
 import shutil
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -167,9 +168,9 @@ def log_json_entry(
             **run_metadata,
         }
 
-        # Write metadata entry first to individual run log
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump([metadata_entry], f, indent=2, ensure_ascii=False)
+        # Write metadata entry first to individual run log (same safe writer
+        # as all other entries — a plain open() here raced the locked path)
+        append_to_log_file(log_dir, filename, metadata_entry)
 
         update_all_run_log(log_dir, metadata_entry)
 
@@ -299,68 +300,52 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
 #     return logs[-1] if logs else None
 
 
+# One lock per process: log writers come from several threads (caption loop,
+# compression worker, reflection loop, mood thread)
+_LOG_WRITE_LOCK = threading.Lock()
+
+
 def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> None:
     """
-    Append a JSON entry to a log file with atomic file locking to prevent corruption.
+    Append a JSON entry to a log file. Crash- and thread-safe:
 
-    Args:
-        log_dir: Directory containing log files
-        filename: Name of the log file
-        entry: Dictionary to append
+    - the entry is serialized BEFORE touching the file (a non-serializable
+      value raises cleanly instead of mid-write),
+    - the new content is written to a temp file and atomically renamed over
+      the target (os.replace) — no reader or hard kill can ever observe a
+      partial file,
+    - a process-wide thread lock plus an flock on a stable sidecar lockfile
+      serialize writers (locking the data file itself broke once recovery
+      replaced its inode — June 12 corruption cascade).
     """
+    json.dumps(entry)  # fail fast, before the file is involved
+
     filepath = os.path.join(log_dir, filename)
     os.makedirs(log_dir, exist_ok=True)
 
-    # Retry logic with exponential backoff for file lock contention
-    max_retries = 5
-    base_delay = 0.001  # 1ms base delay
+    with _LOG_WRITE_LOCK:
+        with open(filepath + ".lock", "w") as lockfile:
+            fcntl.flock(lockfile.fileno(), fcntl.LOCK_EX)
 
-    for attempt in range(max_retries):
-        try:
-            # Open file in read+write mode, create if doesn't exist
-            with open(filepath, "a+", encoding="utf-8") as f:
-                # Get exclusive lock (blocks until available)
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-
+            entries = []
+            if os.path.exists(filepath):
                 try:
-                    # Seek to beginning and read current contents
-                    f.seek(0)
-                    content = f.read().strip()
-
-                    entries = []
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        content = f.read().strip()
                     if content:
-                        try:
-                            entries = json.loads(content)
-                        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                            print(f"[WARNING] Corrupted JSON in {filepath}, attempting recovery: {e}")
-                            entries = _recover_corrupted_log_file(filepath)
+                        entries = json.loads(content)
+                except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                    print(f"[WARNING] Corrupted JSON in {filepath}, attempting recovery: {e}")
+                    entries = _recover_corrupted_log_file(filepath)
 
-                    # Append new entry
-                    entries.append(entry)
+            entries.append(entry)
 
-                    # Truncate and write new contents atomically
-                    f.seek(0)
-                    f.truncate()
-                    json.dump(entries, f, indent=2, ensure_ascii=False)
-                    f.flush()
-                    os.fsync(f.fileno())  # Force write to disk
-
-                finally:
-                    # Lock is automatically released when file closes
-                    pass
-
-            # Success - break out of retry loop
-            break
-
-        except (IOError, OSError) as e:
-            if attempt < max_retries - 1:
-                # Exponential backoff with jitter
-                delay = base_delay * (2**attempt) + random.uniform(0, 0.001)
-                time.sleep(delay)
-                continue
-            else:
-                print(f"[ERROR] Failed to write to log file {filepath} after {max_retries} attempts: {e}")
-                raise
+            tmp_path = filepath + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(entries, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, filepath)
 
 
 def _recover_corrupted_log_file(filepath: str) -> List[Dict[str, Any]]:

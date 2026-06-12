@@ -103,10 +103,18 @@ every pixel ~10px. Roles now:
 - EGO-COMPENSATED FLOW (vision/scene_motion.py, NEW June 12): optical flow
   estimates the camera's own movement between frame-buffer pushes (2fps),
   warps it away, and measures what still changes — true scene motion,
-  person or not, measurable even mid-sway. `residual_motion` in every
-  frame snapshot; threshold SCENE_MOTION_RESIDUAL_THRESHOLD (calibrate
-  with debug/test_scene_motion.py). Synthetic check: camera pan alone
-  reads 0.000, pan + moving object reads 0.022.
+  person or not, measurable through breathing sway. SACCADES (>25px shift,
+  i.e. gaze nudges) return invalid — blurred frames produced 0.07-0.24
+  false residual and kept salience permanently hot, which stripped ALL
+  interior material from every prompt (the June 12 "bland ghost prose"
+  run). Speckle eroded before counting. `residual_motion` in every frame
+  snapshot; threshold SCENE_MOTION_RESIDUAL_THRESHOLD (calibrate with
+  debug/test_scene_motion.py). Synthetic: sway alone 0.000, sway+object
+  0.019, saccade invalid.
+- SALIENCE EVENT LINE: when salience strips the prompt, _assess_scene also
+  names the event ("They just looked straight at you." / "Someone just
+  walked in." / "They're moving right now.") — a stripped prompt with no
+  event invites atmosphere; an event invites a reaction.
 - pixel diff: only decides whether sending video is worth considering
 - ego_motion flag (servo delta >2°/frame): breathing sway (~1-1.2°) + gaze
   nudges flag frames OFTEN — that's expected; only used to pick steady

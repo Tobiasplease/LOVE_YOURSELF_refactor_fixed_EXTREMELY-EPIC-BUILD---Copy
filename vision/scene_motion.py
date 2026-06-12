@@ -29,6 +29,12 @@ _DIFF_THRESHOLD = 28
 # Feature tracking parameters
 _MAX_CORNERS = 200
 _MIN_TRACKED = 20
+# Beyond this the camera made a saccade (gaze nudge ~12° ≈ 60px at 320w):
+# frames are motion-blurred and compensation residue swamps real motion —
+# refuse to measure rather than report noise (live run June 12: constant
+# 0.07-0.24 false residual kept salience permanently hot). Breathing sway
+# (~1° ≈ 5px) stays well inside the trusted range.
+_MAX_TRUSTED_SHIFT_PX = 25.0
 
 
 class SceneMotionEstimator:
@@ -69,6 +75,8 @@ class SceneMotionEstimator:
             return result
 
         result["camera_shift_px"] = float(np.hypot(transform[0, 2], transform[1, 2]))
+        if result["camera_shift_px"] > _MAX_TRUSTED_SHIFT_PX:
+            return result  # saccade — blurred frames, measurement would be noise
 
         # Undo the camera's movement, then diff. Borders the warp can't fill
         # are masked out; means are matched so auto-exposure shifts during
@@ -84,7 +92,10 @@ class SceneMotionEstimator:
         b = warped.astype(np.int16)
         b = b + int(a[mask].mean() - b[mask].mean())
         diff = np.abs(a - b)
-        moving = (diff > _DIFF_THRESHOLD) & mask
+        moving = ((diff > _DIFF_THRESHOLD) & mask).astype(np.uint8)
+        # Erode away single-pixel speckle (sensor noise, compensation residue
+        # along edges) — a real moving body survives, noise doesn't
+        moving = cv2.erode(moving, np.ones((3, 3), np.uint8))
         result["residual_fraction"] = float(moving.sum()) / float(mask.sum())
         result["valid"] = True
         return result
