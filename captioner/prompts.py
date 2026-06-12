@@ -1933,11 +1933,10 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # 6. THOUGHT THREAD LAST — continuation signal with three states:
-    #   dwell — scene is still: stay with the thought, push it one step further
-    #           (builds multi-caption threads instead of perpetual scanning)
-    #   normal — tail of last thought as a loose continuation seed
-    #   drop — no thread, register can break and start fresh elsewhere
+    # 6. DWELL — when the scene is still, occasionally stay with the thought.
+    # The thought itself is visible to the model as its own prior turns (the
+    # stream, captioner._stream) — the old quoted thread-tail mechanism and
+    # its dropout are retired June 12; real turns replaced the quote.
     import random as _random
 
     # Scene stillness from person-angle tracking (camera-compensated), not pixel
@@ -1957,29 +1956,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         dwelling = True
 
     if dwelling:
-        skip_thread = False
-    else:
-        _drop_prob = 0.4 if getattr(agent, "boredom", 0.0) > 0.7 else 0.25
-        skip_thread = _random.random() < _drop_prob
-
-    try:
-        if not skip_thread and hasattr(agent, "recent_captions") and agent.recent_captions:
-            for entry in reversed(agent.recent_captions[-4:]):
-                cap = entry[0] if isinstance(entry, (list, tuple)) else entry
-                if cap and cap.strip() and len(cap.strip()) > 8:
-                    last = _sanitize_context(cap.strip())
-                    if last:
-                        # Extract last sentence only
-                        sentences = [s.strip() for s in last.replace("\n", " ").split(".") if s.strip()]
-                        tail = sentences[-1] if sentences else last
-                        if len(tail) > 80:
-                            tail = tail[:80].rsplit(" ", 1)[0]
-                        prompt_parts.append(f"...{tail}.")
-                        if dwelling:
-                            prompt_parts.append("Stay with that thought — take it one step further instead of starting a new one.")
-                    break
-    except Exception:
-        pass
+        prompt_parts.append("Stay with that last thought — take it one step further instead of starting a new one.")
 
     # Structural guard: never inject the same line twice (a duplicated context
     # line reads as emphasis to the model and locks the register)

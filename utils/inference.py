@@ -29,10 +29,14 @@ def query_model(
     prompt_type: str = "general",
     skip_generation_wait: bool = False,
     prior_assistant_turn: Optional[str] = None,
+    history: Optional[List[str]] = None,
 ) -> str:
     """
     Query the active inference backend with a prompt and optional image.
     Drop-in replacement for query_ollama() — same signature, routes by config.
+
+    history: prior captions as the model's own assistant turns (the stream);
+    llama-server only — the Ollama fallback ignores it.
     """
     # Empty log_dir crashes log_ollama_call (os.makedirs('')) — default it here
     # so call sites don't all have to pass it.
@@ -54,6 +58,7 @@ def query_model(
             prompt_type=prompt_type,
             skip_generation_wait=skip_generation_wait,
             prior_assistant_turn=prior_assistant_turn,
+            history=history,
         )
     else:
         from utils.ollama import query_ollama
@@ -82,6 +87,7 @@ def query_model_video(
     timeout: int = 60,
     show_progress: bool = False,
     skip_generation_wait: bool = False,
+    history: Optional[List[str]] = None,
 ) -> str:
     """
     Query with multiple video frames. Only works with llama-server backend.
@@ -98,6 +104,7 @@ def query_model_video(
             timeout=timeout,
             show_progress=show_progress,
             skip_generation_wait=skip_generation_wait,
+            history=history,
         )
     else:
         # Ollama fallback: use last frame as single image

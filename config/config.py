@@ -261,6 +261,12 @@ CAPTION_INTERVAL = 7  # seconds between full caption cycles
 SCENE_MOTION_RESIDUAL_THRESHOLD = 0.02  # >2% of pixels moving = something is happening (post-erosion: small object ~0.019, camera sway alone 0.000, saccades excluded)
 SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 
+# The stream (CoT-style continuity): prior captions ride as the machine's own
+# assistant turns so each caption continues a visible thought. 0 disables and
+# reverts to amnesiac single-turn captions.
+STREAM_WINDOW = 6  # how many prior captions the model sees as its own turns
+STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
+
 # Attention breathes (north-star principle 6): cadence tightens when something
 # is happening, stretches when nothing has happened for a while
 CAPTION_INTERVAL_LIVE = 4  # cadence while salience is hot (motion, arrival, fresh eye contact)

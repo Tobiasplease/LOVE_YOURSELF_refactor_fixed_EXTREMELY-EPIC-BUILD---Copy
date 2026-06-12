@@ -173,6 +173,11 @@ class Captioner(MemoryMixin):
         self._salience_hot: bool = False
         self._last_salience_time: float = time.time()
         self._prev_eye_contact: bool = False
+
+        # The stream (CoT-style continuity): recent captions ride as the
+        # model's own assistant turns. Gated by _stream_admissible.
+        from config.config import STREAM_WINDOW
+        self._stream: Deque[str] = deque(maxlen=max(STREAM_WINDOW, 0))
         self.last_memory_mode_time: float = time.time()  # Track memory mode trigger (every 4 min)
 
         # Track session continuity
@@ -385,6 +390,36 @@ class Captioner(MemoryMixin):
         self._salience_event = event
         return info
 
+    # Markers that mean a caption slipped into assistant/meta register. Such a
+    # caption is still displayed and logged, but it must NOT enter the stream
+    # window — the model imitates its own visible turns, so one slip would
+    # breed more (the failed earlier CoT experiments died exactly this way).
+    _STREAM_META_MARKERS = (
+        "as an ai",
+        "language model",
+        "i'm here to",
+        "i am here to",
+        "how can i help",
+        "what do you want me",
+        "would you like",
+        "let me know",
+        "feel free to",
+        "i cannot assist",
+        "the user",
+    )
+
+    @classmethod
+    def _stream_admissible(cls, text: str) -> bool:
+        """Admission gate for the stream window (guard at storage, not mouth)."""
+        t = (text or "").strip().lower()
+        if len(t) < 8:
+            return False
+        if any(m in t for m in cls._STREAM_META_MARKERS):
+            return False
+        if t.count("*") >= 2 or t.startswith(("- ", "* ", "#")):
+            return False  # markdown scaffolding breeds in-stream too
+        return True
+
     def _current_caption_interval(self, now: float) -> float:
         """Attention breathes: tight when something is happening, stretched
         when nothing has happened for a while. A fresh arrival snaps the
@@ -432,6 +467,12 @@ class Captioner(MemoryMixin):
         now = time.time()
         if now - self.last_caption_time < self._current_caption_interval(now):
             return
+
+        # A long silence breaks the thought — the stream restarts rather than
+        # pretending continuity across a gap (would-it-lie applies to time too)
+        from config.config import STREAM_BREAK_SECONDS
+        if self.last_caption_time and now - self.last_caption_time > STREAM_BREAK_SECONDS:
+            self._stream.clear()
 
         # Store reactivity data for subconscious layer access
         self._current_reactivity_data = reactivity_data
@@ -632,6 +673,7 @@ class Captioner(MemoryMixin):
                                 system_prompt=system_prompt,
                                 options=gen_options,
                                 timeout=60,
+                                history=list(self._stream),
                             )
                         else:
                             # Eye contact: send the face, not a wide shot where it
@@ -653,6 +695,7 @@ class Captioner(MemoryMixin):
                                 log_dir=MOOD_SNAPSHOT_FOLDER,
                                 options=gen_options,
                                 prompt_type="caption",
+                                history=list(self._stream),
                             )
 
                         # Match output against ChromaDB concepts (replaces perception-based matching)
@@ -843,6 +886,11 @@ class Captioner(MemoryMixin):
             matched_concepts=matched_concepts,
         )
         self.last_caption = caption  # already trimmed to complete sentence above
+
+        # Admit into the stream window (the model's own visible turns) —
+        # meta/markdown slips are displayed and logged but never propagate
+        if caption and self._stream_admissible(caption):
+            self._stream.append(caption.strip())
 
         # Track recent captions for continuity thread (used by flowing thread)
         # Store as (caption, timestamp, mode, perception) for interleaved see/think display

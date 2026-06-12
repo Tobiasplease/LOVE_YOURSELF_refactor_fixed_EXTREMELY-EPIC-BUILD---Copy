@@ -201,13 +201,25 @@ def query_llama_server(
     prompt_type: str = "general",
     skip_generation_wait: bool = False,
     prior_assistant_turn: Optional[str] = None,
+    history: Optional[List[str]] = None,
 ) -> str:
     """
     Query llama-server with a prompt and optional image.
     API-compatible with query_ollama() for easy migration.
+
+    history: prior outputs of the same voice, included as the model's own
+    assistant turns — each call then CONTINUES a visible stream of thought
+    instead of restarting one (CoT-style continuity). Text only; past
+    images are never re-sent.
     """
     if not skip_generation_wait:
         _wait_for_drawing_completion()
+
+    # Auto-restart if llama-server has crashed
+    if not is_server_running():
+        print("[llama-server] Server not responding — attempting restart...")
+        if not start_server():
+            return f"[WARNING] llama-server unavailable and restart failed"
 
     # Encode image
     img_b64 = None
@@ -227,6 +239,15 @@ def query_llama_server(
     messages = []
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
+
+    # The stream: prior thoughts as the machine's own turns; the "..." ticks
+    # mark time passing between them
+    if history:
+        for past in history:
+            past = (past or "").strip()
+            if past:
+                messages.append({"role": "user", "content": "..."})
+                messages.append({"role": "assistant", "content": past})
 
     if prior_assistant_turn:
         messages.append({"role": "user", "content": "..."})
@@ -351,6 +372,7 @@ def _query_multi_image(
     options: Optional[dict] = None,
     timeout: int = 60,
     show_progress: bool = SHOW_PROGRESS,
+    history: Optional[List[str]] = None,
 ) -> str:
     """Plain multi-image mode: send each frame as a separate image_url in the content array.
     The model sees them as independent images but can still infer temporal change.
@@ -359,6 +381,14 @@ def _query_multi_image(
     messages = []
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
+
+    # The stream: prior captions as the machine's own turns (text only)
+    if history:
+        for past in history:
+            past = (past or "").strip()
+            if past:
+                messages.append({"role": "user", "content": "..."})
+                messages.append({"role": "assistant", "content": past})
 
     # Build user content with interleaved images + final text prompt
     user_content = []
@@ -424,6 +454,7 @@ def _query_superframe(
     options: Optional[dict] = None,
     timeout: int = 60,
     show_progress: bool = SHOW_PROGRESS,
+    history: Optional[List[str]] = None,
 ) -> str:
     """Super-frame mode: Conv3D paired frames + M-RoPE temporal encoding.
     Genuine temporal perception — the model sees continuous motion.
@@ -474,6 +505,13 @@ def _query_superframe(
     messages = []
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
+    # The stream: prior captions as the machine's own turns (text only)
+    if history:
+        for past in history:
+            past = (past or "").strip()
+            if past:
+                messages.append({"role": "user", "content": "..."})
+                messages.append({"role": "assistant", "content": past})
     messages.append(user_message)
 
     payload = {
@@ -545,6 +583,7 @@ def query_llama_server_video(
     show_progress: bool = SHOW_PROGRESS,
     skip_generation_wait: bool = False,
     mode: str = "",
+    history: Optional[List[str]] = None,
 ) -> str:
     """
     Query llama-server with multiple video frames.
@@ -565,6 +604,21 @@ def query_llama_server_video(
     if not skip_generation_wait:
         _wait_for_drawing_completion()
 
+    # Auto-restart if llama-server has crashed
+    if not is_server_running():
+        print("[llama-server] Server not responding — attempting restart...")
+        if start_server():
+            print("[llama-server] Restarted successfully")
+        else:
+            print("[llama-server] Restart failed — falling back to single frame")
+            if frames:
+                return query_llama_server(
+                    prompt=prompt, image=frames[-1], system_prompt=system_prompt,
+                    options=options, timeout=timeout, show_progress=show_progress,
+                    skip_generation_wait=True,
+                )
+            return "[WARNING] llama-server unavailable"
+
     if not mode:
         from config.config import VIDEO_MODE
         mode = VIDEO_MODE
@@ -578,6 +632,7 @@ def query_llama_server_video(
                 system_prompt=system_prompt,
                 options=options,
                 timeout=timeout,
+                history=history,
             )
         except ImportError:
             print("[llama-server] llama-video not installed, falling back to multi-image mode")
@@ -595,6 +650,7 @@ def query_llama_server_video(
                 options=options,
                 timeout=timeout,
                 show_progress=show_progress,
+                history=history,
             )
         except Exception as e:
             error_msg = str(e)
