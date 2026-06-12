@@ -141,6 +141,3 @@ def get_model_options(model_name: str) -> dict:
     return copy.deepcopy(base)
 
 
-def get_model_system_prompt(model_name: str) -> dict:
-    """Deprecated. System prompts live in captioner/prompts.py."""
-    return {"style": "detailed", "base_prompt": "See captioner/prompts.SYSTEM_PROMPT"}

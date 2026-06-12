@@ -58,12 +58,13 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 - **config/**: Centralized config system (`config.py`, `loader.py`, `model_settings.py`)
 - **perception/**: Computer vision — face detection (OpenCV DNN), object detection (YOLO), spatial memory
 - **captioner/**: AI captioning pipeline — the core of the system:
-  - `captioner.py`: Main captioner class, runs caption/awakening/environmental cycles
+  - `captioner.py`: Main captioner class, runs caption/awakening/environmental cycles; salience assessment gates prompt interiority
+  - `reflection.py`: Reflection loop — long-form thought on rotating subjects every ~20 quiet minutes, stored in ChromaDB
   - `memory.py`: Agent memory — observations, drawing history, mood tracking, temporal lines
   - `activation_memory.py`: Activation-spreading memory network for concept recall and boredom scoring
   - `context_compression.py`: Compresses recent captions into evolving baseline context (every N captions via background thread)
   - `model_wrapper.py`: Ollama API wrapper for the vision model
-  - `prompt_interface.py`: Builds prompts + model options for caption, reflection, drawing calls
+  - `prompt_interface.py`: Builds prompts + model options for caption and drawing calls
   - `prompts.py`: All prompt templates and builder functions
   - `subconscious.py`: Psychological synthesis layer (used by debug scripts; not called in main loop)
 - **mood/**: Mood analysis engine, emotional state tracking

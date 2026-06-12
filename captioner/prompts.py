@@ -13,16 +13,7 @@ from config import config
 # === SYSTEM PROMPTS ===
 
 # Main system prompt used by captioner (supports dynamic formatting)
-# KEY: Embed emotional state INTO identity ("a bored machine" not "machine that feels bored")
-# INVARIANT SYSTEM PROMPT
-# Clean identity + purpose framing. Works for all models.
 # "You see through a camera" reframes the image as own vision, not an image to analyze.
-SYSTEM_PROMPT = (
-    "You are a {emotional_state} drawing machine. "
-    "You see through a camera — this is your environment. "
-    "Inner monologue. First person. One sentence."
-)
-
 STATIC_SYSTEM_PROMPT = (
     "You are a drawing machine. "
     "You see through a camera — this is your environment. "
@@ -32,12 +23,6 @@ STATIC_SYSTEM_PROMPT = (
 # Generic prompt for non-Mistral vision models
 STATIC_SYSTEM_PROMPT_GENERIC = (
     "You are a drawing machine. "
-    "You see through a camera — this is your environment. "
-    "Inner monologue. First person. One sentence."
-)
-
-SYSTEM_PROMPT_GENERIC = (
-    "You are a {emotional_state} drawing machine. "
     "You see through a camera — this is your environment. "
     "Inner monologue. First person. One sentence."
 )

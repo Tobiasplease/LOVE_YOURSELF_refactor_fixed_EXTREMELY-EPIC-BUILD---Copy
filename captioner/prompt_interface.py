@@ -13,7 +13,6 @@ from config.model_settings import get_model_options
 from .prompts import (
     DRAWING_SYSTEM_PROMPT,
     STATIC_SYSTEM_PROMPT,
-    SYSTEM_PROMPT,
     build_focused_caption_prompt,
     context_rich_multi_step_drawing_analysis,
 )

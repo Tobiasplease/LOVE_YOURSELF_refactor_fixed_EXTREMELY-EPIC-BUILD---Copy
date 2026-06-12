@@ -95,12 +95,14 @@ class ReflectionLoop:
     def _has_visitor_material(self) -> bool:
         try:
             from utils.episodic_log import episodic_log
+
             if episodic_log.get_last_event("person_arrived"):
                 return True
         except Exception:
             pass
         try:
             from captioner.context_compression import context_compressor
+
             return len(context_compressor.core_facts.get("people", "").strip()) > 5
         except Exception:
             return False
@@ -108,6 +110,7 @@ class ReflectionLoop:
     def _gather_drawings(self) -> str:
         try:
             from drawing.drawing_memory import get_drawing_memory
+
             return get_drawing_memory().get_recent_drawings_summary(max_count=3, completed_only=True) or ""
         except Exception:
             return ""
@@ -161,7 +164,15 @@ class ReflectionLoop:
             prompt_type="reflection",
         )
 
+        # Storage-gate cleanup (north-star: guards live at storage, not the mouth):
+        # markdown emphasis is a format artifact, and num_predict can cut the
+        # final sentence mid-thought — trim to the last complete one.
         text = (response or "").strip().strip('"').strip()
+        text = text.replace("**", "").replace("##", "")
+        if text and text[-1] not in ".!?":
+            cut = max(text.rfind("."), text.rfind("!"), text.rfind("?"))
+            if cut > 80:
+                text = text[: cut + 1]
         if len(text) < 80:
             log_json_entry(
                 LogType.REFLECTION,
@@ -179,6 +190,7 @@ class ReflectionLoop:
 
         try:
             from utils.live_log import log_reflection
+
             log_reflection(subject, text)
         except Exception:
             pass

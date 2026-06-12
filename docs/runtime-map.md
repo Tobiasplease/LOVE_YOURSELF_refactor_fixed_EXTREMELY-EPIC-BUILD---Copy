@@ -1,13 +1,13 @@
 # Runtime Map — what is actually live
 
-Last verified: June 12, 2026 (branch: experimental/vision-upgrades).
+Last verified: June 12, 2026 (branch: rebuild/north-star).
 This is the maintenance view: every line the model sees, where it comes from,
 and which subsystems are healthy, weak, or dead. Update it when wiring changes.
 The audit habit that produced it: features fail SILENTLY here — always check
 the event log / state files for evidence a subsystem is producing output,
 don't trust that code existing means code running.
 
-## The caption loop (~every 7s)
+## The caption loop (breathing cadence: 4s live / 7s normal / 12s after 2 quiet min)
 
 ```
 camera frame (~30fps)
@@ -16,7 +16,10 @@ camera frame (~30fps)
   ├─ frame_buffer.push(frame, detection-snapshot)         [machine.py → captioner/frame_buffer.py]
   │    snapshot: face?, person?, count, track_id, pan/tilt, person_angle, ego_motion
   └─ captioner._process_frame                             [captioner/captioner.py]
+       ├─ _assess_scene → salience verdict (FIRST)        [captioner/captioner.py]
+       │    scene motion OR arrival <45s OR eye-contact onset → _salience_hot
        ├─ build_simple_caption_prompt  → USER PROMPT      [captioner/prompts.py]
+       │    salience hot → interior lines stripped (present only)
        ├─ get_monologue_system_prompt  → SYSTEM PROMPT    [captioner/prompts.py]
        ├─ video decision + motion framing                 [captioner/captioner.py]
        └─ query_model_video / query_model → caption
@@ -24,35 +27,48 @@ camera frame (~30fps)
                      → observation store (after_monologue)
 ```
 
+Verify salience in logs: every CAPTION entry carries `salience_hot` and
+`caption_interval`.
+
 ## Every line of the SYSTEM prompt and its source
+
+Torn down June 12 (north-star principles 1+2): situation only, no style
+rules, no registers, no mood clause. Voice comes from content.
 
 | Line | Source | Health |
 |------|--------|--------|
-| identity base ("drawing machine bolted...") | static, prompts.py | ok |
-| register (bored/alert/neutral) | activation network boredom+novelty | ok |
-| mood clause ("You're content just now.") | mood vector (numeric, loop-safe) | WEAK — engine is keyword-based, barely moves; events (person, novelty) now feed it, rescaled thresholds. Deserves event-driven redesign. |
+| situation ("drawing machine bolted... a thought is a sentence or two") | static `_SITUATION` + monologue clause, prompts.py | ok |
 | "Right now: {felt}." | compression felt-state, sanitized ≤6 words | ok (often empty by design) |
-| persona ("I monitor for movement...") | core_facts.self, self-synthesis every 3rd introspection | ok |
+| persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | ok |
 | mode addition ("You're aware of someone...") | mode selection | ok |
 
+Mood engine note: the numeric mood vector no longer reaches the system
+prompt (mood clause deleted). The engine still runs and feeds servo/hand;
+its proper successor is the reflection loop. Watch whether anything is
+missed before rebuilding it.
+
 ## Every line of the USER prompt and its source
+
+Lines marked [interior] are stripped whenever salience is hot — a live
+moment gets the present only (north-star principle 6).
 
 | Line | Source | Health |
 |------|--------|--------|
 | "Been watching 18 minutes. Looking left." | session clock + gaze | ok |
 | "Someone here 5 minutes." | episodic log, visit-clustered | ok |
 | "They've come and gone N times." | episodic pairs (debounced 90s) | ok |
-| introspective ctx ("My last drawings were of...") | drawing_memory, completed only | ok |
-| core facts line | core_facts place/people/drawings | ok |
-| familiarity ("That pink shelf again...") | ChromaDB concept matches, every ~3rd caption | ok; concept near-dups sprawl a bit |
+| [interior] introspective ctx ("My last drawings were of...") | drawing_memory, completed only | ok |
+| [interior] core facts line | core_facts place/drawings | ok |
+| [interior] familiarity ("That pink shelf again...") | ChromaDB concept matches, every ~3rd caption | ok; concept near-dups sprawl a bit |
+| [interior] reflection echo (`A thought you had earlier today: "…"`) | ChromaDB reflections, relevance-matched, every ~4th caption when no familiarity line | NEW — verify via REFLECTION log entries + echo in prompts |
 | drawing/paper state | state_manager | ok |
 | felt-state delta | compression | ok |
-| "Preoccupied with: ..." | desire, gated to 3 injections | ok |
-| baseline first sentence | compression (observational/workspace) | ok |
-| thread tail "...{last sentence}." | recent_captions; dropout 25-40%; dwell keeps+extends | ok |
-| video motion line | person-angle scene motion (NOT pixel diff) | NEW — verify in logs: `[VIDEO] ... scene_motion=` |
+| [interior] "Preoccupied with: ..." | desire, gated to 3 injections | ok |
+| [interior] baseline first sentence | compression (observational/workspace) | ok |
+| thread tail "...{last sentence}." | recent_captions; dropout 25-40%; dwell keeps+extends; dwell cancelled when live | ok |
+| video motion line | person-angle scene motion (NOT pixel diff) | verify in logs: `[VIDEO] ... scene_motion=` |
 
-## Background consolidation (compression thread)
+## Background consolidation (compression thread + reflection loop)
 
 | Cadence | What | Output |
 |---------|------|--------|
@@ -62,6 +78,7 @@ camera frame (~30fps)
 | during introspection | core facts update | core_facts place/people/drawings |
 | per compression | concept extraction (LLM, solid objects) | ChromaDB concepts |
 | every 30 min + shutdown | journal entry | machine_identity.json journal |
+| every ~20 quiet min | REFLECTION LOOP (captioner/reflection.py): long-form thought (600-token budget) on rotating subjects — room / visitor / drawings / time / itself; context = today's compressions + previous reflections + journal + drawings + desire; uses the main model; skipped while drawing | ChromaDB `reflections` collection + REFLECTION log entry; surfaces into quiet captions via echo line |
 
 ## Awakening (first caption of a session)
 
@@ -113,3 +130,13 @@ prompt entirely: present-tense presence belongs to the live detection layer
   removed June 2026 dead-code purge
 - subconscious.py — debug scripts only
 - generate_awakening_message() — superseded by generate_internal_awakening()
+- reason_about_caption + REASON_INTERVAL (every-320s shallow reflection,
+  output discarded) — replaced June 12 by the reflection loop
+- SemanticMemory per-concept reflection worker — replaced June 12 by the
+  reflection loop (old per-concept reflections still readable in the
+  observations collection)
+- system-prompt registers (_REGISTER_BORED/ALERT/NEUTRAL) and _mood_clause —
+  deleted June 12 in the north-star teardown; do not re-add style fences,
+  fix what's being stored instead (north-star principle 1)
+- docs/reasoning-model-plan.md — superseded by docs/north-star.md + the
+  reflection loop
