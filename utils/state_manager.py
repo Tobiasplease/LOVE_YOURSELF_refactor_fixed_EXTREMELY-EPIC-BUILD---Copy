@@ -111,8 +111,6 @@ class StateManager:
                     "emotional_patterns": getattr(captioner, "emotional_patterns", {}),
                     # Recent memory (last 50 entries for richer context)
                     "recent_memory": list(captioner.memory_queue)[-50:] if captioner.memory_queue else [],
-                    # Timer states for reflection interval
-                    "last_reason_time": captioner.last_reason_time,
                 },
                 # Mood engine state
                 "mood_engine": {
@@ -223,10 +221,6 @@ class StateManager:
             # Restore recent memory
             recent_memory = cap_state.get("recent_memory", [])
             captioner.memory_queue = deque(recent_memory, maxlen=30)
-
-            # Reset timer states to current time for fresh session intervals
-            # Don't restore old timer states - start intervals from session startup
-            captioner.last_reason_time = time.time()
 
             # Set session start to NOW (when we actually restart), not old save time
             # The save_time represents when we were last active, but true_session_start

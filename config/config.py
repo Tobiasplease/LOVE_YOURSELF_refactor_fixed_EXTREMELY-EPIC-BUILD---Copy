@@ -256,9 +256,12 @@ UARM_START_PLAY_FILE = os.path.join(
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 CAPTION_INTERVAL = 7  # seconds between full caption cycles
 
+# Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
+REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet
+REFLECTION_NUM_PREDICT = 600  # token budget for a reflection — long-form on purpose (north-star principle 5)
+
 # Drawing system intervals
 DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
-REASON_INTERVAL = 320  # seconds between reflections (7 minutes)
 DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 300  # 1 minute debug vs 5 minutes normal (check frequency)
 DRAWING_COOLDOWN = 120 if DEBUG_FAST_DRAWING else 720  # 2 minutes debug vs 12 minutes normal
 DRAWING_STARTUP_DELAY = 180  # Minimum seconds to wait after startup before first drawing (3 min for full init)
@@ -332,7 +335,7 @@ OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API cal
 # Control creativity and expressiveness in different types of responses
 CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 0.85))       # Regular observations (0.85 for Qwen)
 DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.0))            # Drawing prompts (lowered from 1.2 for Qwen's higher base entropy)
-REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 1.1))      # Introspective moments (philosophical)
+REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 0.85))     # Long-form reflection loop (0.85 for Qwen's higher base entropy)
 ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) # First observations (slightly more grounded)
 
 # === OUTPUT SETTINGS ===

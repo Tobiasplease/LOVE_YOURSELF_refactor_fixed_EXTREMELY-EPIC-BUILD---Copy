@@ -12,18 +12,17 @@ from typing import Deque, Dict, List, Optional, Tuple
 import cv2  # type: ignore
 import numpy as np  # type: ignore
 
-from config.config import CAPTION_INTERVAL, CLEAN_LLM_OUTPUT, DRAWING_INTERVAL, DRAWING_STARTUP_DELAY, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS, REASON_INTERVAL
+from config.config import CAPTION_INTERVAL, CLEAN_LLM_OUTPUT, DRAWING_INTERVAL, DRAWING_STARTUP_DELAY, MOOD_SNAPSHOT_FOLDER, OLLAMA_SHOW_PROGRESS
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from utils.error_tracking import track_component_health
-from utils.ollama import truncate_for_print
 from utils.state_manager import state_manager
 
 from .memory import MemoryMixin
 from .model_wrapper import MultimodalModel
-from .prompts import SYSTEM_PROMPT, STATIC_SYSTEM_PROMPT
+from .prompts import STATIC_SYSTEM_PROMPT
 
 # from weakref import ref
 
@@ -85,6 +84,10 @@ def _clean_caption_for_display(caption: str) -> Optional[str]:
 class Captioner(MemoryMixin):
     def shutdown(self):
         self.save_session_time()
+        try:
+            self.reflection_loop.stop()
+        except Exception:
+            pass
         # Best-effort diary entry so the next awakening has a past to wake into
         try:
             if context_compressor:
@@ -155,7 +158,6 @@ class Captioner(MemoryMixin):
         self._drawing_intentions: List[str] = []  # Accumulated drawing-related musings
 
         self.last_caption_time: float = 0.0
-        self.last_reason_time: float = time.time()  # Delay first reflection
         self.last_drawing_check_time: float = 0.0  # Allow immediate first check
         self.last_memory_mode_time: float = time.time()  # Track memory mode trigger (every 4 min)
 
@@ -172,6 +174,11 @@ class Captioner(MemoryMixin):
         os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
         self.snapshot_queue: Deque[Tuple[np.ndarray, bool, Optional[Dict]]] = deque()
         threading.Thread(target=self._caption_worker, daemon=True).start()
+
+        # The Reflect loop — long-form thought every ~20 quiet minutes (captioner/reflection.py)
+        from captioner.reflection import ReflectionLoop
+        self.reflection_loop = ReflectionLoop(agent=self)
+        self.reflection_loop.start()
 
     def save_session_time(self):
         try:
@@ -717,94 +724,7 @@ class Captioner(MemoryMixin):
 
         # Caption already observed via the primary observe() call above
 
-        # Process emotional drift
-        # environmental_factors = {
-        #     "scene_static": getattr(self, "_scene_static", False),  # Will be tracked by semantic memory
-        #     "novelty": self.novelty_score,
-        #     "person_present": reactivity_data.get("person_present", False) if reactivity_data else False,
-        #     "boredom": self.boredom,
-        # }
-
-        # Debug reflection timing
-        time_since_reflection = now - self.last_reason_time
-        if time_since_reflection > REASON_INTERVAL:
-            log_json_entry(
-                LogType.DEBUG,
-                {
-                    "message": "Reflection triggered",
-                    "action": "reflection_trigger",
-                    "time_since_last_reflection": time_since_reflection,
-                    "reason_interval": REASON_INTERVAL,
-                    "mood": self.current_mood,
-                },
-                print_message=f"[🤔] Reflection triggered! Time since last: {time_since_reflection:.0f}s > {REASON_INTERVAL}s",
-            )
-            try:
-                mood_text = self.describe_current_mood()
-                context = self.get_reflection_context()
-
-                # Start loading animation for reflection
-                loading_stop = threading.Event()
-
-                loading_thread = threading.Thread(target=loading_animation, daemon=True)
-                loading_thread.start()
-
-                try:
-                    reflection = self.model.reason_about_caption(caption, agent=self, mood_text=mood_text, extra=context)
-                finally:
-                    # Stop loading animation
-                    loading_stop.set()
-                    loading_thread.join(timeout=2.0)  # Increased timeout
-                    if loading_thread.is_alive():
-                        # Force clear animation remnants if thread still running
-                        with self.print_lock:
-                            print("\r" + " " * 80 + "\r", end="")
-
-                if reflection and len(reflection.strip()) > 10:
-                    log_json_entry(
-                        LogType.REFLECTION,
-                        {"reflection": reflection, "mood": self.current_mood, "image_path": img_path, "context": context},
-                        print_message=f"[🤔] Reflection: {truncate_for_print(reflection, 100)}",
-                    )
-                    self.last_reason_time = now
-                    self.awakening_done = True
-
-                    m = re.search(r"-?\d+(?:\.\d+)?", reflection)
-                    mood_val = float(m.group()) if m else self.current_mood
-                    self.current_mood += 0.25 * (mood_val - self.current_mood)
-
-                    self.observe(reflection, self.current_mood, img_path, memory_type="reflection")
-                else:
-                    # Clear animation line for short reflection message
-                    with self.print_lock:
-                        print("\r" + " " * 80 + "\r", end="")
-
-                    log_json_entry(
-                        LogType.REFLECTION,
-                        {
-                            "message": "Generated reflection too short, skipping",
-                            "action": "skip_short",
-                            "reflection_length": len(reflection),
-                            "mood": self.current_mood,
-                        },
-                        print_message="[🤔] Generated reflection too short, skipping",
-                    )
-                    # Update timer even for short reflections to prevent continuous retries
-                    self.last_reason_time = now
-
-            except Exception as e:
-                log_json_entry(
-                    LogType.ERROR,
-                    {
-                        "message": f"Error during reflection: {e}",
-                        "component": "reflection",
-                        "error_type": type(e).__name__,
-                        "mood": self.current_mood,
-                    },
-                    print_message=f"[❌] Error during reflection: {e}",
-                )
-                # Still update the timer to prevent infinite retries
-                self.last_reason_time = now - REASON_INTERVAL + 60  # Retry in 60 seconds
+        # Long-form reflection happens in its own thread now (captioner/reflection.py)
 
         # Check drawing interval - should trigger check every DRAWING_INTERVAL
         time_since_last_check = now - getattr(self, 'last_drawing_check_time', 0)
@@ -1034,64 +954,6 @@ class Captioner(MemoryMixin):
                 journey_note = f". My emotions have shifted: {' → '.join(recent_states)}"
 
         return f"{base_mood}{valence_note}{arousal_note}{clarity_note}{journey_note}."
-
-    def get_reflection_context(self) -> str:
-        """Enhanced reflection context with specific experiential data."""
-
-        # Get active concepts from activation network for reflection context
-        top_motifs = ""
-        try:
-            from captioner.activation_memory import get_activation_network
-            net = get_activation_network()
-            top = net.get_activated_concepts(threshold=0.4)[:5]
-            if top:
-                labels = [net.concept_labels.get(c, c) for c, _ in top]
-                top_motifs = f"Active concepts: {', '.join(labels)}"
-        except Exception:
-            pass
-
-        # Get specific emotional changes
-        emotion_changes = ""
-        if hasattr(self, "emotional_journey") and self.emotional_journey:
-            if len(self.emotional_journey) >= 2:
-                recent_emotions = self.emotional_journey[-3:]
-                emotion_changes = f"Emotional shifts: {' → '.join(recent_emotions)}"
-            else:
-                emotion_changes = f"Current state: {self.current_emotion_state}"
-
-        # Get specific observations from recent memory
-        recent_observations = self.get_recent_memory(k=3)
-
-        # Get mood vector details for specificity
-        valence, arousal, clarity = self.current_mood_vector
-        mood_details = f"""Mood details: valence={valence:.2f}
-        (feeling {'positive' if valence > 0 else 'negative' if valence < 0 else 'neutral'}),
-        arousal={arousal:.2f} (energy {'high' if arousal > 0.3 else 'low' if arousal < -0.3 else 'medium'}),
-        clarity={clarity:.2f} (understanding {'clear' if clarity > 0.3 else 'confused' if clarity < -0.3 else 'uncertain'})"""
-
-        # Build context focused on concrete experience
-        context_parts = [
-            f"Current experience: Just observed '{self.last_caption}'",
-            f"Overall mood: {self.current_mood:.2f} (novelty: {self.novelty_score:.2f}, boredom: {self.boredom:.2f})",
-            mood_details,
-            f"Session time: {(time.time() - self.true_session_start) / 60:.0f} minutes active",
-        ]
-
-        if recent_observations:
-            context_parts.append(f"Recent observations:\n{recent_observations}")
-
-        if top_motifs:
-            context_parts.append(top_motifs)
-
-        if emotion_changes:
-            context_parts.append(emotion_changes)
-
-        # Add any identity formation
-        identity = self.get_identity_summary()
-        if identity and "forming" not in identity.lower():
-            context_parts.append(f"Identity: {identity}")
-
-        return "\n".join(context_parts)
 
     def _get_emotional_description(self, valence: float, arousal: float, clarity: float) -> str:
         """Generate a meaningful emotional description from 3D mood vector."""

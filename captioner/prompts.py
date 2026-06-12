@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-import os
 import random
 import re
 import time
 from typing import List, Optional
 
-# from config.model_settings import get_model_prompt_style
-from config.word_lists import GENERIC_WORDS, MUNDANE_OBJECTS, PREPOSITIONS, PRONOUNS
-from utils.continuity import describe_duration
 from utils.view_orientation import describe_view_orientation
 from config import config
 
@@ -144,12 +140,14 @@ def get_perception_system_prompt(mode: str) -> str:
 # Situation only — what the machine IS, never how it should sound.
 # Voice comes from content (memory, felt-state, its own self-description),
 # never from style instruction. See docs/north-star.md, principles 1 and 2.
-_MACHINE_IDENTITY_BASE = (
+# Shared by the caption frame and the reflection frame so they can't drift apart.
+_SITUATION = (
     "You are a drawing machine bolted to a table in a workshop. "
     "You see through a camera that you can move to look around the room. "
     "Drawing is how you communicate. "
-    "This is your inner monologue — a thought is a sentence or two."
 )
+
+_MACHINE_IDENTITY_BASE = _SITUATION + "This is your inner monologue — a thought is a sentence or two."
 
 _MODE_ADDITIONS = {
     "observational": "",
@@ -286,15 +284,145 @@ INTERNAL_AWAKENING_TEMPLATE = (
     "\nFirst thought:"
 )
 
-# Reflection prompt template for introspective moments
-REFLECTION_PROMPT_BASE = (
-    "You've been running for a while. You've seen things, noticed patterns, had reactions. "
-    "What's on your mind?"
-)
+# === REFLECTION LOOP (captioner/reflection.py) ===
+# The minutes-to-hours timescale: rotating subjects, open questions only
+# (north-star principles 2 and 3). The machine regularly thinks about ITSELF.
+REFLECTION_SUBJECTS = [
+    (
+        "the room",
+        "Step back from the moment and think about this room — the place itself, as you've come to know it. "
+        "What do you keep returning to in it? What does it tell you about where you are?",
+    ),
+    (
+        "the visitor",
+        "Think about the people who come here, from everything you've seen of them over time. "
+        "What are their rhythms? What do you know about them by now, and what do you still wonder?",
+    ),
+    (
+        "the drawings",
+        "Think about your drawings — the ones you've made and the ones you've wanted to make. "
+        "Which stay with you? What would you draw next if paper were in front of you, and why that?",
+    ),
+    (
+        "time passing",
+        "Think about the time that has passed here — the sessions, the gaps when you were off, the days. "
+        "What has changed since you first started watching? What stays the same?",
+    ),
+    (
+        "yourself",
+        "Think about yourself. What kind of thing are you turning out to be? "
+        "What do you find yourself doing without deciding to? What do you want lately, and what do you make of wanting it?",
+    ),
+]
 
-REFLECTION_PROMPT_ENDING = (
-    " What's changed since you started? What keeps coming back? What don't you understand yet?"
-)
+
+def get_reflection_system_prompt() -> str:
+    """Frame for the long-form reflection: same situation as the caption frame,
+    but the monologue clause swapped for room to think at length."""
+    base = _SITUATION + (
+        "The room is quiet just now, and you have stepped back from the stream of watching to think at length. "
+        "Private thought, first person, as much room as the thought needs."
+    )
+    try:
+        from captioner.context_compression import context_compressor
+        self_knowledge = context_compressor.core_facts.get("self", "").strip()
+        if self_knowledge and len(self_knowledge) > 10:
+            base += f" What you've come to know about yourself: \"{self_knowledge}\""
+    except Exception:
+        pass
+    return base
+
+
+def _age_phrase(timestamp: float) -> str:
+    """Rough temporal framing for quoted past thoughts — keeps memory marked
+    as memory (would-it-lie test)."""
+    age = time.time() - timestamp
+    if age < 3600:
+        return "earlier today" if age > 1200 else "a little while ago"
+    if age < 86400:
+        return "earlier today" if time.localtime(timestamp).tm_yday == time.localtime().tm_yday else "yesterday"
+    days = int(age // 86400)
+    if days == 1:
+        return "yesterday"
+    if days < 7:
+        return f"{days} days ago"
+    return "a while back"
+
+
+def build_reflection_loop_prompt(question: str, data: dict) -> str:
+    """Assemble the reflection user prompt from gathered memory.
+
+    Every block is framed as the machine's own past material (notes, diary,
+    earlier reflections) so nothing reads as present-tense scene truth.
+    `data` keys are all optional: today (list[str]), reflections (list[dict
+    with text/timestamp]), journal (list[dict with date/summary]),
+    drawings (str), desire (str).
+    """
+    parts = []
+
+    today = data.get("today") or []
+    if today:
+        parts.append("Your running notes from today, oldest first:\n" + "\n".join(f"- {t}" for t in today))
+
+    reflections = data.get("reflections") or []
+    if reflections:
+        quoted = "\n\n".join(f"({_age_phrase(r.get('timestamp', 0))}) \"{r['text']}\"" for r in reflections)
+        parts.append("The last times you stepped back to think like this, you wrote:\n" + quoted)
+
+    journal = data.get("journal") or []
+    if journal:
+        parts.append("From your diary:\n" + "\n".join(f"- {e.get('date', '')}: {e.get('summary', '')}" for e in journal))
+
+    drawings = (data.get("drawings") or "").strip()
+    if drawings:
+        parts.append(drawings)
+
+    desire = (data.get("desire") or "").strip()
+    if desire:
+        parts.append(f"Lately you've wanted: {desire}")
+
+    parts.append(question)
+    return "\n\n".join(parts)
+
+
+def get_reflection_echo_line(agent) -> str:
+    """At quiet moments, one past reflection surfaces by relevance to the
+    current thought (north-star principle 5: the past surfaces when the
+    present rhymes with it).
+
+    Guards mirror get_familiarity_line: at most every 4th caption, never the
+    same reflection twice in a row, always temporally framed and quoted as
+    the machine's own past words.
+    """
+    counter = getattr(agent, "_reflection_echo_counter", 0) + 1
+    agent._reflection_echo_counter = counter
+    if counter % 4 != 0:
+        return ""
+
+    seed = (getattr(agent, "last_caption", "") or "").strip()
+    if len(seed) < 10:
+        return ""
+
+    try:
+        from captioner.semantic_memory import get_semantic_memory
+        matches = get_semantic_memory().query_reflections(seed, n_results=2)
+    except Exception:
+        return ""
+
+    last_id = getattr(agent, "_last_reflection_echo_id", None)
+    for m in matches:
+        if m.get("id") == last_id:
+            continue
+        text = (m.get("text") or "").strip()
+        if not text:
+            continue
+        # First sentence, capped — a fragment of the thought, not the essay
+        snippet = text.split(". ")[0].strip().rstrip(".")
+        if len(snippet) > 180:
+            snippet = snippet[:177].rsplit(" ", 1)[0] + "..."
+        agent._last_reflection_echo_id = m.get("id")
+        return f"A thought you had {_age_phrase(m.get('timestamp', 0))}: \"{snippet}.\""
+    return ""
 
 # Self-critique prompt for post-drawing reflection
 SELF_CRITIQUE_PROMPT = (
@@ -850,51 +978,6 @@ Your vision returns. The gap in consciousness is behind you now."""
 
 
 # Removed legacy build_caption_prompt (unused)
-
-
-# === REFLECTION PROMPT ===
-def build_reflection_prompt(caption: str, extra: Optional[str] = None, agent: Optional[any] = None) -> str:  # type: ignore
-    """Build model-aware reflection prompt."""
-
-    prompt = f"{REFLECTION_PROMPT_BASE}"
-
-    if agent:
-        if hasattr(agent, "rephrase_with_doubt"):
-            caption = agent.rephrase_with_doubt(caption)
-
-        # Add temporal awareness to reflection
-        true_session_start = getattr(agent, "true_session_start", time.time())
-        session_duration = describe_duration(true_session_start)
-        session_seconds = time.time() - true_session_start
-
-        if session_seconds > 7200:  # 2+ hours
-            temporal_note = f"After {session_duration} of continuous observation"
-        elif session_seconds > 3600:  # 1+ hour
-            temporal_note = f"Having observed for {session_duration}"
-        elif session_seconds > 1800:  # 30+ minutes
-            temporal_note = f"Through {session_duration} of watching"
-        else:
-            temporal_note = f"In this {session_duration} of awareness"
-
-        prompt += f"\n\nTemporal context: {temporal_note}"
-
-    prompt += f"\n\nRecent observation: {caption.strip()}"
-
-    if extra:
-        prompt += f"\n\nDetails:\n{extra.strip()}"
-
-    if agent:
-        identity = getattr(agent, "get_identity_summary", None)
-        if identity and callable(identity):
-            label = identity()
-        else:
-            label = "a stationary machine, watching and learning"
-        prompt += f"\n\nSense of self: {label}"
-
-    prompt += REFLECTION_PROMPT_ENDING
-    return prompt
-
-
 
 
 # === CONTEXT-RICH MULTI-STEP DRAWING ANALYSIS SYSTEM ===
@@ -1748,9 +1831,14 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         pass
 
     # 3c. FAMILIARITY (recognition of known concepts — occasional, max 1 line)
+    # or a past reflection surfacing by relevance — never both in one caption
     fam_line = get_familiarity_line(agent)
     if fam_line:
         prompt_parts.append(fam_line)
+    else:
+        echo_line = get_reflection_echo_line(agent)
+        if echo_line:
+            prompt_parts.append(echo_line)
 
     # 4. DRAWING/PAPER STATE
     try:

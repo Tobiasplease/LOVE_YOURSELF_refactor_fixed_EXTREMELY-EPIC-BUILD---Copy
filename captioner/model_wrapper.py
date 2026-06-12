@@ -9,7 +9,6 @@ from typing import Optional
 from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     OLLAMA_MODEL,
-    OLLAMA_TIMEOUT_REFLECTION,
 )
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
@@ -314,46 +313,6 @@ class MultimodalModel:
             print_message=f"[🐞] Response hash: {hash(result)}, preview: {truncate_for_print(result, 50)}",
         )
         return (result, prompt_mode)
-
-    def reason_about_caption(
-        self, caption: str, *, agent: Optional[any] = None, mood_text: Optional[str] = None, extra: Optional[str] = None  # type: ignore
-    ) -> str:  # type: ignore
-        """Generate reflection using centralized prompt interface."""
-        try:
-            prompt, model_options, system_prompt = self.prompt_interface.build_reflection_prompt_with_options(caption, agent=agent, extra=extra)
-
-            log_json_entry(
-                LogType.REFLECTION,
-                {
-                    "message": "Starting reflection",
-                    "action": "reflection_start",
-                    "timeout": OLLAMA_TIMEOUT_REFLECTION,
-                    "caption_preview": caption[:50],
-                },
-                print_message=f"[🤔] Starting reflection with timeout={OLLAMA_TIMEOUT_REFLECTION}s",
-            )
-
-            response = self._call_ollama(
-                prompt, system_prompt=system_prompt, model_options=model_options, timeout=OLLAMA_TIMEOUT_REFLECTION, prompt_type="reflection"
-            )
-
-            log_json_entry(
-                LogType.REFLECTION,
-                {
-                    "message": "Reflection completed",
-                    "action": "reflection_success",
-                    "response_length": len(response),
-                    "response_preview": response[:100],
-                },
-                print_message=f"[✅] Reflection completed: {len(response)} chars",
-            )
-            return response
-        except Exception as e:
-            print(f"[ERROR] Reflection failed: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return "[WARNING] Reflection generation failed"
 
     def generate_drawing_prompt(self, *, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: list = None) -> str:
         """Generate drawing prompt using centralized prompt interface with VISUAL GROUNDING."""

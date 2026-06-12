@@ -15,7 +15,6 @@ from .prompts import (
     STATIC_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     build_focused_caption_prompt,
-    build_reflection_prompt,
     context_rich_multi_step_drawing_analysis,
 )
 
@@ -131,22 +130,6 @@ class PromptInterface:
 
         # Return prompt, options, formatted system prompt, and prompt mode
         return prompt, model_options, system_prompt, prompt_mode
-
-    def build_reflection_prompt_with_options(self, caption: str, agent=None, extra: Optional[str] = None):
-        """Build reflection prompt and prepare options."""
-        prompt = build_reflection_prompt(caption, extra=extra, agent=agent)
-        model_options = self._get_base_model_options()
-        model_options["seed"] = random.randint(1, 1000000)
-
-        # Use configurable reflection temperature
-        try:
-            from config.config import REFLECTION_TEMPERATURE
-
-            model_options["temperature"] = REFLECTION_TEMPERATURE
-        except ImportError:
-            model_options["temperature"] = 1.1  # Default fallback
-
-        return prompt, model_options, SYSTEM_PROMPT
 
     def build_drawing_prompt_with_options(self, memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: list = None):
         """Build drawing prompt and prepare options with visual grounding support."""

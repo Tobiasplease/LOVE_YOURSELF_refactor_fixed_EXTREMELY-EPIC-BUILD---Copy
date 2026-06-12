@@ -53,12 +53,6 @@ TIER_NEW = 5  # seen < 5 times — still forming an impression
 TIER_FAMILIAR = 30  # seen 5-30 times — recognized, evolving relationship
 # above 30 = deeply familiar, part of the environment
 
-# --- Reflection settings ---
-REFLECTION_INTERVAL_SECONDS = 600  # Run reflection check every 10 minutes
-REFLECTION_MIN_NEW_OBSERVATIONS = 4  # Need at least N new observations to trigger
-REFLECTION_MIN_CONCEPT_FAMILIARITY = 5  # Concept must be seen at least N times
-REFLECTION_MAX_PER_CYCLE = 1  # Max reflections per worker pass (avoid LLM contention)
-
 # Singleton
 _instance = None
 _lock = threading.Lock()
@@ -92,23 +86,72 @@ class SemanticMemory:
             metadata={"hnsw:space": "cosine"},
         )
 
+        # Reflections: long-form thoughts from the reflection loop
+        # (captioner/reflection.py). First-class memories — each document is
+        # one full reflection, retrieved by relevance into quiet captions.
+        self._reflections = self._client.get_or_create_collection(
+            name="reflections",
+            metadata={"hnsw:space": "cosine"},
+        )
+
         self._obs_counter = self._observations.count()
         self._session_id = f"session_{int(time.time())}"
 
-        # Reflection worker state
-        self._reflection_thread: Optional[threading.Thread] = None
-        self._reflection_stop = threading.Event()
-        self._last_reflection_check = 0.0
+        print(
+            f"[SEMANTIC] Loaded: {self._concepts.count()} concepts, "
+            f"{self._observations.count()} observations, {self._reflections.count()} reflections"
+        )
 
-        # Count existing reflections for logging
+    # ------------------------------------------------------------------
+    # Reflections — storage and retrieval for the reflection loop
+    # ------------------------------------------------------------------
+
+    def store_reflection_entry(self, text: str, subject: str) -> Optional[str]:
+        """Store one long-form reflection. Returns its id, or None if rejected."""
+        text = (text or "").strip()
+        if len(text) < 80:
+            return None
+        refl_id = f"refl_{int(time.time() * 1000)}"
+        self._reflections.add(
+            ids=[refl_id],
+            documents=[text[:4000]],
+            metadatas=[{"subject": subject, "timestamp": time.time(), "session_id": self._session_id}],
+        )
+        return refl_id
+
+    def get_recent_reflections(self, limit: int = 3) -> List[Dict]:
+        """Most recent reflections, oldest first — the thread of self-thought
+        each new reflection gets to see (across sessions)."""
         try:
-            refl_count = len(self._observations.get(where={"type": "reflection"})["ids"])
+            got = self._reflections.get(include=["documents", "metadatas"])
         except Exception:
-            refl_count = 0
-        print(f"[SEMANTIC] Loaded: {self._concepts.count()} concepts, {self._observations.count()} observations ({refl_count} reflections)")
+            return []
+        rows = sorted(
+            zip(got["ids"], got["documents"], got["metadatas"]),
+            key=lambda r: r[2].get("timestamp", 0),
+        )
+        return [
+            {"id": rid, "text": doc, "subject": meta.get("subject", ""), "timestamp": meta.get("timestamp", 0)}
+            for rid, doc, meta in rows[-limit:]
+        ]
 
-        # Start the reflection worker thread
-        self._start_reflection_worker()
+    def query_reflections(self, query_text: str, n_results: int = 2, max_distance: float = 0.6) -> List[Dict]:
+        """Reflections relevant to the current thought, nearest first."""
+        if not query_text or self._reflections.count() == 0:
+            return []
+        try:
+            res = self._reflections.query(
+                query_texts=[query_text],
+                n_results=min(n_results, self._reflections.count()),
+                include=["documents", "metadatas", "distances"],
+            )
+        except Exception:
+            return []
+        out = []
+        for rid, doc, meta, dist in zip(res["ids"][0], res["documents"][0], res["metadatas"][0], res["distances"][0]):
+            if dist <= max_distance:
+                out.append({"id": rid, "text": doc, "subject": meta.get("subject", ""), "timestamp": meta.get("timestamp", 0), "distance": dist})
+        return out
 
     # ------------------------------------------------------------------
     # Two-phase API: match concepts first, store observations later
@@ -753,228 +796,6 @@ class SemanticMemory:
                 "depth": 0,
             }],
         )
-
-    def _generate_reflection(self, concept_id: str, concept_name: str, observations: List[Dict]) -> Optional[str]:
-        """Synthesize recent observations about a concept into one settled thought.
-
-        Uses the compression model (text-only) to avoid contention with the vision pipeline.
-        Returns the reflection text or None on failure.
-        """
-        if len(observations) < 2:
-            return None
-
-        try:
-            from utils.inference import query_model
-            from config import config
-
-            # Build the prompt
-            obs_lines = "\n".join(f"- {o['text'][:120]}" for o in observations[:6])
-
-            prompt = f"""Recent thoughts about "{concept_name}":
-{obs_lines}
-
-In ONE SHORT SENTENCE (under 20 words), what pattern or deeper understanding is emerging from these thoughts? Third person observational voice. Start with "It" or "A pattern".
-
-Respond with ONLY the sentence."""
-
-            system_prompt = (
-                "You synthesize a drawing machine's recurring thoughts about an object or person into one settled insight. "
-                "Third person, present tense, under 20 words, no preamble. "
-                "Examples: "
-                "'It has come to see the cracks as a wound that no one will heal.' "
-                "'A pattern emerges — it returns to the shelf whenever it feels alone.'"
-            )
-
-            model_options = {
-                "temperature": 0.6,
-                "top_p": 0.9,
-                "num_predict": 50,
-                "repeat_penalty": 1.3,
-                "stop": ["\n\n"],
-            }
-
-            compression_model = getattr(config, 'COMPRESSION_MODEL', config.OLLAMA_MODEL)
-
-            response = query_model(
-                prompt=prompt,
-                model=compression_model,
-                image=None,
-                system_prompt=system_prompt,
-                timeout=getattr(config, 'OLLAMA_TIMEOUT_EVAL', 60),
-                options=model_options,
-                prompt_type="reflection",
-            )
-
-            if response and isinstance(response, str):
-                cleaned = response.strip().strip('"\'').strip()
-                # Take just the first sentence
-                for sep in [". ", "! ", "? "]:
-                    if sep in cleaned:
-                        cleaned = cleaned.split(sep)[0] + sep[0]
-                        break
-                if 15 < len(cleaned) < 200:
-                    return cleaned
-
-        except Exception as e:
-            print(f"[SEMANTIC] Reflection generation failed: {e}")
-
-        return None
-
-    def _store_reflection(self, concept_id: str, text: str, source_obs_ids: List[str], depth: int = 0):
-        """Store a reflection — an LLM-synthesized higher-order memory.
-
-        Reflections are stored alongside observations in the same collection,
-        distinguished by metadata. They represent the machine's settled
-        understanding rather than a single fleeting thought.
-        """
-        if not text or len(text.strip()) < 15:
-            return
-
-        # Duplicate check: don't store if too similar to existing reflections for this concept
-        existing = self._observations.get(
-            where={"$and": [{"concept_id": concept_id}, {"type": "reflection"}]},
-            include=["documents"],
-        )
-        if existing["documents"]:
-            try:
-                results = self._observations.query(
-                    query_texts=[text],
-                    n_results=1,
-                    where={"$and": [{"concept_id": concept_id}, {"type": "reflection"}]},
-                    include=["distances"],
-                )
-                if results["distances"][0] and results["distances"][0][0] < DUPLICATE_DISTANCE:
-                    return  # Already have a near-identical reflection
-            except Exception:
-                pass
-
-        refl_id = f"refl_{self._obs_counter}"
-        self._obs_counter += 1
-
-        # ChromaDB metadata can't store lists directly, store as comma-joined string
-        sources_str = ",".join(source_obs_ids[:10])  # cap at 10 to keep metadata manageable
-
-        self._observations.add(
-            ids=[refl_id],
-            documents=[text[:300]],
-            metadatas=[{
-                "concept_id": concept_id,
-                "timestamp": time.time(),
-                "session_id": self._session_id,
-                "type": "reflection",
-                "depth": depth,
-                "synthesized_from": sources_str,
-            }],
-        )
-        print(f"[SEMANTIC] Stored reflection (depth={depth}): {text[:80]}")
-
-    # ------------------------------------------------------------------
-    # Reflection worker — periodic background synthesis
-    # ------------------------------------------------------------------
-
-    def _start_reflection_worker(self):
-        """Start the background thread that periodically generates reflections."""
-        if self._reflection_thread is not None and self._reflection_thread.is_alive():
-            return
-        self._reflection_stop.clear()
-        self._reflection_thread = threading.Thread(
-            target=self._reflection_worker_loop,
-            daemon=True,
-            name="SemanticReflectionWorker",
-        )
-        self._reflection_thread.start()
-
-    def stop_reflection_worker(self):
-        """Stop the reflection worker thread cleanly."""
-        self._reflection_stop.set()
-        if self._reflection_thread:
-            self._reflection_thread.join(timeout=5)
-
-    def _reflection_worker_loop(self):
-        """Main loop for the reflection worker. Runs every REFLECTION_INTERVAL_SECONDS."""
-        # Sleep on startup to let the main system warm up first
-        if self._reflection_stop.wait(timeout=120):
-            return  # Stop requested before first cycle
-
-        while not self._reflection_stop.is_set():
-            try:
-                self._reflection_cycle()
-            except Exception as e:
-                print(f"[SEMANTIC] Reflection cycle error: {e}")
-            # Wait for next interval, exit early if stop requested
-            if self._reflection_stop.wait(timeout=REFLECTION_INTERVAL_SECONDS):
-                return
-
-    def _reflection_cycle(self):
-        """One pass: find concepts ripe for reflection, synthesize one or two."""
-        candidates = self._find_reflection_candidates()
-        if not candidates:
-            return
-
-        # Process up to REFLECTION_MAX_PER_CYCLE candidates
-        for concept_id, concept_name, observations in candidates[:REFLECTION_MAX_PER_CYCLE]:
-            print(f"[SEMANTIC] Reflecting on '{concept_name}' ({len(observations)} new observations)")
-            reflection = self._generate_reflection(concept_id, concept_name, observations)
-            if reflection:
-                obs_ids = [o["id"] for o in observations]
-                self._store_reflection(concept_id, reflection, obs_ids, depth=0)
-                # Surface in caption monitor as a "settled understanding"
-                try:
-                    from utils.live_log import log_reflection
-                    log_reflection(concept_name, reflection)
-                except Exception:
-                    pass
-
-    def _find_reflection_candidates(self) -> List[Tuple[str, str, List[Dict]]]:
-        """Find concepts that have accumulated enough new observations to warrant reflection.
-
-        Returns list of (concept_id, concept_name, observations_since_last_reflection) tuples,
-        sorted by activity (most observations first).
-        """
-        candidates = []
-
-        all_concepts = self._concepts.get(include=["documents", "metadatas"])
-        if not all_concepts["ids"]:
-            return []
-
-        for cid, name, meta in zip(all_concepts["ids"], all_concepts["documents"], all_concepts["metadatas"]):
-            # Skip rarely-seen concepts
-            if meta.get("times_seen", 0) < REFLECTION_MIN_CONCEPT_FAMILIARITY:
-                continue
-
-            # Get all observations for this concept
-            obs_data = self._observations.get(
-                where={"concept_id": cid},
-                include=["documents", "metadatas"],
-            )
-            if not obs_data["ids"]:
-                continue
-
-            # Find the most recent reflection's timestamp (if any) for this concept
-            last_refl_ts = 0.0
-            new_observations = []
-            for oid, doc, ometa in zip(obs_data["ids"], obs_data["documents"], obs_data["metadatas"]):
-                otype = ometa.get("type", "observation")
-                ts = ometa.get("timestamp", 0)
-                if otype == "reflection" and ts > last_refl_ts:
-                    last_refl_ts = ts
-
-            # Now collect observations newer than the last reflection
-            for oid, doc, ometa in zip(obs_data["ids"], obs_data["documents"], obs_data["metadatas"]):
-                if ometa.get("type", "observation") != "observation":
-                    continue
-                ts = ometa.get("timestamp", 0)
-                if ts > last_refl_ts and len(doc) > 15:
-                    new_observations.append({"id": oid, "text": doc, "timestamp": ts})
-
-            if len(new_observations) >= REFLECTION_MIN_NEW_OBSERVATIONS:
-                # Sort by timestamp ascending (oldest first, so synthesis sees the arc)
-                new_observations.sort(key=lambda x: x["timestamp"])
-                candidates.append((cid, name, new_observations))
-
-        # Sort by number of new observations (most active concepts first)
-        candidates.sort(key=lambda x: len(x[2]), reverse=True)
-        return candidates
 
     def _prune_oldest_observations(self, concept_id: str):
         """Remove the oldest observations for a concept, keeping MAX_OBSERVATIONS_PER_CONCEPT."""
