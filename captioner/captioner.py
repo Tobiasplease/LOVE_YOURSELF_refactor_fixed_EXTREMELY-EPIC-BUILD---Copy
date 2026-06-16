@@ -378,15 +378,16 @@ class Captioner(MemoryMixin):
 
         # Salience strips the prompt to the present — but the present must
         # then SAY what just happened, or the model fills the vacuum with
-        # atmosphere instead of reacting. One plain event line, strongest
-        # signal wins, all present-tense truths.
+        # atmosphere instead of reacting. ONLY discrete events the image
+        # can't make obvious (arrival, eye-contact onset) — continuous
+        # motion is already visible in the superframe AND named in the video
+        # motion_line, and a third "they're moving" channel just bred
+        # surveillance narration ("adjusting my focus to capture every detail").
         event = None
         if eye_onset:
             event = "They just looked straight at you."
         elif arrival:
             event = "Someone just walked in."
-        elif info["scene_motion"]:
-            event = "They're moving right now." if info["person_present_in_window"] else "Something just moved in the room."
         self._salience_event = event
         return info
 

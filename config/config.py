@@ -264,7 +264,7 @@ SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 # The stream (CoT-style continuity): prior captions ride as the machine's own
 # assistant turns so each caption continues a visible thought. 0 disables and
 # reverts to amnesiac single-turn captions.
-STREAM_WINDOW = 6  # how many prior captions the model sees as its own turns
+STREAM_WINDOW = 0  # how many prior captions the model sees as its own turns (0 = off; isolating the base voice first — re-enable once it's healthy)
 STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
 
 # Attention breathes (north-star principle 6): cadence tightens when something
