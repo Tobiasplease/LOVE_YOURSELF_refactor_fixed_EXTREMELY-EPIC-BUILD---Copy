@@ -1125,11 +1125,18 @@ SELF: [plain habits/fixations in <15 words. No statements about reality or perce
             self.introspective_state["discoveries"] = data.get("discoveries", [])
             self.introspective_state["last_introspection"] = data.get("last_updated", 0.0)
 
-            # Restore core facts
+            # Restore core facts. The persona ('self') is gated on load too,
+            # not just on write — a surveillance/scene-text persona that got
+            # in under an older build (or was re-saved by an old process) is
+            # dropped here so it can't keep poisoning the voice across restarts.
             saved_facts = data.get("core_facts", {})
             if saved_facts:
                 for key in ("place", "people", "drawings", "self"):
-                    self.core_facts[key] = saved_facts.get(key, "")
+                    val = saved_facts.get(key, "")
+                    if key == "self" and val and not self._valid_self_fact(val):
+                        print(f"[🧠] Dropped contaminated persona on load: {val[:60]}")
+                        val = ""
+                    self.core_facts[key] = val
 
             # Restore journal (the long-term arc)
             self.journal = data.get("journal", [])[-30:]
