@@ -44,8 +44,31 @@ stage direction, never mixed perspectives.
 
 ## Principle 2 — Prompts are open doors
 
+**Elicitation vs. fence (the distinction that resolves the year of
+oscillation).** Banning *instruction* outright is too blunt and is what keeps
+collapsing the voice into flat, default-literary description. Two different
+things wear the same coat:
+
+- A **fence** polices the mouth — "no metaphors", "don't say dust motes",
+  "avoid X". It primes the very behavior, reads as manipulation, and fences
+  the voice in. *Banned.*
+- An **elicitation** frames the *act* — "what do you make of this? blunt, the
+  way you'd actually mutter it to yourself", "how does this sit with you?". It
+  polices nothing; it tells the model **what kind of thought to have** — a
+  reaction, a feeling, a wondering — rather than leaving it to default to
+  description. *Required, and currently missing.*
+
+Without an elicitation the prompt hands the model an image and context and
+never says what to *do* with it, so it describes (its trained prior for
+"machine inner monologue" is literary fiction). The good early voice ("it's so
+messy in here, what is even going on?") came from elicitation ("express what
+you feel, in fragments") — which got thrown out with the fences during the
+teardown. Restore the elicitations; keep the fences gone. The image stays
+central: the act is *react to what you see*, not *describe a film of it*.
+
 - No negative instructions ("don't…", "no…", "you don't have to…").
   Negations confuse, prime the very behavior, and read as manipulation.
+  (Positive elicitation of a speech-act is not a negation — see above.)
 - No example phrases unless unavoidable; the model imprints on them
   (the grid drawings, the dust motes). Its own recent thoughts are the
   only style guide it needs.
