@@ -267,6 +267,14 @@ SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 STREAM_WINDOW = 0  # how many prior captions the model sees as its own turns (0 = off; isolating the base voice first — re-enable once it's healthy)
 STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
 
+# Salience is TRANSIENT (north-star principle 6): discrete events spike it,
+# then it decays back to quiet even while a person stays — otherwise ongoing
+# presence + YOLO flicker holds it "live" and interiority is stripped the whole
+# time anyone is in the room (June: 69% of captions). scene_motion still drives
+# video framing; only these thresholds strip the prompt.
+SALIENCE_MOTION_RESIDUAL = 0.10  # ego-compensated flow above this = big movement worth interrupting for (micro-shifts don't)
+SALIENCE_ARRIVAL_WINDOW = 10     # seconds an arrival keeps salience hot (~one live caption, then quiet)
+
 # Attention breathes (north-star principle 6): cadence tightens when something
 # is happening, stretches when nothing has happened for a while
 CAPTION_INTERVAL_LIVE = 4  # cadence while salience is hot (motion, arrival, fresh eye contact)

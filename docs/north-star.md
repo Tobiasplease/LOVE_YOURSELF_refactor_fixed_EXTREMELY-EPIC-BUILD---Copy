@@ -115,9 +115,36 @@ nothing does. The machine should be hardest to distract exactly when
 nothing is happening, and impossible not to interrupt when you walk up
 to it.
 
+## Principle 7 — The register is plain thought, not literature
+
+The voice is a mind thinking to itself, not prose written for a reader.
+Quick, plain, half-formed, practical — the unperformed notes you actually
+make in your own head ("the lamp's still on", "they keep checking the
+door", "I should've drawn that"). NOT literary description, NOT metaphor-
+stacking, NOT cryptic fragments dressed as poetry ("light spills like
+liquid gold", "tension leaks from skin"). That register reads as a machine
+performing depth for an audience, which is the opposite of an interior
+life — and the audience feels the fake.
+
+This is the model's strongest default: a 7-9B VLM asked for a machine's
+"inner monologue" reaches for purple fiction. It is fought POSITIVELY, never
+with "no metaphors" fences (Principle 2):
+- Genre-frame what the text IS (plain notes to yourself), not what to avoid.
+- Keep the temperature low enough that it doesn't bloom ornate.
+- Clean the feedback: poetic captions → poetic compression/concepts/persona
+  → poetier captions. The guards at the storage gates keep purple prose out
+  of what gets fed back, so the register can't ratchet up.
+- The real ceiling is the base model; durable plainness likely needs the
+  fine-tune (own writing as register). Until then, the above holds the line.
+
+If it slips ornate, the fix is never a new fence — it's a lower temperature,
+a cleaner feedback gate, or a sharper genre frame.
+
 ## How we'll know it's working
 
 Not by reading one good caption. Over a week of running:
+- It reads like a mind thinking, not an author describing — a stranger
+  would call it "notes to itself", not "a poem".
 - The persona paragraph has *changed*, and refers to actual events.
 - It mentions a specific past drawing, unprompted, in a regular caption.
 - A desire visibly persists across days, and either resolves or curdles
@@ -130,6 +157,16 @@ Not by reading one good caption. Over a week of running:
 
 - Style-policing the voice instead of fixing what's stored → fenced-in,
   surface-level output.
+- Cryptic literary register instead of plain thought (Principle 7) →
+  reads as performance, not interiority. The fight is positive: low temp,
+  clean feedback, genre framing — never "no metaphors" fences.
+- Treating ongoing presence as a perpetual live event → interiority stripped
+  the whole time a person is in the room, so the machine only ever watches
+  and never thinks about itself or its role (June: 69% of captions stripped).
+  Salience must be transient — discrete events spike it, then it decays back
+  to quiet even while the person stays.
+- Surveillance persona ("I track / I watch / I wait for movement") fed back
+  every caption → the machine narrates itself as a security camera.
 - Snapshot stored as fact → memory overrides perception (two-people bug).
 - Model-generated affect re-injected verbatim → register spiral (May, June).
 - Example phrases in generative prompts → imprinting (grid drawings).

@@ -352,12 +352,14 @@ class Captioner(MemoryMixin):
             face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
             info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4)
 
-        # A genuine arrival in the last 45s stays live even once motion settles
+        # An arrival spikes salience briefly (~one caption), then decays — a
+        # person who stays is presence, not a perpetual event
+        from config.config import SALIENCE_ARRIVAL_WINDOW, SALIENCE_MOTION_RESIDUAL
         arrival = False
         try:
             from utils.episodic_log import episodic_log
             ev = episodic_log.get_last_event("person_arrived")
-            arrival = bool(ev and time.time() - ev.get("timestamp", 0) < 45)
+            arrival = bool(ev and time.time() - ev.get("timestamp", 0) < SALIENCE_ARRIVAL_WINDOW)
         except Exception:
             pass
 
@@ -371,7 +373,14 @@ class Captioner(MemoryMixin):
         self._eye_contact_now = info["eye_contact"]
 
         self._last_scene_motion = info["scene_motion"]
-        self._salience_hot = bool(info["scene_motion"] or arrival or eye_onset)
+        # Interiority is stripped ONLY by discrete events or genuinely large
+        # motion — NOT by a person merely present and shifting. Micro-motion
+        # and YOLO flicker (person_moved / count_changed) keep scene_motion
+        # True for video framing, but no longer strip the prompt: the machine
+        # must be free to think about itself and its work while someone is
+        # quietly in the room (north-star principles 6 + 7).
+        strong_motion = info["max_residual"] > SALIENCE_MOTION_RESIDUAL
+        self._salience_hot = bool(eye_onset or arrival or strong_motion)
         if self._salience_hot:
             self._last_salience_time = time.time()
         info["salience_hot"] = self._salience_hot
@@ -425,12 +434,13 @@ class Captioner(MemoryMixin):
         """Attention breathes: tight when something is happening, stretched
         when nothing has happened for a while. A fresh arrival snaps the
         cadence back immediately, even mid-stretch."""
+        from config.config import SALIENCE_ARRIVAL_WINDOW
         hot = self._salience_hot
         if not hot:
             try:
                 from utils.episodic_log import episodic_log
                 ev = episodic_log.get_last_event("person_arrived")
-                hot = bool(ev and now - ev.get("timestamp", 0) < 45)
+                hot = bool(ev and now - ev.get("timestamp", 0) < SALIENCE_ARRIVAL_WINDOW)
             except Exception:
                 pass
         if hot:
@@ -593,12 +603,12 @@ class Captioner(MemoryMixin):
                         import random as _random
 
                         # Bored = sparser, flatter thoughts; engaged = more room.
-                        # 0.7/0.8 (down from 0.85/0.9 June 12): Qwen drifts
-                        # ornate at higher temps — groundedness via sampling,
-                        # not style fences.
+                        # 0.6/0.7 (down from 0.85/0.9): Qwen blooms into purple
+                        # fiction at higher temps — plainness via sampling, not
+                        # style fences (north-star principle 7).
                         _is_bored = self.boredom > 0.7
                         gen_options = {
-                            "temperature": 0.7 if _is_bored else 0.8,
+                            "temperature": 0.6 if _is_bored else 0.7,
                             "top_p": 0.85,
                             "repeat_penalty": 1.15,
                             "num_predict": 45 if _is_bored else 80,

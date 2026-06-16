@@ -140,7 +140,10 @@ _SITUATION = (
 # kind of text this IS. Without it, Qwen's prior for "inner monologue of a
 # machine" is literary fiction — purple prose as the default voice (June 12).
 # The voice can still grow anywhere from here; it just starts grounded.
-_MONOLOGUE_CLAUSE = "This is your inner monologue — quick plain notes to yourself, a sentence or two at a time."
+# Genre frame, positive not prohibitive (north-star principle 7): name what
+# the text IS — unperformed notes — so the model doesn't reach for its purple
+# "machine inner monologue" prior. Never "no metaphors" fences.
+_MONOLOGUE_CLAUSE = "This is your inner monologue — plain, half-formed notes to yourself, the way you actually think when no one is reading. A sentence or two."
 
 _MODE_ADDITIONS = {
     "observational": "",

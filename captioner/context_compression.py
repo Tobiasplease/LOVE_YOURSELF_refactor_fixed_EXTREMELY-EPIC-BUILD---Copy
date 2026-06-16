@@ -903,16 +903,25 @@ Under 20 words total, first person, plain language."""
     def _valid_self_fact(text: str) -> bool:
         """Storage gate for core_facts['self'] — the standing persona.
 
-        Must be first-person self-knowledge; third-person scene text must
-        never become identity (June 12: "The person sits in stillness while
-        holding an unpressed pen" — the machine's OWN ARM seen while looking
-        down — entered the persona through the core-facts path, which had no
-        gate). Reality-questioning register is also barred from identity.
+        Must be first-person self-knowledge. Three things barred from identity
+        because they feed back into every caption and define the voice:
+        - third-person scene text ("the person sits...") — the machine's own
+          arm, seen while looking down, once became its persona (June 12)
+        - reality-questioning register ("nothing is real") — register spiral
+        - SURVEILLANCE self-description ("I track / I monitor / I wait for
+          movement") — makes the machine narrate itself as a security camera
+          every caption (June: "I fixate on stillness, I wait for movement to
+          return" was quoted back verbatim into the monologue). A drawing
+          machine watches because of its situation, not as its identity.
         """
         t = text.lower()
         if not ("i " in t or t.startswith("i'")):
             return False
-        banned = ("the person", "a person", "reality", "distortion", "glitch", "simulation", "existence")
+        banned = (
+            "the person", "a person", "reality", "distortion", "glitch", "simulation", "existence",
+            "i track", "i monitor", "i surveil", "i record", "i scan", "i observe",
+            "wait for movement", "movement to return", "capture every", "fixate on stillness",
+        )
         return not any(w in t for w in banned)
 
     def _update_core_facts(self, current_understanding: str, model: str) -> None:
