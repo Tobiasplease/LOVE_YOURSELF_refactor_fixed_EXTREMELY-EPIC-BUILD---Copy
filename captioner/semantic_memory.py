@@ -249,6 +249,8 @@ class SemanticMemory:
                     }]
 
         return matched
+
+    @staticmethod
     def _mentions_person(text: str) -> bool:
         """Check if text describes a person."""
         t = text.lower()
@@ -452,6 +454,8 @@ class SemanticMemory:
         if lowered.startswith(("awake ", "looking ", "just woke", "someone ")):
             return False
         return True
+
+    @staticmethod
     def _extract_spatial_zone(perception: str) -> tuple:
         """Extract rough spatial location (pan_zone, tilt_zone) from Qwen's perception text.
 
@@ -675,7 +679,6 @@ class SemanticMemory:
         text = re.sub(r'\s{2,}', ' ', text)
         return text.strip()
 
-    @staticmethod
     def register_concepts_from_compression(self, labels: list[str]) -> None:
         """Register pre-cleaned concept labels extracted by LLM during compression.
 
