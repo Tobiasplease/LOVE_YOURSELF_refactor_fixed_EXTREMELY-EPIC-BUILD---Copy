@@ -578,9 +578,13 @@ class Captioner(MemoryMixin):
                 previous_caption = getattr(self, "last_caption", "")
                 matched_concepts = []  # Will be populated by SemanticMemory concept matching
 
-                # Check if it's time for memory mode (every 240 seconds / 4 minutes)
+                # Check if it's time for memory mode (every 240 seconds / 4 minutes).
+                # Clean room: memory mode is detox blind spot #4 — a separate caption
+                # branch that surfaces a long-term memory; suppress it under detox so
+                # the naked voice isn't fed recalled material.
+                from config.config import BASE_VOICE_DETOX as _detox
                 time_since_memory = now - self.last_memory_mode_time
-                is_memory_mode_time = time_since_memory > 240  # 4 minutes
+                is_memory_mode_time = (not _detox) and time_since_memory > 240  # 4 minutes
 
                 try:
                     if is_memory_mode_time:

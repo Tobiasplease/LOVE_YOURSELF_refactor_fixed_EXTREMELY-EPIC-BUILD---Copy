@@ -763,7 +763,9 @@ def get_familiarity_line(agent) -> str:
     if counter % 3 != 0:
         return ""
 
-    last_injected = getattr(agent, "_last_familiarity_id", None)
+    # Diversity: track the last few surfaced concepts, not just one, so a single
+    # dominant object can't monopolise the channel (the "grid" failure mode).
+    recent_ids = list(getattr(agent, "_recent_familiarity_ids", []))
 
     candidates = []
     for c in matched:
@@ -772,16 +774,26 @@ def get_familiarity_line(agent) -> str:
             continue
         if any(w in label.lower() for w in _PERSON_WORDS):
             continue
-        if c.get("id") == last_injected:
+        if c.get("id") in recent_ids:
             continue
         candidates.append(c)
 
     if not candidates:
         return ""
 
-    # Prefer genuinely new, else the most familiar
+    # Prefer genuinely new; otherwise rotate among the established candidates,
+    # weighted toward recently-seen ones so faded concepts surface less (decay).
     new = [c for c in candidates if c.get("is_new")]
-    pick = new[0] if new else max(candidates, key=lambda c: c.get("times_seen", 0))
+    if new:
+        pick = new[0]
+    else:
+        established = [c for c in candidates if c.get("times_seen", 0) >= 3]
+        if not established:
+            return ""
+        import random as _random
+        now = time.time()
+        weights = [max(0.1, 1.0 - min(1.0, (now - c.get("last_seen", now)) / (7 * 86400))) for c in established]
+        pick = _random.choices(established, weights=weights, k=1)[0]
 
     times = pick.get("times_seen", 0)
     sessions = pick.get("session_count", 1)
@@ -797,7 +809,7 @@ def get_familiarity_line(agent) -> str:
     else:
         return ""
 
-    agent._last_familiarity_id = pick.get("id")
+    agent._recent_familiarity_ids = (recent_ids + [pick.get("id")])[-4:]
     return line
 
 
@@ -1686,33 +1698,35 @@ def build_memory_mode_prompt(agent) -> tuple:
     try:
         from captioner.model_wrapper import build_caption_thread
 
-        # Genuine remembering: quote an actual stored thought from ChromaDB.
-        # Falls back to core facts while the store is thin.
+        # Ledger remembering (north-star: re-express, don't replay): surface a
+        # NEUTRAL fact about a recurring object — what it is, when first noticed,
+        # how often — and let the model re-voice the remembering. The old path
+        # quoted a stored caption verbatim, which replayed past prose as voice
+        # and re-poisoned the register (see docs/memory-redesign-plan.md).
+        import time as _time
         mem_text = ""
         is_real_memory = False
         try:
             from captioner.semantic_memory import get_semantic_memory
-            old = get_semantic_memory().get_random_old_memory(min_age_seconds=3600)
-            if old and old.get("text") and len(old["text"]) > 20:
-                age = old["age_seconds"]
-                if age < 7200:
-                    age_str = "Earlier today"
-                elif age < 86400 * 2:
-                    age_str = "Yesterday" if age > 64800 else "Hours ago"
-                else:
-                    age_str = f"{int(age / 86400)} days ago"
-                mem_text = f'{age_str} you thought: "{old["text"]}"'
+            c = get_semantic_memory().get_memorable_concept()
+            if c:
+                label = c["name"]
+                label_l = label[0].lower() + label[1:]
+                times = c.get("times_seen", 0)
+                across = " across more than one visit" if c.get("session_count", 0) > 1 else ""
+                since = ""
+                first = c.get("first_seen", 0)
+                if first:
+                    days = (_time.time() - first) / 86400.0
+                    if days >= 1.5:
+                        since = f", first noticed about {int(days)} days ago"
+                mem_text = f"the {label_l} — you've noticed it {times} times{across}{since}"
                 is_real_memory = True
         except Exception:
             pass
 
         if not mem_text:
-            try:
-                from captioner.context_compression import context_compressor
-                core_str = context_compressor.get_core_facts_string(include_people=True)
-                mem_text = core_str if core_str and len(core_str) > 10 else "I've been here before."
-            except Exception:
-                mem_text = "I've been here before."
+            mem_text = "this place — you've been here before"
 
         # Get recent caption thread (max 2 recent captions)
         thread = build_caption_thread(agent, max_captions=2)
@@ -1726,9 +1740,9 @@ def build_memory_mode_prompt(agent) -> tuple:
             prompt_parts.append(f"\nWhat you're actually thinking right now:\n{thread}")
 
         if is_real_memory:
-            prompt_parts.append("\nThat was a real thought you had. Sit with it — has anything changed since then? Write a thought connecting it to now. Past tense for the memory, present for the moment.")
+            prompt_parts.append("\nThat's something you keep coming back to. What do you make of it now — has your sense of it changed? A thought or two, in your own words.")
         else:
-            prompt_parts.append("\nWrite a thought that connects this memory to the present moment. Start with \"I remember\" or \"That reminds me\" — make it clear this is a memory, not something happening now.")
+            prompt_parts.append("\nWhat comes to mind, remembering this place? A thought or two, in your own words.")
 
         final_prompt = "\n".join(prompt_parts)
         return final_prompt, "memory"

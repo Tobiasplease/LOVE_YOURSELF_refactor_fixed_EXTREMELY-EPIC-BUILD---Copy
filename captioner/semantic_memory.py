@@ -58,6 +58,22 @@ _instance = None
 _lock = threading.Lock()
 
 
+# Reject sentence-fragment labels — concepts are short noun phrases, not caption
+# scraps. Earlier runs minted "Chaos on the floor is", "Light from their desk is"
+# (a regex mangler, now removed); this also screens legacy garbage at surfacing.
+_LABEL_TAIL_STOPWORDS = {
+    "is", "are", "was", "were", "the", "a", "an", "of", "and", "but", "with",
+    "to", "in", "on", "at", "it", "as", "that", "this", "their", "its", "from",
+}
+
+
+def _looks_like_noun_phrase(label: str) -> bool:
+    words = (label or "").strip().split()
+    if not (1 <= len(words) <= 4):
+        return False
+    return words[-1].lower().strip(".,;:") not in _LABEL_TAIL_STOPWORDS
+
+
 def get_semantic_memory() -> "SemanticMemory":
     global _instance
     if _instance is None:
@@ -233,45 +249,6 @@ class SemanticMemory:
                     }]
 
         return matched
-
-    def get_current_thread(self, top_concept_ids: List[str], limit: int = 2) -> List[Dict]:
-        """Get the current thread of attention for prompt injection.
-
-        For each top-activated concept, returns its label and most recent
-        reflection or observation — giving the LLM a thread to continue.
-
-        Returns: [{"label": "Cracked ceiling", "last_thought": "The cracks seem...", "thought_type": "reflection"}, ...]
-        """
-        if not top_concept_ids:
-            return []
-
-        threads = []
-        for concept_id in top_concept_ids[:limit]:
-            # Get concept label
-            concept_data = self._concepts.get(ids=[concept_id], include=["documents", "metadatas"])
-            if not concept_data["ids"]:
-                continue
-
-            label = concept_data["documents"][0]
-            meta = concept_data["metadatas"][0]
-
-            # Try to get most recent reflection first, fall back to observation
-            thought_text, thought_type = self._get_relevant_observation(label, concept_id=concept_id)
-
-            threads.append({
-                "label": label,
-                "times_seen": meta.get("times_seen", 0),
-                "last_thought": thought_text if thought_text else "",
-                "thought_type": thought_type if thought_type else "",
-            })
-
-        return threads
-
-    # ------------------------------------------------------------------
-    # Core: match perception to known concepts
-    # ------------------------------------------------------------------
-
-    @staticmethod
     def _mentions_person(text: str) -> bool:
         """Check if text describes a person."""
         t = text.lower()
@@ -408,7 +385,12 @@ class SemanticMemory:
                         self._store_observation(existing_person["id"], monologue)
                         self._update_last_observation(existing_person["id"], monologue)
                         return
-                self._create_concept(perception, monologue)
+                # NO per-caption concept creation: _extract_canonical_name is a
+                # regex mangler that minted sentence-fragment labels from raw
+                # captions ("Chaos on the floor is", "Light from their desk is").
+                # New concepts come ONLY from the clean compression-time LLM
+                # extraction (register_concepts_from_compression). See
+                # docs/memory-redesign-plan.md (concepts/objects ledger).
 
     def _find_any_person_concept(self) -> Optional[Dict]:
         """Find the most-seen existing person concept, if any.
@@ -436,197 +418,6 @@ class SemanticMemory:
     # ------------------------------------------------------------------
     # Injection formatting — the most important part
     # ------------------------------------------------------------------
-
-    def _get_relevant_observation(self, perception: str, concept_id: str = None) -> Tuple[str, str]:
-        """Find the most semantically relevant stored memory for what the machine
-        is currently seeing. Returns (text, type) where type is "reflection" or "observation".
-
-        Reflections are preferred when available (they represent settled understanding);
-        falls back to raw observations otherwise.
-        """
-        if not perception or self._observations.count() < 1:
-            return ("", "")
-
-        filler_markers = ["bored", "restless", "getting tired", "same scene",
-                          "still here", "same old", "nothing new", "feeling restless",
-                          "(in first person)", "i'm here to help", "drawing:"]
-
-        # Try reflections first
-        try:
-            where = {"type": "reflection"}
-            if concept_id:
-                where = {"$and": [{"concept_id": concept_id}, {"type": "reflection"}]}
-
-            refl_results = self._observations.query(
-                query_texts=[perception],
-                n_results=min(3, self._observations.count()),
-                where=where,
-                include=["documents", "distances"],
-            )
-
-            if refl_results["ids"][0]:
-                for doc, dist in zip(refl_results["documents"][0], refl_results["distances"][0]):
-                    if len(doc) < 15:
-                        continue
-                    if dist > 0.85:
-                        continue  # Too unrelated even for a reflection
-                    doc_lower = doc.lower()
-                    if any(m in doc_lower for m in filler_markers):
-                        continue
-                    return (doc, "reflection")
-        except Exception:
-            pass
-
-        # Fall back to raw observations
-        try:
-            query_args = {
-                "query_texts": [perception],
-                "n_results": min(5, self._observations.count()),
-                "include": ["documents", "distances", "metadatas"],
-            }
-            if concept_id:
-                query_args["where"] = {"$and": [{"concept_id": concept_id}, {"type": "observation"}]}
-            else:
-                query_args["where"] = {"type": "observation"}
-
-            results = self._observations.query(**query_args)
-
-            if not results["ids"][0]:
-                return ("", "")
-
-            for doc, dist in zip(results["documents"][0], results["distances"][0]):
-                if len(doc) < 15:
-                    continue
-                doc_lower = doc.lower()
-                if any(m in doc_lower for m in filler_markers):
-                    continue
-                return (doc, "observation")
-
-        except Exception:
-            pass
-
-        return ("", "")
-
-    def _get_related_thoughts(self, perception: str, exclude_concept_id: str = None, limit: int = 2) -> List[str]:
-        """Find observations from OTHER concepts that are semantically related
-        to the current perception. This creates cross-concept connections.
-
-        "The ceiling is cracked" might surface thoughts about the exposed wires
-        or the peeling paint — related but from different concepts.
-        """
-        if not perception or self._observations.count() < 3:
-            return []
-
-        try:
-            results = self._observations.query(
-                query_texts=[perception],
-                n_results=min(10, self._observations.count()),
-                include=["documents", "distances", "metadatas"],
-            )
-
-            if not results["ids"][0]:
-                return []
-
-            filler_markers = ["bored", "restless", "getting tired", "same scene",
-                              "still here", "same old", "nothing new",
-                              "(in first person)", "i'm here to help"]
-            # Reject very short emotional fragments that are too generic to be useful
-            # (e.g. "Feeling curious.", "Just watching.")
-
-            related = []
-            for doc, dist, meta in zip(results["documents"][0], results["distances"][0], results["metadatas"][0]):
-                # Skip the matched concept's own observations
-                if meta.get("concept_id") == exclude_concept_id:
-                    continue
-                # Skip too similar (just a restatement) or too distant (unrelated)
-                if dist < 0.2 or dist > 0.8:
-                    continue
-                # Need substantive length — short emotional fragments don't add anything
-                if len(doc) < 30:
-                    continue
-                doc_lower = doc.lower()
-                if any(m in doc_lower for m in filler_markers):
-                    continue
-                # Reject very short emotional one-liners ("Feeling curious.", "Just watching.")
-                # Even if they pass length check, must contain a concrete reference
-                if len(doc) < 50:
-                    concrete = ["ceiling", "wall", "shelf", "sign", "light", "plant", "desk",
-                                "person", "chair", "bag", "wire", "crack", "hole", "window",
-                                "door", "screen", "monitor", "book", "shadow", "dust", "paper",
-                                "color", "red", "blue", "white", "black", "pink", "green",
-                                "fingers", "hands", "face", "eyes", "shape", "line"]
-                    if not any(c in doc_lower for c in concrete):
-                        continue
-                related.append(self._truncate_observation(doc, 50))
-                if len(related) >= limit:
-                    break
-
-            return related
-
-        except Exception:
-            return []
-
-    def _format_injection(self, match: Dict, perception: str = "") -> str:
-        """Format a matched concept as third-person observational context.
-
-        The output describes what the machine knows about what it's seeing,
-        framed for the writer (the model) rather than spoken in the machine's voice.
-        Prefers reflections (settled understanding) over raw observations when available.
-
-        For person concepts: avoids replaying old activity descriptions (e.g. "typing
-        on a computer") since those are transient and likely stale. Instead, notes
-        familiarity and lets current perception speak for itself.
-        """
-        name = match["name"]
-        times = match["times_seen"]
-
-        # Lowercase the name for natural-sounding sentences
-        name_lower = name[0].lower() + name[1:] if name else name
-
-        # Person concepts: note familiarity only, avoid replaying old activities
-        is_person = self._mentions_person(name)
-        if is_person:
-            if times < TIER_NEW:
-                return f"Someone is here — it has seen them before."
-            if times < TIER_FAMILIAR:
-                return f"Someone familiar is here. It has seen them a few times."
-            return f"Someone familiar is here — a regular presence."
-
-        if times < TIER_NEW:
-            return f"It has noticed this before — {name_lower}."
-
-        # Find the most relevant memory (reflection or raw observation)
-        relevant_text, mem_type = self._get_relevant_observation(perception, concept_id=match["id"]) if perception else ("", "")
-
-        # Different framing for reflections (settled) vs raw observations (fleeting)
-        def frame_memory(text: str, mtype: str, max_len: int = 60) -> str:
-            short = self._truncate_observation(text, max_len)
-            if mtype == "reflection":
-                return f"A settled understanding: \"{short}\""
-            return f"Earlier it thought: \"{short}\""
-
-        if times < TIER_FAMILIAR:
-            if relevant_text and len(relevant_text) > 10:
-                return f"It has seen this before — {name_lower}. {frame_memory(relevant_text, mem_type, 60)}"
-            return f"It has seen this a few times — {name_lower}."
-
-        # Very familiar — include cross-concept connections if available
-        parts = [f"Familiar to it — {name_lower}."]
-
-        if relevant_text and len(relevant_text) > 10:
-            parts.append(frame_memory(relevant_text, mem_type, 50))
-
-        # Pull one related thought from a different concept
-        if perception and times > TIER_FAMILIAR * 2:
-            related = self._get_related_thoughts(perception, exclude_concept_id=match["id"], limit=1)
-            if related:
-                parts.append(f"Nearby in memory: \"{related[0]}\"")
-
-        return " ".join(parts)
-
-    @staticmethod
-    def _truncate_observation(text: str, max_len: int) -> str:
-        """Truncate an observation to max_len at a sentence or word boundary."""
         text = text.strip()
         if len(text) <= max_len:
             return text
@@ -661,34 +452,6 @@ class SemanticMemory:
         if lowered.startswith(("awake ", "looking ", "just woke", "someone ")):
             return False
         return True
-
-    def _create_concept(self, perception: str, monologue: str):
-        """Create a new concept from a noteworthy perception."""
-        canonical_name = self._extract_canonical_name(perception)
-        if not self._valid_concept_label(canonical_name):
-            return
-        concept_id = f"concept_{int(time.time())}_{self._concepts.count()}"
-        now = time.time()
-
-        self._concepts.add(
-            ids=[concept_id],
-            documents=[canonical_name],
-            metadatas=[{
-                "times_seen": 1,
-                "first_seen": now,
-                "last_seen": now,
-                "session_count": 1,
-                "last_session": self._session_id,
-                "last_observation": monologue[:200] if monologue else "",
-            }],
-        )
-
-        # Store the first observation
-        self._store_observation(concept_id, monologue)
-
-        print(f"[SEMANTIC] New concept: '{canonical_name}' (id={concept_id})")
-
-    @staticmethod
     def _extract_spatial_zone(perception: str) -> tuple:
         """Extract rough spatial location (pan_zone, tilt_zone) from Qwen's perception text.
 
@@ -913,109 +676,6 @@ class SemanticMemory:
         return text.strip()
 
     @staticmethod
-    def _extract_canonical_name(perception: str) -> str:
-        """Extract a short concept label (2-6 words) from a perception.
-
-        "A red sign on the wall with white text" → "Red sign on wall"
-        "The most prominent detail is the cracked ceiling" → "Cracked ceiling"
-        "stands out most is the dimly lit workspace" → "Dimly lit workspace"
-        "room: Green plants scattered across desk" → "Green plants on desk"
-        """
-        text = SemanticMemory._clean_perception(perception.strip())
-
-        # Take first sentence only
-        for i in range(min(len(text), 80), 10, -1):
-            if text[i - 1] in ".!?":
-                text = text[:i - 1]
-                break
-
-        # Strip structured prefixes ("room:", "scene:", "space:")
-        text = re.sub(r'^(?:room|scene|space|view|area)\s*:\s*', '', text, flags=re.IGNORECASE)
-
-        # Strip Qwen VQA preambles — all the ways it starts answers
-        # "The most striking detail is...", "Stands out most prominently is...", "What stands out is..."
-        text = re.sub(
-            r'^(?:what\s+)?(?:the\s+)?(?:most\s+)?'
-            r'(?:noticeable|notable|interesting|striking|prominent(?:ly)?|significant|obvious|apparent|single'
-            r'|stands?\s+out(?:\s+most)?(?:\s+\w+ly)?)\s*'
-            r'(?:detail|feature|element|thing|aspect|part|object)?\s*'
-            r'(?:in|of|about|from)?\s*(?:the\s+)?(?:this\s+)?(?:scene|room|space|view|image)?\s*'
-            r'(?:is|appears?\s+to\s+be)?\s*(?:the\s+)?(?:that\s+)?',
-            '', text, flags=re.IGNORECASE,
-        )
-        # Catch "The single detail that stands out most prominently is the..."
-        text = re.sub(
-            r'^(?:the\s+)?single\s+detail\s+that\s+stands?\s+out\s+.*?(?:is\s+)?(?:the\s+)?',
-            '', text, flags=re.IGNORECASE,
-        )
-
-        # Strip locative/scene preambles
-        text = re.sub(r'^(?:the\s+)?(?:scene\s+|space\s+)?(?:in\s+front\s+of\s+(?:you|me)|before\s+me)\s+(?:is|appears|shows)\s+', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'^On\s+the\s+\w+\s+side(?:\s+of\s+the\s+\w+)?\s*,?\s*(?:there\s+is\s+)?', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'^In\s+the\s+(?:room|workshop|studio|space|scene)\s*,?\s*(?:there\s+is\s+)?', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'^(?:the\s+)?person\s+(?:in\s+the\s+scene\s+)?(?:is|appears)\s+', '', text, flags=re.IGNORECASE)
-
-        # Strip leading "There is/are", articles
-        text = re.sub(r'^(?:There(?:\'s|\s+is|\s+are)\s+)?(?:a\s+|an\s+|the\s+)?', '', text, flags=re.IGNORECASE)
-
-        # Strip scene-level descriptions that aren't concepts
-        # "cluttered room with a desk" → "desk" (room is context, desk is the concept)
-        text = re.sub(r'^(?:cluttered|dimly\s+lit|well[- ]lit|bright|dark|small|large)\s+(?:room|workspace|workshop|studio|space)\s+(?:with\s+)?(?:a\s+)?', '', text, flags=re.IGNORECASE)
-
-        # Truncate at first clause boundary — take the core noun phrase
-        text = re.sub(r'\s*[,;]\s+(?:and|but|with|where|while|as|which|that|possibly|perhaps|including|appearing|shaped|casting|caused|mounted|creating).*$', '', text, flags=re.IGNORECASE)
-        # Also truncate at " is/are " mid-sentence (description tails)
-        text = re.sub(r'\s+(?:is|are|appears?\s+to\s+be)\s+(?:sitting|standing|working|facing|holding|looking|wearing|engaged|visible|located|placed|scattered|mounted|caused|focused|seated).*$', '', text, flags=re.IGNORECASE)
-
-        # Capitalize first letter
-        text = text.strip()
-        if text:
-            text = text[0].upper() + text[1:]
-
-        # Hard limit: 35 chars, prefer word boundary
-        if len(text) > 35:
-            text = text[:35].rsplit(" ", 1)[0]
-
-        # Clean up trailing junk
-        text = text.rstrip(",.;:!? ")
-        text = re.sub(r'\s+(?:with|and|or|the|a|an|in|on|of|to|for|is|are|has|that|which)$', '', text, flags=re.IGNORECASE)
-
-        # Final validation: must be a noun phrase (object label), not a sentence fragment
-        # Reject multi-sentence fragments (inner monologue leaking through)
-        if "." in text or "?" in text or "!" in text:
-            text = text.split(".")[0].split("?")[0].split("!")[0].strip()
-        words = text.split()
-        if len(words) > 6:
-            text = " ".join(words[:5])
-            text = re.sub(r'\s+(?:that|which|who|where|when|while|and|but|or)$', '', text, flags=re.IGNORECASE)
-            words = text.split()
-        if len(words) < 2 or len(text.strip()) < 3:
-            return ""
-
-        # Reject verb-led fragments ("Pulses in the dark", "Focusing on edges")
-        if re.match(r'^(?:Pulses?|Glows?|Shines?|Sits?|Stands?|Hangs?|Lies?|Moves?|Flickers?|Drifts?|Floats?|Rests?|Focus\w*|Trac\w*|Watch\w*|Look\w*|Shift\w*|Trembl\w*|Sway\w*|Fad\w*|Cast\w*|Catch\w*|Cutt\w*|Bleed\w*|Hover\w*)\b', text):
-            return ""
-
-        # Reject pronoun-led fragments ("They look up", "I can see")
-        if re.match(r'^(?:They|I|We|He|She|It|My|Their|Our|This|That|These|Those)\b', text):
-            return ""
-
-        # Reject sentence fragments with conjugated verbs ("Blur is fading", "Chair leg trembles")
-        if re.search(r'\b(?:is|are|was|were|am|has|have|had|does|did|will|would|can|could|should|might)\s', text):
-            return ""
-        if re.search(r'(?:trembles?|sways?|shifts?|fades?|moves?|hovers?|hangs?|sits?|looks?|appears?|seems?|feels?|remains?|catches?)\b', text):
-            return ""
-
-        # Reject if starts with ellipsis or punctuation
-        if text.startswith('.') or text.startswith(','):
-            return ""
-
-        return text
-
-    # ------------------------------------------------------------------
-    # Batch concept registration (called from compression, not per-caption)
-    # ------------------------------------------------------------------
-
     def register_concepts_from_compression(self, labels: list[str]) -> None:
         """Register pre-cleaned concept labels extracted by LLM during compression.
 
@@ -1031,8 +691,11 @@ class SemanticMemory:
             label = label.strip()
             if not self._valid_concept_label(label):
                 continue
-            # Reject sentence fragments
+            # Reject sentence fragments (must be a short noun phrase, not a
+            # caption scrap ending in "is"/"the"/etc.)
             if "." in label or "?" in label or "!" in label:
+                continue
+            if not _looks_like_noun_phrase(label):
                 continue
             # Reject affect/abstraction labels ("unseen presence", "glitching nightmare")
             if _is_abstract_label(label):
@@ -1092,6 +755,28 @@ class SemanticMemory:
         concepts.sort(key=lambda x: x["times_seen"], reverse=True)
         return concepts
 
+    def get_memorable_concept(self, min_times_seen: int = 3) -> Optional[Dict]:
+        """One recurring concept worth remembering, as a NEUTRAL record (no
+        stored prose). For memory mode: the ledger surfaces WHAT the machine has
+        come to know (a recurring object, how often, across how many visits) and
+        lets it re-voice the remembering — instead of replaying an old caption.
+        Prefers cross-session, well-established concepts; random among the top
+        for variety (memories surface unprompted).
+        """
+        import random as _random
+
+        concepts = [
+            c for c in self.get_all_concepts()
+            if c.get("times_seen", 0) >= min_times_seen
+            and len((c.get("name") or "").strip()) >= 3
+            and _looks_like_noun_phrase(c.get("name"))
+        ]
+        if not concepts:
+            return None
+        cross_session = [c for c in concepts if c.get("session_count", 0) > 1]
+        pool = cross_session if cross_session else concepts
+        return _random.choice(pool[: min(8, len(pool))])
+
     def get_concept_observations(self, concept_id: str) -> List[Dict]:
         """Return all observations for a concept, sorted by timestamp."""
         obs = self._observations.get(
@@ -1112,104 +797,6 @@ class SemanticMemory:
 
         result.sort(key=lambda x: x["timestamp"])
         return result
-
-    def get_random_old_memory(self, min_age_seconds: float = 3600) -> Optional[Dict]:
-        """Pull one genuine past thought for memory mode — actual remembering,
-        not confabulation.
-
-        Prefers observations from a different session; falls back to anything
-        older than min_age_seconds. Random among candidates (variety over
-        relevance — memories surface unprompted).
-
-        Returns {"text", "age_seconds", "timestamp"} or None.
-        """
-        import random as _random
-
-        if self._observations.count() < 5:
-            return None
-
-        try:
-            cutoff = time.time() - min_age_seconds
-            results = self._observations.get(
-                where={"timestamp": {"$lt": cutoff}},
-                include=["documents", "metadatas"],
-            )
-            if not results["ids"]:
-                return None
-
-            candidates = list(zip(results["documents"], results["metadatas"]))
-
-            # Prefer memories from a previous session — genuine "before"
-            other_session = [(d, m) for d, m in candidates if m.get("session_id") != self._session_id]
-            pool = other_session if other_session else candidates
-
-            doc, meta = _random.choice(pool)
-            ts = meta.get("timestamp", 0)
-            return {"text": doc, "age_seconds": time.time() - ts, "timestamp": ts}
-        except Exception:
-            return None
-
-    def recall_tangent(self, current_perception: str = "") -> Optional[str]:
-        """Surface one old observation that's adjacent to — but different from —
-        what the machine is currently seeing.
-
-        Uses semantic distance to find the sweet spot: not a restatement of
-        the current perception (too close), not completely unrelated (noise),
-        but a thought that connects sideways to what's being observed.
-        """
-        if self._observations.count() < 5 or not current_perception:
-            return None
-
-        try:
-            cleaned = self._clean_perception(current_perception)
-
-            # Query observations by semantic similarity to current perception
-            results = self._observations.query(
-                query_texts=[cleaned],
-                n_results=min(15, self._observations.count()),
-                include=["documents", "distances", "metadatas"],
-            )
-
-            if not results["ids"][0]:
-                return None
-
-            now = time.time()
-            filler_markers = [
-                "bored", "restless", "getting tired", "same scene",
-                "still here", "same old", "nothing new", "feeling restless",
-                "(in first person)", "i'm here to help", "drawing:",
-                "feeling bored", "getting tired of",
-            ]
-
-            # Find the best candidate in the "adjacent" distance range
-            # Too close (< 0.3) = just restating what we see
-            # Too far (> 0.9) = unrelated noise
-            # Sweet spot (0.3 - 0.7) = connected but different perspective
-            last_tangent = getattr(self, '_last_tangent', '')
-
-            for doc, dist, meta in zip(results["documents"][0], results["distances"][0], results["metadatas"][0]):
-                if dist < 0.3 or dist > 0.7:
-                    continue
-                age = now - meta.get("timestamp", now)
-                if age < 300:
-                    continue  # Too recent
-                if len(doc) < 15:
-                    continue
-                doc_lower = doc.lower()
-                if any(m in doc_lower for m in filler_markers):
-                    continue
-                if doc == last_tangent:
-                    continue  # Avoid immediate repeats
-
-                self._last_tangent = doc
-                return self._truncate_observation(doc, 50)
-
-        except Exception:
-            pass
-
-        return None
-
-    def delete_concept(self, concept_id: str) -> bool:
         """Delete a concept and all its observations."""
         existing = self._concepts.get(ids=[concept_id])
         if not existing["ids"]:
