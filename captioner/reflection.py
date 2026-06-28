@@ -61,6 +61,13 @@ class ReflectionLoop:
                 self.last_reflection_time = time.time() - REFLECTION_LOOP_INTERVAL + 120  # retry in 2 min
 
     def _should_reflect(self) -> bool:
+        # Clean room: the reflection loop is detox blind spot #2 — it consumes
+        # stored prose (compressions, prior reflections, journal, drawings,
+        # desire) AND writes long-form prose back, both contamination channels.
+        # Pause it entirely under detox so the store stops filling with purple.
+        from config.config import BASE_VOICE_DETOX
+        if BASE_VOICE_DETOX:
+            return False
         elapsed = time.time() - self.last_reflection_time
         if elapsed < REFLECTION_LOOP_INTERVAL:
             return False

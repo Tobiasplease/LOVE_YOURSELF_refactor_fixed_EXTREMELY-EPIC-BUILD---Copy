@@ -46,6 +46,17 @@ rules, no registers, no mood clause. Voice comes from content.
 > months of self-poisoned stores. Set False to restore the full memory prompt.
 > Gated in get_monologue_system_prompt + build_simple_caption_prompt (`detox`)
 > and the video path (captioner.py).
+>
+> **Step 0 (June 28): the three detox blind spots are now closed too** — the
+> AWAKENING runs time-only (no stored memory) `captioner.generate_internal_awakening`;
+> the REFLECTION loop pauses entirely `reflection._should_reflect`; and DRAWING
+> is skipped `drawing.should_draw` (its 5-step pipeline + purple step
+> system-prompts can't produce a clean drawing yet). So clean-room is now valid
+> for the whole running machine.py, not just the caption prompt. NOTE: the
+> compression/introspection/self-synthesis/concept GENERATORS still run under
+> detox — but their output is gated from the caption prompt, so it's isolated
+> (and lets us observe whether plain captions yield plainer stores). See
+> docs/memory-redesign-plan.md.
 
 | Line | Source | Health |
 |------|--------|--------|

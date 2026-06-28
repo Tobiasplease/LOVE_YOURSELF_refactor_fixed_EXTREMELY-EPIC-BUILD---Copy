@@ -82,6 +82,15 @@ class DrawingController:
         return cooldown_ready
 
     def should_draw(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
+        # Clean room: the 5-step drawing pipeline is detox blind spot #3 — it
+        # injects ~23 layers of stored prose AND its step system-prompts push
+        # metaphor by design, so a drawing can't come out plain yet and would
+        # pollute drawing_memory. Skip drawing entirely under detox; the pipeline
+        # gets cleaned when its source channels (drawings/desire/reflection) and
+        # its system-prompts are reworked. See docs/memory-redesign-plan.md.
+        from config.config import BASE_VOICE_DETOX
+        if BASE_VOICE_DETOX:
+            return False
         # Use state-motivated drawing logic when enabled, otherwise timer-based
         try:
             from config.config import DRAWING_USE_STATE_MOTIVATION

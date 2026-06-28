@@ -1379,12 +1379,24 @@ class Captioner(MemoryMixin):
 
         # Import consolidated awakening template
         from .prompts import FIRST_AWAKENING_PROMPT, INTERNAL_AWAKENING_TEMPLATE
+        from config.config import BASE_VOICE_DETOX as _detox
+
+        # Clean room: the awakening is detox blind spot #1 — it injects 6 layers
+        # of stored prose (last thought, desire, belief, journal, core facts,
+        # familiar concepts) that seed the whole session's register. Under detox
+        # the naked awakening is time only: real offline/clock facts + the
+        # system-prompt elicitation, no stored memory.
+        if _detox:
+            internal_prompt = time_context + "\nFirst thought:"
+            memory_context = identity_context = long_term_context = ""
 
         # A true first awakening has no past at all. Empty context sections
         # invite the model to fill the void with its priors (dust motes) —
         # the honest framing is that nothing has been seen yet.
         has_past = bool(memory_context or identity_context or long_term_context)
-        if has_past:
+        if _detox:
+            pass  # internal_prompt already set to the naked time-only awakening
+        elif has_past:
             internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(
                 time_context=time_context,
                 memory_context=memory_context,
