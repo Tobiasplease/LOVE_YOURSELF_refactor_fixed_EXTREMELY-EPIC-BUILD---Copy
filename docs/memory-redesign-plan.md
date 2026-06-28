@@ -1,197 +1,180 @@
-# Memory System Redesign Plan
+# Memory Redesign — the ledger model (June 2026)
 
-## Status: June 2026
+Companion to `north-star.md` (spec), `voice-analysis.md` (diagnosis), and
+`runtime-map.md` (wiring). The holistic plan for rebuilding the stores so they
+enable development WITHOUT poisoning the base voice. Written after a full
+three-part audit of every store, generator, and injection point on branch
+`rebuild/north-star`. Checkpoint commit before this work: `582555b`.
 
-## The Core Problem
+> SUPERSEDES the earlier "reconnect the disconnected wires" plan (see History at
+> end). That work is done — the wires are connected, and the problem has
+> inverted: memory now over-reaches the prompt and contaminates the voice.
 
-The memory system has ~4000 lines of code across 6 modules. Most of the infrastructure
-works correctly in isolation, but **the outputs are disconnected from the prompt pipeline**.
-The model generates desires, beliefs, discoveries, reflections, baseline understanding,
-and attention threads — but almost NONE of these reach `build_simple_caption_prompt()`.
+## The core reframe
 
-The result: sophisticated memory computation happens in the background, but the model
-sees almost none of it during regular captioning. The only memory that actually reaches
-the prompt is the thought thread (last caption) and the felt-state delta.
+We have been storing the model's **prose** and replaying it as **voice**. Every
+contaminated channel takes the model's output sentences — purple, interpretive,
+present-tense — and pastes them back as "who you are / what you saw / how you
+sound." Memory became a *transcript of the voice*, so the voice imitates itself
+and ratchets ("grid/dread" re-grew in 3 minutes even after a reset).
 
-## Architecture Map (Current)
+The fix is to make memory a **ledger, not a transcript**:
 
-```
-Camera Frame (30fps)
-    |
-    v
-machine.py main loop
-    |
-    +---> frame_buffer.push() [for video mode]
-    +---> captioner.update(frame)
-              |
-              v
-         _process_frame() [every 10s]
-              |
-              +---> build_simple_caption_prompt()  <-- THE SINGLE INJECTION POINT
-              |         |
-              |         +-- 1. Situational line (time + gaze + person) [WORKING]
-              |         +-- 2. Mode-gated context (relational/observational/workspace/introspective) [WORKING]
-              |         +-- 3. Introspective context (drawing memory + semantic memory) [BROKEN - session_greeting disabled]
-              |         +-- 4. Drawing/paper state [WORKING]
-              |         +-- 5. Felt-state delta [WORKING]
-              |         +-- 6. Thought thread (last caption sentence) [WORKING]
-              |         +-- MISSING: baseline_context (environmental understanding)
-              |         +-- MISSING: desires/beliefs (from compression introspection)
-              |         +-- MISSING: discoveries (from compression introspection)
-              |         +-- MISSING: reflections (from semantic memory)
-              |         +-- MISSING: drawing history in non-introspective modes
-              |
-              +---> query_model() --> caption text
-              |
-              +---> Post-caption processing:
-                    +-- semantic_memory.match_or_create_concepts(caption) [BROKEN - stores monologue fragments]
-                    +-- activation_network.observe(concept_ids) [WORKS but input quality is garbage]
-                    +-- context_compressor.add_caption(caption) [WORKS - generates baseline + desires + beliefs]
-                    +-- episodic_log.record() [WORKS - person events only]
-```
+> Separate the **ledger** (what is true — neutral, structured, dated) from the
+> **voice** (how it's said — regenerated fresh each time). The model never
+> re-reads its own prose; it reads neutral facts and re-voices them now.
 
-## What Exists But Is Disconnected
+Development then lives in the ledger *changing over time* (new objects, new
+drawings, evolving patterns, desires that resolve or curdle), not in stylistic
+drift — a more authentic version of north-star's "develops, over time, its own".
 
-| System | Generates | Stored Where | Reaches Prompt? |
-|--------|-----------|--------------|-----------------|
-| context_compression | baseline_context | In-memory + machine_identity.json | NO (only via dead build_monologue_prompt) |
-| context_compression | current_desire | machine_identity.json | NO (only via dead _build_concept_context) |
-| context_compression | current_belief | machine_identity.json | NO (only in introspective system prompt) |
-| context_compression | discoveries | machine_identity.json | NO (only fed back to introspection) |
-| context_compression | felt_state | In-memory | YES (system prompt + user prompt) |
-| semantic_memory | reflections | ChromaDB observations collection | NO (get_current_thread never called) |
-| semantic_memory | concept labels | ChromaDB concepts collection | NO (get_session_greeting disabled) |
-| activation_memory | attention state | activation_snapshot.json | NO (generate_state_summary never called) |
-| activation_memory | boredom/novelty | In-memory | YES (drives mode selection only) |
-| drawing_memory | artistic arc | drawing_memory.json | Only in introspective mode |
-| episodic_log | events | episodic_events.json | Only person_arrived/left via situational line |
+## Two contamination mechanisms (we had only been addressing one)
 
-## Dead Functions (Safe to Remove)
+1. **Injection** — stored prose pasted into a prompt. `BASE_VOICE_DETOX` gates
+   this, but only for the caption prompt (20 of 52 sites). See blind spots below.
+2. **Generation** — the compressors/synthesizers that WRITE the stores run on
+   the model's prose and emit more prose. Even with perfect injection-gating the
+   stores refill purple (this is why the persona re-grew). The ledger fixes this
+   by making every generator emit **structured/neutral** output at low temp
+   behind a hard validator.
 
-~400 lines of dead code in the runtime path:
+`BASE_VOICE_DETOX` is a *test scaffold*, not the destination. The destination is
+memory clean enough to leave in with the flag OFF.
 
-- `captioner/prompts.py`: `build_monologue_prompt()`, `select_perception_prompt()`, `_build_concept_context()`, `PERCEPTION_PROMPTS` dict
-- `captioner/activation_memory.py`: `observe_and_store()`, `recall_for_prompt()`, `get_current_thread()`, `generate_state_summary()`
-- `captioner/semantic_memory.py`: `after_perception()`, `get_established_labels()`, `get_session_greeting()` (disabled)
-- `captioner/context_compression.py`: `get_current_sentiment_context()` (never called)
+## Detox blind spots (close these first — they make clean-room valid system-wide)
 
-## Implementation Plan
+Three pipelines never check the flag and keep injecting stored prose:
 
-### Phase 1: Reconnect Existing Wires (HIGH IMPACT, LOW EFFORT)
+| Pipeline | Sites | Where | Note |
+|---|---|---|---|
+| Awakening | 8 | `captioner.generate_internal_awakening` | seeds the whole session |
+| Reflection loop | 9 | `reflection.py` + `build_reflection_loop_prompt` | separate thread |
+| Drawing pipeline | 23 | `prompts.py` step1–5 builders | pulls raw `recent_captions[-20:]`; produced the contaminated art |
 
-Wire the existing data that's being generated but never reaches the prompt.
-Add to `build_simple_caption_prompt()` between felt-state and thought thread:
+## The full ledger map — per channel
 
-```python
-# 5b. DESIRE/BELIEF (from compression introspection)
-try:
-    from captioner.context_compression import context_compressor
-    desire = context_compressor.get_current_desire()
-    belief = context_compressor.get_current_belief()
-    if desire and len(desire) > 5:
-        prompt_parts.append(f"Preoccupied with: {desire}")
-    if belief and len(belief) > 5 and mode == "introspective":
-        prompt_parts.append(f"What I know: {belief}")
-except Exception:
-    pass
+Format today / target / readers to migrate (orphan list). `cc` =
+context_compression.py, `sm` = semantic_memory.py, `dm` = drawing_memory.py,
+`p` = prompts.py, `c` = captioner.py. Line numbers are from the June audit —
+re-grep before editing.
 
-# 5c. BASELINE CONTEXT (rolling environmental understanding)
-if mode in ("observational", "workspace"):
-    try:
-        from captioner.context_compression import context_compressor
-        baseline = context_compressor.get_baseline_context()
-        if baseline and len(baseline) > 10:
-            # Only first sentence — full baseline would dominate
-            first_sent = baseline.split(".")[0] + "."
-            prompt_parts.append(first_sent)
-    except Exception:
-        pass
-```
+### 1. Concepts / objects  (LOWEST RISK — already mostly a ledger)
+- **Now:** concept records ARE structured (label, times_seen, first/last_seen,
+  session_count, spatial). The prose leak is the **observations** collection
+  (stores raw monologue per concept) and surfacing.
+- **Target:** keep concept records; stop storing raw monologue as observations
+  (store extracted noun-facts or nothing); surface neutral familiarity
+  ("the foam finger again — many times now"); add **decay** + **diversity**
+  (don't resurface the same concept twice running) so no theme monopolizes.
+- **Readers:** `p get_familiarity_line`, `p get_random_old_memory`,
+  `sm _get_relevant_observation`, `sm _get_related_thoughts`,
+  `c awakening concepts`, `activation_memory boost`. Generator: `cc` extract
+  (temp 0.1, keep).
 
-### Phase 2: Core Memory Block
+### 2. Drawings  (MEDIUM)
+- **Now:** `dm` has `theme_tags` (structured) BUT also `compressed_summary`
+  (prose) and `comfy_prompt` (raw purple); readers inject the prose.
+- **Target:** surface from `{theme_tags, outcome, date}` — "you've drawn the
+  desk 3 times; last one failed (no paper)". Keep `comfy_prompt` STORED (needed
+  to reference the art) but NEVER inject it.
+- **Readers:** `p get_last_drawing_description`, `dm.get_recent_drawings_summary`
+  (reflection, journal, drawing step4/5), introspective context.
 
-Extend existing `machine_identity.json` to include stable facts.
-The compression introspection already generates beliefs/discoveries — add a
-`core_facts` section that the consolidation cycle updates:
+### 3. Place / baseline  (MEDIUM — sentence-split reader must change)
+- **Now:** `baseline_context` prose (sentence-split in build_simple_caption_prompt),
+  `core_facts[place]` prose.
+- **Target:** structured object inventory derived from concepts; surface as a
+  neutral list. Retire the baseline prose generator or reformat it to emit a list.
+- **Readers:** the baseline sentence-split (must change), `cc` stagnation check,
+  journal writer.
 
-```json
-{
-  "current_desire": "...",
-  "current_belief": "...",
-  "discoveries": ["..."],
-  "core_facts": {
-    "place": "Workshop. Pink shelves left. Monitor on desk. Cables everywhere.",
-    "people": "One regular visitor. Sits at desk, types.",
-    "drawings": "47 total. Cables, shadows, hands recurring.",
-    "self": "I fixate on cables. I draw better with company."
-  }
-}
-```
+### 4. Felt-state  (LOW–MEDIUM — candidate for retirement)
+- **Now:** prose adjective phrase + punctuation/word-count validators.
+- **Target:** a valence/arousal **tag** from a fixed vocabulary, or retire the
+  injection entirely (low value, high register-risk). Both injection points are
+  detox-gated already.
+- **Readers:** system prompt `Right now:`, caption felt-delta, `cc get_felt_state`
+  (validators).
 
-The `core_facts.place` field replaces `get_session_greeting()` with curated content.
-Updated by the reflection worker when concepts pass a threshold (>10 observations).
+### 5. Desire / belief  (MEDIUM–HIGH — many readers)
+- **Now:** prose, raw-injected; `activation_memory` expects strings; drawing
+  pipeline injects.
+- **Target:** desire as `{goal_object, status: open/resolved/abandoned, since}`;
+  surface re-voiced as a current preoccupation. The status field is what makes a
+  desire ARC across days (north-star principle 4) instead of regenerating.
+- **Readers:** drawing step3, caption `Preoccupied with:`, awakening,
+  `activation_memory get_beliefs/get_desires`, reflection context.
 
-### Phase 3: Fix Concept Storage Quality
+### 6. Reflections  (HIGH — core to development)
+- **Now:** long prose, injected as echo + drawing pipeline + reflection context.
+- **Target:** store the reflection's **conclusion as a neutral proposition** +
+  subject; surface the *subject* to re-think, not the prose to re-read. Keep full
+  text only for the reflection thread's own continuity, gated from captions.
+- **Readers:** `p get_reflection_echo_line`, `reflection get_recent_reflections`.
+- **Generator:** `reflection.py` (temp 0.75) — must emit a structured conclusion
+  alongside the prose.
 
-Replace `_extract_canonical_name()` regex with LLM-based extraction.
-Run ONCE per compression cycle (every 8 captions), not per caption.
-Extract from the compression output, which is already a clean summary.
+### 7. Persona (core_facts[self])  (HIGHEST RISK — do LAST)
+- **Now:** a quoted purple sentence, raw-injected into the system prompt.
+- **Target:** a small set of structured **trait records** (recurring fixations,
+  what shifts its mood, preferences) built from now-plain captions under a strict
+  low-temp plainness gate; expressed fresh, quoted only if it passes the gate.
+- **Readers:** system prompt persona block. Generator: `cc _synthesize_self_model`
+  (temp 0.4) fed by desire/belief histories + discoveries — so it can only be
+  clean once 5 and 6 are.
 
-Prompt for COMPRESSION_MODEL:
-```
-From this summary, list physical objects or spatial facts as noun phrases (2-4 words each).
-Only concrete things that would be there next time. One per line. Max 3.
-Summary: "{compression_output}"
-```
+## Orphan-risk readers (assume prose; must be migrated WITH their channel)
+- baseline sentence-split in build_simple_caption_prompt
+- felt-state word/punctuation validators (system prompt + `cc get_felt_state`)
+- `activation_memory get_beliefs/get_desires` (treat desire/belief as strings)
+- `cc _synthesize_self_model` / journal writer (discoveries list-iteration)
+- raw-inject sites: `core_facts[self]` (system prompt), desire (drawing step3,
+  caption, awakening)
 
-This is batched and async — no latency impact on the caption cycle.
+Already structured & robust (safe): `journal`, `desire_history`,
+`belief_history`, `compression_history`, episodic_log, concept metadata.
 
-### Phase 4: Delete Dead Code
+## Three mechanisms that make it develop AND stay clean
+1. **Neutral storage gates** — every generator emits structured/neutral data at
+   low temp behind a hard validator; non-neutral output is rejected, not stored.
+2. **Decay + diversity** — unreferenced records fade; don't resurface the same
+   theme repeatedly. Turns "fixate forever" into "learn over time".
+3. **Re-express, don't replay** — stored facts are inputs to a fresh thought in
+   the current voice; the past surfaces as a prompt to think, not a sentence to
+   imitate.
 
-Remove orphaned functions listed above. Reduces cognitive overhead for future work.
+## Migration order (risk-ascending) + validation protocol
+0. **Close the 3 detox blind spots** (awakening, reflection-echo, drawing
+   pipeline) so clean-room is valid for the whole running system, not just the
+   harness. Small, high-leverage.
+1. Concepts/objects ledger (+ decay/diversity).
+2. Drawings ledger.
+3. Place/baseline ledger.
+4. Felt-state (tag or retire).
+5. Desire/belief ledger (+ status arc).
+6. Reflections (neutral conclusions).
+7. Persona (last).
 
-### Phase 5: Episodic Consolidation
+**Per step:** reformat store → reformat generator (structured, low temp, gate) →
+migrate EVERY reader in its orphan list → re-enable that channel with detox OFF →
+run `debug/test_base_voice.py` and a short `machine.py` clean-room → confirm the
+naked voice holds plain AND the channel's facts surface correctly → commit. Never
+two channels at once; the harness is the regression test.
 
-Every 30 minutes, scan episodic log + recent compressions:
-- Person visited >5 times this session → update core_facts.people
-- Same object in >10 concepts → promote to core_facts.place
-- Drawing theme repeats → update core_facts.drawings
+## How development is preserved (the whole point)
+Personality emerges from WHICH facts accumulate (real drawings, objects, visitor
+patterns) + HOW it consistently reacts (traits extracted over time), grounded in
+events — not from replaying a self-reinforcing mood. Desire arcs because it's a
+tracked object with a status. It learns because the ledger evolves and decays
+with real salience. What it stops doing is mistaking its own diary for itself.
 
-Runs on the compression background thread. No new threads needed.
-
-## Token Budget for Prompt Injection
-
-The prompt has a 150-word budget (enforced at end of build_simple_caption_prompt).
-Current usage per mode:
-
-| Section | Tokens (approx) |
-|---------|-----------------|
-| Situational line | 10-20 |
-| Mode context | 10-30 |
-| Introspective context | 15-40 |
-| Drawing/paper state | 5-10 |
-| Felt-state delta | 5-15 |
-| Thought thread | 15-25 |
-| **TOTAL current** | **60-140** |
-| **Budget remaining** | **10-90** |
-
-New injections (desires, baseline) should fit within the remaining budget.
-If over, the existing line-level trimmer handles it (drops middle lines first).
-
-## Risk Mitigations
-
-1. **VRAM**: No new per-caption LLM calls. Fact extraction piggybacks on compression cycle.
-2. **Latency**: All new injections are reads from in-memory or JSON. Zero network calls in prompt path.
-3. **Quality**: Core memory block is LLM-curated (by compression/reflection), not regex-extracted.
-4. **Corruption**: machine_identity.json already has load/save. Add a `.bak` write-ahead.
-5. **Bloat**: Strict character limits on all core_facts fields (200 chars each).
-
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `captioner/prompts.py` | Add desire/belief/baseline injection to build_simple_caption_prompt |
-| `captioner/context_compression.py` | Add core_facts persistence + promotion logic |
-| `captioner/semantic_memory.py` | Replace _extract_canonical_name with LLM gate (in reflection cycle) |
-| `captioner/prompts.py` | Delete dead functions (~400 lines) |
-| `captioner/activation_memory.py` | Delete dead functions (~100 lines) |
+## History (superseded plan, kept for the runtime-map cross-reference)
+The prior version of this file was the **"reconnect the disconnected wires"**
+plan: at the time, compression/desire/belief/baseline were generated but never
+reached `build_simple_caption_prompt`. Phases 1–5 of that plan wired them in
+(desire → "Preoccupied with:", baseline first sentence, core_facts block,
+LLM concept extraction at compression time, episodic consolidation) and removed
+the dead `build_monologue_prompt`/`get_session_greeting`/`_build_concept_context`
+paths. Completing it created today's inverse problem — too much connected,
+contaminating the register — which this ledger plan addresses by changing WHAT is
+stored/surfaced (facts, re-voiced) rather than WHETHER it connects.
