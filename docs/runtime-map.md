@@ -90,7 +90,7 @@ moment gets the present only (north-star principle 6).
 | felt-state delta | compression | ok |
 | [interior] "Preoccupied with: ..." | desire, gated to 3 injections | ok |
 | [interior] baseline first sentence | compression (observational/workspace) | ok |
-| THE STREAM (replaces thread tail, June 12) | last 6 admissible captions ride as the model's OWN assistant turns in the chat (captioner._stream → history param → llama_server messages); "..." user ticks mark time passing; text-only, past images never re-sent | NEW — verify register: one assistant-meta slip in the window would breed, so _stream_admissible gates admission (meta phrases, markdown). Toggle: STREAM_WINDOW=0 reverts to amnesiac captions. Breaks on >180s gaps (STREAM_BREAK_SECONDS) |
+| THE STREAM (replaces thread tail, June 12; **ON June 28, STREAM_WINDOW=6**) | last 6 admissible captions ride as the model's OWN assistant turns in the chat (captioner._stream → history param → llama_server messages); "..." user ticks mark time passing; text-only, past images never re-sent | Turned ON to break the amnesiac REPETITION (the persistent "dust motes" tic — each call couldn't see it already said it). Register watch: one assistant-meta slip would breed, so _stream_admissible gates admission (meta phrases, markdown/stage-directions). If it breeds purple instead of varying, STREAM_WINDOW=0 reverts. Breaks on >180s gaps (STREAM_BREAK_SECONDS) |
 | dwell instruction ("Stay with that last thought...") | scene still + 30% chance; cancelled when live | ok — refers to the visible stream now, no quoted tail |
 | video motion line | person-angle scene motion (NOT pixel diff) | verify in logs: `[VIDEO] ... scene_motion=` |
 

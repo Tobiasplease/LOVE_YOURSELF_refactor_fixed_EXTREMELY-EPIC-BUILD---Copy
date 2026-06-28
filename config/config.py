@@ -264,7 +264,7 @@ SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 # The stream (CoT-style continuity): prior captions ride as the machine's own
 # assistant turns so each caption continues a visible thought. 0 disables and
 # reverts to amnesiac single-turn captions.
-STREAM_WINDOW = 0  # how many prior captions the model sees as its own turns (0 = off; isolating the base voice first — re-enable once it's healthy)
+STREAM_WINDOW = 6  # how many prior captions the model sees as its own turns. ON (June 28) now the base voice is healthy: chiefly to break the amnesiac REPETITION (the persistent "dust motes" tic — each call couldn't see it already said it). Admissibility-gated (_stream_admissible: no meta, no markdown/stage-directions) and breaks on >180s gaps. WATCH: the stream amplifies whatever register is in the window — if it breeds purple instead of varying, set back to 0.
 STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
 
 # Salience is TRANSIENT (north-star principle 6): discrete events spike it,
