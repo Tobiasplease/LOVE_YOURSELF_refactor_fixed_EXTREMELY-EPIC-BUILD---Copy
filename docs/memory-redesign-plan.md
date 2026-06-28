@@ -144,10 +144,15 @@ Already structured & robust (safe): `journal`, `desire_history`,
    imitate.
 
 ## Migration order (risk-ascending) + validation protocol
-0. **Close the 3 detox blind spots** (awakening, reflection-echo, drawing
-   pipeline) so clean-room is valid for the whole running system, not just the
-   harness. Small, high-leverage.
-1. Concepts/objects ledger (+ decay/diversity).
+0. **[DONE — commit 1101f74]** Closed the detox blind spots. NOTE: there were
+   FOUR, not three — memory mode (a separate caption branch every 4 min that
+   quoted a raw old caption) was the fourth, closed in step 1.
+1. **[DONE — commit 6ae0d2d]** Concepts/objects ledger: memory mode reframed to
+   a neutral concept fact (re-express not replay) + gated; familiarity gained
+   decay/diversity; per-caption garbage-concept creation removed; noun-phrase
+   gate on creation + surfacing; 8 dead methods removed. PENDING: the existing
+   concept store has inflated counts/garbage from prior runs — a purge is a
+   separate data decision (like the persona reset).
 2. Drawings ledger.
 3. Place/baseline ledger.
 4. Felt-state (tag or retire).
