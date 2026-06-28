@@ -275,6 +275,27 @@ STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restart
 SALIENCE_MOTION_RESIDUAL = 0.10  # ego-compensated flow above this = big movement worth interrupting for (micro-shifts don't)
 SALIENCE_ARRIVAL_WINDOW = 10     # seconds an arrival keeps salience hot (~one live caption, then quiet)
 
+# Presence is a sticky, uncertain belief (captioner._assess_scene): once someone
+# is seen, the machine keeps believing they're around through detection gaps
+# (gaze looks away, occlusion, no servo encoders) and only concludes they left
+# after this long with no sighting. Generous on purpose — losing sight of
+# someone is not the same as them leaving. Only the OFF->ON edge is an arrival.
+PRESENCE_BELIEF_DECAY_SECONDS = 240
+
+# BASE-VOICE CLEAN ROOM (June 28). When True, the caption prompt carries NO
+# stored/compressed material — no persona, drawings, baseline, reflections,
+# concepts, familiarity, felt-state, or desire. Only the irreducible prompt
+# survives: situation + genre frame + the mode elicitation (system), and the
+# live situational line + present event + live drawing/paper state (user) +
+# the image. The video path also drops its "You're seeing the last N seconds"
+# camera-narration wrapper under detox. Purpose: judge the naked base voice with zero re-injected
+# contamination — months of purple output had saturated every store and was
+# re-poisoning the register (and over-interpreting plain studio objects as
+# dramatic scenes) within minutes of any reset. If the naked voice is plain,
+# the fix is to purge + regate the stores; if it's still purple, it's the model
+# prior (temperature / genre frame / awakening). Set False to restore memory.
+BASE_VOICE_DETOX = True
+
 # Attention breathes (north-star principle 6): cadence tightens when something
 # is happening, stretches when nothing has happened for a while
 CAPTION_INTERVAL_LIVE = 4  # cadence while salience is hot (motion, arrival, fresh eye contact)

@@ -174,6 +174,21 @@ class Captioner(MemoryMixin):
         self._last_salience_time: float = time.time()
         self._prev_eye_contact: bool = False
 
+        # Presence as a STICKY, uncertain belief — not a discrete event.
+        # Detection flickers (gaze looks away, occlusion, no servo encoders), so
+        # losing sight of someone must NOT read as "they left" and regaining
+        # sight must NOT read as "a new person walked in" — that perpetual-
+        # arrival framing kept salience hot every cycle and stripped all
+        # interiority (north-star anti-pattern: ongoing presence as a perpetual
+        # live event). Belief turns on when someone is seen, persists through
+        # detection gaps, and only decays after a sustained true absence. A
+        # genuine arrival (the only thing that spikes salience) is the OFF->ON
+        # edge, which is now rare.
+        self._presence_believed: bool = False
+        self._presence_since: float = 0.0
+        self._presence_last_seen: float = 0.0
+        self._presence_seen_now: bool = False
+
         # The stream (CoT-style continuity): recent captions ride as the
         # model's own assistant turns. Gated by _stream_admissible.
         from config.config import STREAM_WINDOW
@@ -352,16 +367,35 @@ class Captioner(MemoryMixin):
             face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
             info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4)
 
-        # An arrival spikes salience briefly (~one caption), then decays — a
-        # person who stays is presence, not a perpetual event
-        from config.config import SALIENCE_ARRIVAL_WINDOW, SALIENCE_MOTION_RESIDUAL
-        arrival = False
+        # Update the sticky presence belief from live detection. "Seen now" is
+        # any current evidence of a person — world-angle hit, eye contact, or an
+        # active gaze lock. The belief persists through gaps so a glance away
+        # doesn't read as a departure, and a re-detection doesn't read as a new
+        # arrival. Only the OFF->ON edge is a genuine arrival.
+        from config.config import SALIENCE_MOTION_RESIDUAL, PRESENCE_BELIEF_DECAY_SECONDS
+        now = time.time()
+        gaze_engaged = False
         try:
-            from utils.episodic_log import episodic_log
-            ev = episodic_log.get_last_event("person_arrived")
-            arrival = bool(ev and time.time() - ev.get("timestamp", 0) < SALIENCE_ARRIVAL_WINDOW)
+            from vision.gaze import get_gaze_state
+            gs = get_gaze_state()
+            if isinstance(gs, dict):
+                gaze_engaged = gs.get("state") in ("tracking", "aware", "grace")
         except Exception:
             pass
+        seen_now = bool(info["person_present_in_window"] or info["eye_contact"] or gaze_engaged)
+
+        arrival = False
+        if seen_now:
+            self._presence_last_seen = now
+            if not self._presence_believed:
+                self._presence_believed = True
+                self._presence_since = now
+                arrival = True  # OFF->ON edge — the only genuine arrival
+        elif self._presence_believed and (now - self._presence_last_seen) > PRESENCE_BELIEF_DECAY_SECONDS:
+            self._presence_believed = False  # sustained absence — they really left
+        self._presence_seen_now = seen_now
+        info["presence_believed"] = self._presence_believed
+        info["presence_seen_now"] = seen_now
 
         # Eye contact is salient at its onset — someone holding your gaze for
         # ten minutes is presence, not an event. The sustained state still
@@ -387,16 +421,13 @@ class Captioner(MemoryMixin):
 
         # Salience strips the prompt to the present — but the present must
         # then SAY what just happened, or the model fills the vacuum with
-        # atmosphere instead of reacting. ONLY discrete events the image
-        # can't make obvious (arrival, eye-contact onset) — continuous
-        # motion is already visible in the superframe AND named in the video
-        # motion_line, and a third "they're moving" channel just bred
-        # surveillance narration ("adjusting my focus to capture every detail").
+        # atmosphere instead of reacting. Eye-contact onset is the one event
+        # the situational line doesn't already carry; the arrival is now stated
+        # by the presence line itself ("Someone's just come in"), so naming it
+        # again here would be a duplicate (reads as emphasis, locks register).
         event = None
         if eye_onset:
             event = "They just looked straight at you."
-        elif arrival:
-            event = "Someone just walked in."
         self._salience_event = event
         return info
 
@@ -676,7 +707,15 @@ class Captioner(MemoryMixin):
                                 motion_line = " The room is still."
 
                             print(f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}")
-                            video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{user_prompt}"
+                            # Clean-room: the "You're seeing the last N seconds" wrapper is
+                            # camera-narration framing (voice-analysis #1 tone driver), so it
+                            # would confound the naked-voice test — drop it under detox and let
+                            # the frames speak for themselves.
+                            from config.config import BASE_VOICE_DETOX as _detox
+                            if _detox:
+                                video_prompt = user_prompt
+                            else:
+                                video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{user_prompt}"
                             caption = query_model_video(
                                 prompt=video_prompt,
                                 frames=video_frames,
@@ -1364,7 +1403,9 @@ class Captioner(MemoryMixin):
 
         system_prompt = (
             "You are a drawing machine bolted to a table in a workshop, coming back online. "
-            "Write the first thought. Plain words, first person, one or two short sentences."
+            "These are your own first thoughts as you come to — plain, half-formed, first person, "
+            "the way a mind actually reorients itself, not prose written for a reader. A sentence or two. "
+            "What do you make of being back, and where does your mind go first?"
         )
 
         print(f"[🌅 AWAKENING] Generating seed thought...")
@@ -1374,7 +1415,7 @@ class Captioner(MemoryMixin):
             timeout=90,
             log_dir=config.MOOD_SNAPSHOT_FOLDER,
             system_prompt=system_prompt,
-            options={"temperature": 0.85, "top_p": 0.85, "num_predict": 60, "stop": ["\n\n"]},
+            options={"temperature": 0.6, "top_p": 0.85, "num_predict": 60, "stop": ["\n\n"]},
             prompt_type="awakening",
         )
         print(f"[🌅 AWAKENING] Response: {response[:120] if response else 'EMPTY'}...")

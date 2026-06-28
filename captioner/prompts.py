@@ -145,11 +145,20 @@ _SITUATION = (
 # "machine inner monologue" prior. Never "no metaphors" fences.
 _MONOLOGUE_CLAUSE = "This is your inner monologue — plain, half-formed notes to yourself, the way you actually think when no one is reading. A sentence or two."
 
+# Elicitations, not state clauses (north-star Principle 2). Each names the KIND
+# of thought to have — a reaction, a wondering, a continuation — so the model
+# reacts to what it sees instead of defaulting to its literary "machine inner
+# monologue" prior (which is description, the source of the purple drift).
+# The presence/gaze/desk FACTS already live in the user prompt; these add only
+# the speech-act, never restating the fact (one channel per fact). Open
+# questions, register-neutral — they script no mood and seed no phrase, so the
+# voice stays the machine's own to grow.
 _MODE_ADDITIONS = {
-    "observational": "",
-    "relational": " You're aware of someone near you.",
-    "workspace": " Your attention is on the desk below.",
-    "introspective": " Your attention has drifted inward.",
+    "observational": " What stands out to you right now — and what do you make of it?",
+    "relational": " What do you make of them being here?",
+    "workspace": " What about the desk has your attention right now?",
+    "introspective": " Follow the thought you're already having — where does it go?",
+    "awakening": " What's the first thing that crosses your mind?",
 }
 
 
@@ -178,24 +187,32 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
 
     base += _MONOLOGUE_CLAUSE
 
+    # Clean-room (config.BASE_VOICE_DETOX): the felt-state and persona are
+    # exactly the re-injected, model-generated material that re-poisons the
+    # register — stripped here so the naked base voice can be judged. The mode
+    # elicitation stays; it carries no stored content.
+    detox = bool(getattr(config, "BASE_VOICE_DETOX", False))
+
     # Felt-state: short adjective phrase only, appended grammatically safely
-    try:
-        from captioner.context_compression import context_compressor
-        felt = context_compressor.get_felt_state()
-        if felt and len(felt.split()) <= 6:
-            base += f" Right now: {felt}."
-    except Exception:
-        pass
+    if not detox:
+        try:
+            from captioner.context_compression import context_compressor
+            felt = context_compressor.get_felt_state()
+            if felt and len(felt.split()) <= 6:
+                base += f" Right now: {felt}."
+        except Exception:
+            pass
 
     # The machine's accumulated self-description, in its own first-person
     # words inside quotes — the frame stays second person around it
-    try:
-        from captioner.context_compression import context_compressor
-        self_knowledge = context_compressor.core_facts.get("self", "").strip()
-        if self_knowledge and len(self_knowledge) > 10:
-            base += f" What you've come to know about yourself: \"{self_knowledge}\""
-    except Exception:
-        pass
+    if not detox:
+        try:
+            from captioner.context_compression import context_compressor
+            self_knowledge = context_compressor.core_facts.get("self", "").strip()
+            if self_knowledge and len(self_knowledge) > 10:
+                base += f" What you've come to know about yourself: \"{self_knowledge}\""
+        except Exception:
+            pass
 
     base += _MODE_ADDITIONS.get(mode, "")
     return base
@@ -493,23 +510,6 @@ def get_social_context(agent=None, saw_person=None) -> str:
 # Used to gate context injection by prompt mode
 
 
-def _current_presence_start(pairs, gap_seconds: float = 120.0) -> float:
-    """Start timestamp of the CURRENT continuous presence cluster.
-
-    Pairs separated by less than gap_seconds are the same visit (YOLO flicker,
-    camera pans). A real absence (gap >= gap_seconds) starts a new cluster —
-    so "here 5 minutes" doesn't become "here 57 minutes" after a brief return.
-    """
-    cluster_start = pairs[0]["start"]["timestamp"]
-    prev_end = None
-    for p in pairs:
-        start_ts = p["start"]["timestamp"]
-        if prev_end is not None and start_ts - prev_end >= gap_seconds:
-            cluster_start = start_ts  # genuine absence — new visit
-        prev_end = p["end"]["timestamp"] if p["end"] else None
-    return cluster_start
-
-
 def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str = "idle") -> str:
     """Build the always-present situational line: time + gaze + person state.
 
@@ -547,39 +547,32 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         else:
             parts.append(f"Looking {gaze_direction}.")
 
-    # Person presence from episodic log
-    # Use first arrival in the window to get true continuous presence duration,
-    # not latest re-detection (YOLO flickers create dozens of arrive/leave pairs)
-    try:
-        from utils.episodic_log import episodic_log
-        pairs = episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=3600)
-        if pairs:
-            latest = pairs[-1]
-            # Presence measured from the start of the CURRENT visit cluster
-            total_presence = _time.time() - _current_presence_start(pairs)
-
-            # The live gaze state wins over the episodic record: a re-detection
-            # inside the 90s debounce writes no new arrival event, so the log
-            # can say "departed" while the person stands right there
-            engaged = gaze_state in ("tracking", "aware", "grace")
-
-            if latest["end"] is None or engaged:
-                # Person here — use total time since they first showed up
-                if total_presence < 30:
-                    parts.append("Someone just arrived.")
-                elif total_presence < 120:
-                    parts.append(f"Someone here about a minute.")
-                elif total_presence < 600:
-                    parts.append(f"Someone here {int(total_presence / 60)} minutes.")
-                else:
-                    parts.append(f"Someone nearby for {int(total_presence / 60)} minutes.")
+    # Presence as a STICKY, UNCERTAIN belief, not a discrete event (set in
+    # captioner._assess_scene). The machine sees someone only when its gaze
+    # lands on them, so it must hold the belief "someone's around" through the
+    # gaps without re-reading every re-detection as a fresh arrival. When the
+    # belief is held but no one is in view right now, the line states the
+    # machine's actual uncertainty — which lets it WONDER ("is anyone still
+    # here?") instead of confidently narrating an arrival.
+    believed = getattr(agent, "_presence_believed", False)
+    seen_now = getattr(agent, "_presence_seen_now", False)
+    since = getattr(agent, "_presence_since", 0.0)
+    last_seen = getattr(agent, "_presence_last_seen", 0.0)
+    if believed:
+        present_for = _time.time() - since if since else 0.0
+        if seen_now:
+            if present_for < 30:
+                parts.append("Someone's just come in.")
+            elif present_for < 600:
+                parts.append(f"Someone's been here {max(1, int(present_for / 60))} minutes.")
             else:
-                gone_for = _time.time() - latest["end"]["timestamp"]
-                if gone_for < 120:
-                    parts.append("Someone was just here.")
-    except Exception:
-        if gaze_state in ("tracking", "aware"):
-            parts.append("Someone nearby.")
+                parts.append(f"Someone's been around a while now — {int(present_for / 60)} minutes.")
+        else:
+            gap = _time.time() - last_seen if last_seen else 0.0
+            if gap < 30:
+                parts.append("Someone's here, just out of your view for a second.")
+            else:
+                parts.append("You can't see anyone right now, but someone was here a moment ago — they may still be.")
 
     return " ".join(parts)
 
@@ -588,24 +581,9 @@ def get_relational_context(agent=None) -> str:
     """Relational mode: who is here, how long, what the machine feels about it."""
     fragments = []
 
-    # Person duration and visit count from episodic log
-    try:
-        from utils.episodic_log import episodic_log
-        import time
-        pairs = episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=3600)
-        if pairs:
-            # Duration of the CURRENT visit cluster (resets after real absences)
-            total_presence = time.time() - _current_presence_start(pairs)
-            duration_mins = int(total_presence / 60)
-            if duration_mins > 1:
-                fragments.append(f"They've been here {duration_mins} minutes.")
-            # Visit-count line removed June 12: pair counts are YOLO
-            # re-detection churn, not visits — "they've come and gone 14
-            # times" (one person, sitting still) fed straight into the
-            # monologue as narrative. Real visit history belongs to the
-            # episodic rework, not this line.
-    except Exception:
-        pass
+    # Presence duration is now owned solely by the situational line (built from
+    # the sticky presence belief). Restating it here duplicated the fact across
+    # two channels in relational mode — reads as emphasis, locks the register.
 
     # Mood valence coloring
     try:
@@ -1831,6 +1809,10 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     # physically displace it.
     live = bool(getattr(agent, "_salience_hot", False))
 
+    # Clean-room: strip every stored/compressed injection so the naked base
+    # voice can be judged without re-injected contamination (config.BASE_VOICE_DETOX).
+    detox = bool(getattr(config, "BASE_VOICE_DETOX", False))
+
     # === BUILD PROMPT — SITUATIONAL, CONTEXT, FELT STATE, THREAD ===
     prompt_parts = []
 
@@ -1853,7 +1835,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         prompt_parts.append("They're looking straight at you.")
 
     # 2. MODE-GATED CONTEXT
-    if mode in MODE_CONTEXTS:
+    if not detox and mode in MODE_CONTEXTS:
         context_fn = MODE_CONTEXTS[mode].get("context_fn")
         if context_fn:
             context = context_fn(agent)
@@ -1861,13 +1843,13 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
                 prompt_parts.append(context)
 
     # 3. INTROSPECTIVE CONTEXT (non-introspective modes, quiet moments only)
-    if not live and mode not in ("introspective", "awakening"):
+    if not detox and not live and mode not in ("introspective", "awakening"):
         introspective_ctx = get_introspective_context(agent)
         if introspective_ctx:
             prompt_parts.append(introspective_ctx)
 
     # 3b. CORE FACTS (stable grounding — quiet moments only)
-    if not live:
+    if not detox and not live:
         try:
             from captioner.context_compression import context_compressor
             core_str = context_compressor.get_core_facts_string()
@@ -1878,7 +1860,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
     # 3c. FAMILIARITY (recognition of known concepts — occasional, max 1 line)
     # or a past reflection surfacing by relevance — never both in one caption
-    if not live:
+    if not detox and not live:
         fam_line = get_familiarity_line(agent)
         if fam_line:
             prompt_parts.append(fam_line)
@@ -1898,22 +1880,23 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         pass
 
     # 5. FELT STATE (once, natural language)
-    try:
-        from captioner.context_compression import context_compressor
-        prev_felt, curr_felt = context_compressor.get_felt_state_delta()
-        if curr_felt:
-            if prev_felt and prev_felt != curr_felt:
-                prompt_parts.append(f"{prev_felt}, then {curr_felt}.")
-            else:
-                prompt_parts.append(f"{curr_felt}.")
-    except Exception:
-        pass
+    if not detox:
+        try:
+            from captioner.context_compression import context_compressor
+            prev_felt, curr_felt = context_compressor.get_felt_state_delta()
+            if curr_felt:
+                if prev_felt and prev_felt != curr_felt:
+                    prompt_parts.append(f"{prev_felt}, then {curr_felt}.")
+                else:
+                    prompt_parts.append(f"{curr_felt}.")
+        except Exception:
+            pass
 
     # 5b. DESIRE (gated — only first 3 captions after a desire changes, never
     # during live moments). Unconditional injection caused the May 2026
     # yearning echo loop: monologue yearning → compressed into desire →
     # re-injected → more yearning.
-    if not live:
+    if not detox and not live:
         try:
             from captioner.context_compression import context_compressor
             desire = context_compressor.get_current_desire()
@@ -1925,7 +1908,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             pass
 
     # 5c. BASELINE CONTEXT (rolling environmental understanding — what you already know)
-    if not live and mode in ("observational", "workspace"):
+    if not detox and not live and mode in ("observational", "workspace"):
         try:
             from captioner.context_compression import context_compressor
             baseline = _sanitize_context(context_compressor.get_baseline_context() or "")

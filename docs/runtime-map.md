@@ -35,14 +35,26 @@ Verify salience in logs: every CAPTION entry carries `salience_hot` and
 Torn down June 12 (north-star principles 1+2): situation only, no style
 rules, no registers, no mood clause. Voice comes from content.
 
+> **CLEAN-ROOM ACTIVE (June 28): `config.BASE_VOICE_DETOX = True`.** While on,
+> ALL rows below marked as stored/compressed (felt-state, persona) are stripped
+> from the system prompt, and in the user prompt every interior/stored line
+> (mode context, introspective, core facts, familiarity/echo, felt delta,
+> desire, baseline) is stripped too; the video path drops its "You're seeing
+> the last N seconds" wrapper. The model sees only: situation + genre frame +
+> mode elicitation (system); situational line + present event + live
+> drawing/paper state (user) + image. This isolates the naked base voice from
+> months of self-poisoned stores. Set False to restore the full memory prompt.
+> Gated in get_monologue_system_prompt + build_simple_caption_prompt (`detox`)
+> and the video path (captioner.py).
+
 | Line | Source | Health |
 |------|--------|--------|
 | situation ("drawing machine bolted... turning your gaze... quick plain notes") | static `_SITUATION` + monologue clause, prompts.py | ok — "quick plain notes" is GENRE framing, not a fence: without it Qwen's prior for "inner monologue" is literary fiction. Caption temps also lowered to 0.7/0.8 for the same reason. NO "camera" language anywhere — it primes cinematography ("*Camera pans left*", third-person self-narration) |
 | persona storage gate | `_valid_self_fact` in context_compression.py — BOTH persona writers (self-synthesis AND core-facts SELF line) require first person, bar "the person"/reality-register | NEW June 12 — the core-facts path had no gate and stored "The person sits... holding an unpressed pen" (its own arm) as identity |
 | "You are between drawings at the moment." | state_manager drawing status (gated, never lies; absent while drawing) | NEW June 12 — without it the model narrated drawings that weren't happening. States the fact only; deliberately does NOT say what the machine is doing instead |
 | "Right now: {felt}." | compression felt-state, sanitized ≤6 words | ok (often empty by design) |
-| persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | ok |
-| mode addition ("You're aware of someone...") | mode selection | ok |
+| persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | June 28: the WHOLE identity-feedback blob (self + current/historic desire + belief + discoveries) was reset to empty — it had saturated with one purple theme ("grid/silhouette/shadows") and `_synthesize_self_model` rebuilds self FROM the histories, so a partial clear re-grows it in ~10 min. place/people/drawings facts + journal preserved (backup: machine_identity.json.purple-bak). Will re-form from the now-elicited base voice — judge what it re-grows. NOTE: `_valid_self_fact` gate bars surveillance/reality words but NOT metaphor — "grid" walked through; metaphor gate is a Phase-2 item |
+| mode addition — now an ELICITATION ("What do you make of them being here?" / "Follow the thought you're already having…" / per mode incl. awakening) | mode selection, `_MODE_ADDITIONS` prompts.py | NEW June 28 — was a bare state clause ("You're aware of someone near you"). Per north-star Principle 2: names the KIND of thought (react/wonder/continue) so the model stops defaulting to literary description. Open question, no scripted mood/phrase, never restates the presence/desk fact (that's the user prompt). The base lever against purple drift |
 
 Mood engine note: the numeric mood vector no longer reaches the system
 prompt (mood clause deleted). The engine still runs and feeds servo/hand;
@@ -57,7 +69,7 @@ moment gets the present only (north-star principle 6).
 | Line | Source | Health |
 |------|--------|--------|
 | "Been watching 18 minutes. Looking left." / "Looking down at the desk, where your own arms rest." | session clock + gaze; the arms clause keeps the model from reading its own arm as a person | ok |
-| "Someone here 5 minutes." | episodic log, visit-clustered | ok |
+| presence line — now from a STICKY UNCERTAIN BELIEF, not episodic events: "Someone's just come in." / "Someone's been here N minutes." / "Someone's here, just out of your view for a second." / "You can't see anyone right now, but someone was here a moment ago — they may still be." | `captioner._presence_believed/_presence_seen_now/_presence_since/_presence_last_seen`, set in `_assess_scene`; belief decays after `PRESENCE_BELIEF_DECAY_SECONDS`=240 | NEW June 28 — replaced discrete arrive/leave framing. The machine sees someone only when its gaze lands on them; the old "Someone just arrived / just walked in" re-fired every detection regain → perpetual fresh-arrival → salience permanently hot → interiority stripped every cycle (the run that produced this rewrite). Belief persists through gaps; only the OFF→ON edge is an arrival (spikes salience once). Out-of-view state states the machine's real uncertainty so it can WONDER instead of narrating an arrival |
 | "They've come and gone N times." | episodic pairs (debounced 90s) | ok |
 | [interior] introspective ctx ("My last drawings were of...") | drawing_memory, completed only | ok |
 | [interior] core facts line | core_facts place/drawings | ok |
@@ -96,6 +108,11 @@ to fill with priors (the dust-motes register).
 HISTORY: until June 12 a 150-char filter rejected nearly every response and
 shipped the hardcoded "Coming back online..." fallback. Now trims to
 sentence within 300 chars instead of rejecting.
+June 28: awakening system prompt reframed from form-only ("Write the first
+thought. Plain words…") to an ELICITATION ("…the way a mind reorients itself…
+what do you make of being back, where does your mind go first?"); temp lowered
+0.85→0.6 (Principle 7: low temp resists blooming ornate on the most isolated
+single call).
 
 ## Motion semantics (June 12 design)
 
@@ -112,10 +129,16 @@ every pixel ~10px. Roles now:
   snapshot; threshold SCENE_MOTION_RESIDUAL_THRESHOLD (calibrate with
   debug/test_scene_motion.py). Synthetic: sway alone 0.000, sway+object
   0.019, saccade invalid.
-- SALIENCE EVENT LINE: when salience strips the prompt, _assess_scene also
-  names the event ("They just looked straight at you." / "Someone just
-  walked in." / "They're moving right now.") — a stripped prompt with no
-  event invites atmosphere; an event invites a reaction.
+- SALIENCE EVENT LINE: when salience strips the prompt, _assess_scene names
+  the one event the situational line doesn't already carry — eye-contact onset
+  ("They just looked straight at you."). The arrival is no longer a separate
+  event line: the sticky-belief presence line states it ("Someone's just come
+  in"), so re-naming it here would duplicate (June 28). A stripped prompt with
+  no event invites atmosphere; the presence line + this avoid that vacuum.
+- ARRIVAL = the OFF→ON edge of the sticky presence belief (June 28), NOT every
+  episodic person_arrived. Re-detection after a glance away is the SAME visit,
+  so it no longer spikes salience. Only a genuine empty→occupied transition
+  (after PRESENCE_BELIEF_DECAY_SECONDS of no sighting) counts.
 - pixel diff: only decides whether sending video is worth considering
 - ego_motion flag (servo delta >2°/frame): breathing sway (~1-1.2°) + gaze
   nudges flag frames OFTEN — that's expected; only used to pick steady
