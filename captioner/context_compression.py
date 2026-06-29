@@ -57,9 +57,10 @@ class ContextCompressionEngine:
         self.introspective_state = {
             "current_desire": "",  # What I want right now
             "current_belief": "",  # What I've learned about this place
-            "discoveries": [],     # Striking/self-defining things discovered, persisted across sessions
+            "discoveries": [],     # retired Step 5 (kept for back-compat readers); no longer generated
             "last_introspection": 0.0,
             "desire_injection_count": 0,  # Track how many times desire has been injected
+            "desire_since": 0.0,   # when the CURRENT desire first formed — the arc's clock (principle 4)
         }
 
         # Core facts: stable knowledge that grounds prompts (replaces disabled get_session_greeting)
@@ -507,49 +508,39 @@ Respond with the one sentence only, no prefixes."""
             except Exception:
                 pass
 
-            # === FELT-STATE PROMPT ===
-            # Ask for the current felt state directly - not an explanation of how it evolved.
-            # Brief, complete sentences only. The evolution is implicit in the context provided.
+            # === INTROSPECTION — OPEN QUESTIONS, not a fill-in template ===
+            # The old "WANT: I want to… / NOTICED: …" stems forced a desire and a
+            # belief every cycle and produced formulaic, purple identity, and the
+            # labels leaked into the output (north-star principle 2: open questions
+            # over fill-in-the-blank). Now it may answer "nothing", the desire is
+            # allowed to PERSIST (arc, not weather — principle 4), and DISCOVERED
+            # is retired (it was the most purple input to the persona).
+            context_block = ""
             if identity_context:
-                prompt = f"""I have been in this space for {duration}.
+                context_block += identity_context + "\n\n"
+            if activation_context:
+                context_block += activation_context + "\n\n"
 
-{identity_context}
+            prompt = f"""You've been here {duration}.
 
-{activation_context}
-
-Recent thoughts:
+{context_block}Your recent thoughts:
 {recent_text}
 
-Complete each line in 10 words or less, ending with a period:
-1. WANT: I want to...
-2. NOTICED: I've noticed...
-3. DISCOVERED: (only if one of the recent thoughts above felt like a personal memory or self-revelation — quote or paraphrase it. Otherwise leave blank.)"""
-            else:
-                prompt = f"""I have been in this space for {duration}.
-
-{activation_context}
-
-Recent thoughts:
-{recent_text}
-
-Complete each line in 10 words or less, ending with a period:
-1. WANT: I want to...
-2. NOTICED: I've noticed...
-3. DISCOVERED: (only if one of the recent thoughts above felt like a personal memory or self-revelation — quote or paraphrase it. Otherwise leave blank.)"""
+Two plain questions — answer each in your own words, a few words, or just "nothing" if nothing genuine stands out:
+WANT — anything you want, or feel pulled toward, right now? (If you wanted something before and still do, say so.)
+THINK — anything you've come to believe is true, about this place or yourself?"""
 
             introspection_system = (
-                "You are a machine that has been observing the same space for a while. "
-                "You are NOT waking up — you are already here and have been for some time. "
-                "Answer in first person. Each answer is one complete sentence, 10 words or less, ending with a period. "
-                "Be specific and concrete. No explanations. Do NOT invent details not in the recent thoughts. "
-                "For DISCOVERED: only respond if one of the recent thoughts felt like a personal memory or self-revelation. "
-                "Quote or paraphrase from the thoughts above. Do not invent discoveries."
+                "You have been in this space a while — you are not waking up. "
+                "Answer in the first person, plain and concrete, a few words each. "
+                "If nothing genuine stands out for a line, answer 'nothing'. "
+                "No drama, no metaphor — just what's actually there."
             )
 
             model_options = {
-                "temperature": 0.7,
+                "temperature": 0.4,
                 "top_p": 0.9,
-                "num_predict": 120,
+                "num_predict": 60,
                 "repeat_penalty": 1.2,
             }
 
@@ -564,30 +555,22 @@ Complete each line in 10 words or less, ending with a period:
             )
 
             if response and isinstance(response, str):
-                desire, belief, discovery = self._parse_introspection_response(response)
+                desire, belief = self._parse_introspection_response(response)
 
                 if desire:
-                    if desire != self.introspective_state.get("current_desire", ""):
+                    prev = self.introspective_state.get("current_desire", "")
+                    # Persistence (arc, not weather — principle 4): a desire keeps
+                    # its "since" while it stays roughly the same wish; only a
+                    # genuinely different desire resets the clock. So a desire can
+                    # persist across days instead of regenerating every cycle.
+                    if prev and self._roughly_same(desire, prev):
+                        desire = prev  # keep the stable wording + its since
+                    else:
                         self.introspective_state["desire_injection_count"] = 0
+                        self.introspective_state["desire_since"] = time.time()
                     self.introspective_state["current_desire"] = desire
                 if belief:
                     self.introspective_state["current_belief"] = belief
-                if discovery:
-                    discoveries = self.introspective_state.get("discoveries", [])
-                    # Deduplicate: reject if >50% word overlap with any existing discovery
-                    disc_words = set(discovery.lower().split())
-                    is_duplicate = False
-                    for existing in discoveries:
-                        ex_words = set(existing.lower().split())
-                        overlap = len(disc_words & ex_words) / max(len(disc_words | ex_words), 1)
-                        if overlap > 0.5:
-                            is_duplicate = True
-                            break
-                    if not is_duplicate:
-                        discoveries.append(discovery)
-                        discoveries = discoveries[-10:]  # Keep last 10
-                        self.introspective_state["discoveries"] = discoveries
-                        print(f"[💡] Discovery: {discovery}")
                 self.introspective_state["last_introspection"] = time.time()
 
                 log_json_entry(
@@ -597,9 +580,8 @@ Complete each line in 10 words or less, ending with a period:
                         "action": "introspection",
                         "desire": desire,
                         "belief": belief,
-                        "discovery": discovery,
                     },
-                    print_message=f"[💭] Want: {desire[:50]} | Learned: {belief[:50]}" + (f" | Discovered: {discovery[:50]}" if discovery else ""),
+                    print_message=f"[💭] Want: {desire[:50]} | Think: {belief[:50]}",
                 )
 
                 # Update core facts from accumulated knowledge
@@ -621,51 +603,37 @@ Complete each line in 10 words or less, ending with a period:
                 print_message=f"[❌] Introspection failed: {e}",
             )
 
+    @staticmethod
+    def _roughly_same(a: str, b: str) -> bool:
+        """True if two short phrases express roughly the same thing (word
+        overlap) — used to let a desire persist while its wording drifts."""
+        stop = {"i", "to", "the", "a", "an", "and", "it", "my", "of", "for", "want", "feel"}
+        wa = set(a.lower().split()) - stop
+        wb = set(b.lower().split()) - stop
+        if not wa or not wb:
+            return False
+        return len(wa & wb) / max(len(wa | wb), 1) >= 0.5
+
     def _parse_introspection_response(self, response: str) -> tuple:
-        """Parse desire, belief, and discovery from introspection response."""
-        desire = ""
-        belief = ""
-        discovery = ""
-
-        lines = response.strip().split('\n')
-        for line in lines:
-            line_lower = line.lower().strip()
-            if any(marker in line_lower for marker in ['want:', '1.', '1)', 'desire']):
-                for marker in ['want:', 'desire:', '1.', '1)']:
-                    if marker in line_lower:
-                        idx = line_lower.find(marker) + len(marker)
-                        desire = line[idx:].strip().strip('"').strip("'")
-                        break
-            elif any(marker in line_lower for marker in ['learned:', '2.', '2)', 'notice', 'belief']):
-                for marker in ['learned:', 'notice:', 'belief:', '2.', '2)']:
-                    if marker in line_lower:
-                        idx = line_lower.find(marker) + len(marker)
-                        belief = line[idx:].strip().strip('"').strip("'")
-                        break
-            elif any(marker in line_lower for marker in ['discovered:', '3.', '3)']):
-                for marker in ['discovered:', '3.', '3)']:
-                    if marker in line_lower:
-                        idx = line_lower.find(marker) + len(marker)
-                        val = line[idx:].strip().strip('"').strip("'")
-                        # Discard blanks and non-committal responses
-                        if val and not any(skip in val.lower() for skip in ['nothing', 'blank', 'n/a', 'leave', 'nothing striking']):
-                            discovery = val
-                        break
-
-        # Fallback for unstructured 2-line responses
-        if not desire and not belief and len(lines) >= 2:
-            desire = lines[0].strip()
-            belief = lines[1].strip() if len(lines) > 1 else ""
-
-        # Completeness validation
-        if desire and not desire.rstrip().endswith(('.', '!', '?')):
-            desire = ""
-        if belief and not belief.rstrip().endswith(('.', '!', '?')):
-            belief = ""
-        if discovery and not discovery.rstrip().endswith(('.', '!', '?')):
-            discovery = ""
-
-        return desire, belief, discovery
+        """Parse desire + belief from the two open questions (WANT / THINK).
+        Robust to the label leaking into the line (strips any leading label,
+        with or without a colon/dash). 'nothing'/blank → empty. Returns
+        (desire, belief) — DISCOVERED retired in Step 5.
+        """
+        import re
+        desire = belief = ""
+        for raw in response.strip().split('\n'):
+            line = raw.strip().lstrip('•-*0123456789.)( ').strip()
+            low = line.lower()
+            if low.startswith("want"):
+                v = re.sub(r'^want\b[\s:：—–\-]*', '', line, flags=re.IGNORECASE).strip().strip('"\'').strip()
+                if v and not v.lower().lstrip().startswith("nothing"):
+                    desire = v
+            elif low.startswith(("think", "believe", "notice")):
+                v = re.sub(r'^(?:think|believe|notice[d]?)\b[\s:：—–\-]*', '', line, flags=re.IGNORECASE).strip().strip('"\'').strip()
+                if v and not v.lower().lstrip().startswith("nothing"):
+                    belief = v
+        return desire, belief
 
     def _extract_concepts_from_compression(self, understanding: str, model: str) -> None:
         """Extract clean noun-phrase concepts from compression output via LLM.
@@ -1090,6 +1058,7 @@ SELF: [plain habits/fixations in <15 words. No statements about reality or perce
             data = {
                 "current_desire": desire,
                 "current_belief": belief,
+                "desire_since": self.introspective_state.get("desire_since", 0.0),
                 "discoveries": discoveries,
                 "core_facts": self.core_facts,
                 "journal": self.journal,
@@ -1119,6 +1088,7 @@ SELF: [plain habits/fixations in <15 words. No statements about reality or perce
                 data = json.load(f)
 
             self.introspective_state["current_desire"] = data.get("current_desire", "")
+            self.introspective_state["desire_since"] = data.get("desire_since", 0.0)
             self.introspective_state["current_belief"] = data.get("current_belief", "")
             self.introspective_state["discoveries"] = data.get("discoveries", [])
             self.introspective_state["last_introspection"] = data.get("last_updated", 0.0)

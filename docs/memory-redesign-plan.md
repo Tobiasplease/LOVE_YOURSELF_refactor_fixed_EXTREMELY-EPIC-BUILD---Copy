@@ -179,7 +179,16 @@ Already structured & robust (safe): `journal`, `desire_history`,
    `set_felt_state` from the captioner where the mood vector lives; compression
    no longer generates or parses felt (single source of truth). The old LLM
    felt-storage block + parser felt-extraction removed.
-5. Desire/belief ledger (+ status arc).
+5. **[DONE — June 28]** Desire/belief ledger: the `WANT:/NOTICED:/DISCOVERED:`
+   fill-in template (temp 0.7, formulaic, label-leaked "NOTICED:" into beliefs)
+   replaced with OPEN questions (WANT/THINK) that allow "nothing", at temp 0.4.
+   Parser rewritten to strip any leaked label robustly. DISCOVERED retired (it
+   was the most purple input to the persona). ARC (principle 4): a desire now
+   persists — `desire_since` is kept while the wish stays roughly the same
+   (`_roughly_same`), only resetting on a genuinely different desire; persisted
+   across restarts. Readers unchanged (current_desire stays a string). FOLLOW-UP:
+   surfacing the "since" ("you've wanted X for days") and closing the arc
+   (desire → drawing → resolved/abandoned) need the drawing pipeline (detox-gated).
 6. Reflections (neutral conclusions).
 7. Persona (last).
 
