@@ -153,7 +153,15 @@ Already structured & robust (safe): `journal`, `desire_history`,
    gate on creation + surfacing; 8 dead methods removed. PENDING: the existing
    concept store has inflated counts/garbage from prior runs — a purge is a
    separate data decision (like the persona reset).
-2. Drawings ledger.
+2. **[DONE — June 28]** Drawings ledger: `get_recent_drawings_summary` and
+   `get_last_drawing_description` now surface the structured **theme tags** (+
+   recency + outcome) — "chair, cables (about 10 minutes ago)" — never the
+   stored `compressed_summary` / raw `comfy_prompt` prose (kept for reproducing
+   the art, never injected). Readers (workspace/introspective context, journal,
+   core-facts, reflection, drawing pipeline) take the bare phrase + their own
+   framing. PENDING: `get_artistic_arc` still LLM-narrates from `comfy_prompt`
+   — but it's drawing-pipeline-only + detox-gated; folds into the separate
+   drawing-pipeline cleanup (its 5 step system-prompts also push metaphor).
 3. Place/baseline ledger.
 4. Felt-state (tag or retire).
 5. Desire/belief ledger (+ status arc).

@@ -101,7 +101,12 @@ class DrawingMemory:
         return getattr(self, '_last_failure', None)
 
     def get_recent_drawings_summary(self, max_count: int = 3, completed_only: bool = True) -> str:
-        """Get a very compressed summary of recent drawings for prompt context."""
+        """LEDGER (June 28): the recurring SUBJECTS of recent drawings — the
+        structured theme tags only, never the stored prose summary or raw
+        ComfyUI prompt (those carried the purple register that re-poisoned the
+        voice; see docs/memory-redesign-plan.md). Bare content phrase, e.g.
+        "chair, cables, desk"; callers add their own framing.
+        """
         if not self._history:
             return ""
 
@@ -109,36 +114,22 @@ class DrawingMemory:
             recent = [d for d in self._history if d.get("completed", False)][:max_count]
         else:
             recent = self._history[:max_count]
+        if not recent:
+            return ""
 
-        # Build ultra-compact summary — prefer compressed_summary over raw comfy_prompt
-        parts = []
+        tags = []
         for entry in recent:
-            desc = entry.get('compressed_summary', '')
-            if not desc or len(desc.strip()) < 5:
-                desc = entry.get('comfy_prompt', '')
-                if not desc:
-                    continue
-                # Strip the standard ComfyUI preamble to get the actual subject
-                for prefix in ["Black ink line drawing on white paper. ",
-                               "Black ink line drawing on white paper.",
-                               "Black ink drawing on white paper. ",
-                               "black ink line drawing on white paper. "]:
-                    if desc.lower().startswith(prefix.lower()):
-                        desc = desc[len(prefix):]
-                        break
-            if len(desc) > 80:
-                desc = desc[:80].rsplit(" ", 1)[0] + "..."
-            parts.append(desc.strip())
-
-        if parts:
-            return "Recent drawings: " + "; ".join(parts)
-        return ""
+            for t in entry.get("theme_tags", []):
+                t = (t or "").strip().lower()
+                if t and t not in tags:
+                    tags.append(t)
+        return ", ".join(tags[:5])
 
     def get_last_drawing_description(self) -> str:
-        """Get a clean description of the most recent drawing, with temporal context.
-
-        Returns something like: "two figures hunched over computers (about 10 minutes ago)"
-        or empty string if no drawings exist.
+        """LEDGER: the most recent drawing as a NEUTRAL fact — its recurring
+        elements (theme tags) + recency + outcome. Never the raw ComfyUI prose:
+        that contaminated the register AND made the model confabulate fictional
+        drawing titles. e.g. "chair, cables (about 10 minutes ago)".
         """
         if not self._history:
             return ""
@@ -146,47 +137,21 @@ class DrawingMemory:
         import time
         entry = self._history[0]
 
-        # Only use actual ComfyUI prompt — tag-cloud summaries like
-        # "Cluttered Room, Bending Man, Introspection" cause the model
-        # to confabulate fictional drawing titles and descriptions.
-        desc = entry.get('comfy_prompt', '')
-        if not desc:
-            # No real prompt stored — just report temporal context without misleading tags
-            elapsed = time.time() - entry.get('timestamp', time.time())
-            if elapsed < 3600:
-                mins = int(elapsed / 60)
-                return f"something about {mins} minutes ago"
-            else:
-                hours = int(elapsed / 3600)
-                return f"something about {hours} hours ago"
-
-        # Strip ComfyUI preamble
-        for prefix in ["Black ink line drawing on white paper. ",
-                       "Black ink line drawing on white paper.",
-                       "Black ink drawing on white paper. ",
-                       "black ink line drawing on white paper. "]:
-            if desc.lower().startswith(prefix.lower()):
-                desc = desc[len(prefix):]
-                break
-
-        # Truncate
-        if len(desc) > 70:
-            desc = desc[:70].rsplit(" ", 1)[0] + "..."
-
-        # Add temporal context
         elapsed = time.time() - entry.get('timestamp', time.time())
         if elapsed < 120:
-            time_str = "just now"
+            when = "just now"
         elif elapsed < 3600:
-            mins = int(elapsed / 60)
-            time_str = f"about {mins} minutes ago"
+            when = f"about {int(elapsed / 60)} minutes ago"
         elif elapsed < 7200:
-            time_str = "about an hour ago"
+            when = "about an hour ago"
         else:
-            hours = int(elapsed / 3600)
-            time_str = f"about {hours} hours ago"
+            when = f"about {int(elapsed / 3600)} hours ago"
 
-        return f"{desc.strip()} ({time_str})"
+        tags = [(t or "").strip().lower() for t in entry.get("theme_tags", []) if (t or "").strip()][:2]
+        outcome = "" if entry.get("completed", True) else " — it didn't finish"
+        if tags:
+            return f"{', '.join(tags)} ({when}){outcome}"
+        return f"something {when}{outcome}"
 
     def get_thematic_context(self) -> Dict[str, any]:
         """Get thematic patterns from recent drawings."""
