@@ -149,7 +149,7 @@ _SITUATION = (
 # ongoing inner voice lets the model build on its prior turns naturally — mid-
 # thought, doubling back, drifting to what's in front of it — without being told
 # to mechanically extend. Continuity as nature, not instruction.
-_MONOLOGUE_CLAUSE = "This is your inner voice, ongoing — half-formed notes the way you actually think when no one is reading. It carries on from your last thoughts as much as it starts new ones: picking a thread back up, catching mid-sentence, doubting itself, or drifting to whatever's in front of you now. A sentence or two."
+_MONOLOGUE_CLAUSE = "This is your inner voice, always mid-stream — you're partway through a thought, carrying on from your last ones: picking the thread up, wandering off it, doubting it. When something in the room shifts you catch it as it comes — “oh—” — and let it turn your thinking; when nothing does, your mind drifts on its own. Plain, half-formed. A sentence or two."
 
 # Elicitations, not state clauses (north-star Principle 2). Each names the KIND
 # of thought to have — a reaction, a wondering, a continuation — so the model
@@ -517,68 +517,44 @@ def get_social_context(agent=None, saw_person=None) -> str:
 
 
 def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str = "idle") -> str:
-    """Build the always-present situational line: time + gaze + person state.
+    """The DELTA line: only what CHANGED since the last caption, delivered as a
+    brief interruption to the ongoing thought — never a restatement of standing
+    state. Continuity is carried by the stream (prior thoughts), the present by
+    the live image; re-stating duration/gaze/presence every call made the model
+    re-caption the scene ("The desk... The air...") instead of continuing.
 
-    One sentence, ~10-20 words. Natural language, no labels.
-    Examples:
-        "Awake 15 minutes. Looking left. Someone nearby, been here a few minutes."
-        "Awake 2 hours. Looking down at the desk."
-        "Just woke up. Looking ahead."
+    Mostly returns "" (nothing changed → the thought just runs on). The sticky
+    presence belief (240s decay) already smooths flaky detection, so the edges
+    here are rare and real, not flapping.
     """
     import time as _time
 
     parts = []
 
-    # Session duration — round to nearest minute (not floor), feel progression
+    # Waking is noted once, not re-stated every call.
     if hasattr(agent, "true_session_start"):
-        session_secs = _time.time() - agent.true_session_start
-        session_mins = round(session_secs / 60)
-        if session_secs < 45:
+        if _time.time() - agent.true_session_start < 45 and not getattr(agent, "_woke_noted", False):
             parts.append("Just woke up.")
-        elif session_mins < 10:
-            parts.append(f"Awake {session_mins} minutes.")
-        elif session_mins < 60:
-            parts.append(f"Been watching for {session_mins} minutes.")
-        elif session_mins < 120:
-            parts.append(f"Been here over an hour now.")
-        else:
-            parts.append(f"Been here {session_mins // 60} hours.")
+            agent._woke_noted = True
 
-    # Gaze direction. Looking down means its own arms are in view — without
-    # saying so, YOLO + the model read the arm holding the pen as "a person"
-    # (June 12: that misreading became a stored identity fact).
-    if gaze_direction != "ahead":
-        if "down" in gaze_direction:
-            parts.append("Looking down at the desk, where your own arms rest.")
-        else:
-            parts.append(f"Looking {gaze_direction}.")
+    # Presence EDGES only — the OFF→ON / ON→OFF transitions of the sticky belief.
+    believed = bool(getattr(agent, "_presence_believed", False))
+    prev = getattr(agent, "_prev_presence_for_line", None)
+    if believed and prev is False:
+        parts.append("Someone's come in.")
+    elif (not believed) and prev is True:
+        parts.append("They've gone — the room's quiet again.")
+    agent._prev_presence_for_line = believed
 
-    # Presence as a STICKY, UNCERTAIN belief, not a discrete event (set in
-    # captioner._assess_scene). The machine sees someone only when its gaze
-    # lands on them, so it must hold the belief "someone's around" through the
-    # gaps without re-reading every re-detection as a fresh arrival. When the
-    # belief is held but no one is in view right now, the line states the
-    # machine's actual uncertainty — which lets it WONDER ("is anyone still
-    # here?") instead of confidently narrating an arrival.
-    believed = getattr(agent, "_presence_believed", False)
-    seen_now = getattr(agent, "_presence_seen_now", False)
-    since = getattr(agent, "_presence_since", 0.0)
-    last_seen = getattr(agent, "_presence_last_seen", 0.0)
-    if believed:
-        present_for = _time.time() - since if since else 0.0
-        if seen_now:
-            if present_for < 30:
-                parts.append("Someone's just come in.")
-            elif present_for < 600:
-                parts.append(f"Someone's been here {max(1, int(present_for / 60))} minutes.")
-            else:
-                parts.append(f"Someone's been around a while now — {int(present_for / 60)} minutes.")
-        else:
-            gap = _time.time() - last_seen if last_seen else 0.0
-            if gap < 30:
-                parts.append("Someone's here, just out of your view for a second.")
-            else:
-                parts.append("You can't see anyone right now, but someone was here a moment ago — they may still be.")
+    # Occasional time drift, so long stretches don't feel timeless — a light
+    # nudge every few minutes, NOT a per-call clock readout.
+    now = _time.time()
+    last_drift = getattr(agent, "_last_time_drift", None)
+    if last_drift is None:
+        agent._last_time_drift = now
+    elif now - last_drift > 300 and not parts:
+        parts.append("A while's passed.")
+        agent._last_time_drift = now
 
     return " ".join(parts)
 
@@ -1836,23 +1812,18 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     # === BUILD PROMPT — SITUATIONAL, CONTEXT, FELT STATE, THREAD ===
     prompt_parts = []
 
-    # 1. SITUATIONAL LINE (always present)
+    # 1. THE DELTA LINE — only what just changed (an interruption to the thread),
+    # else empty. Continuity comes from the stream, not from re-stating state.
     sit_line = build_situational_line(agent, gaze_direction=gaze_direction, gaze_state=gaze_state)
     if sit_line:
         prompt_parts.append(sit_line)
 
-    # 1b. THE EVENT (live moments only) — salience strips the interior, so
-    # the present has to say what just happened; an event invites a reaction
-    # where an empty prompt invites atmosphere
-    if live:
-        event_line = getattr(agent, "_salience_event", None)
-        if event_line:
-            prompt_parts.append(event_line)
-
-    # 1c. EYE CONTACT (sustained state, live-gated by detection): someone
-    # holding the machine's gaze is present-tense truth the model must know
-    elif getattr(agent, "_eye_contact_now", False):
-        prompt_parts.append("They're looking straight at you.")
+    # 1b. THE EVENT — a discrete thing that just happened (arrival, eye-contact
+    # ONSET). Onset only, never sustained: re-stating "they're looking at you"
+    # every call re-anchored the model into re-describing instead of continuing.
+    event_line = getattr(agent, "_salience_event", None)
+    if event_line:
+        prompt_parts.append(event_line)
 
     # 2. MODE-GATED CONTEXT
     if not detox and mode in MODE_CONTEXTS:
@@ -1958,6 +1929,12 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     prompt_parts = deduped
 
     final_prompt = "\n".join(prompt_parts)
+
+    # Nothing changed → a bare continuation tick ("...", matching the stream's
+    # inter-turn ticks) so the model carries its thought on instead of being
+    # handed an empty turn it fills with a fresh scene description.
+    if not final_prompt.strip():
+        final_prompt = "..."
 
     # Token budget enforcement: ~150 words max
     words = final_prompt.split()
