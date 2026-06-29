@@ -30,7 +30,7 @@ FLIP_X = True   # Test flipping pan direction
 FLIP_Y = True
 
 # === FACE DETECTION ===
-CONFIDENCE_THRESHOLD = 0.55  # Lower threshold — face tracking needs to trigger reliably for eye contact
+CONFIDENCE_THRESHOLD = 0.72  # Raised June 28: the studio's mannequin heads/masks tripped the face DNN at 0.55, firing constant false "eye contact". Eye contact also now requires a real person body (captioner._assess_scene), not just a face.
 DEAD_ZONE = 1  # Very small dead zone for highly responsive centering
 
 # === IDLE GAZE SETTINGS ===
@@ -281,6 +281,13 @@ SALIENCE_ARRIVAL_WINDOW = 10     # seconds an arrival keeps salience hot (~one l
 # after this long with no sighting. Generous on purpose — losing sight of
 # someone is not the same as them leaving. Only the OFF->ON edge is an arrival.
 PRESENCE_BELIEF_DECAY_SECONDS = 240
+
+# Interiority rhythm: every Nth caption (when nothing salient is happening) the
+# machine THINKS WITHOUT LOOKING — the image is dropped so a vision model can't
+# just re-describe the room, and the monologue turns inward (itself, this place,
+# its drawings, why it's here) instead of cataloguing objects. The external
+# observation stream was "completely external"; this weaves in depth. 0 = off.
+INTROSPECT_INTERVAL = 4
 
 # BASE-VOICE CLEAN ROOM (June 28). When True, the caption prompt carries NO
 # stored/compressed material — no persona, drawings, baseline, reflections,

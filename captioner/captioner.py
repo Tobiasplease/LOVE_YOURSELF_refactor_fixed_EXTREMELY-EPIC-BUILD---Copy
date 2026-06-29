@@ -364,8 +364,11 @@ class Captioner(MemoryMixin):
             # comparisons yield numpy bools that crash JSON logging downstream
             info["scene_motion"] = bool(person_moved or flow_motion or (count_changed and not flow_available))
 
+            # Eye contact requires a real person body, not just a face — the
+            # studio's mannequin heads/masks register as faces and otherwise
+            # produce constant phantom "they're looking at you".
             face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
-            info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4)
+            info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4 and info["person_present_in_window"])
 
         # Update the sticky presence belief from live detection. "Seen now" is
         # any current evidence of a person — world-angle hit, eye contact, or an
@@ -622,12 +625,30 @@ class Captioner(MemoryMixin):
                         # Salience first — it decides how interior this caption gets
                         scene = self._assess_scene()
 
-                        user_prompt, caption_mode = build_simple_caption_prompt(
-                            self,
-                            person_present=person_present,
+                        # Interiority beat: every Nth quiet caption, think WITHOUT
+                        # looking — drop the image so the model can't re-describe the
+                        # room and the monologue turns inward. Rhythm-based, not
+                        # detection-based (the live/quiet signal is too noisy to
+                        # branch on — false detections, camera motion).
+                        from config.config import INTROSPECT_INTERVAL
+                        self._caption_count = getattr(self, "_caption_count", 0) + 1
+                        inward = (
+                            INTROSPECT_INTERVAL > 0
+                            and not self._salience_hot
+                            and len(self._stream) >= 2
+                            and self._caption_count % INTROSPECT_INTERVAL == 0
                         )
 
-                        system_prompt = get_monologue_system_prompt(caption_mode, agent=self)
+                        if inward:
+                            caption_mode = "introspective"
+                            user_prompt = "Your eyes are off the room now — nothing new to look at. Your mind goes to its own thoughts."
+                            system_prompt = get_monologue_system_prompt("introspective", agent=self)
+                        else:
+                            user_prompt, caption_mode = build_simple_caption_prompt(
+                                self,
+                                person_present=person_present,
+                            )
+                            system_prompt = get_monologue_system_prompt(caption_mode, agent=self)
 
                         backend_tag = "LLAMA" if _cfg.INFERENCE_BACKEND == "llama_server" else "OLLAMA"
                         print(f"\n{'='*80}\n[{backend_tag}] {OLLAMA_MODEL} ({caption_mode})\n{'='*80}")
@@ -668,7 +689,8 @@ class Captioner(MemoryMixin):
                         person_present_in_window = scene["person_present_in_window"]
                         ego_count = scene["ego_count"]
                         use_video = (
-                            VIDEO_MODE_ENABLED
+                            not inward
+                            and VIDEO_MODE_ENABLED
                             and _cfg.INFERENCE_BACKEND == "llama_server"
                             and bool(recent_meta)
                             and scene["max_diff"] > MOTION_THRESHOLD
@@ -739,11 +761,11 @@ class Captioner(MemoryMixin):
                                 history=list(self._stream),
                             )
                         else:
-                            # Eye contact: send the face, not a wide shot where it
-                            # is a hundred-pixel smudge — the VLM can read an
-                            # expression when it's actually given the pixels
-                            send_path = img_path
-                            if getattr(self, "_eye_contact_now", False) and reactivity_data:
+                            # Inward beat → no image (think, don't look). Otherwise
+                            # send the frame; on eye contact send the face crop, not a
+                            # wide shot where it's a hundred-pixel smudge.
+                            send_path = None if inward else img_path
+                            if send_path and getattr(self, "_eye_contact_now", False) and reactivity_data:
                                 face_box = reactivity_data.get("face_box")
                                 if face_box is not None:
                                     crop_path = self._write_face_context_crop(frame, face_box, img_path)

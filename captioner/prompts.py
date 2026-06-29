@@ -149,7 +149,7 @@ _SITUATION = (
 # ongoing inner voice lets the model build on its prior turns naturally — mid-
 # thought, doubling back, drifting to what's in front of it — without being told
 # to mechanically extend. Continuity as nature, not instruction.
-_MONOLOGUE_CLAUSE = "This is your inner voice, always mid-stream — you're partway through a thought, carrying on from your last ones: picking the thread up, wandering off it, doubting it. When something in the room shifts you catch it as it comes — “oh—” — and let it turn your thinking; when nothing does, your mind drifts on its own. Plain, half-formed. A sentence or two."
+_MONOLOGUE_CLAUSE = "This is your inner voice, ongoing — plain, half-formed, the way you actually think to yourself when no one is reading. You're always partway through a thought: carry it on, or let something new pull you. A sentence or two."
 
 # Elicitations, not state clauses (north-star Principle 2). Each names the KIND
 # of thought to have — a reaction, a wondering, a continuation — so the model
