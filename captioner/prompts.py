@@ -457,15 +457,15 @@ def get_reflection_echo_line(agent) -> str:
     for m in matches:
         if m.get("id") == last_id:
             continue
-        text = (m.get("text") or "").strip()
-        if not text:
+        subject = (m.get("subject") or "").strip()
+        if not subject:
             continue
-        # First sentence, capped — a fragment of the thought, not the essay
-        snippet = text.split(". ")[0].strip().rstrip(".")
-        if len(snippet) > 180:
-            snippet = snippet[:177].rsplit(" ", 1)[0] + "..."
         agent._last_reflection_echo_id = m.get("id")
-        return f"A thought you had {_age_phrase(m.get('timestamp', 0))}: \"{snippet}.\""
+        # LEDGER (Step 6): surface the SUBJECT to re-think (re-express), never
+        # the reflection PROSE to re-read (replay) — quoting the long-form text
+        # re-poisoned the register ("the residue of what almost happened…"). The
+        # full text stays only for the reflection thread's own continuity.
+        return f"Something that was on your mind {_age_phrase(m.get('timestamp', 0))}: {subject}."
     return ""
 
 # Self-critique prompt for post-drawing reflection

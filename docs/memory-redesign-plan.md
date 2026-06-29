@@ -189,7 +189,17 @@ Already structured & robust (safe): `journal`, `desire_history`,
    across restarts. Readers unchanged (current_desire stays a string). FOLLOW-UP:
    surfacing the "since" ("you've wanted X for days") and closing the arc
    (desire → drawing → resolved/abandoned) need the drawing pipeline (detox-gated).
-6. Reflections (neutral conclusions).
+6. **[DONE — June 28]** Reflections: `get_reflection_echo_line` now surfaces the
+   reflection's SUBJECT to re-think ("Something that was on your mind 6 days ago:
+   the room.") instead of quoting its prose first-sentence ("…the residue of what
+   almost happened"). So even the 87 old contaminated reflections surface safely
+   (subject only). The full long-form text stays ONLY for the reflection thread's
+   own continuity (reflection.py get_recent_reflections → next reflection,
+   principle 3) — never quoted into a caption. PENDING: the reflection→drawing
+   injection (captioner.get_last_reflection → drawing extra_context) is
+   drawing-pipeline-scoped + detox-gated; and the reflection generator's own
+   long-form register (temp 0.75) is a separate quality axis, now gated from
+   captions. Both fold into the drawing-pipeline cleanup.
 7. Persona (last).
 
 **Per step:** reformat store → reformat generator (structured, low temp, gate) →
