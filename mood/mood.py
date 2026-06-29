@@ -14,6 +14,54 @@ from utils.inference import query_model
 from utils.pattern_recognition import PatternRecognitionEngine
 
 
+def mood_to_feeling(valence: float, arousal: float) -> str:
+    """Translate the abstract valence/arousal mood vector into a plain, literal
+    feeling the LLM can grasp — an emotion word plus its intensity, e.g.
+    "a little bored", "very calm", "really anxious". Deterministic (no LLM, no
+    poetry), but DEGREED: slightly happy vs very happy vs really happy. Think of
+    naming a feeling in the most direct, unambiguous terms — emotion + how strong.
+    This is the felt-state's job: make the numeric mood legible to the model.
+    """
+    strength = max(abs(valence), abs(arousal))
+    if strength < 0.12:
+        return "calm"  # basically neutral — no strong feeling either way
+
+    pos, neg = valence > 0.15, valence < -0.15
+    high, low = arousal > 0.2, arousal < -0.2
+    if pos and high:
+        word = "excited"
+    elif pos and low:
+        word = "content"
+    elif pos:
+        word = "happy"
+    elif neg and high:
+        word = "anxious"
+    elif neg and low:
+        word = "down"
+    elif neg:
+        word = "uneasy"
+    elif high:
+        word = "restless"
+    elif low:
+        word = "calm"
+    else:
+        word = "okay"
+
+    if strength < 0.30:
+        adv = "a little "
+    elif strength < 0.55:
+        adv = ""
+    elif strength < 0.78:
+        adv = "very "
+    else:
+        adv = "really "
+
+    # "a little calm/okay/content" reads oddly — keep low-key words plain.
+    if adv == "a little " and word in ("calm", "okay", "content"):
+        adv = ""
+    return (adv + word).strip()
+
+
 # ---------------------------------------------------------------------------#
 # Pure MoodEngine - analyzes captions without generating them               #
 # ---------------------------------------------------------------------------#

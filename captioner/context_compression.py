@@ -295,38 +295,36 @@ EARLIER UNDERSTANDINGS (for context):
             # Output feeds directly into vision model prompts
             # Must build on prior baseline, not reset to awakening narrative
 
+            # Felt-state (the old Line 2) is no longer generated here — it's now
+            # a plain, degreed translation of the valence/arousal mood vector
+            # (mood.mood_to_feeling, set via set_felt_state). Compression produces
+            # ONLY the spatial baseline. The parser tolerates a single line.
             if current_baseline:
-                prompt = f"""Update the machine's state. Output exactly TWO lines:
-Line 1 (spatial): one short sentence about the physical environment — the room, surfaces, objects, lighting. Do NOT describe what people are doing (their actions change too quickly to summarize). Third person.
-Line 2 (felt): plainly name the machine's current emotional state. Three to seven words. No metaphor, no imagery — just the actual feeling, possibly with a brief qualifier.
+                prompt = f"""Update the machine's understanding of the room. One short sentence about the physical environment — the room, surfaces, objects, lighting. Do NOT describe what people are doing (their actions change too quickly to summarize). Third person.
 
 Previous understanding: "{current_baseline}"
 The machine's recent thoughts: {recent_text}
 
-Respond ONLY with the two lines, no prefixes."""
+Respond with the one sentence only, no prefixes."""
             else:
-                prompt = f"""Capture the machine's state. Output exactly TWO lines:
-Line 1 (spatial): one short sentence about the physical environment — the room, surfaces, objects, lighting. Do NOT describe what people are doing (their actions change too quickly to summarize). Third person.
-Line 2 (felt): plainly name the machine's current emotional state. Three to seven words. No metaphor, no imagery — just the actual feeling, possibly with a brief qualifier.
+                prompt = f"""Capture the machine's understanding of the room. One short sentence about the physical environment — the room, surfaces, objects, lighting. Do NOT describe what people are doing (their actions change too quickly to summarize). Third person.
 
 Recent thoughts: {recent_text}
 
-Respond ONLY with the two lines, no prefixes."""
+Respond with the one sentence only, no prefixes."""
 
             model_options = {
                 "temperature": 0.5,  # Lower temp for more direct/less ornamental output
                 "top_p": 0.9,
                 "num_predict": 80,
                 "repeat_penalty": 1.3,
-                "stop": ["\n\n", "Line 3"],
+                "stop": ["\n\n", "Line 2"],
             }
 
             narrative_system_prompt = (
-                "You distill a drawing machine's state into two short lines: "
-                "one observational about the environment, one a plain naming of the machine's current emotional state. "
-                "The felt-state is direct, unornamented language — name the actual feeling with a small amount of context. "
-                "No metaphor, no imagery, no poetic flourish, no similes. Just plain emotional language. "
-                "If the model wants to write a metaphor, it should resist and write the literal feeling instead."
+                "You distill a drawing machine's surroundings into one short, plain "
+                "sentence about the physical environment — surfaces, objects, lighting. "
+                "Concrete and literal. No metaphor, no imagery, no poetic flourish."
             )
 
             # Use compression model (text-only narrative model) instead of vision model
@@ -425,24 +423,7 @@ Respond ONLY with the two lines, no prefixes."""
                     # Periodic journal entry (every 30 min, on this background thread)
                     self._maybe_write_journal(compression_model)
 
-                if sentiment_text:
-                    # Track felt-state transition (previous → current)
-                    if hasattr(self, "last_sentiment_analysis") and self.last_sentiment_analysis:
-                        prev = self.last_sentiment_analysis.get("sentiment_text", "")
-                        if prev and prev.strip().lower() != sentiment_text.strip().lower():
-                            self.previous_felt_state = prev
-                    self.last_sentiment_analysis = {"sentiment_text": sentiment_text, "timestamp": time.time()}
-
-                    log_json_entry(
-                        LogType.COMPRESSION,
-                        {
-                            "message": "Updated sentiment analysis",
-                            "action": "update_sentiment",
-                            "sentiment_text": sentiment_text,
-                            "sentiment_length": len(sentiment_text),
-                        },
-                        print_message=f"[😊] Sentiment: {truncate_for_print(sentiment_text, 60)}",
-                    )
+                # Felt-state is set from the mood vector (set_felt_state), not here.
 
             else:
                 log_json_entry(
@@ -1228,15 +1209,10 @@ SELF: [plain habits/fixations in <15 words. No statements about reality or perce
             if not cleaned_lines:
                 return understanding, sentiment_text
 
-            # First line = spatial understanding
+            # First line = spatial understanding. Felt-state is NOT parsed here
+            # anymore — it's a plain translation of the mood vector
+            # (mood_to_feeling), set via set_felt_state. Single source of truth.
             understanding = cleaned_lines[0]
-
-            # Second line = felt-state (if present and reasonably short)
-            if len(cleaned_lines) >= 2:
-                felt = cleaned_lines[1]
-                # Reject if it looks like another spatial sentence (too long, mentions "the machine sees")
-                if len(felt) < 80 and len(felt.split()) <= 12:
-                    sentiment_text = felt
 
         except Exception as e:
             log_json_entry(
@@ -1257,6 +1233,21 @@ SELF: [plain habits/fixations in <15 words. No statements about reality or perce
             # Return raw understanding without prefix - let caller decide formatting
             return self.baseline_context.strip()
         return ""
+
+    def set_felt_state(self, text: str) -> None:
+        """Set the felt-state directly — a plain, degreed translation of the
+        valence/arousal mood vector (mood.mood_to_feeling), not LLM prose. Set
+        by the captioner whenever the mood updates. Mirrors the previous→current
+        transition tracking so get_felt_state_delta still reads a change.
+        """
+        text = (text or "").strip()
+        if not text:
+            return
+        if getattr(self, "last_sentiment_analysis", None):
+            prev = self.last_sentiment_analysis.get("sentiment_text", "")
+            if prev and prev.strip().lower() != text.lower():
+                self.previous_felt_state = prev
+        self.last_sentiment_analysis = {"sentiment_text": text, "timestamp": time.time()}
 
     def get_felt_state(self, max_age_seconds: int = 600) -> str:
         """Get the raw felt-state phrase (no formatting), or empty if stale.

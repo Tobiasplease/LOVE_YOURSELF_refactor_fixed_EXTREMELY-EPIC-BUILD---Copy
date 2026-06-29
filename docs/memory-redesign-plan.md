@@ -170,7 +170,15 @@ Already structured & robust (safe): `journal`, `desire_history`,
    `baseline_context` sensory-prose caption injection (5c, the sentence-split
    reader) is RETIRED — redundant with place + familiarity. core_facts['place']/
    ['drawings'] LLM prose is now stored-unused (stop generating = follow-up).
-4. Felt-state (tag or retire).
+4. **[DONE — June 28]** Felt-state: kept (its purpose — translating the abstract
+   mood vector into something the LLM grasps — is valid), but now DERIVED
+   deterministically from the valence/arousal vector via `mood.mood_to_feeling`
+   instead of LLM prose. Plain + DEGREED: "a little happy", "very anxious",
+   "really excited", "calm" — emotion word + intensity adverb (per the user:
+   "describe an emotion to an autistic person", but with gradation). Set via
+   `set_felt_state` from the captioner where the mood vector lives; compression
+   no longer generates or parses felt (single source of truth). The old LLM
+   felt-storage block + parser felt-extraction removed.
 5. Desire/belief ledger (+ status arc).
 6. Reflections (neutral conclusions).
 7. Persona (last).

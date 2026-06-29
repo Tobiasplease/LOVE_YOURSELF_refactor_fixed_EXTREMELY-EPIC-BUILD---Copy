@@ -264,6 +264,14 @@ class Captioner(MemoryMixin):
                 self.current_mood = mood
             if mood_vector is not None:
                 self.current_mood_vector = mood_vector
+                # Felt-state = a plain, degreed translation of the mood vector
+                # (not LLM prose). Set here where the vector lives.
+                try:
+                    from mood.mood import mood_to_feeling
+                    from captioner.context_compression import context_compressor
+                    context_compressor.set_felt_state(mood_to_feeling(mood_vector[0], mood_vector[1]))
+                except Exception:
+                    pass
             if emotion_state is not None:
                 # Track emotional journey over time using meaningful descriptions instead of crude categories
                 if emotion_state != self.current_emotion_state:
