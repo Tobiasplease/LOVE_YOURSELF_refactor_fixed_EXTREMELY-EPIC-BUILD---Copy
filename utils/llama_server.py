@@ -48,6 +48,23 @@ LLAMA_GPU_LAYERS = int(os.getenv("LLAMA_GPU_LAYERS", "99"))
 
 SHOW_PROGRESS = os.getenv("LLAMA_SHOW_PROGRESS", "true").lower() == "true"
 
+# Sampler keys forwarded verbatim to llama-server beyond the basic temp/top_p/
+# repeat_penalty. DRY (anti-repetition over SEQUENCES, not single tokens) is the
+# only thing that stops the model reproducing a whole prior caption from the
+# stream — plain repeat_penalty only looks back repeat_last_n=64 tokens by
+# default, far short of the stream's length, so a verbatim prior caption sits
+# outside its window entirely.
+_SAMPLER_PASSTHROUGH = (
+    "repeat_last_n", "min_p",
+    "dry_multiplier", "dry_base", "dry_allowed_length", "dry_penalty_last_n",
+)
+
+
+def _forward_sampler_options(payload: dict, options: dict) -> None:
+    for k in _SAMPLER_PASSTHROUGH:
+        if k in options:
+            payload[k] = options[k]
+
 _server_process = None
 
 # ---------------------------------------------------------------------------
@@ -286,6 +303,7 @@ def query_llama_server(
             payload["repeat_penalty"] = options["repeat_penalty"]
         if "seed" in options:
             payload["seed"] = options["seed"]
+        _forward_sampler_options(payload, options)
     elif strict_evaluation:
         payload["temperature"] = 0.1
         payload["top_p"] = 0.8
@@ -411,6 +429,7 @@ def _query_multi_image(
             payload["max_tokens"] = options.get("max_tokens", options.get("num_predict", 60))
         if "repeat_penalty" in options:
             payload["repeat_penalty"] = options["repeat_penalty"]
+        _forward_sampler_options(payload, options)
 
     endpoint = f"{LLAMA_SERVER_URL}/v1/chat/completions"
 
@@ -534,6 +553,7 @@ def _query_superframe(
             payload["max_tokens"] = options.get("max_tokens", options.get("num_predict", 80))
         if "repeat_penalty" in options:
             payload["repeat_penalty"] = options["repeat_penalty"]
+        _forward_sampler_options(payload, options)
     else:
         payload["temperature"] = 0.9
 

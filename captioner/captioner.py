@@ -646,6 +646,15 @@ class Captioner(MemoryMixin):
                             "temperature": 0.6 if _is_bored else 0.7,
                             "top_p": 0.85,
                             "repeat_penalty": 1.15,
+                            # DRY: penalize reproducing SEQUENCES from the whole context
+                            # (incl. the stream) — the only thing that stops the model
+                            # echoing a prior caption verbatim on a static scene. base
+                            # repeat_penalty's window (repeat_last_n=64) can't reach a
+                            # caption 1-2 turns back. dry_penalty_last_n=-1 = whole ctx.
+                            "dry_multiplier": 0.85,
+                            "dry_base": 1.75,
+                            "dry_allowed_length": 3,
+                            "dry_penalty_last_n": -1,
                             "num_predict": 40 if _is_bored else 60,  # "a sentence or two" — 80 let captions run 4-5 sentences and bloom/loop
                             "num_ctx": 4096,
                             "seed": _random.randint(1, 1000000),
