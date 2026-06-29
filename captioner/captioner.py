@@ -646,7 +646,7 @@ class Captioner(MemoryMixin):
                             "temperature": 0.6 if _is_bored else 0.7,
                             "top_p": 0.85,
                             "repeat_penalty": 1.15,
-                            "num_predict": 45 if _is_bored else 80,
+                            "num_predict": 40 if _is_bored else 60,  # "a sentence or two" — 80 let captions run 4-5 sentences and bloom/loop
                             "num_ctx": 4096,
                             "seed": _random.randint(1, 1000000),
                         }

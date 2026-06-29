@@ -143,7 +143,13 @@ _SITUATION = (
 # Genre frame, positive not prohibitive (north-star principle 7): name what
 # the text IS — unperformed notes — so the model doesn't reach for its purple
 # "machine inner monologue" prior. Never "no metaphors" fences.
-_MONOLOGUE_CLAUSE = "This is your inner monologue — plain, half-formed notes to yourself, the way you actually think when no one is reading. A sentence or two."
+# Continuity lives HERE, in the genre frame — not in a per-call "continue the
+# last thought" command (that vague instruction forced linear restate-and-extend
+# loops once the stream made the prior turn visible). Naming the text as ONE
+# ongoing inner voice lets the model build on its prior turns naturally — mid-
+# thought, doubling back, drifting to what's in front of it — without being told
+# to mechanically extend. Continuity as nature, not instruction.
+_MONOLOGUE_CLAUSE = "This is your inner voice, ongoing — half-formed notes the way you actually think when no one is reading. It carries on from your last thoughts as much as it starts new ones: picking a thread back up, catching mid-sentence, doubting itself, or drifting to whatever's in front of you now. A sentence or two."
 
 # Elicitations, not state clauses (north-star Principle 2). Each names the KIND
 # of thought to have — a reaction, a wondering, a continuation — so the model
@@ -1933,30 +1939,12 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # 6. DWELL — when the scene is still, occasionally stay with the thought.
-    # The thought itself is visible to the model as its own prior turns (the
-    # stream, captioner._stream) — the old quoted thread-tail mechanism and
-    # its dropout are retired June 12; real turns replaced the quote.
-    import random as _random
-
-    # Scene stillness from person-angle tracking (camera-compensated), not pixel
-    # diff — the camera sways constantly, pixel diff is always high.
-    scene_still = getattr(agent, "_last_scene_motion", None) is False
-
-    dwelling = getattr(agent, "_dwell_count", 0) > 0
-    if live:
-        # A live moment interrupts any dwelling — the present takes the prompt
-        agent._dwell_count = 0
-        dwelling = False
-    elif dwelling:
-        agent._dwell_count -= 1
-    elif scene_still and mode in ("observational", "workspace", "introspective") and _random.random() < 0.3:
-        # Room is quiet — a chance to go deeper for this caption and the next
-        agent._dwell_count = 1
-        dwelling = True
-
-    if dwelling:
-        prompt_parts.append("Stay with that last thought — take it one step further instead of starting a new one.")
+    # DWELL retired June 28: "Stay with that last thought — take it one step
+    # further" was a per-call extend command that, once the stream made the prior
+    # turn visible, forced restate-and-append loops (the "ghost-weight" x4). The
+    # stream now carries continuity, and the genre frame (_MONOLOGUE_CLAUSE)
+    # frames the voice as ongoing — so continuity emerges instead of being
+    # commanded. No replacement instruction.
 
     # Structural guard: never inject the same line twice (a duplicated context
     # line reads as emphasis to the model and locks the register)
