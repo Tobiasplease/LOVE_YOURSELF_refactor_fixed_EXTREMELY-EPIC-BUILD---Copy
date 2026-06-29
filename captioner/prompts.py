@@ -1898,17 +1898,12 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # 5c. BASELINE CONTEXT (rolling environmental understanding — what you already know)
-    if not detox and not live and mode in ("observational", "workspace"):
-        try:
-            from captioner.context_compression import context_compressor
-            baseline = _sanitize_context(context_compressor.get_baseline_context() or "")
-            if baseline and len(baseline) > 10:
-                first_sent = baseline.split(".")[0].strip()
-                if first_sent and len(first_sent) > 10:
-                    prompt_parts.append(first_sent + ".")
-        except Exception:
-            pass
+    # 5c. BASELINE CONTEXT — RETIRED June 28 (Step 3). The rolling sensory-prose
+    # baseline ("dust motes in a single beam of light…") was redundant with the
+    # concept-derived place inventory (get_core_facts_string) + the familiarity
+    # line, and it was a register-contamination vector. The compression worker
+    # still produces baseline for its own stagnation check; it just no longer
+    # reaches the caption prompt.
 
     # DWELL retired June 28: "Stay with that last thought — take it one step
     # further" was a per-call extend command that, once the stream made the prior

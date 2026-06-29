@@ -1045,15 +1045,32 @@ SELF: [plain habits/fixations in <15 words. No statements about reality or perce
         left (and mannequins forever). Awakening/memory-mode pass
         include_people=True, where it's framed as knowledge, not scene.
         """
-        keys = ("place", "people", "drawings") if include_people else ("place", "drawings")
         parts = []
-        for key in keys:
-            val = self.core_facts.get(key, "").strip()
-            if val and len(val) > 3:
-                parts.append(val)
+
+        # PLACE — from the concepts ledger (the real inventory of what's in the
+        # room), not the LLM-generated core_facts['place'] prose. Step 3.
+        try:
+            from captioner.semantic_memory import get_semantic_memory
+            place = get_semantic_memory().get_place_inventory()
+            if place:
+                parts.append(place)
+        except Exception:
+            pass
+
+        # PEOPLE — a visit PATTERN, only when explicitly asked (awakening /
+        # memory mode), never per-caption (a stored snapshot poisoned perception).
+        if include_people:
+            ppl = self.core_facts.get("people", "").strip()
+            if ppl and len(ppl) > 3:
+                parts.append(ppl)
+
+        # DRAWINGS deliberately NOT here — drawing_memory is the single channel
+        # for drawing history (Step 2). core_facts['drawings'] prose is retired
+        # from surfacing.
+
         if not parts:
             return ""
-        result = " ".join(parts)
+        result = ". ".join(p.rstrip(". ") for p in parts) + "."
         words = result.split()
         if len(words) > 60:
             result = " ".join(words[:60])

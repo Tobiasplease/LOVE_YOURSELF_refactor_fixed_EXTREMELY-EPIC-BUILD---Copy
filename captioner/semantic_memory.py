@@ -780,6 +780,21 @@ class SemanticMemory:
         pool = cross_session if cross_session else concepts
         return _random.choice(pool[: min(8, len(pool))])
 
+    def get_place_inventory(self, max_items: int = 6, min_times_seen: int = 3) -> str:
+        """Neutral inventory of the place — the recurring objects the machine has
+        come to know, straight from the concepts ledger (the real 'what's in this
+        room'), NOT an LLM prose sentence. e.g. "pink shelves, the desk, hanging
+        wires". This is the ledger replacement for core_facts['place'] prose.
+        """
+        labels = []
+        for c in self.get_all_concepts():  # already sorted by times_seen desc
+            name = (c.get("name") or "").strip()
+            if (c.get("times_seen", 0) >= min_times_seen and _looks_like_noun_phrase(name)):
+                labels.append(name[0].lower() + name[1:])
+                if len(labels) >= max_items:
+                    break
+        return ", ".join(labels)
+
     def get_concept_observations(self, concept_id: str) -> List[Dict]:
         """Return all observations for a concept, sorted by timestamp."""
         obs = self._observations.get(

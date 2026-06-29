@@ -162,7 +162,14 @@ Already structured & robust (safe): `journal`, `desire_history`,
    framing. PENDING: `get_artistic_arc` still LLM-narrates from `comfy_prompt`
    — but it's drawing-pipeline-only + detox-gated; folds into the separate
    drawing-pipeline cleanup (its 5 step system-prompts also push metaphor).
-3. Place/baseline ledger.
+3. **[DONE — June 28]** Place/baseline ledger: `place` is now DERIVED from the
+   concepts store (`get_place_inventory` → "desk, mannequin head, humming fan,
+   red foam finger") instead of LLM prose; `get_core_facts_string` surfaces
+   place (concepts) + people (pattern, awakening only) and drops drawings
+   (drawing_memory is the sole channel — one channel per fact). The
+   `baseline_context` sensory-prose caption injection (5c, the sentence-split
+   reader) is RETIRED — redundant with place + familiarity. core_facts['place']/
+   ['drawings'] LLM prose is now stored-unused (stop generating = follow-up).
 4. Felt-state (tag or retire).
 5. Desire/belief ledger (+ status arc).
 6. Reflections (neutral conclusions).
