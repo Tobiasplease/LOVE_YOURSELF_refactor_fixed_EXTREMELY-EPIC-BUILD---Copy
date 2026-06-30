@@ -301,7 +301,7 @@ INTROSPECT_INTERVAL = 4
 # dramatic scenes) within minutes of any reset. If the naked voice is plain,
 # the fix is to purge + regate the stores; if it's still purple, it's the model
 # prior (temperature / genre frame / awakening). Set False to restore memory.
-BASE_VOICE_DETOX = True
+BASE_VOICE_DETOX = False
 
 # Attention breathes (north-star principle 6): cadence tightens when something
 # is happening, stretches when nothing has happened for a while
