@@ -200,7 +200,25 @@ Already structured & robust (safe): `journal`, `desire_history`,
    drawing-pipeline-scoped + detox-gated; and the reflection generator's own
    long-form register (temp 0.75) is a separate quality axis, now gated from
    captions. Both fold into the drawing-pipeline cleanup.
-7. Persona (last).
+7. **[DONE — June 28]** Persona: `_synthesize_self_model` now GROUNDS the
+   synthesis in the concepts ledger ("Things I keep noticing: desk, mannequin
+   head, foam finger…") + the now-plain desire/belief histories (step 5), at
+   temp 0.4→0.3. That grounding is the primary defense — it anchors "I fixate
+   on X" to real objects so the register can't drift to "silhouettes breaking my
+   grid". `_valid_self_fact` strengthened as a BACKSTOP (rejects similes
+   "like a"/"as if", >24 words, in addition to surveillance/reality/third-person)
+   — but it honestly can't catch metaphor-without-markers; that relies on the
+   grounding + clean inputs not GENERATING it (north-star: fix what's stored,
+   not the mouth). Persona is empty (reset step 1) and will re-form from the
+   clean grounded synthesis — what it re-grows is the test.
+
+## Migration complete (steps 0–7). Remaining before detox OFF
+- **Drawing-pipeline cleanup** (its own bucket): the 5 step system-prompts push
+  metaphor; get_artistic_arc LLM-narrates comfy_prompt; reflection→drawing
+  injection; core_facts['place']/['drawings'] LLM prose still generated unused.
+- **Turn detox OFF** channel-by-channel and re-judge each surfaces clean, per the
+  validation protocol — the stores are now ledgers, but this has not yet been
+  run end-to-end with memory back on.
 
 **Per step:** reformat store → reformat generator (structured, low temp, gate) →
 migrate EVERY reader in its orphan list → re-enable that channel with detox OFF →

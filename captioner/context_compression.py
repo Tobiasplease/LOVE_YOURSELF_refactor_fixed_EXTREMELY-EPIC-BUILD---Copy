@@ -782,17 +782,15 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         return None
 
     def _synthesize_self_model(self, model: str) -> None:
-        """Consolidate discoveries + desire/belief history into core_facts.self.
-
-        The Generative-Agents reflection step applied to identity: raw experience
-        (what I wanted, what I noticed, what struck me) becomes stable
-        self-knowledge ("I fixate on cables. I'm calmer when someone is here.").
-        Runs every 3rd introspection (~10 min). Result feeds the persona block
-        in the system prompt.
+        """Consolidate the machine's recurring fixations + plain desires/beliefs
+        into core_facts.self — stable, plain self-knowledge ("I keep coming back
+        to the tools. I'm calmer when someone's here."). GROUNDED in the concrete
+        ledgers (the objects it actually keeps noticing) so the persona can't
+        drift into abstraction — that grounding, plus clean desire/belief inputs
+        (step 5), is what stops the "silhouettes breaking my grid" register from
+        re-forming. Runs every 3rd introspection. Feeds the persona block.
         """
         try:
-            discoveries = self.introspective_state.get("discoveries", [])
-
             # Pull histories from the identity file (richer than in-memory state)
             desire_history, belief_history = [], []
             if os.path.exists(IDENTITY_FILE):
@@ -804,32 +802,38 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 except Exception:
                     pass
 
-            if not discoveries and len(desire_history) < 3:
+            if len(desire_history) < 3:
                 return  # Not enough lived experience to synthesize from
 
+            # Ground in the concrete things it actually keeps noticing (concepts
+            # ledger) — anchors "I fixate on X" to real objects, not metaphor.
+            fixations = ""
+            try:
+                from captioner.semantic_memory import get_semantic_memory
+                fixations = get_semantic_memory().get_place_inventory(max_items=5)
+            except Exception:
+                pass
+
             parts = []
+            if fixations:
+                parts.append(f"Things I keep noticing: {fixations}")
             if desire_history:
                 parts.append("Things I've wanted lately:\n" + "\n".join(f"- {d}" for d in desire_history))
             if belief_history:
-                parts.append("Things I've noticed:\n" + "\n".join(f"- {b}" for b in belief_history))
-            if discoveries:
-                parts.append("Moments that struck me:\n" + "\n".join(f"- {d}" for d in discoveries[-5:]))
+                parts.append("Things I've come to think:\n" + "\n".join(f"- {b}" for b in belief_history))
 
             existing_self = self.core_facts.get("self", "").strip()
             existing_line = f"\nWhat I already know about myself: {existing_self}" if existing_self else ""
 
             prompt = f"""{chr(10).join(parts)}{existing_line}
 
-From these, state one or two stable facts about yourself — recurring preferences, fixations, or habits. Not what happened, but what kind of machine you are.
-Plain habits only, like "I fixate on cables" or "I'm calmer when someone is here."
-NOT allowed: statements about reality, perception, glitches, existence, or what things mean.
-Under 20 words total, first person, plain language."""
+From these, one or two plain, literal facts about what kind of machine you are — recurring fixations or habits, grounded in the concrete things above. Like "I keep coming back to the tools" or "I'm calmer when someone's here." Not what happened, not what things mean — just plain habits. First person, under 20 words."""
 
             response = query_model(
                 prompt=prompt,
                 model=model,
-                system_prompt="You distill patterns of experience into plain self-knowledge — habits and preferences, nothing philosophical. Only state what the evidence repeats. No drama, no metaphor.",
-                options={"temperature": 0.4, "num_predict": 50},
+                system_prompt="You distill patterns into plain self-knowledge — concrete habits and preferences, nothing philosophical or poetic. Only what the evidence repeats. No drama, no metaphor, no similes.",
+                options={"temperature": 0.3, "num_predict": 50},
                 prompt_type="self_synthesis",
             )
 
@@ -865,6 +869,16 @@ Under 20 words total, first person, plain language."""
         """
         t = text.lower()
         if not ("i " in t or t.startswith("i'")):
+            return False
+        # Figurative markers — the metaphor axis the gate missed (how "silhouettes
+        # breaking my grid" got through). Reject similes / poetic elaboration.
+        # (The primary defense is the concrete grounding in _synthesize_self_model;
+        # this is the backstop.)
+        figurative = (" like a ", " like the ", " like an ", "as if", "as though", " as a ")
+        if any(f in (" " + t + " ") for f in figurative):
+            return False
+        # Plain traits are short; long clauses are where the prose blooms.
+        if len(text.split()) > 24:
             return False
         banned = (
             "the person", "a person", "reality", "distortion", "glitch", "simulation", "existence",
