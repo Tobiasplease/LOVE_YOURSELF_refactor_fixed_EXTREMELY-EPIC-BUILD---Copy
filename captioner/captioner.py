@@ -661,6 +661,16 @@ class Captioner(MemoryMixin):
                         backend_tag = "LLAMA" if _cfg.INFERENCE_BACKEND == "llama_server" else "OLLAMA"
                         print(f"\n{'='*80}\n[{backend_tag}] {OLLAMA_MODEL} ({caption_mode})\n{'='*80}")
                         print(f"SYSTEM: {system_prompt}\n")
+                        # The stream (prior thoughts) rides as the model's own assistant
+                        # turns — invisible in SYSTEM/USER above. Show it so continuity
+                        # is verifiable: each line is a prior caption the model sees.
+                        if self._stream:
+                            print("PRIOR THOUGHTS (stream, oldest→newest):")
+                            for _i, _t in enumerate(self._stream, 1):
+                                print(f"  {_i}. {_t[:90]}")
+                            print()
+                        else:
+                            print("PRIOR THOUGHTS: (none yet — stream empty)\n")
                         print(f"USER:\n{user_prompt}\n")
                         print(f"{'='*80}\n")
 
