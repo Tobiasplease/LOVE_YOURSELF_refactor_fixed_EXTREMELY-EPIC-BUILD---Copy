@@ -104,13 +104,20 @@ moment gets the present only (north-star principle 6).
 ## Awakening (first caption of a session)
 
 generate_internal_awakening() builds: offline duration + clock time/day +
-last thought + desire/belief + journal ("From my diary, last time...") +
+**time ALIVE (sessions + days since first boot, from lifetime_state.json) +
+current emotional spectrum (mood vector via mood_to_feeling) [both added June
+28]** + last thought + desire/belief + journal ("From my diary, last time...") +
 core facts + familiar concepts → one LLM call on the MAIN model (was Nemo,
 whose cinematic register seeded the whole session's thread — June 12).
+NOTE — two more awakening paths coexist (grandfathered, reconcile someday):
+machine.py calls generate_awakening_message() at startup but only LOGS the
+result; and the caption loop runs mode="awakening" (place list + elicitation)
+for the first few captions after the seed. generate_internal_awakening is THE
+live first-caption seed.
 COLD START: when there is no past at all (no memory/identity/long-term
 context), a separate FIRST_AWAKENING_PROMPT states the truth — first time
-online, nothing in memory yet — instead of handing the model empty sections
-to fill with priors (the dust-motes register).
+online, nothing in memory yet — BUT time/lifetime/emotion still prepend, so a
+wiped memory reads as amnesia (old but blank), not infancy, never empty.
 HISTORY: until June 12 a 150-char filter rejected nearly every response and
 shipped the hardcoded "Coming back online..." fallback. Now trims to
 sentence within 300 chars instead of rejecting.

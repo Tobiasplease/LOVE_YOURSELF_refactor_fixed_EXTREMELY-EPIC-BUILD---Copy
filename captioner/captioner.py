@@ -1366,6 +1366,33 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
+        # Time ALIVE — the machine's age across all sessions. Survives a memory
+        # wipe (lifetime_state.json), so even with an empty memory it knows it's
+        # old: amnesia, not infancy. (total_runtime is unreliable; use sessions +
+        # days-since-first-boot.)
+        try:
+            import os as _os, json as _json
+            _lf = _os.path.join(config.MOOD_SNAPSHOT_FOLDER, "lifetime_state.json")
+            if _os.path.exists(_lf):
+                with open(_lf) as _f:
+                    _ld = _json.load(_f)
+                _sessions = int(_ld.get("total_sessions", 0))
+                _first = _ld.get("first_boot", 0)
+                if _first and _sessions > 1:
+                    _age_days = int((time.time() - _first) / 86400.0)
+                    time_context += f"I've been switched on {_sessions} times since I first came online about {_age_days} days ago.\n"
+        except Exception:
+            pass
+
+        # Current emotional spectrum — what the machine wakes feeling (the mood
+        # vector, plainly named; restored from the prior session).
+        try:
+            from mood.mood import mood_to_feeling
+            _v, _a, _c = self.current_mood_vector
+            time_context += f"Right now I feel {mood_to_feeling(_v, _a)}.\n"
+        except Exception:
+            pass
+
         # Build narrative memory context — sanitize garbage captions from prior sessions
         memory_context = ""
         prior = getattr(self, "prior_session_last_caption", None)
