@@ -201,40 +201,6 @@ def build_caption_thread(agent, max_captions: int = 3) -> str:
     return "\n".join(thread_lines)
 
 
-def _compress_perception(perception: str, max_len: int = 60) -> str:
-    """Compress a perception string to a short noun-phrase for the 'Already noticed' buffer."""
-    if not perception:
-        return ""
-    p = perception.strip()
-    # Strip Qwen preambles to get to the actual content
-    preambles = [
-        r"^(?:The\s+)?scene\s+in\s+front\s+of\s+(?:you|me)\s+(?:is|appears\s+to\s+be)\s+",
-        r"^In\s+front\s+of\s+(?:you|me)\s+is\s+",
-        r"^(?:The\s+)?(?:most\s+)?(?:striking|significant|noticeable)\s+(?:detail|feature|thing)"
-        r"(?:\s+(?:in|of)\s+(?:the\s+)?(?:scene|room))?\s+(?:is|that\s+stands\s+out\s+is)\s+(?:the\s+)?",
-        r"^(?:The\s+)?person\s+(?:in\s+the\s+scene\s+)?(?:is|appears)\s+",
-        r"^Right\s+now\s+",
-        r"^(?:A\s+)?(?:significant|notable)\s+detail\s+(?:that\s+)?stands?\s+out\s+is\s+(?:the\s+)?",
-    ]
-    for pat in preambles:
-        p_new = re.sub(pat, '', p, flags=re.IGNORECASE)
-        if p_new != p:
-            p = p_new
-            break
-    # Prefer truncation at sentence boundary over mid-phrase
-    if len(p) > max_len:
-        for i in range(min(len(p), max_len), 15, -1):
-            if p[i - 1] in ".!?":
-                p = p[:i]
-                break
-        else:
-            p = p[:max_len].rsplit(" ", 1)[0]
-    # Strip dangling articles/prepositions at the end
-    p = re.sub(r'\s+(?:with|and|or|the|a|an|in|on|of|to|for|is|at|that)$', '', p, flags=re.IGNORECASE)
-    if p and p[0].isupper():
-        p = p[0].lower() + p[1:]
-    return p.rstrip(".,;:")
-
 
 def build_flowing_thread(agent, max_captions: int = 3) -> str:
     """Build flowing thought stream from recent captions.
