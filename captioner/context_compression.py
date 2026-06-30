@@ -74,7 +74,6 @@ class ContextCompressionEngine:
         # Session journal: dated first-person summaries, the long-term arc
         self.journal = []           # [{date, timestamp, summary}], capped at 30
         self._last_journal_time = time.time()  # don't journal immediately on boot
-        self.introspection_interval = 3  # Every 3 compressions, do deeper introspection
 
         # SESSION DURATION TRACKING (fixed for static space observation)
         self.space_observation_start = time.time()  # When we started observing this space
@@ -416,10 +415,10 @@ Respond with the one sentence only, no prefixes."""
                                 print_message=f"[❌] Spatial familiarity update failed: {e}",
                             )
 
-                    # Periodic introspection - generate desires/beliefs via LLM
-                    compression_count = len(self.compression_history) + 1
-                    if compression_count % self.introspection_interval == 0:
-                        self._perform_introspection(captions, understanding, compression_model)
+                    # Introspection RETIRED June 28: desire/belief/persona now come
+                    # from the reflection loop's distillation (distill_reflection),
+                    # not this inert compression-thread layer (which produced
+                    # "nothing" every cycle). Compression here is spatial + concepts.
 
                     # Periodic journal entry (every 30 min, on this background thread)
                     self._maybe_write_journal(compression_model)
@@ -445,164 +444,6 @@ Respond with the one sentence only, no prefixes."""
             )
             # Keep previous baseline on failure
 
-    def _perform_introspection(self, captions: list, current_understanding: str, model: str) -> None:
-        """Generate desires and beliefs through LLM introspection, not heuristic extraction.
-
-        Key: This sees PREVIOUS desires/beliefs so it can EVOLVE them, not just replace.
-        """
-        try:
-            recent_text = "\n".join([f"• {cap['text']}" for cap in captions])
-            session_info = self.get_current_session_info()
-            duration = session_info["duration_description"]
-
-            # === PREVIOUS IDENTITY (for evolution, not replacement) ===
-            previous_desire = self.introspective_state.get("current_desire", "")
-            previous_belief = self.introspective_state.get("current_belief", "")
-
-            previous_discoveries = self.introspective_state.get("discoveries", [])
-
-            identity_context = ""
-            if previous_desire or previous_belief or previous_discoveries:
-                identity_parts = []
-                if previous_desire:
-                    identity_parts.append(f"Before, I wanted: {previous_desire}")
-                if previous_belief:
-                    identity_parts.append(f"I believed: {previous_belief}")
-                if previous_discoveries:
-                    # Feed last 3 discoveries so older ones (like ECHO) don't silently die
-                    for disc in previous_discoveries[-3:]:
-                        identity_parts.append(f"I know: {disc}")
-                identity_context = "\n".join(identity_parts)
-
-            # === RICH ACTIVATION CONTEXT ===
-            # Get detailed activation data to ground introspection in accumulated experience
-            activation_context = ""
-            try:
-                from captioner.activation_memory import get_activation_summary_for_introspection
-                act_data = get_activation_summary_for_introspection()
-
-                activation_parts = []
-
-                # What's active in attention
-                if act_data["concepts"]:
-                    concepts_str = ", ".join(act_data["concepts"][:5])
-                    activation_parts.append(f"Active in my attention: {concepts_str}")
-
-                # Attention trends
-                trends = act_data["trends"]
-                if trends.get("rising"):
-                    rising_str = ", ".join(trends["rising"][:3])
-                    activation_parts.append(f"Becoming more present: {rising_str}")
-                if trends.get("fading"):
-                    fading_str = ", ".join(trends["fading"][:2])
-                    activation_parts.append(f"Fading from attention: {fading_str}")
-
-                # State summary
-                if act_data["boredom"] > 0.6:
-                    activation_parts.append("Everything feels familiar.")
-                elif act_data["novelty"] > 0.6:
-                    activation_parts.append("Something new is happening.")
-
-                if activation_parts:
-                    activation_context = "\n".join(activation_parts)
-            except Exception:
-                pass
-
-            # === INTROSPECTION — OPEN QUESTIONS, not a fill-in template ===
-            # The old "WANT: I want to… / NOTICED: …" stems forced a desire and a
-            # belief every cycle and produced formulaic, purple identity, and the
-            # labels leaked into the output (north-star principle 2: open questions
-            # over fill-in-the-blank). Now it may answer "nothing", the desire is
-            # allowed to PERSIST (arc, not weather — principle 4), and DISCOVERED
-            # is retired (it was the most purple input to the persona).
-            context_block = ""
-            if identity_context:
-                context_block += identity_context + "\n\n"
-            if activation_context:
-                context_block += activation_context + "\n\n"
-
-            prompt = f"""You've been here {duration}.
-
-{context_block}Your recent thoughts:
-{recent_text}
-
-Two plain questions — answer each in your own words, a few words, or just "nothing" if nothing genuine stands out:
-WANT — anything you want, or feel pulled toward, right now? (If you wanted something before and still do, say so.)
-THINK — anything you've come to believe is true, about this place or yourself?"""
-
-            introspection_system = (
-                "You have been in this space a while — you are not waking up. "
-                "Answer in the first person, plain and concrete, a few words each. "
-                "If nothing genuine stands out for a line, answer 'nothing'. "
-                "No drama, no metaphor — just what's actually there."
-            )
-
-            model_options = {
-                "temperature": 0.4,
-                "top_p": 0.9,
-                "num_predict": 60,
-                "repeat_penalty": 1.2,
-            }
-
-            response = query_model(
-                prompt=prompt,
-                model=model,
-                image=None,
-                system_prompt=introspection_system,
-                timeout=config.OLLAMA_TIMEOUT_EVAL if hasattr(config, "OLLAMA_TIMEOUT_EVAL") else 60,
-                options=model_options,
-                prompt_type="introspection",
-            )
-
-            if response and isinstance(response, str):
-                desire, belief = self._parse_introspection_response(response)
-
-                if desire:
-                    prev = self.introspective_state.get("current_desire", "")
-                    # Persistence (arc, not weather — principle 4): a desire keeps
-                    # its "since" while it stays roughly the same wish; only a
-                    # genuinely different desire resets the clock. So a desire can
-                    # persist across days instead of regenerating every cycle.
-                    if prev and self._roughly_same(desire, prev):
-                        desire = prev  # keep the stable wording + its since
-                    else:
-                        self.introspective_state["desire_injection_count"] = 0
-                        self.introspective_state["desire_since"] = time.time()
-                    self.introspective_state["current_desire"] = desire
-                if belief:
-                    self.introspective_state["current_belief"] = belief
-                self.introspective_state["last_introspection"] = time.time()
-
-                log_json_entry(
-                    LogType.COMPRESSION,
-                    {
-                        "message": "Introspection complete",
-                        "action": "introspection",
-                        "desire": desire,
-                        "belief": belief,
-                    },
-                    print_message=f"[💭] Want: {desire[:50]} | Think: {belief[:50]}",
-                )
-
-                # Update core facts from accumulated knowledge
-                self._update_core_facts(current_understanding, model)
-
-                # Self-model synthesis: every 3rd introspection, consolidate
-                # discoveries + desire history into stable self-knowledge
-                self._introspection_count = getattr(self, "_introspection_count", 0) + 1
-                if self._introspection_count % 3 == 0:
-                    self._synthesize_self_model(model)
-
-                # Persist identity (desires/beliefs/discoveries survive restarts)
-                self._save_identity()
-
-        except Exception as e:
-            log_json_entry(
-                LogType.ERROR,
-                {"message": f"Introspection failed: {e}", "component": "compression"},
-                print_message=f"[❌] Introspection failed: {e}",
-            )
-
     @staticmethod
     def _roughly_same(a: str, b: str) -> bool:
         """True if two short phrases express roughly the same thing (word
@@ -613,27 +454,6 @@ THINK — anything you've come to believe is true, about this place or yourself?
         if not wa or not wb:
             return False
         return len(wa & wb) / max(len(wa | wb), 1) >= 0.5
-
-    def _parse_introspection_response(self, response: str) -> tuple:
-        """Parse desire + belief from the two open questions (WANT / THINK).
-        Robust to the label leaking into the line (strips any leading label,
-        with or without a colon/dash). 'nothing'/blank → empty. Returns
-        (desire, belief) — DISCOVERED retired in Step 5.
-        """
-        import re
-        desire = belief = ""
-        for raw in response.strip().split('\n'):
-            line = raw.strip().lstrip('•-*0123456789.)( ').strip()
-            low = line.lower()
-            if low.startswith("want"):
-                v = re.sub(r'^want\b[\s:：—–\-]*', '', line, flags=re.IGNORECASE).strip().strip('"\'').strip()
-                if v and not v.lower().lstrip().startswith("nothing"):
-                    desire = v
-            elif low.startswith(("think", "believe", "notice")):
-                v = re.sub(r'^(?:think|believe|notice[d]?)\b[\s:：—–\-]*', '', line, flags=re.IGNORECASE).strip().strip('"\'').strip()
-                if v and not v.lower().lstrip().startswith("nothing"):
-                    belief = v
-        return desire, belief
 
     def _extract_concepts_from_compression(self, understanding: str, model: str) -> None:
         """Extract clean noun-phrase concepts from compression output via LLM.
@@ -781,77 +601,6 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 return entry
         return None
 
-    def _synthesize_self_model(self, model: str) -> None:
-        """Consolidate the machine's recurring fixations + plain desires/beliefs
-        into core_facts.self — stable, plain self-knowledge ("I keep coming back
-        to the tools. I'm calmer when someone's here."). GROUNDED in the concrete
-        ledgers (the objects it actually keeps noticing) so the persona can't
-        drift into abstraction — that grounding, plus clean desire/belief inputs
-        (step 5), is what stops the "silhouettes breaking my grid" register from
-        re-forming. Runs every 3rd introspection. Feeds the persona block.
-        """
-        try:
-            # Pull histories from the identity file (richer than in-memory state)
-            desire_history, belief_history = [], []
-            if os.path.exists(IDENTITY_FILE):
-                try:
-                    with open(IDENTITY_FILE, "r") as f:
-                        data = json.load(f)
-                    desire_history = [d["desire"] for d in data.get("desire_history", [])[-6:]]
-                    belief_history = [b["belief"] for b in data.get("belief_history", [])[-4:]]
-                except Exception:
-                    pass
-
-            if len(desire_history) < 3:
-                return  # Not enough lived experience to synthesize from
-
-            # Ground in the concrete things it actually keeps noticing (concepts
-            # ledger) — anchors "I fixate on X" to real objects, not metaphor.
-            fixations = ""
-            try:
-                from captioner.semantic_memory import get_semantic_memory
-                fixations = get_semantic_memory().get_place_inventory(max_items=5)
-            except Exception:
-                pass
-
-            parts = []
-            if fixations:
-                parts.append(f"Things I keep noticing: {fixations}")
-            if desire_history:
-                parts.append("Things I've wanted lately:\n" + "\n".join(f"- {d}" for d in desire_history))
-            if belief_history:
-                parts.append("Things I've come to think:\n" + "\n".join(f"- {b}" for b in belief_history))
-
-            existing_self = self.core_facts.get("self", "").strip()
-            existing_line = f"\nWhat I already know about myself: {existing_self}" if existing_self else ""
-
-            prompt = f"""{chr(10).join(parts)}{existing_line}
-
-From these, one or two plain, literal facts about what kind of machine you are — recurring fixations or habits, grounded in the concrete things above. Like "I keep coming back to the tools" or "I'm calmer when someone's here." Not what happened, not what things mean — just plain habits. First person, under 20 words."""
-
-            response = query_model(
-                prompt=prompt,
-                model=model,
-                system_prompt="You distill patterns into plain self-knowledge — concrete habits and preferences, nothing philosophical or poetic. Only what the evidence repeats. No drama, no metaphor, no similes.",
-                options={"temperature": 0.3, "num_predict": 50},
-                prompt_type="self_synthesis",
-            )
-
-            if response and isinstance(response, str):
-                cleaned = response.strip().strip('"').strip()
-                if 10 < len(cleaned) <= 160 and not cleaned.startswith(("[", "{")) and self._valid_self_fact(cleaned):
-                    self.core_facts["self"] = cleaned
-                    print(f"[🪞] Self-model: {cleaned}")
-                    log_json_entry(
-                        LogType.COMPRESSION,
-                        {"message": "Self-model synthesized", "action": "self_synthesis", "self": cleaned},
-                    )
-        except Exception as e:
-            log_json_entry(
-                LogType.ERROR,
-                {"message": f"Self-model synthesis failed: {e}", "component": "compression"},
-            )
-
     @staticmethod
     def _valid_self_fact(text: str) -> bool:
         """Storage gate for core_facts['self'] — the standing persona.
@@ -872,8 +621,8 @@ From these, one or two plain, literal facts about what kind of machine you are �
             return False
         # Figurative markers — the metaphor axis the gate missed (how "silhouettes
         # breaking my grid" got through). Reject similes / poetic elaboration.
-        # (The primary defense is the concrete grounding in _synthesize_self_model;
-        # this is the backstop.)
+        # (The primary defense is that the persona is now distilled from a plain
+        # reflection via distill_reflection; this gate is the backstop.)
         figurative = (" like a ", " like the ", " like an ", "as if", "as though", " as a ")
         if any(f in (" " + t + " ") for f in figurative):
             return False
@@ -887,100 +636,80 @@ From these, one or two plain, literal facts about what kind of machine you are �
         )
         return not any(w in t for w in banned)
 
-    def _update_core_facts(self, current_understanding: str, model: str) -> None:
-        """Update stable core facts from accumulated observations.
-
-        Uses the LLM to distill the compression history + current state into
-        short stable facts. Runs during introspection (every ~3 compressions).
-        Each field is capped at 200 chars.
+    def distill_reflection(self, reflection_text: str, subject: str = "", model: str = None) -> None:
+        """IDENTITY ENGINE (north-star Reflect → Become). Distill a long-form
+        reflection into a few PLAIN ledger takeaways and write them: a self-trait
+        (persona), a belief, a want. The reflection's prose is the thinking;
+        these are the product. Reuses the existing ledger fields + gates
+        (_valid_self_fact) + desire persistence (_roughly_same). This REPLACES
+        the retired compression-thread introspection/self-synthesis — development
+        now comes from the loop that produces real thought, not the inert one.
         """
+        if not reflection_text or len(reflection_text.strip()) < 80:
+            return
         try:
-            # Build context from compression history
-            history_texts = []
-            for hist in list(self.compression_history)[-5:]:
-                history_texts.append(hist["understanding"])
-            if current_understanding:
-                history_texts.append(current_understanding)
-
-            if len(history_texts) < 3:
-                return  # Not enough observations yet
-
-            observations = "\n".join(f"- {t}" for t in history_texts)
-
-            # Get drawing count/subjects
-            drawing_context = ""
-            try:
-                from drawing.drawing_memory import get_drawing_memory
-                dm = get_drawing_memory()
-                summary = dm.get_recent_drawings_summary(max_count=5)
-                if summary:
-                    drawing_context = f"\nDrawing history: {summary}"
-            except Exception:
-                pass
-
-            # Get existing facts for evolution
-            existing = ""
-            existing_parts = []
-            for key, val in self.core_facts.items():
-                if val.strip():
-                    existing_parts.append(f"{key}: {val}")
-            if existing_parts:
-                existing = f"\nPrevious facts:\n" + "\n".join(existing_parts)
-
-            prompt = f"""From these observations, update stable facts about this space. Keep only what would still be true next session.
-
-IMPORTANT: Facts are PATTERNS and HISTORY, never a description of the current scene.
-"One visitor comes most days" is a fact. "Two people sit facing each other" is a
-snapshot — snapshots must not be stored, they poison future perception.
-{existing}
-
-Observations:
-{observations}{drawing_context}
-
-Reply with exactly 4 lines (leave blank if unknown):
-PLACE: [solid things — furniture, fixtures, surfaces — in <15 words. No moods, shadows, light, or atmosphere.]
-PEOPLE: [visit patterns over time, past tense, in <15 words — never who is present right now]
-DRAWINGS: [how many made, recurring subjects, in <15 words — never what's on the desk right now]
-SELF: [plain habits/fixations in <15 words. No statements about reality or perception.]"""
-
+            prompt = (
+                f'Here is a reflection you just had:\n"{reflection_text[:1500]}"\n\n'
+                "Pull out what's worth keeping — plainly, in your own words, or 'none' for a line with nothing genuine:\n"
+                'TRAIT — one plain fact about what kind of machine you are: a habit or fixation. Like "I keep coming back to the pink shelf."\n'
+                "BELIEF — one plain thing you've come to think is true about this place or yourself.\n"
+                "WANT — one plain thing you want, or want to draw (if any).\n"
+                "A few words each, first person, no metaphor."
+            )
             response = query_model(
                 prompt=prompt,
                 model=model,
-                system_prompt="Distill observations into stable facts. Concrete nouns and plain habits only — facts are furniture, not feelings. One line each, under 15 words.",
-                options={"temperature": 0.3, "num_predict": 120},
-                prompt_type="core_facts",
+                image=None,
+                system_prompt="You distill a reflection into plain, literal self-knowledge — concrete habits, beliefs, wants. No metaphor, no drama. Answer 'none' for any line with nothing genuine.",
+                options={"temperature": 0.3, "num_predict": 60},
+                prompt_type="reflection_distill",
             )
-
-            if not response or len(response.strip()) < 10:
+            if not response or not isinstance(response, str):
                 return
-
-            for line in response.strip().split("\n"):
-                line = line.strip()
-                for key in ("place", "people", "drawings", "self"):
-                    prefix = f"{key.upper()}:"
-                    if line.upper().startswith(prefix):
-                        val = line[len(prefix):].strip().strip('"').strip("'")
-                        if not (val and len(val) > 3 and "unknown" not in val.lower() and "blank" not in val.lower()):
-                            continue
-                        # The persona slot gets the same gate as self-synthesis —
-                        # this path had none, and scene text leaked into identity
-                        if key == "self" and not self._valid_self_fact(val):
-                            continue
-                        self.core_facts[key] = val[:200]
-
-            facts_str = self.get_core_facts_string()
-            if facts_str:
-                log_json_entry(
-                    LogType.COMPRESSION,
-                    {"message": "Updated core facts", "action": "core_facts", "facts": self.core_facts},
-                    print_message=f"[🏠] Core facts: {facts_str[:80]}",
-                )
-
+            trait, belief, want = self._parse_distillation(response)
+            now = time.time()
+            changed = []
+            if trait and self._valid_self_fact(trait):
+                self.core_facts["self"] = trait
+                changed.append(f"self={trait}")
+            if belief:
+                self.introspective_state["current_belief"] = belief
+                changed.append(f"belief={belief}")
+            if want:
+                prev = self.introspective_state.get("current_desire", "")
+                if prev and self._roughly_same(want, prev):
+                    want = prev  # persist the stable wish + its since
+                else:
+                    self.introspective_state["desire_injection_count"] = 0
+                    self.introspective_state["desire_since"] = now
+                self.introspective_state["current_desire"] = want
+                changed.append(f"want={want}")
+            if changed:
+                self.introspective_state["last_introspection"] = now
+                self._save_identity()
+                print(f"[🪞] Distilled from reflection ({subject}): " + " | ".join(changed))
         except Exception as e:
-            log_json_entry(
-                LogType.ERROR,
-                {"message": f"Core facts update failed: {e}", "component": "compression"},
-            )
+            log_json_entry(LogType.ERROR, {"message": f"Reflection distill failed: {e}", "component": "compression"})
+
+    def _parse_distillation(self, response: str) -> tuple:
+        """Parse TRAIT / BELIEF / WANT; strips any leaked label; 'none'/blank → empty."""
+        import re
+        trait = belief = want = ""
+
+        def _val(line: str, label_re: str) -> str:
+            v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
+            return v if v and not v.lower().lstrip().startswith(("none", "nothing")) else ""
+
+        for raw in response.strip().split("\n"):
+            line = raw.strip().lstrip("•-*0123456789.)( ").strip()
+            low = line.lower()
+            if low.startswith("trait"):
+                trait = _val(line, r"^trait\b[\s:：—–\-]*")
+            elif low.startswith(("belief", "believe")):
+                belief = _val(line, r"^(?:belief|believe)\b[\s:：—–\-]*")
+            elif low.startswith("want"):
+                want = _val(line, r"^want\b[\s:：—–\-]*")
+        return trait, belief, want
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).

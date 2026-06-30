@@ -98,12 +98,13 @@ moment gets the present only (north-star principle 6).
 
 | Cadence | What | Output |
 |---------|------|--------|
-| every 8 captions | compression | baseline_context + felt-state |
-| every 3rd compression | introspection | desire, belief, discovery |
-| every 3rd introspection | self-synthesis | core_facts.self (persona) |
-| during introspection | core facts update | core_facts place/people/drawings |
+| every 4 captions | compression | baseline_context (spatial only; felt-state now from the mood vector, not here) |
 | per compression | concept extraction (LLM, solid objects) | ChromaDB concepts |
+| ~~every 3rd compression~~ | ~~introspection~~ **RETIRED June 28** | desire/belief now distilled from the reflection |
+| ~~every 3rd introspection~~ | ~~self-synthesis~~ **RETIRED June 28** | persona now distilled from the reflection |
+| ~~during introspection~~ | ~~core-facts update~~ **RETIRED June 28** | place=concepts, drawings=drawing_memory, self=reflection |
 | every 30 min + shutdown | journal entry | machine_identity.json journal |
+| after each reflection | **DISTILLATION (the identity engine, June 28)**: `context_compression.distill_reflection` pulls TRAIT/BELIEF/WANT from the long-form reflection (plain, temp 0.3, _valid_self_fact gate, _roughly_same desire persistence) | core_facts.self (persona), current_belief, current_desire — the Reflect→Become loop. Replaced the inert compression-thread introspection/self-synthesis |
 | every ~20 quiet min | REFLECTION LOOP (captioner/reflection.py): long-form thought (600-token budget) on rotating subjects — room / visitor / drawings / time / itself; context = today's compressions + previous reflections + journal + drawings + desire; uses the main model; skipped while drawing; POSTPONED while the store is empty (reflecting on nothing invents a past that would echo forever) | ChromaDB `reflections` collection + REFLECTION log entry; surfaces into quiet captions via echo line |
 
 ## Awakening (first caption of a session)

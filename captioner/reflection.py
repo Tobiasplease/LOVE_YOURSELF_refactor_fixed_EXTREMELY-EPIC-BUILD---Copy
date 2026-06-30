@@ -212,6 +212,18 @@ class ReflectionLoop:
             pass
 
         self.last_reflection_time = time.time()
+
+        # Identity engine (north-star Reflect → Become): distill this reflection
+        # into a few PLAIN ledger takeaways — a self-trait (persona), a belief, a
+        # want. This is where development now happens; the prose above is the
+        # thinking, these are the product. Replaces the inert compression-thread
+        # introspection/self-synthesis (retired June 28).
+        try:
+            from captioner.context_compression import context_compressor
+            context_compressor.distill_reflection(text, subject, model=config.OLLAMA_MODEL)
+        except Exception as e:
+            print(f"[REFLECT] distill failed: {e}")
+
         log_json_entry(
             LogType.REFLECTION,
             {"reflection": text, "subject": subject, "reflection_id": refl_id, "stored": refl_id is not None},
