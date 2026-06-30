@@ -212,13 +212,30 @@ Already structured & robust (safe): `journal`, `desire_history`,
    not the mouth). Persona is empty (reset step 1) and will re-form from the
    clean grounded synthesis — what it re-grows is the test.
 
-## Migration complete (steps 0–7). Remaining before detox OFF
+## Migration complete (steps 0–7) + consolidation + detox OFF (done June 28)
+- **Consolidation (the identity engine).** The run showed the stores clean but
+  identity INERT: the compression-thread introspection answered "nothing" every
+  cycle, so the persona never formed, while the reflection loop's real
+  self-knowledge was discarded. Fixed by making the **reflection the identity
+  engine**: `context_compression.distill_reflection` pulls TRAIT/BELIEF/WANT from
+  each reflection into the existing persona/belief/desire ledgers (plain, temp
+  0.3, `_valid_self_fact` gate, `_roughly_same` persistence). The inert
+  `_perform_introspection` / `_synthesize_self_model` / `_update_core_facts`
+  (~345 lines) were RETIRED. Net: compression (spatial+concepts) + reflection
+  (identity), not five stacked loops.
+- **Detox OFF, cold-started fresh.** `BASE_VOICE_DETOX=False`; memory wiped to a
+  clean slate (backup `event_log/_pre_coldstart_bak_*`) and rebuilt under the
+  ledger code. Validated: 1.7h with memory on → no re-contamination.
+
+### Still remaining
+- **Validate the identity engine end-to-end**: the distillation was wired after
+  the 1.7h run, so persona forming *clean from a real reflection* is unproven —
+  needs a run where a reflection fires (~20–40 min).
+- **Stop injecting the place inventory every caption** — it flattens the
+  relational voice into re-cataloguing the same objects (next-session-brief #2).
 - **Drawing-pipeline cleanup** (its own bucket): the 5 step system-prompts push
-  metaphor; get_artistic_arc LLM-narrates comfy_prompt; reflection→drawing
-  injection; core_facts['place']/['drawings'] LLM prose still generated unused.
-- **Turn detox OFF** channel-by-channel and re-judge each surfaces clean, per the
-  validation protocol — the stores are now ledgers, but this has not yet been
-  run end-to-end with memory back on.
+  metaphor; `get_artistic_arc` LLM-narrates `comfy_prompt`; reflection→drawing
+  injection; `core_facts['place']/['drawings']` LLM prose still generated unused.
 
 **Per step:** reformat store → reformat generator (structured, low temp, gate) →
 migrate EVERY reader in its orphan list → re-enable that channel with detox OFF →

@@ -35,28 +35,22 @@ Verify salience in logs: every CAPTION entry carries `salience_hot` and
 Torn down June 12 (north-star principles 1+2): situation only, no style
 rules, no registers, no mood clause. Voice comes from content.
 
-> **CLEAN-ROOM ACTIVE (June 28): `config.BASE_VOICE_DETOX = True`.** While on,
-> ALL rows below marked as stored/compressed (felt-state, persona) are stripped
-> from the system prompt, and in the user prompt every interior/stored line
-> (mode context, introspective, core facts, familiarity/echo, felt delta,
-> desire, baseline) is stripped too; the video path drops its "You're seeing
-> the last N seconds" wrapper. The model sees only: situation + genre frame +
-> mode elicitation (system); situational line + present event + live
-> drawing/paper state (user) + image. This isolates the naked base voice from
-> months of self-poisoned stores. Set False to restore the full memory prompt.
-> Gated in get_monologue_system_prompt + build_simple_caption_prompt (`detox`)
-> and the video path (captioner.py).
+> **DETOX NOW OFF (June 28): `config.BASE_VOICE_DETOX = False`. Memory is LIVE.**
+> The whole memory-ledger migration (steps 0–7) + the reflection-distillation
+> consolidation is done, the stores were cold-started fresh, and the flag was
+> flipped to run the system with memory flowing into the prompt. So the
+> stored/derived lines below (persona, place, desire, felt, reflection echo) are
+> ACTIVE again — but as clean ledgers, not the old self-poisoned prose.
 >
-> **Step 0 (June 28): the three detox blind spots are now closed too** — the
-> AWAKENING runs time-only (no stored memory) `captioner.generate_internal_awakening`;
-> the REFLECTION loop pauses entirely `reflection._should_reflect`; and DRAWING
-> is skipped `drawing.should_draw` (its 5-step pipeline + purple step
-> system-prompts can't produce a clean drawing yet). So clean-room is now valid
-> for the whole running machine.py, not just the caption prompt. NOTE: the
-> compression/introspection/self-synthesis/concept GENERATORS still run under
-> detox — but their output is gated from the caption prompt, so it's isolated
-> (and lets us observe whether plain captions yield plainer stores). See
-> docs/memory-redesign-plan.md.
+> `BASE_VOICE_DETOX` remains a **regression harness**: set it True to strip all
+> stored/compressed injection (persona + felt from the system prompt; mode
+> context, core facts, familiarity/echo, felt-delta, desire from the user
+> prompt; the video "last N seconds" wrapper) and ALSO suppress the awakening's
+> stored memory (`generate_internal_awakening`), the reflection loop
+> (`_should_reflect`), and drawing (`should_draw`). Use it to re-isolate the
+> naked base voice if the voice regresses. Gated via `detox` in
+> get_monologue_system_prompt + build_simple_caption_prompt + the video path +
+> those three loops. See docs/memory-redesign-plan.md.
 
 | Line | Source | Health |
 |------|--------|--------|
@@ -204,7 +198,14 @@ prompt entirely: present-tense presence belongs to the live detection layer
 - get_session_greeting, after_perception, build_monologue_prompt etc. —
   removed June 2026 dead-code purge
 - subconscious.py — debug scripts only
-- generate_awakening_message() — superseded by generate_internal_awakening()
+- **_perform_introspection / _synthesize_self_model / _update_core_facts**
+  (context_compression) — RETIRED June 28; identity now distilled from the
+  reflection loop (distill_reflection). ~345 lines removed.
+- **_compress_perception** (model_wrapper) — removed June 28 (the grandfathered
+  "Already noticed" buffer compressor; no callers).
+- generate_awakening_message() — listed as "superseded by generate_internal_
+  awakening()" BUT machine.py still calls it (943/954). Two awakening paths
+  coexist; reconcile before removing. NOT dead.
 - reason_about_caption + REASON_INTERVAL (every-320s shallow reflection,
   output discarded) — replaced June 12 by the reflection loop
 - SemanticMemory per-concept reflection worker — replaced June 12 by the

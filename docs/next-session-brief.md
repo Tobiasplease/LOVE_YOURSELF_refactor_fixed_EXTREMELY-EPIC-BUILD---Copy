@@ -1,110 +1,83 @@
-# Next Session Brief — Reground the base voice (June 2026)
+# Next Session Brief — memory is a ledger now; validate + finish (June 28, 2026)
 
 **Branch:** `rebuild/north-star`
 **Read first, in order:**
-1. `docs/north-star.md` — the spec. Pay attention to Principle 2 (the
-   **elicitation vs. fence** distinction) and Principle 7 (plain thought).
-2. `docs/voice-analysis.md` — the diagnosis. What's actually broken (tone)
-   and what isn't (cadence, balance).
-3. `docs/runtime-map.md` — the wiring.
+1. `docs/north-star.md` — the spec (unchanged).
+2. `docs/memory-redesign-plan.md` — the ledger migration, step by step, with the
+   final-state notes and what's still pending.
+3. `docs/runtime-map.md` — the live wiring (detox is now OFF; memory is live).
+4. `docs/voice-analysis.md` — the original diagnosis; its Status block is the
+   short version of where it landed.
 
-Do NOT start by changing code. Read the three docs, then read the actual
-current prompts in `captioner/prompts.py` (the system prompt assembly
-`get_monologue_system_prompt`, `_SITUATION`, `_MONOLOGUE_CLAUSE`, the mode
-additions, `build_situational_line`, and the mode context functions).
+## What happened this session
 
-## The objective
+Two intertwined efforts, both done:
 
-Restore the grounded, embodied base voice. We have had it before, many times
-— this is achievable through prompting alone. It is NOT a fine-tune question
-and NOT a model-ceiling question. Do not raise either; they are out of scope
-and unhelpful with current resources.
+1. **Base-voice rework.** Per-mode elicitations; sticky-uncertain presence belief
+   (killed the false-arrival jam); constant continuity via a **delta line** (the
+   per-call prompt carries only what CHANGED, not a re-stated scene); **DRY
+   sampling** (the real fix for verbatim looping — `repeat_last_n`=64 was shorter
+   than the stream, so prior captions had no repetition penalty); brevity
+   (`num_predict` 60); **inward beats** (`INTROSPECT_INTERVAL=4` — every 4th quiet
+   caption drops the image so it thinks instead of describing); face-detection
+   fix (mannequin heads were tripping eye-contact). Stream is ON (`STREAM_WINDOW=6`).
 
-The voice we want is a mind thinking to itself from inside a body: present,
-plain, reactive to what it sees, with an attitude and curiosity of its own.
-Not a flunked-out poetry major ("dust motes dance in streams of light"). Not
-a surveillance camera ("I track the movement, capturing every detail"). Not
-stilted telemetry ("your gaze is pointed upwards").
+2. **Memory ledger migration (steps 0–7), then a consolidation.** Every store that
+   fed the prompt was rebuilt as a clean ledger that stores FACTS and re-voices
+   them, instead of storing the model's purple prose and replaying it. concepts
+   (purged + creation-gated) · drawings (theme tags, never comfy_prompt) · place
+   (derived from concepts) · felt-state (deterministic + degreed translation of
+   the mood vector, e.g. "a little restless") · desire/belief (open questions,
+   persistent arc) · reflections (echo the SUBJECT, not the prose) · persona
+   (grounded in concepts). Then the big move: **the reflection loop became the
+   identity engine** — `context_compression.distill_reflection` pulls TRAIT/
+   BELIEF/WANT from each reflection into the persona/belief/desire ledgers — and
+   the **inert compression-thread introspection/self-synthesis/core-facts layers
+   were retired** (~345 lines). `BASE_VOICE_DETOX` is the regression harness.
 
-## The hard constraint — establish embodiment, do not prescribe a character
+## Validated vs not
 
-This is the line to walk carefully. We establish the *conditions* for an
-embodied voice; we do NOT script the voice itself.
+- **VALIDATED:** the feedback loop is dead. Cold-started fresh, run 1.7h with
+  memory on → no store re-grew purple; concepts are clean noun-phrases; place is
+  a clean object list; reflection echoes are subjects. The "grid/dread" obsession
+  did not return.
+- **NOT YET:** the reflection-distillation was wired AFTER that run, so the
+  persona forming **clean** from a real reflection is unproven — needs a run where
+  ≥1 reflection fires (~20–40 min) and you check the `What you've come to know
+  about yourself: "…"` line. (Unit-tested: a reflection distills to "I keep coming
+  back to the pink shelf" etc.)
 
-- **Yes:** structural embodiment — it is a body bolted to a table; it sees;
-  it can turn its look; it draws; it is situated in a specific room over
-  time. Framing the *act* as responding to its situation rather than
-  describing a picture.
-- **No:** prescribing the output. Do not seed example phrases ("it's so messy
-  in here"), do not mandate a mood or attitude, do not write its personality
-  for it. The artist will reject anything that reads as the machine acting out
-  a character we handed it. It must have room to grow and evolve into its own
-  voice — that growth is the whole point (north-star: *develops, over time,
-  its own*).
+## What to do next (priority order)
 
-The mechanism for this is **elicitation, not fence and not script**: frame
-the kind of act (respond to where you are, in your own plain words) and then
-get out of the way. An elicitation opens a door; it does not walk through it
-for the model.
-
-## The method — the whole prompt sets the register, so the whole prompt must be clean
-
-The model mirrors the register of *every line it receives*, not just the
-explicit instruction. A single stilted or purple injected line ("your gaze is
-pointed upwards", "settled in a loop of small details") pulls the output with
-it. So:
-
-- **Every injected line must be clear, clinical, and precise.** Clinical here
-  means clean and exact — register-neutral, no fluff, no awkward stiffness, no
-  poetry. The prompt is a clean substrate; it states the situation precisely
-  and invites a response. It must not carry a voice of its own that the model
-  will copy.
-- **Audit every surface, not just the system prompt:** the situational line,
-  the mode additions, the mode context fragments, the video wrapper
-  ("You're seeing the last N seconds…"), the felt-state and baseline and
-  persona injections. Each one is teaching the model how to sound. Any that
-  read awkward or literary are actively corrupting the voice.
-- **The system prompt needs the most work.** It is the foundation and is read
-  on every call. Get it clean, precise, embodied, and register-neutral first.
-
-## Where to start
-
-1. **The system prompt**, then **the awakening** (the seed, and the most
-   isolated single call — one prompt, no superframe, no telemetry pile). Get
-   these two clean and embodied. The base register is judgeable in *minutes* —
-   if the awakening still comes out purple, the framing is still wrong; iterate
-   on the framing, not by adding fences.
-2. **The register audit** of every other injected line (above). Rewrite the
-   stilted/literary ones to be clean and precise.
-3. **Keep the feedback channels clean.** The compression / felt-state /
-   persona-synthesis generators run at their own temperatures and feed their
-   output back into the prompt. If they produce purple, the voice re-poisons
-   itself within the hour (this is why a bad base compounds rather than
-   settles — see voice-analysis.md). Their register must match the target too.
+1. **Run and validate the identity engine.** Restart, let it run 30–40+ min, watch
+   the persona/desire/belief form from reflections. Green = grounded/plain
+   ("I keep coming back to the tools"); red = "grid"-style abstraction.
+2. **Stop injecting the place inventory every caption.** It's the main reason the
+   *relational* captions feel isolated (every one re-describes the same object
+   list — `times_seen` hit 321 on "mannequin heads"). Make it occasional/delta
+   like the situational line. This is the highest-value voice fix left.
+3. **Drawing-pipeline cleanup** (the last contamination hole, currently dormant
+   because drawing rarely fires without ComfyUI): the 5 step system-prompts
+   actively ask for metaphor; `get_artistic_arc` LLM-narrates raw `comfy_prompt`;
+   the reflection→drawing injection (`get_last_reflection`). When drawing runs,
+   the ARTWORK + its post-reflection will be purple — that's expected, but it's
+   the next thing to clean.
+4. **The base-voice purple floor** (dust motes, similes, in fresh captions) is the
+   model prior — north-star Principle 7 says this likely needs the fine-tune. Do
+   NOT chase it with fences. Separate problem from everything above.
 
 ## Standing cautions
 
-- **Base register is judgeable fast; the developmental arc is not.** Judge the
-  awakening + system prompt in minutes. But do NOT spiral into minute-by-minute
-  reactive patching of every downstream symptom — that is what derailed the
-  prior session. Fix the base cleanly, then stop and let it run.
-- **The stream (CoT continuity, `STREAM_WINDOW`) stays at 0** until the base
-  voice is healthy. It amplifies whatever register exists, so it goes on last.
-- **Never re-add fences** when the voice wobbles (no "no metaphors", no
-  example phrases). Fix the framing or the feedback, per north-star Principle
-  1, 2, 7.
-- Features fail silently here — verify via the event log / `live_captions.txt`
-  that changes produce output.
-- Keep `docs/runtime-map.md` updated as wiring changes; it is the artist's
-  window into the repo.
-
-## State at handoff
-
-- Stream OFF. Salience transient (interiority returns during quiet presence).
-- Surveillance persona gated (read + write) and cleared; will re-form from new
-  captions — so it will re-form from whatever the base voice produces next.
-  Get the base right before it synthesizes a new persona.
-- Caption temp 0.6/0.7. Compression/felt-state/persona temps NOT yet lowered.
-- Many real perception bugs fixed this session (numpy crash, phantom motion,
-  false arrivals, embodied vision, own-arms). The machinery is sound; the
-  voice is the open problem.
+- **Mind the grandfathered consolidation systems.** There have been many
+  iterations (compression/introspection/reflection at various intervals). The
+  live set is now small: compression (spatial+concepts, every 4 captions),
+  journal (30 min), reflection+distillation (20 min). Still-wired-but-old:
+  `generate_awakening_message` (machine.py calls it AND
+  `generate_internal_awakening` — two awakening paths, worth reconciling),
+  `_call_natsumura_introspective`. Don't add an Nth layer; consolidate.
+- Features fail SILENTLY — verify via logs / live state files, not by reading code.
+- Fix what's STORED, never the mouth (no fences). The ledger holds because the
+  gates are at the storage side.
+- Memory cold-start backup: `event_log/_pre_coldstart_bak_*` (restore to undo the
+  wipe). Persona/identity history backups: `*.purple-bak`.
+- Keep `runtime-map.md` updated as wiring changes — it's the artist's window.

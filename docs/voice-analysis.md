@@ -121,10 +121,23 @@ instead of narrating a film.
 4. **Keep the stream (CoT continuity) off** until the base tone is healthy —
    it amplifies whatever voice exists, so it goes back on last.
 
-## Status
+## Status (updated June 28 — most of this doc is now history)
 
-- Stream is OFF (`STREAM_WINDOW=0`) — base-voice isolation.
-- Salience is transient (interiority returns during quiet presence).
-- Persona gated on read+write; contaminated values cleared.
-- NEXT: items 1–3 above. This doc + the north-star Principle 2 amendment are
-  the alignment; code follows.
+The diagnosis above drove the work; here's where it landed. See
+`memory-redesign-plan.md` for the full ledger migration and `next-session-brief.md`
+for the live handoff.
+
+- **Stream is ON** (`STREAM_WINDOW=6`) + DRY sampling — the verbatim-repetition
+  ("dust motes" loop) cause turned out to be sampling, not framing: `repeat_last_n`
+  default 64 < the stream length, so prior captions had zero repetition penalty.
+- **The feedback loop is dismantled.** Every store that fed the prompt is now a
+  ledger (concepts/place/drawings/felt/desire/belief/reflection/persona) — items
+  1–2 of "where we need to be" are done, at the storage gates as the north-star
+  requires. Validated cold-start: after 1.7h with memory on, no store re-grew
+  purple.
+- **Detox is OFF** (`BASE_VOICE_DETOX=False`); kept as a regression harness.
+- **Identity development** moved off the inert introspection onto the reflection
+  loop's distillation (Reflect→Become).
+- **Open**: the residual base-voice purple is the model prior (Principle 7 —
+  likely the fine-tune); the drawing pipeline is still un-cleaned; place-inventory
+  injected every caption flattens the relational voice.
