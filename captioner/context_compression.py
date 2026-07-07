@@ -57,7 +57,6 @@ class ContextCompressionEngine:
         self.introspective_state = {
             "current_desire": "",  # What I want right now
             "current_belief": "",  # What I've learned about this place
-            "discoveries": [],     # retired Step 5 (kept for back-compat readers); no longer generated
             "last_introspection": 0.0,
             "desire_injection_count": 0,  # Track how many times desire has been injected
             "desire_since": 0.0,   # when the CURRENT desire first formed — the arc's clock (principle 4)
@@ -537,10 +536,6 @@ Respond with the one sentence only, no prefixes."""
             if history:
                 material.append("How the space looked:\n" + "\n".join(f"- {h}" for h in history))
 
-            discoveries = self.introspective_state.get("discoveries", [])
-            if discoveries:
-                material.append("What struck me:\n" + "\n".join(f"- {d}" for d in discoveries[-3:]))
-
             desire = self.introspective_state.get("current_desire", "")
             if desire:
                 material.append(f"What I wanted: {desire}")
@@ -784,7 +779,6 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
 
             desire = self.introspective_state.get("current_desire", "")
             belief = self.introspective_state.get("current_belief", "")
-            discoveries = self.introspective_state.get("discoveries", [])
             now = time.time()
 
             desire_history = existing.get("desire_history", [])
@@ -802,7 +796,6 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 "current_desire": desire,
                 "current_belief": belief,
                 "desire_since": self.introspective_state.get("desire_since", 0.0),
-                "discoveries": discoveries,
                 "core_facts": self.core_facts,
                 "journal": self.journal,
                 "desire_history": desire_history,
@@ -833,7 +826,6 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             self.introspective_state["current_desire"] = data.get("current_desire", "")
             self.introspective_state["desire_since"] = data.get("desire_since", 0.0)
             self.introspective_state["current_belief"] = data.get("current_belief", "")
-            self.introspective_state["discoveries"] = data.get("discoveries", [])
             self.introspective_state["last_introspection"] = data.get("last_updated", 0.0)
 
             # Restore core facts. The persona ('self') is gated on load too,

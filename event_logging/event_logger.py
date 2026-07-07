@@ -285,21 +285,6 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
     return logs
 
 
-# def get_latest_log_entry(log_dir: str, log_type: str) -> Optional[Dict[str, Any]]:
-#     """
-#     Get the most recent log entry of a specific type.
-
-#     Args:
-#         log_dir: Directory containing log files
-#         log_type: Type of log entry to find
-
-#     Returns:
-#         Most recent log entry or None if not found
-#     """
-#     logs = read_json_logs(log_dir, log_type)
-#     return logs[-1] if logs else None
-
-
 # One lock per process: log writers come from several threads (caption loop,
 # compression worker, reflection loop, mood thread)
 _LOG_WRITE_LOCK = threading.Lock()

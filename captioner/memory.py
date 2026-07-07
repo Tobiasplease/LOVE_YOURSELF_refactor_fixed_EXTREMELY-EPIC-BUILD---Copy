@@ -128,22 +128,6 @@ class MemoryMixin:
             if hasattr(self, "current_mood"):
                 self.current_mood = entry["mood"]
 
-    def get_activation_beliefs(self) -> List[str]:
-        """Get natural language beliefs from activation network."""
-        return self._activation_network.get_beliefs()
-
-    def estimate_novelty(self, reactivity_metrics: Optional[Dict[str, float]] = None) -> float:
-        """Get novelty score — primarily driven by activation network."""
-        base_novelty = self._novelty_score
-
-        if reactivity_metrics:
-            activity_level = reactivity_metrics.get("activity_level", 0.0)
-            sudden_change = reactivity_metrics.get("sudden_change", 0.0)
-            environmental_novelty = min(1.0, activity_level * 2.0 + sudden_change)
-            self._novelty_score = max(base_novelty, environmental_novelty * 0.8)
-
-        return self._novelty_score
-
     def get_temporal_mood_modifier(self) -> float:
         """Calculate mood modifier based on temporal stagnation effects."""
         if not hasattr(self, "true_session_start"):
@@ -165,26 +149,6 @@ class MemoryMixin:
             return -0.1
         else:
             return 0.0
-
-    def update_boredom(self) -> None:
-        """Update boredom — activation network sets base, temporal stagnation adds on top."""
-        if hasattr(self, "true_session_start"):
-            session_duration = now() - self.true_session_start  # type: ignore
-
-            stagnation_context = self.get_scene_stagnation_context()
-            if stagnation_context:
-                if session_duration > 14400:
-                    temporal_boredom = 0.9
-                elif session_duration > 7200:
-                    temporal_boredom = 0.7
-                elif session_duration > 3600:
-                    temporal_boredom = 0.5
-                elif session_duration > 1800:
-                    temporal_boredom = 0.3
-                else:
-                    temporal_boredom = 0.0
-
-                self._boredom = max(self._boredom, temporal_boredom)
 
     def get_current_session_memory_snippets(self, k: int = 3) -> List[str]:
         """Get only memories from the current session."""

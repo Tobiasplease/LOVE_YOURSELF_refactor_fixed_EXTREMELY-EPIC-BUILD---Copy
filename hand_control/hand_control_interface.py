@@ -23,7 +23,6 @@ from tkinter import ttk
 
 # Add parent directory to path to import config
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import os
 
 from config.config import HAND_CONTROLLER_PORT
 
@@ -56,7 +55,6 @@ import datetime
 import glob
 import json
 import math
-import os
 import random
 import threading
 import time

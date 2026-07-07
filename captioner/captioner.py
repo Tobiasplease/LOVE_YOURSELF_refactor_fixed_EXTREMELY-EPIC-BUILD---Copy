@@ -527,7 +527,7 @@ class Captioner(MemoryMixin):
         if self.last_caption_time and now - self.last_caption_time > STREAM_BREAK_SECONDS:
             self._stream.clear()
 
-        # Store reactivity data for subconscious layer access
+        # Store reactivity data for later cycles
         self._current_reactivity_data = reactivity_data
 
         # Don't update timestamp yet - wait until caption is actually generated
