@@ -129,7 +129,7 @@ def warp_transform_line(gcode_line, max_x, max_y):
     NUDGE_RIGHT_MM = 0.0
     NUDGE_LEFT_MM = 0.0
     NUDGE_UP_MM = 0.0
-    NUDGE_DOWN_MM = 3.0  # Shift drawing toward robot base — was exceeding far edge of paper
+    NUDGE_DOWN_MM = 7.0  # Shift drawing toward robot base — increased for SCALE_FACTOR 1.15
 
     x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
     y_match = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)

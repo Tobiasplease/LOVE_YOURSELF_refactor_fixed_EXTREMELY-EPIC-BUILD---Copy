@@ -1,0 +1,32 @@
+{
+  "name": "LOVE_YOURSELF Hand Controller",
+  "description": "6-servo hand controller (4 fingers + 2 arm), padded to 8 for HAND8 protocol",
+  "serial_port": "/dev/arduino_lefthand",
+  "baud_rate": 9600,
+  "global_min_angle": 0,
+  "global_max_angle": 180,
+  "servo_names": [
+    "Index",
+    "Middle",
+    "Ring",
+    "Pinky",
+    "Shoulder",
+    "Elbow",
+    "Unused_6",
+    "Unused_7"
+  ],
+  "pin_mapping": [11, 10, 9, 8, 7, 6, 5, 4],
+  "finger_count": 4,
+  "arm_count": 2,
+  "reversed_servos": [],
+  "per_servo_limits": [
+    [0, 180],
+    [0, 180],
+    [0, 180],
+    [0, 180],
+    [81, 102],
+    [81, 102],
+    [0, 180],
+    [0, 180]
+  ]
+}
