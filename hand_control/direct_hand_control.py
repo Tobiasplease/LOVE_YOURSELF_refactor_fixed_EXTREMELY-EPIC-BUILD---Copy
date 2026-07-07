@@ -36,15 +36,18 @@ try:
 
     HAND_CONTROL_AVAILABLE = True
 except ImportError as e:
-    print(f"WARNING Hand control not available: {e}")
+    hc_print(f"WARNING Hand control not available: {e}")
     HAND_CONTROL_AVAILABLE = False
     HandControlInterface = None
 
 
-def debug_print(message: str):
-    """Print debug message only if DEBUG_HAND_CONTROLLER is enabled."""
-    if getattr(config, "DEBUG_HAND_CONTROLLER", False):
-        print(message)
+try:
+    from .quiet_print import hc_print
+except ImportError:
+    from quiet_print import hc_print
+
+
+debug_print = hc_print  # legacy alias; hc_print is gated on DEBUG_HAND_CONTROLLER
 
 
 class DirectHandController:
@@ -84,28 +87,18 @@ class DirectHandController:
                 return True
 
         except Exception as e:
-            print(f"ERROR Failed to initialize hand controller: {e}")  # Always show errors
+            hc_print(f"ERROR Failed to initialize hand controller: {e}")  # Always show errors
             return False
 
     def _initialize_headless_controller(self):
         """Initialize a full headless controller with all functionality."""
         try:
-            # Apply global print suppression for hand controller
-            from quiet_print import apply_hand_controller_quiet_mode, restore_original_print
-
-            original_print = apply_hand_controller_quiet_mode()
-
-            try:
-                # Use the full CleanCursorInterface in headless mode
-                self.controller = HandControlInterface(headless_mode=True)
-                print("SUCCESS Headless hand controller initialized")
-                return True
-            finally:
-                # Restore original print
-                restore_original_print(original_print)
+            self.controller = HandControlInterface(headless_mode=True)
+            hc_print("SUCCESS Headless hand controller initialized")
+            return True
 
         except Exception as e:
-            print(f"ERROR Failed to initialize headless controller: {e}")
+            hc_print(f"ERROR Failed to initialize headless controller: {e}")
             # Fallback: set controller to None and continue without it
             self.controller = None
             return False
@@ -113,11 +106,11 @@ class DirectHandController:
     def start(self):
         """Start the hand controller in appropriate mode."""
         if not HAND_CONTROL_AVAILABLE:
-            print("WARNING Hand controller not available")
+            hc_print("WARNING Hand controller not available")
             return False
 
         if self.controller:
-            print("SUCCESS Hand controller already started")
+            hc_print("SUCCESS Hand controller already started")
             return True
 
         self.running = True
@@ -138,13 +131,13 @@ class DirectHandController:
                 if self.controller_ready.wait(timeout=10):  # Wait up to 10 seconds
                     debug_print("SUCCESS Hand controller GUI thread started and ready")
                 else:
-                    print("ERROR Hand controller failed to initialize within timeout")
+                    hc_print("ERROR Hand controller failed to initialize within timeout")
                     return False
 
             return True
 
         except Exception as e:
-            print(f"ERROR Failed to start hand controller: {e}")
+            hc_print(f"ERROR Failed to start hand controller: {e}")
             import traceback
 
             traceback.print_exc()
@@ -230,7 +223,7 @@ class DirectHandController:
                 builtins.print = original_print
 
         except Exception as e:
-            print(f"ERROR GUI thread error: {e}")
+            hc_print(f"ERROR GUI thread error: {e}")
             import traceback
 
             traceback.print_exc()
@@ -248,9 +241,9 @@ class DirectHandController:
                 if not self.headless and hasattr(self.controller, "root"):
                     self.controller.root.quit()
                     self.controller.root.destroy()
-                print("🛑 Hand controller stopped")
+                hc_print("🛑 Hand controller stopped")
             except Exception as e:
-                print(f"WARNING Error stopping hand controller: {e}")
+                hc_print(f"WARNING Error stopping hand controller: {e}")
             finally:
                 self.controller = None
 
@@ -265,14 +258,14 @@ class DirectHandController:
             # Call the emotion change method directly
             if hasattr(self.controller, "change_emotion"):
                 self.controller.change_emotion(mapped_emotion)
-                print(f"🎭 Hand controller emotion changed to: {mapped_emotion}")
+                hc_print(f"🎭 Hand controller emotion changed to: {mapped_emotion}")
                 return True
             else:
-                print(f"WARNING Hand controller doesn't support emotion changing")
+                hc_print(f"WARNING Hand controller doesn't support emotion changing")
                 return False
 
         except Exception as e:
-            print(f"ERROR Failed to set emotion {emotion}: {e}")
+            hc_print(f"ERROR Failed to set emotion {emotion}: {e}")
             return False
 
     def send_reactivity_data(self, reactivity_data: Dict[str, Any]):
@@ -293,7 +286,7 @@ class DirectHandController:
                     try:
                         self.controller.pause_markov_generation()
                     except Exception as pause_error:
-                        print(f"ERROR Pause method error: {pause_error}")
+                        hc_print(f"ERROR Pause method error: {pause_error}")
                         import traceback
 
                         traceback.print_exc()
@@ -302,7 +295,7 @@ class DirectHandController:
                     try:
                         self.controller.stop_markov_generation()
                     except Exception as stop_error:
-                        print(f"ERROR Stop method error: {stop_error}")
+                        hc_print(f"ERROR Stop method error: {stop_error}")
                         import traceback
 
                         traceback.print_exc()
@@ -317,16 +310,16 @@ class DirectHandController:
                 elif hasattr(self.controller, "start_markov_generation"):
                     self.controller.start_markov_generation()
                     if getattr(config, "DEBUG_REACTIVITY_PAUSE", False):
-                        print("SUCCESS Hand controller resumed (fallback)")
+                        hc_print("SUCCESS Hand controller resumed (fallback)")
                 return True
 
             # Unknown action type
             if getattr(config, "DEBUG_REACTIVITY_PAUSE", False):
-                print(f"WARNING Unknown reactivity action: {action}")
+                hc_print(f"WARNING Unknown reactivity action: {action}")
             return False
 
         except Exception as e:
-            print(f"ERROR Failed to send reactivity data: {e}")
+            hc_print(f"ERROR Failed to send reactivity data: {e}")
             return False
 
     def get_status(self) -> Dict[str, Any]:
@@ -345,13 +338,13 @@ class DirectHandController:
             return status
 
         except Exception as e:
-            print(f"ERROR Failed to get status: {e}")
+            hc_print(f"ERROR Failed to get status: {e}")
             return {"available": False, "error": str(e)}
 
     def change_to_emotion(self, emotion):
         """Change the emotional state of the hand controller - thread-safe and immediate."""
         if not self.controller:
-            print("WARNING Hand controller not available")
+            hc_print("WARNING Hand controller not available")
             return False
 
         # Check if emotion is already current - avoid unnecessary resets
@@ -370,27 +363,27 @@ class DirectHandController:
                 self.current_emotion = emotion
                 return True
             else:
-                print("WARNING Hand controller doesn't support emotion changing")
+                hc_print("WARNING Hand controller doesn't support emotion changing")
                 return False
         except Exception as e:
-            print(f"ERROR Error changing emotion to {emotion}: {e}")
+            hc_print(f"ERROR Error changing emotion to {emotion}: {e}")
             return False
 
     def start_autonomous_mode(self):
         """Start autonomous Markov chain generation."""
         if not self.controller:
-            print("WARNING Hand controller not available")
+            hc_print("WARNING Hand controller not available")
             return False
 
         try:
             if hasattr(self.controller, "start_autonomous_mode"):
-                print("🧠 Starting autonomous Markov generation...")
+                hc_print("🧠 Starting autonomous Markov generation...")
                 return self.controller.start_autonomous_mode()
             else:
-                print("WARNING Hand controller doesn't support autonomous mode")
+                hc_print("WARNING Hand controller doesn't support autonomous mode")
                 return False
         except Exception as e:
-            print(f"ERROR Error starting autonomous mode: {e}")
+            hc_print(f"ERROR Error starting autonomous mode: {e}")
             return False
 
 

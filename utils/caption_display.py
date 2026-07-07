@@ -29,22 +29,17 @@ class CaptionDisplay:
 
     def _connect(self):
         try:
-            print(f"[DISPLAY] Attempting to connect to {self.port}")
             self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
             time.sleep(2)
             self.connected = True
-            print(f"[DISPLAY] Successfully connected to {self.port}")
+            print(f"[DISPLAY] Connected to {self.port}")
 
-            # Test if Arduino responds to anything
-            print(f"[DEBUG] Testing Arduino communication...")
+            # Prime brightness; the response (if any) is informational only
             self.ser.write(b"BRIGHTNESS:255\n")
             self.ser.flush()
             time.sleep(0.5)
             if self.ser.in_waiting > 0:
-                response = self.ser.readline().decode().strip()
-                print(f"[DEBUG] Arduino brightness response: {response}")
-            else:
-                print(f"[DEBUG] No response to brightness command")
+                self.ser.readline()
         except Exception as e:
             print(f"[DISPLAY] Failed to connect to caption display: {e}")
             print(f"[DISPLAY] Error type: {type(e)}")

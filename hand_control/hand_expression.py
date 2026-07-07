@@ -11,6 +11,11 @@ from typing import Optional
 
 import serial
 
+try:
+    from .quiet_print import hc_print
+except ImportError:
+    from quiet_print import hc_print
+
 
 class HandExpressionController:
     """Standalone hand expression controller with exact same API as original."""
@@ -38,14 +43,14 @@ class HandExpressionController:
             self._init_serial()
         else:
             if not self.clean_output:
-                print("WARNING: No hand controller port detected - running in simulation mode")
+                hc_print("WARNING: No hand controller port detected - running in simulation mode")
 
     def _detect_hand_controller_port(self) -> Optional[str]:
         """Return fixed udev symlink for hand controller."""
         # Use fixed udev symlink
         port = "/dev/arduino_lefthand"
         if not self.clean_output:
-            print(f"Using fixed hand controller port: {port}")
+            hc_print(f"Using fixed hand controller port: {port}")
         return port
 
         # Note: Removed environment variable checks - using fixed udev symlink
@@ -61,11 +66,11 @@ class HandExpressionController:
             from config.config import HAND_CONTROLLER_PORT
 
             if not self.clean_output:
-                print(f"Using hand controller port from config: {HAND_CONTROLLER_PORT}")
+                hc_print(f"Using hand controller port from config: {HAND_CONTROLLER_PORT}")
             return HAND_CONTROLLER_PORT
         except ImportError:
             if not self.clean_output:
-                print("WARNING: Could not import config - no port available")
+                hc_print("WARNING: Could not import config - no port available")
             return None
 
     def _init_serial(self):
@@ -74,15 +79,15 @@ class HandExpressionController:
             self.serial_connection = serial.Serial(self.port, self.baudrate, timeout=1)
             time.sleep(2)  # Arduino boot time
             if not self.clean_output:
-                print(f"SUCCESS Connected to hand controller on {self.port} at {self.baudrate} baud")
+                hc_print(f"SUCCESS Connected to hand controller on {self.port} at {self.baudrate} baud")
             # Send test command to verify connection
             test_command = "HAND,90,90,90,90\n"
             self.serial_connection.write(test_command.encode())
             if not self.clean_output:
-                print(f"📤 Test command sent: {test_command.strip()}")
+                hc_print(f"📤 Test command sent: {test_command.strip()}")
         except Exception as e:
             if not self.clean_output:
-                print(f"ERROR Failed to connect to {self.port}: {e}")
+                hc_print(f"ERROR Failed to connect to {self.port}: {e}")
             self.serial_connection = None
 
     def set_hand_positions(self, positions: list):
@@ -146,23 +151,23 @@ class HandExpressionController:
                 self._debug_count = 0
             self._debug_count += 1
             if self._debug_count % 20 == 0:  # Every 20 commands
-                print(f"📤 SERIAL: {command.strip()}")
+                hc_print(f"📤 SERIAL: {command.strip()}")
 
         except Exception as e:
             if not self.clean_output:
-                print(f"ERROR Serial write error: {e}")
+                hc_print(f"ERROR Serial write error: {e}")
 
     def enable_manual_override(self):
         """Enable manual override mode."""
         self.manual_override = True
         if not self.clean_output:
-            print("🎮 Manual override ENABLED")
+            hc_print("🎮 Manual override ENABLED")
 
     def disable_manual_override(self):
         """Disable manual override mode."""
         self.manual_override = False
         if not self.clean_output:
-            print("🤖 Manual override DISABLED")
+            hc_print("🤖 Manual override DISABLED")
 
     def enable_left_arm_movement(self):
         """Enable autonomous left arm movement."""
@@ -172,10 +177,10 @@ class HandExpressionController:
                 self.serial_connection.write(command.encode())
                 self.serial_connection.flush()
                 if not self.clean_output:
-                    print("🤖 Left arm movement ENABLED")
+                    hc_print("🤖 Left arm movement ENABLED")
             except Exception as e:
                 if not self.clean_output:
-                    print(f"ERROR Failed to enable left arm movement: {e}")
+                    hc_print(f"ERROR Failed to enable left arm movement: {e}")
 
     def disable_left_arm_movement(self):
         """Disable autonomous left arm movement."""
@@ -185,10 +190,10 @@ class HandExpressionController:
                 self.serial_connection.write(command.encode())
                 self.serial_connection.flush()
                 if not self.clean_output:
-                    print("🤖 Left arm movement DISABLED")
+                    hc_print("🤖 Left arm movement DISABLED")
             except Exception as e:
                 if not self.clean_output:
-                    print(f"ERROR Failed to disable left arm movement: {e}")
+                    hc_print(f"ERROR Failed to disable left arm movement: {e}")
 
     def cleanup(self):
         """Clean shutdown of hand controller."""
@@ -196,7 +201,7 @@ class HandExpressionController:
             try:
                 self.serial_connection.close()
                 if not self.clean_output:
-                    print("🔌 Serial connection closed")
+                    hc_print("🔌 Serial connection closed")
             except Exception as e:
                 if not self.clean_output:
-                    print(f"ERROR Error closing serial: {e}")
+                    hc_print(f"ERROR Error closing serial: {e}")

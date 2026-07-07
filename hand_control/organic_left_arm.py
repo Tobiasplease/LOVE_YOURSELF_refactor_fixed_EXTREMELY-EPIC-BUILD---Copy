@@ -16,6 +16,11 @@ import threading
 from typing import Optional, Dict, Any
 
 try:
+    from .quiet_print import hc_print
+except ImportError:
+    from quiet_print import hc_print
+
+try:
     from mood.mood import MoodEngine
 except ImportError:
     MoodEngine = None
@@ -47,7 +52,7 @@ class OrganicLeftArmController:
         for i in range(self.servo_count):
             target = random.randint(self.min_positions[i], self.max_positions[i])
             self.target_positions.append(target)
-            print(f"🎯 Servo {i} initial target: {target}° (current: {self.center_positions[i]}°)")
+            hc_print(f"🎯 Servo {i} initial target: {target}° (current: {self.center_positions[i]}°)")
         self.last_move_time = [time.time()] * self.servo_count
         self.last_speed_change = [time.time()] * self.servo_count
 
@@ -113,7 +118,7 @@ class OrganicLeftArmController:
             }
         }
 
-        print("🤖 Organic Left Arm Controller initialized with mood integration")
+        hc_print("🤖 Organic Left Arm Controller initialized with mood integration")
 
     def set_serial_connection(self, serial_connection):
         """Update the serial connection."""
@@ -128,7 +133,7 @@ class OrganicLeftArmController:
         if emotion_state != self.current_emotional_state:
             self.current_emotional_state = emotion_state
             self._apply_emotional_modifiers()
-            print(f"🌊 Left arm adapting to {emotion_state} mood")
+            hc_print(f"🌊 Left arm adapting to {emotion_state} mood")
 
     def _apply_emotional_modifiers(self):
         """Apply very subtle emotional modifiers to movement parameters."""
@@ -175,7 +180,7 @@ class OrganicLeftArmController:
             self.running = True
             self.thread = threading.Thread(target=self._movement_loop, daemon=True)
             self.thread.start()
-            print("🌊 Organic left arm movement ENABLED")
+            hc_print("🌊 Organic left arm movement ENABLED")
 
     def disable(self):
         """Disable organic movement."""
@@ -183,21 +188,21 @@ class OrganicLeftArmController:
             return
 
         self.enabled = False
-        print("🛑 Organic left arm movement DISABLED")
+        hc_print("🛑 Organic left arm movement DISABLED")
 
     def pause_for_drawing(self):
         """Temporarily pause organic movement for CNC drawing."""
         if self.enabled:
             self.enabled = False
             self.paused_for_drawing = True
-            print("⏸️ Organic left arm PAUSED for drawing")
+            hc_print("⏸️ Organic left arm PAUSED for drawing")
 
     def resume_after_drawing(self):
         """Resume organic movement after CNC drawing."""
         if hasattr(self, 'paused_for_drawing') and self.paused_for_drawing:
             self.enabled = True
             self.paused_for_drawing = False
-            print("▶️ Organic left arm RESUMED after drawing")
+            hc_print("▶️ Organic left arm RESUMED after drawing")
 
     def shutdown(self):
         """Shutdown the controller."""
@@ -205,7 +210,7 @@ class OrganicLeftArmController:
         self.running = False
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=2.0)
-        print("🧹 Organic left arm controller shutdown")
+        hc_print("🧹 Organic left arm controller shutdown")
 
     def _movement_loop(self):
         """Main movement loop running in background thread."""
@@ -215,7 +220,7 @@ class OrganicLeftArmController:
             self._start_initial_pause(i, current_time)
             self._change_servo_speed(i)
 
-        print("🌊 Organic movement loop started")
+        hc_print("🌊 Organic movement loop started")
 
         while self.running:
             try:
@@ -228,10 +233,10 @@ class OrganicLeftArmController:
                 time.sleep(0.1)  # 100ms update rate
 
             except Exception as e:
-                print(f"⚠️ Error in organic movement loop: {e}")
+                hc_print(f"⚠️ Error in organic movement loop: {e}")
                 time.sleep(1.0)
 
-        print("🛑 Organic movement loop stopped")
+        hc_print("🛑 Organic movement loop stopped")
 
     def _update_organic_movement(self, current_time: float):
         """Update organic movement for all servos with intelligent patterns."""
@@ -247,7 +252,7 @@ class OrganicLeftArmController:
                     # End pause
                     self.in_pause[i] = False
                     self.last_move_time[i] = current_time
-                    # print(f"🌊 Servo {i} resuming after {self.pause_duration[i]:.1f}s pause")
+                    # hc_print(f"🌊 Servo {i} resuming after {self.pause_duration[i]:.1f}s pause")
                     self._change_servo_speed(i)
                 else:
                     continue  # Still pausing, skip movement
@@ -289,7 +294,7 @@ class OrganicLeftArmController:
 
             self.target_positions[servo_index] = new_target
 
-            # print(f"🎯 Servo {servo_index} new target: {new_target} "
+            # hc_print(f"🎯 Servo {servo_index} new target: {new_target} "
             #       f"(current: {self.current_positions[servo_index]}, "
             #       f"speed: {self.current_speeds[servo_index]:.1f}s)")
 
@@ -305,7 +310,7 @@ class OrganicLeftArmController:
     def _send_servo_positions(self):
         """Send current servo positions to Arduino via direct servo commands."""
         if not self.serial_connection:
-            print("🔌 No serial connection - skipping servo commands")
+            hc_print("🔌 No serial connection - skipping servo commands")
             return
 
         try:
@@ -314,12 +319,12 @@ class OrganicLeftArmController:
             for i, position in enumerate(self.current_positions):
                 pin = 4 + i  # Pins 4 and 5 for left arm servos
                 command = f"SERVO,{pin},{int(position)}\n"
-                # print(f"📤 Sending: {command.strip()}")  # Suppressed debug output
+                # hc_print(f"📤 Sending: {command.strip()}")  # Suppressed debug output
                 self.serial_connection.write(command.encode())
                 self.serial_connection.flush()
 
         except Exception as e:
-            print(f"⚠️ Error sending servo positions: {e}")
+            hc_print(f"⚠️ Error sending servo positions: {e}")
 
 
     def _start_pause(self, servo_index: int, current_time: float):
@@ -337,7 +342,7 @@ class OrganicLeftArmController:
 
         self.pause_duration[servo_index] = pause_duration
 
-        # print(f"⏸️ Servo {servo_index} starting {pause_duration:.1f}s pause")
+        # hc_print(f"⏸️ Servo {servo_index} starting {pause_duration:.1f}s pause")
 
     def _start_initial_pause(self, servo_index: int, current_time: float):
         """Start initial pause for a servo."""
@@ -350,7 +355,7 @@ class OrganicLeftArmController:
         speed_range = self.max_speed - self.min_speed
         self.current_speeds[servo_index] = self.min_speed + random.random() * speed_range
 
-        # print(f"🏃 Servo {servo_index} speed changed to {self.current_speeds[servo_index]:.1f}s")
+        # hc_print(f"🏃 Servo {servo_index} speed changed to {self.current_speeds[servo_index]:.1f}s")
 
     def get_status(self) -> Dict[str, Any]:
         """Get current status."""
@@ -377,7 +382,7 @@ class OrganicLeftArmController:
         self.mode_change_time = current_time
         self.mode_duration = random.uniform(5.0, 15.0)
 
-        # print(f"🎭 Movement mode: {self.movement_mode} for {self.mode_duration:.1f}s")
+        # hc_print(f"🎭 Movement mode: {self.movement_mode} for {self.mode_duration:.1f}s")
 
     def _update_independent_movement(self, current_time: float):
         """Update independent movement for each servo."""
@@ -426,7 +431,7 @@ class OrganicLeftArmController:
                             new_target = random.randint(self.min_positions[i], current_pos - 3)
 
                         self.target_positions[i] = max(self.min_positions[i], min(self.max_positions[i], new_target))
-                        # print(f"🌊 Servo {i} sweep target: {self.target_positions[i]}°")
+                        # hc_print(f"🌊 Servo {i} sweep target: {self.target_positions[i]}°")
 
                     self._move_servo(i, current_time)
 
@@ -442,6 +447,6 @@ class OrganicLeftArmController:
 
                     # If close to center, end retract mode early
                     if abs(self.current_positions[i] - self.center_positions[i]) <= 2:
-                        # print(f"✨ Servo {i} retracted to center")
+                        # hc_print(f"✨ Servo {i} retracted to center")
                         # Switch to a new random target after retraction
                         self.target_positions[i] = random.randint(self.min_positions[i], self.max_positions[i])
