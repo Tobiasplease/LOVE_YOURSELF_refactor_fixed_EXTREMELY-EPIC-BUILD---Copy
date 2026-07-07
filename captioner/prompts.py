@@ -1373,15 +1373,19 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     Commit: "refactor: tighten drawing prompts for ComfyUI utility"
     ============================================================
     """
-    from config.config import DRAWING_TEMPERATURE, MOOD_SNAPSHOT_FOLDER
+    from config.config import CLEAN_LLM_OUTPUT, DRAWING_TEMPERATURE, MOOD_SNAPSHOT_FOLDER
     from event_logging.event_logger import log_json_entry
     from event_logging.log_type import LogType
     from utils.inference import query_model
 
-    print("[🎨] Starting context-rich 5-step drawing analysis...")
+    def _say(msg):
+        if not CLEAN_LLM_OUTPUT:
+            print(msg)
+
+    _say("[🎨] Starting context-rich 5-step drawing analysis...")
 
     # === STEP 1: ENVIRONMENTAL ANALYSIS ===
-    print("[🎨] Step 1: Environmental Reality Check (with spatial memory)")
+    _say("[🎨] Step 1: Environmental Reality Check (with spatial memory)")
     step1_prompt = build_step1_environmental_prompt(memory_ref, image_path)
 
     step1_result = query_model(
@@ -1392,10 +1396,10 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt_type="drawing_step1_environmental",
         options={"temperature": DRAWING_TEMPERATURE * 0.8},
     )
-    print(f"[🎨] Step 1 result: {step1_result[:200]}")
+    _say(f"[🎨] Step 1 result: {step1_result[:200]}")
 
     # === STEP 2: EMOTIONAL ASSESSMENT ===
-    print("[🎨] Step 2: Emotional Assessment (with emotional journey)")
+    _say("[🎨] Step 2: Emotional Assessment (with emotional journey)")
     step2_prompt = build_step2_emotional_prompt(memory_ref, step1_result)
 
     step2_result = query_model(
@@ -1406,17 +1410,17 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt_type="drawing_step2_emotional",
         options={"temperature": DRAWING_TEMPERATURE},
     )
-    print(f"[🎨] Step 2 result: {step2_result[:200]}")
+    _say(f"[🎨] Step 2 result: {step2_result[:200]}")
 
     # === STEP 3: COMMUNICATION INTENT (with artistic arc + drawing intentions) ===
-    print("[🎨] Step 3: Communication Intent (with identity, artistic arc & drawing ideas)")
+    _say("[🎨] Step 3: Communication Intent (with identity, artistic arc & drawing ideas)")
     artistic_context = ""
     try:
         from drawing.drawing_memory import get_drawing_memory
         dm = get_drawing_memory()
         artistic_context = dm.get_artistic_arc_context(drawing_intentions=drawing_intentions or [])
         if artistic_context:
-            print(f"[🎨] Artistic context injected: {artistic_context[:80]}...")
+            _say(f"[🎨] Artistic context injected: {artistic_context[:80]}...")
     except Exception as e:
         print(f"[⚠️] Artistic arc unavailable: {e}")
 
@@ -1430,10 +1434,10 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt_type="drawing_step3_communication",
         options={"temperature": DRAWING_TEMPERATURE * 1.1},
     )
-    print(f"[🎨] Step 3 result: {step3_result[:200]}")
+    _say(f"[🎨] Step 3 result: {step3_result[:200]}")
 
     # === STEP 4: TECHNIQUE ASSESSMENT ===
-    print("[🎨] Step 4: Technical Planning (with drawing history)")
+    _say("[🎨] Step 4: Technical Planning (with drawing history)")
     step4_prompt = build_step4_technique_prompt(memory_ref, step3_result)
 
     step4_result = query_model(
@@ -1444,10 +1448,10 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         prompt_type="drawing_step4_technique",
         options={"temperature": DRAWING_TEMPERATURE * 0.9},
     )
-    print(f"[🎨] Step 4 result: {step4_result[:200]}")
+    _say(f"[🎨] Step 4 result: {step4_result[:200]}")
 
     # === STEP 5: FINAL SYNTHESIS ===
-    print("[🎨] Step 5: Final Synthesis (with complete consciousness)")
+    _say("[🎨] Step 5: Final Synthesis (with complete consciousness)")
     all_results = {"environmental": step1_result, "emotional": step2_result, "communication": step3_result, "technique": step4_result}
 
     step5_prompt = build_step5_synthesis_prompt(memory_ref, all_results, extra)
@@ -1466,8 +1470,8 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
         },
     )
 
-    print(f"[🎨] Step 5 FINAL: {final_result[:300]}")
-    print("[🎨] ✅ Context-rich 5-step analysis complete")
+    _say(f"[🎨] Step 5 FINAL: {final_result[:300]}")
+    _say("[🎨] ✅ Context-rich 5-step analysis complete")
 
     # Log complete analysis for review
     log_json_entry(

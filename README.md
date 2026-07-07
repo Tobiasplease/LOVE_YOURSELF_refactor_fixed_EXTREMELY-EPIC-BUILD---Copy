@@ -1,12 +1,12 @@
 # LOVE_YOURSELF - AI-Powered Interactive Mirror System
 
-A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using ollama vision models, and can optionally control servo motors for physical interaction. It can also generate images based on mood by posting to an external comfyui server.
+A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using a local vision-language model (Qwen3.5 via llama-server, Ollama fallback), and can optionally control servo motors for physical interaction. It can also generate images based on mood by posting to an external comfyui server.
 
 ## Features
 
 - **Real-time Face Detection**: Uses OpenCV DNN face detection for robust person detection
 - **Object Detection**: YOLOv8-powered object recognition and tracking
-- **Mood Analysis**: AI-driven emotion and mood evaluation via ollama hosted model
+- **Mood Analysis**: AI-driven emotion and mood evaluation via local language models
 - **Caption Generation**: Automatic scene description and context understanding
 - **Image Generation**: Creates art based on mood analysis using ComfyUI integration
 - **Physical Control Systems**: Multi-modal physical interaction capabilities:
@@ -97,17 +97,23 @@ models/yolov8n.pt
 
 ### 7. External Service Setup
 
-#### Ollama API Setup
+#### Inference Backend Setup
 
-For mood analysis and captioning, ensure ollama is running locally:
+The vision model is Qwen3.5. The primary backend is a patched llama-server
+(llama.cpp with Qwen3.5 video super-frame support) at `http://localhost:8080`,
+managed by `utils/llama_server.py`; set `INFERENCE_BACKEND=ollama` to fall back
+to Ollama instead:
 
 ```bash
-# Install and run LLaVA (using Ollama)
-ollama pull llava:7b-v1.6-mistral-q5_1
+# Fallback backend (Ollama)
+ollama pull qwen3.5:9b
+ollama pull mistral-nemo   # text-side model for compression/monologue
 ollama serve
 ```
 
-The system expects an LLM model to be accessible at `http://localhost:11434/api/generate`. All Ollama API calls are handled through the `utils/ollama.py` module.
+Ollama is expected at `http://localhost:11434/api/generate`; calls are handled
+through `utils/ollama.py`. See `docs/llama-cpp-video-migration.md` for the
+llama-server rationale and setup.
 
 #### ComfyUI Setup (Optional)
 
@@ -138,7 +144,6 @@ python machine.py
 
 # Run with configuration override
 python machine.py --config_override config/debug_config.json
-python machine.py --config_override config/production_config.json
 
 # Run with debug mode for verbose output
 python machine.py --debug
@@ -154,17 +159,14 @@ export MOOD_SNAPSHOT_FOLDER=/Users/jbe/Dropbox/\_outputs/impostor_event_log && p
 ### Testing Components
 
 ```bash
-# Test ollama caption generation
-python debug/test_ollama_caption.py
+# Test caption pipeline
+python debug/test_caption_flow.py
+
+# Test the llama-server backend
+python debug/test_llama_server.py
 
 # Test ComfyUI integration
 python debug/test_comfy.py drawing/example_workflow.json
-
-# Test complete impostor image generation pipeline
-python debug/test_impostor_flow.py
-
-# Test G-code processing pipeline
-python debug/test_pipeline.py
 
 # View event logs
 python debug/log_viewer.py
@@ -184,8 +186,7 @@ LOVE_YOURSELF/
 │   ├── config.py          # Main configuration file
 │   ├── loader.py          # Configuration override system
 │   ├── debug_config.json  # Debug mode settings
-│   ├── production_config.json # Production settings
-│   └── platform-specific/ # Platform-specific configurations
+│   └── platform-specific/ # Platform-specific configurations (gpu-peon, impostor-bot-win, jbe-osx)
 ├── captioner/             # AI captioning and memory system
 ├── mood/                  # Mood analysis and emotional processing
 ├── perception/            # Computer vision and object detection
@@ -225,9 +226,6 @@ The system supports runtime configuration overrides via JSON files:
 ```bash
 # Use debug configuration (faster intervals for development)
 python machine.py --config_override config/debug_config.json
-
-# Use production configuration (slower, optimized intervals)
-python machine.py --config_override config/production_config.json
 ```
 
 #### Available Override Configurations
@@ -235,13 +233,7 @@ python machine.py --config_override config/production_config.json
 **Debug Config** (`config/debug_config.json`):
 
 - Faster processing intervals for development and testing
-- `REASON_INTERVAL`: 30 seconds (vs 360 default)
-- `DRAWING_INTERVAL`: 60 seconds (vs 600 default)
-
-**Production Config** (`config/production_config.json`):
-
-- Standard production intervals for optimal performance
-- Uses default values from `config/config.py`
+- e.g. `DRAWING_INTERVAL`: 60 seconds (vs 600 default)
 
 **Platform-Specific Configs:**
 

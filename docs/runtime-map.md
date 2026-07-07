@@ -1,6 +1,7 @@
 # Runtime Map — what is actually live
 
-Last verified: June 12, 2026 (branch: rebuild/north-star).
+Last verified: June 12, 2026 (branch: rebuild/north-star); dead-code entries
+updated July 7, 2026 (handoff cleanup pass).
 This is the maintenance view: every line the model sees, where it comes from,
 and which subsystems are healthy, weak, or dead. Update it when wiring changes.
 The audit habit that produced it: features fail SILENTLY here — always check
@@ -204,7 +205,7 @@ prompt entirely: present-tense presence belongs to the live detection layer
 - utils/ollama.py query path (fallback only; llama-server is primary)
 - get_session_greeting, after_perception, build_monologue_prompt etc. —
   removed June 2026 dead-code purge
-- subconscious.py — debug scripts only
+- subconscious.py — REMOVED July 2026 along with its debug suite
 - **_perform_introspection / _synthesize_self_model / _update_core_facts**
   (context_compression) — RETIRED June 28; identity now distilled from the
   reflection loop (distill_reflection). ~345 lines removed.
@@ -223,3 +224,21 @@ prompt entirely: present-tense presence belongs to the live detection layer
   fix what's being stored instead (north-star principle 1)
 - docs/reasoning-model-plan.md — superseded by docs/north-star.md + the
   reflection loop
+
+## Manual tools (real code, NOT in the runtime path)
+
+Standalone utilities run by hand for calibration and setup — do not mistake
+them for dead code, and do not expect machine.py to reach them:
+
+- `grbl/setup_grbl.py`, `grbl/setup_grbl_grid.py`, `grbl/svg_to_grbl.py`,
+  `grbl/grid_drawing_ui.py`, `grbl/manual_motor_control_gui.py` — CNC setup,
+  grid calibration, and manual control GUIs (warp calibration workflow)
+- `grbl/segmented_executor.py` — person-responsive segmented G-code execution;
+  currently exercised only from debug scripts
+- `tools/arm_gui_tk/` — 2-link arm kinematics GUI for skew correction
+  (see docs/skew_calibration_quickstart.md)
+- `bcnc/` — G-code conversion library; the runtime entry is
+  `image_monitor/image_monitor.py` (raster → centerline SVG)
+- `labs/warp-fix-lab/` — experimental warp correction scripts, not integrated
+- `debug/` — 103 standalone test/calibration scripts (all verified to import
+  only symbols that still exist, July 2026)

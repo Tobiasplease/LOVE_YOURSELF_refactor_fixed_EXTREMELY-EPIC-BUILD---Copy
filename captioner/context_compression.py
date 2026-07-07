@@ -497,7 +497,8 @@ Respond with the one sentence only, no prefixes."""
             try:
                 from captioner.semantic_memory import get_semantic_memory
                 get_semantic_memory().register_concepts_from_compression(labels)
-                print(f"[SEMANTIC] Extracted from compression: {labels}")
+                if not config.CLEAN_LLM_OUTPUT:
+                    print(f"[SEMANTIC] Extracted from compression: {labels}")
             except Exception as e:
                 print(f"[SEMANTIC] Failed to register concepts: {e}")
 
