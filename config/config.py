@@ -20,9 +20,6 @@ PAN_MIN = 45   # Left limit (±45° from center) - expanded range
 PAN_MAX = 135  # Right limit (±45° from center) - expanded range
 TILT_MIN = 65  # Down limit - matches current working position with lowered mount
 TILT_MAX = 150 # Up limit - expanded for upward viewing range
-# Legacy values for backwards compatibility
-SERVO_MIN = PAN_MIN  # Use PAN_MIN as default
-SERVO_MAX = PAN_MAX  # Use PAN_MAX as default
 EASING_FACTOR = 0.15  # Slightly faster for more responsive movement
 
 # === SERVO FLIPPING ===
@@ -39,26 +36,15 @@ IDLE_AMPLITUDE_Y = 30  # Increased from 15 for more prominent vertical movement
 IDLE_CENTER_X = 90
 IDLE_CENTER_Y = 90
 FACE_STABLE_TIMEOUT = 3.0  # Time before going idle after losing face
-IDLE_SPEED_MIN = 0.15
-IDLE_SPEED_MAX = 0.30
 IDLE_PAUSE_MIN = 1.5  # Minimum pause between idle movements (more organic)
 IDLE_PAUSE_MAX = 6.0  # Maximum pause between idle movements (more frequent)
 IDLE_EASING = 0.18  # Easing factor for idle movements (more responsive)
 SWEEP_PROBABILITY = 0.6  # Probability of doing a big sweep movement vs small movement
 
-# === LLM-DRIVEN GAZE INTENT ===
-# Allow the model to influence camera direction via caption content
-ENABLE_GAZE_INTENT = True  # Parse captions for directional cues (up/down/left/right)
-GAZE_NUDGE_DURATION = 6.0  # How long a gaze nudge lasts before decaying (seconds)
-
-
 # === BREATHING SETTINGS ===
 LUNG_MIN = 60
 LUNG_MAX = 110
 PAUSE_DURATION = 1.5
-LUNG_OFFSET_SCALE = -0.10
-
-# === MOOD SYSTEM ===
 
 # === INFERENCE BACKEND ===
 # "ollama" — Ollama daemon (default, legacy)
@@ -136,7 +122,6 @@ GRBL_WARP_TRANSFORM = True
 
 # GRBL homing retry configuration
 GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
-GRBL_HOMING_TIMEOUT = 120  # Seconds to wait for each homing attempt
 
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.
@@ -163,7 +148,6 @@ GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING = os.getenv("GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING
 GRBL_USE_CENTRALIZED_PEN_UP = os.getenv("GRBL_USE_CENTRALIZED_PEN_UP", "false").lower() in ("1", "true", "yes")
 
 # Safety pen up value for homing and critical operations (higher than drawing)
-GRBL_SAFETY_PEN_UP = int(os.getenv("GRBL_SAFETY_PEN_UP", 30))  # Higher for safety during homing
 
 # === GRBL IDLE MOVEMENT SETTINGS ===
 # Idle movements happen in far corner away from home (0,0)
@@ -343,23 +327,6 @@ YOLO_MODEL_PATH = os.getenv(
     os.path.join(MODEL_PATH, "yolov8n.pt"),  # nano model for low VRAM use
 )
 
-# === CAPTIONER MEMORY CONTROL ===
-MOOD_DECAY_RATE = 0.03  # how much mood fades when nothing new happens
-NOVELTY_RANDOMNESS = 0.5  # random weight to boost novelty
-
-# === CHANGE DETECTION ===
-VISUAL_CHANGE_THRESHOLD = 1.0  # novelty score threshold for triggering change-focused prompts (0.0-1.0) - disabled for now
-
-
-# === TINYLLAMA SETTINGS ===
-MOTIF_MODEL = "tinyllama:latest"
-# MOTIF_MODEL = OLLAMA_MODEL
-
-TINYLLAMA_TEMPERATURE = 0.1  # Low temperature for consistent numeric output
-TINYLLAMA_TOP_P = 0.8  # Top-p sampling for TinyLlama
-TINYLLAMA_NUM_PREDICT = 5  # Very short - just a number like "0.7"
-TINYLLAMA_TIMEOUT = 20  # Timeout in seconds for TinyLlama queries
-
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
 # === CAMERA RESOLUTION ===
@@ -374,12 +341,7 @@ CAMERA_BRIGHTNESS = -1     # Brightness (-1 for auto/default)
 CAMERA_EXPOSURE = -1       # Exposure (-1 for auto, or manual value)
 CAMERA_AUTO_FOCUS = True   # Enable autofocus if available
 
-# --- Mistral LLM settings ---
-# MISTRAL_COOLDOWN_SECS = 1000  # Min seconds between Mistral prompts
-MISTRAL_TIMEOUT_SECS = 60  # Max time to wait for Ollama to respond
-
 # === OLLAMA SETTINGS ===
-OLLAMA_TIMEOUT_SUMMARY = 60
 OLLAMA_TIMEOUT_EVAL = 90
 OLLAMA_TIMEOUT_REFLECTION = 120  # Timeout for reflection/reasoning calls
 OLLAMA_SHOW_PROGRESS = False  # Show animated progress bar during Ollama API calls
@@ -398,8 +360,6 @@ ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) #
 LOG_TYPES_TO_PRINT = ["caption", "reflection", "decision", "comfy_prompt", "new_drawing", "debug"]
 CLEAN_LLM_OUTPUT = False  # Print only LLM response text without metadata prefixes
 PRINT_CLEAN_CAPTIONS = True  # Suppress verbose runtime messages, show only LLM captions
-USE_FOCUSED_PROMPTS = True  # Use streamlined caption prompts (vs verbose structured prompts)
-USE_NARRATIVE_PROMPTS = False  # EXPERIMENTAL: Disabled - reverted to original system
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
 DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
@@ -432,9 +392,6 @@ USE_MULTI_STEP_DRAWING_ANALYSIS = DRAWING_ANALYSIS_MODE in ("multi_step",)
 ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
 PAPER_DETECTION_GAZE_PAN = 80  # Pan angle for looking down at drawing area (adjusted further left for better centering)
 PAPER_DETECTION_GAZE_TILT = 65  # Tilt angle for looking down at drawing area (low enough to see ArUco marker)
-# Reference images used by grbl_utils local heuristic detection
-PAPER_PRESENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_present.jpg")
-PAPER_ABSENT_REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "calibration", "paper_absent.jpg")
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
 
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
@@ -443,40 +400,9 @@ ENABLE_POST_HOME_PAPER_CHECK = True
 # Early paper check: run ArUco check BEFORE ComfyUI generation to save resources
 # This is in addition to the post-home check (double verification)
 ENABLE_EARLY_PAPER_CHECK = True
-# Soft vs. strict behavior: when False, paper check never blocks drawing
-# (it only logs and proceeds). Set to True to enforce blocking on "no paper".
-PAPER_CHECK_STRICT_MODE = True
-# Max time budget for the post-home paper check (seconds)
-PAPER_CHECK_MAX_WAIT_S = 1.0
 # Use the same tilt as drawing lock for detection (aligns view)
 PAPER_USE_DRAWING_TILT = False  # Use PAPER_DETECTION_GAZE_TILT instead (65° for proper ArUco viewing)
-# Use full frame for paper check (not cropped ROI)
-PAPER_USE_FULL_FRAME = True
 
-# --- Paper detection debug + tuning ---
-# Dump diagnostic images/metrics during post-home paper check
-PAPER_DEBUG_DUMP = True
-# Disable all local image heuristics during the post-home paper check
-# (use LLM-only judgment). When True, skips X/whiteness/reference comparisons
-# and relies solely on the LLM single-token decision.
-PAPER_DISABLE_LOCAL_HEURISTICS = True
-# Whiteness thresholds (0..1)
-PAPER_WHITENESS_MIN = 0.25           # Global ROI whiteness guard
-PAPER_WHITENESS_WINDOW_MIN = 0.60    # Any 1/9 window whiteness guard (partial paper)
-# Correlation decision thresholds
-PAPER_CORR_MARGIN = 0.12
-PAPER_PRESENT_CORR_MIN = 0.35
-PAPER_ABSENT_CORR_MIN = 0.35
-# X-detection thresholds
-PAPER_X_SCORE_MIN = 0.35              # Min weighted diagonal length score to accept X
-PAPER_X_CENTER_TOL_FRAC = 0.20        # Fraction of ROI size for center tolerance
-PAPER_X_WHITENESS_OVERRIDE = 0.85     # Only override a strong X if a window whiteness >= this
-
-# --- Optional LLM tie-breaker ---
-PAPER_LLM_ENABLED = True             # Use LLM only when local check is inconclusive/NO
-PAPER_LLM_TIMEOUT_S = 2.0            # Soft time budget for LLM check (best-effort)
-PAPER_LLM_CONFIDENCE_MIN = 0.85      # Require at least this confidence to override
-PAPER_LLM_MODE = "always"            # 'tie_break' or 'always'
 # === LCD CAPTION DISPLAY ===
 USE_CAPTION_DISPLAY = True
 CAPTION_DISPLAY_PORT = "/dev/arduino_lcd"
@@ -487,7 +413,6 @@ CAPTION_DISPLAY_PORT = "/dev/arduino_lcd"
 
 # 1. Lightbulb PWM Controller
 USE_LIGHTBULB_PWM = True  # Re-enabled with non-blocking controller
-LIGHTBULB_SERIAL_PORT = "/dev/arduino_lightbulb"  # Lightbulb controller - fixed udev symlink
 
 # 2. Hand Controller (hardcoded port required)
 HAND_CONTROLLER_PORT = "/dev/arduino_lefthand"  # Hand controller (5 micro servos) - fixed udev symlink

@@ -1,7 +1,6 @@
 {
   "MOOD_EVALUATION_INTERVAL": 10,
   "CAPTION_INTERVAL": 10,
-  "REASON_INTERVAL": 360,
   "DRAWING_INTERVAL": 200,
   "COMFY_OUTPUT_FOLDER": "/home/jbe/Dropbox/_outputs",
   "COMFY_TEMPLATE_FILE": "impostor-template-impostor-bot-svg.json",
@@ -13,5 +12,7 @@
   "CONTROLNET_NET_PATH": "flux/flux-dev-controlnet-union-pro-2.safetensors",
   "BATCH_SIZE": 1,
   "NO_HANDS": true,
-  "LOG_TYPES_TO_PRINT": ["all"]
+  "LOG_TYPES_TO_PRINT": [
+    "all"
+  ]
 }

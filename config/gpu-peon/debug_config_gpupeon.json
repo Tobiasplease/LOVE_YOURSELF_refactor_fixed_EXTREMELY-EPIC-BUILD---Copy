@@ -1,7 +1,6 @@
 {
   "MOOD_EVALUATION_INTERVAL": 10,
   "CAPTION_INTERVAL": 10,
-  "REASON_INTERVAL": 360,
   "DRAWING_INTERVAL": 200,
   "COMFY_OUTPUT_FOLDER": "/home/jbe/Dropbox/_outputs",
   "COMFY_TEMPLATE_FILE": "impostor-template-impostor-bot-svg.json",
@@ -15,5 +14,7 @@
   "NO_HANDS": true,
   "DEBUG_OLLAMA_PROMPTS": false,
   "OLLAMA_PRINT_FULL_RESPONSE": false,
-  "LOG_TYPES_TO_PRINT": ["all"]
+  "LOG_TYPES_TO_PRINT": [
+    "all"
+  ]
 }
