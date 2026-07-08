@@ -460,6 +460,16 @@ class Captioner(MemoryMixin):
         "the user",
     )
 
+    # "1) ..." / "2. ..." openings: assistant list-speak. Document mode
+    # CONTINUES whatever shape is in the stream, so one list item that gets
+    # in breeds "3) ...", "4) ..." forever — strip the prefix at the mouth
+    # and refuse multi-item lists at the stream gate.
+    _ENUM_PREFIX_RE = re.compile(r"^\s*\)?\s*\d{1,2}[).:\]]\s+")
+
+    @classmethod
+    def _strip_list_shape(cls, text: str) -> str:
+        return cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
+
     @classmethod
     def _stream_admissible(cls, text: str) -> bool:
         """Admission gate for the stream window (guard at storage, not mouth)."""
@@ -470,6 +480,8 @@ class Captioner(MemoryMixin):
             return False
         if t.count("*") >= 2 or t.startswith(("- ", "* ", "#")):
             return False  # markdown scaffolding breeds in-stream too
+        if cls._ENUM_PREFIX_RE.match(t) or re.search(r"\b\d\)\s.+\b\d\)\s", t):
+            return False  # numbered-list shape (single item or inline list)
         return True
 
     def _echo_of_stream(self, caption: str) -> bool:
@@ -819,7 +831,7 @@ class Captioner(MemoryMixin):
                                     history=list(self._stream),
                                 )
 
-                        caption = _generate(gen_options)
+                        caption = self._strip_list_shape(_generate(gen_options))
 
                         # Anti-echo gate: a caption that re-opens like a recent
                         # stream entry is a template imitation, not a continuation.
@@ -834,7 +846,7 @@ class Captioner(MemoryMixin):
                                 {"message": "Template echo detected — retrying hotter", "action": "anti_echo_retry", "caption_preview": caption[:60]},
                                 print_message=f"[🔁] Echoed opening, retrying: {caption[:60]}...",
                             )
-                            retry = _generate(hot_opts)
+                            retry = self._strip_list_shape(_generate(hot_opts))
                             if retry and not self._echo_of_stream(retry):
                                 caption = retry
                             else:
