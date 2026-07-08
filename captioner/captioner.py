@@ -897,6 +897,7 @@ class Captioner(MemoryMixin):
                                     options=_opts,
                                     timeout=60,
                                     history=list(self._stream),
+                                    react=bool(self._salience_hot),
                                 )
                         else:
                             # Inward beat → no image (think, don't look). Otherwise
@@ -921,6 +922,7 @@ class Captioner(MemoryMixin):
                                     options=_opts,
                                     prompt_type="caption",
                                     history=list(self._stream),
+                                    react=bool(self._salience_hot),
                                 )
 
                         caption = self._strip_list_shape(_generate(gen_options))

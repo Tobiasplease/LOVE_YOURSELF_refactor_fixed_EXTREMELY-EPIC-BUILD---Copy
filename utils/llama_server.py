@@ -103,17 +103,31 @@ def _document_prefill(history: Optional[List[str]]) -> str:
     return " ".join(parts) + " " if parts else ""
 
 
-def _append_stream_and_user(messages: list, history: Optional[List[str]], user_message: dict) -> str:
+def _append_stream_and_user(messages: list, history: Optional[List[str]], user_message: dict, react: bool = False) -> str:
     """Append the stream + current user message per STREAM_MODE.
 
     "document": user message first, then the monologue-so-far as ONE trailing
     assistant message — llama-server continues it (assistant prefill; the
     payload must set enable_thinking=false or the server rejects the request).
+    The model's next tokens continue its own thought.
+
+    react=True (salience hot — arrival, eye contact, scene motion): the shape
+    flips. The monologue (truncated to the last two thoughts) comes FIRST and
+    the event+frames come LAST, so the model answers the moment instead of
+    continuing past it. Attention capture truncates rehearsal; the reaction is
+    stored into the stream, so the interruption becomes part of the document.
+
     "turns": legacy turn-pairs, then the user message.
 
-    Returns the prefill text ("" in turns mode) for seam cleaning + logging.
+    Returns the prefill text ("" in turns/react modes) for seam cleaning + logging.
     """
     if _stream_mode() == "document":
+        if react:
+            recent = [p for p in ((h or "").strip() for h in history or []) if p][-2:]
+            if recent:
+                messages.append({"role": "assistant", "content": " ".join(recent)})
+            messages.append(user_message)
+            return ""
         prefill = _document_prefill(history)
         messages.append(user_message)
         if prefill:
@@ -283,6 +297,7 @@ def query_llama_server(
     skip_generation_wait: bool = False,
     prior_assistant_turn: Optional[str] = None,
     history: Optional[List[str]] = None,
+    react: bool = False,
 ) -> str:
     """
     Query llama-server with a prompt and optional image.
@@ -347,7 +362,7 @@ def query_llama_server(
     # In document mode, prior_assistant_turn doubles as the stream when no
     # history was passed (memory-mode calls) — continuity either way.
     effective_history = history or ([prior_assistant_turn] if prior_assistant_turn else None)
-    prefill = _append_stream_and_user(messages, effective_history, user_message)
+    prefill = _append_stream_and_user(messages, effective_history, user_message, react=react)
 
     # Build payload
     payload = {
@@ -423,7 +438,7 @@ def query_llama_server(
             prompt_type=prompt_type,
             api_endpoint=endpoint,
             history_len=len(effective_history or []),
-            stream_mode=_stream_mode() if effective_history else None,
+            stream_mode=(_stream_mode() + ("-react" if react else "")) if effective_history else None,
             prefill_tail=prefill[-150:] if prefill else None,
         )
 
@@ -447,7 +462,7 @@ def query_llama_server(
             prompt_type=prompt_type,
             api_endpoint=endpoint,
             history_len=len(effective_history or []),
-            stream_mode=_stream_mode() if effective_history else None,
+            stream_mode=(_stream_mode() + ("-react" if react else "")) if effective_history else None,
         )
 
         return f"[WARNING] llama-server API failed: {error_msg}"
@@ -465,6 +480,7 @@ def _query_multi_image(
     timeout: int = 60,
     show_progress: bool = SHOW_PROGRESS,
     history: Optional[List[str]] = None,
+    react: bool = False,
 ) -> str:
     """Plain multi-image mode: send each frame as a separate image_url in the content array.
     The model sees them as independent images but can still infer temporal change.
@@ -482,7 +498,7 @@ def _query_multi_image(
     user_content.append({"type": "text", "text": prompt})
 
     # The stream: prior captions, per STREAM_MODE (document prefill or turn-pairs)
-    prefill = _append_stream_and_user(messages, history, {"role": "user", "content": user_content})
+    prefill = _append_stream_and_user(messages, history, {"role": "user", "content": user_content}, react=react)
 
     payload = {
         "messages": messages,
@@ -544,7 +560,7 @@ def _query_multi_image(
         prompt_type="caption",
         api_endpoint=endpoint,
         history_len=len(history or []),
-        stream_mode=_stream_mode() if history else None,
+        stream_mode=(_stream_mode() + ("-react" if react else "")) if history else None,
         num_frames=len(frames),
         prefill_tail=prefill[-150:] if prefill else None,
     )
@@ -561,6 +577,7 @@ def _query_superframe(
     timeout: int = 60,
     show_progress: bool = SHOW_PROGRESS,
     history: Optional[List[str]] = None,
+    react: bool = False,
 ) -> str:
     """Super-frame mode: Conv3D paired frames + M-RoPE temporal encoding.
     Genuine temporal perception — the model sees continuous motion.
@@ -612,7 +629,7 @@ def _query_superframe(
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
     # The stream: prior captions, per STREAM_MODE (document prefill or turn-pairs)
-    prefill = _append_stream_and_user(messages, history, user_message)
+    prefill = _append_stream_and_user(messages, history, user_message, react=react)
 
     payload = {
         "messages": messages,
@@ -685,7 +702,7 @@ def _query_superframe(
         prompt_type="caption",
         api_endpoint=endpoint,
         history_len=len(history or []),
-        stream_mode=_stream_mode() if history else None,
+        stream_mode=(_stream_mode() + ("-react" if react else "")) if history else None,
         num_frames=len(frames),
         prefill_tail=prefill[-150:] if prefill else None,
     )
@@ -704,6 +721,7 @@ def query_llama_server_video(
     skip_generation_wait: bool = False,
     mode: str = "",
     history: Optional[List[str]] = None,
+    react: bool = False,
 ) -> str:
     """
     Query llama-server with multiple video frames.
@@ -753,6 +771,7 @@ def query_llama_server_video(
                 options=options,
                 timeout=timeout,
                 history=history,
+                react=react,
             )
         except ImportError:
             print("[llama-server] llama-video not installed, falling back to multi-image mode")
@@ -771,6 +790,7 @@ def query_llama_server_video(
                 timeout=timeout,
                 show_progress=show_progress,
                 history=history,
+                react=react,
             )
         except Exception as e:
             error_msg = str(e)

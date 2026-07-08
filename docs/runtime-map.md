@@ -41,6 +41,16 @@ monologue. `"turns"` keeps the old turn-pair shape for A/B. The empty
 `<think>` block Qwen emits is stripped in `_clean_continuation`
 (utils/llama_server.py), along with any re-typed prefill seam.
 
+**Salience flips the shape** (react=True, from `_salience_hot`): when
+something happens — arrival, eye contact, scene motion — the monologue
+(truncated to 2 thoughts) moves FIRST and the event+frames come LAST, so
+the model answers the moment instead of continuing past it. In pure
+document shape an up-close arrival can be ignored entirely (A/B verified:
+the control produced an empty response to "someone steps right up close").
+The reaction is stored into the stream, so the interruption becomes part
+of the document when quiet returns. React calls log as
+`stream_mode: document-react`.
+
 Mouth gate (captioner._caption_reject_reason): rejects `template_echo`
 (opens with the same `ANTI_ECHO_WORDS` words as a recent stream entry),
 `assistant_speak` (chat-closer register, the `_STREAM_META_MARKERS` list),

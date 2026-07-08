@@ -30,6 +30,7 @@ def query_model(
     skip_generation_wait: bool = False,
     prior_assistant_turn: Optional[str] = None,
     history: Optional[List[str]] = None,
+    react: bool = False,
 ) -> str:
     """
     Query the active inference backend with a prompt and optional image.
@@ -59,6 +60,7 @@ def query_model(
             skip_generation_wait=skip_generation_wait,
             prior_assistant_turn=prior_assistant_turn,
             history=history,
+            react=react,
         )
     else:
         from utils.ollama import query_ollama
@@ -88,6 +90,7 @@ def query_model_video(
     show_progress: bool = False,
     skip_generation_wait: bool = False,
     history: Optional[List[str]] = None,
+    react: bool = False,
 ) -> str:
     """
     Query with multiple video frames. Only works with llama-server backend.
@@ -105,6 +108,7 @@ def query_model_video(
             show_progress=show_progress,
             skip_generation_wait=skip_generation_wait,
             history=history,
+            react=react,
         )
     else:
         # Ollama fallback: use last frame as single image
