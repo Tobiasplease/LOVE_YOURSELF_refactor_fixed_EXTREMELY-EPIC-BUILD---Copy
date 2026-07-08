@@ -514,6 +514,10 @@ class Captioner(MemoryMixin):
             return "template_echo"
         if any(m in low for m in self._STREAM_META_MARKERS):
             return "assistant_speak"
+        # Qwen drifts into CJK at high temperatures; one 哎呀 in the document
+        # breeds more. English voice only — reject any CJK character.
+        if any("　" <= ch <= "ヿ" or "一" <= ch <= "鿿" or "＀" <= ch <= "￯" for ch in caption):
+            return "cjk_drift"
         core = caption.strip().strip('"“”?!. ').lower()
         if core and len(core) < 90 and prompt_text:
             import difflib
@@ -866,7 +870,8 @@ class Captioner(MemoryMixin):
                         if reason:
                             from config.config import ANTI_ECHO_RETRY_TEMP_BUMP
                             hot_opts = dict(gen_options or {})
-                            hot_opts["temperature"] = min(1.2, float(hot_opts.get("temperature", 0.8)) + ANTI_ECHO_RETRY_TEMP_BUMP)
+                            # cap at 1.0 — above it Qwen rambles and drifts into CJK
+                            hot_opts["temperature"] = min(1.0, float(hot_opts.get("temperature", 0.8)) + ANTI_ECHO_RETRY_TEMP_BUMP)
                             log_json_entry(
                                 LogType.DEBUG,
                                 {"message": f"Caption rejected ({reason}) — retrying hotter", "action": "anti_echo_retry", "reason": reason, "caption_preview": caption[:60]},
