@@ -465,10 +465,14 @@ class Captioner(MemoryMixin):
     # in breeds "3) ...", "4) ..." forever — strip the prefix at the mouth
     # and refuse multi-item lists at the stream gate.
     _ENUM_PREFIX_RE = re.compile(r"^\s*\)?\s*\d{1,2}[).:\]]\s+")
+    # "12... " / "16... 15... " countdown prefixes: numbers are the strongest
+    # continuation bait there is — strip them, keep any prose that follows.
+    _COUNTDOWN_PREFIX_RE = re.compile(r"^\s*(?:\d{1,4}\s*[.,…!]+[\s\n]*)+")
 
     @classmethod
     def _strip_list_shape(cls, text: str) -> str:
-        return cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
+        t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
+        return cls._COUNTDOWN_PREFIX_RE.sub("", t).strip()
 
     @classmethod
     def _stream_admissible(cls, text: str) -> bool:
@@ -507,8 +511,7 @@ class Captioner(MemoryMixin):
         line (the model answering the elicitation instead of thinking).
         Display suppression matters as much as stream admission here: document
         mode continues whatever the document is, and the artist reads the feed."""
-        if not caption:
-            return None
+        caption = (caption or "").strip()
         low = caption.lower()
         if self._echo_of_stream(caption):
             return "template_echo"
@@ -518,6 +521,15 @@ class Captioner(MemoryMixin):
         # breeds more. English voice only — reject any CJK character.
         if any("　" <= ch <= "ヿ" or "一" <= ch <= "鿿" or "＀" <= ch <= "￯" for ch in caption):
             return "cjk_drift"
+        # Numeric fragments ("12...", "5... 4... 3...", "24/7...") slip under
+        # the stream's length gate, freeze the window, and recite forever.
+        if sum(1 for ch in caption if ch.isalpha()) < 8:
+            return "numeric_fragment"
+        # Number-chain: the document continues numeric progressions ("497
+        # days" -> "498 days" -> countdowns). One number-led thought may live
+        # in the window; a second one on its heels is recitation, not thought.
+        if re.match(r"\s*\d", caption) and any(re.match(r"\s*\d", past) for past in self._stream):
+            return "number_chain"
         core = caption.strip().strip('"“”?!. ').lower()
         if core and len(core) < 90 and prompt_text:
             import difflib
