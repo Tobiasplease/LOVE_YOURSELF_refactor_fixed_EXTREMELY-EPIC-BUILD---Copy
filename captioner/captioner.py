@@ -499,6 +499,30 @@ class Captioner(MemoryMixin):
                 return True
         return False
 
+    def _caption_reject_reason(self, caption: str, prompt_text: str = "") -> Optional[str]:
+        """Mouth gate (retry-once-else-silence). Rejects, in order:
+        template_echo — opens like a recent stream entry;
+        assistant_speak — chat-closer register ("Let me know what comes next!");
+        prompt_parrot — a short caption that near-verbatim repeats a prompt
+        line (the model answering the elicitation instead of thinking).
+        Display suppression matters as much as stream admission here: document
+        mode continues whatever the document is, and the artist reads the feed."""
+        if not caption:
+            return None
+        low = caption.lower()
+        if self._echo_of_stream(caption):
+            return "template_echo"
+        if any(m in low for m in self._STREAM_META_MARKERS):
+            return "assistant_speak"
+        core = caption.strip().strip('"“”?!. ').lower()
+        if core and len(core) < 90 and prompt_text:
+            import difflib
+            for sent in re.split(r"[\n.?!]", prompt_text.lower()):
+                sent = sent.strip()
+                if len(sent) > 15 and difflib.SequenceMatcher(None, core, sent).ratio() > 0.75:
+                    return "prompt_parrot"
+        return None
+
     def _current_caption_interval(self, now: float) -> float:
         """Attention breathes: tight when something is happening, stretched
         when nothing has happened for a while. A fresh arrival snaps the
@@ -833,27 +857,30 @@ class Captioner(MemoryMixin):
 
                         caption = self._strip_list_shape(_generate(gen_options))
 
-                        # Anti-echo gate: a caption that re-opens like a recent
-                        # stream entry is a template imitation, not a continuation.
-                        # One retry, hotter; if it still echoes, skip the cycle —
-                        # silence over restatement (docs/continuity-plan.md).
-                        if caption and self._echo_of_stream(caption):
+                        # Mouth gate: template echo / assistant-speak / prompt
+                        # parroting are conversation-shapes, not continuations.
+                        # One retry, hotter; if the shape persists, skip the
+                        # cycle — silence over restatement (docs/continuity-plan.md).
+                        _gate_ctx = f"{system_prompt or ''}\n{user_prompt or ''}"
+                        reason = self._caption_reject_reason(caption, _gate_ctx)
+                        if reason:
                             from config.config import ANTI_ECHO_RETRY_TEMP_BUMP
                             hot_opts = dict(gen_options or {})
                             hot_opts["temperature"] = min(1.2, float(hot_opts.get("temperature", 0.8)) + ANTI_ECHO_RETRY_TEMP_BUMP)
                             log_json_entry(
                                 LogType.DEBUG,
-                                {"message": "Template echo detected — retrying hotter", "action": "anti_echo_retry", "caption_preview": caption[:60]},
-                                print_message=f"[🔁] Echoed opening, retrying: {caption[:60]}...",
+                                {"message": f"Caption rejected ({reason}) — retrying hotter", "action": "anti_echo_retry", "reason": reason, "caption_preview": caption[:60]},
+                                print_message=f"[🔁] Rejected ({reason}), retrying: {caption[:60]}...",
                             )
                             retry = self._strip_list_shape(_generate(hot_opts))
-                            if retry and not self._echo_of_stream(retry):
+                            retry_reason = self._caption_reject_reason(retry, _gate_ctx)
+                            if retry and not retry_reason:
                                 caption = retry
                             else:
                                 log_json_entry(
                                     LogType.INFO,
-                                    {"message": "Caption skipped: template echo persisted after retry", "action": "anti_echo_skip", "caption_preview": (retry or caption)[:60]},
-                                    print_message="[🔇] Echo persisted — staying quiet this cycle",
+                                    {"message": f"Caption skipped: {retry_reason or reason} persisted after retry", "action": "anti_echo_skip", "reason": retry_reason or reason, "caption_preview": (retry or caption)[:60]},
+                                    print_message=f"[🔇] {retry_reason or reason} persisted — staying quiet this cycle",
                                 )
                                 self.last_caption_time = now
                                 return None
