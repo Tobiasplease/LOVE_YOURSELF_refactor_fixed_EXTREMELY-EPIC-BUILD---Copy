@@ -83,9 +83,12 @@ except ImportError:
 # The stream: how prior captions reach the model (docs/continuity-plan.md)
 # ---------------------------------------------------------------------------
 
-# Qwen3.5 emits an empty <think></think> block before continuing a prefill
-# even with enable_thinking=false — strip it (and any leading whitespace).
-_THINK_RE = re.compile(r"^\s*<think>.*?</think>\s*", re.DOTALL)
+# Qwen3.5 emits empty <think></think> blocks even with enable_thinking=false —
+# and not only leading ones: when it regurgitates a poisoned document it can
+# emit several (a ^-anchored sub only removed the first; the survivor entered
+# the stream and bred). Strip ALL blocks plus any dangling unclosed tag.
+_THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+_THINK_OPEN_RE = re.compile(r"<think>.*\Z", re.DOTALL)
 
 
 def _stream_mode() -> str:
@@ -144,9 +147,11 @@ def _append_stream_and_user(messages: list, history: Optional[List[str]], user_m
 
 
 def _clean_continuation(text: str, prefill: str = "") -> str:
-    """Strip the leading think block, then any verbatim re-typing of the
-    prefill seam (the model occasionally re-says the tail it was continuing)."""
-    text = _THINK_RE.sub("", text or "").lstrip()
+    """Strip ALL think blocks (and a dangling unclosed one), then any verbatim
+    re-typing of the prefill seam (the model occasionally re-says the tail it
+    was continuing)."""
+    text = _THINK_RE.sub("", text or "")
+    text = _THINK_OPEN_RE.sub("", text).strip()
     if prefill:
         tail = prefill.rstrip()
         for n in range(min(len(tail), 120), 11, -1):
