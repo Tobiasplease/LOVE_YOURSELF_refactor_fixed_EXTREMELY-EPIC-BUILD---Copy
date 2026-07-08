@@ -355,6 +355,7 @@ CAMERA_SATURATION = -1     # Color saturation (-1 for auto/default)
 CAMERA_CONTRAST = -1       # Contrast (-1 for auto/default)
 CAMERA_BRIGHTNESS = -1     # Brightness (-1 for auto/default)
 CAMERA_EXPOSURE = -1       # Exposure (-1 for auto, or manual value)
+CAMERA_AUTO_FOCUS = True   # Enable autofocus if available (machine.py camera setup)
 CAMERA_AUTO_FOCUS = True   # Enable autofocus if available
 
 # === OLLAMA SETTINGS ===
