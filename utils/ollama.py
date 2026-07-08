@@ -59,6 +59,11 @@ def log_ollama_call(
     log_dir: str = "mood_snapshots",
     system_prompt: Optional[str] = None,
     prompt_type: str = "general",
+    api_endpoint: Optional[str] = None,
+    history_len: int = 0,
+    stream_mode: Optional[str] = None,
+    num_frames: int = 0,
+    prefill_tail: Optional[str] = None,
 ):
     """
     Log Ollama API call details for monitoring and debugging.
@@ -100,8 +105,18 @@ def log_ollama_call(
         "success": success,
         "error_message": error_message,
         "timeout": timeout,
-        "api_endpoint": "http://localhost:11434/api/generate",
+        "api_endpoint": api_endpoint or "http://localhost:11434/api/generate",
     }
+    # Stream observability: the logged prompt understates what the model saw
+    # whenever a history/prefill rode along — record it here.
+    if history_len:
+        data["history_len"] = history_len
+    if stream_mode:
+        data["stream_mode"] = stream_mode
+    if num_frames:
+        data["num_frames"] = num_frames
+    if prefill_tail:
+        data["prefill_tail"] = truncate_for_print(prefill_tail, 150)
 
     type_emoji = _get_prompt_emoji(prompt_type)
     data["prompt_type"] = prompt_type

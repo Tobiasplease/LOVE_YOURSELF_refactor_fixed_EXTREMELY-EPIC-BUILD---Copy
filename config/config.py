@@ -251,6 +251,22 @@ SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 STREAM_WINDOW = 6  # how many prior captions the model sees as its own turns. ON (June 28) now the base voice is healthy: chiefly to break the amnesiac REPETITION (the persistent "dust motes" tic — each call couldn't see it already said it). Admissibility-gated (_stream_admissible: no meta, no markdown/stage-directions) and breaks on >180s gaps. WATCH: the stream amplifies whatever register is in the window — if it breeds purple instead of varying, set back to 0.
 STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
 
+# How the stream reaches the model (July 2026, docs/continuity-plan.md):
+# "document" — the monologue-so-far is sent as ONE trailing assistant message
+#   and llama-server CONTINUES it (assistant prefill; requires
+#   enable_thinking=false or the server rejects the request). The model's next
+#   tokens are literally the next tokens of its own text — real continuity.
+# "turns" — legacy: each prior caption as a separate assistant turn-pair.
+#   Bred template imitation (openings cloned across captions), kept as A/B.
+STREAM_MODE = os.getenv("STREAM_MODE", "document")
+
+# Anti-echo storage gate: a caption that OPENS with the same N words as a
+# recent stream entry is a template imitation, not a continuation. One retry
+# at a hotter temperature; if it still echoes, the cycle is skipped (silence
+# over restatement). A gate, not a style fence.
+ANTI_ECHO_WORDS = 5
+ANTI_ECHO_RETRY_TEMP_BUMP = 0.15
+
 # Salience is TRANSIENT (north-star principle 6): discrete events spike it,
 # then it decays back to quiet even while a person stays — otherwise ongoing
 # presence + YOLO flicker holds it "live" and interiority is stripped the whole

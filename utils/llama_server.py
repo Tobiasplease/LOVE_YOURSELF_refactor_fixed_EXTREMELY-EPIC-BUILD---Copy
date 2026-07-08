@@ -28,6 +28,7 @@ Usage:
 import base64
 import json
 import os
+import re
 import subprocess
 import time
 from typing import List, Optional, Union
@@ -76,6 +77,69 @@ try:
 except ImportError:
     def log_ollama_call(**kwargs):
         pass
+
+
+# ---------------------------------------------------------------------------
+# The stream: how prior captions reach the model (docs/continuity-plan.md)
+# ---------------------------------------------------------------------------
+
+# Qwen3.5 emits an empty <think></think> block before continuing a prefill
+# even with enable_thinking=false — strip it (and any leading whitespace).
+_THINK_RE = re.compile(r"^\s*<think>.*?</think>\s*", re.DOTALL)
+
+
+def _stream_mode() -> str:
+    from config import config as _c
+    return getattr(_c, "STREAM_MODE", "turns")
+
+
+def _document_prefill(history: Optional[List[str]]) -> str:
+    """Join the stream into one flowing monologue text for assistant prefill.
+
+    Ends with a single space (not a paragraph break) so the model continues
+    the same flow instead of opening a fresh, list-shaped item.
+    """
+    parts = [p for p in ((h or "").strip() for h in history or []) if p]
+    return " ".join(parts) + " " if parts else ""
+
+
+def _append_stream_and_user(messages: list, history: Optional[List[str]], user_message: dict) -> str:
+    """Append the stream + current user message per STREAM_MODE.
+
+    "document": user message first, then the monologue-so-far as ONE trailing
+    assistant message — llama-server continues it (assistant prefill; the
+    payload must set enable_thinking=false or the server rejects the request).
+    "turns": legacy turn-pairs, then the user message.
+
+    Returns the prefill text ("" in turns mode) for seam cleaning + logging.
+    """
+    if _stream_mode() == "document":
+        prefill = _document_prefill(history)
+        messages.append(user_message)
+        if prefill:
+            messages.append({"role": "assistant", "content": prefill})
+        return prefill
+    if history:
+        for past in history:
+            past = (past or "").strip()
+            if past:
+                messages.append({"role": "user", "content": "..."})
+                messages.append({"role": "assistant", "content": past})
+    messages.append(user_message)
+    return ""
+
+
+def _clean_continuation(text: str, prefill: str = "") -> str:
+    """Strip the leading think block, then any verbatim re-typing of the
+    prefill seam (the model occasionally re-says the tail it was continuing)."""
+    text = _THINK_RE.sub("", text or "").lstrip()
+    if prefill:
+        tail = prefill.rstrip()
+        for n in range(min(len(tail), 120), 11, -1):
+            if text.startswith(tail[-n:]):
+                text = text[n:].lstrip()
+                break
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -257,16 +321,9 @@ def query_llama_server(
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
 
-    # The stream: prior thoughts as the machine's own turns; the "..." ticks
-    # mark time passing between them
-    if history:
-        for past in history:
-            past = (past or "").strip()
-            if past:
-                messages.append({"role": "user", "content": "..."})
-                messages.append({"role": "assistant", "content": past})
-
-    if prior_assistant_turn:
+    # prior_assistant_turn: a single anchor thought (turns mode only — in
+    # document mode the prefill IS the prior thought, so the anchor is skipped)
+    if prior_assistant_turn and _stream_mode() != "document":
         messages.append({"role": "user", "content": "..."})
         prior_clean = prior_assistant_turn.strip()
         sent_end = min(
@@ -277,18 +334,26 @@ def query_llama_server(
         messages.append({"role": "assistant", "content": prior_anchor})
 
     if img_b64:
-        user_content = [
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-            {"type": "text", "text": prompt},
-        ]
-        messages.append({"role": "user", "content": user_content})
+        user_message = {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                {"type": "text", "text": prompt},
+            ],
+        }
     else:
-        messages.append({"role": "user", "content": prompt})
+        user_message = {"role": "user", "content": prompt}
+
+    # In document mode, prior_assistant_turn doubles as the stream when no
+    # history was passed (memory-mode calls) — continuity either way.
+    effective_history = history or ([prior_assistant_turn] if prior_assistant_turn else None)
+    prefill = _append_stream_and_user(messages, effective_history, user_message)
 
     # Build payload
     payload = {
         "messages": messages,
         "stream": show_progress,
+        "cache_prompt": True,  # the stream is a stable prefix — reuse the KV cache
         "chat_template_kwargs": {"enable_thinking": False},
     }
 
@@ -344,6 +409,8 @@ def query_llama_server(
             data = response.json()
             response_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
+        response_text = _clean_continuation(response_text, prefill)
+
         log_ollama_call(
             prompt=prompt,
             model=model or "llama-server",
@@ -354,6 +421,10 @@ def query_llama_server(
             log_dir=log_dir,
             system_prompt=system_prompt,
             prompt_type=prompt_type,
+            api_endpoint=endpoint,
+            history_len=len(effective_history or []),
+            stream_mode=_stream_mode() if effective_history else None,
+            prefill_tail=prefill[-150:] if prefill else None,
         )
 
         return response_text
@@ -374,6 +445,9 @@ def query_llama_server(
             log_dir=log_dir,
             system_prompt=system_prompt,
             prompt_type=prompt_type,
+            api_endpoint=endpoint,
+            history_len=len(effective_history or []),
+            stream_mode=_stream_mode() if effective_history else None,
         )
 
         return f"[WARNING] llama-server API failed: {error_msg}"
@@ -400,25 +474,20 @@ def _query_multi_image(
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
 
-    # The stream: prior captions as the machine's own turns (text only)
-    if history:
-        for past in history:
-            past = (past or "").strip()
-            if past:
-                messages.append({"role": "user", "content": "..."})
-                messages.append({"role": "assistant", "content": past})
-
     # Build user content with interleaved images + final text prompt
     user_content = []
     for frame_bytes in frames:
         img_b64 = base64.b64encode(frame_bytes).decode("utf-8")
         user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
     user_content.append({"type": "text", "text": prompt})
-    messages.append({"role": "user", "content": user_content})
+
+    # The stream: prior captions, per STREAM_MODE (document prefill or turn-pairs)
+    prefill = _append_stream_and_user(messages, history, {"role": "user", "content": user_content})
 
     payload = {
         "messages": messages,
         "stream": show_progress,
+        "cache_prompt": True,
         "chat_template_kwargs": {"enable_thinking": False},
     }
     if options:
@@ -461,6 +530,24 @@ def _query_multi_image(
         response.raise_for_status()
         data = response.json()
         response_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    response_text = _clean_continuation(response_text, prefill)
+
+    log_ollama_call(
+        prompt=prompt,
+        model="llama-server",
+        response=response_text,
+        success=True,
+        timeout=timeout,
+        log_dir=MOOD_SNAPSHOT_FOLDER,
+        system_prompt=system_prompt,
+        prompt_type="caption",
+        api_endpoint=endpoint,
+        history_len=len(history or []),
+        stream_mode=_stream_mode() if history else None,
+        num_frames=len(frames),
+        prefill_tail=prefill[-150:] if prefill else None,
+    )
 
     return response_text
 
@@ -524,18 +611,13 @@ def _query_superframe(
     messages = []
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
-    # The stream: prior captions as the machine's own turns (text only)
-    if history:
-        for past in history:
-            past = (past or "").strip()
-            if past:
-                messages.append({"role": "user", "content": "..."})
-                messages.append({"role": "assistant", "content": past})
-    messages.append(user_message)
+    # The stream: prior captions, per STREAM_MODE (document prefill or turn-pairs)
+    prefill = _append_stream_and_user(messages, history, user_message)
 
     payload = {
         "messages": messages,
         "stream": show_progress,
+        "cache_prompt": True,
         "chat_template_kwargs": {"enable_thinking": False},
         "mm_processor_kwargs": {
             "fps": video_input.fps,
@@ -589,6 +671,24 @@ def _query_superframe(
         response.raise_for_status()
         data = response.json()
         response_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    response_text = _clean_continuation(response_text, prefill)
+
+    log_ollama_call(
+        prompt=prompt,
+        model="llama-server",
+        response=response_text,
+        success=True,
+        timeout=timeout,
+        log_dir=MOOD_SNAPSHOT_FOLDER,
+        system_prompt=system_prompt,
+        prompt_type="caption",
+        api_endpoint=endpoint,
+        history_len=len(history or []),
+        stream_mode=_stream_mode() if history else None,
+        num_frames=len(frames),
+        prefill_tail=prefill[-150:] if prefill else None,
+    )
 
     return response_text
 

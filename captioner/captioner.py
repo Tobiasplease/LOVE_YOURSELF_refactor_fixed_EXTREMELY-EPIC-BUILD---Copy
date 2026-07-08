@@ -472,6 +472,21 @@ class Captioner(MemoryMixin):
             return False  # markdown scaffolding breeds in-stream too
         return True
 
+    def _echo_of_stream(self, caption: str) -> bool:
+        """True when the caption OPENS with the same words as a recent stream
+        entry — the template-imitation signature ("The motors hum…" x3). Checks
+        openings only: returning to a subject mid-thought is development, not echo."""
+        from config.config import ANTI_ECHO_WORDS
+        words = [w for w in (caption or "").lower().split()]
+        if len(words) < ANTI_ECHO_WORDS:
+            return False
+        head = " ".join(words[:ANTI_ECHO_WORDS])
+        for past in self._stream:
+            past_words = past.lower().split()
+            if len(past_words) >= ANTI_ECHO_WORDS and " ".join(past_words[:ANTI_ECHO_WORDS]) == head:
+                return True
+        return False
+
     def _current_caption_interval(self, now: float) -> float:
         """Attention breathes: tight when something is happening, stretched
         when nothing has happened for a while. A fresh arrival snaps the
@@ -769,15 +784,16 @@ class Captioner(MemoryMixin):
                                 video_prompt = user_prompt
                             else:
                                 video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{user_prompt}"
-                            caption = query_model_video(
-                                prompt=video_prompt,
-                                frames=video_frames,
-                                fps=2.0,
-                                system_prompt=system_prompt,
-                                options=gen_options,
-                                timeout=60,
-                                history=list(self._stream),
-                            )
+                            def _generate(_opts):
+                                return query_model_video(
+                                    prompt=video_prompt,
+                                    frames=video_frames,
+                                    fps=2.0,
+                                    system_prompt=system_prompt,
+                                    options=_opts,
+                                    timeout=60,
+                                    history=list(self._stream),
+                                )
                         else:
                             # Inward beat → no image (think, don't look). Otherwise
                             # send the frame; on eye contact send the face crop, not a
@@ -789,19 +805,49 @@ class Captioner(MemoryMixin):
                                     crop_path = self._write_face_context_crop(frame, face_box, img_path)
                                     if crop_path:
                                         send_path = crop_path
-                            caption = query_model(
-                                prompt=user_prompt,
-                                model=OLLAMA_MODEL,
-                                image=send_path,
-                                system_prompt=system_prompt,
-                                timeout=60,
-                                log_dir=MOOD_SNAPSHOT_FOLDER,
-                                options=gen_options,
-                                prompt_type="caption",
-                                history=list(self._stream),
+
+                            def _generate(_opts):
+                                return query_model(
+                                    prompt=user_prompt,
+                                    model=OLLAMA_MODEL,
+                                    image=send_path,
+                                    system_prompt=system_prompt,
+                                    timeout=60,
+                                    log_dir=MOOD_SNAPSHOT_FOLDER,
+                                    options=_opts,
+                                    prompt_type="caption",
+                                    history=list(self._stream),
+                                )
+
+                        caption = _generate(gen_options)
+
+                        # Anti-echo gate: a caption that re-opens like a recent
+                        # stream entry is a template imitation, not a continuation.
+                        # One retry, hotter; if it still echoes, skip the cycle —
+                        # silence over restatement (docs/continuity-plan.md).
+                        if caption and self._echo_of_stream(caption):
+                            from config.config import ANTI_ECHO_RETRY_TEMP_BUMP
+                            hot_opts = dict(gen_options or {})
+                            hot_opts["temperature"] = min(1.2, float(hot_opts.get("temperature", 0.8)) + ANTI_ECHO_RETRY_TEMP_BUMP)
+                            log_json_entry(
+                                LogType.DEBUG,
+                                {"message": "Template echo detected — retrying hotter", "action": "anti_echo_retry", "caption_preview": caption[:60]},
+                                print_message=f"[🔁] Echoed opening, retrying: {caption[:60]}...",
                             )
+                            retry = _generate(hot_opts)
+                            if retry and not self._echo_of_stream(retry):
+                                caption = retry
+                            else:
+                                log_json_entry(
+                                    LogType.INFO,
+                                    {"message": "Caption skipped: template echo persisted after retry", "action": "anti_echo_skip", "caption_preview": (retry or caption)[:60]},
+                                    print_message="[🔇] Echo persisted — staying quiet this cycle",
+                                )
+                                self.last_caption_time = now
+                                return None
 
                         # Match output against ChromaDB concepts (replaces perception-based matching)
+                        matched_concepts = []
                         try:
                             from captioner.semantic_memory import get_semantic_memory
                             matched_concepts = get_semantic_memory().match_or_create_concepts(caption or "")
