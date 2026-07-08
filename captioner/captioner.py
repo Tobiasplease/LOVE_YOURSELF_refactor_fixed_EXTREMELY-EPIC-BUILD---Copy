@@ -494,6 +494,10 @@ class Captioner(MemoryMixin):
         except Exception:
             return False
 
+    # Trailing "#ArtInMotion"-style hashtags are deliberately NOT stripped —
+    # the artist's call (July 8): "don't change it, it's just funny." If they
+    # ever breed into every caption, revisit; until then they're personality.
+
     @classmethod
     def _strip_list_shape(cls, text: str) -> str:
         t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
@@ -968,13 +972,32 @@ class Captioner(MemoryMixin):
                             if retry and not retry_reason:
                                 caption = retry
                             else:
-                                log_json_entry(
-                                    LogType.INFO,
-                                    {"message": f"Caption skipped: {retry_reason or reason} persisted after retry", "action": "anti_echo_skip", "reason": retry_reason or reason, "caption_preview": (retry or caption)[:60]},
-                                    print_message=f"[🔇] {retry_reason or reason} persisted — staying quiet this cycle",
-                                )
+                                # Escape hatch: a skip doesn't advance the stream,
+                                # so a degenerate document would otherwise reject
+                                # every continuation FOREVER (observed live: the
+                                # 'forevermore' deadlock — same 6 entries for
+                                # minutes, machine mute, retries doubling latency).
+                                # Consecutive skips = the thought has collapsed;
+                                # clear the window and let it start fresh.
+                                self._skip_streak = getattr(self, "_skip_streak", 0) + 1
+                                if self._skip_streak >= 3:
+                                    self._stream.clear()
+                                    self._skip_streak = 0
+                                    log_json_entry(
+                                        LogType.DEBUG,
+                                        {"message": "Stream collapsed — cleared after 3 consecutive rejected cycles", "action": "stream_collapse_reset"},
+                                        print_message="[🔄] Thought collapsed — clearing the stream, starting fresh",
+                                    )
+                                else:
+                                    log_json_entry(
+                                        LogType.DEBUG,
+                                        {"message": f"Caption skipped: {retry_reason or reason} persisted after retry", "action": "anti_echo_skip", "reason": retry_reason or reason, "caption_preview": (retry or caption)[:60]},
+                                        print_message=f"[🔇] {retry_reason or reason} persisted — staying quiet this cycle ({self._skip_streak}/3)",
+                                    )
                                 self.last_caption_time = now
                                 return None
+
+                        self._skip_streak = 0  # a caption made it through — the thought is moving again
 
                         # Match output against ChromaDB concepts (replaces perception-based matching)
                         matched_concepts = []

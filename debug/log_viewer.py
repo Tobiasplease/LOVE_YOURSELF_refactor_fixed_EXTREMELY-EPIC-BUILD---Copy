@@ -40,9 +40,11 @@ class LogViewer:
         for log_file in sorted(glob.glob(pattern)):
             run_id = os.path.basename(log_file).replace("-event-log.json", "")
             try:
-                with open(log_file, "r", encoding="utf-8") as f:
-                    logs[run_id] = json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError):
+                from event_logging.event_logger import load_event_log_entries
+                entries = load_event_log_entries(log_file)
+                if entries:
+                    logs[run_id] = entries
+            except FileNotFoundError:
                 continue
 
         return logs

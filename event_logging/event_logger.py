@@ -243,26 +243,16 @@ def read_json_logs(log_dir: str, log_type: Optional[str] = None) -> List[Dict[st
 
         filepath = os.path.join(log_dir, filename)
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
             # Handle different log file formats
             if filename.endswith("-event-log.json") or filename.startswith("event_log_"):
-                # Event log format: array of entries (new and old format)
-                if isinstance(data, list):
-                    for entry in data:
-                        if isinstance(entry, dict):
-                            # Filter by log type if specified
-                            if log_type and entry.get("type") != log_type:
-                                continue
-                            logs.append(entry)
-                else:
-                    # Single entry format
-                    if isinstance(data, dict):
-                        if log_type and data.get("type") != log_type:
-                            continue
-                        logs.append(data)
+                # Event log: JSONL (current) or legacy array — shared loader
+                for entry in load_event_log_entries(filepath):
+                    if log_type and entry.get("type") != log_type:
+                        continue
+                    logs.append(entry)
             else:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
                 if isinstance(data, dict):
                     # Filter by log type if specified
                     if log_type and data.get("type") != log_type:
@@ -301,25 +291,60 @@ def _coerce_jsonable(obj):
     return str(obj)
 
 
+def load_event_log_entries(filepath: str) -> List[Dict[str, Any]]:
+    """Read an event log in either format: legacy JSON array (pre-July 2026
+    runs) or JSONL (one entry per line). Malformed lines — e.g. a final line
+    truncated by a hard kill mid-append — are skipped, not fatal."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            text = f.read()
+    except (IOError, UnicodeDecodeError):
+        return []
+    stripped = text.lstrip()
+    if not stripped:
+        return []
+    if stripped.startswith("["):
+        try:
+            data = json.loads(text)
+            return [e for e in data if isinstance(e, dict)] if isinstance(data, list) else []
+        except json.JSONDecodeError:
+            pass  # fall through — may be a partially converted file
+    entries = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            if isinstance(obj, dict):
+                entries.append(obj)
+        except json.JSONDecodeError:
+            continue
+    return entries
+
+
 def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> None:
     """
-    Append a JSON entry to a log file. Crash- and thread-safe:
+    Append a JSON entry to a log file. JSONL (one compact entry per line):
 
-    - the entry is serialized BEFORE touching the file (a non-serializable
-      value raises cleanly instead of mid-write),
-    - the new content is written to a temp file and atomically renamed over
-      the target (os.replace) — no reader or hard kill can ever observe a
-      partial file,
-    - a process-wide thread lock plus an flock on a stable sidecar lockfile
+    - O(1) per write. The previous design re-read, re-parsed, and rewrote the
+      ENTIRE file (indent=2) for every entry — with ~6 entries per caption
+      cycle under a global lock, a multi-hour run visibly slowed down as the
+      file grew (the July 8 "it gets slower over time" report).
+    - Crash-safe by construction: a hard kill can at most truncate the final
+      line, which load_event_log_entries skips. (The old atomic-rename dance
+      existed to protect the array format; JSONL doesn't need it.)
+    - The entry is serialized BEFORE touching the file (a non-serializable
+      value raises cleanly instead of mid-write); numpy scalars are coerced
+      (622 caption entries were once lost to "type bool is not JSON
+      serializable").
+    - A process-wide thread lock plus an flock on a stable sidecar lockfile
       serialize writers (locking the data file itself broke once recovery
       replaced its inode — June 12 corruption cascade).
+    - Legacy array files are migrated to JSONL once, atomically, on first
+      append (temp file + os.replace).
     """
-    # Numpy scalars (bools/floats from the vision layer) ride along in log
-    # data constantly — coerce them instead of refusing the whole entry
-    # (622 caption entries were lost to "type bool is not JSON serializable",
-    # and before atomic writes the same TypeError mid-dump corrupted files)
-    serialized = json.dumps(entry, indent=2, ensure_ascii=False, default=_coerce_jsonable)
-    entry = json.loads(serialized)
+    line = json.dumps(entry, ensure_ascii=False, default=_coerce_jsonable)
 
     filepath = os.path.join(log_dir, filename)
     os.makedirs(log_dir, exist_ok=True)
@@ -328,25 +353,29 @@ def append_to_log_file(log_dir: str, filename: str, entry: Dict[str, Any]) -> No
         with open(filepath + ".lock", "w") as lockfile:
             fcntl.flock(lockfile.fileno(), fcntl.LOCK_EX)
 
-            entries = []
+            # One-time migration: legacy array file -> JSONL
             if os.path.exists(filepath):
                 try:
                     with open(filepath, "r", encoding="utf-8") as f:
-                        content = f.read().strip()
-                    if content:
-                        entries = json.loads(content)
-                except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                    print(f"[WARNING] Corrupted JSON in {filepath}, attempting recovery: {e}")
-                    entries = _recover_corrupted_log_file(filepath)
+                        head = f.read(64).lstrip()
+                    if head.startswith("["):
+                        entries = load_event_log_entries(filepath)
+                        if not entries:
+                            entries = _recover_corrupted_log_file(filepath)
+                        tmp_path = filepath + ".tmp"
+                        with open(tmp_path, "w", encoding="utf-8") as f:
+                            for e in entries:
+                                f.write(json.dumps(e, ensure_ascii=False, default=_coerce_jsonable) + "\n")
+                            f.flush()
+                            os.fsync(f.fileno())
+                        os.replace(tmp_path, filepath)
+                except (IOError, UnicodeDecodeError) as e:
+                    print(f"[WARNING] Log migration failed for {filepath}: {e}")
 
-            entries.append(entry)
-
-            tmp_path = filepath + ".tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(entries, f, indent=2, ensure_ascii=False)
+            with open(filepath, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
                 f.flush()
                 os.fsync(f.fileno())
-            os.replace(tmp_path, filepath)
 
 
 def _recover_corrupted_log_file(filepath: str) -> List[Dict[str, Any]]:
