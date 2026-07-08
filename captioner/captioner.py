@@ -716,7 +716,32 @@ class Captioner(MemoryMixin):
 
                         if inward:
                             caption_mode = "introspective"
+                            # Real temporal anchors, rotated. The inward line used
+                            # to be one static sentence, 100+ identical calls per
+                            # run — and time-starved, so the model INVENTED time
+                            # ("497 days without new ink", countdowns). True
+                            # numbers displace confabulated ones.
                             user_prompt = "Your eyes are off the room now — nothing new to look at. Your mind goes to its own thoughts."
+                            self._inward_count = getattr(self, "_inward_count", 0) + 1
+                            try:
+                                if self._inward_count % 3 == 1:
+                                    from captioner.prompts import casual_time_string
+                                    awake_mins = (now - self.session_start) / 60.0
+                                    user_prompt = (
+                                        f"Your eyes are off the room now — nothing new to look at. "
+                                        f"You've been awake {casual_time_string(awake_mins)}. "
+                                        f"Your mind goes to its own thoughts."
+                                    )
+                                elif self._inward_count % 3 == 2:
+                                    from utils.continuity import get_current_time_description
+                                    day_part = get_current_time_description().split(" (")[0]
+                                    user_prompt = (
+                                        f"Your eyes are off the room now — nothing new to look at. "
+                                        f"It's {day_part}. "
+                                        f"Your mind goes to its own thoughts."
+                                    )
+                            except Exception:
+                                pass
                             system_prompt = get_monologue_system_prompt("introspective", agent=self)
                         else:
                             user_prompt, caption_mode = build_simple_caption_prompt(
