@@ -469,6 +469,30 @@ class Captioner(MemoryMixin):
     # continuation bait there is — strip them, keep any prose that follows.
     _COUNTDOWN_PREFIX_RE = re.compile(r"^\s*(?:\d{1,4}\s*[.,…!]+[\s\n]*)+")
 
+    # Present-tense physical drawing acts. The machine only draws while GRBL
+    # executes — and inference is paused then, so a caption claiming an act of
+    # marking is always false. Thinking/wanting/remembering drawing is its
+    # inner life and stays untouched; only the phantom ACT is gated.
+    _PHANTOM_DRAWING_RE = re.compile(
+        r"\b(?:"
+        r"(?:i am|i'm|i’m) (?:drawing|tracing|sketching|inking)"
+        r"|as i (?:draw|trace|sketch|ink)\b"
+        r"|let me (?:draw|trace|sketch|ink)\b"
+        r"|(?:ink|line|graphite|pen) (?:spills?|bleeds?|flows?|glides?)"
+        r"|spill(?:s|ing)? onto the paper"
+        r"|(?:pen|nib|pencil) (?:touches|presses|moves|drags|scratches)"
+        r")\b",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _drawing_now(cls) -> bool:
+        try:
+            from utils.state_manager import state_manager as _sm
+            return bool(_sm.is_generating_drawing or _sm.current_drawing_phase == "executing")
+        except Exception:
+            return False
+
     @classmethod
     def _strip_list_shape(cls, text: str) -> str:
         t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
@@ -530,6 +554,9 @@ class Captioner(MemoryMixin):
         # in the window; a second one on its heels is recitation, not thought.
         if re.match(r"\s*\d", caption) and any(re.match(r"\s*\d", past) for past in self._stream):
             return "number_chain"
+        # A claimed act of marking while the pen is parked is always false.
+        if self._PHANTOM_DRAWING_RE.search(caption) and not self._drawing_now():
+            return "phantom_drawing"
         core = caption.strip().strip('"“”?!. ').lower()
         if core and len(core) < 90 and prompt_text:
             import difflib

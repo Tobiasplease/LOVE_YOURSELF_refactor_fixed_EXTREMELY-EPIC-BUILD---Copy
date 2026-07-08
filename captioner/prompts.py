@@ -187,7 +187,10 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     try:
         from utils.state_manager import state_manager as _sm
         if not (_sm.is_generating_drawing or _sm.current_drawing_phase == "executing"):
-            base += "You are between drawings at the moment. "
+            # Physical anchor, not just status: in document mode one phantom
+            # "I trace a line onto the paper" breeds more (you only ever draw
+            # while inference is paused — you never experience it live).
+            base += "You are between drawings at the moment — the pen is parked, touching nothing. "
     except Exception:
         pass
 
