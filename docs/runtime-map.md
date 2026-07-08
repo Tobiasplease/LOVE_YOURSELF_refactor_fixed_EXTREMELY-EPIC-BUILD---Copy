@@ -41,9 +41,13 @@ monologue. `"turns"` keeps the old turn-pair shape for A/B. The empty
 `<think>` block Qwen emits is stripped in `_clean_continuation`
 (utils/llama_server.py), along with any re-typed prefill seam.
 
-Anti-echo gate (captioner._echo_of_stream): a caption opening with the same
-`ANTI_ECHO_WORDS` words as a recent stream entry is template imitation →
-one hotter retry, else the cycle is SKIPPED (logged as `anti_echo_skip`).
+Mouth gate (captioner._caption_reject_reason): rejects `template_echo`
+(opens with the same `ANTI_ECHO_WORDS` words as a recent stream entry),
+`assistant_speak` (chat-closer register, the `_STREAM_META_MARKERS` list),
+and `prompt_parrot` (short caption fuzzy-matching a prompt line — the model
+answering the elicitation instead of thinking). One hotter retry, else the
+cycle is SKIPPED (logged `anti_echo_skip` with the reason). List-shaped
+output ("4) …") is stripped at the mouth and inadmissible to the stream.
 
 Observability: every llama-server call now logs the real `api_endpoint`,
 `history_len`, `stream_mode`, `num_frames`, `prefill_tail` (video calls were
