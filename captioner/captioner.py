@@ -513,18 +513,24 @@ class Captioner(MemoryMixin):
             return False  # numbered-list shape (single item or inline list)
         return True
 
+    @staticmethod
+    def _norm_words(text: str) -> list:
+        """Lowercased words with punctuation stripped — em-dashes and asterisks
+        otherwise make 'oh god yes—that's right' and 'oh god yes—that's when'
+        look different at word 4 and the echo gate goes blind."""
+        return [w for w in (re.sub(r"[^a-z0-9\s]", " ", (text or "").lower())).split() if w]
+
     def _echo_of_stream(self, caption: str) -> bool:
         """True when the caption OPENS with the same words as a recent stream
         entry — the template-imitation signature ("The motors hum…" x3). Checks
         openings only: returning to a subject mid-thought is development, not echo."""
         from config.config import ANTI_ECHO_WORDS
-        words = [w for w in (caption or "").lower().split()]
+        words = self._norm_words(caption)
         if len(words) < ANTI_ECHO_WORDS:
             return False
-        head = " ".join(words[:ANTI_ECHO_WORDS])
+        head = words[:ANTI_ECHO_WORDS]
         for past in self._stream:
-            past_words = past.lower().split()
-            if len(past_words) >= ANTI_ECHO_WORDS and " ".join(past_words[:ANTI_ECHO_WORDS]) == head:
+            if self._norm_words(past)[:ANTI_ECHO_WORDS] == head:
                 return True
         return False
 
@@ -558,6 +564,19 @@ class Captioner(MemoryMixin):
         # A claimed act of marking while the pen is parked is always false.
         if self._PHANTOM_DRAWING_RE.search(caption) and not self._drawing_now():
             return "phantom_drawing"
+        # Tail-echo COLLAPSE: one short restatement is a beat, deliberate
+        # emphasis ("…waiting forever more…" -> "forevermore, right?" — the
+        # artist reads this as rhythm and it stays). But when the PREVIOUS
+        # caption was already a short fragment and this one just re-says it
+        # again ("forevermore"), the thought is circling the drain — break it.
+        # Compared de-spaced so "forever more"/"forevermore" register as one.
+        if len(caption.split()) <= 3 and self._stream:
+            prev = list(self._stream)[-1]
+            if len(prev.split()) <= 3:
+                core = re.sub(r"[^a-z0-9]", "", low)
+                tailpool = "".join(re.sub(r"[^a-z0-9]", "", p.lower()) for p in list(self._stream)[-2:])
+                if core and core in tailpool:
+                    return "tail_echo"
         core = caption.strip().strip('"“”?!. ').lower()
         if core and len(core) < 90 and prompt_text:
             import difflib
