@@ -31,6 +31,27 @@ camera frame (~30fps)
 Verify salience in logs: every CAPTION entry carries `salience_hot` and
 `caption_interval`.
 
+### The stream (July 2026 — docs/continuity-plan.md)
+
+`STREAM_MODE = "document"` (config): the last `STREAM_WINDOW` captions are
+sent as ONE trailing assistant message and llama-server **continues** it
+(assistant prefill — requires `enable_thinking:false`, which is why earlier
+prefill attempts 400'd). The model's next tokens literally extend its own
+monologue. `"turns"` keeps the old turn-pair shape for A/B. The empty
+`<think>` block Qwen emits is stripped in `_clean_continuation`
+(utils/llama_server.py), along with any re-typed prefill seam.
+
+Anti-echo gate (captioner._echo_of_stream): a caption opening with the same
+`ANTI_ECHO_WORDS` words as a recent stream entry is template imitation →
+one hotter retry, else the cycle is SKIPPED (logged as `anti_echo_skip`).
+
+Observability: every llama-server call now logs the real `api_endpoint`,
+`history_len`, `stream_mode`, `num_frames`, `prefill_tail` (video calls were
+previously unlogged; single calls were mislabeled as Ollama).
+Measure continuity with `debug/caption_metrics.py` — baseline (turns mode,
+run 7b951565): 12.4% opening repetition, 7.4% near-dups, 0.5% anaphoric
+openings.
+
 ## Every line of the SYSTEM prompt and its source
 
 Torn down June 12 (north-star principles 1+2): situation only, no style

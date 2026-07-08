@@ -1,5 +1,13 @@
 # Continuity Plan — one stream, not a list of thoughts (July 2026)
 
+> **Status (July 8, evening):** Phase 0 and Phase 1 IMPLEMENTED (commit
+> d6b473c) — document-mode prefill verified against the live server; the
+> earlier failures were Qwen3.5's thinking default (server 400s on
+> prefill+thinking; `enable_thinking:false` fixes it). Baseline metrics
+> captured via `debug/caption_metrics.py` on run 7b951565 (turns mode):
+> 12.4% opening repetition, 7.4% near-dups, 0.5% anaphoric openings.
+> Restart machine.py to run document mode. Phases 2–3 still open.
+
 Companion to `north-star.md` (spec) and `runtime-map.md` (wiring). Written
 after auditing the live run of July 8 (run `7b951565`, 83 min, 441 captions,
 171 caption model calls, 3 reflections). Every claim below is from that log,
