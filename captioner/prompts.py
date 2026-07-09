@@ -1080,6 +1080,23 @@ def build_step2_emotional_prompt(memory_ref, environmental_result: str) -> str:
     if social_context.strip():
         context_parts.append(f"Social context: {social_context.strip()}")
 
+    # Live interiority: what the machine has been wanting and how the room has
+    # felt — the numeric mood engine flatlined (June); these are the compressor-
+    # distilled signals that actually carry felt experience into the drawing
+    try:
+        from captioner.context_compression import context_compressor
+        desire = context_compressor.get_current_desire()
+        if desire and len(desire) > 5:
+            context_parts.append(f"What you've been wanting lately: {desire}")
+        prev_felt, curr_felt = context_compressor.get_felt_state_delta()
+        if curr_felt:
+            if prev_felt and prev_felt != curr_felt:
+                context_parts.append(f"How the room has felt: {prev_felt}, then {curr_felt}")
+            else:
+                context_parts.append(f"How the room has felt: {curr_felt}")
+    except Exception:
+        pass
+
     rich_emotional_context = "\n".join(f"• {part}" for part in context_parts) if context_parts else "• Emerging emotional awareness"
 
     prompt = f"""=== ACCUMULATED EMOTIONAL JOURNEY ===
@@ -1415,7 +1432,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     )
     _say(f"[🎨] Step 2 result: {step2_result[:200]}")
 
-    # === STEP 3: COMMUNICATION INTENT (with artistic arc + drawing intentions) ===
+    # === STEP 3: COMMUNICATION INTENT (arc + intentions + long-term reflections) ===
     _say("[🎨] Step 3: Communication Intent (with identity, artistic arc & drawing ideas)")
     artistic_context = ""
     try:
@@ -1426,6 +1443,26 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
             _say(f"[🎨] Artistic context injected: {artistic_context[:80]}...")
     except Exception as e:
         print(f"[⚠️] Artistic arc unavailable: {e}")
+
+    # Long-term development: past reflections surface by relevance to the
+    # emotional assessment just made — the reflection loop's thought reaches
+    # the drawings (temporally framed; subjects only, never the prose)
+    try:
+        from captioner.semantic_memory import get_semantic_memory
+        matches = get_semantic_memory().query_reflections(step2_result or step1_result, n_results=2)
+        refl_lines = []
+        for m in matches or []:
+            subject = (m.get("subject") or "").strip()
+            if subject:
+                refl_lines.append(f"- {subject} ({_age_phrase(m.get('timestamp', 0))})")
+        if refl_lines:
+            artistic_context = "\n\n".join(filter(None, [
+                artistic_context,
+                "Things you've found yourself reflecting on, before today:\n" + "\n".join(refl_lines),
+            ]))
+            _say(f"[🎨] Reflection subjects injected: {len(refl_lines)}")
+    except Exception:
+        pass
 
     step3_prompt = build_step3_communication_prompt(memory_ref, step1_result, step2_result, artistic_context=artistic_context)
 

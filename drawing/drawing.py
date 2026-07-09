@@ -202,6 +202,14 @@ class DrawingController:
         self.last_prompt = prompt
         self.last_drawing_prompt = prompt
 
+        # The pen actually drew — this is the one place that may promote the
+        # drawing-memory entry to executed (the arc reads executed-only)
+        try:
+            from drawing.drawing_memory import get_drawing_memory
+            get_drawing_memory().mark_last_completed()
+        except Exception:
+            pass
+
         if not CLEAN_LLM_OUTPUT:
             print(f"\n{'='*60}")
             print(f"🔔 DRAWING COOLDOWN RESET")

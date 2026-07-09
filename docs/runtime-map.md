@@ -260,6 +260,25 @@ prompt entirely: present-tense presence belongs to the live detection layer
 - docs/reasoning-model-plan.md — superseded by docs/north-star.md + the
   reflection loop
 
+## The drawing pipeline's memory (July 9 provenance fix)
+
+One drawing = ONE drawing_memory entry: created at prompt generation
+(`completed=False`), enriched in place by the drawing-start thematic
+reflection (`update_last_drawing` — this used to add_drawing a duplicate),
+and promoted by `mark_last_completed()` from `register_drawing`, which
+fires only after GRBL physically executed. **The artistic arc and drawing
+summaries read executed-only** — a ComfyUI generation that never reached
+paper is an intention, not part of the oeuvre. Window: 24 entries.
+
+Inputs to the 5-step drawing analysis:
+- Step 2 (emotional): mood line (engine still flatlined), last 20 captions,
+  temporal/social, and NOW the compressor's current desire + felt-state
+  delta — the live interiority signals.
+- Step 3 (communication intent): artistic arc over executed work, drawing
+  intentions from the caption stream, and NOW 1-2 past reflection subjects
+  relevance-matched against the step-2 result (temporally framed, subjects
+  only). This is where long-term development enters the drawings.
+
 ## Manual tools (real code, NOT in the runtime path)
 
 Standalone utilities run by hand for calibration and setup — do not mistake

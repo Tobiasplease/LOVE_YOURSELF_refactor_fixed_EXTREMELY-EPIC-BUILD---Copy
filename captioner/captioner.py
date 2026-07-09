@@ -1883,17 +1883,17 @@ class Captioner(MemoryMixin):
                     reactivity_data=reactivity_data
                 )
 
-                # Update drawing memory for future prompts
+                # Enrich the entry created at prompt generation — adding a new
+                # one here duplicated every drawing and put narrative_thread on
+                # the phantom copy. completed stays False until GRBL finishes.
                 try:
                     from drawing.drawing_memory import get_drawing_memory
                     memory = get_drawing_memory()
-                    memory.add_drawing(
-                        prompt=drawing_summary,
+                    memory.update_last_drawing(
                         compressed_summary=reflection['compressed_summary'],
                         theme_tags=reflection.get('theme_tags', []),
                         emotional_tone=reflection.get('emotional_tone', ''),
                         narrative_thread=reflection.get('narrative_thread', ''),
-                        comfy_prompt=drawing_summary,
                     )
                 except Exception as e:
                     print(f"[⚠️] Could not update drawing memory: {e}")

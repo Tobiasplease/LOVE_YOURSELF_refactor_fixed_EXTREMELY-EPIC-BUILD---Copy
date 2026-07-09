@@ -12,7 +12,7 @@ from config.config import MOOD_SNAPSHOT_FOLDER
 class DrawingMemory:
     """Manages compressed history of recent drawings for thematic continuity."""
 
-    def __init__(self, max_history: int = 5):
+    def __init__(self, max_history: int = 24):
         self.max_history = max_history
         self.memory_file = Path(MOOD_SNAPSHOT_FOLDER) / "drawing_memory.json"
         self._history: List[Dict] = []
@@ -83,6 +83,37 @@ class DrawingMemory:
         self._save_memory()
 
         print(f"[📚] Stored drawing memory: {compressed_summary}")
+
+    def update_last_drawing(self, **fields) -> None:
+        """Enrich the newest entry in place (thematic reflection at drawing
+        start used to add_drawing a DUPLICATE — every drawing appeared twice
+        and narrative_thread landed on the phantom copy)."""
+        if not self._history:
+            return
+        entry = self._history[0]
+        limits = {'compressed_summary': 120, 'emotional_tone': 30, 'narrative_thread': 50, 'comfy_prompt': 200}
+        for k, v in fields.items():
+            if v in (None, "", []):
+                continue
+            if k == 'theme_tags':
+                entry[k] = list(v)[:3]
+            elif k in limits:
+                entry[k] = str(v)[:limits[k]]
+            else:
+                entry[k] = v
+        self._save_memory()
+
+    def mark_last_completed(self) -> None:
+        """The pen actually drew: flip the newest entry to completed. Called
+        from register_drawing (post-GRBL) — the ONLY place that may set it.
+        Generated-but-never-executed prompts stay completed=False and are
+        excluded from the arc: the body of work is what reached paper."""
+        if not self._history:
+            return
+        if not self._history[0].get('completed', False):
+            self._history[0]['completed'] = True
+            self._save_memory()
+            print(f"[📚] Drawing marked EXECUTED: {self._history[0].get('compressed_summary', '')[:60]}")
 
     def record_failure(self, reason: str, prompt: Optional[str] = None) -> None:
         """Record a failed drawing attempt — no paper, ComfyUI failure, etc."""
@@ -180,13 +211,17 @@ class DrawingMemory:
         narrative of where the work has been and where it's heading.
         On-demand call — acceptable since drawings happen every 5-30 min.
         """
-        if len(self._history) < 2:
+        # The arc is the body of WORK — executed drawings only. A prompt that
+        # never reached paper is an intention, not part of the oeuvre.
+        executed = [d for d in self._history if d.get('completed', False)]
+        if len(executed) < 2:
             return ""
 
         import time
 
-        # Build chronological sequence (history is newest-first, reverse it)
-        drawings_chronological = list(reversed(self._history))
+        # Build chronological sequence (history is newest-first, reverse it);
+        # cap what the LLM reads so the arc prompt stays digestible
+        drawings_chronological = list(reversed(executed))[-10:]
         lines = []
         for i, entry in enumerate(drawings_chronological, 1):
             desc = self._strip_comfy_preamble(entry.get('comfy_prompt', ''))
