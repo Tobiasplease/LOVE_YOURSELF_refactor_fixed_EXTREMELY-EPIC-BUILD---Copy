@@ -216,7 +216,11 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
 
 
 def stop_server() -> None:
-    """Stop the llama-server process to free VRAM."""
+    """Stop llama-server to free VRAM — by process pattern, not just our own
+    handle. After a machine.py restart the running server is an adopted
+    orphan (started by a previous process; no handle), and terminating
+    nothing silently left ~10GB on the GPU: ComfyUI OOM'd on every drawing
+    until the 5-minute timeout (July 9)."""
     global _server_process
     if _server_process and _server_process.poll() is None:
         _server_process.terminate()
@@ -224,8 +228,24 @@ def stop_server() -> None:
             _server_process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             _server_process.kill()
-        print("[llama-server] Stopped (VRAM freed)")
     _server_process = None
+
+    # Orphan sweep: anything still answering the port is holding the VRAM
+    # this call exists to free
+    if is_server_running():
+        try:
+            subprocess.run(["pkill", "-f", LLAMA_SERVER_BIN], timeout=10)
+            for _ in range(20):
+                if not is_server_running():
+                    break
+                time.sleep(0.5)
+        except Exception as e:
+            print(f"[llama-server] Orphan kill failed: {e}")
+
+    if is_server_running():
+        print("[llama-server] WARNING: a server is still responding after stop — VRAM not freed")
+    else:
+        print("[llama-server] Stopped (VRAM freed)")
 
 
 def is_server_running() -> bool:

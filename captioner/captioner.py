@@ -687,6 +687,11 @@ class Captioner(MemoryMixin):
         now = time.time()
         if now - self.last_caption_time < self._current_caption_interval(now):
             return
+        # Function-scope init: the shared post-processing (observe at the end)
+        # reads this, but only SOME branches assign it — the memory-mode branch
+        # crashed every ~4 min cycle with UnboundLocalError (recurring since
+        # July 8; the earlier fix only covered the inner concept-match path)
+        matched_concepts = []
 
         # A long silence breaks the thought — the stream restarts rather than
         # pretending continuity across a gap (would-it-lie applies to time too)
@@ -754,7 +759,6 @@ class Captioner(MemoryMixin):
                     print_message=f"[🐞] Requesting new caption for {img_path}",
                 )
                 previous_caption = getattr(self, "last_caption", "")
-                matched_concepts = []  # Will be populated by SemanticMemory concept matching
 
                 # Check if it's time for memory mode (every 240 seconds / 4 minutes).
                 # Clean room: memory mode is detox blind spot #4 — a separate caption
