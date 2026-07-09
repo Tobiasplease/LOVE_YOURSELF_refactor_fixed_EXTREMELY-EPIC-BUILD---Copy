@@ -459,6 +459,7 @@ class Captioner(MemoryMixin):
         "i cannot assist",
         "the user",
         "<think",  # Qwen think-tag leakage — one stored tag breeds in-document
+        "<end_of",  # "<end_of_thought>" token leak (July 9)
     )
 
     # "1) ..." / "2. ..." openings: assistant list-speak. Document mode

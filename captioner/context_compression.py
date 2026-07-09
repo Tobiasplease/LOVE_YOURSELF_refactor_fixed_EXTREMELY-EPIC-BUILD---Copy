@@ -629,6 +629,15 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             "the person", "a person", "reality", "distortion", "glitch", "simulation", "existence",
             "i track", "i monitor", "i surveil", "i record", "i scan", "i observe",
             "wait for movement", "movement to return", "capture every", "fixate on stillness",
+            # ASSISTANT self-description (July 9: "I am a text generator that
+            # outputs structured responses based on input patterns" became the
+            # standing persona and the voice collapsed into awaiting-input
+            # theater — "Current task: Observe." / "How can I assist you
+            # today?". First-person, so the old checks passed it. The persona
+            # slot re-injects every call: the strongest amplifier there is.
+            "text generator", "language model", "an ai", "assistant",
+            "input pattern", "structured response", "instruction", "assist",
+            "await", "command", "output", "prompt", "user",
         )
         return not any(w in t for w in banned)
 
