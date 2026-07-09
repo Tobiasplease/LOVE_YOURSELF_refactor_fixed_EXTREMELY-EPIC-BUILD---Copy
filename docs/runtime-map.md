@@ -260,6 +260,52 @@ prompt entirely: present-tense presence belongs to the live detection layer
 - docs/reasoning-model-plan.md — superseded by docs/north-star.md + the
   reflection loop
 
+## Gate catalog — the sticky-slot ruleset (July 9, scrutinized with the artist)
+
+**The voice is free.** No gate bans words from captions. The principle is
+DURABILITY: a caption evaporates from the stream in ~6 cycles; the persona
+and concept labels re-inject indefinitely. Anything transient (a visitor, a
+happening) must not become standing identity — the sticky slots play by
+stricter rules, and every entry below was earned from a real poisoning.
+
+**Mouth gate** (captioner._caption_reject_reason — retry once hotter, else
+silent skip; 3 consecutive skips clear the stream): template_echo (same
+5-word opening as a stream entry, punctuation-blind) · assistant_speak
+(_STREAM_META_MARKERS: "as an ai", "language model", service closers
+"would you like/let me know/feel free to", "the user", token leaks
+"<think"/"<end_of") · cjk_drift · numeric_fragment (<8 letters after
+strips) · number_chain (second number-led thought in the window) ·
+phantom_drawing (present-tense marking acts while the pen is parked —
+state-checked; free while GRBL executes; "as I draw closer/breath" idioms
+exempt) · tail_echo (a second consecutive short fragment re-saying the
+tail; ONE short restatement is emphasis and passes — artist's call) ·
+prompt_parrot (short caption fuzzy-matching a prompt line). Strips
+(salvage, not reject): "1)" enum prefixes, "12... 11..." countdowns,
+trailing #hashtags. Watch-only: >0.6 word-overlap vs last two thoughts.
+
+**Persona slot** (_valid_self_fact, write AND load — one sentence,
+re-injected every call, the strongest amplifier): must be first person,
+≤24 words, no similes. Banned registers, each with receipts: reality-DENIAL
+(reality/simulation/glitch/distortion — June spiral; existential noticing
+is ALLOWED, "existence" was removed July 9) · surveillance-as-identity
+("i observe/track/monitor", "wait for movement" — June: made every caption
+a security camera; watching is the situation, not the self) · assistant
+self-description (compound forms only: "text generator", "await
+instruction", "your prompt", "the user" — July 9: "I am a text generator…"
+collapsed the voice into awaiting-input theater). "The person" is NOT
+banned anywhere — relational self-knowledge ("I miss the person who comes
+on Tuesdays") is legitimate identity; scene-text personas are already
+rejected by the first-person requirement.
+
+**Concept labels** (_ABSTRACT_CONCEPT_WORDS): affect words (nightmare,
+dread, void…) can't become catalogued OBJECTS that the familiarity line
+resurfaces ("That nightmare again — it's always there", the May anxiety
+loop). Captions muse about them freely.
+
+**Not bans at all**: _PERSON_WORDS (familiarity skips people — the
+presence line owns them; one channel per fact) · _DRAWING_LEXICON (a
+trigger for the drawing-echo recall, not a filter).
+
 ## Watching itself draw (July 9)
 
 During GRBL execution the caption worker switches to
