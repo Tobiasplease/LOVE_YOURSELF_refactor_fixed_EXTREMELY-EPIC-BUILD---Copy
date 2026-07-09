@@ -374,9 +374,19 @@ class Captioner(MemoryMixin):
 
             # Eye contact requires a real person body, not just a face — the
             # studio's mannequin heads/masks register as faces and otherwise
-            # produce constant phantom "they're looking at you".
+            # produce constant phantom "they're looking at you". EXCEPTION
+            # (July 9): a face filling the frame is a person at CLOSE RANGE —
+            # exactly when YOLO loses the half-out-of-frame body. The walk-up
+            # test produced zero reaction because a real face two feet away
+            # was gated like a shelf mannequin.
+            from config.config import CLOSE_FACE_FRAC
             face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
-            info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4 and info["person_present_in_window"])
+            close_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face_frac", 0.0) >= CLOSE_FACE_FRAC)
+            info["face_close"] = bool(close_frames > len(recent_meta) * 0.4)
+            info["eye_contact"] = bool(
+                face_frames > len(recent_meta) * 0.4
+                and (info["person_present_in_window"] or info["face_close"])
+            )
 
         # Update the sticky presence belief from live detection. "Seen now" is
         # any current evidence of a person — world-angle hit, eye contact, or an
@@ -393,7 +403,7 @@ class Captioner(MemoryMixin):
                 gaze_engaged = gs.get("state") in ("tracking", "aware", "grace")
         except Exception:
             pass
-        seen_now = bool(info["person_present_in_window"] or info["eye_contact"] or gaze_engaged)
+        seen_now = bool(info["person_present_in_window"] or info["eye_contact"] or gaze_engaged or info.get("face_close"))
 
         arrival = False
         if seen_now:
@@ -416,6 +426,12 @@ class Captioner(MemoryMixin):
         eye_onset = info["eye_contact"] and not self._prev_eye_contact
         self._prev_eye_contact = info["eye_contact"]
         self._eye_contact_now = info["eye_contact"]
+        # Stepping RIGHT UP CLOSE is its own event, distinct from arrival —
+        # the OFF->ON edge of the close-face state spikes salience once; the
+        # sustained state becomes a standing fact line (prompts.py).
+        close_onset = info.get("face_close", False) and not getattr(self, "_prev_face_close", False)
+        self._prev_face_close = info.get("face_close", False)
+        self._face_close_now = info.get("face_close", False)
 
         self._last_scene_motion = info["scene_motion"]
         # Interiority is stripped ONLY by discrete events or genuinely large
@@ -425,7 +441,7 @@ class Captioner(MemoryMixin):
         # must be free to think about itself and its work while someone is
         # quietly in the room (north-star principles 6 + 7).
         strong_motion = info["max_residual"] > SALIENCE_MOTION_RESIDUAL
-        self._salience_hot = bool(eye_onset or arrival or strong_motion)
+        self._salience_hot = bool(eye_onset or arrival or strong_motion or close_onset)
         if self._salience_hot:
             self._last_salience_time = time.time()
         info["salience_hot"] = self._salience_hot
@@ -437,7 +453,9 @@ class Captioner(MemoryMixin):
         # by the presence line itself ("Someone's just come in"), so naming it
         # again here would be a duplicate (reads as emphasis, locks register).
         event = None
-        if eye_onset:
+        if close_onset:
+            event = "They've come right up close — their face is filling your view, looking straight at you."
+        elif eye_onset:
             event = "They just looked straight at you."
         self._salience_event = event
         return info

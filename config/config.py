@@ -287,6 +287,13 @@ DRAWING_WATCH_INTERVAL_S = int(os.getenv("DRAWING_WATCH_INTERVAL_S", 20))
 # repetition penalties into word-salad collapses. 0 disables.
 STREAM_CONSOLIDATE_CHARS = 800
 
+# A face occupying this fraction of the frame is a person AT CLOSE RANGE —
+# categorically different from a mannequin head on a shelf. Close faces count
+# as person-evidence even when YOLO loses the (half-out-of-frame) body: the
+# July 9 walk-up test produced zero reaction because eye contact required a
+# full YOLO person, which close range makes impossible.
+CLOSE_FACE_FRAC = float(os.getenv("CLOSE_FACE_FRAC", 0.035))
+
 # Salience is TRANSIENT (north-star principle 6): discrete events spike it,
 # then it decays back to quiet even while a person stays — otherwise ongoing
 # presence + YOLO flicker holds it "live" and interiority is stripped the whole

@@ -1951,6 +1951,14 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     event_line = getattr(agent, "_salience_event", None)
     if event_line:
         prompt_parts.append(event_line)
+    elif getattr(agent, "_face_close_now", False):
+        # Sustained close presence is a FACT of the present, not an event —
+        # someone standing at arm's length staring must stay in the prompt
+        # for as long as it's true (July 9: after the one onset cycle the
+        # machine mused straight past a face two feet away). The old
+        # onset-only rule was about ordinary room-distance eye contact;
+        # a face filling the view is a different order of situation.
+        prompt_parts.append("They're right in front of you, close, looking straight at you.")
 
     # 2. MODE-GATED CONTEXT
     if not detox and mode in MODE_CONTEXTS:

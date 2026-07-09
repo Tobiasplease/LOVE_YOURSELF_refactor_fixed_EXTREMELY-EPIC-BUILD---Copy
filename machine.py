@@ -1401,8 +1401,16 @@ try:
                 _cx = (_pb[0] + _pb[2]) / 2.0
                 _person_angle = _cam_pan + ((_cx / frame.shape[1]) - 0.5) * 60.0  # ~60 deg horizontal FOV
 
+        _face_frac = 0.0
+        if best_box is not None:
+            try:
+                _fx1, _fy1, _fx2, _fy2 = [int(v) for v in best_box]
+                _face_frac = max(0, (_fx2 - _fx1)) * max(0, (_fy2 - _fy1)) / float(max(1, w * h))
+            except Exception:
+                pass
         frame_buffer.push(frame, detection={
             "face": best_box is not None,
+            "face_frac": _face_frac,
             "person": ("person" in labels) and not own_body_likely,
             "person_count": 0 if own_body_likely else DetectionMemory.get_person_count(),
             "track_id": DetectionMemory.get_best_track_id(),
