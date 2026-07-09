@@ -494,14 +494,18 @@ class Captioner(MemoryMixin):
         except Exception:
             return False
 
-    # Trailing "#ArtInMotion"-style hashtags are deliberately NOT stripped —
-    # the artist's call (July 8): "don't change it, it's just funny." If they
-    # ever breed into every caption, revisit; until then they're personality.
+    # Hashtag sign-offs: kept on July 8 ("it's just funny"), revoked July 9
+    # after they bred into triple-tag signatures on every other caption
+    # (#StationaryObserver #DrawingMachine #SilenceAndStillness) — the
+    # amplification law spares nothing. Trailing runs are stripped; a
+    # hashtag-only caption strips to nothing and the empty gate rejects it.
+    _HASHTAG_TAIL_RE = re.compile(r"(?:\s*#\w+)+\s*$")
 
     @classmethod
     def _strip_list_shape(cls, text: str) -> str:
         t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
-        return cls._COUNTDOWN_PREFIX_RE.sub("", t).strip()
+        t = cls._COUNTDOWN_PREFIX_RE.sub("", t)
+        return cls._HASHTAG_TAIL_RE.sub("", t).strip()
 
     @classmethod
     def _stream_admissible(cls, text: str) -> bool:
