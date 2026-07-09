@@ -1928,6 +1928,17 @@ class Captioner(MemoryMixin):
             caption = self._strip_list_shape(caption)
             if not caption or self._caption_reject_reason(caption, f"{system_prompt}\n{user_prompt}"):
                 return  # quiet cycle — no retries while the arm is working
+            # Watch cycles are the tightest self-amplification loop in the
+            # system (static prompt, near-static frame, 20s cadence). Opening
+            # checks aren't enough — the July 9 live run bred "What do you
+            # think it could be?" soup by ROTATING its sentences (which also
+            # defeats sequence matching: 0.59 ratio on real soup). Word-set
+            # overlap is order-invariant — that's the right lens for rotation.
+            cap_words = set(self._norm_words(caption))
+            for past in list(self._stream)[-2:]:
+                past_words = set(self._norm_words(past))
+                if cap_words and len(cap_words & past_words) / max(1, len(cap_words | past_words)) > 0.6:
+                    return
             if self._stream_admissible(caption):
                 self._stream.append(caption.strip())
                 self._consolidate_stream_if_needed()

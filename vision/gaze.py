@@ -454,6 +454,13 @@ def activate_search_mode(last_seen_pan: float = None, last_seen_tilt: float = No
     global searching_active, searching_last_known_pan, searching_last_known_tilt
     global searching_zones_to_visit, searching_current_goal, searching_goal_start_time
 
+    # Never search while the gaze is drawing-locked: the camera is pointed at
+    # the paper, a visitor CANNOT be in frame, and any YOLO "person" there is
+    # the machine's own arm — searching just pans the camera off the drawing
+    # (July 9: watch frames kept losing the paper mid-drawing).
+    if drawing_sequence_active:
+        return
+
     searching_active = True
     searching_last_known_pan = last_seen_pan
     searching_last_known_tilt = last_seen_tilt
@@ -1059,7 +1066,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         in_aware_break = aware_break_until > now
 
         # Check if YOLO detected someone - transition to aware (unless in break)
-        if yolo_person_detected and not in_aware_break:
+        if yolo_person_detected and not in_aware_break and not drawing_sequence_active:
+            # (drawing-locked gaze: a YOLO "person" is the machine's own arm
+            # on the paper — never a visitor; don't leave the drawing view)
             last_state_change = now
             llm_zone_active = False  # Clear LLM zone - real person overrides LLM's imagined directions
             print("[👁️] Person detected while idle - entering 'aware' state")
