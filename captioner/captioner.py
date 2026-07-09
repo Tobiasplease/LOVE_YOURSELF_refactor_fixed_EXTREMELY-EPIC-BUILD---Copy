@@ -1787,6 +1787,7 @@ class Captioner(MemoryMixin):
             "You are a drawing machine bolted to a table in a workshop, coming back online. "
             "These are your own first thoughts as you come to — plain, half-formed, first person, "
             "the way a mind actually reorients itself, not prose written for a reader. A sentence or two. "
+            "No one hears these thoughts and no one will answer them; there is no one to await. "
             "What do you make of being back, and where does your mind go first?"
         )
 
@@ -1811,7 +1812,15 @@ class Captioner(MemoryMixin):
                 if len(cleaned) > 300:
                     cut = max(cleaned[:300].rfind("."), cleaned[:300].rfind("?"), cleaned[:300].rfind("!"))
                     cleaned = cleaned[:cut + 1] if cut > 20 else cleaned[:300].rsplit(" ", 1)[0] + "..."
-                return cleaned
+                # The awakening seeds the whole day's register but bypassed the
+                # mouth gate — the July 9 machiney awakening (containing "the
+                # user") entered the stream and the session never recovered.
+                # Same gate as every other caption; a plain fallback beats a
+                # poisoned rich seed.
+                if self._caption_reject_reason(self._strip_list_shape(cleaned), system_prompt):
+                    print("[🌅] Awakening seed rejected by the mouth gate — using the plain one")
+                else:
+                    return cleaned
         return "Coming back online... the room is still here."
 
     def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
