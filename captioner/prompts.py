@@ -1523,6 +1523,21 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     except Exception as e:
         print(f"[⚠️] Artistic arc unavailable: {e}")
 
+    # The LIVE thought: the drawing must be born FROM the monologue, not
+    # beside it ("the drawing prompts seem detached from the runtime
+    # monologue", July 9). The last two stream entries — what the machine was
+    # actually thinking as the urge to draw arrived — enter the intent step.
+    try:
+        stream_tail = [t for t in list(getattr(memory_ref, "_stream", []))[-2:] if t]
+        if stream_tail:
+            artistic_context = "\n\n".join(filter(None, [
+                artistic_context,
+                "What you were thinking just now, as the urge to draw arrived:\n"
+                + "\n".join(f"- {t[:160]}" for t in stream_tail),
+            ]))
+    except Exception:
+        pass
+
     # Long-term development: past reflections surface by relevance to the
     # emotional assessment just made — the reflection loop's thought reaches
     # the drawings (temporally framed; subjects only, never the prose)

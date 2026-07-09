@@ -597,6 +597,11 @@ class Captioner(MemoryMixin):
         low = caption.lower()
         if self._echo_of_stream(caption):
             return "template_echo"
+        # exact repeats of ANY length ("What do you think?" twice) — the
+        # opening-echo check needs 5 words and misses short full-duplicates
+        norm = " ".join(self._norm_words(caption))
+        if norm and any(norm == " ".join(self._norm_words(past)) for past in self._stream):
+            return "template_echo"
         if any(m in low for m in self._STREAM_META_MARKERS):
             return "assistant_speak"
         # Qwen drifts into CJK at high temperatures; one 哎呀 in the document
@@ -954,7 +959,13 @@ class Captioner(MemoryMixin):
                             "dry_base": 1.75,
                             "dry_allowed_length": 3,
                             "dry_penalty_last_n": 128,
-                            "num_predict": 40 if _is_bored else 60,  # "a sentence or two" — 80 let captions run 4-5 sentences and bloom/loop
+                            # Quiet time is THINKING time (July 9: "prior it
+                            # felt like it was really thinking more"): the old
+                            # bored-clamp (40) truncated thought hardest exactly
+                            # when the machine should go deepest. The bloom/loop
+                            # risk 80+ used to carry is now owned by the gates
+                            # (salad, echo, near-dup, consolidation).
+                            "num_predict": 110 if _is_bored else 80,
                             "num_ctx": 4096,
                             "seed": _random.randint(1, 1000000),
                         }

@@ -93,14 +93,30 @@ def _stream_mode() -> str:
     return getattr(_c, "STREAM_MODE", "turns")
 
 
+def _trim_to_sentence(text: str) -> str:
+    """Cut to the last complete sentence (keeps text intact if none found)."""
+    cut = max(text.rfind("."), text.rfind("!"), text.rfind("?"), text.rfind("…"))
+    return text[: cut + 1] if cut > 20 else text
+
+
 def _document_prefill(history: Optional[List[str]]) -> str:
     """Join the stream into one flowing monologue text for assistant prefill.
+
+    Older entries are trimmed to complete sentences — token-budget cuts left
+    mid-sentence breaks INSIDE the document, which the model then repaired in
+    assistant register ("(Note: the final line was cut off mid-sentence. I
+    will continue from where I left off.)", July 9). The NEWEST entry stays
+    raw: a mid-sentence tail is the good kind of unfinished — the model picks
+    it up and completes it (the original document-mode magic).
 
     Ends with a single space (not a paragraph break) so the model continues
     the same flow instead of opening a fresh, list-shaped item.
     """
     parts = [p for p in ((h or "").strip() for h in history or []) if p]
-    return " ".join(parts) + " " if parts else ""
+    if not parts:
+        return ""
+    parts = [_trim_to_sentence(p) for p in parts[:-1]] + [parts[-1]]
+    return " ".join(p for p in parts if p) + " "
 
 
 def _append_stream_and_user(messages: list, history: Optional[List[str]], user_message: dict, react: bool = False) -> str:
