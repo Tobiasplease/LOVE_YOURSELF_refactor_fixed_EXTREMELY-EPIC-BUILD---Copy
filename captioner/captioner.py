@@ -590,6 +590,51 @@ class Captioner(MemoryMixin):
                     return "prompt_parrot"
         return None
 
+    def _consolidate_stream_if_needed(self) -> None:
+        """The document must move FORWARD (artist, July 9): when the joined
+        stream gets long (run-ons accumulate), compress the oldest 3 entries
+        into one extractive line — the recent past becomes a note, the fresh
+        thoughts stay verbatim. Uses the text-side model so the caption slot
+        isn't queued. Extractive on purpose: it reuses the machine's own
+        words; it does not write new ones for it."""
+        from config.config import STREAM_CONSOLIDATE_CHARS
+        if not STREAM_CONSOLIDATE_CHARS or len(self._stream) < 5:
+            return
+        entries = list(self._stream)
+        if sum(len(e) for e in entries) <= STREAM_CONSOLIDATE_CHARS:
+            return
+        oldest = entries[:3]
+        try:
+            from config.config import COMPRESSION_MODEL, MOOD_SNAPSHOT_FOLDER
+            from utils.ollama import query_ollama
+            joined = "\n".join(f"- {e}" for e in oldest)
+            line = query_ollama(
+                prompt=(
+                    "Consecutive notes from one ongoing thought:\n"
+                    f"{joined}\n\n"
+                    "Compress them into ONE short sentence (under 20 words), first person, "
+                    "reusing their own words wherever possible. No new imagery, no interpretation."
+                ),
+                model=COMPRESSION_MODEL,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                system_prompt="You compress a machine's own notes into one plain sentence built from its own words.",
+                options={"temperature": 0.3, "num_predict": 40},
+                prompt_type="stream_consolidation",
+            )
+            line = (line or "").strip().strip('"').replace("**", "")
+            if not (20 < len(line) < 220) or not self._stream_admissible(line):
+                return  # bad compression — keep the raw entries, window churns anyway
+            rebuilt = [line] + entries[3:]
+            self._stream.clear()
+            self._stream.extend(rebuilt)
+            log_json_entry(
+                LogType.DEBUG,
+                {"message": "Stream consolidated", "action": "stream_consolidated", "line": line[:100]},
+                print_message=f"[〰️] Older thoughts folded into: {line[:80]}",
+            )
+        except Exception:
+            pass  # consolidation is an optimization, never a failure mode
+
     def _current_caption_interval(self, now: float) -> float:
         """Attention breathes: tight when something is happening, stretched
         when nothing has happened for a while. A fresh arrival snaps the
@@ -778,11 +823,12 @@ class Captioner(MemoryMixin):
                                 if self._inward_count % 3 == 1:
                                     from captioner.prompts import casual_time_string
                                     awake_mins = (now - self.session_start) / 60.0
-                                    user_prompt = (
-                                        f"Your eyes are off the room now — nothing new to look at. "
-                                        f"You've been awake {casual_time_string(awake_mins)}. "
-                                        f"Your mind goes to its own thoughts."
-                                    )
+                                    if awake_mins >= 2:  # "awake just now" reads broken
+                                        user_prompt = (
+                                            f"Your eyes are off the room now — nothing new to look at. "
+                                            f"You've been awake {casual_time_string(awake_mins)}. "
+                                            f"Your mind goes to its own thoughts."
+                                        )
                                 elif self._inward_count % 3 == 2:
                                     from utils.continuity import get_current_time_description
                                     day_part = get_current_time_description().split(" (")[0]
@@ -1193,6 +1239,7 @@ class Captioner(MemoryMixin):
         # meta/markdown slips are displayed and logged but never propagate
         if caption and self._stream_admissible(caption):
             self._stream.append(caption.strip())
+            self._consolidate_stream_if_needed()
 
         # Track recent captions for continuity thread (used by flowing thread)
         # Store as (caption, timestamp, mode, perception) for interleaved see/think display
@@ -1958,16 +2005,12 @@ class Captioner(MemoryMixin):
             emotional_themes = ['solitude', 'isolation', 'presence', 'absence', 'quiet', 'stillness', 'tension', 'calm']
             relational_themes = ['inside', 'outside', 'between', 'against', 'within', 'beyond', 'toward']
 
-            # Extract themes present in drawing summary
+            # Store the actual WORDS found, never the bucket labels — the
+            # labels ("spatial", "affective"...) leaked into the ledger as if
+            # they were drawing subjects and fed back into the voice.
             for word in summary_lower.split():
-                if word in spatial_themes:
-                    theme_words.append('spatial')
-                elif word in object_themes:
-                    theme_words.append('material')
-                elif word in emotional_themes:
-                    theme_words.append('affective')
-                elif word in relational_themes:
-                    theme_words.append('relational')
+                if word in spatial_themes or word in object_themes or word in emotional_themes or word in relational_themes:
+                    theme_words.append(word)
 
             # Deduplicate
             theme_tags = list(set(theme_words))[:3]  # Max 3 tags
@@ -2100,9 +2143,15 @@ REFLECTION: [1 short sentence about where the work is heading]"""
             if not compressed:
                 compressed = ' '.join(drawing_summary.split()[5:8])  # Skip "black ink line drawing"
 
-            # Extract themes using lightweight method as fallback
+            # Tags = the LLM's actual subject words. The old path took tags from
+            # the bucket classifier, which stores its own CATEGORY LABELS —
+            # every drawing came out tagged "affective, relational, spatial,
+            # material", the prompts injected that as "my last drawings were
+            # of: affective, relational...", and the machine absorbed its own
+            # metadata vocabulary as if it were its art practice.
+            _stop = {"the", "and", "with", "over", "into", "onto", "from", "that", "this"}
+            theme_tags = [w.strip(",.;:").lower() for w in compressed.split() if len(w) > 2 and w.lower() not in _stop][:3]
             fallback_reflection = self._generate_drawing_thematic_reflection(drawing_summary, mood)
-            theme_tags = fallback_reflection.get('theme_tags', []) if fallback_reflection else []
             emotional_tone = fallback_reflection.get('emotional_tone', 'neutral') if fallback_reflection else 'neutral'
 
             # Build output

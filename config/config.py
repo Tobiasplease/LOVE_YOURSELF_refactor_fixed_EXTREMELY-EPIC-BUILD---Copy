@@ -267,6 +267,13 @@ STREAM_MODE = os.getenv("STREAM_MODE", "document")
 ANTI_ECHO_WORDS = 5
 ANTI_ECHO_RETRY_TEMP_BUMP = 0.15
 
+# Stream consolidation: when the joined document exceeds this, the oldest 3
+# entries are compressed into ONE extractive line (COMPRESSION_MODEL, reusing
+# the machine's own words) so the thought moves forward instead of
+# accumulating run-ons — an over-long document is also what squeezes the
+# repetition penalties into word-salad collapses. 0 disables.
+STREAM_CONSOLIDATE_CHARS = 800
+
 # Salience is TRANSIENT (north-star principle 6): discrete events spike it,
 # then it decays back to quiet even while a person stays — otherwise ongoing
 # presence + YOLO flicker holds it "live" and interiority is stripped the whole

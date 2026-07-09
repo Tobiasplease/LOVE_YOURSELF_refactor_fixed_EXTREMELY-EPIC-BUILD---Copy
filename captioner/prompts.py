@@ -733,19 +733,9 @@ def get_workspace_context(agent=None) -> str:
     except Exception:
         pass
 
-    # Last drawing from memory
-    if not fragments:
-        try:
-            from drawing.drawing_memory import get_drawing_memory
-            dm = get_drawing_memory()
-            summary = _sanitize_context(dm.get_recent_drawings_summary(max_count=1))
-            if summary and len(summary.strip()) > 3:
-                s = summary.strip()
-                if len(s) > 80:
-                    s = s[:80].rsplit(" ", 1)[0]
-                fragments.append(f"Lately you've drawn {s}.")
-        except Exception:
-            pass
+    # (drawing history removed here — get_introspective_context carries it;
+    # both fired in one prompt and duplicated the fact, which reads as
+    # emphasis and locks the register. One channel per fact.)
 
     # Arousal as energy hint
     try:
