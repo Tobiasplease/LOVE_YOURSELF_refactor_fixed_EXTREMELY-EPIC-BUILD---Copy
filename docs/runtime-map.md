@@ -277,7 +277,8 @@ silent skip; 3 consecutive skips clear the stream): template_echo (same
 strips) · number_chain (second number-led thought in the window) ·
 phantom_drawing (present-tense marking acts while the pen is parked —
 state-checked; free while GRBL executes; "as I draw closer/breath" idioms
-exempt) · tail_echo (a second consecutive short fragment re-saying the
+exempt) · word_salad (≥12 words with <15% function words — salad is
+maximally novel, invisible to every similarity gate; July 9 lesson) · tail_echo (a second consecutive short fragment re-saying the
 tail; ONE short restatement is emphasis and passes — artist's call) ·
 prompt_parrot (short caption fuzzy-matching a prompt line). Strips
 (salvage, not reject): "1)" enum prefixes, "12... 11..." countdowns,
