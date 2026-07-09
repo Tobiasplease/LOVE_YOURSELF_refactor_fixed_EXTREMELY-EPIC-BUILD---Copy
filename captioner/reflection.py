@@ -129,10 +129,20 @@ class ReflectionLoop:
             return False
 
     def _gather_drawings(self) -> str:
+        """Framed sentences, executed-only — this used to inject a bare,
+        unframed tag list ("chair, cables, desk") that read as scene noise."""
         try:
             from drawing.drawing_memory import get_drawing_memory
 
-            return get_drawing_memory().get_recent_drawings_summary(max_count=3, completed_only=True) or ""
+            dm = get_drawing_memory()
+            parts = []
+            last = dm.get_last_drawing_description(executed_only=True)
+            if last:
+                parts.append(f"The last drawing that actually reached paper: {last}.")
+            tags = dm.get_recent_drawings_summary(max_count=3, completed_only=True)
+            if tags:
+                parts.append(f"Recurring subjects in your drawings: {tags}.")
+            return " ".join(parts)
         except Exception:
             return ""
 

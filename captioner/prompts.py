@@ -479,6 +479,38 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     return "\n\n".join(parts)
 
 
+# Tight lexicon on purpose: "line"/"mark"/"trace" are this machine's everyday
+# scene vocabulary (the dark line in the floor) and would trigger constantly.
+_DRAWING_LEXICON = ("draw", "drew", "sketch", "pen ", "pen.", "pen,", "ink", "paper")
+
+
+def get_drawing_echo_line(agent) -> str:
+    """When the current thought is about drawing, ONE real fact from the
+    executed-only ledger surfaces — trigger-worded recall, the third instance
+    of the familiarity/echo pattern. Displaces confabulated drawing history
+    (July 9: "faint pencil marks from yesterday's work about the wooden
+    figures I was sketching earlier today" — entirely invented; the machine
+    had no access to what it actually drew, so it made a past up).
+    """
+    seed = (getattr(agent, "last_caption", "") or "").lower()
+    if not any(w in seed for w in _DRAWING_LEXICON):
+        return ""
+    try:
+        from drawing.drawing_memory import get_drawing_memory
+        fact = get_drawing_memory().get_last_drawing_description(executed_only=True)
+    except Exception:
+        return ""
+    line = (
+        f"The last thing you actually drew: {fact}."
+        if fact
+        else "You haven't actually put pen to paper yet."
+    )
+    if getattr(agent, "_last_drawing_echo", None) == line:
+        return ""  # said once; don't restate until the fact changes
+    agent._last_drawing_echo = line
+    return line
+
+
 def get_reflection_echo_line(agent) -> str:
     """At quiet moments, one past reflection surfaces by relevance to the
     current thought (north-star principle 5: the past surfaces when the
@@ -1941,15 +1973,20 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             pass
 
     # 3c. FAMILIARITY (recognition of known concepts — occasional, max 1 line)
-    # or a past reflection surfacing by relevance — never both in one caption
+    # or a drawing fact when the thought is about drawing, or a past
+    # reflection surfacing by relevance — at most ONE memory surface per caption
     if not detox and not live:
         fam_line = get_familiarity_line(agent)
         if fam_line:
             prompt_parts.append(fam_line)
         else:
-            echo_line = get_reflection_echo_line(agent)
-            if echo_line:
-                prompt_parts.append(echo_line)
+            d_line = get_drawing_echo_line(agent)
+            if d_line:
+                prompt_parts.append(d_line)
+            else:
+                echo_line = get_reflection_echo_line(agent)
+                if echo_line:
+                    prompt_parts.append(echo_line)
 
     # 4. DRAWING/PAPER STATE
     try:

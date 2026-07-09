@@ -156,17 +156,23 @@ class DrawingMemory:
                     tags.append(t)
         return ", ".join(tags[:5])
 
-    def get_last_drawing_description(self) -> str:
+    def get_last_drawing_description(self, executed_only: bool = False) -> str:
         """LEDGER: the most recent drawing as a NEUTRAL fact — its recurring
         elements (theme tags) + recency + outcome. Never the raw ComfyUI prose:
         that contaminated the register AND made the model confabulate fictional
         drawing titles. e.g. "chair, cables (about 10 minutes ago)".
+
+        executed_only: skip entries that never reached paper (intents).
         """
-        if not self._history:
+        if executed_only:
+            candidates = [d for d in self._history if d.get('completed', False)]
+        else:
+            candidates = self._history
+        if not candidates:
             return ""
 
         import time
-        entry = self._history[0]
+        entry = candidates[0]
 
         elapsed = time.time() - entry.get('timestamp', time.time())
         if elapsed < 120:
