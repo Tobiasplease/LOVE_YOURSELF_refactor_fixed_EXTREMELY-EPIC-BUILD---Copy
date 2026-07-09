@@ -562,6 +562,29 @@ class Captioner(MemoryMixin):
                 return True
         return False
 
+    # Function words that any real English prose contains. Word salad
+    # ("incible indestructible immortal eternal everlasting permanent...")
+    # is maximally NOVEL — invisible to every similarity gate (echo,
+    # near-dup, tail-echo all measure sameness) — but it contains almost no
+    # function words. July 9: bounding DRY removed the accidental brake on
+    # continuing stored salad, and the document faithfully extended it
+    # MID-WORD across captions; this gate is the deliberate brake.
+    _FUNCTION_WORDS = frozenset(
+        "the a an and or but if of to in on at by for with from as is are was were be been "
+        "it its this that these those i you he she they we my your their his her our me him "
+        "them us not no nor so than then there here when where who what how why which while "
+        "will would can could should shall may might must do does did have has had".split()
+    )
+
+    @classmethod
+    def _is_word_salad(cls, text: str) -> bool:
+        words = [w.strip(".,;:!?—-()'\"") for w in (text or "").lower().split()]
+        words = [w for w in words if w]
+        if len(words) < 12:
+            return False
+        func = sum(1 for w in words if w in cls._FUNCTION_WORDS)
+        return func / len(words) < 0.15
+
     def _caption_reject_reason(self, caption: str, prompt_text: str = "") -> Optional[str]:
         """Mouth gate (retry-once-else-silence). Rejects, in order:
         template_echo — opens like a recent stream entry;
@@ -584,6 +607,8 @@ class Captioner(MemoryMixin):
         # the stream's length gate, freeze the window, and recite forever.
         if sum(1 for ch in caption if ch.isalpha()) < 8:
             return "numeric_fragment"
+        if self._is_word_salad(caption):
+            return "word_salad"
         # Number-chain: the document continues numeric progressions ("497
         # days" -> "498 days" -> countdowns). One number-led thought may live
         # in the window; a second one on its heels is recitation, not thought.
@@ -608,9 +633,18 @@ class Captioner(MemoryMixin):
         core = caption.strip().strip('"“”?!. ').lower()
         if core and len(core) < 90 and prompt_text:
             import difflib
+            cap_words = set(self._norm_words(core))
             for sent in re.split(r"[\n.?!]", prompt_text.lower()):
                 sent = sent.strip()
-                if len(sent) > 15 and difflib.SequenceMatcher(None, core, sent).ratio() > 0.75:
+                if len(sent) <= 15:
+                    continue
+                if difflib.SequenceMatcher(None, core, sent).ratio() > 0.75:
+                    return "prompt_parrot"
+                # fragment parrots: "nothing here is addressed to anyone." is
+                # a piece of a longer prompt sentence — whole-sentence fuzzy
+                # scores low, but its words are wholly contained in it
+                sent_words = set(self._norm_words(sent))
+                if len(cap_words) >= 4 and len(cap_words & sent_words) / len(cap_words) > 0.85:
                     return "prompt_parrot"
         return None
 
@@ -1837,7 +1871,11 @@ class Captioner(MemoryMixin):
             if (self.memory_loaded_from_previous and gap is not None
                     and 0 <= gap < AWAKENING_MIN_GAP_S):
                 prior = (getattr(self, "prior_session_last_caption", "") or "").strip()
-                if prior and self._stream_admissible(prior):
+                # Full mouth gate, not just stream admissibility: resuming a
+                # degraded session's last caption carried salad ACROSS
+                # restarts (July 9) — a poisoned thought doesn't deserve
+                # continuity; better to wake with an empty stream.
+                if prior and self._stream_admissible(prior) and not self._caption_reject_reason(prior, ""):
                     self._stream.append(prior)
                 print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
                 return ""
