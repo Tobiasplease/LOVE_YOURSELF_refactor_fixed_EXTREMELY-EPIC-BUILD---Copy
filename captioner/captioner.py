@@ -1635,7 +1635,15 @@ class Captioner(MemoryMixin):
                 _first = _ld.get("first_boot", 0)
                 if _first and _sessions > 1:
                     _age_days = int((time.time() - _first) / 86400.0)
-                    time_context += f"I've been switched on {_sessions} times since I first came online about {_age_days} days ago.\n"
+                    # Words, not the raw counter — "switched on 1943 times"
+                    # seeded number-recitation (same ruling as sighting counts)
+                    if _sessions >= 100:
+                        _often = "more times than I could count"
+                    elif _sessions >= 20:
+                        _often = "many times"
+                    else:
+                        _often = "a number of times"
+                    time_context += f"I've been switched on {_often} since I first came online about {_age_days} days ago.\n"
         except Exception:
             pass
 
@@ -1781,6 +1789,24 @@ class Captioner(MemoryMixin):
 
     def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
         """Generate comprehensive awakening with environmental description - THE ONLY awakening now."""
+
+        # A blink is not a night (July 9): after a short restart gap, skip the
+        # ceremony — it ran several times an hour across dev restarts and
+        # converged on stock reorientation prose ("the hum returns, dust
+        # motes..."). Resume instead: the prior session's last thought seeds
+        # the stream, and document mode continues it as one ongoing thought.
+        try:
+            from config.config import AWAKENING_MIN_GAP_S
+            gap = getattr(self, "last_session_gap", None)
+            if (self.memory_loaded_from_previous and gap is not None
+                    and 0 <= gap < AWAKENING_MIN_GAP_S):
+                prior = (getattr(self, "prior_session_last_caption", "") or "").strip()
+                if prior and self._stream_admissible(prior):
+                    self._stream.append(prior)
+                print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
+                return ""
+        except Exception:
+            pass
 
         # Import the environmental prompt builder
         from .prompts import build_environmental_caption_prompt

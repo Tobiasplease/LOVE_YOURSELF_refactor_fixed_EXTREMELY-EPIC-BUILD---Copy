@@ -39,6 +39,23 @@ def _is_abstract_label(label: str) -> bool:
     return any(w in _ABSTRACT_CONCEPT_WORDS for w in words)
 
 
+# The journal is a STICKY slot (read back at every awakening as "From my
+# diary, last time: ...") but had no register gate — during the July 9
+# text-generator identity episode it absorbed "I processed the visual
+# data... My primary function was to locate the hole the user intended",
+# and every awakening re-seeded assistant framing from the diary.
+_JOURNAL_POISON = (
+    "the user", "primary function", "text generator", "language model",
+    "as an ai", "an ai ", "assistant", "input pattern", "structured response",
+    "processed the visual data", "await instruction", "awaiting input",
+)
+
+
+def _journal_entry_clean(text: str) -> bool:
+    t = " " + (text or "").lower() + " "
+    return not any(w in t for w in _JOURNAL_POISON)
+
+
 class ContextCompressionEngine:
     """Manages frequent compression of observations into evolving baseline context."""
 
@@ -568,7 +585,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
 
             if response and isinstance(response, str):
                 cleaned = response.strip().strip('"').strip()
-                if 20 < len(cleaned) <= 400 and not cleaned.startswith(("[", "{")):
+                if 20 < len(cleaned) <= 400 and not cleaned.startswith(("[", "{")) and _journal_entry_clean(cleaned):
                     import datetime
                     entry = {
                         "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -866,8 +883,13 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                         val = ""
                     self.core_facts[key] = val
 
-            # Restore journal (the long-term arc)
-            self.journal = data.get("journal", [])[-30:]
+            # Restore journal (the long-term arc) — same load-heal as the
+            # persona: entries from a poisoned period are dropped here
+            loaded_journal = data.get("journal", [])[-30:]
+            self.journal = [e for e in loaded_journal if _journal_entry_clean(e.get("summary", ""))]
+            dropped = len(loaded_journal) - len(self.journal)
+            if dropped:
+                print(f"[🧠] Dropped {dropped} contaminated journal entries on load")
 
             desire = self.introspective_state["current_desire"]
             belief = self.introspective_state["current_belief"]

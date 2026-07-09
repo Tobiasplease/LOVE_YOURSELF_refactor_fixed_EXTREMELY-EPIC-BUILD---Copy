@@ -940,10 +940,11 @@ if previous_state:
 
     awakening_msg = captioner.generate_awakening_message(time_since_last, previous_beliefs)
 
-    log_json_entry(
-        LogType.INFO,
-        {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
-    )
+    if awakening_msg:  # empty = short-gap resume, no ceremony to log
+        log_json_entry(
+            LogType.INFO,
+            {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
+        )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
 else:

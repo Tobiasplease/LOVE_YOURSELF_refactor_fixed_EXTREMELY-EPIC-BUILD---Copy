@@ -267,6 +267,13 @@ STREAM_MODE = os.getenv("STREAM_MODE", "document")
 ANTI_ECHO_WORDS = 5
 ANTI_ECHO_RETRY_TEMP_BUMP = 0.15
 
+# A blink is not a night: below this offline gap, restarting skips the full
+# awakening ceremony (which, run several times an hour across dev restarts,
+# converged on stock reorientation prose — "the hum returns, dust motes...")
+# and instead RESUMES: the prior session's last thought seeds the stream and
+# document mode continues it. Real absences still get the rich awakening.
+AWAKENING_MIN_GAP_S = int(os.getenv("AWAKENING_MIN_GAP_S", 600))
+
 # While GRBL executes, the machine watches itself draw: a throttled caption
 # (frame of the paper + arm, current drawing intent, document stream) every
 # N seconds. The execution used to be inference dead space — and the machine
