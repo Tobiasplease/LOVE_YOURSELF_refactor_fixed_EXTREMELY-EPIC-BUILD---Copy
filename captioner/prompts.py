@@ -239,13 +239,15 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
         except Exception:
             pass
 
-    # The introspective elicitation ("follow the thought you're already
-    # having") is the continuation mechanics in question form — in document
-    # mode the structure already does exactly that, and it was the most
-    # parroted line in the July 8 logs. Content elicitations (relational/
-    # workspace/observational) stay: they steer WHAT, not HOW.
+    # Standing QUESTIONS invite answers — and reciprocation ("What's your
+    # turn?", July 9). In document mode the quiet modes (introspective/
+    # observational/workspace) carry no elicitation: the document continues
+    # itself, and the model needs no conversational door left open while the
+    # samplers squeeze it. Relational keeps its question (a person is a real
+    # event worth being asked about), awakening keeps its (a real threshold).
+    # Turns mode keeps all elicitations — the A/B stays honest.
     addition = _MODE_ADDITIONS.get(mode, "")
-    if mode == "introspective":
+    if mode in ("introspective", "observational", "workspace"):
         try:
             from config.config import STREAM_MODE
             if STREAM_MODE == "document":
