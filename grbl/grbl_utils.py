@@ -34,6 +34,7 @@ try:
         GRBL_ENABLE_SEGMENTED_EXECUTION,
         GRBL_MAX_SEGMENT_SIZE,
         GRBL_ENABLE_PERSON_DETECTION_PAUSE,
+        GRBL_PEN_SETTLE_DWELL_S,
     )
 except Exception:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S = 30, 50, 255, 0
@@ -46,6 +47,7 @@ except Exception:
     GRBL_ENABLE_SEGMENTED_EXECUTION = True
     GRBL_MAX_SEGMENT_SIZE = 150
     GRBL_ENABLE_PERSON_DETECTION_PAUSE = False
+    GRBL_PEN_SETTLE_DWELL_S = 0.12
 
 # Default configuration
 DEFAULT_BAUD = 115200
@@ -679,12 +681,22 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
                         # Linear move - pen should be down
                         if not pen_down:
                             servo_lines.append(f"{PEN_DOWN_CMD}")
+                            # GRBL treats spindle-PWM changes as instantaneous —
+                            # it never waits for the physical servo. Without a
+                            # settle dwell, a dot/short dash is over before the
+                            # pen lands (the dotted-line dropouts, July 9).
+                            if GRBL_PEN_SETTLE_DWELL_S > 0:
+                                servo_lines.append(f"G4 P{GRBL_PEN_SETTLE_DWELL_S} ; pen settle")
                             pen_down = True
                         servo_lines.append(line)
                     elif line.startswith("G00") or (line.startswith("G0") and " " in line):
                         # Rapid move - pen should be up
                         if pen_down:
                             servo_lines.append(f"{PEN_UP_CMD}")
+                            # settle before the rapid too, or the still-low pen
+                            # drags a tail out of the stroke
+                            if GRBL_PEN_SETTLE_DWELL_S > 0:
+                                servo_lines.append(f"G4 P{GRBL_PEN_SETTLE_DWELL_S} ; pen settle")
                             pen_down = False
                         servo_lines.append(line)
                     else:

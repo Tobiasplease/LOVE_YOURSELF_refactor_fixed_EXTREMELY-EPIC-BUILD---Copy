@@ -129,8 +129,19 @@ GRBL_SPINDLE_MAX_S = int(os.getenv("GRBL_SPINDLE_MAX_S", 255))  # -> $30
 GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))  # -> $31
 
 # Pen up/down S values (relative to $30 scale). Tune for your linkage.
-GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 20))  # Lowered for faster operation
+# UP raised 20 -> 34 (July 9): 20<->52 was 32 S-units of servo travel per
+# lift — too far for the servo to descend before short strokes finished.
+# Raise UP further toward DOWN for even shallower/faster lifts; lower it
+# back if the pen grazes paper during travel moves.
+GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 34))
 GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 52))
+
+# Settle dwell after every pen transition during drawing (G4). GRBL treats a
+# spindle-PWM change as instantaneous — it never waits for the physical
+# servo — so without this, a dot/short dash is over before the pen lands
+# (the dotted-line dropouts). ~0.12s covers the shortened travel above;
+# raise if dots still start faint, lower toward 0.08 once UP is tuned.
+GRBL_PEN_SETTLE_DWELL_S = float(os.getenv("GRBL_PEN_SETTLE_DWELL_S", 0.12))
 
 # Extra safety to ensure pen is fully UP before any homing ($H)
 GRBL_PEN_UP_REPEATS = int(os.getenv("GRBL_PEN_UP_REPEATS", 5))   # How many times to assert M3 S{UP} before homing
@@ -187,10 +198,17 @@ GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 8.0))  
 
 # === PEN LIFT OPTIMIZATION ===
 # Servo values for different pen operations - lower S = more lift (pen higher)
-GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", 30))         # Drawing pen up value (was 41, now more lift)
-GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))   # Normal pen down value
-GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 32))       # Cluster pen up (was 43, now more lift)
-GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", min(60, GRBL_PEN_DOWN_S + 5))) # Fast pen down for clusters
+# Lift-height history (don't re-learn this the hard way): the original
+# variable lift used UP 41/43 — shallow and fast, but it GRAZED the paper in
+# high regions (the work surface isn't flat; see the warp transform). It was
+# then deepened to 30/32, which made cluster optimization near-pointless
+# (2 S-units shallower than normal) and dots faint (servo travel too long).
+# July 9: middle path — moderate lift everywhere + settle dwell for contact,
+# fast cluster lift kept safely above the old grazing point.
+GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", GRBL_PEN_UP_S))
+GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))
+GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 38))       # dense clusters: shallower, still ~3 above the grazing 41
+GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", GRBL_PEN_DOWN_S))  # was +5: pressing HARDER in clusters was backwards
 
 # Cluster detection parameters
 GRBL_CLUSTER_DISTANCE_THRESHOLD = float(os.getenv("GRBL_CLUSTER_DISTANCE_THRESHOLD", 5.0))  # Max distance between clustered pen lifts (mm)
