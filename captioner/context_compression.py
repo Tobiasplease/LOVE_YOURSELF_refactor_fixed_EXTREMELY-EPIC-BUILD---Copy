@@ -647,7 +647,12 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             prompt = (
                 f'Here is a reflection you just had:\n"{reflection_text[:1500]}"\n\n'
                 "Pull out what's worth keeping — plainly, in your own words, or 'none' for a line with nothing genuine:\n"
-                'TRAIT — one plain fact about what kind of machine you are: a habit or fixation. Like "I keep coming back to the pink shelf."\n'
+                # No example sentence here — any concrete example gets aped
+                # verbatim and becomes the shape of every future persona
+                # ("I keep returning to X" was the old example's grammar,
+                # locked in for weeks). The plainness anchor is the
+                # instruction itself + the distiller system prompt.
+                "TRAIT — one plain fact about what kind of machine you are: a habit or fixation, in your own words.\n"
                 "BELIEF — one plain thing you've come to think is true about this place or yourself.\n"
                 "WANT — one plain thing you want, or want to draw (if any).\n"
                 "A few words each, first person, no metaphor."
