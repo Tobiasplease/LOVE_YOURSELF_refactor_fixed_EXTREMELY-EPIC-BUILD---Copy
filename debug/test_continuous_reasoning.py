@@ -36,7 +36,7 @@ OLLAMA_URL = "http://localhost:11434"
 
 # Current pipeline models
 PERCEPTION_MODEL = "qwen2.5vl:7b"
-MONOLOGUE_MODEL = "mistral-nemo:latest"
+MODEL_NAME = "mistral-nemo:latest"
 
 # Proposed pipeline model
 THINKING_MODEL = "qwen3-vl:8b-thinking"
@@ -169,7 +169,7 @@ def run_current_pipeline(image_b64, last_thought="", cycle_num=0, session_second
 
     mono_prompt = "\n".join(mono_parts)
     monologue, mono_ms, mono_tokens = ollama_generate(
-        MONOLOGUE_MODEL, mono_prompt, system=MONOLOGUE_SYSTEM,
+        MODEL_NAME, mono_prompt, system=MONOLOGUE_SYSTEM,
         options=MONOLOGUE_OPTIONS,
     )
 
@@ -435,7 +435,7 @@ def main():
     print(f"  Image source:    {'live camera' if use_camera else image_path}")
     if run_current:
         print(f"  Perception:      {PERCEPTION_MODEL}")
-        print(f"  Monologue:       {MONOLOGUE_MODEL}")
+        print(f"  Monologue:       {MODEL_NAME}")
     if run_proposed:
         print(f"  Thinking model:  {thinking_model}")
     mode = "both" if run_current and run_proposed else "current only" if run_current else "proposed only"

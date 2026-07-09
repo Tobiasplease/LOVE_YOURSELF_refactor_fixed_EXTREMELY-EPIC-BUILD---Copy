@@ -21,7 +21,7 @@ class PromptInterface:
     """Centralized interface for all prompt building and preparation."""
 
     def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or config.OLLAMA_MODEL
+        self.model_name = model_name or config.MODEL_NAME
 
     def build_caption_prompt_with_options(self, memory_ref, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False, person_present: bool = False):
         """Build caption prompt and prepare all options for API call."""

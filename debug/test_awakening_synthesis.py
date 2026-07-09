@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import config
-from utils.ollama import query_ollama
+from utils.inference import query_model
 
 IDENTITY_PATH = os.path.join(config.MOOD_SNAPSHOT_FOLDER, "machine_identity.json")
 
@@ -95,9 +95,9 @@ def run_test(image_path: str, identity: dict, label: str = "SAME SPACE"):
     print(f"--- SYSTEM ---\n{system}\n")
     print("--- RESPONSE ---")
 
-    result = query_ollama(
+    result = query_model(
         prompt=prompt,
-        model=config.OLLAMA_MODEL,
+        model=config.MODEL_NAME,
         image=image_path,
         system_prompt=system,
         options={"temperature": 0.8, "num_predict": 80, "top_p": 0.7, "repeat_penalty": 1.8, "stop": ["\n"]},
@@ -142,9 +142,9 @@ def main():
         "Never say 'the image' or 'the scene' — you live here. "
         "One sentence only."
     )
-    result2 = query_ollama(
+    result2 = query_model(
         prompt=prompt,
-        model=config.OLLAMA_MODEL,
+        model=config.MODEL_NAME,
         image=recent_image,
         system_prompt=system,
         options={"temperature": 0.4, "num_predict": 80, "top_p": 0.8, "repeat_penalty": 1.8, "stop": ["\n"]},

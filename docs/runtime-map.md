@@ -237,7 +237,7 @@ prompt entirely: present-tense presence belongs to the live detection layer
 
 ## Dead / deprecated (do not revive without checking docs/memory-redesign-plan.md)
 
-- utils/ollama.py query path (fallback only; llama-server is primary)
+- utils/ollama.py — REMOVED July 9 (with mistral-nemo and the whole Ollama backend; llama-server is the sole backend, logging moved to utils/llm_log.py)
 - get_session_greeting, after_perception, build_monologue_prompt etc. —
   removed June 2026 dead-code purge
 - subconscious.py — REMOVED July 2026 along with its debug suite

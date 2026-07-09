@@ -14,8 +14,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.ollama import query_ollama
-from config.config import OLLAMA_MODEL, MOOD_SNAPSHOT_FOLDER
+from utils.inference import query_model
+from config.config import MODEL_NAME, MOOD_SNAPSHOT_FOLDER
 
 # Use provided image or find most recent mood snapshot
 if len(sys.argv) > 1:
@@ -29,7 +29,7 @@ else:
     IMAGE = images[-1]
 
 print(f"\nUsing image: {IMAGE}")
-print(f"Model: {OLLAMA_MODEL}\n")
+print(f"Model: {MODEL_NAME}\n")
 print("=" * 70)
 
 # Also load current drifted baseline for comparison
@@ -133,9 +133,9 @@ for i, candidate in enumerate(CANDIDATES):
     print(f"\n[{i+1}/{len(CANDIDATES)}] Testing: {candidate['name']}")
     opts = {**OPTIONS_BASE, **candidate["options"]}
     t0 = time.time()
-    result = query_ollama(
+    result = query_model(
         prompt=candidate["prompt"],
-        model=OLLAMA_MODEL,
+        model=MODEL_NAME,
         image=IMAGE,
         log_dir=MOOD_SNAPSHOT_FOLDER,
         system_prompt=candidate["system"],

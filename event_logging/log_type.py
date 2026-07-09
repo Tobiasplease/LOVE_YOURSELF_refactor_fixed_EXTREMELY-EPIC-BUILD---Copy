@@ -19,7 +19,7 @@ class LogType(Enum):
     INTROSPECTION = "introspection"
     # SENTIMENT = "sentiment_analysis"
     COMPRESSION = "compression"
-    OLLAMA_API_CALL = "ollama_api_call"
+    LLM_API_CALL = "llm_api_call"  # was OLLAMA_API_CALL/"ollama_api_call" pre-July 9 (old logs keep the old string)
 
     # Drawing and creative process events
     DECISION = "decision"

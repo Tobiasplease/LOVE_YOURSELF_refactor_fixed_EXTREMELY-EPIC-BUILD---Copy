@@ -24,7 +24,7 @@ import threading
 import time
 
 from config import config
-from config.config import OLLAMA_TIMEOUT_REFLECTION, REFLECTION_LOOP_INTERVAL, REFLECTION_NUM_PREDICT, REFLECTION_TEMPERATURE
+from config.config import LLM_TIMEOUT_REFLECTION, REFLECTION_LOOP_INTERVAL, REFLECTION_NUM_PREDICT, REFLECTION_TEMPERATURE
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 
@@ -193,9 +193,9 @@ class ReflectionLoop:
         print(f"[REFLECT] Stepping back to think about {subject}...")
         response = query_model(
             prompt=prompt,
-            model=config.OLLAMA_MODEL,
+            model=config.MODEL_NAME,
             system_prompt=system_prompt,
-            timeout=OLLAMA_TIMEOUT_REFLECTION,
+            timeout=LLM_TIMEOUT_REFLECTION,
             options={
                 "temperature": REFLECTION_TEMPERATURE,
                 "top_p": 0.9,
@@ -244,7 +244,7 @@ class ReflectionLoop:
         # introspection/self-synthesis (retired June 28).
         try:
             from captioner.context_compression import context_compressor
-            context_compressor.distill_reflection(text, subject, model=config.OLLAMA_MODEL)
+            context_compressor.distill_reflection(text, subject, model=config.MODEL_NAME)
         except Exception as e:
             print(f"[REFLECT] distill failed: {e}")
 

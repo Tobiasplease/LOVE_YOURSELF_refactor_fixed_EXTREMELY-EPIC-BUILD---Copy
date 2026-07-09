@@ -1,12 +1,13 @@
 """
 utils/llama_server.py
 ---------------------
-Drop-in replacement for utils/ollama.py that talks to llama-server directly.
-Supports both single-image (regular captioning) and multi-frame video input
-via the llama-video super-frame pipeline.
+THE inference backend (sole backend since July 9 2026 — utils/ollama.py
+retired). Talks to the patched llama-server directly: single-image captioning,
+multi-frame video via the llama-video super-frame pipeline, and document-mode
+assistant prefill (the stream).
 
 Usage:
-    # Single image (same API as query_ollama):
+    # Single image:
     from utils.llama_server import query_llama_server
     result = query_llama_server(prompt="Describe this.", image="/path/to/frame.jpg")
 
@@ -72,11 +73,7 @@ _server_process = None
 # Logging (reuse existing infrastructure)
 # ---------------------------------------------------------------------------
 
-try:
-    from utils.ollama import log_ollama_call
-except ImportError:
-    def log_ollama_call(**kwargs):
-        pass
+from utils.llm_log import log_llm_call
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +255,7 @@ def is_server_running() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Drawing completion wait (mirrors utils/ollama._wait_for_drawing_completion)
+# Drawing completion wait
 # ---------------------------------------------------------------------------
 
 def _wait_for_drawing_completion() -> None:
@@ -305,7 +302,7 @@ def _wait_for_drawing_completion() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Single-image query (drop-in for query_ollama)
+# Single-image query
 # ---------------------------------------------------------------------------
 
 def query_llama_server(
@@ -326,7 +323,6 @@ def query_llama_server(
 ) -> str:
     """
     Query llama-server with a prompt and optional image.
-    API-compatible with query_ollama() for easy migration.
 
     history: prior outputs of the same voice, included as the model's own
     assistant turns — each call then CONTINUES a visible stream of thought
@@ -451,7 +447,7 @@ def query_llama_server(
 
         response_text = _clean_continuation(response_text, prefill)
 
-        log_ollama_call(
+        log_llm_call(
             prompt=prompt,
             model=model or "llama-server",
             image_path=image_path,
@@ -474,7 +470,7 @@ def query_llama_server(
         if progress_bar:
             progress_bar.stop(success=False)
 
-        log_ollama_call(
+        log_llm_call(
             prompt=prompt,
             model=model or "llama-server",
             image_path=image_path,
@@ -574,7 +570,7 @@ def _query_multi_image(
 
     response_text = _clean_continuation(response_text, prefill)
 
-    log_ollama_call(
+    log_llm_call(
         prompt=prompt,
         model="llama-server",
         response=response_text,
@@ -716,7 +712,7 @@ def _query_superframe(
 
     response_text = _clean_continuation(response_text, prefill)
 
-    log_ollama_call(
+    log_llm_call(
         prompt=prompt,
         model="llama-server",
         response=response_text,

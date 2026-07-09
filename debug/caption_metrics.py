@@ -45,7 +45,7 @@ def analyze(path):
     entries = load(path)
     caps = [e.get("caption", "").strip() for e in entries if e.get("type") == "caption" and e.get("caption")]
     caps = [c for c in caps if len(c) > 10 and not c.startswith("[")]
-    calls = [e for e in entries if e.get("type") == "ollama_api_call"]
+    calls = [e for e in entries if e.get("type") in ("llm_api_call", "ollama_api_call")]
     dbg = [e for e in entries if e.get("type") in ("debug", "info")]
 
     n = len(caps)

@@ -8,12 +8,12 @@ from typing import Optional
 
 from config.config import (
     MOOD_SNAPSHOT_FOLDER,
-    OLLAMA_MODEL,
+    MODEL_NAME,
 )
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.inference import query_model
-from utils.ollama import truncate_for_print
+from utils.llm_log import truncate_for_print
 
 from .prompt_interface import PromptInterface
 
@@ -228,7 +228,7 @@ class MultimodalModel:
 
     def __init__(self, memory_ref: Optional[any] = None) -> None:  # type: ignore
         self.memory_ref = memory_ref
-        self.model_name = OLLAMA_MODEL
+        self.model_name = MODEL_NAME
         self.prompt_interface = PromptInterface(self.model_name)
 
     def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False, person_present: bool = False) -> tuple:
@@ -326,8 +326,8 @@ class MultimodalModel:
     ) -> str:
         """Call Natsumura model for introspective/narrative captions (no image needed)."""
         try:
-            from config.config import COMPRESSION_MODEL
-            natsumura_model = COMPRESSION_MODEL
+            from config.config import MODEL_NAME
+            natsumura_model = MODEL_NAME
         except ImportError:
             natsumura_model = "natsumura-storytelling-rp:latest"
 
@@ -581,7 +581,7 @@ class MultimodalModel:
             tuple: (monologue_text, mode)
         """
         import random as _random
-        from config.config import OLLAMA_MODEL
+        from config.config import MODEL_NAME
         from captioner.prompts import get_monologue_system_prompt
 
         emotion_state = getattr(agent, "current_emotion_state", "calm") if agent else "calm"
@@ -600,7 +600,7 @@ class MultimodalModel:
             ],
         }
 
-        monologue_model = OLLAMA_MODEL  # Same model as perception — no swap
+        monologue_model = MODEL_NAME  # Same model as perception — no swap
         print(f"\n{'='*80}\n[MONOLOGUE] {monologue_model} (with image)\n{'='*80}")
         print(f"SYSTEM: {system_prompt}\n")
         print(f"USER:\n{monologue_prompt}\n")

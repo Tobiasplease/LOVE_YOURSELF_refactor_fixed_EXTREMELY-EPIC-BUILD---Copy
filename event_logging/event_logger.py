@@ -92,28 +92,6 @@ def create_run_metadata(run_id: str) -> Dict[str, Any]:
     }
 
 
-def update_all_run_log(log_dir: str, entry: Dict[str, Any]) -> None:
-    """Update the aggregated all-run-log.json file with a log entry."""
-    all_run_log_path = os.path.join(log_dir, "all-run-log.json")
-
-    # Load existing entries
-    all_entries = []
-    if os.path.exists(all_run_log_path):
-        try:
-            with open(all_run_log_path, "r", encoding="utf-8") as f:
-                all_entries = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            all_entries = []
-
-    # Add new log entry
-    all_entries.append(entry)
-
-    # Write back to file
-    os.makedirs(log_dir, exist_ok=True)
-    with open(all_run_log_path, "w", encoding="utf-8") as f:
-        json.dump(all_entries, f, indent=2, ensure_ascii=False)
-
-
 def log_json_entry(
     log_type: Union[LogType, str],
     data: Dict[str, Any],
@@ -172,11 +150,10 @@ def log_json_entry(
         # as all other entries — a plain open() here raced the locked path)
         append_to_log_file(log_dir, filename, metadata_entry)
 
-        update_all_run_log(log_dir, metadata_entry)
-
     append_to_log_file(log_dir, filename, entry)
-
-    update_all_run_log(log_dir, entry)
+    # (all-run-log.json aggregation retired July 9: it re-read and rewrote an
+    # ever-growing array on EVERY entry — the second O(n^2) writer — and
+    # nothing anywhere read it)
 
     # Decide whether to print based on config and clean LLM output policy
     should_print = False
@@ -188,7 +165,7 @@ def log_json_entry(
 
     lt = log_type_str.lower()
     # Always-print LLM text categories when CLEAN_LLM_OUTPUT is enabled
-    llm_always_print = {"caption", "reflection", "comfy_prompt", "ollama_api_call"}
+    llm_always_print = {"caption", "reflection", "comfy_prompt", "llm_api_call", "ollama_api_call"}
 
     if lt in LOG_TYPES_TO_PRINT or ("all" in LOG_TYPES_TO_PRINT and lt != "debug"):
         should_print = True

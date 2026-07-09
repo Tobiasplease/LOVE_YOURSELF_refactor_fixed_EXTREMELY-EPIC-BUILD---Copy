@@ -17,7 +17,7 @@ import requests
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 PERCEPTION_MODEL = "qwen2.5vl:7b"
-MONOLOGUE_MODEL = "mistral-nemo"
+MODEL_NAME = "mistral-nemo"
 
 # --- NEW SYSTEM PROMPTS (casual register) ---
 
@@ -92,7 +92,7 @@ def get_perception(img_path: str) -> str:
 
 def get_monologue(system_prompt: str, user_prompt: str) -> str:
     resp = requests.post(OLLAMA_URL, json={
-        "model": MONOLOGUE_MODEL,
+        "model": MODEL_NAME,
         "prompt": user_prompt,
         "stream": False,
         "system": system_prompt,

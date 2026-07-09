@@ -37,7 +37,7 @@ flake8 . --max-line-length=150
 
 ## Architecture Overview
 
-An AI-powered interactive mirror system. A camera observes a space, a vision-language model (Qwen3.5 via a patched llama-server; Ollama is the fallback backend) generates captions, and these drive mood analysis, physical outputs (servo, CNC arm), and periodic drawing generation (ComfyUI). The system is structured as a threaded Python application.
+An AI-powered interactive mirror system. A camera observes a space, a vision-language model (Qwen3.5 via a patched llama-server — the sole inference backend) generates captions, and these drive mood analysis, physical outputs (servo, CNC arm), and periodic drawing generation (ComfyUI). The system is structured as a threaded Python application.
 
 **`docs/runtime-map.md` is the maintained source of truth for what is actually live at runtime.** Update it whenever wiring changes. Historical/superseded plan docs live in `docs/archive/` — do not trust them against current code.
 
@@ -65,7 +65,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
   - `activation_memory.py`: Activation-spreading memory network for concept recall and boredom scoring
   - `context_compression.py`: Compresses recent captions into evolving baseline context (every N captions via background thread)
   - `frame_buffer.py`: Rolling frame + detection-snapshot buffer feeding the caption loop
-  - `model_wrapper.py`: Vision-model API wrapper (llama-server or Ollama backend)
+  - `model_wrapper.py`: Vision-model API wrapper (llama-server)
   - `prompt_interface.py`: Builds prompts + model options for caption and drawing calls
   - `prompts.py`: All prompt templates and builder functions
 - **mood/**: Mood analysis engine, emotional state tracking
@@ -79,9 +79,9 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 - **safety/**: ArUco marker detection and paper presence detection for CNC safety
 - **event_logging/**: JSON event logging with run management
 - **utils/**: Utility modules:
-  - `llama_server.py`: llama-server process management (primary inference backend)
-  - `inference.py`: Backend-agnostic model query helper
-  - `ollama.py`: Ollama HTTP API wrapper (fallback backend)
+  - `llama_server.py`: llama-server process management + query paths (the inference backend)
+  - `inference.py`: Model query interface (query_model / query_model_video)
+  - `llm_log.py`: Per-call LLM logging (prompt/response/stream observability)
   - `state_manager.py`: Shared runtime state (drawing status, paper detection, etc.)
   - `hooks.py`: Hook registration and dispatch
   - `continuity.py`: Time-gap description helpers
@@ -96,7 +96,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 
 1. **Threaded Processing**: Camera, caption, and compression each run in separate threads
 2. **Activation Memory System**: Concepts extracted from captions feed an activation network; activation levels drive boredom detection and prompt mode selection
-3. **Context Compression**: Every N captions, a background thread calls Ollama to compress recent observations into a rolling `baseline_context` string, injected into system prompts
+3. **Context Compression**: Every N captions, a background thread compresses recent observations into a rolling `baseline_context` string, injected into system prompts
 4. **Prompt Mode Routing**: `build_simple_caption_prompt` selects a mode (relational/observational/restless/workspace/introspective/awakening) based on activation state; mode determines prompt content
 5. **Multi-Step Drawing Analysis**: `context_rich_multi_step_drawing_analysis` runs a 5-step pipeline to generate drawing prompts from current memory state
 6. **Configuration-Driven**: All tuning parameters in `config/config.py` with JSON override support
@@ -104,10 +104,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 
 ### External Dependencies
 
-- **Inference backend** (`INFERENCE_BACKEND` in config, default `llama_server`):
-  - **llama-server** (primary): patched llama.cpp at http://localhost:8080 with Qwen3.5 video support (Conv3D super-frames); managed by `utils/llama_server.py`
-  - **Ollama** (fallback): http://localhost:11434, model `qwen3.5:9b` (`OLLAMA_MODEL` constant in config.py)
-  - Text-side models (compression/monologue): `mistral-nemo` via Ollama (`COMPRESSION_MODEL`)
+- **Inference backend** (single, since July 2026): patched llama.cpp llama-server at http://localhost:8080 with Qwen3.5 video support (Conv3D super-frames) and assistant prefill; managed by `utils/llama_server.py`. ALL calls (captions, reflections, compression, drawing analysis) run on the one loaded model (`MODEL_NAME` label, weights from `LLAMA_MODEL_PATH`). Ollama + mistral-nemo were retired.
 - **ComfyUI (Optional)**: AI image generation at http://localhost:8188
 - **OpenCV DNN Models**: `models/deploy.prototxt` + `models/res10_300x300_ssd_iter_140000.caffemodel`
 - **YOLO Models**: `models/yolov8n.pt` default (`yolov8m.pt` at repo root also available)
@@ -118,7 +115,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 ### Data Flow
 
 1. Camera frames → face/object detection → spatial memory updates
-2. Every caption cycle: frame(s) + memory context → vision model (llama-server/Ollama) → caption text
+2. Every caption cycle: frame(s) + memory context → vision model (llama-server) → caption text
 3. Caption → activation memory update → concept activation/boredom scores
 4. Every N captions: background compression → `baseline_context` updated
 5. Caption + context → mood analysis → emotional state
@@ -128,8 +125,8 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 
 ### Environment Variables
 
-- `INFERENCE_BACKEND`: `llama_server` (default) or `ollama`
 - `LLAMA_SERVER_URL`: llama-server endpoint (default `http://localhost:8080`)
+- `LLAMA_MODEL_PATH` / `LLAMA_MMPROJ_PATH`: model weights for llama-server
 - `VIDEO_MODE_ENABLED` / `VIDEO_MODE`: temporal video perception (`superframe` default, or `multi`)
 - `MOTION_THRESHOLD`: frame-diff threshold below which a single still is sent
 - `MOOD_SNAPSHOT_FOLDER`: Override default event log storage location

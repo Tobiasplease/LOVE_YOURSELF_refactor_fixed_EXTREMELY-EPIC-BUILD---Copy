@@ -1,19 +1,19 @@
 """
 utils/inference.py
 ------------------
-Unified inference wrapper. All LLM call sites import query_model() from here.
-Routes to either Ollama or llama-server based on config.INFERENCE_BACKEND.
+Model query interface. Single backend since July 9 2026: the patched
+llama-server (Qwen3.5, video super-frames, assistant prefill). The Ollama
+backend + the separate text-side model (mistral-nemo) were retired — since
+the llama.cpp migration, per-call model selection was ignored anyway (one
+loaded model), so compression/reflection/drawing analysis were already
+running on the main model in practice.
 
-For video-capable calls, use query_model_video() which sends multiple frames
-through the super-frame pipeline when llama-server is active, or falls back
-to single-frame via query_model() on Ollama.
-
-Also re-exports start_server / stop_server for VRAM lifecycle management.
+Also re-exports unload_model / reload_model for the ComfyUI VRAM dance.
 """
 
 from typing import List, Optional, Union
 
-from config import config as _cfg
+from config import config as _cfg  # kept for MODEL_NAME/log defaults
 
 
 def query_model(
@@ -33,51 +33,34 @@ def query_model(
     react: bool = False,
 ) -> str:
     """
-    Query the active inference backend with a prompt and optional image.
-    Drop-in replacement for query_ollama() — same signature, routes by config.
+    Query llama-server with a prompt and optional image.
 
-    history: prior captions as the model's own assistant turns (the stream);
-    llama-server only — the Ollama fallback ignores it.
+    history: prior captions as the model's own assistant turns/prefill (the
+    stream). `model` is a log label only — llama-server serves the one model
+    it loaded (LLAMA_MODEL_PATH).
     """
-    # Empty log_dir crashes log_ollama_call (os.makedirs('')) — default it here
+    # Empty log_dir crashes log_llm_call (os.makedirs('')) — default it here
     # so call sites don't all have to pass it.
     if not log_dir:
         log_dir = _cfg.MOOD_SNAPSHOT_FOLDER
 
-    if _cfg.INFERENCE_BACKEND == "llama_server":
-        from utils.llama_server import query_llama_server
-        return query_llama_server(
-            prompt=prompt,
-            model=model,
-            image=image,
-            timeout=timeout,
-            log_dir=log_dir,
-            system_prompt=system_prompt,
-            strict_evaluation=strict_evaluation,
-            options=options,
-            show_progress=show_progress,
-            prompt_type=prompt_type,
-            skip_generation_wait=skip_generation_wait,
-            prior_assistant_turn=prior_assistant_turn,
-            history=history,
-            react=react,
-        )
-    else:
-        from utils.ollama import query_ollama
-        return query_ollama(
-            prompt=prompt,
-            model=model,
-            image=image,
-            timeout=timeout,
-            log_dir=log_dir,
-            system_prompt=system_prompt,
-            strict_evaluation=strict_evaluation,
-            options=options,
-            show_progress=show_progress,
-            prompt_type=prompt_type,
-            skip_generation_wait=skip_generation_wait,
-            prior_assistant_turn=prior_assistant_turn,
-        )
+    from utils.llama_server import query_llama_server
+    return query_llama_server(
+        prompt=prompt,
+        model=model,
+        image=image,
+        timeout=timeout,
+        log_dir=log_dir,
+        system_prompt=system_prompt,
+        strict_evaluation=strict_evaluation,
+        options=options,
+        show_progress=show_progress,
+        prompt_type=prompt_type,
+        skip_generation_wait=skip_generation_wait,
+        prior_assistant_turn=prior_assistant_turn,
+        history=history,
+        react=react,
+    )
 
 
 def query_model_video(
@@ -92,72 +75,32 @@ def query_model_video(
     history: Optional[List[str]] = None,
     react: bool = False,
 ) -> str:
-    """
-    Query with multiple video frames. Only works with llama-server backend.
-    Falls back to single-frame (last frame) on Ollama.
-    """
-    if _cfg.INFERENCE_BACKEND == "llama_server":
-        from utils.llama_server import query_llama_server_video
-        return query_llama_server_video(
-            prompt=prompt,
-            frames=frames,
-            fps=fps,
-            system_prompt=system_prompt,
-            options=options,
-            timeout=timeout,
-            show_progress=show_progress,
-            skip_generation_wait=skip_generation_wait,
-            history=history,
-            react=react,
-        )
-    else:
-        # Ollama fallback: use last frame as single image
-        from utils.ollama import query_ollama
-        last_frame = frames[-1] if frames else None
-        return query_ollama(
-            prompt=prompt,
-            image=last_frame,
-            system_prompt=system_prompt,
-            options=options,
-            timeout=timeout,
-            show_progress=show_progress,
-            skip_generation_wait=skip_generation_wait,
-        )
+    """Query with multiple video frames (super-frame or multi-image mode)."""
+    from utils.llama_server import query_llama_server_video
+    return query_llama_server_video(
+        prompt=prompt,
+        frames=frames,
+        fps=fps,
+        system_prompt=system_prompt,
+        options=options,
+        timeout=timeout,
+        show_progress=show_progress,
+        skip_generation_wait=skip_generation_wait,
+        history=history,
+        react=react,
+    )
 
 
 # --- VRAM lifecycle (used by drawing.py) ---
 
 def unload_model() -> None:
     """Free VRAM before ComfyUI generation."""
-    if _cfg.INFERENCE_BACKEND == "llama_server":
-        from utils.llama_server import stop_server
-        stop_server()
-    else:
-        import requests
-        try:
-            requests.post(
-                "http://localhost:11434/api/generate",
-                json={"model": "", "keep_alive": 0},
-                timeout=10,
-            )
-        except Exception:
-            pass
+    from utils.llama_server import stop_server
+    stop_server()
 
 
 def reload_model() -> None:
     """Reload model into VRAM after ComfyUI is done."""
-    if _cfg.INFERENCE_BACKEND == "llama_server":
-        from utils.llama_server import start_server, is_server_running
-        if not is_server_running():
-            start_server()
-    else:
-        from config.config import OLLAMA_MODEL
-        import requests
-        try:
-            requests.post(
-                "http://localhost:11434/api/generate",
-                json={"model": OLLAMA_MODEL, "prompt": "", "keep_alive": "5m"},
-                timeout=120,
-            )
-        except Exception:
-            pass
+    from utils.llama_server import is_server_running, start_server
+    if not is_server_running():
+        start_server()

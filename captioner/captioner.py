@@ -21,7 +21,7 @@ from config.config import (
     DRAWING_INTERVAL,
     DRAWING_STARTUP_DELAY,
     MOOD_SNAPSHOT_FOLDER,
-    OLLAMA_SHOW_PROGRESS,
+    LLM_SHOW_PROGRESS,
 )
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
@@ -609,18 +609,19 @@ class Captioner(MemoryMixin):
             return
         oldest = entries[:3]
         try:
-            from config.config import COMPRESSION_MODEL, MOOD_SNAPSHOT_FOLDER
-            from utils.ollama import query_ollama
+            from config.config import MODEL_NAME, MOOD_SNAPSHOT_FOLDER
+            from utils.inference import query_model
             joined = "\n".join(f"- {e}" for e in oldest)
-            line = query_ollama(
+            line = query_model(
                 prompt=(
                     "Consecutive notes from one ongoing thought:\n"
                     f"{joined}\n\n"
                     "Compress them into ONE short sentence (under 20 words), first person, "
                     "reusing their own words wherever possible. No new imagery, no interpretation."
                 ),
-                model=COMPRESSION_MODEL,
+                model=MODEL_NAME,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
+                skip_generation_wait=True,
                 system_prompt="You compress a machine's own notes into one plain sentence built from its own words.",
                 options={"temperature": 0.3, "num_predict": 40},
                 prompt_type="stream_consolidation",
@@ -717,7 +718,7 @@ class Captioner(MemoryMixin):
         def loading_animation():
             frames = [" ", ".", "..", "..."]
             idx = 0
-            if OLLAMA_SHOW_PROGRESS:
+            if LLM_SHOW_PROGRESS:
                 while not loading_stop.is_set():
                     if hasattr(self, "print_lock"):
                         with self.print_lock:
@@ -797,7 +798,7 @@ class Captioner(MemoryMixin):
                         from captioner.prompts import build_simple_caption_prompt, get_monologue_system_prompt
                         from config import config as _cfg
                         MOTION_THRESHOLD = _cfg.MOTION_THRESHOLD
-                        OLLAMA_MODEL = _cfg.OLLAMA_MODEL
+                        MODEL_NAME = _cfg.MODEL_NAME
                         VIDEO_MODE_ENABLED = _cfg.VIDEO_MODE_ENABLED
                         from utils.inference import query_model, query_model_video
 
@@ -855,8 +856,7 @@ class Captioner(MemoryMixin):
                             )
                             system_prompt = get_monologue_system_prompt(caption_mode, agent=self)
 
-                        backend_tag = "LLAMA" if _cfg.INFERENCE_BACKEND == "llama_server" else "OLLAMA"
-                        print(f"\n{'='*80}\n[{backend_tag}] {OLLAMA_MODEL} ({caption_mode})\n{'='*80}")
+                        print(f"\n{'='*80}\n[LLAMA] {MODEL_NAME} ({caption_mode})\n{'='*80}")
                         print(f"SYSTEM: {system_prompt}\n")
                         # The stream (prior thoughts) rides as the model's own assistant
                         # turns — invisible in SYSTEM/USER above. Show it so continuity
@@ -906,7 +906,6 @@ class Captioner(MemoryMixin):
                         use_video = (
                             not inward
                             and VIDEO_MODE_ENABLED
-                            and _cfg.INFERENCE_BACKEND == "llama_server"
                             and bool(recent_meta)
                             and scene["max_diff"] > MOTION_THRESHOLD
                         )
@@ -992,7 +991,7 @@ class Captioner(MemoryMixin):
                             def _generate(_opts):
                                 return query_model(
                                     prompt=user_prompt,
-                                    model=OLLAMA_MODEL,
+                                    model=MODEL_NAME,
                                     image=send_path,
                                     system_prompt=system_prompt,
                                     timeout=60,
@@ -1745,7 +1744,7 @@ class Captioner(MemoryMixin):
         # the thought-thread continues from it — when the narrative side
         # model (Nemo) wrote it, the whole session inherited its cinematic
         # register from word one (observed June 12).
-        awakening_model = config.OLLAMA_MODEL
+        awakening_model = config.MODEL_NAME
 
         system_prompt = (
             "You are a drawing machine bolted to a table in a workshop, coming back online. "
@@ -1916,7 +1915,7 @@ class Captioner(MemoryMixin):
             )
             caption = query_model(
                 prompt=user_prompt,
-                model=_cfg.OLLAMA_MODEL,
+                model=_cfg.MODEL_NAME,
                 image=buf.tobytes(),
                 system_prompt=system_prompt,
                 timeout=60,

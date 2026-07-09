@@ -3,7 +3,7 @@
 import sys
 sys.path.insert(0, '/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy')
 
-from utils.ollama import query_ollama
+from utils.inference import query_model
 import config.config as config
 
 recent_captions = [
@@ -46,13 +46,13 @@ narrative_system_prompt = (
     "Speak in first person. Follow the format exactly."
 )
 
-compression_model = getattr(config, 'COMPRESSION_MODEL', config.OLLAMA_MODEL)
+compression_model = getattr(config, 'MODEL_NAME', config.MODEL_NAME)
 print(f"Using model: {compression_model}")
 print("=" * 50)
 
 for i in range(3):
     print(f"\n--- Test {i+1} ---")
-    response = query_ollama(
+    response = query_model(
         prompt=prompt,
         model=compression_model,
         system_prompt=narrative_system_prompt,

@@ -258,8 +258,8 @@ class DrawingMemory:
             from config.config import MOOD_SNAPSHOT_FOLDER
 
             try:
-                from config.config import COMPRESSION_MODEL
-                model = COMPRESSION_MODEL
+                from config.config import MODEL_NAME
+                model = MODEL_NAME
             except (ImportError, AttributeError):
                 model = None
 

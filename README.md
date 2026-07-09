@@ -1,6 +1,6 @@
 # LOVE_YOURSELF - AI-Powered Interactive Mirror System
 
-A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using a local vision-language model (Qwen3.5 via llama-server, Ollama fallback), and can optionally control servo motors for physical interaction. It can also generate images based on mood by posting to an external comfyui server.
+A sophisticated AI-driven interactive system that combines computer vision, mood analysis, and servo control to create an empathetic digital companion. The system uses webcam input to detect faces, analyze emotions, generate captions using a local vision-language model (Qwen3.5 via llama-server), and can optionally control servo motors for physical interaction. It can also generate images based on mood by posting to an external comfyui server.
 
 ## Features
 
@@ -99,21 +99,11 @@ models/yolov8n.pt
 
 #### Inference Backend Setup
 
-The vision model is Qwen3.5. The primary backend is a patched llama-server
-(llama.cpp with Qwen3.5 video super-frame support) at `http://localhost:8080`,
-managed by `utils/llama_server.py`; set `INFERENCE_BACKEND=ollama` to fall back
-to Ollama instead:
-
-```bash
-# Fallback backend (Ollama)
-ollama pull qwen3.5:9b
-ollama pull mistral-nemo   # text-side model for compression/monologue
-ollama serve
-```
-
-Ollama is expected at `http://localhost:11434/api/generate`; calls are handled
-through `utils/ollama.py`. See `docs/llama-cpp-video-migration.md` for the
-llama-server rationale and setup.
+The vision model is Qwen3.5 on a patched llama-server (llama.cpp with video
+super-frame support and assistant prefill) at `http://localhost:8080`, managed
+automatically by `utils/llama_server.py` (weights via `LLAMA_MODEL_PATH`).
+This is the sole backend — Ollama was retired July 2026. See
+`docs/llama-cpp-video-migration.md` for the rationale and setup.
 
 #### ComfyUI Setup (Optional)
 
@@ -198,7 +188,7 @@ LOVE_YOURSELF/
 ├── grbl/                  # GRBL CNC machine integration
 ├── bcnc/                  # bCNC G-code processing utilities
 ├── event_logging/         # JSON event logging and run management
-├── utils/                 # Utility modules (ollama, continuity, pattern recognition)
+├── utils/                 # Utility modules (llama_server, continuity, pattern recognition)
 ├── labs/                  # Experimental features
 │   └── warp-fix-lab/      # Drawing warp correction
 ├── debug/                 # Test scripts and debugging tools

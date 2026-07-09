@@ -32,7 +32,7 @@ from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from grbl.idle_movement_manager import pause_for_drawing
 from utils.inference import query_model
-from utils.ollama import truncate_for_print
+from utils.llm_log import truncate_for_print
 from utils.state_manager import state_manager
 
 from .comfy import create_impostor_controller
@@ -442,8 +442,8 @@ class DrawingController:
     # ------------------------------------------------------------------
     # VRAM management
     # ------------------------------------------------------------------
-    def _unload_ollama_models(self) -> None:
-        """Unload inference model from VRAM to free space for ComfyUI/Flux."""
+    def _unload_inference_model(self) -> None:
+        """Unload llama-server from VRAM to free space for ComfyUI/Flux."""
         from utils.inference import unload_model
         try:
             unload_model()
@@ -456,8 +456,8 @@ class DrawingController:
     # ------------------------------------------------------------------
     def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str) -> None:
         try:
-            # Unload Ollama models from VRAM so ComfyUI/Flux can allocate
-            self._unload_ollama_models()
+            # Unload the inference model from VRAM so ComfyUI/Flux can allocate
+            self._unload_inference_model()
 
             # Don't pause idle movements yet - let them continue with "generating" pattern
             # We'll only pause when actual G-code execution starts

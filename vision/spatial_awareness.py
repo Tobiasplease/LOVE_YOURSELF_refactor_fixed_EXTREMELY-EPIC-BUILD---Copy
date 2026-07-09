@@ -16,7 +16,7 @@ import cv2
 import requests
 from typing import Optional
 
-from config.config import PAN_MIN, PAN_MAX, TILT_MIN, TILT_MAX, OLLAMA_MODEL
+from config.config import PAN_MIN, PAN_MAX, TILT_MIN, TILT_MAX, MODEL_NAME
 
 # Import gaze control functions
 try:
@@ -45,7 +45,7 @@ class SpatialAwarenessEngine:
 
         self.query_interval = query_interval
         self.ollama_host = ollama_host
-        self.model = model or OLLAMA_MODEL
+        self.model = model or MODEL_NAME
 
         self.current_frame = None
         self.frame_lock = threading.Lock()

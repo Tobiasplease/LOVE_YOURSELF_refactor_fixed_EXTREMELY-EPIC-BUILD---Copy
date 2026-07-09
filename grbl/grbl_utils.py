@@ -1261,7 +1261,7 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
                     
                     self_critique = query_model(
                         critique_prompt,
-                        model=config.OLLAMA_MODEL,
+                        model=config.MODEL_NAME,
                         system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
                         options=model_options,
                         timeout=30

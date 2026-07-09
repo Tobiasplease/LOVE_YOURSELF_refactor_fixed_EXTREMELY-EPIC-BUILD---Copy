@@ -39,10 +39,10 @@ _MISTRAL_MODEL = "llava:7b-v1.6-mistral-q5_1"
 
 def _get_static_system_prompt() -> str:
     """Return the appropriate static system prompt for the active model."""
-    from config.config import OLLAMA_MODEL
-    if "qwen" in OLLAMA_MODEL.lower():
+    from config.config import MODEL_NAME
+    if "qwen" in MODEL_NAME.lower():
         return STATIC_SYSTEM_PROMPT_QWEN
-    if OLLAMA_MODEL == _MISTRAL_MODEL:
+    if MODEL_NAME == _MISTRAL_MODEL:
         return STATIC_SYSTEM_PROMPT
     return STATIC_SYSTEM_PROMPT_GENERIC
 
@@ -1890,7 +1890,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
     is_awakening = session_mins < 1 and observation_count < 3
 
-    from config.config import OLLAMA_MODEL as _active_model
+    from config.config import MODEL_NAME as _active_model
     _is_qwen = "qwen" in _active_model.lower()
 
     # === RESOLVE GAZE STATE (used by mode selection + situational line) ===

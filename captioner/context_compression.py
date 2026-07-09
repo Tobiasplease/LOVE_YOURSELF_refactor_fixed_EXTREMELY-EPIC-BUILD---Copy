@@ -18,7 +18,7 @@ from config.model_settings import get_model_options
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.inference import query_model
-from utils.ollama import truncate_for_print
+from utils.llm_log import truncate_for_print
 
 IDENTITY_FILE = os.path.join(config.MOOD_SNAPSHOT_FOLDER, "machine_identity.json")
 
@@ -196,7 +196,7 @@ class ContextCompressionEngine:
                 "baseline": current_baseline,
                 "timestamp": time.time(),
             })
-            compression_model = getattr(config, 'COMPRESSION_MODEL', 'default')
+            compression_model = getattr(config, 'MODEL_NAME', 'default')
             log_json_entry(
                 LogType.COMPRESSION,
                 {"message": "Queued narrative compression", "action": "queue", "caption_count": len(captions_snapshot), "model": compression_model},
@@ -327,14 +327,14 @@ Respond with the one sentence only, no prefixes."""
             )
 
             # Use compression model (text-only narrative model) instead of vision model
-            compression_model = getattr(config, 'COMPRESSION_MODEL', config.OLLAMA_MODEL)
+            compression_model = getattr(config, 'MODEL_NAME', config.MODEL_NAME)
 
             response = query_model(
                 prompt=prompt,
                 model=compression_model,
                 image=None,  # Text-only compression
                 system_prompt=narrative_system_prompt,
-                timeout=config.OLLAMA_TIMEOUT_EVAL if hasattr(config, "OLLAMA_TIMEOUT_EVAL") else 90,
+                timeout=config.LLM_TIMEOUT_EVAL if hasattr(config, "LLM_TIMEOUT_EVAL") else 90,
                 options=model_options,
                 prompt_type="compression",
             )
@@ -517,7 +517,7 @@ Respond with the one sentence only, no prefixes."""
         try:
             if time.time() - self._last_journal_time < 600:
                 return  # Wrote within last 10 min — good enough
-            model = getattr(config, "COMPRESSION_MODEL", config.OLLAMA_MODEL)
+            model = getattr(config, "MODEL_NAME", config.MODEL_NAME)
             self._maybe_write_journal(model, force=True)
         except Exception:
             pass

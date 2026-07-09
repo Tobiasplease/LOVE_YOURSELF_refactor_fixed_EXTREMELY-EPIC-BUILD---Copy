@@ -688,18 +688,16 @@ if os.path.exists(_caption_monitor_script):
 debug_print("Initializing mood engine", "INIT")
 mood_engine = MoodEngine()
 _global_mood_engine = mood_engine
-# Ensure inference backend is running
-from config.config import INFERENCE_BACKEND
-if INFERENCE_BACKEND == "llama_server":
-    from utils.llama_server import is_server_running, start_server
-    if not is_server_running():
-        print("[INIT] Starting llama-server...")
-        if not start_server():
-            print("[INIT] llama-server failed to start — falling back to Ollama")
-            import config.config as _cfg
-            _cfg.INFERENCE_BACKEND = "ollama"
-    else:
-        print("[INIT] llama-server already running")
+# Ensure llama-server is running (the only backend since July 9 2026 —
+# the Ollama fallback was retired with mistral-nemo; the query paths
+# auto-restart the server if it dies mid-run)
+from utils.llama_server import is_server_running, start_server
+if not is_server_running():
+    print("[INIT] Starting llama-server...")
+    if not start_server():
+        print("[INIT] WARNING: llama-server failed to start — captions will retry/restart it per call")
+else:
+    print("[INIT] llama-server already running")
 
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
