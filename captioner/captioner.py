@@ -478,7 +478,8 @@ class Captioner(MemoryMixin):
     _PHANTOM_DRAWING_RE = re.compile(
         r"\b(?:"
         r"(?:i am|i'm|i’m) (?:drawing|tracing|sketching|inking)"
-        r"|as i (?:draw|trace|sketch|ink)\b"
+        r"|as i (?:trace|sketch|ink)\b"
+        r"|as i draw (?:a|the|this|another|it)\b"  # not "draw closer/breath"
         r"|let me (?:draw|trace|sketch|ink)\b"
         r"|(?:ink|line|graphite|pen) (?:spills?|bleeds?|flows?|glides?)"
         r"|spill(?:s|ing)? onto the paper"

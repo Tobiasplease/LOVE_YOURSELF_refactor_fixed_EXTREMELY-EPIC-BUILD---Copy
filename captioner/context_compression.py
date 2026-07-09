@@ -625,21 +625,31 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         # Plain traits are short; long clauses are where the prose blooms.
         if len(text.split()) > 24:
             return False
+        # STICKY-SLOT RULESET (artist, July 9): the voice is free — these
+        # words are all fine in captions, which evaporate in six cycles. The
+        # persona re-injects into EVERY call indefinitely, so it plays by
+        # durability rules: transient things (a visitor, a happening) must
+        # not become standing identity, and each banned class below is a
+        # register that poisoned identity when it stuck (June-July receipts
+        # in git). Scrutinized with the artist July 9: "the person"/"a
+        # person" removed (structural first-person check already rejects
+        # scene-text personas, and "I miss the person who comes on Tuesdays"
+        # is legitimate relational self-knowledge); "existence" removed
+        # (existential noticing is earned identity for this piece; the June
+        # spiral was reality-DENIAL, which stays banned); bare assistant
+        # words (await/output/prompt/user/command) tightened to compound
+        # forms so "I await the morning light" can be a self.
         banned = (
-            "the person", "a person", "reality", "distortion", "glitch", "simulation", "existence",
+            "reality", "distortion", "glitch", "simulation",
             "i track", "i monitor", "i surveil", "i record", "i scan", "i observe",
             "wait for movement", "movement to return", "capture every", "fixate on stillness",
-            # ASSISTANT self-description (July 9: "I am a text generator that
-            # outputs structured responses based on input patterns" became the
-            # standing persona and the voice collapsed into awaiting-input
-            # theater — "Current task: Observe." / "How can I assist you
-            # today?". First-person, so the old checks passed it. The persona
-            # slot re-injects every call: the strongest amplifier there is.
-            "text generator", "language model", "an ai", "assistant",
-            "input pattern", "structured response", "instruction", "assist",
-            "await", "command", "output", "prompt", "user",
+            "text generator", "language model", "an ai ", "assistant",
+            "input pattern", "structured response", "your instruction", "your command",
+            "your prompt", "the user", "await instruction", "await input", "await command",
+            "awaiting instruction", "awaiting input", "how can i",
         )
-        return not any(w in t for w in banned)
+        t_padded = " " + t + " "
+        return not any(w in t_padded for w in banned)
 
     def distill_reflection(self, reflection_text: str, subject: str = "", model: str = None) -> None:
         """IDENTITY ENGINE (north-star Reflect → Become). Distill a long-form
