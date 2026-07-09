@@ -1808,6 +1808,18 @@ def build_memory_mode_prompt(agent) -> tuple:
                 label = c["name"]
                 label_l = label[0].lower() + label[1:]
                 times = c.get("times_seen", 0)
+                # Qualitative bands, never the raw integer — "you've noticed
+                # it 1738 times" bred number-recitation ("a static monument
+                # I've counted 2411 times"). The ledger keeps exact counts
+                # for gating; the voice gets words (artist's call, July 9).
+                if times >= 200:
+                    how_often = "countless times"
+                elif times >= 30:
+                    how_often = "again and again"
+                elif times >= 10:
+                    how_often = "many times"
+                else:
+                    how_often = "a few times"
                 across = " across more than one visit" if c.get("session_count", 0) > 1 else ""
                 since = ""
                 first = c.get("first_seen", 0)
@@ -1815,7 +1827,7 @@ def build_memory_mode_prompt(agent) -> tuple:
                     days = (_time.time() - first) / 86400.0
                     if days >= 1.5:
                         since = f", first noticed about {int(days)} days ago"
-                mem_text = f"the {label_l} — you've noticed it {times} times{across}{since}"
+                mem_text = f"the {label_l} — you've noticed it {how_often}{across}{since}"
                 is_real_memory = True
         except Exception:
             pass
