@@ -260,6 +260,20 @@ prompt entirely: present-tense presence belongs to the live detection layer
 - docs/reasoning-model-plan.md — superseded by docs/north-star.md + the
   reflection loop
 
+## Watching itself draw (July 9)
+
+During GRBL execution the caption worker switches to
+`_process_drawing_introspection`: one thematic consolidation at drawing
+start (unchanged), then `_watch_drawing` every `DRAWING_WATCH_INTERVAL_S`
+(20s): current frame (gaze holds the paper + arm) + the drawing intent +
+the document stream → a watching-myself-draw caption, gated and stored
+like any other. The 2026-02-03 refactor emptied this time because the old
+camera couldn't see the paper; it can now. Because the captions enter the
+stream, a finished drawing is remembered as lived experience — before
+this, the machine drew only in blackouts and met its own work afterwards.
+Rejected watch captions skip silently (no retries while the arm works).
+Logged as `mode: drawing_watch` / `prompt_type: drawing_watch`.
+
 ## The drawing pipeline's memory (July 9 provenance fix)
 
 One drawing = ONE drawing_memory entry: created at prompt generation

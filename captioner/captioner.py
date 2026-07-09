@@ -307,7 +307,7 @@ class Captioner(MemoryMixin):
                 try:
                     # Check if we're currently drawing - switch to introspective mode
                     if self._is_currently_drawing():
-                        self._process_drawing_introspection(reactivity_data)
+                        self._process_drawing_introspection(reactivity_data, frame=frame)
                     else:
                         self._process_frame(frame, reactivity_data, person_present)
                 except Exception as exc:
@@ -1879,6 +1879,70 @@ class Captioner(MemoryMixin):
             return self._boredom
         return 0.0
 
+    def _watch_drawing(self, frame, drawing_summary: str) -> None:
+        """The machine watches itself draw (July 9). The 2026-02-03 refactor
+        emptied this time because the old camera couldn't see the paper; the
+        new one can — the gaze holds the sheet and the moving arm. These
+        captions ride the document stream like any others, so a finished
+        drawing is REMEMBERED as lived experience instead of met afterwards
+        like a stranger's work (until now the machine drew only in blackouts).
+        The phantom-drawing gate is state-aware: present-tense acts of marking
+        are legitimate exactly here."""
+        from config.config import DRAWING_WATCH_INTERVAL_S
+        if not DRAWING_WATCH_INTERVAL_S or frame is None:
+            return
+        now_ts = time.time()
+        if now_ts - getattr(self, "_last_drawing_watch", 0) < DRAWING_WATCH_INTERVAL_S:
+            return
+        self._last_drawing_watch = now_ts
+        try:
+            import cv2 as _cv2
+            from captioner.prompts import get_monologue_system_prompt
+            from config import config as _cfg
+            from utils.inference import query_model
+
+            ok, buf = _cv2.imencode(".jpg", frame)
+            if not ok:
+                return
+            system_prompt = get_monologue_system_prompt("observational", agent=self)
+            user_prompt = (
+                "Your arm is drawing right now — the pen is on the paper below you, mid-line. "
+                f"You set out to draw: {drawing_summary[:120]}. "
+                "What you see below is how far it has gotten."
+            )
+            caption = query_model(
+                prompt=user_prompt,
+                model=_cfg.OLLAMA_MODEL,
+                image=buf.tobytes(),
+                system_prompt=system_prompt,
+                timeout=60,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                options={"temperature": 0.8, "num_predict": 80},
+                prompt_type="drawing_watch",
+                history=list(self._stream),
+                skip_generation_wait=True,
+            )
+            caption = self._strip_list_shape(caption)
+            if not caption or self._caption_reject_reason(caption, f"{system_prompt}\n{user_prompt}"):
+                return  # quiet cycle — no retries while the arm is working
+            if self._stream_admissible(caption):
+                self._stream.append(caption.strip())
+                self._consolidate_stream_if_needed()
+            self.last_caption = caption
+            log_json_entry(
+                LogType.CAPTION,
+                {"caption": caption, "mood": self.current_mood, "salience_hot": False,
+                 "caption_interval": DRAWING_WATCH_INTERVAL_S, "mode": "drawing_watch"},
+                print_message=caption,
+            )
+            try:
+                from utils.live_log import log_caption
+                log_caption(caption)
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[🎨👁] drawing-watch failed: {e}")
+
     def _is_currently_drawing(self) -> bool:
         """Check if system is currently executing G-code (actual drawing)."""
         try:
@@ -1889,13 +1953,18 @@ class Captioner(MemoryMixin):
         except Exception:
             return False
 
-    def _process_drawing_introspection(self, reactivity_data: Optional[Dict] = None) -> None:
+    def _process_drawing_introspection(self, reactivity_data: Optional[Dict] = None, frame=None) -> None:
         """
         REFACTORED 2026-02-03: Replaced useless image analysis (camera can't see drawing)
         with productive thematic consolidation for drawing continuity.
 
         UPDATED 2026-02-03: Only consolidates ONCE at start of drawing, then silently skips
         during execution to avoid spamming the same output repeatedly.
+
+        UPDATED 2026-07-09: the camera CAN see the drawing now (better camera +
+        Qwen vision) — after the one-time consolidation, the execution time is
+        no longer dead space: _watch_drawing runs throttled watching-myself-draw
+        captions into the document stream.
         """
         try:
             from utils.state_manager import state_manager
@@ -1912,7 +1981,8 @@ class Captioner(MemoryMixin):
                 self._last_consolidated_drawing = None
 
             if self._last_consolidated_drawing == drawing_summary:
-                return  # Already consolidated this drawing, skip silently
+                self._watch_drawing(frame, drawing_summary)
+                return
 
             # Mark this drawing as consolidated
             self._last_consolidated_drawing = drawing_summary

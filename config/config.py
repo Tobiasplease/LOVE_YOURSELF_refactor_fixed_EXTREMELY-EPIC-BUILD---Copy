@@ -285,6 +285,12 @@ STREAM_MODE = os.getenv("STREAM_MODE", "document")
 ANTI_ECHO_WORDS = 5
 ANTI_ECHO_RETRY_TEMP_BUMP = 0.15
 
+# While GRBL executes, the machine watches itself draw: a throttled caption
+# (frame of the paper + arm, current drawing intent, document stream) every
+# N seconds. The execution used to be inference dead space — and the machine
+# met its own drawings afterwards like a stranger's work. 0 disables.
+DRAWING_WATCH_INTERVAL_S = int(os.getenv("DRAWING_WATCH_INTERVAL_S", 20))
+
 # Stream consolidation: when the joined document exceeds this, the oldest 3
 # entries are compressed into ONE extractive line (COMPRESSION_MODEL, reusing
 # the machine's own words) so the thought moves forward instead of
