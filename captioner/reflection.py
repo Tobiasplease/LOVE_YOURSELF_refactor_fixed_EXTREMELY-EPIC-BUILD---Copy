@@ -39,6 +39,20 @@ class ReflectionLoop:
         self._subject_idx = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        # Resume rotation after the last stored subject — resetting to index 0
+        # on every restart made "the room" dominate (6 of 11 reflections on a
+        # restart-heavy day)
+        try:
+            from captioner.prompts import REFLECTION_SUBJECTS
+            from captioner.semantic_memory import get_semantic_memory
+            last = get_semantic_memory().get_recent_reflections(limit=1)
+            if last:
+                names = [s for s, _ in REFLECTION_SUBJECTS]
+                subj = (last[0].get("subject") or "").strip()
+                if subj in names:
+                    self._subject_idx = (names.index(subj) + 1) % len(names)
+        except Exception:
+            pass
 
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():

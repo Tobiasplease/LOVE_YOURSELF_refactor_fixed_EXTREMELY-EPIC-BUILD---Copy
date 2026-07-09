@@ -149,7 +149,23 @@ _SITUATION = (
 # ongoing inner voice lets the model build on its prior turns naturally — mid-
 # thought, doubling back, drifting to what's in front of it — without being told
 # to mechanically extend. Continuity as nature, not instruction.
-_MONOLOGUE_CLAUSE = "This is your inner voice, ongoing — plain, half-formed, the way you actually think to yourself when no one is reading. You're always partway through a thought: carry it on, or let something new pull you. A sentence or two."
+def _monologue_clause() -> str:
+    """Genre frame only. The continuation instruction ("you're always partway
+    through a thought: carry it on") is appended ONLY in turns mode — in
+    document mode the prefill IS the partway-through thought, so instructing
+    the mechanics is redundant, and meta-instruction leaks (observed July 9:
+    the machine reciting its own system prompt mid-stream)."""
+    clause = (
+        "This is your inner voice, ongoing — plain, half-formed, the way you "
+        "actually think to yourself when no one is reading. A sentence or two."
+    )
+    try:
+        from config.config import STREAM_MODE
+        if STREAM_MODE != "document":
+            clause += " You're always partway through a thought: carry it on, or let something new pull you."
+    except ImportError:
+        pass
+    return clause
 
 # Elicitations, not state clauses (north-star Principle 2). Each names the KIND
 # of thought to have — a reaction, a wondering, a continuation — so the model
@@ -194,7 +210,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     except Exception:
         pass
 
-    base += _MONOLOGUE_CLAUSE
+    base += _monologue_clause()
 
     # Clean-room (config.BASE_VOICE_DETOX): the felt-state and persona are
     # exactly the re-injected, model-generated material that re-poisons the
@@ -223,7 +239,20 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
         except Exception:
             pass
 
-    base += _MODE_ADDITIONS.get(mode, "")
+    # The introspective elicitation ("follow the thought you're already
+    # having") is the continuation mechanics in question form — in document
+    # mode the structure already does exactly that, and it was the most
+    # parroted line in the July 8 logs. Content elicitations (relational/
+    # workspace/observational) stay: they steer WHAT, not HOW.
+    addition = _MODE_ADDITIONS.get(mode, "")
+    if mode == "introspective":
+        try:
+            from config.config import STREAM_MODE
+            if STREAM_MODE == "document":
+                addition = ""
+        except ImportError:
+            pass
+    base += addition
     return base
 
 
@@ -367,8 +396,9 @@ def get_reflection_system_prompt() -> str:
     """Frame for the long-form reflection: same situation as the caption frame,
     but the monologue clause swapped for room to think at length."""
     base = _SITUATION + (
-        "The room is quiet just now, and you have stepped back from the stream of watching to think at length. "
-        "Private thought in the same plain voice as your notes, first person, as much room as the thought needs."
+        "The room is quiet just now, and you have stepped back from the stream of watching to think. "
+        "Private thought in the same plain voice as your notes, first person. "
+        "One paragraph — the one thought that's actually moving, not a survey of everything."
     )
     try:
         from captioner.context_compression import context_compressor
@@ -411,10 +441,22 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     if today:
         parts.append("Your running notes from today, oldest first:\n" + "\n".join(f"- {t}" for t in today))
 
+    # Prior reflections enter as short excerpts, never the full prose — the
+    # same store-lesson as the echo line (step 6): re-reading 8K chars of its
+    # own long-form output compounded the purple and froze the subjects.
     reflections = data.get("reflections") or []
     if reflections:
-        quoted = "\n\n".join(f"({_age_phrase(r.get('timestamp', 0))}) \"{r['text']}\"" for r in reflections)
-        parts.append("The last times you stepped back to think like this, you wrote:\n" + quoted)
+        def _excerpt(t: str, limit: int = 220) -> str:
+            t = (t or "").strip()
+            if len(t) <= limit:
+                return t
+            cut = t[:limit].rsplit(" ", 1)[0]
+            return cut + "…"
+        quoted = "\n".join(
+            f"- ({_age_phrase(r.get('timestamp', 0))}, on {r.get('subject', '?')}) \"{_excerpt(r.get('text', ''))}\""
+            for r in reflections
+        )
+        parts.append("The last times you stepped back to think like this, you began:\n" + quoted)
 
     journal = data.get("journal") or []
     if journal:
@@ -429,6 +471,11 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
         parts.append(f"Lately you've wanted: {desire}")
 
     parts.append(question)
+    # Development pressure: when there IS a thread to continue, ask for the
+    # delta, not a re-description (the July 9 audit found reflections circling
+    # the same material session after session).
+    if reflections:
+        parts.append("You've thought about this before — don't re-describe what you already wrote. What's moved since then?")
     return "\n\n".join(parts)
 
 

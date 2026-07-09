@@ -311,7 +311,7 @@ CAPTION_QUIET_AFTER = 120  # seconds without salience before the cadence stretch
 
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet
-REFLECTION_NUM_PREDICT = 600  # token budget for a reflection — long-form on purpose (north-star principle 5)
+REFLECTION_NUM_PREDICT = 220  # was 600 — the model padded to the brim every time (~2600 chars of purple survey); brevity pressure IS register pressure  # token budget for a reflection — long-form on purpose (north-star principle 5)
 
 # Drawing system intervals
 DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
