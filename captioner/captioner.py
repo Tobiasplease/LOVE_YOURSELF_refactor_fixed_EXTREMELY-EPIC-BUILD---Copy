@@ -2020,11 +2020,28 @@ class Captioner(MemoryMixin):
             ok, buf = _cv2.imencode(".jpg", frame)
             if not ok:
                 return
+            # Intent as a clean subject: state may hold the RAW ComfyUI
+            # prompt ("Black ink line drawing on white paper: ...") — strip
+            # the boilerplate, cut at a word boundary. (NB: commit 0ea1625
+            # claimed this fix but its script aborted before writing.)
+            try:
+                from drawing.drawing_memory import DrawingMemory
+                subject = DrawingMemory._strip_comfy_preamble(drawing_summary or "")
+            except Exception:
+                subject = drawing_summary or ""
+            subject = subject.strip().rstrip(".")
+            if len(subject) > 110:
+                subject = subject[:110].rsplit(" ", 1)[0] + "…"
             system_prompt = get_monologue_system_prompt("observational", agent=self)
+            # Honest occlusion framing: the old line claimed "what you see
+            # below is how far it has gotten" — but the hand covers the
+            # marks. Asked to report progress it couldn't see, the model
+            # confabulated waiting/silence atmosphere and a brush that
+            # doesn't exist. State what it CAN see.
             user_prompt = (
-                "Your arm is drawing right now — the pen is on the paper below you, mid-line. "
-                f"You set out to draw: {drawing_summary[:120]}. "
-                "What you see below is how far it has gotten."
+                "Your arm is drawing right now — your hand is moving over the paper below, "
+                "and it mostly blocks the marks; you catch glimpses of fresh line around its edges. "
+                f"You set out to draw: {subject}."
             )
             caption = query_model(
                 prompt=user_prompt,
@@ -2033,7 +2050,14 @@ class Captioner(MemoryMixin):
                 system_prompt=system_prompt,
                 timeout=60,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
-                options={"temperature": 0.8, "num_predict": 80},
+                # Same anti-loop samplers as normal captions — this path had
+                # temperature only; with nothing penalizing repeats it chanted
+                # ("I am the one who waits. The silence is all there is." x4
+                # inside one caption, July 9)
+                options={"temperature": 0.8, "num_predict": 80,
+                         "repeat_penalty": 1.15,
+                         "dry_multiplier": 0.85, "dry_base": 1.75,
+                         "dry_allowed_length": 3, "dry_penalty_last_n": 128},
                 prompt_type="drawing_watch",
                 history=list(self._stream),
                 skip_generation_wait=True,
@@ -2050,7 +2074,9 @@ class Captioner(MemoryMixin):
             cap_words = set(self._norm_words(caption))
             for past in list(self._stream)[-2:]:
                 past_words = set(self._norm_words(past))
-                if cap_words and len(cap_words & past_words) / max(1, len(cap_words | past_words)) > 0.6:
+                # 0.5, was 0.6: mantra creep mixes half-new atmosphere with
+                # a repeated refrain and slid under the higher threshold
+                if cap_words and len(cap_words & past_words) / max(1, len(cap_words | past_words)) > 0.5:
                     return
             if self._stream_admissible(caption):
                 self._stream.append(caption.strip())
