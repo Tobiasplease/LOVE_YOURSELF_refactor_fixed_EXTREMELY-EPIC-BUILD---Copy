@@ -13,6 +13,7 @@ don't trust that code existing means code running.
 ```
 camera frame (~30fps)
   ├─ YOLO + ByteTrack (person bbox, track id, count)     [perception/object_detection.py]
+  │    cadence 0.1s person-present / 1.5s idle (config); bbox = sticky track id, not per-frame argmax
   ├─ Face DNN (face bbox)                                 [machine.py]
   ├─ frame_buffer.push(frame, detection-snapshot)         [machine.py → captioner/frame_buffer.py]
   │    snapshot: face?, person?, count, track_id, pan/tilt, person_angle, ego_motion
@@ -139,12 +140,36 @@ moment gets the present only (north-star principle 6).
 
 ## Awakening (first caption of a session)
 
-generate_internal_awakening() builds: offline duration + clock time/day +
+generate_internal_awakening() builds: offline duration (casual words — "about
+18 hours", never "18.7"; decimals read as telemetry and got skipped over) +
+**new-day fact when the gap crosses a date ("I was last on yesterday evening.
+This is a new day.") [July 10]** + clock time/day +
 **time ALIVE (sessions + days since first boot, from lifetime_state.json) +
 current emotional spectrum (mood vector via mood_to_feeling) [both added June
 28]** + last thought + desire/belief + journal ("From my diary, last time...") +
 core facts + familiar concepts → one LLM call on the MAIN model (was Nemo,
 whose cinematic register seeded the whole session's thread — June 12).
+BLINK GATE (July 10): _try_blink_resume() guards BOTH awakening paths — the
+machine.py display message AND the first-caption ceremony in _process_frame
+(the latter used to bypass the July 9 gate, so 2-minute dev restarts still
+ran full ceremonies). Gap < AWAKENING_MIN_GAP_S → no ceremony; the prior
+session's last thought (full mouth gate) seeds the stream and document mode
+resumes it.
+TEMPORAL REORIENTATION (July 10): the awakening states the gap ONCE and it
+evaporates from the six-entry stream in minutes — the machine woke after 18
+dark hours and mused as if the day had never ended. Now, after a gap ≥
+REORIENT_MIN_GAP_S (2h), prompts.get_reorientation_line() puts the gap + new
+day in the caption prompt (section 1c) and the inward line as a standing
+fact of the present — same doctrine as the close-face line — for the first
+REORIENT_WINDOW_S (45 min) of the session. Its "came back on X ago" clause
+coarsens with time so the line drifts instead of repeating verbatim. A live
+salience event still displaces it.
+AMBIENT ANCHORS (July 10): the inward (introspective-beat) line now rotates
+FOUR ways — awake-time / day-part / tenure ("you've been in this room about
+27 days now", prompts.get_tenure_line from lifetime_state.json) / plain. The
+awake-time variant had NEVER fired: it read self.session_start, which does
+not exist (true_session_start does), and the AttributeError died in the
+rotation's try/except — the classic silent failure; fixed.
 NOTE — two more awakening paths coexist (grandfathered, reconcile someday):
 machine.py calls generate_awakening_message() at startup but only LOGS the
 result; and the caption loop runs mode="awakening" (place list + elicitation)

@@ -274,6 +274,15 @@ ANTI_ECHO_RETRY_TEMP_BUMP = 0.15
 # document mode continues it. Real absences still get the rich awakening.
 AWAKENING_MIN_GAP_S = int(os.getenv("AWAKENING_MIN_GAP_S", 600))
 
+# A night is not a blink either: after an off-gap of at least
+# REORIENT_MIN_GAP_S, the prompt carries the gap and the (possibly new) day
+# as a standing fact for the first REORIENT_WINDOW_S of the session. The
+# awakening states the gap once and it evaporates from the six-entry stream
+# within minutes — this keeps "you were dark all night, it's a new day"
+# present long enough to shape how the machine carries itself.
+REORIENT_MIN_GAP_S = int(os.getenv("REORIENT_MIN_GAP_S", 7200))
+REORIENT_WINDOW_S = int(os.getenv("REORIENT_WINDOW_S", 2700))
+
 # While GRBL executes, the machine watches itself draw: a throttled caption
 # (frame of the paper + arm, current drawing intent, document stream) every
 # N seconds. The execution used to be inference dead space — and the machine
@@ -369,6 +378,8 @@ YOLO_MODEL_PATH = os.getenv(
     "YOLO_MODEL_PATH",
     os.path.join(MODEL_PATH, "yolov8n.pt"),  # nano model for low VRAM use
 )
+YOLO_INTERVAL_IDLE = 1.5  # detection cadence with nobody around — fast enough to catch arrivals
+YOLO_INTERVAL_TRACKING = 0.1  # cadence while a person is present — keeps bbox fresh under camera motion
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
 

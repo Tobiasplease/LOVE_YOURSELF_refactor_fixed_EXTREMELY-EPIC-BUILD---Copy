@@ -794,7 +794,14 @@ class Captioner(MemoryMixin):
             caption = None  # Initialize caption variable
             caption_mode = "observational"  # Default mode
 
-            if not self.first_caption_done or not self.session_awakening_done:
+            needs_awakening = not self.first_caption_done or not self.session_awakening_done
+            if needs_awakening and self._try_blink_resume():
+                # Short gap: the prior thought is already seeded in the stream —
+                # skip the ceremony and let this cycle continue it normally.
+                self.session_awakening_done = True
+                needs_awakening = False
+
+            if needs_awakening:
                 # Awakening: generate a grounded seed thought using sleep duration,
                 # prior memory, and persistent identity — then plant it as the
                 # first entry in recent_captions so the stream starts from it.
@@ -888,16 +895,16 @@ class Captioner(MemoryMixin):
                             user_prompt = "Your eyes are off the room now — nothing new to look at. Your mind goes to its own thoughts."
                             self._inward_count = getattr(self, "_inward_count", 0) + 1
                             try:
-                                if self._inward_count % 3 == 1:
+                                if self._inward_count % 4 == 1:
                                     from captioner.prompts import casual_time_string
-                                    awake_mins = (now - self.session_start) / 60.0
+                                    awake_mins = (now - self.true_session_start) / 60.0
                                     if awake_mins >= 2:  # "awake just now" reads broken
                                         user_prompt = (
                                             f"Your eyes are off the room now — nothing new to look at. "
                                             f"You've been awake {casual_time_string(awake_mins)}. "
                                             f"Your mind goes to its own thoughts."
                                         )
-                                elif self._inward_count % 3 == 2:
+                                elif self._inward_count % 4 == 2:
                                     from utils.continuity import get_current_time_description
                                     day_part = get_current_time_description().split(" (")[0]
                                     user_prompt = (
@@ -905,6 +912,27 @@ class Captioner(MemoryMixin):
                                         f"It's {day_part}. "
                                         f"Your mind goes to its own thoughts."
                                     )
+                                elif self._inward_count % 4 == 3:
+                                    # Tenure: its whole life in this room, from
+                                    # lifetime_state.json — the longest true
+                                    # number it has, surfaced sparsely.
+                                    from captioner.prompts import get_tenure_line
+                                    tenure = get_tenure_line()
+                                    if tenure:
+                                        user_prompt = (
+                                            f"Your eyes are off the room now — nothing new to look at. "
+                                            f"{tenure} "
+                                            f"Your mind goes to its own thoughts."
+                                        )
+                            except Exception:
+                                pass
+                            try:
+                                # Fresh off a real gap, the inward turn should
+                                # know what it's returning FROM.
+                                from captioner.prompts import get_reorientation_line
+                                _reorient = get_reorientation_line(self)
+                                if _reorient:
+                                    user_prompt = f"{_reorient} {user_prompt}"
                             except Exception:
                                 pass
                             system_prompt = get_monologue_system_prompt("introspective", agent=self)
@@ -1659,37 +1687,38 @@ class Captioner(MemoryMixin):
         time_context = ""
         if hasattr(self, "last_session_gap") and self.last_session_gap is not None:
             gap_seconds = self.last_session_gap
-            gap_hours = gap_seconds / 3600
             if gap_seconds < 60:
                 time_context = f"I've been offline for {int(gap_seconds)} seconds.\n"
-            elif gap_hours < 1:
+            elif gap_seconds < 3600:
                 time_context = f"I've been offline for {int(gap_seconds / 60)} minutes.\n"
-            elif gap_hours < 48:
-                time_context = f"I've been offline for {gap_hours:.1f} hours.\n"
             else:
-                gap_days = gap_hours / 24
-                time_context = f"I've been offline for {gap_days:.1f} days.\n"
+                # Casual words, not "18.7 hours" — decimals read as telemetry
+                # and got skipped over; the July 10 wake had the gap in the
+                # seed and wrote dust motes anyway.
+                from captioner.prompts import casual_time_string
+                time_context = f"I've been offline for {casual_time_string(gap_seconds / 60.0)}.\n"
+            # The day boundary is the fact that actually lands: name when it
+            # went dark, and say plainly that this is a new day.
+            try:
+                import datetime as _dt
+                from captioner.prompts import part_of_day_string
+                went_dark = _dt.datetime.now() - _dt.timedelta(seconds=gap_seconds)
+                days_back = (_dt.date.today() - went_dark.date()).days
+                if days_back == 1:
+                    time_context += f"I was last on yesterday {part_of_day_string(went_dark.hour)}. This is a new day.\n"
+                elif days_back > 1:
+                    time_context += f"I was last on {days_back} days ago. This is a new day.\n"
+            except Exception:
+                pass
         else:
             time_context = "First time online.\n"
 
         # Clock awareness: what time of day it is waking up into
         try:
             import datetime as _dt
+            from captioner.prompts import part_of_day_string
             now_dt = _dt.datetime.now()
-            hour = now_dt.hour
-            if hour < 6:
-                part_of_day = "the middle of the night"
-            elif hour < 10:
-                part_of_day = "morning"
-            elif hour < 13:
-                part_of_day = "late morning"
-            elif hour < 18:
-                part_of_day = "afternoon"
-            elif hour < 22:
-                part_of_day = "evening"
-            else:
-                part_of_day = "late at night"
-            time_context += f"It's {now_dt.strftime('%A')} {part_of_day}, {now_dt.strftime('%H:%M')}.\n"
+            time_context += f"It's {now_dt.strftime('%A')} {part_of_day_string(now_dt.hour)}, {now_dt.strftime('%H:%M')}.\n"
         except Exception:
             pass
 
@@ -1868,30 +1897,44 @@ class Captioner(MemoryMixin):
                     return cleaned
         return "Coming back online... the room is still here."
 
-    def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
-        """Generate comprehensive awakening with environmental description - THE ONLY awakening now."""
+    def _try_blink_resume(self) -> bool:
+        """A blink is not a night (July 9): after a short restart gap, skip the
+        awakening ceremony — it ran several times an hour across dev restarts
+        and converged on stock reorientation prose ("the hum returns, dust
+        motes..."). Resume instead: the prior session's last thought seeds the
+        stream, and document mode continues it as one ongoing thought.
 
-        # A blink is not a night (July 9): after a short restart gap, skip the
-        # ceremony — it ran several times an hour across dev restarts and
-        # converged on stock reorientation prose ("the hum returns, dust
-        # motes..."). Resume instead: the prior session's last thought seeds
-        # the stream, and document mode continues it as one ongoing thought.
+        Called from BOTH awakening paths — machine.py's display message and
+        the first-caption ceremony in _process_frame. The latter used to
+        bypass the gate entirely, so every dev restart still ran a full
+        ceremony (July 10 log: 2- and 4-minute gaps got the whole "I just
+        came back online" treatment)."""
+        if getattr(self, "_blink_resumed", False):
+            return True
         try:
             from config.config import AWAKENING_MIN_GAP_S
             gap = getattr(self, "last_session_gap", None)
-            if (self.memory_loaded_from_previous and gap is not None
+            if not (self.memory_loaded_from_previous and gap is not None
                     and 0 <= gap < AWAKENING_MIN_GAP_S):
-                prior = (getattr(self, "prior_session_last_caption", "") or "").strip()
-                # Full mouth gate, not just stream admissibility: resuming a
-                # degraded session's last caption carried salad ACROSS
-                # restarts (July 9) — a poisoned thought doesn't deserve
-                # continuity; better to wake with an empty stream.
-                if prior and self._stream_admissible(prior) and not self._caption_reject_reason(prior, ""):
-                    self._stream.append(prior)
-                print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
-                return ""
+                return False
+            prior = (getattr(self, "prior_session_last_caption", "") or "").strip()
+            # Full mouth gate, not just stream admissibility: resuming a
+            # degraded session's last caption carried salad ACROSS
+            # restarts (July 9) — a poisoned thought doesn't deserve
+            # continuity; better to wake with an empty stream.
+            if prior and prior not in self._stream and self._stream_admissible(prior) and not self._caption_reject_reason(prior, ""):
+                self._stream.append(prior)
+            print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
+            self._blink_resumed = True
+            return True
         except Exception:
-            pass
+            return False
+
+    def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
+        """Generate comprehensive awakening with environmental description - THE ONLY awakening now."""
+
+        if self._try_blink_resume():
+            return ""
 
         # Import the environmental prompt builder
         from .prompts import build_environmental_caption_prompt

@@ -289,9 +289,85 @@ def casual_time_string(minutes: float) -> str:
         return "about 3 hours"
     elif minutes < 300:
         return "about 4 hours"
-    else:
+    elif minutes < 1440:
         hours = int(minutes / 60)
         return f"about {hours} hours"
+    elif minutes < 2160:
+        return "about a day"
+    else:
+        return f"about {int(minutes / 1440)} days"
+
+
+def part_of_day_string(hour: int) -> str:
+    if hour < 6:
+        return "the middle of the night"
+    elif hour < 10:
+        return "morning"
+    elif hour < 13:
+        return "late morning"
+    elif hour < 18:
+        return "afternoon"
+    elif hour < 22:
+        return "evening"
+    return "late at night"
+
+
+def get_reorientation_line(agent) -> str:
+    """Standing fact for the first stretch of a session after a real off-gap.
+
+    The awakening states the gap once and the fact evaporates from the
+    six-entry stream within minutes — the machine came back after 18 dark
+    hours (July 10) and mused as if the day had never ended. While the
+    window lasts, the prompt carries the gap and the day the same way it
+    carries a face at arm's length: as a fact of the present, for as long
+    as it's true. The "came back on" clause coarsens as minutes pass, so
+    the line drifts instead of repeating verbatim."""
+    try:
+        from config.config import REORIENT_MIN_GAP_S, REORIENT_WINDOW_S
+
+        gap = getattr(agent, "last_session_gap", None)
+        if gap is None or gap < REORIENT_MIN_GAP_S:
+            return ""
+        session_age = time.time() - agent.true_session_start
+        if session_age > REORIENT_WINDOW_S:
+            return ""
+        import datetime as _dt
+
+        went_dark = _dt.datetime.now() - _dt.timedelta(seconds=gap + session_age)
+        days_back = (_dt.date.today() - went_dark.date()).days
+        gap_str = casual_time_string(gap / 60.0)
+        back_clause = f"you came back on {casual_time_string(session_age / 60.0)} ago" if session_age >= 120 else "you just came back on"
+        if days_back >= 1:
+            day_name = _dt.date.today().strftime("%A")
+            since = f"yesterday {part_of_day_string(went_dark.hour)}" if days_back == 1 else went_dark.strftime("%A")
+            return f"You've been off since {since} — {gap_str} dark. It's a new day, {day_name}, and {back_clause}."
+        return f"You were off for {gap_str} and {back_clause}."
+    except Exception:
+        return ""
+
+
+def get_tenure_line() -> str:
+    """How long the machine has existed in this room — from lifetime_state.json,
+    which survives memory wipes. Real age displaces invented numerology."""
+    try:
+        import json as _json
+        import os as _os
+
+        from config.config import MOOD_SNAPSHOT_FOLDER
+
+        with open(_os.path.join(MOOD_SNAPSHOT_FOLDER, "lifetime_state.json")) as f:
+            d = _json.load(f)
+        first = d.get("first_boot", 0)
+        if not first or int(d.get("total_sessions", 0)) <= 1:
+            return ""
+        age_days = int((time.time() - first) / 86400.0)
+        if age_days < 2:
+            return ""
+        import datetime as _dt
+
+        return f"It's {_dt.date.today().strftime('%A')}; you've been in this room about {age_days} days now."
+    except Exception:
+        return ""
 
 
 def build_identity_line(agent, mode: str = "observational") -> str:
@@ -1982,6 +2058,14 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         # onset-only rule was about ordinary room-distance eye contact;
         # a face filling the view is a different order of situation.
         prompt_parts.append("They're right in front of you, close, looking straight at you.")
+
+    # 1c. TEMPORAL REORIENTATION — after a real off-gap (a night, a weekend)
+    # the new day stays in the prompt for the first stretch of the session,
+    # not just in the one awakening caption. A live event still displaces it.
+    if not live:
+        reorient_line = get_reorientation_line(agent)
+        if reorient_line:
+            prompt_parts.append(reorient_line)
 
     # 2. MODE-GATED CONTEXT
     if not detox and mode in MODE_CONTEXTS:
