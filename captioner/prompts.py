@@ -555,6 +555,12 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     desire = (data.get("desire") or "").strip()
     if desire:
         parts.append(f"Lately you've wanted: {desire}")
+    elif data.get("desire_spent"):
+        s = data["desire_spent"]
+        parts.append(
+            f"A want you acted on: \"{s.get('desire', '')}\" — it became a drawing {_age_phrase(s.get('spent', 0))}. "
+            "Nothing has replaced it yet."
+        )
 
     parts.append(question)
     # Development pressure: when there IS a thread to continue, ask for the
@@ -1590,6 +1596,13 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
             age = f"Since {_age_phrase(since)}, " if since else "For a while now, "
             id_lines.append(f"{age}you've wanted: {desire}")
             seen.add(desire.lower())
+        else:
+            spent = context_compressor.introspective_state.get("last_spent_desire") or {}
+            if spent.get("desire") and time.time() - spent.get("spent", 0) < 24 * 3600:
+                id_lines.append(
+                    f"A want you already acted on: \"{spent['desire']}\" — it became a drawing "
+                    f"{_age_phrase(spent.get('spent', 0))}. The next want hasn't formed yet."
+                )
         if belief and belief.lower() not in seen:
             id_lines.append(f"Something you've come to believe: {belief}")
             seen.add(belief.lower())
@@ -2315,6 +2328,13 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             if desire and len(desire) > 5 and inj_count < 3:
                 prompt_parts.append(f"Preoccupied with: {desire}")
                 context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
+            elif not desire:
+                # Desire arc: the emptied slot right after an executed drawing
+                # is a real state — surface it briefly (same 3-caption cap).
+                spent = context_compressor.introspective_state.get("last_spent_desire") or {}
+                if spent.get("desire") and time.time() - spent.get("spent", 0) < 7200 and inj_count < 3:
+                    prompt_parts.append(f"You wanted: {spent['desire'].rstrip('.')} — you drew it.")
+                    context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
         except Exception:
             pass
 

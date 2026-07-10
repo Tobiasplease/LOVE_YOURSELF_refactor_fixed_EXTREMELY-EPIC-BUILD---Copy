@@ -205,8 +205,12 @@ class DrawingController:
         # The pen actually drew — this is the one place that may promote the
         # drawing-memory entry to executed (the arc reads executed-only)
         try:
-            from drawing.drawing_memory import get_drawing_memory
+            from drawing.drawing_memory import DrawingMemory, get_drawing_memory
             get_drawing_memory().mark_last_completed()
+            # Desire arc: the act discharges the want. Post-GRBL only — an
+            # intent that never reached paper spends nothing.
+            from captioner.context_compression import context_compressor
+            context_compressor.spend_desire(drawing_summary=DrawingMemory._strip_comfy_preamble(prompt or ""))
         except Exception:
             pass
 

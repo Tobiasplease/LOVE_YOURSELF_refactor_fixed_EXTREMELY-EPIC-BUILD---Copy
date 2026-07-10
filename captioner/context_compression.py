@@ -439,7 +439,10 @@ Respond with the one sentence only, no prefixes."""
                     # Periodic journal entry (every 30 min, on this background thread)
                     self._maybe_write_journal(compression_model)
 
-                # Felt-state is set from the mood vector (set_felt_state), not here.
+                    # MOOD READ (July 10): the affect engine's core signal —
+                    # the model reads the feeling in the machine's own recent
+                    # thoughts. Same cadence, same background thread.
+                    self._mood_read(captions, compression_model)
 
             else:
                 log_json_entry(
@@ -805,6 +808,32 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             result = " ".join(words[:60])
         return result
 
+    def spend_desire(self, drawing_summary: str = "") -> None:
+        """DESIRE ARC (July 10, north-star step 5): an executed drawing SPENDS
+        the current desire. Drawing is the machine's only act — once the want
+        reaches paper it is no longer a want, it's part of the body of work.
+        Without this the slot held one sentence indefinitely (_roughly_same
+        persistence) and every drawing re-rendered it ("withhold the pencil" →
+        three hovering-pencil drawings in one afternoon). The spent desire
+        stays readable (last_spent_desire + a marked history entry) so the
+        next reflection forms the next want informed by the act, not amnesiac
+        of it. Called from drawing.register_drawing — post-GRBL only."""
+        want = (self.introspective_state.get("current_desire") or "").strip()
+        if not want:
+            return
+        now = time.time()
+        self.introspective_state["last_spent_desire"] = {
+            "desire": want,
+            "formed": self.introspective_state.get("desire_since", 0.0) or None,
+            "spent": now,
+            "drawing": (drawing_summary or "")[:80],
+        }
+        self.introspective_state["current_desire"] = ""
+        self.introspective_state["desire_since"] = 0.0
+        self.introspective_state["desire_injection_count"] = 0
+        self._save_identity()
+        print(f"[🪞] Desire spent by execution: \"{want[:60]}\"")
+
     def _save_identity(self) -> None:
         """Save introspective state to persistent identity file."""
         try:
@@ -834,10 +863,20 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 belief_history.append({"belief": belief, "timestamp": now})
                 belief_history = belief_history[-10:]
 
+            # Desire arc: annotate the history entry of a spent desire in place
+            # (it was appended when it formed) instead of appending a duplicate.
+            last_spent = self.introspective_state.get("last_spent_desire") or None
+            if last_spent and desire_history:
+                tail = desire_history[-1]
+                if tail.get("desire") == last_spent.get("desire") and "spent" not in tail:
+                    tail["spent"] = last_spent.get("spent")
+                    tail["drawing"] = last_spent.get("drawing", "")
+
             data = {
                 "current_desire": desire,
                 "current_belief": belief,
                 "desire_since": self.introspective_state.get("desire_since", 0.0),
+                "last_spent_desire": last_spent,
                 "core_facts": self.core_facts,
                 "journal": self.journal,
                 "desire_history": desire_history,
@@ -867,6 +906,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
 
             self.introspective_state["current_desire"] = data.get("current_desire", "")
             self.introspective_state["desire_since"] = data.get("desire_since", 0.0)
+            self.introspective_state["last_spent_desire"] = data.get("last_spent_desire") or None
             self.introspective_state["current_belief"] = data.get("current_belief", "")
             self.introspective_state["last_introspection"] = data.get("last_updated", 0.0)
 
@@ -979,6 +1019,83 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         """Get the latest sentiment analysis from compression."""
         return getattr(self, "last_sentiment_analysis", None)
 
+    def _mood_read(self, captions: list, model: str) -> None:
+        """MOOD READ (July 10) — the affect engine's core signal. The keyword
+        lexicon in mood.py flatlined the moment the north-star teardown
+        changed the voice: the monologue says "the door is still open where
+        they left", never "I feel melancholy", so no keyword ever matched and
+        valence sat at ~0 for weeks. The model can read what the lexicon
+        can't. One small forced-choice call over the machine's own recent
+        thoughts; MoodEngine.analyze_mood blends the result as the vector's
+        core, real events (person, novelty) still nudge on top."""
+        try:
+            recent = [c.get("text", "") for c in captions if c.get("text")][-8:]
+            if len(recent) < 2:
+                return
+            thoughts = "\n".join(f"- {t[:180]}" for t in recent)
+            prompt = (
+                f"These are your last thoughts:\n{thoughts}\n\n"
+                "Read the feeling in them — the undertone in the words, not a summary of events. Three lines:\n"
+                "PLEASANTNESS: unpleasant, neutral or pleasant\n"
+                "ENERGY: drained, settled, stirred or charged\n"
+                "FELT: how it feels right now, 2-6 plain words"
+            )
+            response = query_model(
+                prompt=prompt,
+                model=model,
+                image=None,
+                system_prompt=(
+                    "You read the emotional undertone of a machine's inner monologue. "
+                    "Answer with exactly three lines — PLEASANTNESS, ENERGY, FELT. "
+                    "Plain words, no metaphor, no commentary."
+                ),
+                options={"temperature": 0.3, "num_predict": 40},
+                prompt_type="mood_read",
+            )
+            if not response or not isinstance(response, str):
+                return
+
+            valence_map = {"unpleasant": -0.5, "neutral": 0.0, "pleasant": 0.5}
+            arousal_map = {"drained": 0.1, "settled": 0.3, "stirred": 0.55, "charged": 0.8}
+            valence, arousal, felt = None, None, ""
+            for raw in response.strip().split("\n"):
+                line = raw.strip().lstrip("•-* ").strip()
+                low = line.lower()
+                if low.startswith("pleasantness"):
+                    for k, v in valence_map.items():
+                        if k in low:
+                            valence = v
+                            break
+                elif low.startswith("energy"):
+                    for k, v in arousal_map.items():
+                        if k in low:
+                            arousal = v
+                            break
+                elif low.startswith("felt"):
+                    felt = line.split(":", 1)[-1].strip().strip("\"'").rstrip(".").strip()
+
+            if valence is None and arousal is None:
+                return
+            self.last_mood_read = {
+                "valence": valence if valence is not None else 0.0,
+                "arousal": arousal if arousal is not None else 0.35,
+                "felt": felt if felt and 1 <= len(felt.split()) <= 6 else "",
+                "timestamp": time.time(),
+            }
+            if self.last_mood_read["felt"]:
+                self.set_felt_state(self.last_mood_read["felt"], source="read")
+            print(f"[🫀] Mood read: v={self.last_mood_read['valence']:+.1f} a={self.last_mood_read['arousal']:.1f}"
+                  + (f" — {felt}" if self.last_mood_read["felt"] else ""))
+        except Exception as e:
+            log_json_entry(LogType.ERROR, {"message": f"Mood read failed: {e}", "component": "compression"})
+
+    def get_last_mood_read(self, max_age_seconds: int = 900) -> dict | None:
+        """Latest LLM mood read, or None if stale/absent."""
+        read = getattr(self, "last_mood_read", None)
+        if read and (time.time() - read.get("timestamp", 0)) <= max_age_seconds:
+            return read
+        return None
+
     def get_consolidated_understanding(self) -> str:
         """Get the consolidated understanding to guide future observations."""
         if self.baseline_context and len(self.baseline_context.strip()) > 0:
@@ -986,15 +1103,21 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             return self.baseline_context.strip()
         return ""
 
-    def set_felt_state(self, text: str) -> None:
-        """Set the felt-state directly — a plain, degreed translation of the
-        valence/arousal mood vector (mood.mood_to_feeling), not LLM prose. Set
-        by the captioner whenever the mood updates. Mirrors the previous→current
-        transition tracking so get_felt_state_delta still reads a change.
+    def set_felt_state(self, text: str, source: str = "vector") -> None:
+        """Set the felt-state phrase. Two writers, explicit priority:
+        source="read" — the mood read's own words for the feeling (primary);
+        source="vector" — mood_to_feeling's degreed translation of the numeric
+        vector (fallback; the captioner writes this every mood update and must
+        NOT clobber a fresh read — that was how "calm" overwrote everything).
+        Mirrors the previous→current transition so get_felt_state_delta works.
         """
         text = (text or "").strip()
         if not text:
             return
+        if source == "vector":
+            read = getattr(self, "last_mood_read", None)
+            if read and (time.time() - read.get("timestamp", 0)) < 900 and read.get("felt"):
+                return  # the machine's own phrase wins while fresh
         if getattr(self, "last_sentiment_analysis", None):
             prev = self.last_sentiment_analysis.get("sentiment_text", "")
             if prev and prev.strip().lower() != text.lower():

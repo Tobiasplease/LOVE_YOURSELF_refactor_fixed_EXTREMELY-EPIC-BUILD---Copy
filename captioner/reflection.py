@@ -168,6 +168,12 @@ class ReflectionLoop:
         data["drawings"] = self._gather_drawings()
         try:
             data["desire"] = context_compressor.get_current_desire()
+            # Desire arc: a freshly spent want enters the reflection as a fact,
+            # so the next want forms informed by the act instead of amnesiac.
+            if not data["desire"]:
+                spent = context_compressor.introspective_state.get("last_spent_desire") or {}
+                if spent.get("desire") and time.time() - spent.get("spent", 0) < 48 * 3600:
+                    data["desire_spent"] = spent
         except Exception:
             pass
         return data

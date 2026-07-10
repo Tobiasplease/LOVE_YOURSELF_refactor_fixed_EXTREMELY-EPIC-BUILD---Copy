@@ -22,12 +22,17 @@ def mood_to_feeling(valence: float, arousal: float) -> str:
     naming a feeling in the most direct, unambiguous terms — emotion + how strong.
     This is the felt-state's job: make the numeric mood legible to the model.
     """
-    strength = max(abs(valence), abs(arousal))
+    # Spaces: valence is signed (-1..1); arousal is the ENGINE's 0..1 space
+    # (base ~0.35). The old thresholds treated arousal as signed, so "low"
+    # was unreachable and anything above 0.2 read as "high" — every feeling
+    # came out excited/anxious/restless.
+    arousal_dev = arousal - 0.35
+    strength = max(abs(valence), abs(arousal_dev) * 1.5)
     if strength < 0.12:
         return "calm"  # basically neutral — no strong feeling either way
 
     pos, neg = valence > 0.15, valence < -0.15
-    high, low = arousal > 0.2, arousal < -0.2
+    high, low = arousal_dev > 0.15, arousal_dev < -0.15
     if pos and high:
         word = "excited"
     elif pos and low:
@@ -91,40 +96,40 @@ class MoodEngine:
         memory_context: Optional[any] = None,  # type: ignore
         temporal_feeling: Optional[str] = None,
     ) -> float:
-        """Analyze mood using 3D valence/arousal/clarity system via Ollama."""
-        saw_person = "person" in caption.lower() or "individual" in caption.lower()
+        """Analyze mood: LLM mood read as the core signal + real-event nudges.
 
-        # Simple mood analysis (3D analysis moved to context compression)
-        scalar_mood = self.analyze_caption_sentiment(caption)
+        REINTEGRATED July 10. The old core was a keyword lexicon matching
+        emotion adjectives ("happy", "gloomy", "cozy") — dead against the
+        post-teardown voice, which never names emotions, so valence flatlined
+        at ~0 for weeks and every downstream consumer starved (felt-state
+        "calm" forever, hand controller stuck on defaults, drawing step-2
+        inventing drama to contradict "balanced"). The core signal is now the
+        compression thread's mood read (context_compression._mood_read): the
+        model reading the undertone of the machine's own recent thoughts.
+        Real events (company, novelty) still nudge on top — state signals,
+        not text, loop-safe. Momentum smooths per caption as before.
+        """
+        saw_person = saw_person or "person" in caption.lower() or "individual" in caption.lower()
 
         # Apply unified pattern analysis (motifs + novelty)
         pattern_data = self.pattern_engine.analyze_caption(caption)
         novelty = pattern_data["novelty"]
         self._last_novelty = novelty  # Store for external access
-        traditional_change = self.compute_mood_change(novelty, saw_person)
 
-        # Combine simple analysis with traditional factors
-        self.current_mood = np.clip(scalar_mood + traditional_change, 0.0, 1.0)
+        # Core affect from the mood read (fresh within 15 min); neutral until
+        # the first read of the session lands.
+        read_valence, read_arousal = 0.0, 0.35
+        try:
+            from captioner.context_compression import context_compressor
+            read = context_compressor.get_last_mood_read()
+            if read:
+                read_valence = read.get("valence", 0.0)
+                read_arousal = read.get("arousal", 0.35)
+        except Exception:
+            pass
 
-        # Update 3D mood vector. Keyword sentiment alone flatlines at ~0 with a
-        # grounded caption register (no emotion adjectives to match), so real
-        # events feed the vector too: company lifts valence, presence and
-        # novelty raise arousal. These are state signals, not text — loop-safe.
-        valence = np.clip(scalar_mood + (0.08 if saw_person else -0.01), -1.0, 1.0)
-
-        # Calculate arousal from action/energy words in caption
-        energy_words = ["energetic", "excited", "dynamic", "movement", "active", "engaged", "focus", "intense", "alert", "vibrant"]
-        calm_words = ["quiet", "still", "peaceful", "calm", "sitting", "resting", "dim", "soft", "tired", "withdrawn", "slouching", "heavy"]
-        arousal_score = 0.0
-        for word in energy_words:
-            if word in caption.lower():
-                arousal_score += 0.15
-        for word in calm_words:
-            if word in caption.lower():
-                arousal_score -= 0.1
-        arousal_score += (0.15 if saw_person else 0.0) + 0.2 * novelty
-        arousal = np.clip(0.3 + arousal_score, 0.0, 1.0)  # Base arousal + content + events
-
+        valence = np.clip(read_valence + (0.08 if saw_person else 0.0), -1.0, 1.0)
+        arousal = np.clip(read_arousal + (0.12 if saw_person else 0.0) + 0.15 * novelty, 0.0, 1.0)
         clarity = np.clip((len(caption.split()) - 10) / 20, -1.0, 1.0)  # Caption length suggests clarity
 
         # Apply emotional momentum to smooth transitions
@@ -136,7 +141,12 @@ class MoodEngine:
             (1 - momentum) * clarity + momentum * prev_clarity
         )
 
-        log_mood(caption, self.current_mood, traditional_change, image_path=image_path)
+        # Legacy scalar (0..1) now derives from blended valence — the keyword
+        # sentiment + decay arithmetic it used to carry is retired.
+        previous_scalar = self.current_mood
+        self.current_mood = float(np.clip(0.5 + 0.5 * self.mood_vector[0], 0.0, 1.0))
+
+        log_mood(caption, self.current_mood, self.current_mood - previous_scalar, image_path=image_path)
         self.last_caption = caption
         self.last_person_detected = saw_person
         return self.current_mood
@@ -198,114 +208,9 @@ class MoodEngine:
             "novelty_score": getattr(self, "_last_novelty", 0.0),
         }
 
-    def compute_mood_change(self, novelty, saw_person):
-
-        # HMMM
-        # The natural decay (-0.02) is too weak compared to novelty increases (+0.05), so
-        # any small variation in scene descriptions keeps the mood elevated.
-
-        # Solutions:
-
-        # 1. Increase decay rate: Make the no-novelty penalty stronger (e.g., -0.03 to
-        # -0.04)
-        # 2. Add time-based decay: Gradually reduce mood over time regardless of scene
-        # changes
-        # 3. Make novelty detection more strict: Only count significant caption changes as
-        # novelty
-        # 4. Cap positive changes: Reduce the novelty bonus when mood is already high
-
-        change = 0.0
-
-        # Base novelty effect - much smaller and proportional
-        change += novelty * 0.03  # Scale down novelty impact significantly
-
-        # Natural mood decay - balanced with sentiment strength
-        change -= 0.03  # Reduced to let sentiment analysis have more impact
-
-        # Person presence effects - reduced
-        if saw_person and not self.last_person_detected:
-            change += 0.04  # Reduced from 0.07
-        elif not saw_person and self.last_person_detected:
-            change -= 0.03  # Reduced from 0.05
-
-        # Add time-based decay for long sessions
-        session_duration = time.time() - self.session_start
-        if session_duration > 1800:  # After 30 minutes
-            change -= 0.01  # Additional decay for long sessions
-        if session_duration > 3600:  # After 1 hour
-            change -= 0.02  # Even more decay
-
-        return change
-
-    def analyze_caption_sentiment(self, caption: str) -> float:
-        """Analyze sentiment from caption content using keyword matching."""
-        positive_words = [
-            "happy",
-            "joy",
-            "smile",
-            "laugh",
-            "bright",
-            "warm",
-            "comfortable",
-            "peaceful",
-            "content",
-            "energetic",
-            "engaged",
-            "focused",
-            "curious",
-            "confident",
-            "relaxed",
-            "pleasant",
-            "cozy",
-            "vibrant",
-            "cheerful",
-        ]
-
-        negative_words = [
-            "sad",
-            "tired",
-            "dark",
-            "cold",
-            "worried",
-            "anxious",
-            "stressed",
-            "distant",
-            "withdrawn",
-            "confused",
-            "lonely",
-            "bored",
-            "frustrated",
-            "empty",
-            "dull",
-            "lifeless",
-            "gloomy",
-            "melancholy",
-            "troubled",
-        ]
-
-        neutral_words = ["thoughtful", "contemplative", "observant", "quiet", "still", "reflective", "pensive", "calm", "serene", "composed"]
-
-        caption_lower = caption.lower()
-        sentiment_score = 0.0
-
-        # Count positive indicators
-        for word in positive_words:
-            if word in caption_lower:
-                sentiment_score += 0.02
-
-        # Count negative indicators
-        for word in negative_words:
-            if word in caption_lower:
-                sentiment_score -= 0.03
-
-        # Neutral words have slight positive effect (better than nothing)
-        for word in neutral_words:
-            if word in caption_lower:
-                sentiment_score += 0.005
-
-        return np.clip(sentiment_score, -0.3, 0.3)  # Increased range for better emotion detection
-
-    # analyze_3d_mood_with_ollama removed - now uses natural language sentiment from context compression
+    # Keyword sentiment (analyze_caption_sentiment) + compute_mood_change
+    # retired July 10 — the lexicon matched emotion adjectives the voice never
+    # uses; the core signal is now the LLM mood read (context_compression).
 
 def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
     """

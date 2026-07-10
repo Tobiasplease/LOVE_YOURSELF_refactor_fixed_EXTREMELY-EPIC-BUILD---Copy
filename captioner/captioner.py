@@ -264,12 +264,13 @@ class Captioner(MemoryMixin):
                 self.current_mood = mood
             if mood_vector is not None:
                 self.current_mood_vector = mood_vector
-                # Felt-state = a plain, degreed translation of the mood vector
-                # (not LLM prose). Set here where the vector lives.
+                # Felt-state fallback: the degreed vector translation. The
+                # mood read's own phrase (source="read") outranks this while
+                # fresh — set_felt_state enforces the priority.
                 try:
                     from mood.mood import mood_to_feeling
                     from captioner.context_compression import context_compressor
-                    context_compressor.set_felt_state(mood_to_feeling(mood_vector[0], mood_vector[1]))
+                    context_compressor.set_felt_state(mood_to_feeling(mood_vector[0], mood_vector[1]), source="vector")
                 except Exception:
                     pass
             if emotion_state is not None:
@@ -1784,6 +1785,10 @@ class Captioner(MemoryMixin):
             identity_parts = []
             if persistent_desire:
                 identity_parts.append(f"I wanted: {persistent_desire}")
+            else:
+                spent = context_compressor.introspective_state.get("last_spent_desire") or {}
+                if spent.get("desire") and time.time() - spent.get("spent", 0) < 48 * 3600:
+                    identity_parts.append(f"I wanted: {spent['desire']} I acted on it — it became a drawing.")
             if persistent_belief:
                 identity_parts.append(f"I knew: {persistent_belief}")
             if identity_parts:
