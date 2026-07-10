@@ -307,10 +307,10 @@ class MultimodalModel:
         except Exception:
             pass
 
-        # If using natsumura or multi-step analysis, the prompt IS the final result, don't call LLM again
+        # If using stream/natsumura/multi-step analysis, the prompt IS the final result, don't call LLM again
         try:
             from config.config import DRAWING_ANALYSIS_MODE
-            if DRAWING_ANALYSIS_MODE in ("natsumura", "multi_step"):
+            if DRAWING_ANALYSIS_MODE in ("stream", "natsumura", "multi_step"):
                 return prompt  # These modes already return the final drawing prompt
         except ImportError:
             pass

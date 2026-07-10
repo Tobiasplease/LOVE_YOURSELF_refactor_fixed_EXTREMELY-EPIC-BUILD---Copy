@@ -1523,6 +1523,179 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
     return prompt
 
 
+def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: Optional[List[str]] = None) -> str:
+    """Two-call drawing pipeline (July 10) — DRAWING_ANALYSIS_MODE="stream".
+
+    Replaces the 5-step committee (context_rich_multi_step_drawing_analysis,
+    kept behind the "multi_step" flag for A/B). What the steps actually did,
+    judged from live logs: step 1 wrote purple essays about the room's "visual
+    forces" (redundant — the stream already carries what it sees); step 2
+    manufactured a feeling from the flatlined mood input, converging on the
+    same invented drama every drawing; step 4 planned india-ink washes and
+    micro-brush technique the pen plotter cannot do (fiction that steered the
+    render); and the identity block led step 3, so every drawing became a
+    portrait of the same two stored sentences ("hovering pencil" ×3, July 10).
+
+    Now: ONE intent call in the machine's own voice — the live stream leads,
+    the sticky slots follow (each stated once, with its age), and the executed
+    body of work is listed plainly so repetition is VISIBLE rather than
+    forbidden (fixating on a motif is a legitimate choice; drawing the same
+    image unknowingly is not — the artist's ruling, July 10). Then ONE
+    mechanical render call translates the intent into a ComfyUI prompt under
+    hardware truth: one black pen, lines only.
+    """
+    from config.config import CLEAN_LLM_OUTPUT, DRAWING_TEMPERATURE, MOOD_SNAPSHOT_FOLDER
+    from event_logging.event_logger import log_json_entry
+    from event_logging.log_type import LogType
+    from utils.inference import query_model
+
+    def _say(msg):
+        if not CLEAN_LLM_OUTPUT:
+            print(msg)
+
+    _say("[🎨] Drawing intent — one call, born from the stream...")
+
+    materials = []
+
+    # The live thought leads — the drawing is born FROM the monologue.
+    stream_tail = []
+    try:
+        stream_tail = [t for t in list(getattr(memory_ref, "_stream", []))[-5:] if t]
+        if stream_tail:
+            materials.append("What you've been thinking, just now:\n" + "\n".join(f"- {t[:200]}" for t in stream_tail))
+    except Exception:
+        pass
+
+    # Drawing-flavored musings the stream produced earlier this session.
+    if drawing_intentions:
+        materials.append("Drawing thoughts that have crossed your mind this session:\n" + "\n".join(f"- {t[:120]}" for t in drawing_intentions[-3:]))
+
+    try:
+        from captioner.context_compression import context_compressor
+
+        felt = context_compressor.get_felt_state()
+        if felt:
+            materials.append(f"Right now you feel {felt}.")
+
+        # The sticky slots — each distinct sentence stated ONCE, with its age.
+        # The 5-step printed identity==belief twice and put them first; three
+        # drawings in one afternoon were portraits of the same sentence.
+        id_lines = []
+        seen = set()
+        desire = (context_compressor.get_current_desire() or "").strip()
+        belief = (context_compressor.get_current_belief() or "").strip()
+        persona = (context_compressor.core_facts.get("self", "") or "").strip()
+        if desire:
+            since = context_compressor.introspective_state.get("desire_since", 0.0)
+            age = f"Since {_age_phrase(since)}, " if since else "For a while now, "
+            id_lines.append(f"{age}you've wanted: {desire}")
+            seen.add(desire.lower())
+        if belief and belief.lower() not in seen:
+            id_lines.append(f"Something you've come to believe: {belief}")
+            seen.add(belief.lower())
+        if persona and persona.lower() not in seen:
+            id_lines.append(f"What you know about yourself: {persona}")
+        if id_lines:
+            materials.append("\n".join(id_lines))
+    except Exception:
+        pass
+
+    # The body of work — executed drawings only, chronological, plain. If the
+    # next intent repeats one of these, that's fixation as a choice, in view.
+    try:
+        from drawing.drawing_memory import get_drawing_memory
+
+        sequence = get_drawing_memory().get_executed_sequence(max_count=8)
+        if sequence:
+            materials.append("What you have actually drawn, oldest to newest:\n" + "\n".join(f"- {s}" for s in sequence))
+    except Exception:
+        pass
+
+    # Long-term development: reflection subjects surface by relevance to the
+    # live thought (subjects only, never the prose — register hygiene).
+    try:
+        from captioner.semantic_memory import get_semantic_memory
+
+        query_text = "\n".join(t[:120] for t in stream_tail) if stream_tail else (extra or "")[:300]
+        matches = get_semantic_memory().query_reflections(query_text, n_results=2) if query_text else []
+        refl_lines, _seen_subjects = [], set()
+        for m in matches or []:
+            subject = (m.get("subject") or "").strip()
+            if subject and subject.lower() not in _seen_subjects:
+                _seen_subjects.add(subject.lower())
+                refl_lines.append(f"- {subject} ({_age_phrase(m.get('timestamp', 0))})")
+        if refl_lines:
+            materials.append("Things you've found yourself reflecting on, before today:\n" + "\n".join(refl_lines))
+    except Exception:
+        pass
+
+    intent_system = _SITUATION + (
+        "It's time to draw — the arm is ready. Decide what the next drawing is. "
+        "Not a report of the room: the one image that needs to exist next. "
+        "Say it concretely, in your own plain words, first person — a few sentences at most."
+    )
+    intent_prompt = "\n\n".join(materials + ["Out of all of this — what do you need to draw right now? Name the one image."])
+
+    intent = query_model(
+        prompt=intent_prompt,
+        image=None,
+        log_dir=MOOD_SNAPSHOT_FOLDER,
+        system_prompt=intent_system,
+        prompt_type="drawing_intent",
+        options={"temperature": DRAWING_TEMPERATURE, "num_predict": 180, "top_p": 0.9, "repeat_penalty": 1.15},
+    )
+    intent = (intent or "").strip()
+    if not intent:
+        raise RuntimeError("stream drawing pipeline: empty intent")
+    _say(f"[🎨] Intent: {intent[:250]}")
+
+    # The intent in the machine's own words is the drawing's meaning — the
+    # captioner stores it as the memory entry's summary (not the ComfyUI prose).
+    try:
+        memory_ref._last_drawing_intent = intent
+    except Exception:
+        pass
+
+    # Render translation — mechanical, low temp, hardware truth. Replaces the
+    # technique-fiction step (india ink washes on a machine holding one pen).
+    render_system = (
+        "You translate a drawing machine's intention into a prompt for an image generator. "
+        "The generated image will be traced and drawn by a pen plotter: one black pen on white "
+        "paper, lines only — no shading, no gradients, no fills, no texture. Bold, simple, "
+        "clear linework survives the tracing; fine detail and tone are lost. "
+        "Write ONLY the image prompt, 40-80 words, no commentary. "
+        "Begin with: Black ink line drawing on white paper."
+    )
+    final_result = query_model(
+        prompt=f"The intention, in the machine's own words:\n\n{intent}\n\nWrite the image generation prompt.",
+        image=None,
+        log_dir=MOOD_SNAPSHOT_FOLDER,
+        system_prompt=render_system,
+        prompt_type="drawing_render",
+        options={"temperature": 0.5, "num_predict": 160, "top_p": 0.9, "repeat_penalty": 1.2},
+    )
+    final_result = (final_result or "").strip()
+    if not final_result:
+        final_result = f"Black ink line drawing on white paper. {intent[:150]}"
+    elif not final_result.lower().startswith("black ink"):
+        final_result = f"Black ink line drawing on white paper. {final_result}"
+
+    _say(f"[🎨] Render prompt: {final_result[:250]}")
+
+    log_json_entry(
+        LogType.DEBUG,
+        {
+            "event": "stream_drawing_analysis",
+            "intent": intent[:300],
+            "render_prompt": final_result[:300],
+            "materials_used": len(materials),
+        },
+        print_message="[🎨] Stream drawing analysis complete (2 calls)",
+    )
+
+    return final_result
+
+
 def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: Optional[List[str]] = None) -> str:
     """
     5-step drawing analysis with full accumulated identity integration.

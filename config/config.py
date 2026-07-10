@@ -28,7 +28,15 @@ FLIP_Y = True
 
 # === FACE DETECTION ===
 CONFIDENCE_THRESHOLD = 0.72  # Raised June 28: the studio's mannequin heads/masks tripped the face DNN at 0.55, firing constant false "eye contact". Eye contact also now requires a real person body (captioner._assess_scene), not just a face.
-DEAD_ZONE = 1  # Very small dead zone for highly responsive centering
+
+# === FACE TRACKING CONTROL (July 10) ===
+# Close-range stability: a close face maps each camera degree to many pixels,
+# and the flimsy mount wobbles — with no dead zone the loop hunted ("bobbing"),
+# blurring every capture. The dead zone grows with apparent face size so
+# distant tracking stays responsive while a close face parks the camera.
+FACE_TRACK_DEAD_ZONE = 0.05  # base half-width around frame center, fraction of frame
+FACE_TRACK_DEAD_ZONE_FACE_SCALE = 0.4  # dead zone added per unit of face-width fraction
+FACE_TRACK_MAX_STEP = 2.5  # max target movement per update, degrees (~75°/s at 30fps)
 
 # === IDLE GAZE SETTINGS ===
 IDLE_AMPLITUDE_X = 35  # Increased from 10 for more prominent horizontal movement
@@ -373,10 +381,14 @@ DRAWING_SCALE_TARGET = "50x50mm"
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.55  # Raised to 0.55 to avoid detecting hands/arms as person
-# Use a lightweight model by default (person-only use case)
+# yolov8m (July 10 eval, debug/compare_yolo_models.py): rejects the desk
+# mannequin head that nano fired on constantly, and finds still/seated people
+# nano missed for whole stretches. Known remaining false positive: the
+# life-size sweater doll — human enough to fool anything short of the LLM.
+# Inference ~12ms, so the 0.1s tracking cadence is unaffected.
 YOLO_MODEL_PATH = os.getenv(
     "YOLO_MODEL_PATH",
-    os.path.join(MODEL_PATH, "yolov8n.pt"),  # nano model for low VRAM use
+    os.path.join(MODEL_PATH, "yolov8m.pt"),
 )
 YOLO_INTERVAL_IDLE = 1.5  # detection cadence with nobody around — fast enough to catch arrivals
 YOLO_INTERVAL_TRACKING = 0.1  # cadence while a person is present — keeps bbox fresh under camera motion
@@ -434,10 +446,15 @@ INCLUDE_DRAWING_HISTORY = True
 DRAWING_HISTORY_LIMIT = 3  # how many recent drawing entries to surface in prompts
 
 # === DRAWING ANALYSIS MODE ===
-# "natsumura" - Natsumura-driven, identity-aware drawing decisions (experimental, needs debugging)
-# "multi_step" - 5-step context-rich analysis with LLaVA (stable)
-# "single" - Original single-prompt approach
-DRAWING_ANALYSIS_MODE = "multi_step"
+# "stream"     - two calls (July 10): intent born from the live monologue +
+#                sticky slots (aged, deduped) + executed body of work, then a
+#                mechanical render translation under hardware truth (one pen,
+#                lines only). See prompts.stream_drawing_analysis.
+# "multi_step" - LEGACY 5-step committee, kept for A/B: env essay / emotion
+#                manufacture / intent / technique fiction / synthesis
+# "natsumura"  - Natsumura-driven, identity-aware drawing decisions (experimental, needs debugging)
+# "single"     - Original single-prompt approach
+DRAWING_ANALYSIS_MODE = "stream"
 
 # Legacy toggle (for backwards compatibility)
 USE_MULTI_STEP_DRAWING_ANALYSIS = DRAWING_ANALYSIS_MODE in ("multi_step",)

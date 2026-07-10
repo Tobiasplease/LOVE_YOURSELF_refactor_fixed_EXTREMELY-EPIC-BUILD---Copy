@@ -14,7 +14,12 @@ don't trust that code existing means code running.
 camera frame (~30fps)
   ├─ YOLO + ByteTrack (person bbox, track id, count)     [perception/object_detection.py]
   │    cadence 0.1s person-present / 1.5s idle (config); bbox = sticky track id, not per-frame argmax
+  │    model yolov8m since July 10 — nano hallucinated the desk mannequin head as person and
+  │    missed still/seated people (the cause of the 180s departure-timeout workaround). Known
+  │    hard case both models fail: the life-size sweater doll reads as person (~0.8 conf)
   ├─ Face DNN (face bbox)                                 [machine.py]
+  │    tracking dead zone scales with face size (config FACE_TRACK_*) — close faces used to
+  │    drive servo hunting ("bobbing") that blurred captures; tracking physics now ~critically damped
   ├─ frame_buffer.push(frame, detection-snapshot)         [machine.py → captioner/frame_buffer.py]
   │    snapshot: face?, person?, count, track_id, pan/tilt, person_angle, ego_motion
   └─ captioner._process_frame                             [captioner/captioner.py]
@@ -356,14 +361,33 @@ fires only after GRBL physically executed. **The artistic arc and drawing
 summaries read executed-only** — a ComfyUI generation that never reached
 paper is an intention, not part of the oeuvre. Window: 24 entries.
 
-Inputs to the 5-step drawing analysis:
-- Step 2 (emotional): mood line (engine still flatlined), last 20 captions,
-  temporal/social, and NOW the compressor's current desire + felt-state
-  delta — the live interiority signals.
-- Step 3 (communication intent): artistic arc over executed work, drawing
-  intentions from the caption stream, and NOW 1-2 past reflection subjects
-  relevance-matched against the step-2 result (temporally framed, subjects
-  only). This is where long-term development enters the drawings.
+## Drawing prompt generation (July 10: DRAWING_ANALYSIS_MODE="stream")
+
+TWO calls (prompts.stream_drawing_analysis), replacing the 5-step committee:
+
+1. **Intent** — one call in the machine's own voice (_SITUATION system
+   prompt + "it's time to draw"). Materials, in this order: live stream tail
+   (5 entries — the drawing is born FROM the monologue), drawing musings
+   from the session, felt state, the sticky slots each stated ONCE with age
+   ("Since earlier today, you've wanted: ..." — the 5-step printed
+   identity==belief twice and led with them, so every drawing became a
+   portrait of the same sentence: hovering-pencil ×3 on July 10), the
+   executed body of work as plain chronological lines
+   (`get_executed_sequence`, no LLM — repetition stays VISIBLE, never
+   forbidden: motif fixation is a choice per the artist, drawing the same
+   image blindly is a loop), and 1-2 reflection subjects matched against
+   the live thought. The intent is stored as the memory entry's
+   compressed_summary (the machine's own words, not ComfyUI prose) and
+   logged as `prompt_type: drawing_intent`.
+2. **Render** — mechanical translation to a ComfyUI prompt under hardware
+   truth: one black pen, lines only, no shading/fills/texture (the 5-step's
+   technique stage planned india-ink washes the plotter cannot do). Temp
+   0.5, logged as `prompt_type: drawing_render`. Fallback: prefix + intent.
+
+LEGACY (kept for A/B: DRAWING_ANALYSIS_MODE="multi_step"): the 5-step
+context_rich_multi_step_drawing_analysis — env essay / emotion manufacture
+(from the flatlined mood, converging on invented stasis drama every time) /
+intent / technique fiction / synthesis.
 
 ## Manual tools (real code, NOT in the runtime path)
 

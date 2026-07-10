@@ -135,7 +135,12 @@ class PromptInterface:
         if not memory_ref:
             return None, None, None
 
-        prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path, drawing_intentions=drawing_intentions)
+        from config.config import DRAWING_ANALYSIS_MODE
+        if DRAWING_ANALYSIS_MODE == "stream":
+            from captioner.prompts import stream_drawing_analysis
+            prompt = stream_drawing_analysis(memory_ref, extra=extra, image_path=image_path, drawing_intentions=drawing_intentions)
+        else:
+            prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path, drawing_intentions=drawing_intentions)
 
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)

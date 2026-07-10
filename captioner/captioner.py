@@ -1550,11 +1550,14 @@ class Captioner(MemoryMixin):
                 dm = get_drawing_memory()
                 dm.add_drawing(
                     prompt=prompt,
-                    compressed_summary="",  # Will be set by LLM reflection after actual execution
+                    # Stream pipeline: the intent in the machine's own words is the
+                    # drawing's meaning — store THAT, not the ComfyUI prose.
+                    compressed_summary=getattr(self, "_last_drawing_intent", "")[:120],
                     emotional_tone=getattr(self, "current_emotion_state", "neutral"),
                     comfy_prompt=prompt,
                     completed=False,  # Will be updated to True if GRBL finishes
                 )
+                self._last_drawing_intent = ""
             except Exception as e:
                 print(f"[⚠️] Could not store drawing intent: {e}")
 

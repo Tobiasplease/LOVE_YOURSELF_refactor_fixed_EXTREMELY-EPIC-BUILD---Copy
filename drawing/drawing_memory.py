@@ -156,6 +156,33 @@ class DrawingMemory:
                     tags.append(t)
         return ", ".join(tags[:5])
 
+    def get_executed_sequence(self, max_count: int = 8) -> List[str]:
+        """Chronological plain lines of the executed body of work, oldest to
+        newest — "a suspended pencil dripping ink (about 2 hours ago)". Feeds
+        the stream drawing pipeline's intent step: repetition stays VISIBLE
+        (drawing a motif again knowingly is fixation, a choice; drawing it
+        again blindly is a loop). No LLM, unlike get_artistic_arc."""
+        import time
+
+        executed = [d for d in self._history if d.get('completed', False)][:max_count]
+        lines = []
+        for entry in reversed(executed):
+            desc = self._strip_comfy_preamble(entry.get('comfy_prompt', '')) or entry.get('compressed_summary', '')
+            desc = (desc or "").strip()
+            if not desc:
+                continue
+            if len(desc) > 90:
+                desc = desc[:90].rsplit(" ", 1)[0] + "..."
+            elapsed = time.time() - entry.get('timestamp', time.time())
+            if elapsed < 3600:
+                when = f"{max(1, int(elapsed / 60))} minutes ago"
+            elif elapsed < 86400:
+                when = f"about {max(1, int(elapsed / 3600))} hours ago"
+            else:
+                when = f"{int(elapsed / 86400)} days ago"
+            lines.append(f"{desc} ({when})")
+        return lines
+
     def get_last_drawing_description(self, executed_only: bool = False) -> str:
         """LEDGER: the most recent drawing as a NEUTRAL fact — its recurring
         elements (theme tags) + recency + outcome. Never the raw ComfyUI prose:
@@ -307,13 +334,13 @@ Write as "I" — this is your own artistic development."""
 
     @staticmethod
     def _strip_comfy_preamble(desc: str) -> str:
-        """Strip the standard ComfyUI preamble from a prompt."""
-        for prefix in ["Black ink line drawing on white paper. ",
-                       "Black ink line drawing on white paper.",
-                       "Black ink drawing on white paper. ",
-                       "black ink line drawing on white paper. "]:
-            if desc.lower().startswith(prefix.lower()):
-                return desc[len(prefix):]
+        """Strip the boilerplate ComfyUI opening — everything up to the end of
+        the first sentence IF that sentence is style preamble ("Black ink line
+        drawing on white paper with high contrast..."), not subject matter."""
+        import re
+        m = re.match(r'^(black ink[^.]{0,80}\.)\s*', desc, flags=re.IGNORECASE)
+        if m and len(desc) > m.end():
+            return desc[m.end():]
         return desc
 
 
