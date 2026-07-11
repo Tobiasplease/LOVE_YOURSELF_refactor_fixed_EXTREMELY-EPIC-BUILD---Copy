@@ -552,6 +552,18 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     if drawings:
         parts.append(drawings)
 
+    events = data.get("events") or []
+    if events:
+        parts.append("Things that happened lately:\n" + "\n".join(
+            f"- ({_age_phrase(e.get('timestamp', 0))}) {e.get('event', '')}" for e in events
+        ))
+
+    self_notes = data.get("self_notes") or []
+    if self_notes:
+        parts.append("Notes you've made about yourself lately:\n" + "\n".join(
+            f"- ({_age_phrase(n.get('timestamp', 0))}) {n.get('note', '')}" for n in self_notes
+        ))
+
     desire = (data.get("desire") or "").strip()
     if desire:
         parts.append(f"Lately you've wanted: {desire}")

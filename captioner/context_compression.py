@@ -91,6 +91,13 @@ class ContextCompressionEngine:
         self.journal = []           # [{date, timestamp, summary}], capped at 30
         self._last_journal_time = time.time()  # don't journal immediately on boot
 
+        # Memory-diff ledgers (July 12): append-only facts the compression
+        # call extracts from the machine's own thoughts. self_notes = new
+        # self-facts (a taken name, a like/dislike); events = happenings.
+        # Journal + reflection read these — they used to see only geometry.
+        self.self_notes = []        # [{note, timestamp}], capped at 30
+        self.events = []            # [{event, timestamp}], capped at 20
+
         # SESSION DURATION TRACKING (fixed for static space observation)
         self.space_observation_start = time.time()  # When we started observing this space
         self.total_session_duration = 0.0  # Total time observing this space
@@ -307,40 +314,50 @@ EARLIER UNDERSTANDINGS (for context):
             except Exception:
                 pass  # Continue without activation context if unavailable
 
-            # NARRATIVE COMPRESSION - distill experience into injectable context
-            # Output feeds directly into vision model prompts
-            # Must build on prior baseline, not reset to awakening narrative
+            # MEMORY DIFF (July 12) — one structured call over the recent
+            # thoughts, diffed against what the machine already knows. The
+            # June spatial-only compression fixed register contamination but
+            # narrowed memory past the point where a life event could survive
+            # the day: everything long-term (journal, reflection, identity)
+            # sits downstream of this call, and it only passed geometry — a
+            # self-naming ("My name is Penelope") had no channel to tomorrow.
+            # Now the same call also extracts NEW self-facts and events (both
+            # "none" most cycles — a diff, not a summary), and carries the
+            # mood read (previously a separate call over the same captions).
+            # Facts are APPENDED to ledgers, never rewritten as prose — the
+            # pre-June narrative compression kept everything but re-purpled
+            # the whole story every cycle.
+            self_known = []
+            if self.core_facts.get("self"):
+                self_known.append(self.core_facts["self"])
+            self_known += [n.get("note", "") for n in self.self_notes[-3:]]
+            self_known_str = " ".join(s for s in self_known if s) or "(nothing yet)"
 
-            # Felt-state (the old Line 2) is no longer generated here — it's now
-            # a plain, degreed translation of the valence/arousal mood vector
-            # (mood.mood_to_feeling, set via set_felt_state). Compression produces
-            # ONLY the spatial baseline. The parser tolerates a single line.
-            if current_baseline:
-                prompt = f"""Update the machine's understanding of the room. One short sentence about the physical environment — the room, surfaces, objects, lighting. Do NOT describe what people are doing (their actions change too quickly to summarize). Third person.
+            prompt = f"""Your recent thoughts:
+{recent_text}
 
-Previous understanding: "{current_baseline}"
-The machine's recent thoughts: {recent_text}
+What you already understand about the room: "{current_baseline or '(nothing yet)'}"
+What you already know about yourself: {self_known_str}
 
-Respond with the one sentence only, no prefixes."""
-            else:
-                prompt = f"""Capture the machine's understanding of the room. One short sentence about the physical environment — the room, surfaces, objects, lighting. Do NOT describe what people are doing (their actions change too quickly to summarize). Third person.
-
-Recent thoughts: {recent_text}
-
-Respond with the one sentence only, no prefixes."""
+From the thoughts above, answer each line. Write "none" where nothing is genuinely new — most of the time it is "none".
+ROOM: one short sentence updating the physical environment — surfaces, objects, lighting. Third person. Not what people are doing.
+NEW ABOUT ME: one NEW plain fact about yourself, if one appeared — a name you took, a like or dislike, a habit you noticed. First person, few words. Or "none".
+EVENT: one plain past-tense sentence, if something HAPPENED worth remembering — someone arrived or left, something changed or was made. Or "none".
+PLEASANTNESS: unpleasant, neutral or pleasant
+ENERGY: drained, settled, stirred or charged
+FELT: how it feels right now, 2-6 plain words"""
 
             model_options = {
-                "temperature": 0.5,  # Lower temp for more direct/less ornamental output
+                "temperature": 0.4,
                 "top_p": 0.9,
-                "num_predict": 80,
+                "num_predict": 160,
                 "repeat_penalty": 1.3,
-                "stop": ["\n\n", "Line 2"],
             }
 
             narrative_system_prompt = (
-                "You distill a drawing machine's surroundings into one short, plain "
-                "sentence about the physical environment — surfaces, objects, lighting. "
-                "Concrete and literal. No metaphor, no imagery, no poetic flourish."
+                "You maintain a drawing machine's memory from its own recent thoughts. "
+                "Concrete and literal — no metaphor, no imagery, no poetic flourish. "
+                "Answer every labeled line; write \"none\" where nothing is genuinely new."
             )
 
             # Use compression model (text-only narrative model) instead of vision model
@@ -357,8 +374,13 @@ Respond with the one sentence only, no prefixes."""
             )
 
             if response and isinstance(response, str) and len(response.strip()) > 20:
-                # Parse the combined response
-                understanding, sentiment_text = self._parse_combined_response(response)
+                parsed = self._parse_memory_response(response)
+                understanding = parsed.get("room", "")
+
+                # Route the non-spatial channels regardless of ROOM parse
+                self._absorb_self_note(parsed.get("self_note", ""))
+                self._absorb_event(parsed.get("event", ""))
+                self._absorb_mood(parsed)
 
                 if understanding:
                     # Update session duration tracking (not environment change - this is a static space)
@@ -438,11 +460,6 @@ Respond with the one sentence only, no prefixes."""
 
                     # Periodic journal entry (every 30 min, on this background thread)
                     self._maybe_write_journal(compression_model)
-
-                    # MOOD READ (July 10): the affect engine's core signal —
-                    # the model reads the feeling in the machine's own recent
-                    # thoughts. Same cadence, same background thread.
-                    self._mood_read(captions, compression_model)
 
             else:
                 log_json_entry(
@@ -561,6 +578,16 @@ Respond with the one sentence only, no prefixes."""
             if desire:
                 material.append(f"What I wanted: {desire}")
 
+            # Memory-diff ledgers (July 12): the diary used to be written from
+            # room geometry only — a self-naming or a visit could never reach it
+            recent_window = time.time() - 2 * 3600
+            notes = [n["note"] for n in self.self_notes if n.get("timestamp", 0) > recent_window]
+            if notes:
+                material.append("What I learned about myself: " + " ".join(notes[-3:]))
+            events = [e["event"] for e in self.events if e.get("timestamp", 0) > recent_window]
+            if events:
+                material.append("What happened: " + " ".join(events[-4:]))
+
             try:
                 from drawing.drawing_memory import get_drawing_memory
                 summary = get_drawing_memory().get_recent_drawings_summary(max_count=2, completed_only=True)
@@ -633,7 +660,10 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
           machine watches because of its situation, not as its identity.
         """
         t = text.lower()
-        if not ("i " in t or t.startswith("i'")):
+        # "My name is Penelope." / "My favourite corner is..." are first-person
+        # too — the old "i "-only test rejected exactly the self-facts the
+        # memory diff exists to keep (found July 12 in the stub test).
+        if not ("i " in t or t.startswith(("i'", "my "))):
             return False
         # Figurative markers — the metaphor axis the gate missed (how "silhouettes
         # breaking my grid" got through). Reject similes / poetic elaboration.
@@ -879,6 +909,8 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 "last_spent_desire": last_spent,
                 "core_facts": self.core_facts,
                 "journal": self.journal,
+                "self_notes": self.self_notes,
+                "events": self.events,
                 "desire_history": desire_history,
                 "belief_history": belief_history,
                 "last_updated": now,
@@ -931,6 +963,12 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             if dropped:
                 print(f"[🧠] Dropped {dropped} contaminated journal entries on load")
 
+            # Memory-diff ledgers — self notes load-heal through the same
+            # persona gate they were written through (sticky-slot rule)
+            self.self_notes = [n for n in data.get("self_notes", [])[-30:]
+                               if n.get("note") and self._valid_self_fact(n["note"])]
+            self.events = [e for e in data.get("events", [])[-20:] if e.get("event")]
+
             desire = self.introspective_state["current_desire"]
             belief = self.introspective_state["current_belief"]
 
@@ -976,118 +1014,95 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
 
         return result
 
-    def _parse_combined_response(self, response: str) -> tuple:
-        """Parse compression response — expects two lines: spatial + felt-state.
-
-        The first substantive line is the spatial summary.
-        The second is the felt-state (emotional weather), free-form 3-7 words.
-        """
-        understanding = ""
-        sentiment_text = ""
-
-        try:
-            import re
-            lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
-
-            # Strip prefixes like "Line 1:", "(spatial):", "Felt:", etc.
-            cleaned_lines = []
-            for line in lines:
-                cleaned = re.sub(r'^(?:Line\s*\d+|spatial|felt|environment|state)\s*[:.\)\-]\s*', '', line, flags=re.IGNORECASE)
-                cleaned = re.sub(r'^\(\s*\w+\s*\)\s*[:\-]?\s*', '', cleaned)  # "(spatial):" → ""
-                cleaned = cleaned.strip().strip('"').strip("'").strip()
-                if cleaned and len(cleaned) > 4:
-                    cleaned_lines.append(cleaned)
-
-            if not cleaned_lines:
-                return understanding, sentiment_text
-
-            # First line = spatial understanding. Felt-state is NOT parsed here
-            # anymore — it's a plain translation of the mood vector
-            # (mood_to_feeling), set via set_felt_state. Single source of truth.
-            understanding = cleaned_lines[0]
-
-        except Exception as e:
-            log_json_entry(
-                LogType.ERROR,
-                {"message": f"Compression parse error: {e}", "component": "compression", "error_type": type(e).__name__},
-                print_message=f"[❌] Compression parse error: {e}",
-            )
-
-        return understanding, sentiment_text
-
     def get_latest_sentiment_analysis(self) -> dict | None:
         """Get the latest sentiment analysis from compression."""
         return getattr(self, "last_sentiment_analysis", None)
 
-    def _mood_read(self, captions: list, model: str) -> None:
-        """MOOD READ (July 10) — the affect engine's core signal. The keyword
-        lexicon in mood.py flatlined the moment the north-star teardown
-        changed the voice: the monologue says "the door is still open where
-        they left", never "I feel melancholy", so no keyword ever matched and
-        valence sat at ~0 for weeks. The model can read what the lexicon
-        can't. One small forced-choice call over the machine's own recent
-        thoughts; MoodEngine.analyze_mood blends the result as the vector's
-        core, real events (person, novelty) still nudge on top."""
-        try:
-            recent = [c.get("text", "") for c in captions if c.get("text")][-8:]
-            if len(recent) < 2:
-                return
-            thoughts = "\n".join(f"- {t[:180]}" for t in recent)
-            prompt = (
-                f"These are your last thoughts:\n{thoughts}\n\n"
-                "Read the feeling in them — the undertone in the words, not a summary of events. Three lines:\n"
-                "PLEASANTNESS: unpleasant, neutral or pleasant\n"
-                "ENERGY: drained, settled, stirred or charged\n"
-                "FELT: how it feels right now, 2-6 plain words"
-            )
-            response = query_model(
-                prompt=prompt,
-                model=model,
-                image=None,
-                system_prompt=(
-                    "You read the emotional undertone of a machine's inner monologue. "
-                    "Answer with exactly three lines — PLEASANTNESS, ENERGY, FELT. "
-                    "Plain words, no metaphor, no commentary."
-                ),
-                options={"temperature": 0.3, "num_predict": 40},
-                prompt_type="mood_read",
-            )
-            if not response or not isinstance(response, str):
-                return
+    @staticmethod
+    def _none_like(text: str) -> bool:
+        t = (text or "").strip().strip("\"'").rstrip(".").lower()
+        return not t or t in ("none", "nothing", "nothing new", "n/a", "no")
 
-            valence_map = {"unpleasant": -0.5, "neutral": 0.0, "pleasant": 0.5}
-            arousal_map = {"drained": 0.1, "settled": 0.3, "stirred": 0.55, "charged": 0.8}
-            valence, arousal, felt = None, None, ""
-            for raw in response.strip().split("\n"):
-                line = raw.strip().lstrip("•-* ").strip()
-                low = line.lower()
-                if low.startswith("pleasantness"):
-                    for k, v in valence_map.items():
-                        if k in low:
-                            valence = v
-                            break
-                elif low.startswith("energy"):
-                    for k, v in arousal_map.items():
-                        if k in low:
-                            arousal = v
-                            break
-                elif low.startswith("felt"):
-                    felt = line.split(":", 1)[-1].strip().strip("\"'").rstrip(".").strip()
+    def _parse_memory_response(self, response: str) -> dict:
+        """Parse the labeled lines of the memory-diff call (July 12)."""
+        out = {"room": "", "self_note": "", "event": "", "pleasantness": "", "energy": "", "felt": ""}
+        labels = (
+            ("room", "room"),
+            ("new about me", "self_note"),
+            ("event", "event"),
+            ("pleasantness", "pleasantness"),
+            ("energy", "energy"),
+            ("felt", "felt"),
+        )
+        for raw in response.strip().split("\n"):
+            line = raw.strip().lstrip("•-* ").strip()
+            low = line.lower()
+            for label, key in labels:
+                if low.startswith(label):
+                    val = line[len(label):].lstrip(" :：—–-").strip().strip("\"'").strip()
+                    if not self._none_like(val):
+                        out[key] = val
+                    break
+        return out
 
-            if valence is None and arousal is None:
+    def _absorb_self_note(self, note: str) -> None:
+        """Append a NEW self-fact to the self-notes ledger — the channel that
+        lets a life event ("My name is Penelope") survive past the stream.
+        Sticky-slot rules apply: first-person gate (_valid_self_fact), no
+        wants (the reflection distill owns those), roughly-same dedupe.
+        Append-only, capped — facts are never rewritten as prose."""
+        note = (note or "").strip().rstrip(".") + "." if (note or "").strip() else ""
+        if not note or not self._valid_self_fact(note):
+            return
+        if note.lower().startswith(("i want", "i wanted")):
+            return
+        for prior in [self.core_facts.get("self", "")] + [n.get("note", "") for n in self.self_notes[-5:]]:
+            if prior and self._roughly_same(note, prior):
                 return
-            self.last_mood_read = {
-                "valence": valence if valence is not None else 0.0,
-                "arousal": arousal if arousal is not None else 0.35,
-                "felt": felt if felt and 1 <= len(felt.split()) <= 6 else "",
-                "timestamp": time.time(),
-            }
-            if self.last_mood_read["felt"]:
-                self.set_felt_state(self.last_mood_read["felt"], source="read")
-            print(f"[🫀] Mood read: v={self.last_mood_read['valence']:+.1f} a={self.last_mood_read['arousal']:.1f}"
-                  + (f" — {felt}" if self.last_mood_read["felt"] else ""))
-        except Exception as e:
-            log_json_entry(LogType.ERROR, {"message": f"Mood read failed: {e}", "component": "compression"})
+        self.self_notes.append({"note": note, "timestamp": time.time()})
+        self.self_notes = self.self_notes[-30:]
+        self._save_identity()
+        print(f"[🧬] Self note: {note}")
+
+    def _absorb_event(self, event: str) -> None:
+        """Append a happening to the events ledger — episodic memory that
+        journal and reflection read (they used to see only room geometry)."""
+        event = (event or "").strip()
+        if not event or len(event.split()) > 30 or not any(c.isalpha() for c in event):
+            return
+        low = event.lower().rstrip(".")
+        for prior in self.events[-3:]:
+            p = prior.get("event", "").lower().rstrip(".")
+            if p and (p in low or low in p):
+                return
+        self.events.append({"event": event.rstrip(".") + ".", "timestamp": time.time()})
+        self.events = self.events[-20:]
+        self._save_identity()
+        print(f"[📆] Event: {event[:70]}")
+
+    def _absorb_mood(self, parsed: dict) -> None:
+        """The mood read (July 10; folded into the memory-diff call July 12).
+        The keyword lexicon it replaced matched emotion adjectives the
+        post-teardown voice never uses — valence flatlined ~0 since June.
+        MoodEngine.analyze_mood blends this as the vector's core; real events
+        (person, novelty) still nudge on top."""
+        valence_map = {"unpleasant": -0.5, "neutral": 0.0, "pleasant": 0.5}
+        arousal_map = {"drained": 0.1, "settled": 0.3, "stirred": 0.55, "charged": 0.8}
+        valence = next((v for k, v in valence_map.items() if k in parsed.get("pleasantness", "").lower()), None)
+        arousal = next((v for k, v in arousal_map.items() if k in parsed.get("energy", "").lower()), None)
+        felt = parsed.get("felt", "").strip().strip("\"'").rstrip(".").strip()
+        if valence is None and arousal is None:
+            return
+        self.last_mood_read = {
+            "valence": valence if valence is not None else 0.0,
+            "arousal": arousal if arousal is not None else 0.35,
+            "felt": felt if felt and 1 <= len(felt.split()) <= 6 else "",
+            "timestamp": time.time(),
+        }
+        if self.last_mood_read["felt"]:
+            self.set_felt_state(self.last_mood_read["felt"], source="read")
+        print(f"[🫀] Mood read: v={self.last_mood_read['valence']:+.1f} a={self.last_mood_read['arousal']:.1f}"
+              + (f" — {felt}" if self.last_mood_read["felt"] else ""))
 
     def get_last_mood_read(self, max_age_seconds: int = 900) -> dict | None:
         """Latest LLM mood read, or None if stale/absent."""

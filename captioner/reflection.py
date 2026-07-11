@@ -167,6 +167,14 @@ class ReflectionLoop:
             pass
         data["drawings"] = self._gather_drawings()
         try:
+            # Memory-diff ledgers (July 12): the reflection used to see only
+            # room geometry — never the machine's own life. Now it gets what
+            # happened and what it learned about itself.
+            data["events"] = context_compressor.events[-5:]
+            data["self_notes"] = context_compressor.self_notes[-3:]
+        except Exception:
+            pass
+        try:
             data["desire"] = context_compressor.get_current_desire()
             # Desire arc: a freshly spent want enters the reflection as a fact,
             # so the next want forms informed by the act instead of amnesiac.
