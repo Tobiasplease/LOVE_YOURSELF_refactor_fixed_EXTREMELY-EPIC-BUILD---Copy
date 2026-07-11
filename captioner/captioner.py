@@ -2214,8 +2214,11 @@ class Captioner(MemoryMixin):
                 try:
                     from drawing.drawing_memory import get_drawing_memory
                     memory = get_drawing_memory()
+                    # Enrich tags/tone/thread only — compressed_summary was set
+                    # at prompt generation from the machine's own intent words
+                    # and the consolidation's terse rewrite must not replace it
+                    # ("Steel clamp biting wood grain" over a whole thought).
                     memory.update_last_drawing(
-                        compressed_summary=reflection['compressed_summary'],
                         theme_tags=reflection.get('theme_tags', []),
                         emotional_tone=reflection.get('emotional_tone', ''),
                         narrative_thread=reflection.get('narrative_thread', ''),

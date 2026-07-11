@@ -139,9 +139,9 @@ class ReflectionLoop:
             last = dm.get_last_drawing_description(executed_only=True)
             if last:
                 parts.append(f"The last drawing that actually reached paper: {last}.")
-            tags = dm.get_recent_drawings_summary(max_count=3, completed_only=True)
-            if tags:
-                parts.append(f"Recurring subjects in your drawings: {tags}.")
+            summaries = dm.get_recent_drawings_summary(max_count=3, completed_only=True)
+            if summaries:
+                parts.append(f"Your recent drawings: {summaries}.")
             return " ".join(parts)
         except Exception:
             return ""

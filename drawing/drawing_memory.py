@@ -132,11 +132,14 @@ class DrawingMemory:
         return getattr(self, '_last_failure', None)
 
     def get_recent_drawings_summary(self, max_count: int = 3, completed_only: bool = True) -> str:
-        """LEDGER (June 28): the recurring SUBJECTS of recent drawings — the
-        structured theme tags only, never the stored prose summary or raw
-        ComfyUI prompt (those carried the purple register that re-poisoned the
-        voice; see docs/memory-redesign-plan.md). Bare content phrase, e.g.
-        "chair, cables, desk"; callers add their own framing.
+        """LEDGER (June 28; un-starved July 11): one short phrase per drawing
+        from compressed_summary. The June rule returned theme tags ONLY
+        because the stored prose then was purple ComfyUI register — but since
+        the stream pipeline (July 10) compressed_summary holds the machine's
+        own intent words, and the tags-only rule shredded real subjects into
+        single-word confetti ("steel, clamp, biting, suspended, silence" —
+        too compressed to carry meaning). Tags remain the fallback for
+        entries with no summary. Callers add their own framing.
         """
         if not self._history:
             return ""
@@ -148,13 +151,18 @@ class DrawingMemory:
         if not recent:
             return ""
 
-        tags = []
+        phrases = []
         for entry in recent:
-            for t in entry.get("theme_tags", []):
-                t = (t or "").strip().lower()
-                if t and t not in tags:
-                    tags.append(t)
-        return ", ".join(tags[:5])
+            s = self._strip_comfy_preamble((entry.get("compressed_summary") or "").strip())
+            if s:
+                if len(s) > 70:
+                    s = s[:70].rsplit(" ", 1)[0] + "…"
+                phrases.append(s.rstrip("."))
+            else:
+                tags = [(t or "").strip().lower() for t in entry.get("theme_tags", []) if (t or "").strip()]
+                if tags:
+                    phrases.append(", ".join(tags[:3]))
+        return "; ".join(phrases)
 
     def get_executed_sequence(self, max_count: int = 8) -> List[str]:
         """Chronological plain lines of the executed body of work, oldest to

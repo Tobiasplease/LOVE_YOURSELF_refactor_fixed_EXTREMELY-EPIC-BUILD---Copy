@@ -862,8 +862,8 @@ def get_introspective_context(agent=None) -> str:
             import re as _re
             clean = _re.sub(r'\s*\([^)]*\)\s*$', '', clean)
             if clean:
-                if len(clean) > 80:
-                    clean = clean[:80].rsplit(" ", 1)[0]
+                if len(clean) > 160:
+                    clean = clean[:160].rsplit(" ", 1)[0]
                 fragments.append(f"My last drawings were of: {clean}")
     except Exception:
         pass
