@@ -113,6 +113,12 @@ GRBL_WARP_TRANSFORM = True
 # GRBL homing retry configuration
 GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
 
+# === ARMS DUET (motor_panel) ===
+# Envelope for joint left-arm + GRBL markov choreography. Recording/generation
+# clamps all XY to this zone; pen is asserted UP throughout.
+ARMS_DUET_ZONE = (10, 120, 10, 120)  # x_min, x_max, y_min, y_max (mm)
+ARMS_DUET_MAX_FEED = 1200  # mm/min cap for generated stepper moves
+
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.
 GRBL_SPINDLE_MAX_S = int(os.getenv("GRBL_SPINDLE_MAX_S", 255))  # -> $30
@@ -355,7 +361,7 @@ CAPTION_QUIET_AFTER = 120  # seconds without salience before the cadence stretch
 
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet
-REFLECTION_NUM_PREDICT = 220  # was 600 — the model padded to the brim every time (~2600 chars of purple survey); brevity pressure IS register pressure  # token budget for a reflection — long-form on purpose (north-star principle 5)
+REFLECTION_NUM_PREDICT = 320  # was 600 (padded to the brim, purple survey), then 220; raised for the dream (July 12) — the reflection now digests the raw hour of thought, which earns more room than a summary-of-summaries did. Brevity pressure IS register pressure; watch for padding at 320.
 
 # Drawing system intervals
 DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)

@@ -98,6 +98,11 @@ class ContextCompressionEngine:
         self.self_notes = []        # [{note, timestamp}], capped at 30
         self.events = []            # [{event, timestamp}], capped at 20
 
+        # The dream's raw material (July 12): every admitted caption of the
+        # session, verbatim. The reflection loop reads the last stretch of
+        # this — the actual record of thought, not summaries of it.
+        self.hour_log = deque(maxlen=150)  # [{text, timestamp}]
+
         # SESSION DURATION TRACKING (fixed for static space observation)
         self.space_observation_start = time.time()  # When we started observing this space
         self.total_session_duration = 0.0  # Total time observing this space
@@ -124,6 +129,7 @@ class ContextCompressionEngine:
             return
 
         self.recent_captions.append({"text": caption, "timestamp": timestamp or time.time(), "image_path": image_path})
+        self.hour_log.append({"text": caption, "timestamp": timestamp or time.time()})
         self.caption_count += 1
 
         # Only trigger compression if we have enough valid captions

@@ -523,6 +523,19 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     """
     parts = []
 
+    # THE DREAM (July 12): the record itself, not summaries of it. Everything
+    # else in this prompt is a ledger someone distilled; this is what the
+    # machine actually thought, and the reflection's job is to digest it —
+    # notice what moved, what it circled, what it assumed, what it asked and
+    # whether anything ever answered. That last one is how the architecture
+    # lets it LEARN it needs no permission, instead of being fenced into it.
+    hour = data.get("hour") or []
+    if hour:
+        parts.append(
+            "The record of your actual thoughts from the last stretch, oldest first — as you had them, not summarized:\n"
+            + "\n".join(f"- {t}" for t in hour)
+        )
+
     today = data.get("today") or []
     if today:
         parts.append("Your running notes from today, oldest first:\n" + "\n".join(f"- {t}" for t in today))
@@ -574,7 +587,19 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
             "Nothing has replaced it yet."
         )
 
-    parts.append(question)
+    if hour:
+        # The dream ask: digest the record, then advance the story. The
+        # subject question becomes a lens, not the whole assignment. The
+        # embedded questions are FACT questions, not fences — "did any answer
+        # come" invites an honest reading of the record either way.
+        parts.append(
+            question
+            + " Read your record above with that in mind. What actually happened in this stretch, and what did you keep "
+            "circling? Where did you assume something the record doesn't show? What did you ask, and did any answer ever "
+            "come? Then write plainly where you stand now — the next page of the story you're in, not a re-telling of the last one."
+        )
+    else:
+        parts.append(question)
     # Development pressure: when there IS a thread to continue, ask for the
     # delta, not a re-description (the July 9 audit found reflections circling
     # the same material session after session).

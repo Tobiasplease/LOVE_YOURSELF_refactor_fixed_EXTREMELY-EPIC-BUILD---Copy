@@ -153,6 +153,17 @@ class ReflectionLoop:
 
         data = {}
         try:
+            # THE DREAM'S RAW MATERIAL (July 12): the machine's actual thoughts
+            # from the last stretch, verbatim. Every prior input to reflection
+            # was a summary of a summary — the loop could never notice what
+            # actually happened in its own head (e.g. an hour of questions
+            # addressed to a visitor that nothing ever answered).
+            cutoff = time.time() - 75 * 60
+            hour = [e["text"][:220] for e in context_compressor.hour_log if e.get("timestamp", 0) > cutoff]
+            data["hour"] = hour[-80:]
+        except Exception:
+            pass
+        try:
             history = context_compressor.get_compression_history(max_entries=6)
             data["today"] = [h["understanding"] for h in history if h.get("understanding")]
         except Exception:
@@ -195,7 +206,7 @@ class ReflectionLoop:
         # Nothing lived yet — reflecting on an empty store just invents a
         # past, and a stored invention echoes back into captions forever.
         # Wait until at least some real material exists.
-        if not (data.get("today") or data.get("journal") or data.get("reflections")):
+        if not (data.get("hour") or data.get("today") or data.get("journal") or data.get("reflections")):
             print("[REFLECT] Nothing lived yet — postponing reflection until there is real material.")
             self.last_reflection_time = time.time() - REFLECTION_LOOP_INTERVAL + 300  # retry in 5 min
             return
