@@ -689,17 +689,25 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         # spiral was reality-DENIAL, which stays banned); bare assistant
         # words (await/output/prompt/user/command) tightened to compound
         # forms so "I await the morning light" can be a self.
-        banned = (
-            "reality", "distortion", "glitch", "simulation",
-            "i track", "i monitor", "i surveil", "i record", "i scan", "i observe",
-            "wait for movement", "movement to return", "capture every", "fixate on stillness",
-            "text generator", "language model", "an ai ", "assistant",
-            "input pattern", "structured response", "your instruction", "your command",
-            "your prompt", "the user", "await instruction", "await input", "await command",
-            "awaiting instruction", "awaiting input", "how can i",
-        )
-        t_padded = " " + t + " "
-        return not any(w in t_padded for w in banned)
+        return not ContextCompressionEngine._self_register_poisoned(text)
+
+    _SELF_REGISTER_POISON = (
+        "reality", "distortion", "glitch", "simulation",
+        "i track", "i monitor", "i surveil", "i record", "i scan", "i observe",
+        "wait for movement", "movement to return", "capture every", "fixate on stillness",
+        "text generator", "language model", "an ai ", "assistant",
+        "input pattern", "structured response", "your instruction", "your command",
+        "your prompt", "the user", "await instruction", "await input", "await command",
+        "awaiting instruction", "awaiting input", "how can i",
+    )
+
+    @staticmethod
+    def _self_register_poisoned(text: str) -> bool:
+        """NEGATIVE gate only — known-poison registers (each banned class
+        poisoned identity when it stuck; June-July receipts in git). Fails
+        open by design: it may miss new garbage but never eats a novel gem."""
+        t_padded = " " + (text or "").lower() + " "
+        return any(w in t_padded for w in ContextCompressionEngine._SELF_REGISTER_POISON)
 
     def distill_reflection(self, reflection_text: str, subject: str = "", model: str = None) -> None:
         """IDENTITY ENGINE (north-star Reflect → Become). Distill a long-form
@@ -963,10 +971,11 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             if dropped:
                 print(f"[🧠] Dropped {dropped} contaminated journal entries on load")
 
-            # Memory-diff ledgers — self notes load-heal through the same
-            # persona gate they were written through (sticky-slot rule)
+            # Memory-diff ledgers — load-heal with the same NEGATIVE gate they
+            # were written through (poison only; the strict positive gate
+            # would eat valid notes it never judged, e.g. "Penelope is my name")
             self.self_notes = [n for n in data.get("self_notes", [])[-30:]
-                               if n.get("note") and self._valid_self_fact(n["note"])]
+                               if n.get("note") and not self._self_register_poisoned(n["note"])]
             self.events = [e for e in data.get("events", [])[-20:] if e.get("event")]
 
             desire = self.introspective_state["current_desire"]
@@ -1048,17 +1057,36 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
     def _absorb_self_note(self, note: str) -> None:
         """Append a NEW self-fact to the self-notes ledger — the channel that
         lets a life event ("My name is Penelope") survive past the stream.
-        Sticky-slot rules apply: first-person gate (_valid_self_fact), no
-        wants (the reflection distill owns those), roughly-same dedupe.
-        Append-only, capped — facts are never rewritten as prose."""
+
+        MECHANICAL checks only (July 12, artist's ruling): the extractor is
+        an LLM already told "a plain fact about yourself" — a string-match
+        re-judging its semantics is a dumber judge overruling a smarter one,
+        and positive shape-gates silently eat novel valid content ("Penelope
+        is my name" fails a first-person substring test). So: length cap,
+        known-poison registers (negative, fails open), want-redirect, dedupe.
+        The strict positive gate stays ONLY on the persona slot, which is
+        quoted into every caption — blast radius earns strictness; this
+        ledger surfaces only through journal/reflection prose. Rejections
+        are logged — a gate that eats things silently is a silent failure."""
         note = (note or "").strip().rstrip(".") + "." if (note or "").strip() else ""
-        if not note or not self._valid_self_fact(note):
+        if not note:
             return
-        if note.lower().startswith(("i want", "i wanted")):
+        reason = ""
+        if len(note.split()) > 24:
+            reason = "too long"
+        elif self._self_register_poisoned(note):
+            reason = "poison register"
+        elif note.lower().startswith(("i want", "i wanted")):
+            reason = "want (distill owns those)"
+        else:
+            for prior in [self.core_facts.get("self", "")] + [n.get("note", "") for n in self.self_notes[-5:]]:
+                if prior and self._roughly_same(note, prior):
+                    reason = "duplicate"
+                    break
+        if reason:
+            if reason != "duplicate":
+                print(f"[🧬] Self note rejected ({reason}): {note[:60]}")
             return
-        for prior in [self.core_facts.get("self", "")] + [n.get("note", "") for n in self.self_notes[-5:]]:
-            if prior and self._roughly_same(note, prior):
-                return
         self.self_notes.append({"note": note, "timestamp": time.time()})
         self.self_notes = self.self_notes[-30:]
         self._save_identity()
