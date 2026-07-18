@@ -1214,11 +1214,40 @@ cv2.createTrackbar("Sharpness", "mslint camera", current_sharpness, 100, on_shar
 debug_print("Camera controls initialized - use trackbars in preview window to adjust in real-time", "INIT")
 debug_print("Press 'r' in camera window to reset controls to defaults", "INIT")
 
+# Freeze watchdog: gaze + lung both go through this loop, so if it stalls the
+# whole body freezes. When the heartbeat goes stale, dump every thread's stack
+# to the event log folder — the dump shows exactly which call is blocking.
+_loop_heartbeat = time.time()
+_last_freeze_dump = 0.0
+
+
+def _freeze_watchdog():
+    global _last_freeze_dump
+    import faulthandler
+
+    while not shutdown_in_progress:
+        time.sleep(5)
+        stall = time.time() - _loop_heartbeat
+        if stall > 10 and _loop_heartbeat > _last_freeze_dump:
+            _last_freeze_dump = time.time()
+            dump_path = os.path.join(MOOD_SNAPSHOT_FOLDER, f"freeze_dump_{int(_last_freeze_dump)}.txt")
+            try:
+                with open(dump_path, "w") as fh:
+                    fh.write(f"main loop stalled for {stall:.1f}s\n\n")
+                    faulthandler.dump_traceback(file=fh, all_threads=True)
+                print(f"[WATCHDOG] Main loop stalled {stall:.1f}s — thread dump: {dump_path}")
+            except Exception as e:
+                print(f"[WATCHDOG] Stall detected ({stall:.1f}s) but dump failed: {e}")
+
+
+threading.Thread(target=_freeze_watchdog, daemon=True, name="freeze-watchdog").start()
+
 try:
     prev_gray = None
     smoothed_pwm = 0
     debug_print("Entering main camera processing loop", "MAIN")
     while True:
+        _loop_heartbeat = time.time()
         # Check for shutdown signal
         if shutdown_in_progress:
             print("[SHUTDOWN] Shutdown signal received - breaking main loop")
@@ -1464,12 +1493,14 @@ try:
         person_state = person_detection.get_person_state()
         person_is_present = person_state["is_present"] and not own_body_likely
 
-        # Switch YOLO to fast mode when actively tracking person, slow mode when idle
-        # This ensures bbox updates keep pace with camera movement during tracking
+        # Switch YOLO to fast mode whenever a person is around, not only once
+        # gaze is already tracking — gaze can't lock on quickly from stale
+        # idle-cadence boxes. "remembered" keeps the fast cadence through
+        # search sweeps so a re-appearing person is re-acquired immediately.
         from vision.gaze import get_gaze_state
         gaze_state_info = get_gaze_state()
         gaze_state_name = gaze_state_info.get("state", "idle") if isinstance(gaze_state_info, dict) else "idle"
-        is_tracking_person = gaze_state_name in ("aware", "tracking", "grace")
+        is_tracking_person = gaze_state_name in ("aware", "tracking", "grace") or person_state.get("person_state", "absent") != "absent"
         object_detector.set_tracking_mode(is_tracking_person)
 
         # Manage gaze search mode based on person detection state

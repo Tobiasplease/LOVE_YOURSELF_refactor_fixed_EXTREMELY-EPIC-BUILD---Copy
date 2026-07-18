@@ -5,9 +5,11 @@ import threading
 import numpy as np
 
 from config.config import (
-    DEAD_ZONE,
     EASING_FACTOR,
     FACE_STABLE_TIMEOUT,
+    FACE_TRACK_DEAD_ZONE,
+    FACE_TRACK_DEAD_ZONE_FACE_SCALE,
+    FACE_TRACK_MAX_STEP,
     FLIP_X,
     FLIP_Y,
     IDLE_AMPLITUDE_X,
@@ -41,9 +43,6 @@ IDLE_LONG_PAUSE_CHANCE = 0.10  # 10% chance for a longer pause
 IDLE_STILLNESS_MIN = 1.0  # Minimum stillness duration (seconds)
 IDLE_STILLNESS_MAX = 3.0  # Maximum stillness duration (seconds)
 IDLE_STILLNESS_CHANCE = 0.35  # 35% of movements end in stillness — more alive
-
-# Override dead zone for precise face tracking
-PRECISE_DEAD_ZONE = 0.2  # Ultra-small dead zone for highly responsive face tracking (overrides config DEAD_ZONE)
 
 # === SIMPLIFIED STATE MANAGEMENT ===
 servo_x = 90
@@ -174,7 +173,7 @@ PHYSICS_PATTERNS = {
 TRACKING_PHYSICS = {
     "mass": 0.1,             # Very light for immediate response
     "spring_constant": 45.0,  # Strong pull toward face target
-    "damping": 2.5,          # Low damping — fast, responsive tracking
+    "damping": 4.5,          # ~critical (2·√(k·m)≈4.24) — at 2.5 every correction overshot and bounced, feeding the close-range bobbing
     "tremor_amplitude": 0.0,
     "orbital_strength": 0.0,
 }
@@ -899,12 +898,23 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         face_x_norm = face_center_x / w
         face_y_norm = face_center_y / h
 
-        target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * face_x_norm
-        target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * face_y_norm
+        # Dead zone scaled by apparent face size: up close each camera degree
+        # moves the face many pixels, so chasing bbox jitter from the flimsy
+        # mount becomes hunting ("bobbing") that blurs every capture. Inside
+        # the zone the target holds and the camera stays parked. Target steps
+        # are capped so a jittery bbox can't lunge the servos.
+        face_w_norm = (endX - startX) / w
+        dead_zone = FACE_TRACK_DEAD_ZONE + FACE_TRACK_DEAD_ZONE_FACE_SCALE * face_w_norm
 
-        # Physics tracking: set target, snap immediately to tracking params
-        physics_state.pan_target = target_x
-        physics_state.tilt_target = target_y
+        if abs(face_x_norm - 0.5) > dead_zone:
+            raw_target_x = PAN_MIN + (PAN_MAX - PAN_MIN) * face_x_norm
+            physics_state.pan_target += clamp(raw_target_x - physics_state.pan_target, -FACE_TRACK_MAX_STEP, FACE_TRACK_MAX_STEP)
+        if abs(face_y_norm - 0.5) > dead_zone:
+            raw_target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * face_y_norm
+            physics_state.tilt_target += clamp(raw_target_y - physics_state.tilt_target, -FACE_TRACK_MAX_STEP, FACE_TRACK_MAX_STEP)
+        target_x = physics_state.pan_target
+        target_y = physics_state.tilt_target
+
         physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.9)  # Near-instant snap to face tracking physics
 
         pan, tilt = update_physics_step(dt, is_tracking=True)

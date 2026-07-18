@@ -7,7 +7,7 @@ import warnings
 import cv2
 from ultralytics import YOLO
 
-from config.config import YOLO_CONFIDENCE_THRESHOLD, YOLO_MODEL_PATH
+from config.config import YOLO_CONFIDENCE_THRESHOLD, YOLO_INTERVAL_IDLE, YOLO_INTERVAL_TRACKING, YOLO_MODEL_PATH
 from perception.detection_memory import DetectionMemory
 
 # Suppress ultralytics config warnings
@@ -15,11 +15,7 @@ warnings.filterwarnings("ignore", message=".*attempted relative import.*")
 
 
 class ObjectDetectionThread(threading.Thread):
-    # Interval modes for different tracking states
-    INTERVAL_IDLE = 5.0      # When not tracking anyone - conserve resources
-    INTERVAL_TRACKING = 0.25  # When actively tracking person - fast updates (4/sec)
-
-    def __init__(self, model_path: str = YOLO_MODEL_PATH, update_interval: int = 5):
+    def __init__(self, model_path: str = YOLO_MODEL_PATH, update_interval: float = YOLO_INTERVAL_IDLE):
         super().__init__()
         self.model = YOLO(model_path)
         self.update_interval = update_interval
@@ -28,6 +24,7 @@ class ObjectDetectionThread(threading.Thread):
         self.lock = threading.Lock()
         self.force_cpu = False  # fallback to CPU on CUDA OOM
         self._tracking_mode = False  # When True, use fast interval
+        self._target_track_id = None  # sticky gaze target across detection cycles
 
     def set_frame(self, frame):
         with self.lock:
@@ -37,13 +34,14 @@ class ObjectDetectionThread(threading.Thread):
         """Switch between fast tracking mode and idle mode."""
         if is_tracking != self._tracking_mode:
             self._tracking_mode = is_tracking
-            self.update_interval = self.INTERVAL_TRACKING if is_tracking else self.INTERVAL_IDLE
+            self.update_interval = YOLO_INTERVAL_TRACKING if is_tracking else YOLO_INTERVAL_IDLE
             mode_name = "TRACKING" if is_tracking else "IDLE"
             print(f"[YOLOv8] Switched to {mode_name} mode (interval: {self.update_interval}s)")
 
     def run(self):
         print("[YOLOv8] Object detection thread started.")
         while self.running:
+            cycle_start = time.time()
             with self.lock:
                 frame = self.shared_frame.copy() if self.shared_frame is not None else None
 
@@ -74,11 +72,10 @@ class ObjectDetectionThread(threading.Thread):
                     time.sleep(self.update_interval)
                     continue
             detected = set()
-            best_person_bbox = None
-            best_person_conf = 0.0
-            best_person_track_id = None
             person_count = 0
             person_tracks = {}  # {track_id: (bbox, confidence)}
+            untracked_bbox = None
+            untracked_conf = 0.0
 
             for box in results.boxes:
                 cls_id = int(box.cls[0])
@@ -104,21 +101,36 @@ class ObjectDetectionThread(threading.Thread):
 
                 if track_id is not None:
                     person_tracks[track_id] = ((x1, y1, x2, y2), conf)
+                elif conf > untracked_conf:
+                    untracked_bbox, untracked_conf = (x1, y1, x2, y2), conf
 
-                if conf > best_person_conf:
-                    best_person_bbox = (x1, y1, x2, y2)
-                    best_person_conf = conf
-                    best_person_track_id = track_id
+            # Sticky target: keep following the same ByteTrack ID while its track
+            # lives — per-frame confidence argmax made gaze jump between people.
+            if self._target_track_id not in person_tracks:
+                self._target_track_id = max(person_tracks, key=lambda t: person_tracks[t][1]) if person_tracks else None
+
+            if self._target_track_id is not None:
+                best_person_bbox, best_person_conf = person_tracks[self._target_track_id]
+            else:
+                best_person_bbox, best_person_conf = untracked_bbox, untracked_conf
 
             DetectionMemory.update(
                 list(detected), time.time(), clean_frame,
                 best_person_bbox, best_person_conf,
                 person_count=person_count,
-                best_track_id=best_person_track_id,
+                best_track_id=self._target_track_id,
                 person_tracks=person_tracks,
             )
 
-            time.sleep(self.update_interval)
+            # Chunked sleep: inference time counts toward the interval, and a
+            # mode switch takes effect now instead of after a full idle sleep.
+            # CPU fallback runs ~25x slower — cap its cadence and always yield
+            # at least once, or a fallen-back model saturates every core and
+            # starves the camera loop (gaze + lung freeze).
+            interval = max(self.update_interval, 1.0) if self.force_cpu else self.update_interval
+            time.sleep(0.05)
+            while self.running and (time.time() - cycle_start) < interval:
+                time.sleep(0.05)
 
     def stop(self):
         print("[YOLOv8] Stopping object detection thread...")

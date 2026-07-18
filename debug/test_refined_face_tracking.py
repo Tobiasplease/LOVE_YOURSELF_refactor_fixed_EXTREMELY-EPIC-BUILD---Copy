@@ -12,13 +12,15 @@ import numpy as np
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from vision.gaze import FACE_PAN_VELOCITY, FACE_TILT_VELOCITY, FACE_VELOCITY_SMOOTHING, PRECISE_DEAD_ZONE, update_gaze
+# NOTE (July 10): superseded by test_face_tracking_stability.py — the tiny-dead-zone
+# tuning this script was written to verify caused close-range bobbing and was replaced
+# by a face-size-scaled dead zone (config FACE_TRACK_DEAD_ZONE). Safe to delete.
+from vision.gaze import FACE_PAN_VELOCITY, FACE_TILT_VELOCITY, FACE_VELOCITY_SMOOTHING, update_gaze
 
 
 def test_precision_tracking():
     """Test precise face tracking with very small dead zone"""
     print("=== TESTING: Precision Face Tracking ===")
-    print(f"Dead zone: {PRECISE_DEAD_ZONE}° (very small for precise tracking)")
     print(f"Face tracking velocities: PAN {FACE_PAN_VELOCITY}°, TILT {FACE_TILT_VELOCITY}°")
     print(f"Face smoothing: {FACE_VELOCITY_SMOOTHING} (less smoothing = more responsive)")
     print("-" * 60)
@@ -207,7 +209,7 @@ def main():
     print("\n" + "=" * 60)
     print("REFINED FACE TRACKING TEST COMPLETED")
     print("\nKey refinements verified:")
-    print(f"1. Very small dead zone ({PRECISE_DEAD_ZONE}°) for precise tracking")
+    print("1. Dead zone now face-size-scaled (config FACE_TRACK_DEAD_ZONE)")
     print(f"2. Optimized face tracking velocities (PAN {FACE_PAN_VELOCITY}°, TILT {FACE_TILT_VELOCITY}°)")
     print(f"3. Reduced smoothing ({FACE_VELOCITY_SMOOTHING}) for more responsiveness")
     print("4. Maintained velocity limits to prevent hard lock-ins")
