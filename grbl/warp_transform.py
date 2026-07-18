@@ -2,6 +2,36 @@ import re
 import math
 
 # ================================================================
+# MEASURED CALIBRATION OVERRIDE (July 2026)
+# If grbl/warp_calibration.json exists (built with
+# debug/warp_calibrate.py), warp_transform_line() routes through the
+# fitted thin-plate-spline map instead of the legacy quad + band-aid
+# constants below. Delete the JSON to fall back. See warp_calibration.py.
+# ================================================================
+_measured_cal = None
+_measured_checked = False
+
+
+def _get_measured_calibration():
+    global _measured_cal, _measured_checked
+    if not _measured_checked:
+        _measured_checked = True
+        try:
+            try:
+                from grbl.warp_calibration import WarpCalibration
+            except ImportError:
+                from warp_calibration import WarpCalibration  # imported as top-level module
+            _measured_cal = WarpCalibration.load()
+            if _measured_cal is not None:
+                rms, mx = _measured_cal.residuals_mm()
+                print(f"[warp] measured TPS calibration active ({len(_measured_cal.command_pts)} points, "
+                      f"fit residual rms {rms:.2f}mm max {mx:.2f}mm) — legacy quad bypassed")
+        except Exception as e:
+            print(f"[warp] calibration load failed, using legacy quad: {e}")
+            _measured_cal = None
+    return _measured_cal
+
+# ================================================================
 # Optional PRE‑TRANSFORM (ideal domain) settings
 # ------------------------------------------------
 # These apply BEFORE the warp mapping so the correction is preserved.
@@ -107,6 +137,9 @@ def map_to_quad(x, y, x_max=40, y_max=40):
 
 def warp_transform_line(gcode_line, max_x, max_y):
     """Apply inverse warp transform to G-code coordinates"""
+    cal = _get_measured_calibration()
+    if cal is not None:
+        return cal.apply_to_line(gcode_line, max_x, max_y)
     # Post-transform scale — increase for larger drawings on paper
     SCALE_FACTOR = 1.15  # Increase output size (was 1.08, bumped for more paper coverage)
 

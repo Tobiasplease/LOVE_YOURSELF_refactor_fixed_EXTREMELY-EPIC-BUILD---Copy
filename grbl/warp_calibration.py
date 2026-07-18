@@ -1,0 +1,184 @@
+"""Measured warp calibration — the model-free successor to map_to_quad.
+
+The arm's distortion is a smooth, position-dependent field (2-link ~300mm
+kinematics behind fictional gear constants — see WARP_TRANSFORM_README).
+A 4-corner bilinear quad can pin corners but cannot bend edges or fix the
+interior, which is why a decade of PRE_ROTATION / PRE_SCALE / NUDGE band-aids
+never produced a good square.
+
+This module skips modeling entirely and measures the field:
+
+  1. generate_calibration_gcode(): the machine dots an n×n grid of KNOWN
+     command coordinates onto paper (sent raw — no transforms).
+  2. The operator photographs the sheet; debug/warp_calibrate.py turns
+     clicks into paper-mm positions for each dot.
+  3. fit(): a thin-plate spline is fitted INVERSE (paper -> command):
+     "to put ink here, send this." Tilt, scale, offset and curvature are
+     all just part of the fitted field — no tuning constants remain.
+
+warp_transform.warp_transform_line() uses this automatically whenever
+grbl/warp_calibration.json exists; delete the file to fall back to the
+legacy quad transform.
+"""
+
+import json
+import os
+import re
+from typing import List, Optional, Tuple
+
+import numpy as np
+
+CALIBRATION_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "warp_calibration.json")
+
+# Command-space domain the dots are laid over (raw GRBL coords the machine
+# accepts today — same box the current pipeline commands into).
+DEFAULT_DOMAIN = (0.0, 70.0, 0.0, 40.0)  # x0, x1, y0, y1
+
+
+def grid_points(n: int = 5, domain: Tuple[float, float, float, float] = DEFAULT_DOMAIN) -> List[Tuple[float, float]]:
+    """n×n command-space grid in serpentine order (matches the click tool)."""
+    x0, x1, y0, y1 = domain
+    pts = []
+    for iy in range(n):
+        y = y0 + (y1 - y0) * iy / (n - 1)
+        xs = range(n) if iy % 2 == 0 else range(n - 1, -1, -1)
+        for ix in xs:
+            pts.append((x0 + (x1 - x0) * ix / (n - 1), y))
+    return pts
+
+
+def generate_calibration_gcode(n: int = 5, domain=DEFAULT_DOMAIN,
+                               pen_up: int = 34, pen_down: int = 52,
+                               feed: int = 1500) -> List[str]:
+    """Dot the grid + an orientation dash next to dot #1. Send these lines
+    RAW (no warp transform) — they define command space itself."""
+    pts = grid_points(n, domain)
+    lines = ["G21", "G90", f"M3 S{pen_up}", "G4 P0.3"]
+    for i, (x, y) in enumerate(pts):
+        lines.append(f"G0 X{x:.2f} Y{y:.2f}")
+        lines.append(f"M3 S{pen_down}")
+        lines.append("G4 P0.25")
+        lines.append(f"M3 S{pen_up}")
+        lines.append("G4 P0.2")
+        if i == 0:  # orientation dash: identifies dot #1 and grid direction
+            lines.append(f"G0 X{x + 2:.2f} Y{y:.2f}")
+            lines.append(f"M3 S{pen_down}")
+            lines.append("G4 P0.2")
+            lines.append(f"G1 X{x + 5:.2f} Y{y:.2f} F{feed}")
+            lines.append(f"M3 S{pen_up}")
+            lines.append("G4 P0.2")
+    lines.append("G0 X0 Y0")
+    return lines
+
+
+def _inscribed_rect(paper: np.ndarray) -> Tuple[float, float, float, float]:
+    """Largest-ish axis-aligned rectangle INSIDE the measured footprint.
+
+    The TPS is an interpolator: queries must stay inside the convex hull of
+    the measured dots, or it extrapolates garbage. The footprint of an arm
+    is curved (banana-shaped), so its bounding box is mostly OUTSIDE the
+    hull — using it as the drawing area was the first bug this module had.
+    Binary-search a centered rectangle (bbox aspect) against hull
+    containment, then inset 5% for safety."""
+    from scipy.spatial import Delaunay
+    tri = Delaunay(paper)
+    cx, cy = paper.mean(axis=0)
+    hw = (paper[:, 0].max() - paper[:, 0].min()) / 2
+    hh = (paper[:, 1].max() - paper[:, 1].min()) / 2
+
+    def inside(s: float) -> bool:
+        xs = np.linspace(cx - hw * s, cx + hw * s, 5)
+        ys = np.linspace(cy - hh * s, cy + hh * s, 5)
+        border = [(x, ys[0]) for x in xs] + [(x, ys[-1]) for x in xs] \
+               + [(xs[0], y) for y in ys] + [(xs[-1], y) for y in ys]
+        return bool((tri.find_simplex(np.array(border)) >= 0).all())
+
+    lo, hi = 0.0, 1.0
+    for _ in range(24):
+        mid = (lo + hi) / 2
+        if inside(mid):
+            lo = mid
+        else:
+            hi = mid
+    s = lo * 0.95
+    return (cx - hw * s, cy - hh * s, cx + hw * s, cy + hh * s)
+
+
+class WarpCalibration:
+    """Thin-plate-spline inverse map: paper mm -> command coords."""
+
+    def __init__(self, command_pts: List[Tuple[float, float]],
+                 paper_pts: List[Tuple[float, float]],
+                 paper_area: Tuple[float, float, float, float]):
+        from scipy.interpolate import RBFInterpolator
+        self.command_pts = np.asarray(command_pts, dtype=float)
+        self.paper_pts = np.asarray(paper_pts, dtype=float)
+        self.paper_area = paper_area  # x0, y0, x1, y1 (mm on paper) drawings map into
+        self._rbf = RBFInterpolator(self.paper_pts, self.command_pts,
+                                    kernel="thin_plate_spline", smoothing=1e-3)
+
+    # --- fitting ---------------------------------------------------------------
+    @classmethod
+    def fit(cls, command_pts, paper_pts, paper_area=None) -> "WarpCalibration":
+        paper = np.asarray(paper_pts, dtype=float)
+        if paper_area is None:
+            paper_area = _inscribed_rect(paper)
+        return cls(command_pts, paper_pts, paper_area)
+
+    def residuals_mm(self) -> Tuple[float, float]:
+        """Round-trip check in command space: rms, max (should be ~0.1mm)."""
+        back = self._rbf(self.paper_pts)
+        err = np.linalg.norm(back - self.command_pts, axis=1)
+        return float(np.sqrt((err ** 2).mean())), float(err.max())
+
+    # --- application -----------------------------------------------------------
+    def paper_target(self, u: float, v: float, aspect: float = 1.0) -> Tuple[float, float]:
+        """[0,1]² -> paper mm: the largest aspect-true rectangle centered in
+        paper_area. Aspect preservation is what makes a commanded square a
+        paper square instead of stretching to fill the drawing region."""
+        x0, y0, x1, y1 = self.paper_area
+        W, H = x1 - x0, y1 - y0
+        if W / H > aspect:
+            w, h = H * aspect, H
+        else:
+            w, h = W, W / aspect
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        return cx - w / 2 + w * u, cy - h / 2 + h * v
+
+    def to_command(self, paper_x: float, paper_y: float) -> Tuple[float, float]:
+        out = self._rbf(np.array([[paper_x, paper_y]]))[0]
+        return float(out[0]), float(out[1])
+
+    def apply_to_line(self, gcode_line: str, max_x: float, max_y: float) -> str:
+        """Drop-in for warp_transform_line: ideal gcode -> command gcode."""
+        xm = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
+        ym = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
+        if not (xm and ym):
+            return gcode_line
+        u = float(xm.group(1)) / max(1e-9, max_x)
+        v = float(ym.group(1)) / max(1e-9, max_y)
+        px, py = self.paper_target(min(1, max(0, u)), min(1, max(0, v)), aspect=max_x / max(1e-9, max_y))
+        cx, cy = self.to_command(px, py)
+        line = re.sub(r"X[-+]?\d*\.?\d+", f"X{cx:.3f}", gcode_line, count=1, flags=re.IGNORECASE)
+        line = re.sub(r"Y[-+]?\d*\.?\d+", f"Y{cy:.3f}", line, count=1, flags=re.IGNORECASE)
+        return line
+
+    # --- persistence -------------------------------------------------------------
+    def save(self, path: str = CALIBRATION_PATH) -> str:
+        with open(path, "w") as f:
+            json.dump({
+                "format": "warp_calibration_tps_v1",
+                "command_pts": self.command_pts.tolist(),
+                "paper_pts": self.paper_pts.tolist(),
+                "paper_area": list(self.paper_area),
+            }, f, indent=1)
+        return path
+
+    @classmethod
+    def load(cls, path: str = CALIBRATION_PATH) -> Optional["WarpCalibration"]:
+        try:
+            with open(path) as f:
+                d = json.load(f)
+            return cls(d["command_pts"], d["paper_pts"], tuple(d["paper_area"]))
+        except Exception:
+            return None
