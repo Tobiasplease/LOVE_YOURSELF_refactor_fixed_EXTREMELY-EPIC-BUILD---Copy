@@ -38,6 +38,26 @@ JOG_STEPS = [0.5, 1, 2, 5, 10]
 LOOP_LENGTHS = [15, 30, 45, 60]
 
 
+def labeled_slider(parent, label, lo, hi, init, cb, fmt=lambda v: f"{v:.2f}"):
+    """Side-panel slider: caption above, live value readout beside."""
+    box = ttk.Frame(parent)
+    box.pack(fill="x", pady=3)
+    ttk.Label(box, text=label, font=("monospace", 8)).pack(anchor="w")
+    row = ttk.Frame(box)
+    row.pack(fill="x")
+    val = ttk.Label(row, text=fmt(float(init)), width=6)
+
+    def on_move(v):
+        cb(float(v))
+        val.config(text=fmt(float(v)))
+
+    sc = ttk.Scale(row, from_=lo, to=hi, command=on_move)
+    sc.set(init)
+    sc.pack(side="left", fill="x", expand=True)
+    val.pack(side="left")
+    return sc
+
+
 def parse_position(status_line: str):
     """X,Y,Z out of a GRBL status line. This fork emits the old comma style
     with '>' glued to the last coord — <Idle,WPos:12.000,34.000,0.000> —
@@ -85,15 +105,18 @@ class DeviceFrame(ttk.LabelFrame):
             s.pack(side="left", fill="x", expand=True, padx=4)
             val_lbl.pack(side="left")
             rev_var = tk.BooleanVar(value=ch.invert)
-            ttk.Checkbutton(row, text="rev", variable=rev_var,
-                            command=lambda n=name, v=rev_var: self.device.set_invert(n, v.get())).pack(side="left")
+            ttk.Checkbutton(row, text="rev", variable=rev_var, command=lambda n=name, v=rev_var: self.device.set_invert(n, v.get())).pack(side="left")
             self.sliders[name] = (s, var, val_lbl)
 
         if device.extras:
             ex = ttk.Frame(self)
             ex.pack(fill="x", padx=4, pady=2)
-            for label in device.extras:
-                ttk.Button(ex, text=label, command=lambda l=label: self.device.send_extra(l)).pack(side="left", padx=2)
+            row = None
+            for idx, label in enumerate(device.extras):
+                if idx % 3 == 0:
+                    row = ttk.Frame(ex)
+                    row.pack(fill="x")
+                ttk.Button(row, text=label, command=lambda l=label: self.device.send_extra(l)).pack(side="left", padx=2, pady=1)
 
     def toggle(self):
         if self.device.connected:
@@ -194,9 +217,11 @@ class GrblFrame(ttk.LabelFrame):
             self.ser = None
             self.log("grbl", "disconnected", False)
         else:
+
             def worker():
                 try:
                     from grbl.grbl_utils import find_grbl_port
+
                     self.ser = find_grbl_port(preferred_port=os.getenv("GRBL_PORT", "/dev/arduino_cnc"))
                     self.log("grbl", f"connected {self.ser.port}" if self.ser else "no GRBL found", self.ser is None)
                     if self.ser is not None:
@@ -210,6 +235,7 @@ class GrblFrame(ttk.LabelFrame):
                 except Exception as e:
                     self.log("grbl", f"connect failed: {e}", True)
                 self.refresh()
+
             threading.Thread(target=worker, daemon=True).start()
         self.refresh()
 
@@ -220,6 +246,7 @@ class GrblFrame(ttk.LabelFrame):
         while motion commands sit in planner flow-control (the reason the
         trail lagged while motors got faster)."""
         import time as _t
+
         while self.ser is not None:
             try:
                 with self._write_lock:
@@ -486,12 +513,12 @@ class BedView(tk.Canvas):
     """Right-arm workspace: the plotting bed to scale — envelope, live
     position, a fading trail of the last seconds. Drag to perform."""
 
-    W, H, M = 340, 250, 22
     TRAIL_SECONDS = 10.0
 
-    def __init__(self, parent, grbl: GrblFrame):
-        super().__init__(parent, width=self.W, height=self.H, bg="#101422",
-                         highlightthickness=0, cursor="crosshair")
+    def __init__(self, parent, grbl: GrblFrame, size=340):
+        self.W = self.H = size  # the zone is square in mm — keep it square in px
+        self.M = max(22, size // 14)
+        super().__init__(parent, width=self.W, height=self.H, bg="#101422", highlightthickness=0, cursor="crosshair")
         self.grbl = grbl
         self.trail = []  # (x, y, t)
         x0, x1, y0, y1 = ARMS_DUET_ZONE
@@ -503,8 +530,7 @@ class BedView(tk.Canvas):
             gx0, gy0 = self._px(x0, y0 + (y1 - y0) * f)
             gx1, gy1 = self._px(x1, y0 + (y1 - y0) * f)
             self.create_line(gx0, gy0, gx1, gy1, fill="#1c2438")
-        self.create_text(self.W // 2, 12, text=f"bed  {x0}-{x1} × {y0}-{y1} mm   ✛ = target   ● = machine",
-                         fill="#667", font=("monospace", 8))
+        self.create_text(self.W // 2, 12, text=f"bed  {x0}-{x1} × {y0}-{y1} mm   ✛ = target   ● = machine", fill="#667", font=("monospace", 8))
         self.trail_line = self.create_line(0, 0, 0, 0, fill="#7a3448", smooth=True, width=2, state="hidden")
         # commanded target (where you asked it to go) vs reported position
         self.target_h = self.create_line(0, 0, 0, 0, fill="#f5c04a", width=1)
@@ -570,10 +596,7 @@ class LinkageView(tk.Canvas):
         motor_panel/arm_calibration.json.
     """
 
-    W, H = 520, 250
-    PAD = (14, 40, 194, 220)  # square drag surface (x0, y0, x1, y1)
-    P0 = (330, 200)    # skeleton pivot
-    L1, L2 = 105, 85   # stylized segment lengths (visual only)
+    BASE_W, BASE_H = 520, 250  # the proven layout; everything scales uniformly from it
     VISUAL_SWEEP = 70.0
     # Sign of each joint's visual mapping vs the physical arm. July 11:
     # dragging read inverted on hardware, so both flipped. If ONE joint
@@ -581,11 +604,14 @@ class LinkageView(tk.Canvas):
     S_SIGN = -1.0
     E_SIGN = -1.0
     CALIB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arm_calibration.json")
-    CAL_NAMES = ["top-left", "top-center", "top-right",
-                 "mid-left", "center", "mid-right",
-                 "bottom-left", "bottom-center", "bottom-right"]
+    CAL_NAMES = ["top-left", "top-center", "top-right", "mid-left", "center", "mid-right", "bottom-left", "bottom-center", "bottom-right"]
 
-    def __init__(self, parent, lefthand: SerialDevice):
+    def __init__(self, parent, lefthand: SerialDevice, w=520, h=250):
+        k = min(w / self.BASE_W, h / self.BASE_H)
+        self.W, self.H = int(self.BASE_W * k), int(self.BASE_H * k)
+        self.PAD = tuple(int(c * k) for c in (14, 40, 194, 220))  # square drag surface (x0, y0, x1, y1)
+        self.P0 = (int(330 * k), int(200 * k))  # skeleton pivot
+        self.L1, self.L2 = 105 * k, 85 * k  # stylized segment lengths (visual only)
         super().__init__(parent, width=self.W, height=self.H, bg="#0f1a17", highlightthickness=0)
         self.lefthand = lefthand
         self.s_ch = lefthand.channels["shoulder"]
@@ -631,10 +657,8 @@ class LinkageView(tk.Canvas):
             ix, iy = int(gx), int(gy)
             fx, fy = gx - ix, gy - iy
             g = self.calib  # g[iy][ix] = (s, e), iy 0 = bottom row
-            s = ((g[iy][ix][0] * (1 - fx) + g[iy][ix + 1][0] * fx) * (1 - fy)
-                 + (g[iy + 1][ix][0] * (1 - fx) + g[iy + 1][ix + 1][0] * fx) * fy)
-            e = ((g[iy][ix][1] * (1 - fx) + g[iy][ix + 1][1] * fx) * (1 - fy)
-                 + (g[iy + 1][ix][1] * (1 - fx) + g[iy + 1][ix + 1][1] * fx) * fy)
+            s = (g[iy][ix][0] * (1 - fx) + g[iy][ix + 1][0] * fx) * (1 - fy) + (g[iy + 1][ix][0] * (1 - fx) + g[iy + 1][ix + 1][0] * fx) * fy
+            e = (g[iy][ix][1] * (1 - fx) + g[iy][ix + 1][1] * fx) * (1 - fy) + (g[iy + 1][ix][1] * (1 - fx) + g[iy + 1][ix + 1][1] * fx) * fy
             return s, e
         s_lo, s_hi = self._eff_range(self.s_ch, self.s_scale)
         e_lo, e_hi = self._eff_range(self.e_ch, self.e_scale)
@@ -728,10 +752,12 @@ class LinkageView(tk.Canvas):
 
     def _draw_reach_shade(self):
         s_lo, s_hi, e_lo, e_hi = self.s_ch.lo, self.s_ch.hi, self.e_ch.lo, self.e_ch.hi
-        pts = ([self._wrist_px(s, e_lo) for s in range(s_lo, s_hi + 1)]
-               + [self._wrist_px(s_hi, e) for e in range(e_lo, e_hi + 1)]
-               + [self._wrist_px(s, e_hi) for s in range(s_hi, s_lo - 1, -1)]
-               + [self._wrist_px(s_lo, e) for e in range(e_hi, e_lo - 1, -1)])
+        pts = (
+            [self._wrist_px(s, e_lo) for s in range(s_lo, s_hi + 1)]
+            + [self._wrist_px(s_hi, e) for e in range(e_lo, e_hi + 1)]
+            + [self._wrist_px(s, e_hi) for s in range(s_hi, s_lo - 1, -1)]
+            + [self._wrist_px(s_lo, e) for e in range(e_hi, e_lo - 1, -1)]
+        )
         self.coords(self.zone, *[c for p in pts for c in p])
 
     def _tick(self):
@@ -752,60 +778,171 @@ class LinkageView(tk.Canvas):
         self.after(100, self._tick)
 
 
-class HandPad(tk.Canvas):
-    """Hand workspace — the cursor paradigm from the hand controller: four
-    finger columns, vertical drag = curl. Dragging across columns sweeps the
-    hand; neighbors follow at 30% for organic coupling."""
+class HandSpace(tk.Canvas):
+    """Hand workspace — the full cursor paradigm from the original hand
+    controller (hand_control_interface.py), distilled. A free cursor over
+    four finger home columns: each finger follows the cursor's height in
+    proportion to horizontal proximity (the gravity/wave field) and relaxes
+    to the default curl outside it, so sweeping across the hand makes a
+    wave. Per-finger keyboard control (w/s e/d r/f t/g) locks a finger
+    while its keys are held, releasing it back to the field on key-up.
 
-    W, H = 340, 220
+    Control engages only while the pointer is over this canvas — leave and
+    the hand holds its pose, and playback/generation own the channels.
+    """
 
-    def __init__(self, parent, lefthand: SerialDevice):
-        super().__init__(parent, width=self.W, height=self.H, bg="#1a1426", highlightthickness=0)
+    HOME_START, HOME_SPAN = 0.25, 0.5  # finger columns condensed to mid-canvas (matches the original)
+    KEYS = {"w": (0, +1), "s": (0, -1), "e": (1, +1), "d": (1, -1), "r": (2, +1), "f": (2, -1), "t": (3, +1), "g": (3, -1)}
+    STEP = 2.0  # degrees per tick while a key is held
+    TOP, BOT = 30, 34  # bar margins (labels above, degrees below)
+
+    def __init__(self, parent, lefthand: SerialDevice, w=340, h=220):
+        super().__init__(parent, width=w, height=h, bg="#1a1426", highlightthickness=0, cursor="crosshair")
+        self.W, self.H = w, h
         self.lefthand = lefthand
-        col_w = self.W / 4
-        self.bars = []
+        # the proven field parameters (defaults = the old interface's working values)
+        self.sensitivity = tk.DoubleVar(value=3.0)
+        self.wave = tk.DoubleVar(value=2.0)
+        self.gravity = tk.DoubleVar(value=0.4)
+        self.default_pos = tk.DoubleVar(value=90.0)
+        self.servo_range = tk.DoubleVar(value=60.0)
+        self.reverse = tk.BooleanVar(value=True)
+        self.mouse = None  # (u, v) normalized; None while the pointer is away
+        self.pressed = set()
+        self.locked = [False] * 4
+        self.lock_target = [90.0] * 4
+
+        self.create_text(
+            self.W // 2,
+            12,
+            fill="#667",
+            font=("monospace", 9),
+            text="hover to perform — cursor is the wave, keys w/s e/d r/f t/g grab single fingers",
+        )
+        self.col_rects, self.bars, self.deg_lbls, self.key_lbls = [], [], [], []
+        half = self.W * self.HOME_SPAN / 4 * 0.42
         for i in range(4):
-            x = i * col_w
-            self.create_rectangle(x + 4, 20, x + col_w - 4, self.H - 8, outline="#3a2f52")
-            self.create_text(x + col_w / 2, 10, text=f"f{i}", fill="#667", font=("monospace", 8))
-            self.bars.append(self.create_rectangle(x + 8, 0, x + col_w - 8, 0, fill="#8a63d2", outline=""))
-        self.bind("<B1-Motion>", self._drag)
-        self.bind("<Button-1>", self._drag)
+            cx = self._home_u(i) * self.W
+            self.col_rects.append(self.create_rectangle(cx - half, self.TOP, cx + half, self.H - self.BOT, outline="#3a2f52"))
+            self.create_text(cx, self.TOP - 8, text=f"f{i}", fill="#889", font=("monospace", 9))
+            keys = [k for k, (fi, _) in self.KEYS.items() if fi == i]
+            self.key_lbls.append(
+                self.create_text(cx, self.H - self.BOT + 12, text="/".join(sorted(keys, reverse=True)), fill="#554a6e", font=("monospace", 8))
+            )
+            self.bars.append(self.create_rectangle(cx - half + 3, 0, cx + half - 3, 0, fill="#8a63d2", outline=""))
+            self.deg_lbls.append(self.create_text(cx, self.H - self.BOT + 24, text="90°", fill="#667", font=("monospace", 8)))
+        self.default_line = self.create_line(0, 0, 0, 0, fill="#3a4a3a", dash=(3, 4))
+        self.gravity_line = self.create_line(0, 0, 0, 0, fill="#4a5a7a", width=2, state="hidden")
+        self.cursor_h = self.create_line(0, 0, 0, 0, fill="#ffeaa7", state="hidden")
+        self.cursor_v = self.create_line(0, 0, 0, 0, fill="#ffeaa7", state="hidden")
+        self.bind("<Motion>", self._motion)
+        self.bind("<B1-Motion>", self._motion)
+        self.bind("<Enter>", self._enter)
+        self.bind("<Leave>", self._leave)
+        self.bind("<KeyPress>", self._key_down)
+        self.bind("<KeyRelease>", self._key_up)
         self._tick()
 
-    def _drag(self, ev):
-        col = min(3, max(0, int(ev.x / (self.W / 4))))
-        curl = 180 * min(1, max(0, 1 - (ev.y - 20) / (self.H - 28)))
-        for i in range(4):
-            ch = self.lefthand.channels[f"finger{i}"]
-            blend = 1.0 if i == col else 0.3 if abs(i - col) == 1 else 0.0
-            if blend:
-                self.lefthand.set_channel(f"finger{i}", ch.value + (curl - ch.value) * blend)
+    def _home_u(self, i: int) -> float:
+        return self.HOME_START + (i + 0.5) / 4 * self.HOME_SPAN
+
+    def _bar_y(self, deg: float) -> float:
+        return self.TOP + (self.H - self.TOP - self.BOT) * (1 - deg / 180.0)
+
+    def _enter(self, ev):
+        self.focus_set()  # keyboard finger control while hovering
+        self._motion(ev)
+
+    def _leave(self, _ev):
+        self.mouse = None  # hand holds its pose; playback/generation regain the channels
+        self.pressed.clear()
+        self.locked = [False] * 4
+
+    def _motion(self, ev):
+        self.mouse = (min(1, max(0, ev.x / self.W)), min(1, max(0, ev.y / self.H)))
+
+    def _key_down(self, ev):
+        key = ev.keysym.lower()
+        if key not in self.KEYS or self.mouse is None:
+            return
+        i, _ = self.KEYS[key]
+        if not self.locked[i]:
+            self.locked[i] = True
+            self.lock_target[i] = float(self.lefthand.channels[f"finger{i}"].value)
+        self.pressed.add(key)
+
+    def _key_up(self, ev):
+        key = ev.keysym.lower()
+        self.pressed.discard(key)
+        if key in self.KEYS:
+            i, _ = self.KEYS[key]
+            if not any(self.KEYS[k][0] == i for k in self.pressed):
+                self.locked[i] = False  # back to the field
+
+    def field_target(self, i: int, u: float, v: float) -> float:
+        """The original calculate_cursor_targets math, verbatim: influence
+        falls off linearly inside the gravity width; outside it the finger
+        relaxes to the default curl."""
+        d = abs(u - self._home_u(i))
+        g = self.gravity.get()
+        if d >= g:
+            return self.default_pos.get()
+        influence = 1.0 - d / g
+        y_off = (v - 0.5) * self.sensitivity.get() * self.wave.get() * influence
+        if self.reverse.get():
+            y_off = -y_off
+        return max(0.0, min(180.0, self.default_pos.get() + y_off * self.servo_range.get()))
 
     def _tick(self):
-        col_w = self.W / 4
+        for key in self.pressed:
+            i, d = self.KEYS[key]
+            if self.locked[i]:
+                self.lock_target[i] = max(0.0, min(180.0, self.lock_target[i] + d * self.STEP))
+                self.lefthand.set_channel(f"finger{i}", self.lock_target[i])
+        if self.mouse is not None:
+            u, v = self.mouse
+            for i in range(4):
+                if not self.locked[i]:
+                    self.lefthand.set_channel(f"finger{i}", self.field_target(i, u, v))
+        self._redraw()
+        self.after(33, self._tick)
+
+    def _redraw(self):
+        half = self.W * self.HOME_SPAN / 4 * 0.42
         for i in range(4):
-            v = self.lefthand.channels[f"finger{i}"].value / 180.0
-            x = i * col_w
-            top = 20 + (self.H - 28) * (1 - v)
-            self.coords(self.bars[i], x + 8, top, x + col_w - 8, self.H - 8)
-        self.after(100, self._tick)
+            deg = self.lefthand.channels[f"finger{i}"].value
+            cx = self._home_u(i) * self.W
+            self.coords(self.bars[i], cx - half + 3, self._bar_y(deg), cx + half - 3, self.H - self.BOT)
+            self.itemconfig(self.bars[i], fill="#c9a63d" if self.locked[i] else "#8a63d2")
+            self.itemconfig(self.deg_lbls[i], text=f"{int(deg)}°")
+        dy = self._bar_y(self.default_pos.get())
+        self.coords(self.default_line, self.W * 0.08, dy, self.W * 0.92, dy)
+        if self.mouse is not None:
+            px, py = self.mouse[0] * self.W, self.mouse[1] * self.H
+            r = self.gravity.get() * self.W
+            self.coords(self.gravity_line, px - r, py, px + r, py)
+            self.coords(self.cursor_h, px - 8, py, px + 8, py)
+            self.coords(self.cursor_v, px, py - 8, px, py + 8)
+            state = "normal"
+        else:
+            state = "hidden"
+        for item in (self.gravity_line, self.cursor_h, self.cursor_v):
+            self.itemconfig(item, state=state)
 
 
 class LungStrip(tk.Canvas):
     """Lung workspace — breath as a scrolling waveform: vertical drag sets
     the lung position, and you SEE the rhythm you're performing."""
 
-    W, H = 340, 220
     WINDOW = 12.0  # seconds of breath history shown
 
-    def __init__(self, parent, lunggaze: SerialDevice):
+    def __init__(self, parent, lunggaze: SerialDevice, w=340, h=220):
+        self.W, self.H = w, h
         super().__init__(parent, width=self.W, height=self.H, bg="#0d1f26", highlightthickness=0)
         self.lunggaze = lunggaze
         self.ch = lunggaze.channels["lung"]
         self.history = []  # (t, value)
-        self.create_text(self.W // 2, 10, text="lung — drag vertically, breathe with the wave",
-                         fill="#667", font=("monospace", 8))
+        self.create_text(self.W // 2, 10, text="lung — drag vertically, breathe with the wave", fill="#667", font=("monospace", 8))
         self.wave = self.create_line(0, 0, 0, 0, fill="#3ba7a0", width=2, smooth=True)
         self.now_dot = self.create_oval(0, 0, 0, 0, fill="#ffeaa7", outline="")
         self.bind("<B1-Motion>", self._drag)
@@ -841,7 +978,7 @@ class SessionFrame(ttk.LabelFrame):
     joint chain — they move in relation) or go solo (own chain); Generate
     runs every chain simultaneously."""
 
-    def __init__(self, parent, lunggaze: SerialDevice, lefthand: SerialDevice, grbl: GrblFrame, log):
+    def __init__(self, parent, lunggaze: SerialDevice, lefthand: SerialDevice, grbl: GrblFrame, log, ws=(760, 380)):
         super().__init__(parent, text="body session  (layered choreography → joint markov)")
         self.lunggaze = lunggaze
         self.lefthand = lefthand
@@ -861,13 +998,15 @@ class SessionFrame(ttk.LabelFrame):
         ttk.Button(tr, text="∿ Generate", command=self.generate).pack(side="left", padx=2)
         ttk.Label(tr, text="loop").pack(side="left", padx=(10, 2))
         self.loop_var = tk.IntVar(value=int(self.session.loop_len))
-        ttk.OptionMenu(tr, self.loop_var, int(self.session.loop_len), *LOOP_LENGTHS,
-                       command=lambda v: setattr(self.session, "loop_len", float(v))).pack(side="left")
+        ttk.OptionMenu(
+            tr, self.loop_var, int(self.session.loop_len), *LOOP_LENGTHS, command=lambda v: setattr(self.session, "loop_len", float(v))
+        ).pack(side="left")
         ttk.Label(tr, text="speed").pack(side="left", padx=(10, 2))
         self.speed_var = tk.DoubleVar(value=1.0)
         self.speed_lbl = ttk.Label(tr, text="1.0x", width=5)
-        ttk.Scale(tr, from_=0.25, to=2.0, variable=self.speed_var, length=90,
-                  command=lambda v: self.speed_lbl.config(text=f"{float(v):.2f}x")).pack(side="left")
+        ttk.Scale(tr, from_=0.25, to=2.0, variable=self.speed_var, length=90, command=lambda v: self.speed_lbl.config(text=f"{float(v):.2f}x")).pack(
+            side="left"
+        )
         self.speed_lbl.pack(side="left")
 
         # session persistence row
@@ -889,46 +1028,38 @@ class SessionFrame(ttk.LabelFrame):
         self.tracks_box.pack(fill="x", padx=4, pady=2)
         self._build_tracks()
 
-        # workspaces
+        # workspaces — each tab: big canvas left, controls in a side panel
+        ws_w, ws_h = ws
+        side_w = 250
+        cv_w = max(520, ws_w - side_w)
         nb = ttk.Notebook(self)
-        nb.pack(fill="x", padx=4, pady=3)
-        bed_tab = ttk.Frame(nb)
-        self.bed = BedView(bed_tab, grbl)
-        self.bed.pack()
-        feed_row = ttk.Frame(bed_tab)
-        feed_row.pack(fill="x", pady=2)
-        ttk.Label(feed_row, text="max feed", font=("monospace", 8)).pack(side="left", padx=4)
-        feed_lbl = ttk.Label(feed_row, text=str(int(grbl.max_feed)), width=5)
+        nb.pack(fill="both", expand=True, padx=4, pady=3)
 
-        def on_feed(v):
-            grbl.max_feed = float(v)
-            feed_lbl.config(text=str(int(float(v))))
+        def make_tab(title):
+            t = ttk.Frame(nb)
+            nb.add(t, text=title)
+            side = ttk.Frame(t, width=side_w)
+            side.pack(side="right", fill="y", padx=8, pady=4)
+            side.pack_propagate(False)
+            holder = ttk.Frame(t)
+            holder.pack(side="left", fill="both", expand=True, padx=4, pady=4)
+            return holder, side
 
-        fs = ttk.Scale(feed_row, from_=200, to=3000, command=on_feed)
-        fs.set(grbl.max_feed)
-        fs.pack(side="left", fill="x", expand=True, padx=4)
-        feed_lbl.pack(side="left")
-        nb.add(bed_tab, text="right arm — bed")
-        link_tab = ttk.Frame(nb)
-        self.linkage = LinkageView(link_tab, lefthand)
-        self.linkage.pack()
-        knobs = ttk.Frame(link_tab)
-        knobs.pack(fill="x", pady=2)
-        for label, cb, lo, hi, init in (
-            ("elbow range %", lambda v: self.linkage.set_scale("elbow", float(v) / 100), 10, 100, 100),
-            ("shoulder range %", lambda v: self.linkage.set_scale("shoulder", float(v) / 100), 10, 100, 100),
-            ("smoothing s", lambda v: setattr(lefthand, "smooth_time", float(v)), 0.05, 0.8, 0.25),
-        ):
-            box = ttk.Frame(knobs)
-            box.pack(side="left", fill="x", expand=True, padx=3)
-            ttk.Label(box, text=label, font=("monospace", 8)).pack()
-            sc = ttk.Scale(box, from_=lo, to=hi, command=cb)
-            sc.set(init)
-            sc.pack(fill="x")
+        holder, side = make_tab("right arm — bed")
+        self.bed = BedView(holder, grbl, size=min(ws_h, cv_w))
+        self.bed.pack(anchor="nw")
+        labeled_slider(side, "max feed (playback/gen)", 200, 3000, grbl.max_feed, lambda v: setattr(grbl, "max_feed", v), fmt=lambda v: str(int(v)))
+        ttk.Label(side, text="drag = pen-up rapids\nplayback/gen = G1 at\nrecorded tempo", font=("monospace", 8), foreground="#888").pack(
+            anchor="w", pady=6
+        )
 
-        cal = ttk.Frame(link_tab)
-        cal.pack(fill="x", pady=2)
-        self.cal_lbl = ttk.Label(cal, text="", font=("monospace", 8))
+        holder, side = make_tab("left arm — linkage")
+        self.linkage = LinkageView(holder, lefthand, w=cv_w, h=ws_h)
+        self.linkage.pack(anchor="nw")
+        labeled_slider(side, "elbow range %", 10, 100, 100, lambda v: self.linkage.set_scale("elbow", v / 100), fmt=lambda v: str(int(v)))
+        labeled_slider(side, "shoulder range %", 10, 100, 100, lambda v: self.linkage.set_scale("shoulder", v / 100), fmt=lambda v: str(int(v)))
+        labeled_slider(side, "smoothing s", 0.05, 0.8, 0.25, lambda v: setattr(lefthand, "smooth_time", v))
+        self.cal_lbl = ttk.Label(side, text="", font=("monospace", 8), wraplength=side_w - 16)
 
         def set_cal(msg):
             self.cal_lbl.config(text=msg)
@@ -938,28 +1069,30 @@ class SessionFrame(ttk.LabelFrame):
             set_cal(self.linkage.set_mode(new))
             mode_btn.config(text=f"mapping: {self.linkage.mode}")
 
-        mode_btn = ttk.Button(cal, text=f"mapping: {self.linkage.mode}", command=toggle_mode)
-        mode_btn.pack(side="left", padx=2)
-        ttk.Button(cal, text="Calibrate 9-pt", command=lambda: set_cal(self.linkage.start_calibration())).pack(side="left", padx=2)
+        mode_btn = ttk.Button(side, text=f"mapping: {self.linkage.mode}", command=toggle_mode)
+        mode_btn.pack(fill="x", pady=(10, 2))
+        ttk.Button(side, text="Calibrate 9-pt", command=lambda: set_cal(self.linkage.start_calibration())).pack(fill="x", pady=2)
 
         def set_point():
             set_cal(self.linkage.capture_point())
             mode_btn.config(text=f"mapping: {self.linkage.mode}")
 
-        ttk.Button(cal, text="Set point", command=set_point).pack(side="left", padx=2)
-        self.cal_lbl.pack(side="left", padx=6)
-        nb.add(link_tab, text="left arm — linkage")
+        ttk.Button(side, text="Set point", command=set_point).pack(fill="x", pady=2)
+        self.cal_lbl.pack(fill="x", pady=4)
 
-        hand_tab = ttk.Frame(nb)
-        self.hand_pad = HandPad(hand_tab, lefthand)
-        self.hand_pad.pack()
-        imp = ttk.Frame(hand_tab)
-        imp.pack(fill="x", pady=2)
-        ttk.Label(imp, text="legacy dataset", font=("monospace", 8)).pack(side="left", padx=2)
+        holder, side = make_tab("hand")
+        self.hand_space = HandSpace(holder, lefthand, w=cv_w, h=ws_h)
+        self.hand_space.pack(anchor="nw")
+        hs = self.hand_space
+        labeled_slider(side, "sensitivity", 0.5, 6.0, 3.0, hs.sensitivity.set)
+        labeled_slider(side, "wave strength", 0.2, 4.0, 2.0, hs.wave.set)
+        labeled_slider(side, "gravity width", 0.05, 1.0, 0.4, hs.gravity.set)
+        labeled_slider(side, "default curl °", 0, 180, 90, hs.default_pos.set, fmt=lambda v: str(int(v)))
+        labeled_slider(side, "range ±°", 10, 90, 60, hs.servo_range.set, fmt=lambda v: str(int(v)))
+        ttk.Checkbutton(side, text="reverse vertical", variable=hs.reverse).pack(anchor="w", pady=4)
+        ttk.Label(side, text="legacy dataset", font=("monospace", 8)).pack(anchor="w", pady=(12, 2))
         self.legacy_var = tk.StringVar()
-        legacy_menu = ttk.Combobox(imp, textvariable=self.legacy_var, width=34, state="readonly",
-                                   values=list_legacy_hand_datasets())
-        legacy_menu.pack(side="left", padx=2)
+        ttk.Combobox(side, textvariable=self.legacy_var, state="readonly", values=list_legacy_hand_datasets()).pack(fill="x", pady=2)
 
         def do_import():
             if not self.legacy_var.get():
@@ -975,13 +1108,12 @@ class SessionFrame(ttk.LabelFrame):
             self._refresh_tracks()
             self.status.config(text=f"imported {self.legacy_var.get()} as hand take ({len(samples)} samples)")
 
-        ttk.Button(imp, text="Import as hand take", command=do_import).pack(side="left", padx=2)
-        nb.add(hand_tab, text="hand")
+        ttk.Button(side, text="Import as hand take", command=do_import).pack(fill="x", pady=2)
 
-        lung_tab = ttk.Frame(nb)
-        self.lung_strip = LungStrip(lung_tab, lunggaze)
-        self.lung_strip.pack()
-        nb.add(lung_tab, text="lung")
+        holder, side = make_tab("lung")
+        self.lung_strip = LungStrip(holder, lunggaze, w=cv_w, h=ws_h)
+        self.lung_strip.pack(anchor="nw")
+        ttk.Label(side, text="drag vertically —\nbreathe with the wave", font=("monospace", 8), foreground="#888").pack(anchor="w", pady=6)
 
         self.status = ttk.Label(self, text="idle")
         self.status.pack(fill="x", padx=6, pady=2)
@@ -1032,18 +1164,14 @@ class SessionFrame(ttk.LabelFrame):
             row.pack(fill="x")
             arm_var = tk.BooleanVar(value=t.armed)
             mute_var = tk.BooleanVar(value=t.mute)
-            ttk.Checkbutton(row, text="arm", variable=arm_var,
-                            command=lambda t=t, v=arm_var: setattr(t, "armed", v.get())).pack(side="left")
-            ttk.Checkbutton(row, text="mute", variable=mute_var,
-                            command=lambda t=t, v=mute_var: setattr(t, "mute", v.get())).pack(side="left")
+            ttk.Checkbutton(row, text="arm", variable=arm_var, command=lambda t=t, v=arm_var: setattr(t, "armed", v.get())).pack(side="left")
+            ttk.Checkbutton(row, text="mute", variable=mute_var, command=lambda t=t, v=mute_var: setattr(t, "mute", v.get())).pack(side="left")
             group_var = tk.StringVar(value=t.group)
-            ttk.OptionMenu(row, group_var, t.group, *GROUPS,
-                           command=lambda v, t=t: setattr(t, "group", v)).pack(side="left", padx=2)
+            ttk.OptionMenu(row, group_var, t.group, *GROUPS, command=lambda v, t=t: setattr(t, "group", v)).pack(side="left", padx=2)
             take_lbl = tk.Label(row, text="●", fg="green" if t.has_take else "gray")
             take_lbl.pack(side="left", padx=4)
             ttk.Label(row, text=f"{t.name}  [{', '.join(t.channels)}]").pack(side="left")
-            ttk.Button(row, text="clear", width=5,
-                       command=lambda t=t: (setattr(t, "samples", None), self._refresh_tracks())).pack(side="right")
+            ttk.Button(row, text="clear", width=5, command=lambda t=t: (setattr(t, "samples", None), self._refresh_tracks())).pack(side="right")
             self._track_widgets.append((t, arm_var, mute_var, take_lbl))
 
     def _refresh_tracks(self):
@@ -1078,15 +1206,21 @@ class SessionFrame(ttk.LabelFrame):
         self.transport.stop()
 
 
-def main():
-    root = tk.Tk()
+def build_ui(root):
+    """Assemble the whole panel into `root`. Split from main() so debug
+    scripts can measure/verify the layout without entering the mainloop."""
     root.title("mslint — unified motor panel")
+    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry(f"{sw}x{sh - 70}+0+0")
+    try:
+        root.attributes("-zoomed", True)  # fill the screen where the WM supports it
+    except tk.TclError:
+        pass
 
-    warn = tk.Label(root, text="⚠ stop machine.py before connecting — serial ports are exclusive",
-                    fg="darkorange")
+    warn = tk.Label(root, text="⚠ stop machine.py before connecting — serial ports are exclusive", fg="darkorange")
     warn.pack(fill="x", pady=2)
 
-    console = scrolledtext.ScrolledText(root, height=9, state="disabled", font=("monospace", 9))
+    console = scrolledtext.ScrolledText(root, height=7, state="disabled", font=("monospace", 9))
 
     def log(device: str, line: str, simulated: bool):
         def append():
@@ -1095,37 +1229,42 @@ def main():
             console.insert("end", f"{device:>10} | {tag}{line}\n")
             console.see("end")
             console.config(state="disabled")
+
         try:
             root.after(0, append)
         except RuntimeError:
             pass
 
-    frames = []
     devices = build_devices()
-    cols = ttk.Frame(root)
-    cols.pack(fill="both", expand=True)
-    left = ttk.Frame(cols)
-    left.pack(side="left", fill="both", expand=True)
-    right = ttk.Frame(cols)
-    right.pack(side="left", fill="both", expand=True)
 
-    for device, parent in zip(devices, [left, left, right]):
-        f = DeviceFrame(parent, device, log)
-        f.pack(fill="x", padx=4, pady=3)
-        frames.append(f)
-    grbl = GrblFrame(right, log)
-    grbl.pack(fill="x", padx=4, pady=3)
-    body = SessionFrame(left, devices[0], devices[1], grbl, log)  # lunggaze, lefthand
-    body.pack(fill="x", padx=4, pady=3)
-
+    # bottom-up packing: the action bar and console claim their space FIRST,
+    # so a crowded layout squeezes the workspaces — never the buttons
     bottom = ttk.Frame(root)
-    bottom.pack(fill="x")
+    bottom.pack(side="bottom", fill="x")
+
     def everything_neutral():
         for d in devices:
             d.all_neutral()
-    ttk.Button(bottom, text="ALL NEUTRAL", command=everything_neutral).pack(side="left", padx=4, pady=2)
 
-    console.pack(fill="both", expand=False, padx=4, pady=3)
+    ttk.Button(bottom, text="ALL NEUTRAL", command=everything_neutral).pack(side="left", padx=4, pady=2)
+    console.pack(side="bottom", fill="x", padx=4, pady=3)
+
+    cols = ttk.Frame(root)
+    cols.pack(fill="both", expand=True)
+    dev_col = ttk.Frame(cols)
+    dev_col.pack(side="left", fill="y", padx=4)
+    frames = []
+    for device in devices:
+        f = DeviceFrame(dev_col, device, log)
+        f.pack(fill="x", pady=3)
+        frames.append(f)
+    grbl = GrblFrame(dev_col, log)
+    grbl.pack(fill="x", pady=3)
+
+    ws_h = max(380, min(640, sh - 560))
+    ws_w = max(760, min(1250, sw - 700))
+    body = SessionFrame(cols, devices[0], devices[1], grbl, log, ws=(ws_w, ws_h))  # lunggaze, lefthand
+    body.pack(side="left", fill="both", expand=True, padx=4, pady=3)
 
     def on_close():
         body.shutdown()
@@ -1139,6 +1278,12 @@ def main():
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
+    return {"body": body, "grbl": grbl, "devices": devices, "frames": frames}
+
+
+def main():
+    root = tk.Tk()
+    build_ui(root)
     root.mainloop()
 
 

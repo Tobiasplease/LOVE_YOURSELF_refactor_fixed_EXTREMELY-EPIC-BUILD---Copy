@@ -100,9 +100,27 @@ are unaffected by mounting flips), config-driven limits.
   captured poses; persists `arm_calibration.json`). Range % sliders compress
   joint-space sensitivity; `S_SIGN`/`E_SIGN` in `LinkageView` flip skeleton
   drawing only (rev flags fix physical direction).
-- **hand**: four finger columns, vertical drag = curl, 30% neighbor coupling;
-  legacy dataset import lives here.
+- **hand**: the full cursor paradigm from the original hand controller
+  (July 19 rebuild — the old four-column drag pad was too limited). A free
+  cursor over four finger home columns: each finger follows the cursor's
+  height in proportion to horizontal proximity (gravity/wave field) and
+  relaxes to the default curl outside it. Side-panel knobs = the original's
+  proven parameters (sensitivity 3.0, wave strength 2.0, gravity width 0.4,
+  default curl 90°, range ±60°, reverse vertical). Narrow gravity ≈ the old
+  single-column feel; wide gravity sweeps the whole hand. Keys w/s e/d r/f
+  t/g lock single fingers (2°/tick) while held, releasing back to the field.
+  Control engages only while the pointer is over the canvas — leave and the
+  hand holds its pose (playback/generation own the channels). Legacy dataset
+  import lives in the side panel.
 - **lung**: breathing strip — drag vertically, 12s scrolling waveform.
+
+Layout (July 19): the window sizes itself to the screen; devices + GRBL live
+in one left column, the session frame gets the rest, and the console/action
+bar pack bottom-first so buttons can never be clipped. Workspace canvases
+scale from screen size (1920×1080 → bed 520² true-square, others ~970×520);
+each tab is canvas + side control panel. `debug/test_panel_layout.py`
+verifies the whole panel fits the screen headlessly — run it after layout
+changes.
 
 ## 5. The session looper (recording model)
 
@@ -202,6 +220,7 @@ coords — the two arms could then share a room-space canvas).
 | Script | What it proves |
 |---|---|
 | `debug/identify_hand_firmware.py` | which hand firmware is flashed (banner + SERVO echo) |
+| `debug/test_panel_layout.py` | panel layout fits the screen (headless, no window shown) |
 | `debug/test_face_tracking_stability.py` | gaze servo closed-loop stability (separate thread) |
 | `debug/warp_calibrate.py` | the whole warp workflow (`--run/--measure/--square`) |
 | `debug/test_warp_calibration.py` | warp method proof vs simulated 2-link arm |
