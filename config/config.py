@@ -119,7 +119,12 @@ GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
 # whole working world is the 40x40mm drawing area (see GRBL_IDLE_ZONE and
 # warp_transform's [0,40] square) — the earlier 120mm default drove it into
 # the frame. Stay inside the same box the idle/drawing systems use.
-ARMS_DUET_ZONE = (5, 40, 5, 40)  # x_min, x_max, y_min, y_max (mm)
+# DISCOVERY SETTING (July 19): opened wide IN ALL FOUR DIRECTIONS for range
+# exploration — the machine reports NEGATIVE work coords (work-zero was set
+# inside the reachable range, not at its corner), so the true territory
+# spans negative and positive. Tighten to surveyed reality after the warp
+# calibration lands.
+ARMS_DUET_ZONE = (-200, 200, -200, 200)  # x_min, x_max, y_min, y_max (mm)
 ARMS_DUET_MAX_FEED = 800  # mm/min cap — matches the idle system's ceiling
 
 # Left arm servo limits (degrees). The old 14-degree Python cages (81-95 /
@@ -127,8 +132,8 @@ ARMS_DUET_MAX_FEED = 800  # mm/min cap — matches the idle system's ceiling
 # swept 70-110 on BOTH joints through months of exhibition, so that envelope
 # is mechanically proven. Tighten/widen here after creeping the panel sliders
 # to the real binding points.
-LEFT_ARM_ELBOW_LIMITS = (70, 110, 90)   # lo, hi, neutral — pin 4
-LEFT_ARM_SHOULDER_LIMITS = (70, 110, 90)  # lo, hi, neutral — pin 5
+LEFT_ARM_ELBOW_LIMITS = (60, 120, 90)   # lo, hi, neutral — pin 4 (widened from proven 70-110, July 19; creep further on hardware)
+LEFT_ARM_SHOULDER_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 5 (clean firmware allows 0-180; mechanics decide the real limit)
 
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.
