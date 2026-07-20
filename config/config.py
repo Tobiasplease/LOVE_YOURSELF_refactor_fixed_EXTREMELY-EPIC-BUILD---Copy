@@ -146,7 +146,11 @@ GRBL_SPINDLE_MIN_S = int(os.getenv("GRBL_SPINDLE_MIN_S", 0))  # -> $31
 # Raise UP further toward DOWN for even shallower/faster lifts; lower it
 # back if the pen grazes paper during travel moves.
 GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 34))
-GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 52))
+# 52 -> 56 (July 21): calibration dots at 52 were ghost-faint (5-13 gray
+# levels above paper in photos — unmeasurable by human OR machine vision;
+# an entire night of matcher engineering traced back to this). Real strokes
+# during drawing were fine; taps need more plunge to deposit ink.
+GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 56))
 
 # Settle dwell after every pen transition during drawing (G4). GRBL treats a
 # spindle-PWM change as instantaneous — it never waits for the physical

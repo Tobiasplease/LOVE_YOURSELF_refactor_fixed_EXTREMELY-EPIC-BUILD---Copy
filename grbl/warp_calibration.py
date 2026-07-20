@@ -93,6 +93,69 @@ def polygon_grid(boundary: List[Tuple[float, float]] = None, spacing: float = 10
     return [p for row in rows for p in row]
 
 
+def ring_points(cal: "WarpCalibration", spacing: float = 10.0) -> List[Tuple[float, float]]:
+    """Command-space dots in the RING: inside the walked boundary but outside
+    the already-measured hull — the extrapolation territory a grown window
+    leans on. Measuring the ring turns guessed commands into known ones."""
+    from scipy.spatial import Delaunay
+    hull = Delaunay(cal.command_pts)
+    poly = _inset_polygon(MEASURED_BOUNDARY, 0.95)
+    xs = [p[0] for p in poly]
+    ys = [p[1] for p in poly]
+    rows = []
+    y = min(ys)
+    row_i = 0
+    while y <= max(ys) + 1e-9:
+        row = []
+        x = min(xs)
+        while x <= max(xs) + 1e-9:
+            if _point_in_polygon(x, y, poly) and hull.find_simplex(np.array([(x, y)]))[0] < 0:
+                row.append((round(x, 2), round(y, 2)))
+            x += spacing
+        if row:
+            rows.append(row if row_i % 2 == 0 else row[::-1])
+            row_i += 1
+        y += spacing
+    return [p for row in rows for p in row]
+
+
+def pick_anchors(cal: "WarpCalibration", k: int = 5) -> List[int]:
+    """Indices of well-spread measured dots to re-dot as anchors — they
+    register a new sheet's frame to the original calibration frame.
+
+    Anchor IDENTITY is derived from the BASE survey grid, not from the
+    calibration's current extremes: after a ring merge the extremes shift
+    to edge-band points (masked out of photos, and different dots than the
+    ones inked as anchors) — July 21 lesson. The base grid never changes,
+    so the same five physical dots stay anchors forever."""
+    base = np.array(polygon_grid(spacing=10.0))
+    bi = [int(np.argmin(base[:, 0])), int(np.argmax(base[:, 0])),
+          int(np.argmin(base[:, 1])), int(np.argmax(base[:, 1]))]
+    centroid = base.mean(axis=0)
+    bi.append(int(np.argmin(np.linalg.norm(base - centroid, axis=1))))
+    out = []
+    for b in dict.fromkeys(bi):
+        d = np.linalg.norm(cal.command_pts - base[b], axis=1)
+        j = int(np.argmin(d))
+        if d[j] < 1.5 and j not in out:
+            out.append(j)
+    return out
+
+
+def similarity_transform(src: np.ndarray, dst: np.ndarray):
+    """Least-squares similarity (rotation+scale+translation) src -> dst."""
+    sc, dc = src.mean(axis=0), dst.mean(axis=0)
+    s, d = src - sc, dst - dc
+    U, S, Vt = np.linalg.svd(s.T @ d)
+    R = (U @ Vt).T
+    if np.linalg.det(R) < 0:
+        Vt[-1] *= -1
+        R = (U @ Vt).T
+    scale = S.sum() / (s ** 2).sum()
+    t = dc - scale * (R @ sc)
+    return lambda pts: (scale * (np.asarray(pts) @ R.T)) + t
+
+
 def save_survey(points: List[Tuple[float, float]], meta: dict = None) -> str:
     with open(SURVEY_PATH, "w") as f:
         json.dump({"points": points, **(meta or {})}, f, indent=1)
@@ -103,6 +166,14 @@ def load_survey() -> Optional[List[Tuple[float, float]]]:
     try:
         with open(SURVEY_PATH) as f:
             return [tuple(p) for p in json.load(f)["points"]]
+    except Exception:
+        return None
+
+
+def load_survey_full() -> Optional[dict]:
+    try:
+        with open(SURVEY_PATH) as f:
+            return json.load(f)
     except Exception:
         return None
 
@@ -121,7 +192,8 @@ def grid_points(n: int = 5, domain: Tuple[float, float, float, float] = DEFAULT_
 
 def generate_calibration_gcode(n: int = 5, domain=DEFAULT_DOMAIN,
                                pen_up: int = 34, pen_down: int = 52,
-                               feed: int = 1500, points: Optional[List[Tuple[float, float]]] = None) -> List[str]:
+                               feed: int = 1500, points: Optional[List[Tuple[float, float]]] = None,
+                               dash: bool = True) -> List[str]:
     """Dot the grid + an orientation dash next to dot #1. Send these lines
     RAW (no warp transform) — they define command space itself."""
     pts = points if points is not None else grid_points(n, domain)
@@ -132,7 +204,7 @@ def generate_calibration_gcode(n: int = 5, domain=DEFAULT_DOMAIN,
         lines.append("G4 P0.25")
         lines.append(f"M3 S{pen_up}")
         lines.append("G4 P0.2")
-        if i == 0:  # orientation dash: identifies dot #1 and grid direction
+        if i == 0 and dash:  # orientation dash: identifies dot #1 and grid direction
             lines.append(f"G0 X{x + 2:.2f} Y{y:.2f}")
             lines.append(f"M3 S{pen_down}")
             lines.append("G4 P0.2")
