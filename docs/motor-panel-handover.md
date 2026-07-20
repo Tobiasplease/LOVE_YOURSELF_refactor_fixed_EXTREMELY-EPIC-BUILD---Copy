@@ -272,3 +272,25 @@ via limit switches (hard limits off, switch electrically inert), clamp
 artifacts (fixed twice: raw/projected zigzag, then centroid-inset
 over-padding). Also learned: command units cost ~10mm paper each — size
 all safety margins in command space accordingly.
+
+### Corner mystery — SOLVED IN PRINCIPLE (July 21, late)
+
+The -50mm window-shift experiment closed the case: the cut FOLLOWED the
+window's corners into fresh command territory (both reversal corners at
+once, including commands far outside the old "droop zone"). Not reach
+(user-proven), not the calibration (immune to every change all night):
+**BACKLASH AT DIRECTION REVERSALS.** Corners are where a motor reverses;
+mid-edges never skip; static hovers approach one-directionally and land
+true. The old WARP_TRANSFORM_README listed direction-dependent backlash
+as known-unmodeled — it was the answer the whole time.
+
+Next session, 10 minutes:
+1. Measure: pen-down line +X 20 units, retrace -X back; repeat for Y;
+   the endpoint mismatch IS the per-axis backlash in ink. (Both axes,
+   both directions; $100=30 vs $101=60 steps/mm — expect asymmetry.)
+2. Compensate in gcode generation: track per-axis direction; on reversal
+   add the measured backlash to all subsequent coordinates until the next
+   reversal (GRBL fork has no native comp). Apply in warp_calibration
+   emission paths + drawing pipeline.
+3. Then the full 225x159 window (and likely the pre-clamp corners too)
+   draws with true 90-degree corners.
