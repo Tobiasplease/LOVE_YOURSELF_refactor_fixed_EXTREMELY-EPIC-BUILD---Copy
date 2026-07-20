@@ -173,7 +173,6 @@ class GrblFrame(ttk.LabelFrame):
         self.state_lbl = ttk.Label(top, text="")
         self.state_lbl.pack(side="left", padx=8)
         self.state_text = ""  # writer thread writes this; the label polls it (no cross-thread Tk)
-        self._label_tick()
 
         jog = ttk.Frame(self)
         jog.pack(padx=4, pady=2)
@@ -189,11 +188,13 @@ class GrblFrame(ttk.LabelFrame):
         pen = ttk.Frame(self)
         pen.pack(fill="x", padx=4, pady=2)
         ttk.Label(pen, text="pen S").pack(side="left")
+        self.pen_s = GRBL_PEN_UP_S  # commanded pen state — plain attr so worker threads can read/write it
         self.pen_lbl = ttk.Label(pen, text=str(GRBL_PEN_UP_S), width=4)
 
         def on_pen(v):
-            self.pen_lbl.config(text=str(int(float(v))))
-            self.send(f"M3 S{int(float(v))}")
+            v = int(float(v))
+            self.pen_lbl.config(text=str(v))
+            self.pen_command(v)
 
         self.pen_var = tk.IntVar(value=GRBL_PEN_UP_S)
         ttk.Scale(pen, from_=0, to=255, variable=self.pen_var, command=on_pen).pack(side="left", fill="x", expand=True, padx=4)
@@ -207,6 +208,7 @@ class GrblFrame(ttk.LabelFrame):
         self.raw_entry.pack(side="left", fill="x", expand=True, padx=2)
         self.raw_entry.bind("<Return>", lambda e: self.send_raw())
         ttk.Button(raw, text="Send", command=self.send_raw).pack(side="left")
+        self._label_tick()  # after all polled widgets exist (state label + pen slider)
 
     def toggle(self):
         if self.ser is not None:
@@ -452,6 +454,8 @@ class GrblFrame(ttk.LabelFrame):
     def _label_tick(self):
         if self.state_lbl.cget("text") != self.state_text:
             self.state_lbl.config(text=self.state_text)
+        if self.pen_var.get() != self.pen_s:  # playback/generation moved the pen — sync the slider
+            self.pen_var.set(self.pen_s)
         self.after(150, self._label_tick)
 
     def jog(self, dx: int, dy: int):
@@ -497,10 +501,23 @@ class GrblFrame(ttk.LabelFrame):
             self._path = deque(list(self._path)[::2])
         self._cmd_q.put(("__MOTION__", True))
 
+    def pen_command(self, s: int):
+        """Thread-safe pen move (playback/generation call this off-thread):
+        no Tk access, deduped so replayed step samples cost nothing."""
+        s = int(s)
+        if s == self.pen_s:
+            return
+        self.pen_s = s
+        self.send(f"M3 S{s}")
+
+    def pen_is_down(self) -> bool:
+        mid = (GRBL_PEN_UP_S + GRBL_PEN_DOWN_S) / 2
+        return (self.pen_s > mid) == (GRBL_PEN_DOWN_S > GRBL_PEN_UP_S)
+
     def set_pen(self, s: int):
         self.pen_var.set(s)
         self.pen_lbl.config(text=str(s))
-        self.send(f"M3 S{s}")
+        self.pen_command(s)
 
     def send_raw(self):
         cmd = self.raw_entry.get().strip()
@@ -511,7 +528,10 @@ class GrblFrame(ttk.LabelFrame):
 
 class BedView(tk.Canvas):
     """Right-arm workspace: the plotting bed to scale — envelope, live
-    position, a fading trail of the last seconds. Drag to perform."""
+    position, a fading trail of the last seconds. Left-drag to perform;
+    HOLD the right button to put the pen down (it draws — the pen is a
+    recordable layer). Pen-down drags move at the performed tempo (G1),
+    pen-up drags stay rapids."""
 
     TRAIL_SECONDS = 10.0
 
@@ -536,8 +556,14 @@ class BedView(tk.Canvas):
         self.target_h = self.create_line(0, 0, 0, 0, fill="#f5c04a", width=1)
         self.target_v = self.create_line(0, 0, 0, 0, fill="#f5c04a", width=1)
         self.dot = self.create_oval(0, 0, 0, 0, fill="#e94560", outline="")
+        self.pen_ind = self.create_text(
+            self.M, self.H - 10, anchor="w", text="pen ▲  (hold right button to draw)", fill="#667", font=("monospace", 8)
+        )
         self.bind("<B1-Motion>", self._drag)
         self.bind("<Button-1>", self._drag)
+        self.bind("<ButtonPress-3>", lambda e: self.grbl.set_pen(GRBL_PEN_DOWN_S))
+        self.bind("<ButtonRelease-3>", lambda e: self.grbl.set_pen(GRBL_PEN_UP_S))
+        self._last_drag_t = None
         self._tick()
 
     def _px(self, x: float, y: float):
@@ -557,10 +583,19 @@ class BedView(tk.Canvas):
         px, py = self._px(x, y)
         self.coords(self.target_h, px - 7, py, px + 7, py)
         self.coords(self.target_v, px, py - 7, px, py + 7)
-        self.grbl.goto(x, y)  # dt omitted: live performance runs at full slider feed
+        now = time.time()
+        if self.grbl.pen_is_down() and self._last_drag_t is not None:
+            # ink on paper: G1 at the tempo you're actually drawing, not a rapid lunge
+            self.grbl.goto(x, y, min(0.5, max(0.05, now - self._last_drag_t)))
+        else:
+            self.grbl.goto(x, y)  # pen-up travel: rapids
+        self._last_drag_t = now
 
     def _tick(self):
         now = time.time()
+        down = self.grbl.pen_is_down()
+        self.itemconfig(self.trail_line, fill="#dfe6e9" if down else "#7a3448")
+        self.itemconfig(self.pen_ind, text="pen ▼ DRAWING" if down else "pen ▲  (hold right button to draw)", fill="#dfe6e9" if down else "#667")
         x, y = self.grbl.position
         if not self.trail or (self.trail[-1][0], self.trail[-1][1]) != (x, y):
             self.trail.append((x, y, now))
@@ -1049,9 +1084,12 @@ class SessionFrame(ttk.LabelFrame):
         self.bed = BedView(holder, grbl, size=min(ws_h, cv_w))
         self.bed.pack(anchor="nw")
         labeled_slider(side, "max feed (playback/gen)", 200, 3000, grbl.max_feed, lambda v: setattr(grbl, "max_feed", v), fmt=lambda v: str(int(v)))
-        ttk.Label(side, text="drag = pen-up rapids\nplayback/gen = G1 at\nrecorded tempo", font=("monospace", 8), foreground="#888").pack(
-            anchor="w", pady=6
-        )
+        ttk.Label(
+            side,
+            text="drag = rapids (travel)\nright-hold = pen down:\ndraws, drags become G1\nat your tempo\n\npen is a track — arm it\nto record up/down as a\nlayer; group with the\narm to learn WHERE it\ndraws",
+            font=("monospace", 8),
+            foreground="#888",
+        ).pack(anchor="w", pady=6)
 
         holder, side = make_tab("left arm — linkage")
         self.linkage = LinkageView(holder, lefthand, w=cv_w, h=ws_h)
@@ -1123,7 +1161,12 @@ class SessionFrame(ttk.LabelFrame):
         def get_state():
             s = {c: dev.channels[c].value for c, dev in self._route.items()}
             s["x"], s["y"] = self.grbl.position
+            s["pen"] = float(self.grbl.pen_s)
             return s
+
+        def send_step(d):
+            if "pen" in d:
+                self.grbl.pen_command(int(round(d["pen"])))
 
         return Transport(
             self.session,
@@ -1131,6 +1174,7 @@ class SessionFrame(ttk.LabelFrame):
             send_ease=lambda d: [self._route[c].set_channel(c, int(round(v))) for c, v in d.items()],
             send_plan=lambda d, dt: self.grbl.goto(d["x"], d["y"], dt),
             on_status=self._set_status,
+            send_step=send_step,
         )
 
     def _set_status(self, msg: str):
@@ -1139,16 +1183,28 @@ class SessionFrame(ttk.LabelFrame):
         except RuntimeError:
             pass
 
+    def _pen_layer_active(self) -> bool:
+        """The pen draws only when its track is part of the session — armed
+        for this pass, or holding an unmuted take. Otherwise choreography
+        stays pen-up (the old always-up rule, now scoped)."""
+        for t in self.session.tracks:
+            if t.channels == ["pen"]:
+                return t.armed or (t.has_take and not t.mute)
+        return False
+
     def record(self):
-        self.grbl.set_pen(GRBL_PEN_UP_S)  # never draw during choreography
+        if not self._pen_layer_active():
+            self.grbl.set_pen(GRBL_PEN_UP_S)
         self.transport.record()
 
     def play(self):
-        self.grbl.set_pen(GRBL_PEN_UP_S)
+        if not self._pen_layer_active():
+            self.grbl.set_pen(GRBL_PEN_UP_S)
         self.transport.play(speed=self.speed_var.get())
 
     def generate(self):
-        self.grbl.set_pen(GRBL_PEN_UP_S)
+        if not self._pen_layer_active():
+            self.grbl.set_pen(GRBL_PEN_UP_S)
         self.transport.generate(speed=self.speed_var.get())
 
     def transport_stop(self):
@@ -1261,7 +1317,7 @@ def build_ui(root):
     grbl = GrblFrame(dev_col, log)
     grbl.pack(fill="x", pady=3)
 
-    ws_h = max(380, min(640, sh - 560))
+    ws_h = max(380, min(640, sh - 600))
     ws_w = max(760, min(1250, sw - 700))
     body = SessionFrame(cols, devices[0], devices[1], grbl, log, ws=(ws_w, ws_h))  # lunggaze, lefthand
     body.pack(side="left", fill="both", expand=True, padx=4, pady=3)

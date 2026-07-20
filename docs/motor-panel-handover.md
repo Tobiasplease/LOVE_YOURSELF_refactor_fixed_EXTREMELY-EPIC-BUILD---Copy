@@ -93,6 +93,9 @@ are unaffected by mounting flips), config-driven limits.
 - **right arm — bed**: envelope to scale, ✛ commanded target vs ● reported
   machine dot (10Hz status polls), 10s fading trail, drag = G0 rapids.
   Max-feed slider caps playback/generation only (rapids ignore F).
+  **Pen (July 19): hold the right button to put the pen down** — it draws;
+  pen-down drags switch to G1 at the tempo you're performing (pen-up drags
+  stay rapids), and the trail/indicator turn ink-white while down.
 - **left arm — linkage**: SQUARE pad (joint-space by default: x=shoulder,
   y=elbow, corners = extremes) with the stylized skeleton beside it. `mapping:`
   toggles to **calibrated** after the 9-point physical-square capture
@@ -124,9 +127,20 @@ changes.
 
 ## 5. The session looper (recording model)
 
-- **Track** = channel subset (right arm x/y; left arm elbow/shoulder; hand
-  finger0-3; lung). Per-track: **arm** (record-enable: armed tracks capture
-  during the next Record pass), **mute** (excluded everywhere), **group**.
+- **Track** = channel subset (right arm x/y; pen; left arm elbow/shoulder;
+  hand finger0-3; lung). Per-track: **arm** (record-enable: armed tracks
+  capture during the next Record pass), **mute** (excluded everywhere),
+  **group**.
+- **Pen layer (July 19)**: the pen (M3 S) is its own track on a third
+  channel family — **step channels**: recorded continuously like everything
+  else but emitted ONLY on value change, never interpolated (a half-lowered
+  pen drags) and never streamed (each M3 barriers the GRBL writer queue).
+  The old "always pen-up during choreography" rule is now scoped: transport
+  forces pen up unless the pen track is armed or holds an unmuted take.
+  Default group solo; **group it with the right arm to train a joint chain
+  that learns WHERE the pen draws** — generation then only lowers the pen in
+  regions you demonstrated. `debug/test_pen_layer.py` proves the step
+  semantics closed-loop (player/trainer/generator/transport).
 - **Record pass** records exactly one loop length (15-60s); unarmed tracks
   with takes play back during it — that's layering. Countdown in status line.
 - **Groups (A/B/solo)** are a *training-time* concept: tracks sharing a letter
@@ -221,6 +235,7 @@ coords — the two arms could then share a room-space canvas).
 |---|---|
 | `debug/identify_hand_firmware.py` | which hand firmware is flashed (banner + SERVO echo) |
 | `debug/test_panel_layout.py` | panel layout fits the screen (headless, no window shown) |
+| `debug/test_pen_layer.py` | pen step-channel semantics: on-change-only through play/train/generate |
 | `debug/test_face_tracking_stability.py` | gaze servo closed-loop stability (separate thread) |
 | `debug/warp_calibrate.py` | the whole warp workflow (`--run/--measure/--square`) |
 | `debug/test_warp_calibration.py` | warp method proof vs simulated 2-link arm |

@@ -5,11 +5,15 @@ as ONE joint state: a chain trained on the recording can only produce
 configurations and transitions that were actually performed, so collision
 safety and mutual relation between limbs come from the choreography itself.
 
-Channels split into two actuation families:
+Channels split into three actuation families:
   ease channels  — servo-like: the generator interpolates them at substep
                    rate for smooth motion (elbow, shoulder, fingers, lung)
   plan channels  — planner-like: sent once per transition with timing; the
                    controller does its own easing (GRBL x/y)
+  step channels  — state-like: emitted ONLY when the value changes (pen
+                   M3 S). Never interpolated (a half-lowered pen drags) and
+                   never streamed (each M3 barriers the GRBL writer queue —
+                   20Hz would destroy motion pipelining).
 
 This module is UI-free; motor_panel/session.py owns tracks/transport and
 motor_panel/panel.py provides the surfaces. Run  python motor_panel/panel.py
@@ -23,9 +27,20 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional
 
-DEFAULT_BINS = {"elbow": 1.0, "shoulder": 1.0, "x": 2.0, "y": 2.0,
-                "finger0": 4.0, "finger1": 4.0, "finger2": 4.0, "finger3": 4.0, "lung": 2.0}
-PLAN_CHANNELS = ("x", "y")  # everything else eases
+DEFAULT_BINS = {
+    "elbow": 1.0,
+    "shoulder": 1.0,
+    "x": 2.0,
+    "y": 2.0,
+    "finger0": 4.0,
+    "finger1": 4.0,
+    "finger2": 4.0,
+    "finger3": 4.0,
+    "lung": 2.0,
+    "pen": 2.0,
+}
+PLAN_CHANNELS = ("x", "y")
+STEP_CHANNELS = ("pen",)  # everything else eases
 SAMPLE_RATE = 20.0  # Hz
 TAKES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "movement_recordings", "arms")
 
@@ -98,10 +113,7 @@ def train(samples: List[dict], channels: List[str], bins: Optional[Dict[str, flo
         out = {}
         for src, nxts in table.items():
             total = sum(n["count"] for n in nxts.values())
-            out[src] = {
-                dst: {"prob": n["count"] / total, "avg_dt": sum(n["dts"]) / len(n["dts"]), "count": n["count"]}
-                for dst, n in nxts.items()
-            }
+            out[src] = {dst: {"prob": n["count"] / total, "avg_dt": sum(n["dts"]) / len(n["dts"]), "count": n["count"]} for dst, n in nxts.items()}
         return out
 
     return {
@@ -132,18 +144,24 @@ class Generator:
 
     SUBSTEP = 0.05
 
-    def __init__(self, chain: dict,
-                 send_ease: Callable[[Dict[str, float]], None],
-                 send_plan: Callable[[Dict[str, float], float], None],
-                 speed: float = 1.0,
-                 on_state: Optional[Callable[[str], None]] = None):
+    def __init__(
+        self,
+        chain: dict,
+        send_ease: Callable[[Dict[str, float]], None],
+        send_plan: Callable[[Dict[str, float], float], None],
+        speed: float = 1.0,
+        on_state: Optional[Callable[[str], None]] = None,
+        send_step: Optional[Callable[[Dict[str, float]], None]] = None,
+    ):
         self.chain = chain
         self.channels = chain["channels"]
         self.bins = chain["discretization"]
-        self.ease_channels = [c for c in self.channels if c not in PLAN_CHANNELS]
+        self.ease_channels = [c for c in self.channels if c not in PLAN_CHANNELS and c not in STEP_CHANNELS]
         self.plan_channels = [c for c in self.channels if c in PLAN_CHANNELS]
+        self.step_channels = [c for c in self.channels if c in STEP_CHANNELS]
         self.send_ease = send_ease
         self.send_plan = send_plan
+        self.send_step = send_step
         self.speed = speed
         self.on_state = on_state
         self._running = False
@@ -190,6 +208,10 @@ class Generator:
         return _unkey(key, self.channels, self.bins)
 
     def _transition(self, frm: Dict[str, float], to: Dict[str, float], dt: float):
+        if self.step_channels and self.send_step:
+            changed = {c: to[c] for c in self.step_channels if to[c] != frm.get(c)}
+            if changed:
+                self.send_step(changed)
         if self.plan_channels:
             self.send_plan({c: to[c] for c in self.plan_channels}, dt)
         steps = max(1, int(dt / self.SUBSTEP))
@@ -207,16 +229,25 @@ class Player:
 
     PLAN_INTERVAL = 0.2  # GRBL planner wants coarser targets than servos
 
-    def __init__(self, samples: List[dict], channels: List[str],
-                 send_ease: Callable[[Dict[str, float]], None],
-                 send_plan: Callable[[Dict[str, float], float], None],
-                 loop: bool = False, speed: float = 1.0,
-                 on_done: Optional[Callable[[], None]] = None):
+    def __init__(
+        self,
+        samples: List[dict],
+        channels: List[str],
+        send_ease: Callable[[Dict[str, float]], None],
+        send_plan: Callable[[Dict[str, float], float], None],
+        loop: bool = False,
+        speed: float = 1.0,
+        on_done: Optional[Callable[[], None]] = None,
+        send_step: Optional[Callable[[Dict[str, float]], None]] = None,
+    ):
         self.samples = samples
-        self.ease_channels = [c for c in channels if c not in PLAN_CHANNELS]
+        self.ease_channels = [c for c in channels if c not in PLAN_CHANNELS and c not in STEP_CHANNELS]
         self.plan_channels = [c for c in channels if c in PLAN_CHANNELS]
+        self.step_channels = [c for c in channels if c in STEP_CHANNELS]
         self.send_ease = send_ease
         self.send_plan = send_plan
+        self.send_step = send_step
+        self._last_step: Dict[str, float] = {}
         self.loop = loop
         self.speed = max(0.1, speed)  # 2.0 = twice recorded tempo
         self.on_done = on_done
@@ -245,6 +276,11 @@ class Player:
                     time.sleep(wait)
                 if self.ease_channels:
                     self.send_ease({c: s[c] for c in self.ease_channels if c in s})
+                if self.step_channels and self.send_step:
+                    changed = {c: s[c] for c in self.step_channels if c in s and s[c] != self._last_step.get(c)}
+                    if changed:
+                        self.send_step(changed)
+                        self._last_step.update(changed)
                 if self.plan_channels and time.time() - last_plan >= self.PLAN_INTERVAL:
                     self.send_plan({c: s[c] for c in self.plan_channels if c in s}, self.PLAN_INTERVAL)
                     last_plan = time.time()

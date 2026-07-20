@@ -49,6 +49,7 @@ class Session:
         self.loop_len = loop_len
         self.tracks: List[Track] = [
             Track("right arm (grbl)", ["x", "y"], group="A"),
+            Track("pen (right hand)", ["pen"], group="solo"),  # group with the arm to learn WHERE it draws
             Track("left arm", ["elbow", "shoulder"], group="A"),
             Track("hand (fingers)", ["finger0", "finger1", "finger2", "finger3"], group="solo"),
             Track("lung", ["lung"], group="solo"),
@@ -90,13 +91,15 @@ class Session:
         safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in self.name) or "session"
         path = os.path.join(SESSIONS_DIR, f"session_{safe}.json")
         with open(path, "w") as f:
-            json.dump({
-                "format_version": "4.1_session_groups",
-                "name": self.name,
-                "loop_len": self.loop_len,
-                "tracks": [{"name": t.name, "channels": t.channels, "group": t.group,
-                            "samples": t.samples} for t in self.tracks],
-            }, f)
+            json.dump(
+                {
+                    "format_version": "4.1_session_groups",
+                    "name": self.name,
+                    "loop_len": self.loop_len,
+                    "tracks": [{"name": t.name, "channels": t.channels, "group": t.group, "samples": t.samples} for t in self.tracks],
+                },
+                f,
+            )
         return path
 
     @classmethod
@@ -126,8 +129,7 @@ LEGACY_HAND_DIR = os.path.join(os.path.dirname(SESSIONS_DIR))  # movement_record
 def list_legacy_hand_datasets() -> List[str]:
     if not os.path.isdir(LEGACY_HAND_DIR):
         return []
-    return sorted(f for f in os.listdir(LEGACY_HAND_DIR)
-                  if f.endswith(".json") and os.path.isfile(os.path.join(LEGACY_HAND_DIR, f)))
+    return sorted(f for f in os.listdir(LEGACY_HAND_DIR) if f.endswith(".json") and os.path.isfile(os.path.join(LEGACY_HAND_DIR, f)))
 
 
 def import_legacy_hand_take(filename: str, loop_len: float) -> List[dict]:
@@ -136,10 +138,11 @@ def import_legacy_hand_take(filename: str, loop_len: float) -> List[dict]:
     tiled to fill the loop. The original file is never modified."""
     with open(os.path.join(LEGACY_HAND_DIR, filename)) as f:
         d = json.load(f)
-    src = [{"t": m.get("relative_time", 0.0),
-            "f": m.get("finger_positions") or m.get("servo_positions")}
-           for m in d.get("servo_movements", [])
-           if m.get("finger_positions") or m.get("servo_positions")]
+    src = [
+        {"t": m.get("relative_time", 0.0), "f": m.get("finger_positions") or m.get("servo_positions")}
+        for m in d.get("servo_movements", [])
+        if m.get("finger_positions") or m.get("servo_positions")
+    ]
     if len(src) < 4:
         raise ValueError(f"{filename}: no finger movement data")
     duration = max(0.5, src[-1]["t"])
@@ -153,9 +156,16 @@ def import_legacy_hand_take(filename: str, loop_len: float) -> List[dict]:
         while idx + 1 < len(src) and src[idx + 1]["t"] <= ts:
             idx += 1
         fp = src[idx]["f"]
-        out.append({"t": t, "dt": 1.0 / engine.SAMPLE_RATE,
-                    "finger0": float(fp[0]), "finger1": float(fp[1]),
-                    "finger2": float(fp[2]), "finger3": float(fp[3])})
+        out.append(
+            {
+                "t": t,
+                "dt": 1.0 / engine.SAMPLE_RATE,
+                "finger0": float(fp[0]),
+                "finger1": float(fp[1]),
+                "finger2": float(fp[2]),
+                "finger3": float(fp[3]),
+            }
+        )
     return out
 
 
@@ -166,17 +176,23 @@ class Transport:
       get_state()            -> dict of every live channel value
       send_ease(dict)        -> servo-like channels
       send_plan(dict, dt)    -> planner-like channels (grbl)
+      send_step(dict)        -> state-like channels, on change only (pen)
     """
 
-    def __init__(self, session: Session,
-                 get_state: Callable[[], Dict[str, float]],
-                 send_ease: Callable[[Dict[str, float]], None],
-                 send_plan: Callable[[Dict[str, float], float], None],
-                 on_status: Callable[[str], None]):
+    def __init__(
+        self,
+        session: Session,
+        get_state: Callable[[], Dict[str, float]],
+        send_ease: Callable[[Dict[str, float]], None],
+        send_plan: Callable[[Dict[str, float], float], None],
+        on_status: Callable[[str], None],
+        send_step: Optional[Callable[[Dict[str, float]], None]] = None,
+    ):
         self.session = session
         self.get_state = get_state
         self.send_ease = send_ease
         self.send_plan = send_plan
+        self.send_step = send_step
         self.on_status = on_status
         self.state = "idle"
         self._players: List[engine.Player] = []
@@ -193,7 +209,7 @@ class Transport:
             return
         for t in self.session.tracks:
             if t.has_take and not t.armed and not t.mute:
-                p = engine.Player(t.samples, t.channels, self.send_ease, self.send_plan, loop=False)
+                p = engine.Player(t.samples, t.channels, self.send_ease, self.send_plan, loop=False, send_step=self.send_step)
                 self._players.append(p)
                 p.start()
         self._recorder = engine.Recorder(self.get_state)
@@ -212,6 +228,7 @@ class Transport:
                     break
                 self.on_status(f"● recording — {left:.0f}s left")
                 time.sleep(1.0)
+
         threading.Thread(target=ticker, daemon=True).start()
 
     def _finish_record(self):
@@ -222,8 +239,7 @@ class Transport:
         self._stop_players()
         for t in self.session.tracks:
             if t.armed:
-                t.samples = [{**{c: s[c] for c in t.channels if c in s}, "t": s["t"], "dt": s["dt"]}
-                             for s in samples]
+                t.samples = [{**{c: s[c] for c in t.channels if c in s}, "t": s["t"], "dt": s["dt"]} for s in samples]
                 t.armed = False
         self.state = "idle"
         self.on_status(f"pass captured ({len(samples)} samples)")
@@ -234,7 +250,7 @@ class Transport:
         started = 0
         for t in self.session.tracks:
             if t.has_take and not t.mute:
-                p = engine.Player(t.samples, t.channels, self.send_ease, self.send_plan, loop=True, speed=speed)
+                p = engine.Player(t.samples, t.channels, self.send_ease, self.send_plan, loop=True, speed=speed, send_step=self.send_step)
                 self._players.append(p)
                 p.start()
                 started += 1
@@ -255,7 +271,7 @@ class Transport:
             return
         state = self.get_state()
         for key, chain in chains.items():
-            gen = engine.Generator(chain, self.send_ease, self.send_plan, speed=speed)
+            gen = engine.Generator(chain, self.send_ease, self.send_plan, speed=speed, send_step=self.send_step)
             gen.start(state)
             self._generators.append(gen)
         self.state = "generating"
