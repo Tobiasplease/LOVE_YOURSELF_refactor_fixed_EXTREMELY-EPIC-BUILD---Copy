@@ -246,3 +246,29 @@ appears in the console pane. When something misbehaves, read the console
 before the code — GRBL's error strings + the July 12 logs solved five
 layered bugs (modal stranding, fork dialect, homing shred, `?\n` desync,
 comma-format position parse) exactly that way.
+
+## Addendum — warp campaign close-out (July 21 2026)
+
+State: 37-point calibration live; landscape window 225×159mm at 0°
+(square to the observer); command-space safety clamp (`_clamp_command`,
+uniform 0.5-unit `_offset_polygon` margin — NOT centroid scaling, which
+over-pads far vertices ~4x). Bottom edge draws straight; the bottom-right
+window corner draws with a deliberate cut (~30mm) reflecting the map's
+measured belief.
+
+FILED MYSTERY — the bottom-right corner: statically reachable (pen hovers
+correctly at command (77,-7.5), elbow teetering on its inert home switch),
+but under continuous motion the ink lands short/droops. Manual-pin
+experiment (asserting the static observation as a calibration pair) brought
+the droop BACK — i.e. the auto-merged motion-context dots are the truer
+witness for drawing. Static-vs-dynamic discrepancy at one pose ⇒ prime
+suspect is DIRECTION-DEPENDENT BACKLASH (listed, unmodeled, in the old
+WARP_TRANSFORM_README). Not chased further by agreement. If reopened:
+probe by approaching the same corner command from 4 directions with dots.
+
+Ruled out along the way, with receipts: mechanical reach (user probes),
+kinematic conditioning (Jacobian uniform ~10mm/unit everywhere), grinding
+via limit switches (hard limits off, switch electrically inert), clamp
+artifacts (fixed twice: raw/projected zigzag, then centroid-inset
+over-padding). Also learned: command units cost ~10mm paper each — size
+all safety margins in command space accordingly.

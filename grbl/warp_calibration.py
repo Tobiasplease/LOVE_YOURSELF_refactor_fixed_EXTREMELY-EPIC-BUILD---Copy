@@ -69,6 +69,38 @@ def _inset_polygon(poly: List[Tuple[float, float]], factor: float = 0.92) -> Lis
     return [(cx + (x - cx) * factor, cy + (y - cy) * factor) for x, y in poly]
 
 
+def _offset_polygon(poly: List[Tuple[float, float]], d: float) -> List[Tuple[float, float]]:
+    """TRUE inward offset: every edge moves d units along its inward normal.
+    Centroid scaling (_inset_polygon) moves far vertices proportionally more
+    — it padded the bottom-right corner 4+ units when 0.5 was intended,
+    which at ~10mm paper per command unit drew a 35mm corner cut
+    (July 21). Command-space safety margins must be uniform."""
+    n = len(poly)
+    area2 = sum(poly[i][0] * poly[(i + 1) % n][1] - poly[(i + 1) % n][0] * poly[i][1] for i in range(n))
+    sign = 1.0 if area2 > 0 else -1.0  # CCW -> interior on the left
+    shifted = []
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        dx, dy = x2 - x1, y2 - y1
+        L = math.hypot(dx, dy) or 1e-9
+        nx, ny = -dy / L * sign, dx / L * sign
+        shifted.append((x1 + nx * d, y1 + ny * d, x2 + nx * d, y2 + ny * d))
+    out = []
+    for i in range(n):
+        ax1, ay1, ax2, ay2 = shifted[(i - 1) % n]
+        bx1, by1, bx2, by2 = shifted[i]
+        d1x, d1y = ax2 - ax1, ay2 - ay1
+        d2x, d2y = bx2 - bx1, by2 - by1
+        den = d1x * d2y - d1y * d2x
+        if abs(den) < 1e-9:
+            out.append((bx1, by1))
+            continue
+        t = ((bx1 - ax1) * d2y - (by1 - ay1) * d2x) / den
+        out.append((ax1 + t * d1x, ay1 + t * d1y))
+    return out
+
+
 def polygon_grid(boundary: List[Tuple[float, float]] = None, spacing: float = 10.0,
                  inset: float = 0.92) -> List[Tuple[float, float]]:
     """Survey dots: a spacing-mm lattice clipped to the inset reach polygon,
@@ -374,7 +406,36 @@ class WarpCalibration:
 
     def to_command(self, paper_x: float, paper_y: float) -> Tuple[float, float]:
         out = self._rbf(np.array([[paper_x, paper_y]]))[0]
-        return float(out[0]), float(out[1])
+        return self._clamp_command(float(out[0]), float(out[1]))
+
+    def _clamp_command(self, x: float, y: float) -> Tuple[float, float]:
+        """Command-space floor: never emit a command outside the walked
+        envelope. A command even 1-2 units past a joint stop grinds, loses
+        steps (no encoders), and poisons the REST of the stroke with a
+        position offset — the July 21 'droopy corner that new data couldn't
+        fix'.
+
+        PURE projection onto the clamp polygon (a straight envelope edge
+        maps a run of outside samples to collinear points = clean chamfer),
+        with a hysteresis shell: anything not clearly inside gets projected,
+        so near-boundary TPS wiggle can't alternate raw/clamped points into
+        a zigzag (the July 21 'jagged corner' after the droop fix)."""
+        shell = _offset_polygon(MEASURED_BOUNDARY, 0.35)  # must be CLEARLY inside this
+        if _point_in_polygon(x, y, shell):
+            return x, y
+        poly = _offset_polygon(MEASURED_BOUNDARY, 0.5)   # projection target: ~5mm paper margin
+        best = None
+        n = len(poly)
+        for i in range(n):
+            x1, y1 = poly[i]
+            x2, y2 = poly[(i + 1) % n]
+            dx, dy = x2 - x1, y2 - y1
+            t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / max(1e-9, dx * dx + dy * dy)))
+            px, py = x1 + t * dx, y1 + t * dy
+            d = (px - x) ** 2 + (py - y) ** 2
+            if best is None or d < best[0]:
+                best = (d, px, py)
+        return best[1], best[2]
 
     def apply_to_line(self, gcode_line: str, max_x: float, max_y: float) -> str:
         """Drop-in for warp_transform_line: ideal gcode -> command gcode."""
