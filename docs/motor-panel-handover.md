@@ -74,14 +74,17 @@ Design rules that were paid for in debugging blood; do not regress them:
 | lightbulb | `/dev/arduino_lightbulb` @9600 | `B:{0-255}`, `F` flash | brightness |
 | grbl CNC | `/dev/arduino_cnc` @115200 | pre-1.1 fork G-code: `G0/G1`, `M3 S{n}` pen (up 34 / down 52), `$H`, `$X`, `?` realtime | x/y clamped into the MEASURED reach polygon (`grbl/warp_calibration.py MEASURED_BOUNDARY`, walked July 20 — see §7) |
 
-Left-arm firmware (**critical, likely still pending**): `arduino_src/` has
-variants. The **"fixed"** variant has NO `SERVO` handler — the arm is driven
-by an internal random wanderer (70-110°, 0.3-1° steps; `LEFT_ARM_MAX_RANGE=40`
-is literally the user's observed "40 degree area"). Direct control requires
-flashing **`hand_controller_clean.ino`** (SERVO handler, 5ms/° slew, no
-wanderer). Identify what's flashed: `python debug/identify_hand_firmware.py`
-(reads the boot banner: "Improved Left Arm Control" = wanderer variant,
-"Direct Servo Control" = the good one).
+Left-arm firmware: **`hand_controller_clean.ino` confirmed flashed July 19**
+(SERVO handler, no wanderer; the old "fixed" variant ignored SERVO entirely
+and wandered 70-110° on its own). Identify what's flashed:
+`python debug/identify_hand_firmware.py` (boot banner "Direct Servo
+Control" = clean). **July 26 — RE-FLASH NEEDED**: the clean variant had
+flattened hand-servo slew to 1°/15ms (67°/s) — the "fingers drift slowly"
+regression vs the original controller. The original's adaptive slew is now
+ported into clean: HAND commands set per-finger speed by movement size
+(startle ≈ instant, large ≈ 500°/s, fine = slow to prevent hum); arm
+servos keep 1°/5ms — the linkage wants gentleness and the panel smoother
+shapes them anyway.
 
 Device-layer features: per-channel `smooth` easing (arm servos; time constant
 = the "smoothing s" slider, a future per-emotion parameter), per-motor `rev`

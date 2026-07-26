@@ -79,7 +79,33 @@ void processCommand(String command) {
 
     // Set target angles for hand servos (0-3) and attach if needed
     for (int i = 0; i < 4; i++) {
-      targetAngles[i] = constrain(positions[i], 0, 180);
+      int newTarget = constrain(positions[i], 0, 180);
+      targetAngles[i] = newTarget;
+
+      // Adaptive slew (ported from hand_controller.ino — the flat 15ms/1°
+      // default made the hand drift at 67 deg/s, 5-15x slower than the
+      // original controller's felt response): big movements go fast, fine
+      // adjustments stay slow so idle servos don't hum.
+      int distance = abs(newTarget - currentAngles[i]);
+      bool isStartleMovement = false;
+      if (distance > 25) {
+        int totalMovement = 0;
+        for (int j = 0; j < 4; j++) {
+          totalMovement += abs(positions[j] - currentAngles[j]);
+        }
+        if (totalMovement > 100) {
+          isStartleMovement = true;
+        }
+      }
+      if (isStartleMovement) {
+        speeds[i] = 3;   // near-instant for whole-hand jumps
+      } else if (distance > 30) {
+        speeds[i] = 8;   // fast for large movements
+      } else if (distance > 10) {
+        speeds[i] = 12;  // medium
+      } else {
+        speeds[i] = 20;  // slow for fine adjustments - prevents servo noise
+      }
 
       // Attach servo if not already attached
       if (!servos[i].attached()) {
@@ -151,7 +177,19 @@ void updateServoPositions(unsigned long now) {
     if (now - lastUpdate[i] >= speeds[i]) {
       // Move toward target with smooth steps
       int distance = abs(targetAngles[i] - currentAngles[i]);
+
+      // Hand servos (0-3): step size scales with the adaptive speed set by
+      // the HAND command, matching the original controller's felt response.
+      // Arm servos (4-5) keep 1-degree steps — the linkage wants gentleness
+      // and the Python smoother already shapes their motion.
       int stepSize = 1;
+      if (i < 4) {
+        if (speeds[i] <= 3) {
+          stepSize = 12;  // startle: near-instant
+        } else if (speeds[i] <= 10) {
+          stepSize = 4;   // fast: ~500 deg/s
+        }
+      }
 
       if (distance > 0) {
         if (currentAngles[i] < targetAngles[i]) {
