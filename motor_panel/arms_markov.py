@@ -25,7 +25,7 @@ import os
 import random
 import threading
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 DEFAULT_BINS = {
     "elbow": 1.0,
@@ -206,56 +206,92 @@ class Generator:
     def _loop(self, current: Dict[str, float]):
         first = self.chain["servo_transitions"]
         second = self.chain.get("servo_second_order", {})
-        prev_key = None
         cur_key = _key(current, self.channels, self.bins)
         if cur_key not in first:  # ease to the nearest known state to enter the chain
             cur_key = self._nearest_key(current, first)
             self._transition(current, self._state(cur_key), self.enter_ease)
             current = self._state(cur_key)
 
+        # Pipeline: the walk chooses (and DISPATCHES gantry/pen for) one
+        # transition beyond the one currently easing, so the GRBL planner
+        # always holds a queued segment and blends junctions instead of
+        # decelerating to a stop at every markov state — the choppy gait.
+        # Servo ease stays on the wall clock; the gantry leads by at most
+        # one transition. Pen/step commands ride the dispatch, keeping their
+        # stream order relative to the segments they belong to.
+        walk_prev, walk_cur = None, cur_key
+        queue: List[Tuple[str, float, Dict[str, float]]] = []
         while self._running:
-            nxts = second.get(f"{prev_key}|{cur_key}") if prev_key else None
-            nxts = nxts or first.get(cur_key)
-            if not nxts:  # dead end — re-enter the chain gently
-                prev_key, cur_key = None, random.choice(list(first.keys()))
-                self._transition(current, self._state(cur_key), 2.0)
-                current = self._state(cur_key)
+            while len(queue) < 2 and self._running:
+                nxts = second.get(f"{walk_prev}|{walk_cur}") if walk_prev else None
+                nxts = nxts or first.get(walk_cur)
+                if not nxts:
+                    break
+                nxt = _weighted(nxts)
+                dt = max(0.1, nxts[nxt]["avg_dt"] / max(0.1, self.speed))
+                target = self._state(nxt)
+                self._dispatch(self._state(walk_cur), target, dt)
+                queue.append((nxt, dt, target))
+                walk_prev, walk_cur = walk_cur, nxt
+            if not queue:  # dead end with nothing in flight — re-enter gently
+                walk_prev = None
+                walk_cur = random.choice(list(first.keys()))
+                self._transition(current, self._state(walk_cur), 2.0)
+                current = self._state(walk_cur)
                 continue
-            nxt = _weighted(nxts)
-            dt = max(0.1, nxts[nxt]["avg_dt"] / max(0.1, self.speed))
-            target = self._state(nxt)
-            self._transition(current, target, dt)
+            nxt, dt, target = queue.pop(0)
+            self._ease(current, target, dt)
             current = target
-            prev_key, cur_key = cur_key, nxt
             if self.on_state:
-                self.on_state(cur_key)
+                self.on_state(nxt)
 
     def _state(self, key: str) -> Dict[str, float]:
         return _unkey(key, self.channels, self.bins)
 
-    def _transition(self, frm: Dict[str, float], to: Dict[str, float], dt: float):
+    def _dispatch(self, frm: Dict[str, float], to: Dict[str, float], dt: float):
+        """Plan + step leave at WALK time (ahead of the ease), in stream
+        order — a pen change stays interleaved with exactly the segments it
+        was demonstrated between."""
         if self.step_channels and self.send_step:
             changed = {c: to[c] for c in self.step_channels if to[c] != frm.get(c)}
             if changed:
                 self.send_step(changed)
         if self.plan_channels:
             self.send_plan({c: to[c] for c in self.plan_channels}, dt)
+
+    def _ease(self, frm: Dict[str, float], to: Dict[str, float], dt: float):
         steps = max(1, int(dt / self.SUBSTEP))
         for i in range(1, steps + 1):
             if not self._running:
                 return
             while time.time() < self._pause_until and self._running:  # freeze: hold mid-transition
                 time.sleep(0.02)
-            f = i / steps
             if self.ease_channels:
+                f = i / steps
                 self.send_ease({c: frm[c] + (to[c] - frm[c]) * f for c in self.ease_channels})
             time.sleep(self.SUBSTEP)
 
+    def _transition(self, frm: Dict[str, float], to: Dict[str, float], dt: float):
+        """Entry / dead-end re-entry: dispatch and ease together."""
+        self._dispatch(frm, to, dt)
+        self._ease(frm, to, dt)
+
 
 class Player:
-    """Replays recorded samples on a channel subset — the overdub/loop deck."""
+    """Replays recorded samples on a channel subset — the overdub/loop deck.
+
+    Plan (gantry) targets are streamed LOOKAHEAD seconds ahead of the
+    playback clock: a target that arrives exactly on time leaves the GRBL
+    planner with zero lookahead, so it decelerates to a full stop at every
+    waypoint — the choppy stop-start gait. A small lead keeps 1-2 segments
+    queued and junctions blend; tempo stays honest because it's carried by
+    the per-segment feeds, not by arrival time. (Cost: pen/step commands
+    ride the wall clock, so their position in the ink can lead by up to
+    LOOKAHEAD — acceptable for choreography; a pen-marker path queue is the
+    proper fix if it ever matters.)"""
 
     PLAN_INTERVAL = 0.2  # GRBL planner wants coarser targets than servos
+    LOOKAHEAD = 0.35  # seconds of gantry commands kept ahead of the clock
 
     def __init__(
         self,
@@ -292,16 +328,34 @@ class Player:
         if self._thread:
             self._thread.join(timeout=2)
 
+    def _plan_points(self) -> List[Tuple[float, float, Dict[str, float]]]:
+        """Take decimated to PLAN_INTERVAL spacing: (t, dt_from_prev, target)."""
+        pts = []
+        last_t = None
+        for s in self.samples:
+            if not all(c in s for c in self.plan_channels):
+                continue
+            if last_t is None or s["t"] - last_t >= self.PLAN_INTERVAL:
+                pts.append((s["t"], self.PLAN_INTERVAL if last_t is None else s["t"] - last_t, {c: s[c] for c in self.plan_channels}))
+                last_t = s["t"]
+        return pts
+
     def _loop_fn(self):
+        plan_pts = self._plan_points() if self.plan_channels else []
         while self._running:
             t0 = time.time()
-            last_plan = 0.0
+            pj = 0
             for s in self.samples:
                 if not self._running:
                     break
                 wait = s["t"] / self.speed - (time.time() - t0)
                 if wait > 0:
                     time.sleep(wait)
+                elapsed = time.time() - t0
+                while pj < len(plan_pts) and plan_pts[pj][0] / self.speed <= elapsed + self.LOOKAHEAD:
+                    t, dt, target = plan_pts[pj]
+                    self.send_plan(dict(target), dt / self.speed)
+                    pj += 1
                 if self.ease_channels:
                     self.send_ease({c: s[c] for c in self.ease_channels if c in s})
                 if self.step_channels and self.send_step:
@@ -309,9 +363,6 @@ class Player:
                     if changed:
                         self.send_step(changed)
                         self._last_step.update(changed)
-                if self.plan_channels and time.time() - last_plan >= self.PLAN_INTERVAL:
-                    self.send_plan({c: s[c] for c in self.plan_channels if c in s}, self.PLAN_INTERVAL)
-                    last_plan = time.time()
             if not self.loop:
                 break
         self._running = False

@@ -51,18 +51,24 @@ def main():
     failures = []
     take = make_take()
 
-    # --- 1+2: Player step semantics -----------------------------------------
+    # --- 1+2: Player step semantics + plan lookahead --------------------------
     steps, eases, plans = [], [], []
+    t_start = time.time()
     p = engine.Player(
         take,
         ["x", "y", "pen"],
         send_ease=lambda d: eases.append(dict(d)),
-        send_plan=lambda d, dt: plans.append(dict(d)),
+        send_plan=lambda d, dt: plans.append((time.time() - t_start, dict(d))),
         send_step=lambda d: steps.append(dict(d)),
     )
     p.start()
     time.sleep(LOOP + 0.5)
     p.stop()
+    # lookahead: the final gantry waypoint (take-time ~1.8s) must arrive EARLY
+    # (planner needs queued segments to blend junctions — on-time = choppy)
+    if plans and not plans[-1][0] < LOOP - 0.05:
+        failures.append(f"no plan lookahead: last waypoint arrived at {plans[-1][0]:.2f}s of a {LOOP}s take")
+    plans = [d for _, d in plans]
     pen_steps = [d["pen"] for d in steps if "pen" in d]
     if pen_steps != [PEN_UP, PEN_DOWN, PEN_UP]:
         failures.append(f"player pen steps {pen_steps}, expected [{PEN_UP}, {PEN_DOWN}, {PEN_UP}]")
