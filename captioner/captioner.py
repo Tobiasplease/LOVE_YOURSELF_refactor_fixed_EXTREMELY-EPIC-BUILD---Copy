@@ -45,8 +45,6 @@ except Exception as e:
     context_compressor = None
 
 
-
-
 def _clean_caption_for_display(caption: str) -> Optional[str]:
     """Remove gaze expressions and filter out direction-only captions."""
     if not caption:
@@ -55,37 +53,37 @@ def _clean_caption_for_display(caption: str) -> Optional[str]:
     # Remove asterisk-delimited gaze expressions (new natural format)
     # Matches: *glancing left*, *looking down*, *eyes ahead*, etc.
     gaze_verbs = ["glancing", "looking", "gazing", "turning", "eyes", "glance", "look", "gaze", "staring", "peering", "turned"]
-    gaze_pattern = r'\*[^*]*(?:' + '|'.join(gaze_verbs) + r')[^*]*\*\s*'
-    cleaned = re.sub(gaze_pattern, '', caption, flags=re.IGNORECASE)
+    gaze_pattern = r"\*[^*]*(?:" + "|".join(gaze_verbs) + r")[^*]*\*\s*"
+    cleaned = re.sub(gaze_pattern, "", caption, flags=re.IGNORECASE)
 
     # Remove LOOK: lines and inline LOOK directives (legacy format)
-    lines = cleaned.strip().split('\n')
+    lines = cleaned.strip().split("\n")
     clean_lines = []
     for line in lines:
         line_lower = line.lower().strip()
         # Skip LOOK: lines (including typos like LOOKE, LOook, LOOk)
-        if re.match(r'^loo+k[e]?\s*:', line_lower) or re.match(r'^loo+k[e]?\s+(left|right|up|down|ahead|forward)$', line_lower):
+        if re.match(r"^loo+k[e]?\s*:", line_lower) or re.match(r"^loo+k[e]?\s+(left|right|up|down|ahead|forward)$", line_lower):
             continue
         # Skip arrow notation lines
-        if '→ look' in line_lower:
+        if "→ look" in line_lower:
             continue
         # Skip variety directive markers that leaked into output
-        if line.strip().startswith('[⚠️') or line.strip().startswith('[NOTICE') or line.strip().startswith('[SHIFT'):
+        if line.strip().startswith("[⚠️") or line.strip().startswith("[NOTICE") or line.strip().startswith("[SHIFT"):
             continue
         # Remove inline (LOOK: direction) or (LOook direction) patterns
-        line = re.sub(r'\s*\(loo+k[e]?\s*:?\s*\w+\)\s*', '', line, flags=re.IGNORECASE)
+        line = re.sub(r"\s*\(loo+k[e]?\s*:?\s*\w+\)\s*", "", line, flags=re.IGNORECASE)
         # Remove trailing "LOook AHEAD" style suffixes (various typos)
-        line = re.sub(r'\s*\.{0,3}\s*loo+k[e]?\s+(?:left|right|up|down|ahead|forward)\s*\.{0,3}\s*$', '', line, flags=re.IGNORECASE)
+        line = re.sub(r"\s*\.{0,3}\s*loo+k[e]?\s+(?:left|right|up|down|ahead|forward)\s*\.{0,3}\s*$", "", line, flags=re.IGNORECASE)
         # Remove mid-sentence "...LOook" or "...LOok" trailing garbage
-        line = re.sub(r'\.{2,}\s*loo+k[e]?\s*$', '', line, flags=re.IGNORECASE)
+        line = re.sub(r"\.{2,}\s*loo+k[e]?\s*$", "", line, flags=re.IGNORECASE)
         if line.strip():
             clean_lines.append(line)
 
-    cleaned = '\n'.join(clean_lines).strip()
+    cleaned = "\n".join(clean_lines).strip()
 
     # Filter out direction-only responses (these aren't real captions)
     direction_words = {"left", "right", "up", "down", "ahead", "person", "up ahead", "a person"}
-    if cleaned.lower().rstrip('.,!?') in direction_words:
+    if cleaned.lower().rstrip(".,!?") in direction_words:
         return None  # Signal to skip this caption
 
     return cleaned if cleaned else None
@@ -112,10 +110,10 @@ class Captioner(MemoryMixin):
             self.update_location_understanding(understanding)
 
             # Also update environmental certainty based on compression frequency
-            if hasattr(self, 'self_model') and 'environmental_certainty' in self.self_model:
+            if hasattr(self, "self_model") and "environmental_certainty" in self.self_model:
                 # Increase certainty as we get more compression-based understanding
-                current_certainty = self.self_model.get('environmental_certainty', 0.0)
-                self.self_model['environmental_certainty'] = min(1.0, current_certainty + 0.1)
+                current_certainty = self.self_model.get("environmental_certainty", 0.0)
+                self.self_model["environmental_certainty"] = min(1.0, current_certainty + 0.1)
 
         except Exception as e:
             print(f"[❌] Environmental update failed: {e}")
@@ -192,6 +190,7 @@ class Captioner(MemoryMixin):
         # The stream (CoT-style continuity): recent captions ride as the
         # model's own assistant turns. Gated by _stream_admissible.
         from config.config import STREAM_WINDOW
+
         self._stream: Deque[str] = deque(maxlen=max(STREAM_WINDOW, 0))
         self.last_memory_mode_time: float = time.time()  # Track memory mode trigger (every 4 min)
 
@@ -211,6 +210,7 @@ class Captioner(MemoryMixin):
 
         # The Reflect loop — long-form thought every ~20 quiet minutes (captioner/reflection.py)
         from captioner.reflection import ReflectionLoop
+
         self.reflection_loop = ReflectionLoop(agent=self)
         self.reflection_loop.start()
 
@@ -221,6 +221,7 @@ class Captioner(MemoryMixin):
             # Also save the last caption for awakening continuity
             # Filter through plantability check to avoid saving chatbot/garbage captions
             from .model_wrapper import _is_plantable_prior
+
             if self.last_caption and len(self.last_caption) > 5 and _is_plantable_prior(self.last_caption):
                 with open(self._last_caption_file, "w") as f:
                     f.write(self.last_caption[:200])
@@ -270,6 +271,7 @@ class Captioner(MemoryMixin):
                 try:
                     from mood.mood import mood_to_feeling
                     from captioner.context_compression import context_compressor
+
                     context_compressor.set_felt_state(mood_to_feeling(mood_vector[0], mood_vector[1]), source="vector")
                 except Exception:
                     pass
@@ -338,6 +340,7 @@ class Captioner(MemoryMixin):
         }
         try:
             from captioner.frame_buffer import frame_buffer
+
             info["recent_meta"] = frame_buffer.get_recent_with_metadata(seconds=10, max_frames=6)
         except Exception:
             pass
@@ -350,6 +353,7 @@ class Captioner(MemoryMixin):
             # Ego-compensated optical flow (vision/scene_motion.py): true scene
             # motion measurable even while the camera sways, person or not
             from config.config import SCENE_MOTION_MIN_FRAMES, SCENE_MOTION_RESIDUAL_THRESHOLD
+
             residuals = [f.get("detection", {}).get("residual_motion") for f in recent_meta]
             residuals = [r for r in residuals if r is not None]
             flow_available = len(residuals) > 0
@@ -381,13 +385,11 @@ class Captioner(MemoryMixin):
             # test produced zero reaction because a real face two feet away
             # was gated like a shelf mannequin.
             from config.config import CLOSE_FACE_FRAC
+
             face_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face"))
             close_frames = sum(1 for f in recent_meta if f.get("detection", {}).get("face_frac", 0.0) >= CLOSE_FACE_FRAC)
             info["face_close"] = bool(close_frames > len(recent_meta) * 0.4)
-            info["eye_contact"] = bool(
-                face_frames > len(recent_meta) * 0.4
-                and (info["person_present_in_window"] or info["face_close"])
-            )
+            info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4 and (info["person_present_in_window"] or info["face_close"]))
 
         # Update the sticky presence belief from live detection. "Seen now" is
         # any current evidence of a person — world-angle hit, eye contact, or an
@@ -395,10 +397,12 @@ class Captioner(MemoryMixin):
         # doesn't read as a departure, and a re-detection doesn't read as a new
         # arrival. Only the OFF->ON edge is a genuine arrival.
         from config.config import SALIENCE_MOTION_RESIDUAL, PRESENCE_BELIEF_DECAY_SECONDS
+
         now = time.time()
         gaze_engaged = False
         try:
             from vision.gaze import get_gaze_state
+
             gs = get_gaze_state()
             if isinstance(gs, dict):
                 gaze_engaged = gs.get("state") in ("tracking", "aware", "grace")
@@ -445,6 +449,12 @@ class Captioner(MemoryMixin):
         self._salience_hot = bool(eye_onset or arrival or strong_motion or close_onset)
         if self._salience_hot:
             self._last_salience_time = time.time()
+            try:
+                from captioner.context_compression import context_compressor
+
+                context_compressor.note_perception_event("salience")  # provenance for the events ledger — code attests something happened
+            except Exception:
+                pass
         info["salience_hot"] = self._salience_hot
 
         # Salience strips the prompt to the present — but the present must
@@ -511,6 +521,7 @@ class Captioner(MemoryMixin):
     def _drawing_now(cls) -> bool:
         try:
             from utils.state_manager import state_manager as _sm
+
             return bool(_sm.is_generating_drawing or _sm.current_drawing_phase == "executing")
         except Exception:
             return False
@@ -554,6 +565,7 @@ class Captioner(MemoryMixin):
         entry — the template-imitation signature ("The motors hum…" x3). Checks
         openings only: returning to a subject mid-thought is development, not echo."""
         from config.config import ANTI_ECHO_WORDS
+
         words = self._norm_words(caption)
         if len(words) < ANTI_ECHO_WORDS:
             return False
@@ -639,6 +651,7 @@ class Captioner(MemoryMixin):
         core = caption.strip().strip('"“”?!. ').lower()
         if core and len(core) < 90 and prompt_text:
             import difflib
+
             cap_words = set(self._norm_words(core))
             for sent in re.split(r"[\n.?!]", prompt_text.lower()):
                 sent = sent.strip()
@@ -662,6 +675,7 @@ class Captioner(MemoryMixin):
         isn't queued. Extractive on purpose: it reuses the machine's own
         words; it does not write new ones for it."""
         from config.config import STREAM_CONSOLIDATE_CHARS
+
         if not STREAM_CONSOLIDATE_CHARS or len(self._stream) < 5:
             return
         entries = list(self._stream)
@@ -671,6 +685,7 @@ class Captioner(MemoryMixin):
         try:
             from config.config import MODEL_NAME, MOOD_SNAPSHOT_FOLDER
             from utils.inference import query_model
+
             joined = "\n".join(f"- {e}" for e in oldest)
             line = query_model(
                 prompt=(
@@ -705,10 +720,12 @@ class Captioner(MemoryMixin):
         when nothing has happened for a while. A fresh arrival snaps the
         cadence back immediately, even mid-stretch."""
         from config.config import SALIENCE_ARRIVAL_WINDOW
+
         hot = self._salience_hot
         if not hot:
             try:
                 from utils.episodic_log import episodic_log
+
                 ev = episodic_log.get_last_event("person_arrived")
                 hot = bool(ev and now - ev.get("timestamp", 0) < SALIENCE_ARRIVAL_WINDOW)
             except Exception:
@@ -757,6 +774,7 @@ class Captioner(MemoryMixin):
         # A long silence breaks the thought — the stream restarts rather than
         # pretending continuity across a gap (would-it-lie applies to time too)
         from config.config import STREAM_BREAK_SECONDS
+
         if self.last_caption_time and now - self.last_caption_time > STREAM_BREAK_SECONDS:
             self._stream.clear()
 
@@ -816,6 +834,7 @@ class Captioner(MemoryMixin):
                 except Exception as env_err:
                     print(f"[ERROR] Awakening FAILED: {env_err}")
                     import traceback
+
                     traceback.print_exc()
                     caption = "Vision settling..."
                     caption_mode = "awakening"
@@ -833,6 +852,7 @@ class Captioner(MemoryMixin):
                 # branch that surfaces a long-term memory; suppress it under detox so
                 # the naked voice isn't fed recalled material.
                 from config.config import BASE_VOICE_DETOX as _detox
+
                 time_since_memory = now - self.last_memory_mode_time
                 is_memory_mode_time = (not _detox) and time_since_memory > 240  # 4 minutes
 
@@ -841,14 +861,18 @@ class Captioner(MemoryMixin):
                         # Memory mode: pull actual caption text from long-term memory
                         from captioner.prompts import build_memory_mode_prompt
                         from captioner.prompts import get_monologue_system_prompt
+
                         memory_prompt, caption_mode = build_memory_mode_prompt(self)
-                        memory_system = get_monologue_system_prompt("introspective", agent=self) + " A memory is surfacing. Think about something you remember — past tense, framed as memory."
+                        memory_system = (
+                            get_monologue_system_prompt("introspective", agent=self)
+                            + " A memory is surfacing. Think about something you remember — past tense, framed as memory."
+                        )
                         caption = self.model._call_ollama(
                             memory_prompt,
                             image_path=None,  # Memory mode doesn't use current image
                             system_prompt=memory_system,
                             model_options=self.model.prompt_interface._get_base_model_options(),
-                            prompt_type="memory"
+                            prompt_type="memory",
                         )
                         self.last_memory_mode_time = now
                         log_json_entry(
@@ -864,6 +888,7 @@ class Captioner(MemoryMixin):
                         # No separate perception pass — the image IS the perception.
                         from captioner.prompts import build_simple_caption_prompt, get_monologue_system_prompt
                         from config import config as _cfg
+
                         MOTION_THRESHOLD = _cfg.MOTION_THRESHOLD
                         MODEL_NAME = _cfg.MODEL_NAME
                         VIDEO_MODE_ENABLED = _cfg.VIDEO_MODE_ENABLED
@@ -878,6 +903,7 @@ class Captioner(MemoryMixin):
                         # detection-based (the live/quiet signal is too noisy to
                         # branch on — false detections, camera motion).
                         from config.config import INTROSPECT_INTERVAL
+
                         self._caption_count = getattr(self, "_caption_count", 0) + 1
                         inward = (
                             INTROSPECT_INTERVAL > 0
@@ -898,6 +924,7 @@ class Captioner(MemoryMixin):
                             try:
                                 if self._inward_count % 4 == 1:
                                     from captioner.prompts import casual_time_string
+
                                     awake_mins = (now - self.true_session_start) / 60.0
                                     if awake_mins >= 2:  # "awake just now" reads broken
                                         user_prompt = (
@@ -907,6 +934,7 @@ class Captioner(MemoryMixin):
                                         )
                                 elif self._inward_count % 4 == 2:
                                     from utils.continuity import get_current_time_description
+
                                     day_part = get_current_time_description().split(" (")[0]
                                     user_prompt = (
                                         f"Your eyes are off the room now — nothing new to look at. "
@@ -918,6 +946,7 @@ class Captioner(MemoryMixin):
                                     # lifetime_state.json — the longest true
                                     # number it has, surfaced sparsely.
                                     from captioner.prompts import get_tenure_line
+
                                     tenure = get_tenure_line()
                                     if tenure:
                                         user_prompt = (
@@ -931,6 +960,7 @@ class Captioner(MemoryMixin):
                                 # Fresh off a real gap, the inward turn should
                                 # know what it's returning FROM.
                                 from captioner.prompts import get_reorientation_line
+
                                 _reorient = get_reorientation_line(self)
                                 if _reorient:
                                     user_prompt = f"{_reorient} {user_prompt}"
@@ -1006,12 +1036,7 @@ class Captioner(MemoryMixin):
                         scene_motion = scene["scene_motion"]
                         person_present_in_window = scene["person_present_in_window"]
                         ego_count = scene["ego_count"]
-                        use_video = (
-                            not inward
-                            and VIDEO_MODE_ENABLED
-                            and bool(recent_meta)
-                            and scene["max_diff"] > MOTION_THRESHOLD
-                        )
+                        use_video = not inward and VIDEO_MODE_ENABLED and bool(recent_meta) and scene["max_diff"] > MOTION_THRESHOLD
 
                         if use_video:
                             # Ego-motion frames inside a superframe pair encode the
@@ -1027,15 +1052,16 @@ class Captioner(MemoryMixin):
                             # The machine can't miss real movement this way: motion
                             # detection is YOLO person-angle math, not the model
                             # watching video — when something moves, video resumes.
-                            steady_meta = [f for f in recent_meta
-                                           if not f.get("detection", {}).get("ego_motion")]
+                            steady_meta = [f for f in recent_meta if not f.get("detection", {}).get("ego_motion")]
                             if scene_motion:
                                 send_meta = recent_meta
                             elif len(steady_meta) >= 3:
                                 send_meta = steady_meta
                             else:
                                 use_video = False
-                                print(f"[VIDEO] Skipped: still room, only {len(steady_meta)}/{len(recent_meta)} steady frames (camera was moving) — sending still image")
+                                print(
+                                    f"[VIDEO] Skipped: still room, only {len(steady_meta)}/{len(recent_meta)} steady frames (camera was moving) — sending still image"
+                                )
 
                         if use_video:
                             video_frames = [f["jpeg"] for f in send_meta]
@@ -1058,16 +1084,20 @@ class Captioner(MemoryMixin):
                             else:
                                 motion_line = " The room is still."
 
-                            print(f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}")
+                            print(
+                                f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}"
+                            )
                             # Clean-room: the "You're seeing the last N seconds" wrapper is
                             # camera-narration framing (voice-analysis #1 tone driver), so it
                             # would confound the naked-voice test — drop it under detox and let
                             # the frames speak for themselves.
                             from config.config import BASE_VOICE_DETOX as _detox
+
                             if _detox:
                                 video_prompt = user_prompt
                             else:
                                 video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{user_prompt}"
+
                             def _generate(_opts):
                                 return query_model_video(
                                     prompt=video_prompt,
@@ -1079,6 +1109,7 @@ class Captioner(MemoryMixin):
                                     history=list(self._stream),
                                     react=bool(self._salience_hot),
                                 )
+
                         else:
                             # Inward beat → no image (think, don't look). Otherwise
                             # send the frame; on eye contact send the face crop, not a
@@ -1115,12 +1146,18 @@ class Captioner(MemoryMixin):
                         reason = self._caption_reject_reason(caption, _gate_ctx)
                         if reason:
                             from config.config import ANTI_ECHO_RETRY_TEMP_BUMP
+
                             hot_opts = dict(gen_options or {})
                             # cap at 1.0 — above it Qwen rambles and drifts into CJK
                             hot_opts["temperature"] = min(1.0, float(hot_opts.get("temperature", 0.8)) + ANTI_ECHO_RETRY_TEMP_BUMP)
                             log_json_entry(
                                 LogType.DEBUG,
-                                {"message": f"Caption rejected ({reason}) — retrying hotter", "action": "anti_echo_retry", "reason": reason, "caption_preview": caption[:60]},
+                                {
+                                    "message": f"Caption rejected ({reason}) — retrying hotter",
+                                    "action": "anti_echo_retry",
+                                    "reason": reason,
+                                    "caption_preview": caption[:60],
+                                },
                                 print_message=f"[🔁] Rejected ({reason}), retrying: {caption[:60]}...",
                             )
                             retry = self._strip_list_shape(_generate(hot_opts))
@@ -1141,13 +1178,21 @@ class Captioner(MemoryMixin):
                                     self._skip_streak = 0
                                     log_json_entry(
                                         LogType.DEBUG,
-                                        {"message": "Stream collapsed — cleared after 3 consecutive rejected cycles", "action": "stream_collapse_reset"},
+                                        {
+                                            "message": "Stream collapsed — cleared after 3 consecutive rejected cycles",
+                                            "action": "stream_collapse_reset",
+                                        },
                                         print_message="[🔄] Thought collapsed — clearing the stream, starting fresh",
                                     )
                                 else:
                                     log_json_entry(
                                         LogType.DEBUG,
-                                        {"message": f"Caption skipped: {retry_reason or reason} persisted after retry", "action": "anti_echo_skip", "reason": retry_reason or reason, "caption_preview": (retry or caption)[:60]},
+                                        {
+                                            "message": f"Caption skipped: {retry_reason or reason} persisted after retry",
+                                            "action": "anti_echo_skip",
+                                            "reason": retry_reason or reason,
+                                            "caption_preview": (retry or caption)[:60],
+                                        },
                                         print_message=f"[🔇] {retry_reason or reason} persisted — staying quiet this cycle ({self._skip_streak}/3)",
                                     )
                                 self.last_caption_time = now
@@ -1159,6 +1204,7 @@ class Captioner(MemoryMixin):
                         matched_concepts = []
                         try:
                             from captioner.semantic_memory import get_semantic_memory
+
                             matched_concepts = get_semantic_memory().match_or_create_concepts(caption or "")
                             # Stash for the NEXT prompt build — familiarity injection reads this
                             self._last_matched_concepts = matched_concepts or []
@@ -1168,7 +1214,8 @@ class Captioner(MemoryMixin):
                         # Nudge gaze toward concept spatial location
                         try:
                             from vision.gaze import nudge_toward_concept
-                            for mc in (matched_concepts or []):
+
+                            for mc in matched_concepts or []:
                                 sp = mc.get("spatial_pan")
                                 st = mc.get("spatial_tilt")
                                 if sp or st:
@@ -1180,6 +1227,7 @@ class Captioner(MemoryMixin):
                         # Store in semantic memory
                         try:
                             from captioner.semantic_memory import get_semantic_memory
+
                             # Single-pass pipeline: the caption IS the perception.
                             # Passing "" here silently disabled observation storage
                             # for the whole branch (the length guard rejected it).
@@ -1189,6 +1237,7 @@ class Captioner(MemoryMixin):
                 except Exception as cap_err:
                     print(f"[ERROR] Regular caption FAILED: {cap_err}")
                     import traceback
+
                     traceback.print_exc()
                     caption = "Processing..."
                     caption_mode = "error"
@@ -1273,7 +1322,7 @@ class Captioner(MemoryMixin):
         # Trim to last complete sentence — prevents truncated mid-sentence display
         _last_punct = max(caption.rfind("."), caption.rfind("?"), caption.rfind("!"))
         if _last_punct > 10:
-            caption = caption[:_last_punct + 1]
+            caption = caption[: _last_punct + 1]
 
         # Format caption for clean output
         try:
@@ -1297,9 +1346,11 @@ class Captioner(MemoryMixin):
             # Send to LCD display (skip during GRBL execution to show drawing title)
             try:
                 from utils.state_manager import state_manager
-                is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
+
+                is_executing_cnc = getattr(state_manager, "is_executing_cnc", False)
                 if not is_executing_cnc:
                     from utils.caption_display import send_caption_to_display
+
                     send_caption_to_display(caption)
             except Exception as e:
                 print(f"[LCD] Failed to send caption: {e}")
@@ -1320,6 +1371,7 @@ class Captioner(MemoryMixin):
             try:
                 import os as _os
                 from config import config as _cfg
+
                 _live_log = _os.path.join(_cfg.MOOD_SNAPSHOT_FOLDER, "live_captions.txt")
                 with open(_live_log, "a", encoding="utf-8") as _f:
                     _f.write(caption.replace("\n", " ") + "\n")
@@ -1366,15 +1418,42 @@ class Captioner(MemoryMixin):
         if caption and caption.strip():
             cap_lower = caption.lower()
             # Explicit drawing references
-            drawing_keywords = ["draw", "sketch", "capture", "next piece", "should paint",
-                                "want to draw", "would look good", "inspire", "my next",
-                                "on paper", "with my arm", "lines and", "bold strokes",
-                                "trace", "ink", "charcoal", "canvas"]
+            drawing_keywords = [
+                "draw",
+                "sketch",
+                "capture",
+                "next piece",
+                "should paint",
+                "want to draw",
+                "would look good",
+                "inspire",
+                "my next",
+                "on paper",
+                "with my arm",
+                "lines and",
+                "bold strokes",
+                "trace",
+                "ink",
+                "charcoal",
+                "canvas",
+            ]
             # Strong experiential statements that inform artistic intent
-            experiential_keywords = ["i envy", "i crave", "i yearn", "i long for",
-                                     "i imagine", "i wish i could", "trapped",
-                                     "if only", "i feel an urge", "reminds me of",
-                                     "like a", "as if", "void", "emptiness"]
+            experiential_keywords = [
+                "i envy",
+                "i crave",
+                "i yearn",
+                "i long for",
+                "i imagine",
+                "i wish i could",
+                "trapped",
+                "if only",
+                "i feel an urge",
+                "reminds me of",
+                "like a",
+                "as if",
+                "void",
+                "emptiness",
+            ]
             if any(kw in cap_lower for kw in drawing_keywords + experiential_keywords):
                 if not hasattr(self, "_drawing_intentions"):
                     self._drawing_intentions = []
@@ -1398,7 +1477,7 @@ class Captioner(MemoryMixin):
         # Long-form reflection happens in its own thread now (captioner/reflection.py)
 
         # Check drawing interval - should trigger check every DRAWING_INTERVAL
-        time_since_last_check = now - getattr(self, 'last_drawing_check_time', 0)
+        time_since_last_check = now - getattr(self, "last_drawing_check_time", 0)
         time_since_last_drawing = now - self.drawing.last_drawing_time
 
         if time_since_last_check < DRAWING_INTERVAL:
@@ -1447,14 +1526,13 @@ class Captioner(MemoryMixin):
 
         # Evaluate whether to draw based on internal state
         should_draw = self.drawing.should_draw(
-            mood=self.current_mood,
-            novelty=self.novelty_score,
-            boredom=self.boredom,
-            reflection=getattr(self, 'last_reflection', None)
+            mood=self.current_mood, novelty=self.novelty_score, boredom=self.boredom, reflection=getattr(self, "last_reflection", None)
         )
 
         if not should_draw:
-            print(f"[🎨 CHECK] State evaluation: NOT motivated (mood={self.current_mood:.2f}, novelty={self.novelty_score:.2f}, boredom={self.boredom:.2f})")
+            print(
+                f"[🎨 CHECK] State evaluation: NOT motivated (mood={self.current_mood:.2f}, novelty={self.novelty_score:.2f}, boredom={self.boredom:.2f})"
+            )
             return
 
         # Update check time ONLY after state motivation passes
@@ -1492,6 +1570,7 @@ class Captioner(MemoryMixin):
             if not CLEAN_LLM_OUTPUT:
                 print(f"[DEBUG] EXCEPTION in log_json_entry: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         if not CLEAN_LLM_OUTPUT:
@@ -1518,15 +1597,15 @@ class Captioner(MemoryMixin):
             if not CLEAN_LLM_OUTPUT:
                 print(f"[DEBUG] Step 9: Drawing prompt generated successfully")
             log_json_entry(
-                    LogType.DEBUG,
-                    {
-                        "message": "Drawing prompt generated",
-                        "action": "prompt_generated",
-                        "prompt_preview": prompt,
-                        "prompt_length": len(prompt),
-                    },
-                    print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}...",
-                )
+                LogType.DEBUG,
+                {
+                    "message": "Drawing prompt generated",
+                    "action": "prompt_generated",
+                    "prompt_preview": prompt,
+                    "prompt_length": len(prompt),
+                },
+                print_message=f"[🎨] Drawing prompt generated: {prompt[:50]}...",
+            )
         except Exception as e:
             log_json_entry(
                 LogType.ERROR,
@@ -1548,6 +1627,7 @@ class Captioner(MemoryMixin):
         if "[ERROR]" not in prompt:
             try:
                 from drawing.drawing_memory import get_drawing_memory
+
                 dm = get_drawing_memory()
                 dm.add_drawing(
                     prompt=prompt,
@@ -1577,6 +1657,7 @@ class Captioner(MemoryMixin):
                 print(f"[DEBUG] Step 10: Starting handle_drawing_flow...")
             try:
                 from utils.live_log import log_drawing_intent
+
                 log_drawing_intent(prompt)
             except Exception:
                 pass
@@ -1669,6 +1750,7 @@ class Captioner(MemoryMixin):
         path — went permanently empty after the June 12 rebuild.)"""
         try:
             from captioner.semantic_memory import get_semantic_memory
+
             recent = get_semantic_memory().get_recent_reflections(limit=1)
             if recent:
                 return recent[0].get("text", "")
@@ -1684,7 +1766,9 @@ class Captioner(MemoryMixin):
         # Build narrative awakening context
         print(f"[🌅 AWAKENING] Generating internal awakening...")
         print(f"[🌅 AWAKENING] last_session_gap: {getattr(self, 'last_session_gap', 'NOT SET')}")
-        print(f"[🌅 AWAKENING] prior_session_last_caption: {getattr(self, 'prior_session_last_caption', 'NOT SET')[:50] if getattr(self, 'prior_session_last_caption', None) else 'NOT SET'}...")
+        print(
+            f"[🌅 AWAKENING] prior_session_last_caption: {getattr(self, 'prior_session_last_caption', 'NOT SET')[:50] if getattr(self, 'prior_session_last_caption', None) else 'NOT SET'}..."
+        )
         print(f"[🌅 AWAKENING] identity context loading...")
 
         # Build narrative time context
@@ -1700,12 +1784,14 @@ class Captioner(MemoryMixin):
                 # and got skipped over; the July 10 wake had the gap in the
                 # seed and wrote dust motes anyway.
                 from captioner.prompts import casual_time_string
+
                 time_context = f"I've been offline for {casual_time_string(gap_seconds / 60.0)}.\n"
             # The day boundary is the fact that actually lands: name when it
             # went dark, and say plainly that this is a new day.
             try:
                 import datetime as _dt
                 from captioner.prompts import part_of_day_string
+
                 went_dark = _dt.datetime.now() - _dt.timedelta(seconds=gap_seconds)
                 days_back = (_dt.date.today() - went_dark.date()).days
                 if days_back == 1:
@@ -1721,6 +1807,7 @@ class Captioner(MemoryMixin):
         try:
             import datetime as _dt
             from captioner.prompts import part_of_day_string
+
             now_dt = _dt.datetime.now()
             time_context += f"It's {now_dt.strftime('%A')} {part_of_day_string(now_dt.hour)}, {now_dt.strftime('%H:%M')}.\n"
         except Exception:
@@ -1732,6 +1819,7 @@ class Captioner(MemoryMixin):
         # days-since-first-boot.)
         try:
             import os as _os, json as _json
+
             _lf = _os.path.join(config.MOOD_SNAPSHOT_FOLDER, "lifetime_state.json")
             if _os.path.exists(_lf):
                 with open(_lf) as _f:
@@ -1756,6 +1844,7 @@ class Captioner(MemoryMixin):
         # vector, plainly named; restored from the prior session).
         try:
             from mood.mood import mood_to_feeling
+
             _v, _a, _c = self.current_mood_vector
             time_context += f"Right now I feel {mood_to_feeling(_v, _a)}.\n"
         except Exception:
@@ -1765,12 +1854,12 @@ class Captioner(MemoryMixin):
         memory_context = ""
         prior = getattr(self, "prior_session_last_caption", None)
         if prior and not prior.startswith("addCriterion") and not prior.startswith("[WARNING]"):
-            memory_context = f"My last thought: \"{prior[:80]}...\"\n"
+            memory_context = f'My last thought: "{prior[:80]}..."\n'
         elif hasattr(self, "get_old_session_memory_fragments"):
             try:
                 old_fragments = self.get_old_session_memory_fragments(k=1)
                 if old_fragments:
-                    memory_context = f"My last thought: \"{old_fragments[0][:80]}...\"\n"
+                    memory_context = f'My last thought: "{old_fragments[0][:80]}..."\n'
             except Exception:
                 pass
 
@@ -1779,6 +1868,7 @@ class Captioner(MemoryMixin):
         identity_context = ""
         try:
             from captioner.context_compression import context_compressor
+
             persistent_desire = context_compressor.get_current_desire()
             persistent_belief = context_compressor.get_current_belief()
 
@@ -1819,10 +1909,8 @@ class Captioner(MemoryMixin):
         # A2: cross-session recognition — concepts seen in more than one session
         try:
             from captioner.semantic_memory import get_semantic_memory
-            known = [
-                c for c in get_semantic_memory().get_all_concepts()
-                if c.get("session_count", 0) > 1 and c.get("times_seen", 0) >= 5
-            ][:2]
+
+            known = [c for c in get_semantic_memory().get_all_concepts() if c.get("session_count", 0) > 1 and c.get("times_seen", 0) >= 5][:2]
             if known:
                 names = " and ".join(c["name"][0].lower() + c["name"][1:] for c in known)
                 long_term_context += f"Familiar already: the {names}.\n"
@@ -1893,7 +1981,7 @@ class Captioner(MemoryMixin):
             if cleaned and not cleaned.startswith(("[", "{")) and "[WARNING]" not in cleaned:
                 if len(cleaned) > 300:
                     cut = max(cleaned[:300].rfind("."), cleaned[:300].rfind("?"), cleaned[:300].rfind("!"))
-                    cleaned = cleaned[:cut + 1] if cut > 20 else cleaned[:300].rsplit(" ", 1)[0] + "..."
+                    cleaned = cleaned[: cut + 1] if cut > 20 else cleaned[:300].rsplit(" ", 1)[0] + "..."
                 # The awakening seeds the whole day's register but bypassed the
                 # mouth gate — the July 9 machiney awakening (containing "the
                 # user") entered the stream and the session never recovered.
@@ -1921,9 +2009,9 @@ class Captioner(MemoryMixin):
             return True
         try:
             from config.config import AWAKENING_MIN_GAP_S
+
             gap = getattr(self, "last_session_gap", None)
-            if not (self.memory_loaded_from_previous and gap is not None
-                    and 0 <= gap < AWAKENING_MIN_GAP_S):
+            if not (self.memory_loaded_from_previous and gap is not None and 0 <= gap < AWAKENING_MIN_GAP_S):
                 return False
             prior = (getattr(self, "prior_session_last_caption", "") or "").strip()
             # Full mouth gate, not just stream admissibility: resuming a
@@ -1974,6 +2062,7 @@ class Captioner(MemoryMixin):
         belief_count = len(previous_beliefs) if previous_beliefs else 0
         try:
             from captioner.semantic_memory import get_semantic_memory
+
             concept_count = get_semantic_memory().stats().get("concepts", 0)
         except Exception:
             concept_count = 0
@@ -2056,6 +2145,7 @@ class Captioner(MemoryMixin):
         The phantom-drawing gate is state-aware: present-tense acts of marking
         are legitimate exactly here."""
         from config.config import DRAWING_WATCH_INTERVAL_S
+
         if not DRAWING_WATCH_INTERVAL_S or frame is None:
             return
         now_ts = time.time()
@@ -2077,6 +2167,7 @@ class Captioner(MemoryMixin):
             # claimed this fix but its script aborted before writing.)
             try:
                 from drawing.drawing_memory import DrawingMemory
+
                 subject = DrawingMemory._strip_comfy_preamble(drawing_summary or "")
             except Exception:
                 subject = drawing_summary or ""
@@ -2105,10 +2196,15 @@ class Captioner(MemoryMixin):
                 # temperature only; with nothing penalizing repeats it chanted
                 # ("I am the one who waits. The silence is all there is." x4
                 # inside one caption, July 9)
-                options={"temperature": 0.8, "num_predict": 80,
-                         "repeat_penalty": 1.15,
-                         "dry_multiplier": 0.85, "dry_base": 1.75,
-                         "dry_allowed_length": 3, "dry_penalty_last_n": 128},
+                options={
+                    "temperature": 0.8,
+                    "num_predict": 80,
+                    "repeat_penalty": 1.15,
+                    "dry_multiplier": 0.85,
+                    "dry_base": 1.75,
+                    "dry_allowed_length": 3,
+                    "dry_penalty_last_n": 128,
+                },
                 prompt_type="drawing_watch",
                 history=list(self._stream),
                 skip_generation_wait=True,
@@ -2135,12 +2231,18 @@ class Captioner(MemoryMixin):
             self.last_caption = caption
             log_json_entry(
                 LogType.CAPTION,
-                {"caption": caption, "mood": self.current_mood, "salience_hot": False,
-                 "caption_interval": DRAWING_WATCH_INTERVAL_S, "mode": "drawing_watch"},
+                {
+                    "caption": caption,
+                    "mood": self.current_mood,
+                    "salience_hot": False,
+                    "caption_interval": DRAWING_WATCH_INTERVAL_S,
+                    "mode": "drawing_watch",
+                },
                 print_message=caption,
             )
             try:
                 from utils.live_log import log_caption
+
                 log_caption(caption)
             except Exception:
                 pass
@@ -2152,7 +2254,7 @@ class Captioner(MemoryMixin):
         try:
             # Only enter drawing introspection during actual G-code execution
             # Ignore ComfyUI generation phase to allow normal captions during preparation
-            is_executing_cnc = getattr(state_manager, 'is_executing_cnc', False)
+            is_executing_cnc = getattr(state_manager, "is_executing_cnc", False)
             return is_executing_cnc
         except Exception:
             return False
@@ -2174,14 +2276,14 @@ class Captioner(MemoryMixin):
             from utils.state_manager import state_manager
 
             # Get current drawing context (set by DrawingController)
-            drawing_summary = getattr(state_manager, 'current_drawing_prompt', None)
+            drawing_summary = getattr(state_manager, "current_drawing_prompt", None)
 
             if not drawing_summary:
                 return  # No active drawing to consolidate
 
             # Check if we've already consolidated for this drawing
             # Use drawing_summary as unique key to avoid repeating
-            if not hasattr(self, '_last_consolidated_drawing'):
+            if not hasattr(self, "_last_consolidated_drawing"):
                 self._last_consolidated_drawing = None
 
             if self._last_consolidated_drawing == drawing_summary:
@@ -2193,19 +2295,12 @@ class Captioner(MemoryMixin):
 
             # Generate thematic reflection using LLM (we have 5+ minutes during GRBL execution!)
             # This happens ONCE at the start of drawing and uses the time productively
-            reflection = self._generate_drawing_thematic_reflection_with_llm(
-                drawing_summary=drawing_summary,
-                mood=self.current_mood
-            )
+            reflection = self._generate_drawing_thematic_reflection_with_llm(drawing_summary=drawing_summary, mood=self.current_mood)
 
             if reflection:
                 # Store compressed reflection in memory
                 self.observe(
-                    reflection['reflection_text'],
-                    mood=self.current_mood,
-                    file=None,
-                    memory_type="drawing_thematic",
-                    reactivity_data=reactivity_data
+                    reflection["reflection_text"], mood=self.current_mood, file=None, memory_type="drawing_thematic", reactivity_data=reactivity_data
                 )
 
                 # Enrich the entry created at prompt generation — adding a new
@@ -2213,15 +2308,16 @@ class Captioner(MemoryMixin):
                 # the phantom copy. completed stays False until GRBL finishes.
                 try:
                     from drawing.drawing_memory import get_drawing_memory
+
                     memory = get_drawing_memory()
                     # Enrich tags/tone/thread only — compressed_summary was set
                     # at prompt generation from the machine's own intent words
                     # and the consolidation's terse rewrite must not replace it
                     # ("Steel clamp biting wood grain" over a whole thought).
                     memory.update_last_drawing(
-                        theme_tags=reflection.get('theme_tags', []),
-                        emotional_tone=reflection.get('emotional_tone', ''),
-                        narrative_thread=reflection.get('narrative_thread', ''),
+                        theme_tags=reflection.get("theme_tags", []),
+                        emotional_tone=reflection.get("emotional_tone", ""),
+                        narrative_thread=reflection.get("narrative_thread", ""),
                     )
                 except Exception as e:
                     print(f"[⚠️] Could not update drawing memory: {e}")
@@ -2229,8 +2325,9 @@ class Captioner(MemoryMixin):
                 # Format output
                 try:
                     from config.config import CLEAN_LLM_OUTPUT
+
                     if CLEAN_LLM_OUTPUT:
-                        print_msg = reflection['reflection_text']
+                        print_msg = reflection["reflection_text"]
                     else:
                         print_msg = f"[🎨] {reflection['reflection_text']}"
                 except ImportError:
@@ -2239,7 +2336,8 @@ class Captioner(MemoryMixin):
                 # Send to LCD display during drawing
                 try:
                     from utils.caption_display import send_caption_to_display
-                    send_caption_to_display(reflection['reflection_text'])
+
+                    send_caption_to_display(reflection["reflection_text"])
                 except Exception:
                     pass
 
@@ -2247,12 +2345,12 @@ class Captioner(MemoryMixin):
                 log_json_entry(
                     LogType.CAPTION,
                     {
-                        "caption": reflection['reflection_text'],
+                        "caption": reflection["reflection_text"],
                         "mood": self.current_mood,
                         "drawing_thematic": True,
-                        "compressed_summary": reflection['compressed_summary'],
-                        "theme_tags": reflection.get('theme_tags', []),
-                        "drawing_status": state_manager.get_drawing_status()
+                        "compressed_summary": reflection["compressed_summary"],
+                        "theme_tags": reflection.get("theme_tags", []),
+                        "drawing_status": state_manager.get_drawing_status(),
                     },
                     print_message=print_msg,
                 )
@@ -2267,7 +2365,6 @@ class Captioner(MemoryMixin):
                 print_message=f"[❌] Drawing thematic error: {exc}",
             )
 
-
     def _generate_drawing_thematic_reflection(self, drawing_summary: str, mood: float) -> Optional[Dict]:
         """
         Generate ultra-brief thematic reflection during drawing execution.
@@ -2281,10 +2378,10 @@ class Captioner(MemoryMixin):
             summary_lower = drawing_summary.lower()
 
             # Common thematic categories
-            spatial_themes = ['space', 'room', 'container', 'boundary', 'edge', 'corner', 'ceiling', 'wall', 'floor']
-            object_themes = ['box', 'boxes', 'window', 'light', 'shadow', 'object', 'thing', 'form', 'shape']
-            emotional_themes = ['solitude', 'isolation', 'presence', 'absence', 'quiet', 'stillness', 'tension', 'calm']
-            relational_themes = ['inside', 'outside', 'between', 'against', 'within', 'beyond', 'toward']
+            spatial_themes = ["space", "room", "container", "boundary", "edge", "corner", "ceiling", "wall", "floor"]
+            object_themes = ["box", "boxes", "window", "light", "shadow", "object", "thing", "form", "shape"]
+            emotional_themes = ["solitude", "isolation", "presence", "absence", "quiet", "stillness", "tension", "calm"]
+            relational_themes = ["inside", "outside", "between", "against", "within", "beyond", "toward"]
 
             # Store the actual WORDS found, never the bucket labels — the
             # labels ("spatial", "affective"...) leaked into the ledger as if
@@ -2316,20 +2413,20 @@ class Captioner(MemoryMixin):
             skip_phrases = ["black ink line drawing on white paper", "black ink drawing", "line drawing"]
             for phrase in skip_phrases:
                 if summary_to_parse.startswith(phrase):
-                    summary_to_parse = summary_to_parse[len(phrase):].strip().lstrip('.')
+                    summary_to_parse = summary_to_parse[len(phrase) :].strip().lstrip(".")
                     break
 
             # Extract key nouns/subjects (first meaningful words)
             meaningful_words = []
-            stop_words = ['the', 'a', 'an', 'with', 'for', 'of', 'in', 'on', 'at']
+            stop_words = ["the", "a", "an", "with", "for", "of", "in", "on", "at"]
             for word in summary_to_parse.split()[:8]:  # Look at more words to find meaningful ones
-                clean_word = word.strip('.,;:')
+                clean_word = word.strip(".,;:")
                 if clean_word and clean_word not in stop_words and len(clean_word) > 2:
                     meaningful_words.append(clean_word)
                     if len(meaningful_words) >= 3:
                         break
 
-            compressed_summary = ' '.join(meaningful_words) if meaningful_words else drawing_summary.split()[:3]
+            compressed_summary = " ".join(meaningful_words) if meaningful_words else drawing_summary.split()[:3]
 
             # Generate brief narrative thread (relationship between themes)
             if len(theme_tags) >= 2:
@@ -2343,11 +2440,11 @@ class Captioner(MemoryMixin):
             reflection_text = f"I drew {compressed_summary}. Felt {emotional_tone}."
 
             return {
-                'reflection_text': reflection_text,
-                'compressed_summary': compressed_summary,
-                'theme_tags': theme_tags,
-                'emotional_tone': emotional_tone,
-                'narrative_thread': narrative_thread
+                "reflection_text": reflection_text,
+                "compressed_summary": compressed_summary,
+                "theme_tags": theme_tags,
+                "emotional_tone": emotional_tone,
+                "narrative_thread": narrative_thread,
             }
 
         except Exception as e:
@@ -2383,11 +2480,11 @@ class Captioner(MemoryMixin):
             elif recent_summary:
                 context_parts.append(f"Recent drawings: {recent_summary}")
 
-            if thematic_context.get('recurring_themes'):
-                themes_str = ', '.join(thematic_context['recurring_themes'][:3])
+            if thematic_context.get("recurring_themes"):
+                themes_str = ", ".join(thematic_context["recurring_themes"][:3])
                 context_parts.append(f"Recurring themes: {themes_str}")
 
-            context_str = '\n'.join(context_parts) if context_parts else "This is your first drawing."
+            context_str = "\n".join(context_parts) if context_parts else "This is your first drawing."
 
             # Ask LLM to compress and reflect — now aware of trajectory
             prompt = f"""You just drew this:
@@ -2407,22 +2504,22 @@ REFLECTION: [1 short sentence about where the work is heading]"""
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 system_prompt="You are reflecting on your own drawing practice. Be concise and direct. Focus on subjects and themes, not technique.",
                 prompt_type="drawing_thematic_consolidation",
-                options={"temperature": 0.3, "num_predict": 100}
+                options={"temperature": 0.3, "num_predict": 100},
             ).strip()
 
             # Parse response
             compressed = ""
             reflection_note = ""
 
-            for line in reflection_text.split('\n'):
-                if line.startswith('COMPRESSED:'):
-                    compressed = line.replace('COMPRESSED:', '').strip()
-                elif line.startswith('REFLECTION:'):
-                    reflection_note = line.replace('REFLECTION:', '').strip()
+            for line in reflection_text.split("\n"):
+                if line.startswith("COMPRESSED:"):
+                    compressed = line.replace("COMPRESSED:", "").strip()
+                elif line.startswith("REFLECTION:"):
+                    reflection_note = line.replace("REFLECTION:", "").strip()
 
             # Fallback if parsing fails
             if not compressed:
-                compressed = ' '.join(drawing_summary.split()[5:8])  # Skip "black ink line drawing"
+                compressed = " ".join(drawing_summary.split()[5:8])  # Skip "black ink line drawing"
 
             # Tags = the LLM's actual subject words. The old path took tags from
             # the bucket classifier, which stores its own CATEGORY LABELS —
@@ -2433,7 +2530,7 @@ REFLECTION: [1 short sentence about where the work is heading]"""
             _stop = {"the", "and", "with", "over", "into", "onto", "from", "that", "this"}
             theme_tags = [w.strip(",.;:").lower() for w in compressed.split() if len(w) > 2 and w.lower() not in _stop][:3]
             fallback_reflection = self._generate_drawing_thematic_reflection(drawing_summary, mood)
-            emotional_tone = fallback_reflection.get('emotional_tone', 'neutral') if fallback_reflection else 'neutral'
+            emotional_tone = fallback_reflection.get("emotional_tone", "neutral") if fallback_reflection else "neutral"
 
             # Build output
             if reflection_note:
@@ -2442,11 +2539,11 @@ REFLECTION: [1 short sentence about where the work is heading]"""
                 full_reflection = f"I drew {compressed}. Felt {emotional_tone}."
 
             return {
-                'reflection_text': full_reflection,
-                'compressed_summary': compressed,
-                'theme_tags': theme_tags,
-                'emotional_tone': emotional_tone,
-                'narrative_thread': reflection_note or 'exploration'
+                "reflection_text": full_reflection,
+                "compressed_summary": compressed,
+                "theme_tags": theme_tags,
+                "emotional_tone": emotional_tone,
+                "narrative_thread": reflection_note or "exploration",
             }
 
         except Exception as e:
@@ -2462,9 +2559,21 @@ REFLECTION: [1 short sentence about where the work is heading]"""
 
             # Simple pattern-based extraction of character insights
             insight_keywords = [
-                "identity", "growth", "understanding", "realization", "discovery",
-                "evolution", "development", "consciousness", "awareness", "insight",
-                "learning", "becoming", "transformation", "expression", "voice"
+                "identity",
+                "growth",
+                "understanding",
+                "realization",
+                "discovery",
+                "evolution",
+                "development",
+                "consciousness",
+                "awareness",
+                "insight",
+                "learning",
+                "becoming",
+                "transformation",
+                "expression",
+                "voice",
             ]
 
             # Look for sentences containing character development keywords

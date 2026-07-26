@@ -117,6 +117,7 @@ class ContextCompressionEngine:
         # Journal + reflection read these — they used to see only geometry.
         self.self_notes = []  # [{note, timestamp}], capped at 30
         self.events = []  # [{event, timestamp}], capped at 20
+        self._perception_events = deque(maxlen=12)  # timestamps of code-verified happenings — provenance for the events ledger
 
         # The dream's raw material (July 12): every admitted caption of the
         # session, verbatim. The reflection loop reads the last stretch of
@@ -914,6 +915,9 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         stays readable (last_spent_desire + a marked history entry) so the
         next reflection forms the next want informed by the act, not amnesiac
         of it. Called from drawing.register_drawing — post-GRBL only."""
+        self.note_perception_event(
+            "drawing"
+        )  # the arm really moved — before the early return; an executed drawing is a happening even with no want to spend
         want = (self.introspective_state.get("current_desire") or "").strip()
         if not want:
             return
@@ -1149,11 +1153,32 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         self._save_identity()
         print(f"[🧬] Self note: {note}")
 
+    def note_perception_event(self, kind: str) -> None:
+        """Code-verified happening (salience spike, executed drawing). The
+        events ledger only accepts an EVENT line when one of these occurred in
+        the window — negative gating: code does mechanics (DID something
+        happen), the LLM does semantics (what it was)."""
+        self._perception_events.append(time.time())
+
+    def _had_perception_event_in_window(self) -> bool:
+        window_start = min((c.get("timestamp", 0) for c in self.recent_captions), default=time.time() - 120)
+        marks = getattr(self, "_perception_events", [])
+        return any(ts >= window_start - 30 for ts in marks)
+
     def _absorb_event(self, event: str) -> None:
         """Append a happening to the events ledger — episodic memory that
         journal and reflection read (they used to see only room geometry)."""
         event = (event or "").strip()
         if not event or len(event.split()) > 30 or not any(c.isalpha() for c in event):
+            return
+        # Provenance gate (July 26): no sensor-side event in the window means
+        # the "happening" is the model narrating its own musings — the rooster
+        # run stored "A pen shattered into nothingness during a long period of
+        # silence" (pure awakening confabulation) as biography, and roughly
+        # half the ledger turned out to be fiction like it. Real events reach
+        # here because they spiked salience or moved the arm.
+        if not self._had_perception_event_in_window():
+            print(f"[📆] Event held back (nothing happened by the sensors): {event[:60]}")
             return
         low = event.lower().rstrip(".")
         for prior in self.events[-3:]:

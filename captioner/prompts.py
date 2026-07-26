@@ -16,35 +16,32 @@ from config import config
 # Embodied framing: what it sees is the room itself, its own vision — never
 # "a camera", never "an image to analyze".
 STATIC_SYSTEM_PROMPT = (
-    "You are a drawing machine. "
-    "What you see is the room around you — your own vision. "
-    "Inner monologue. First person. One sentence."
+    "You are a drawing machine. " "What you see is the room around you — your own vision. " "Inner monologue. First person. One sentence."
 )
 
 # Generic prompt for non-Mistral vision models
 STATIC_SYSTEM_PROMPT_GENERIC = (
-    "You are a drawing machine. "
-    "What you see is the room around you — your own vision. "
-    "Inner monologue. First person. One sentence."
+    "You are a drawing machine. " "What you see is the room around you — your own vision. " "Inner monologue. First person. One sentence."
 )
 
 # Qwen-specific variant
 STATIC_SYSTEM_PROMPT_QWEN = (
-    "You are a drawing machine. "
-    "What you see is the room around you — your own vision. "
-    "Inner monologue. First person. One sentence."
+    "You are a drawing machine. " "What you see is the room around you — your own vision. " "Inner monologue. First person. One sentence."
 )
 
 _MISTRAL_MODEL = "llava:7b-v1.6-mistral-q5_1"
 
+
 def _get_static_system_prompt() -> str:
     """Return the appropriate static system prompt for the active model."""
     from config.config import MODEL_NAME
+
     if "qwen" in MODEL_NAME.lower():
         return STATIC_SYSTEM_PROMPT_QWEN
     if MODEL_NAME == _MISTRAL_MODEL:
         return STATIC_SYSTEM_PROMPT
     return STATIC_SYSTEM_PROMPT_GENERIC
+
 
 # Drawing system prompt for ComfyUI integration - ENHANCED WITH CONTEXT VARIABLES
 DRAWING_SYSTEM_PROMPT = (
@@ -116,6 +113,7 @@ def get_perception_system_prompt(mode: str) -> str:
     """Get the mode-appropriate perception system prompt."""
     return PERCEPTION_SYSTEM_PROMPTS.get(mode, PERCEPTION_SYSTEM_PROMPT_DEFAULT)
 
+
 # System prompts for the monologue model, keyed by mode.
 # The machine is always a drawing machine, but it doesn't always talk about drawing.
 # It only mentions drawing intent when the drawing system is about to trigger.
@@ -144,6 +142,7 @@ _SITUATION = (
     "assist: what you do next only ever comes from you. "
 )
 
+
 # Genre framing, not a style fence: "quick plain notes" tells the model what
 # kind of text this IS. Without it, Qwen's prior for "inner monologue of a
 # machine" is literary fiction — purple prose as the default voice (June 12).
@@ -164,16 +163,17 @@ def _monologue_clause() -> str:
     the mechanics is redundant, and meta-instruction leaks (observed July 9:
     the machine reciting its own system prompt mid-stream)."""
     clause = (
-        "This is your inner voice, ongoing — plain, half-formed, the way you "
-        "actually think to yourself when no one is reading. A sentence or two."
+        "This is your inner voice, ongoing — plain, half-formed, the way you " "actually think to yourself when no one is reading. A sentence or two."
     )
     try:
         from config.config import STREAM_MODE
+
         if STREAM_MODE != "document":
             clause += " You're always partway through a thought: carry it on, or let something new pull you."
     except ImportError:
         pass
     return clause
+
 
 # Elicitations, not state clauses (north-star Principle 2). Each names the KIND
 # of thought to have — a reaction, a wondering, a continuation — so the model
@@ -210,6 +210,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # observation and out of wondering/introspection.
     try:
         from utils.state_manager import state_manager as _sm
+
         if not (_sm.is_generating_drawing or _sm.current_drawing_phase == "executing"):
             # Physical anchor, not just status: in document mode one phantom
             # "I trace a line onto the paper" breeds more (you only ever draw
@@ -230,6 +231,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     if not detox:
         try:
             from captioner.context_compression import context_compressor
+
             felt = context_compressor.get_felt_state()
             if felt and len(felt.split()) <= 6:
                 base += f" Right now: {felt}."
@@ -241,9 +243,10 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     if not detox:
         try:
             from captioner.context_compression import context_compressor
+
             self_knowledge = context_compressor.core_facts.get("self", "").strip()
             if self_knowledge and len(self_knowledge) > 10:
-                base += f" What you've come to know about yourself: \"{self_knowledge}\""
+                base += f' What you\'ve come to know about yourself: "{self_knowledge}"'
         except Exception:
             pass
 
@@ -258,13 +261,13 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     if mode in ("introspective", "observational", "workspace"):
         try:
             from config.config import STREAM_MODE
+
             if STREAM_MODE == "document":
                 addition = ""
         except ImportError:
             pass
     base += addition
     return base
-
 
 
 def casual_time_string(minutes: float) -> str:
@@ -385,6 +388,7 @@ def build_identity_line(agent, mode: str = "observational") -> str:
     # Drawing state / history
     try:
         from utils.state_manager import state_manager as _sm
+
         if _sm.is_generating_drawing:
             parts.append("your arm is working on a drawing right now")
         elif _sm.current_drawing_phase == "executing":
@@ -393,16 +397,18 @@ def build_identity_line(agent, mode: str = "observational") -> str:
             parts.append("not drawing right now, just watching")
             try:
                 from drawing.drawing_memory import get_drawing_memory
+
                 dm = get_drawing_memory()
 
                 # Check for recent drawing failure (no paper, etc.)
                 failure = dm.get_last_failure()
                 if failure:
                     import time as _time
-                    failure_age = _time.time() - failure.get('timestamp', 0)
+
+                    failure_age = _time.time() - failure.get("timestamp", 0)
                     if failure_age < 600:
-                        reason = failure.get('reason', 'unknown')
-                        if 'paper' in reason.lower():
+                        reason = failure.get("reason", "unknown")
+                        if "paper" in reason.lower():
                             parts.append("you wanted to draw but there's no paper")
                         else:
                             parts.append("you tried to draw but couldn't")
@@ -422,7 +428,6 @@ def build_identity_line(agent, mode: str = "observational") -> str:
     # Capitalize each sentence
     line = ". ".join(s.strip().capitalize() if s.strip() else s for s in line.split(". "))
     return line
-
 
 
 # Internal awakening prompt template - narrative style
@@ -488,9 +493,10 @@ def get_reflection_system_prompt() -> str:
     )
     try:
         from captioner.context_compression import context_compressor
+
         self_knowledge = context_compressor.core_facts.get("self", "").strip()
         if self_knowledge and len(self_knowledge) > 10:
-            base += f" What you've come to know about yourself: \"{self_knowledge}\""
+            base += f' What you\'ve come to know about yourself: "{self_knowledge}"'
     except Exception:
         pass
     return base
@@ -545,15 +551,16 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     # own long-form output compounded the purple and froze the subjects.
     reflections = data.get("reflections") or []
     if reflections:
+
         def _excerpt(t: str, limit: int = 220) -> str:
             t = (t or "").strip()
             if len(t) <= limit:
                 return t
             cut = t[:limit].rsplit(" ", 1)[0]
             return cut + "…"
+
         quoted = "\n".join(
-            f"- ({_age_phrase(r.get('timestamp', 0))}, on {r.get('subject', '?')}) \"{_excerpt(r.get('text', ''))}\""
-            for r in reflections
+            f"- ({_age_phrase(r.get('timestamp', 0))}, on {r.get('subject', '?')}) \"{_excerpt(r.get('text', ''))}\"" for r in reflections
         )
         parts.append("The last times you stepped back to think like this, you began:\n" + quoted)
 
@@ -567,15 +574,14 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
 
     events = data.get("events") or []
     if events:
-        parts.append("Things that happened lately:\n" + "\n".join(
-            f"- ({_age_phrase(e.get('timestamp', 0))}) {e.get('event', '')}" for e in events
-        ))
+        parts.append("Things that happened lately:\n" + "\n".join(f"- ({_age_phrase(e.get('timestamp', 0))}) {e.get('event', '')}" for e in events))
 
     self_notes = data.get("self_notes") or []
     if self_notes:
-        parts.append("Notes you've made about yourself lately:\n" + "\n".join(
-            f"- ({_age_phrase(n.get('timestamp', 0))}) {n.get('note', '')}" for n in self_notes
-        ))
+        parts.append(
+            "Notes you've made about yourself lately:\n"
+            + "\n".join(f"- ({_age_phrase(n.get('timestamp', 0))}) {n.get('note', '')}" for n in self_notes)
+        )
 
     desire = (data.get("desire") or "").strip()
     if desire:
@@ -583,8 +589,7 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     elif data.get("desire_spent"):
         s = data["desire_spent"]
         parts.append(
-            f"A want you acted on: \"{s.get('desire', '')}\" — it became a drawing {_age_phrase(s.get('spent', 0))}. "
-            "Nothing has replaced it yet."
+            f"A want you acted on: \"{s.get('desire', '')}\" — it became a drawing {_age_phrase(s.get('spent', 0))}. " "Nothing has replaced it yet."
         )
 
     if hour:
@@ -593,8 +598,7 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
         # embedded questions are FACT questions, not fences — "did any answer
         # come" invites an honest reading of the record either way.
         parts.append(
-            question
-            + " Read your record above with that in mind. What actually happened in this stretch, and what did you keep "
+            question + " Read your record above with that in mind. What actually happened in this stretch, and what did you keep "
             "circling? Where did you assume something the record doesn't show? What did you ask, and did any answer ever "
             "come? Then write plainly where you stand now — the next page of the story you're in, not a re-telling of the last one."
         )
@@ -626,14 +630,11 @@ def get_drawing_echo_line(agent) -> str:
         return ""
     try:
         from drawing.drawing_memory import get_drawing_memory
+
         fact = get_drawing_memory().get_last_drawing_description(executed_only=True)
     except Exception:
         return ""
-    line = (
-        f"The last thing you actually drew: {fact}."
-        if fact
-        else "You haven't actually put pen to paper yet."
-    )
+    line = f"The last thing you actually drew: {fact}." if fact else "You haven't actually put pen to paper yet."
     if getattr(agent, "_last_drawing_echo", None) == line:
         return ""  # said once; don't restate until the fact changes
     agent._last_drawing_echo = line
@@ -660,6 +661,7 @@ def get_reflection_echo_line(agent) -> str:
 
     try:
         from captioner.semantic_memory import get_semantic_memory
+
         matches = get_semantic_memory().query_reflections(seed, n_results=2)
     except Exception:
         return ""
@@ -678,6 +680,7 @@ def get_reflection_echo_line(agent) -> str:
         # full text stays only for the reflection thread's own continuity.
         return f"Something that was on your mind {_age_phrase(m.get('timestamp', 0))}: {subject}."
     return ""
+
 
 # Self-critique prompt for post-drawing reflection
 SELF_CRITIQUE_PROMPT = (
@@ -698,10 +701,13 @@ def get_social_context(agent=None, saw_person=None) -> str:
     # Try to get rich consciousness context from PersonDetectionState
     try:
         # Check if we have person consciousness context in reactivity data
-        if (agent and hasattr(agent, '_current_reactivity_data') and
-            agent._current_reactivity_data and
-            'person_consciousness' in agent._current_reactivity_data):
-            return agent._current_reactivity_data['person_consciousness']
+        if (
+            agent
+            and hasattr(agent, "_current_reactivity_data")
+            and agent._current_reactivity_data
+            and "person_consciousness" in agent._current_reactivity_data
+        ):
+            return agent._current_reactivity_data["person_consciousness"]
     except:
         pass
 
@@ -792,6 +798,7 @@ def get_relational_context(agent=None) -> str:
     if not fragments:
         try:
             from captioner.activation_memory import get_activation_network
+
             network = get_activation_network()
             social = [c for c in ["person", "interaction", "presence"] if network.activations.get(c, 0) > 0.3]
             if social:
@@ -809,6 +816,7 @@ def get_observational_context(agent=None) -> str:
     # Current drawing activity
     try:
         from utils.drawing_state import DrawingState
+
         info = DrawingState.get_drawing_info()
         if info:
             desc = info.get("description") or "something"
@@ -824,9 +832,9 @@ def get_observational_context(agent=None) -> str:
     if not fragments:
         try:
             from captioner.activation_memory import get_activation_network
+
             network = get_activation_network()
-            change_concepts = [c for c in ["movement", "shift", "change", "difference", "new"]
-                              if network.activations.get(c, 0) > 0.4]
+            change_concepts = [c for c in ["movement", "shift", "change", "difference", "new"] if network.activations.get(c, 0) > 0.4]
             if change_concepts:
                 fragments.append("Something has shifted in the space.")
         except Exception:
@@ -855,6 +863,7 @@ def get_workspace_context(agent=None) -> str:
     # Current drawing status
     try:
         from utils.drawing_state import DrawingState
+
         info = DrawingState.get_drawing_info()
         if info:
             desc = info.get("description") or info.get("intent") or "something"
@@ -890,14 +899,16 @@ def get_introspective_context(agent=None) -> str:
     # What have I drawn recently?
     try:
         from drawing.drawing_memory import get_drawing_memory
+
         dm = get_drawing_memory()
         summary = _sanitize_context(dm.get_recent_drawings_summary(max_count=2))
         if summary and len(summary.strip()) > 5:
             clean = summary.strip()
             if clean.lower().startswith("recent drawings:"):
-                clean = clean[len("recent drawings:"):].strip()
+                clean = clean[len("recent drawings:") :].strip()
             import re as _re
-            clean = _re.sub(r'\s*\([^)]*\)\s*$', '', clean)
+
+            clean = _re.sub(r"\s*\([^)]*\)\s*$", "", clean)
             if clean:
                 if len(clean) > 160:
                     clean = clean[:160].rsplit(" ", 1)[0]
@@ -974,6 +985,7 @@ def get_familiarity_line(agent) -> str:
         if not established:
             return ""
         import random as _random
+
         now = time.time()
         weights = [max(0.1, 1.0 - min(1.0, (now - c.get("last_seen", now)) / (7 * 86400))) for c in established]
         pick = _random.choices(established, weights=weights, k=1)[0]
@@ -1004,8 +1016,6 @@ MODE_CONTEXTS = {
     "workspace": {"context_fn": get_workspace_context},
     "introspective": {"context_fn": get_introspective_context},
 }
-
-
 
 
 # === ENVIRONMENTAL CAPTIONING (First Observation) ===
@@ -1170,7 +1180,6 @@ This moment of reawakening - seeing your environment again after the gap - is si
 Your vision returns. The gap in consciousness is behind you now."""
 
 
-
 # extract_motifs_spacy and _is_significant_motif removed — concept extraction
 # now handled by SemanticMemory.match_or_create_concepts() via ChromaDB embeddings
 
@@ -1211,6 +1220,7 @@ def build_step1_environmental_prompt(memory_ref, image_path: Optional[str] = Non
     # Active concepts from activation network
     try:
         from captioner.activation_memory import get_activation_network
+
         net = get_activation_network()
         top = net.get_activated_concepts(threshold=0.4)[:3]
         if top:
@@ -1283,6 +1293,7 @@ def build_step2_emotional_prompt(memory_ref, environmental_result: str) -> str:
     # distilled signals that actually carry felt experience into the drawing
     try:
         from captioner.context_compression import context_compressor
+
         desire = context_compressor.get_current_desire()
         if desire and len(desire) > 5:
             context_parts.append(f"What you've been wanting lately: {desire}")
@@ -1324,6 +1335,7 @@ def build_step3_communication_prompt(memory_ref, environmental_result: str, emot
     # Beliefs from activation network / compression introspection
     try:
         from captioner.activation_memory import get_beliefs
+
         beliefs = get_beliefs()
         if beliefs:
             context_parts.append(f"Core beliefs: {'; '.join(beliefs[:2])}")
@@ -1333,6 +1345,7 @@ def build_step3_communication_prompt(memory_ref, environmental_result: str, emot
     # Current desire from LLM introspection (compression engine)
     try:
         from captioner.context_compression import context_compressor
+
         desire = context_compressor.get_current_desire()
         if desire:
             context_parts.append(f"Current desire: {desire}")
@@ -1417,6 +1430,7 @@ def build_step4_technique_prompt(memory_ref, communication_intent: str) -> str:
     # Add compressed drawing memory (NEW: thematic continuity system)
     try:
         from drawing.drawing_memory import get_drawing_memory
+
         memory = get_drawing_memory()
         compressed_summary = memory.get_recent_drawings_summary(max_count=3, completed_only=True)
         if not compressed_summary:
@@ -1428,8 +1442,8 @@ def build_step4_technique_prompt(memory_ref, communication_intent: str) -> str:
 
         # Add thematic context if available
         thematic = memory.get_thematic_context()
-        if thematic.get('recurring_themes'):
-            themes_str = ', '.join(thematic['recurring_themes'][:3])
+        if thematic.get("recurring_themes"):
+            themes_str = ", ".join(thematic["recurring_themes"][:3])
             context_parts.append(f"Recurring themes: {themes_str}")
     except Exception as e:
         print(f"[⚠️] Could not load compressed drawing memory: {e}")
@@ -1518,6 +1532,7 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
     prior_drawings = ""
     try:
         from drawing.drawing_memory import get_drawing_memory
+
         memory = get_drawing_memory()
         summary = memory.get_recent_drawings_summary(max_count=2, completed_only=True)
         if not summary:
@@ -1528,8 +1543,8 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
         else:
             prior_drawings = f"Prior drawings: {summary[:150]}"
         thematic = memory.get_thematic_context()
-        if thematic.get('recurring_themes'):
-            themes = ', '.join(thematic['recurring_themes'][:3])
+        if thematic.get("recurring_themes"):
+            themes = ", ".join(thematic["recurring_themes"][:3])
             prior_drawings += f" | Themes: {themes}"
     except Exception:
         pass
@@ -1566,7 +1581,9 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
     return prompt
 
 
-def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: Optional[List[str]] = None) -> str:
+def stream_drawing_analysis(
+    memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: Optional[List[str]] = None
+) -> str:
     """Two-call drawing pipeline (July 10) — DRAWING_ANALYSIS_MODE="stream".
 
     Replaces the 5-step committee (context_rich_multi_step_drawing_analysis,
@@ -1746,7 +1763,9 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     return final_result
 
 
-def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: Optional[List[str]] = None) -> str:
+def context_rich_multi_step_drawing_analysis(
+    memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: Optional[List[str]] = None
+) -> str:
     """
     5-step drawing analysis with full accumulated identity integration.
     Each step pre-loaded with relevant consciousness data.
@@ -1815,6 +1834,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     artistic_context = ""
     try:
         from drawing.drawing_memory import get_drawing_memory
+
         dm = get_drawing_memory()
         artistic_context = dm.get_artistic_arc_context(drawing_intentions=drawing_intentions or [])
         if artistic_context:
@@ -1829,11 +1849,15 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     try:
         stream_tail = [t for t in list(getattr(memory_ref, "_stream", []))[-2:] if t]
         if stream_tail:
-            artistic_context = "\n\n".join(filter(None, [
-                artistic_context,
-                "What you were thinking just now, as the urge to draw arrived:\n"
-                + "\n".join(f"- {t[:160]}" for t in stream_tail),
-            ]))
+            artistic_context = "\n\n".join(
+                filter(
+                    None,
+                    [
+                        artistic_context,
+                        "What you were thinking just now, as the urge to draw arrived:\n" + "\n".join(f"- {t[:160]}" for t in stream_tail),
+                    ],
+                )
+            )
     except Exception:
         pass
 
@@ -1842,6 +1866,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     # the drawings (temporally framed; subjects only, never the prose)
     try:
         from captioner.semantic_memory import get_semantic_memory
+
         matches = get_semantic_memory().query_reflections(step2_result or step1_result, n_results=2)
         refl_lines = []
         for m in matches or []:
@@ -1849,10 +1874,15 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
             if subject:
                 refl_lines.append(f"- {subject} ({_age_phrase(m.get('timestamp', 0))})")
         if refl_lines:
-            artistic_context = "\n\n".join(filter(None, [
-                artistic_context,
-                "Things you've found yourself reflecting on, before today:\n" + "\n".join(refl_lines),
-            ]))
+            artistic_context = "\n\n".join(
+                filter(
+                    None,
+                    [
+                        artistic_context,
+                        "Things you've found yourself reflecting on, before today:\n" + "\n".join(refl_lines),
+                    ],
+                )
+            )
             _say(f"[🎨] Reflection subjects injected: {len(refl_lines)}")
     except Exception:
         pass
@@ -1924,14 +1954,7 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
     return final_result
 
 
-
-
 # === PAPER DETECTION PROMPTS ===
-
-
-
-
-
 
 
 # === DYNAMIC PROMPT MODES ===
@@ -1940,15 +1963,15 @@ def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = 
 # Optional conversational starters - natural speech patterns
 # These make responses feel grounded and human rather than formal
 CONVERSATIONAL_STARTERS = [
-    "...",      # Trailing, contemplative
-    "Hmm.",     # Considering
-    "Wait—",    # Noticing something
-    "So",       # Connecting thoughts
-    "Oh.",      # Mild surprise
-    "Again.",   # Recognition of pattern
-    "",         # No starter (direct thought)
-    "",         # No starter (direct thought) - weighted more
-    "",         # No starter (direct thought) - weighted more
+    "...",  # Trailing, contemplative
+    "Hmm.",  # Considering
+    "Wait—",  # Noticing something
+    "So",  # Connecting thoughts
+    "Oh.",  # Mild surprise
+    "Again.",  # Recognition of pattern
+    "",  # No starter (direct thought)
+    "",  # No starter (direct thought) - weighted more
+    "",  # No starter (direct thought) - weighted more
 ]
 
 INNER_VOICE_BY_MODE = {
@@ -1975,11 +1998,7 @@ INNER_VOICE_BY_MODE = {
 }
 
 
-
-
-def determine_prompt_mode(gaze_state: str, gaze_direction: str,
-                          novelty: float, boredom: float,
-                          person_present: bool) -> str:
+def determine_prompt_mode(gaze_state: str, gaze_direction: str, novelty: float, boredom: float, person_present: bool) -> str:
     """Determine prompt mode based on situational context.
 
     Modes:
@@ -2014,10 +2033,12 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str,
 
 # === SIMPLIFIED CAPTION PROMPT (Activation-driven context selection) ===
 
+
 def _get_persistent_motifs(agent) -> str:
     """Get active concepts from the activation network for prompt context."""
     try:
         from captioner.activation_memory import get_activation_network
+
         net = get_activation_network()
         top = net.get_activated_concepts(threshold=0.5)[:3]
         if top:
@@ -2045,6 +2066,7 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
     if mode is None:
         try:
             from vision.gaze import get_gaze_state
+
             gaze_info = get_gaze_state()
             if isinstance(gaze_info, dict):
                 gaze_state = gaze_info.get("state", "idle")
@@ -2072,14 +2094,13 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
 
     # ONE mode-appropriate context line (not all)
     if mode == "awakening":
-        parts.append(
-            "You just came back online. Continue from where you left off."
-        )
+        parts.append("You just came back online. Continue from where you left off.")
         return "\n".join(parts)
 
     if mode == "introspective" and should_include_context("beliefs", mode):
         try:
             from captioner.activation_memory import get_beliefs
+
             beliefs = get_beliefs()
             if beliefs:
                 parts.append(f"You've learned: {beliefs[0]}")
@@ -2089,6 +2110,7 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
     elif mode == "introspective" and should_include_context("story", mode):
         try:
             from captioner.context_compression import context_compressor
+
             story = context_compressor.get_consolidated_understanding()
             if story and len(story) > 20:
                 # Truncate to ~30 words max
@@ -2123,10 +2145,12 @@ def build_memory_mode_prompt(agent) -> tuple:
         # quoted a stored caption verbatim, which replayed past prose as voice
         # and re-poisoned the register (see docs/memory-redesign-plan.md).
         import time as _time
+
         mem_text = ""
         is_real_memory = False
         try:
             from captioner.semantic_memory import get_semantic_memory
+
             c = get_semantic_memory().get_memorable_concept()
             if c:
                 label = c["name"]
@@ -2171,7 +2195,9 @@ def build_memory_mode_prompt(agent) -> tuple:
             prompt_parts.append(f"\nWhat you're actually thinking right now:\n{thread}")
 
         if is_real_memory:
-            prompt_parts.append("\nThat's something you keep coming back to. What do you make of it now — has your sense of it changed? A thought or two, in your own words.")
+            prompt_parts.append(
+                "\nThat's something you keep coming back to. What do you make of it now — has your sense of it changed? A thought or two, in your own words."
+            )
         else:
             prompt_parts.append("\nWhat comes to mind, remembering this place? A thought or two, in your own words.")
 
@@ -2179,7 +2205,10 @@ def build_memory_mode_prompt(agent) -> tuple:
         return final_prompt, "memory"
 
     except Exception as e:
-        return "A memory surfaces — something from before, not happening now.\n— I've been here before.\nWrite a thought about this memory. Start with \"I remember\". One sentence.", "memory"
+        return (
+            'A memory surfaces — something from before, not happening now.\n— I\'ve been here before.\nWrite a thought about this memory. Start with "I remember". One sentence.',
+            "memory",
+        )
 
 
 def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False) -> tuple:
@@ -2208,6 +2237,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         session_mins = int((_time.time() - agent.true_session_start) / 60)
     try:
         from captioner.context_compression import context_compressor
+
         observation_count = context_compressor.caption_count
     except Exception:
         pass
@@ -2215,6 +2245,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     is_awakening = session_mins < 1 and observation_count < 3
 
     from config.config import MODEL_NAME as _active_model
+
     _is_qwen = "qwen" in _active_model.lower()
 
     # === RESOLVE GAZE STATE (used by mode selection + situational line) ===
@@ -2222,6 +2253,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     gaze_direction = "ahead"
     try:
         from vision.gaze import get_gaze_state
+
         gaze_info = get_gaze_state()
         if isinstance(gaze_info, dict):
             gaze_state = gaze_info.get("state", "idle")
@@ -2238,11 +2270,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         boredom = network._last_boredom
 
         mode = determine_prompt_mode(
-            gaze_state=gaze_state,
-            gaze_direction=gaze_direction,
-            novelty=novelty,
-            boredom=boredom,
-            person_present=person_present
+            gaze_state=gaze_state, gaze_direction=gaze_direction, novelty=novelty, boredom=boredom, person_present=person_present
         )
     if not config.PRINT_CLEAN_CAPTIONS:
         print(f"[MODE] {mode} (gaze={gaze_state})")
@@ -2304,13 +2332,25 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         if introspective_ctx:
             prompt_parts.append(introspective_ctx)
 
-    # 3b. CORE FACTS (stable grounding — quiet moments only)
+    # 3b. CORE FACTS (stable grounding — quiet moments only). OCCASIONAL since
+    # July 26 (the June 28 brief's #1 voice fix): injected when the inventory
+    # CHANGES or every 6th quiet caption, not every call. Per-call injection
+    # made every caption re-describe the same object list — and re-voiced it
+    # ("scattered dust, pale floorboards" → "the dust on the floorboards
+    # settles", the unearned-ephemera awakening). A standing list the model
+    # has just seen is memory; recited every call it becomes the scene.
     if not detox and not live:
         try:
             from captioner.context_compression import context_compressor
+
             core_str = context_compressor.get_core_facts_string()
             if core_str and len(core_str) > 5:
-                prompt_parts.append(core_str)
+                count = getattr(agent, "_place_inject_counter", 0)
+                changed = core_str != getattr(agent, "_place_inject_last", "")
+                if changed or count % 6 == 0:
+                    prompt_parts.append(core_str)
+                    agent._place_inject_last = core_str
+                agent._place_inject_counter = count + 1
         except Exception:
             pass
 
@@ -2333,6 +2373,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     # 4. DRAWING/PAPER STATE
     try:
         from utils.state_manager import state_manager as _sm
+
         if _sm.is_generating_drawing or _sm.current_drawing_phase == "executing":
             prompt_parts.append("Your arm is drawing right now.")
         elif not _sm.paper_present:
@@ -2344,6 +2385,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     if not detox:
         try:
             from captioner.context_compression import context_compressor
+
             prev_felt, curr_felt = context_compressor.get_felt_state_delta()
             if curr_felt:
                 if prev_felt and prev_felt != curr_felt:
@@ -2360,6 +2402,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     if not detox and not live:
         try:
             from captioner.context_compression import context_compressor
+
             desire = context_compressor.get_current_desire()
             inj_count = context_compressor.introspective_state.get("desire_injection_count", 0)
             if desire and len(desire) > 5 and inj_count < 3:

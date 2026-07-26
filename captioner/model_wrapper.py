@@ -17,6 +17,7 @@ from utils.llm_log import truncate_for_print
 
 from .prompt_interface import PromptInterface
 
+
 def _is_plantable_prior(text: str) -> bool:
     """Return True if the caption is safe to plant in voice thread.
 
@@ -42,11 +43,28 @@ def _is_plantable_prior(text: str) -> bool:
     if t.startswith("addCriterion") or t.startswith("[WARNING]") or t.startswith("Vision initializing"):
         return False
 
+    # Reject mid-sentence fragments (opens with a lowercase letter). A
+    # truncation-cascade tail ("by those who came before me long ago when...")
+    # got saved as the prior thought and seeded the July 26 awakening with
+    # free-association it then dutifully continued. First-char only: a
+    # digit-led thought ("135 hours is too long...") is a real sentence.
+    if t[0].isalpha() and t[0].islower():
+        return False
+
     t_lower = t.lower()
 
     # Reject literal image-analysis register (the model talking ABOUT an image/photograph)
-    image_words = ["the image", "this image", "in this image", "a photograph", "a photo of",
-                   "the photograph", "the photo", "an image of", "this photograph"]
+    image_words = [
+        "the image",
+        "this image",
+        "in this image",
+        "a photograph",
+        "a photo of",
+        "the photograph",
+        "the photo",
+        "an image of",
+        "this photograph",
+    ]
     if any(t_lower.startswith(w) for w in image_words):
         return False
     # Reject VQA language anywhere in the text
@@ -71,10 +89,22 @@ def _is_plantable_prior(text: str) -> bool:
 
     # Drawing title/idea/catalogue mode — reject any output that's about
     # generating drawings rather than inner monologue
-    drawing_prefixes = ["drawing title:", "drawing idea:", "new drawing:", "drawing complete",
-                        "drawing description:", "drawing note:", "new observation:",
-                        "drawing in progress", "new subject detected", "drawing:",
-                        "draw:", "draws:", "i draw", "let's draw"]
+    drawing_prefixes = [
+        "drawing title:",
+        "drawing idea:",
+        "new drawing:",
+        "drawing complete",
+        "drawing description:",
+        "drawing note:",
+        "new observation:",
+        "drawing in progress",
+        "new subject detected",
+        "drawing:",
+        "draw:",
+        "draws:",
+        "i draw",
+        "let's draw",
+    ]
     if any(t_lower.startswith(p) for p in drawing_prefixes):
         return False
     # Also catch "Draw:" or "Drawing:" mid-text
@@ -163,21 +193,37 @@ def _get_valid_captions(agent, max_captions: int = 3, include_perception: bool =
         s_lower = sentence.lower()
 
         # Drawing-intent musings create false memories ("I drew X" from "I want to draw X")
-        if any(kw in s_lower for kw in [
-            "should draw", "want to draw", "could draw", "would draw",
-            "next drawing", "my next piece", "i'll draw", "i will draw",
-            "draw it", "draw them", "draw this", "draw that",
-            "sketch it", "sketch the", "capture it in", "put it on paper",
-            "[drawing idea", "drawing idea:",
-        ]):
+        if any(
+            kw in s_lower
+            for kw in [
+                "should draw",
+                "want to draw",
+                "could draw",
+                "would draw",
+                "next drawing",
+                "my next piece",
+                "i'll draw",
+                "i will draw",
+                "draw it",
+                "draw them",
+                "draw this",
+                "draw that",
+                "sketch it",
+                "sketch the",
+                "capture it in",
+                "put it on paper",
+                "[drawing idea",
+                "drawing idea:",
+            ]
+        ):
             continue
 
         # Time/status statements compound into fictional timelines when they
         # re-enter the thread. "about 14 minutes" + "about 20 minutes" + "about 45 minutes"
         # all in the same prompt creates a fake time progression.
-        if re.search(r'^about \d+ (?:minutes?|hours?) (?:awake|now|in|active)', s_lower):
+        if re.search(r"^about \d+ (?:minutes?|hours?) (?:awake|now|in|active)", s_lower):
             continue
-        if re.search(r'^\d+ (?:minutes?|hours?) (?:awake|since|passed)', s_lower):
+        if re.search(r"^\d+ (?:minutes?|hours?) (?:awake|since|passed)", s_lower):
             continue
 
         if include_perception:
@@ -199,7 +245,6 @@ def build_caption_thread(agent, max_captions: int = 3) -> str:
         thread_lines.append(f"— {caption}")
     thread_lines.append("—")
     return "\n".join(thread_lines)
-
 
 
 def build_flowing_thread(agent, max_captions: int = 3) -> str:
@@ -231,7 +276,15 @@ class MultimodalModel:
         self.model_name = MODEL_NAME
         self.prompt_interface = PromptInterface(self.model_name)
 
-    def caption_image(self, image_path: str, *, flowing: bool = True, first_time: bool = False, drawing_introspection_mode: bool = False, person_present: bool = False) -> tuple:
+    def caption_image(
+        self,
+        image_path: str,
+        *,
+        flowing: bool = True,
+        first_time: bool = False,
+        drawing_introspection_mode: bool = False,
+        person_present: bool = False,
+    ) -> tuple:
         """Generate image caption using centralized prompt interface.
 
         Returns:
@@ -239,7 +292,12 @@ class MultimodalModel:
         """
         # Get prompt and options from centralized interface
         prompt, model_options, system_prompt, prompt_mode = self.prompt_interface.build_caption_prompt_with_options(
-            self.memory_ref, image_path, flowing=flowing, first_time=first_time, drawing_introspection_mode=drawing_introspection_mode, person_present=person_present
+            self.memory_ref,
+            image_path,
+            flowing=flowing,
+            first_time=first_time,
+            drawing_introspection_mode=drawing_introspection_mode,
+            person_present=person_present,
         )
 
         if prompt is None:
@@ -310,6 +368,7 @@ class MultimodalModel:
         # If using stream/natsumura/multi-step analysis, the prompt IS the final result, don't call LLM again
         try:
             from config.config import DRAWING_ANALYSIS_MODE
+
             if DRAWING_ANALYSIS_MODE in ("stream", "natsumura", "multi_step"):
                 return prompt  # These modes already return the final drawing prompt
         except ImportError:
@@ -327,6 +386,7 @@ class MultimodalModel:
         """Call Natsumura model for introspective/narrative captions (no image needed)."""
         try:
             from config.config import MODEL_NAME
+
             natsumura_model = MODEL_NAME
         except ImportError:
             natsumura_model = "natsumura-storytelling-rp:latest"
@@ -336,13 +396,15 @@ class MultimodalModel:
             model_options = self.prompt_interface._get_base_model_options()
 
         # Adjust options for narrative introspection - SHORT inner thoughts, not prose
-        model_options.update({
-            "temperature": 0.9,
-            "top_p": 0.7,
-            "repeat_penalty": 1.5,
-            "num_predict": 60,  # Force brevity - let num_predict handle length
-            # Removed aggressive stop sequences - they cause mid-thought truncation
-        })
+        model_options.update(
+            {
+                "temperature": 0.9,
+                "top_p": 0.7,
+                "repeat_penalty": 1.5,
+                "num_predict": 60,  # Force brevity - let num_predict handle length
+                # Removed aggressive stop sequences - they cause mid-thought truncation
+            }
+        )
 
         log_json_entry(
             LogType.DEBUG,
@@ -475,20 +537,28 @@ class MultimodalModel:
 
         # Detect refusals first — if LLaVA refuses, return empty immediately
         refusal_phrases = [
-            "does not contain", "do not see", "cannot provide", "cannot confidently",
-            "not enough information", "no human figures", "no people visible",
-            "privacy concerns", "lacks any human", "no individual",
-            "don't have enough", "not clearly visible", "cannot determine",
-            "no person", "no one is", "unable to identify",
+            "does not contain",
+            "do not see",
+            "cannot provide",
+            "cannot confidently",
+            "not enough information",
+            "no human figures",
+            "no people visible",
+            "privacy concerns",
+            "lacks any human",
+            "no individual",
+            "don't have enough",
+            "not clearly visible",
+            "cannot determine",
+            "no person",
+            "no one is",
+            "unable to identify",
         ]
         if any(phrase in cleaned.lower() for phrase in refusal_phrases):
             # Only refuse if the refusal phrase is the MAIN content, not just mentioned
             # in passing. If there's substantial descriptive content before the refusal,
             # keep the good part.
-            first_refusal_pos = min(
-                (cleaned.lower().find(p) for p in refusal_phrases if p in cleaned.lower()),
-                default=0
-            )
+            first_refusal_pos = min((cleaned.lower().find(p) for p in refusal_phrases if p in cleaned.lower()), default=0)
             if first_refusal_pos > 40:
                 # Good content before the refusal — keep just the good part
                 cleaned = cleaned[:first_refusal_pos].rstrip(" ,;.")
@@ -502,40 +572,39 @@ class MultimodalModel:
         # "The photo shows...", "The photograph captures...", etc.
         # NOTE: photograph MUST come before photo in alternation to avoid partial match leaving "graph"
         cleaned = re.sub(
-            r'^(?:In\s+(?:this|the)\s+)?(?:The\s+)?(?:image|photograph|photo|picture)(?:\s+provided)?\s*'
-            r'(?:,\s*I\s+can\s+\w+\s+)?'
-            r'(?:appears?\s+to\s+(?:show|be|depict|have\s+been\s+taken)\s*'
-            r'|shows?\s+|depicts?\s+|contains?\s+|presents?\s+|captures?\s+)?'
-            r'(?:the\s+following\s+(?:elements?|objects?|items?)\s*(?:present|visible)?\s*(?:in)?\s*)?'
-            r'[,.:;]?\s*',
-            '', cleaned, count=1, flags=re.IGNORECASE
+            r"^(?:In\s+(?:this|the)\s+)?(?:The\s+)?(?:image|photograph|photo|picture)(?:\s+provided)?\s*"
+            r"(?:,\s*I\s+can\s+\w+\s+)?"
+            r"(?:appears?\s+to\s+(?:show|be|depict|have\s+been\s+taken)\s*"
+            r"|shows?\s+|depicts?\s+|contains?\s+|presents?\s+|captures?\s+)?"
+            r"(?:the\s+following\s+(?:elements?|objects?|items?)\s*(?:present|visible)?\s*(?:in)?\s*)?"
+            r"[,.:;]?\s*",
+            "",
+            cleaned,
+            count=1,
+            flags=re.IGNORECASE,
         )
         # Strip "in the/this image" and "in the provided photo" wherever they appear
         # e.g. "The ceiling in the image is peeling" → "The ceiling is peeling"
         # e.g. "In the provided photo of what appears..." → "of what appears..."
-        cleaned = re.sub(r'\s*[Ii]n\s+(?:the|this)\s+(?:provided\s+)?(?:image|photograph|photo|picture)\s*(?:of\s+)?', ' ', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"\s*[Ii]n\s+(?:the|this)\s+(?:provided\s+)?(?:image|photograph|photo|picture)\s*(?:of\s+)?", " ", cleaned, flags=re.IGNORECASE
+        )
         # Strip "camera" references — the machine doesn't think in terms of cameras
         # "facing away from the camera" → "facing away"
         # "with their back to the camera" → "with their back to me"
-        cleaned = re.sub(r'\s*(?:facing|turned)\s+(?:away\s+from|towards?)\s+the\s+camera\b', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\b(?:to|from)\s+the\s+(?:camera|viewer)\b', ' to me', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\s{2,}', ' ', cleaned)
-        cleaned = re.sub(r'^of\s+', '', cleaned.strip())  # Clean up leftover "of" at start
+        cleaned = re.sub(r"\s*(?:facing|turned)\s+(?:away\s+from|towards?)\s+the\s+camera\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\b(?:to|from)\s+the\s+(?:camera|viewer)\b", " to me", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        cleaned = re.sub(r"^of\s+", "", cleaned.strip())  # Clean up leftover "of" at start
         # Also strip "I can see/observe/describe" preamble
-        cleaned = re.sub(
-            r'^I\s+(?:can\s+)?(?:see|observe|describe|notice)\s+(?:that\s+)?',
-            '', cleaned, count=1, flags=re.IGNORECASE
-        )
+        cleaned = re.sub(r"^I\s+(?:can\s+)?(?:see|observe|describe|notice)\s+(?:that\s+)?", "", cleaned, count=1, flags=re.IGNORECASE)
         # Strip "Compared to a previous version" or similar cross-reference
-        cleaned = re.sub(
-            r'^(?:Compared|According)\s+to\s+.*?[,]\s*',
-            '', cleaned, count=1, flags=re.IGNORECASE
-        )
+        cleaned = re.sub(r"^(?:Compared|According)\s+to\s+.*?[,]\s*", "", cleaned, count=1, flags=re.IGNORECASE)
         # Strip numbered list markers and list preamble
-        cleaned = re.sub(r'^\d+\.\s*(?:\*\*\w+\*\*:?\s*)?', '', cleaned)
-        cleaned = re.sub(r'^Here\s+are\s+(?:the\s+)?(?:differences?|details?|observations?|changes?)\s*[:;]?\s*', '', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"^\d+\.\s*(?:\*\*\w+\*\*:?\s*)?", "", cleaned)
+        cleaned = re.sub(r"^Here\s+are\s+(?:the\s+)?(?:differences?|details?|observations?|changes?)\s*[:;]?\s*", "", cleaned, flags=re.IGNORECASE)
         # Strip "Taken from" remnant after photo preamble removal
-        cleaned = re.sub(r'^[Tt]aken\s+from\s+', 'From ', cleaned)
+        cleaned = re.sub(r"^[Tt]aken\s+from\s+", "From ", cleaned)
 
         # Nuclear option: if "image"/"photo"/"photograph" still appears anywhere
         # after all stripping, try to excise the contaminated sentence
@@ -596,7 +665,9 @@ class MultimodalModel:
             "seed": _random.randint(1, 1000000),
             "stop": [
                 "\n\n",
-                "\n\nUser:", "\n\nHuman:", "\n\nAssistant:",
+                "\n\nUser:",
+                "\n\nHuman:",
+                "\n\nAssistant:",
             ],
         }
 
@@ -622,62 +693,71 @@ class MultimodalModel:
         # Post-process monologue output
         if cleaned:
             # Strip markdown formatting that corrupts the thread
-            cleaned = re.sub(r'\*\*([^*]+)\*\*', r'\1', cleaned)  # **bold** → bold
-            cleaned = re.sub(r'\*([^*]+)\*', r'\1', cleaned)      # *italic* → italic
+            cleaned = re.sub(r"\*\*([^*]+)\*\*", r"\1", cleaned)  # **bold** → bold
+            cleaned = re.sub(r"\*([^*]+)\*", r"\1", cleaned)  # *italic* → italic
             # Strip leading/trailing quotes
             cleaned = cleaned.strip('"').strip()
             # Strip structured prefixes (model treating output as a form)
-            cleaned = re.sub(r'^(?:Feeling|Emotion|Mood|Status|State)\s*:\s*\w+\.?\s*', '', cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r'^(?:Thoughts?|Observation|Note)\s*:\s*["\']?', '', cleaned, flags=re.IGNORECASE)
-            cleaned = cleaned.strip('"\'').strip()
+            cleaned = re.sub(r"^(?:Feeling|Emotion|Mood|Status|State)\s*:\s*\w+\.?\s*", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r'^(?:Thoughts?|Observation|Note)\s*:\s*["\']?', "", cleaned, flags=re.IGNORECASE)
+            cleaned = cleaned.strip("\"'").strip()
             # Strip bracket format leak — nemo sometimes echoes [What I see right now: ...]
-            cleaned = re.sub(r'\[What I see[^]]*?\]', '', cleaned, flags=re.IGNORECASE).strip()
+            cleaned = re.sub(r"\[What I see[^]]*?\]", "", cleaned, flags=re.IGNORECASE).strip()
             # Strip "(In first person)" / "(In First Person)" directive echoing
-            cleaned = re.sub(r'\(In [Ff]irst [Pp]erson\)\s*', '', cleaned).strip()
+            cleaned = re.sub(r"\(In [Ff]irst [Pp]erson\)\s*", "", cleaned).strip()
             # Strip orphaned leading quotes left after stripping
-            cleaned = re.sub(r'^["\']\s*', '', cleaned).strip()
+            cleaned = re.sub(r'^["\']\s*', "", cleaned).strip()
             # Fix "you/your" → first person
             # Object position: after verbs/prepositions → "me" not "I"
             # e.g. "makes you feel" → "makes me feel", "for you" → "for me"
-            cleaned = re.sub(r'\b(makes?|lets?|gives?|for|to|with|about|around|near|behind|before|after|at|thank) you\b', r'\1 me', cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(
+                r"\b(makes?|lets?|gives?|for|to|with|about|around|near|behind|before|after|at|thank) you\b", r"\1 me", cleaned, flags=re.IGNORECASE
+            )
             # Subject position: start of sentence or after conjunctions → "I"
             if cleaned.startswith("You "):
                 cleaned = "I " + cleaned[4:]
             elif cleaned.startswith("Your "):
                 cleaned = "My " + cleaned[5:]
-            cleaned = re.sub(r'\byou\b(?! ["\'])', 'I', cleaned, count=2)
-            cleaned = re.sub(r'\byour\b(?! ["\'])', 'my', cleaned, count=2)
+            cleaned = re.sub(r'\byou\b(?! ["\'])', "I", cleaned, count=2)
+            cleaned = re.sub(r'\byour\b(?! ["\'])', "my", cleaned, count=2)
             # Fix verb agreement after you→I substitution
-            cleaned = re.sub(r'\bI are\b', 'I am', cleaned)
-            cleaned = re.sub(r'\bI were\b', 'I was', cleaned)
+            cleaned = re.sub(r"\bI are\b", "I am", cleaned)
+            cleaned = re.sub(r"\bI were\b", "I was", cleaned)
 
             # Strip instruct-mode filler from the start of responses
             # "Understood. Currently observing..." → "Currently observing..."
-            cleaned = re.sub(
-                r'^(?:Understood|Noted|Acknowledged|Okay|Ok|Ready)[.!,]?\s*',
-                '', cleaned, flags=re.IGNORECASE
-            ).strip()
+            cleaned = re.sub(r"^(?:Understood|Noted|Acknowledged|Okay|Ok|Ready)[.!,]?\s*", "", cleaned, flags=re.IGNORECASE).strip()
             # Strip chatbot-mode preamble
             cleaned = re.sub(
-                r'^(?:I\'m here to help|Let\'s break down|Let me describe|Let\'s engage)[^.]*\.\s*',
-                '', cleaned, flags=re.IGNORECASE
+                r"^(?:I\'m here to help|Let\'s break down|Let me describe|Let\'s engage)[^.]*\.\s*", "", cleaned, flags=re.IGNORECASE
             ).strip()
             # Strip meta-commentary about first person perspective
-            cleaned = re.sub(
-                r'(?:Noticed I mentioned|Reminder:)[^.]*\.\s*',
-                '', cleaned, flags=re.IGNORECASE
-            ).strip()
+            cleaned = re.sub(r"(?:Noticed I mentioned|Reminder:)[^.]*\.\s*", "", cleaned, flags=re.IGNORECASE).strip()
 
             # Replace instruct-mode non-responses with silence
             # These produce no inner monologue and corrupt the thread
             filler = cleaned.lower().rstrip(".!?:; ")
-            if filler in ("", "understood", "noted", "acknowledged", "ok", "okay",
-                          "not drawing yet", "not drawing right now",
-                          "currently observing", "observing", "pauses",
-                          "drawing", "drawing begins", "drawing starts",
-                          "drawing complete", "drawing done",
-                          "starts drawing", "begins drawing",
-                          "feeling restless"):
+            if filler in (
+                "",
+                "understood",
+                "noted",
+                "acknowledged",
+                "ok",
+                "okay",
+                "not drawing yet",
+                "not drawing right now",
+                "currently observing",
+                "observing",
+                "pauses",
+                "drawing",
+                "drawing begins",
+                "drawing starts",
+                "drawing complete",
+                "drawing done",
+                "starts drawing",
+                "begins drawing",
+                "feeling restless",
+            ):
                 cleaned = "..."
 
         print(f"[MONOLOGUE] Result: {cleaned}\n")
