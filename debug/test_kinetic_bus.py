@@ -52,12 +52,15 @@ def main():
     session_mod.SESSIONS_DIR = tmp  # save/load route through the temp library
     try:
         for name, center in (("energized_engaged_a", 60), ("calm_observant_a", 140), ("drawing_a", 100)):
-            make_session(name, center).save()
+            make_session(name, center).save(export=True)
+        make_session("energized_engaged_wip", 90).save()  # PROJECT save — runtime must not see it
 
         lib = kb.TemperamentLibrary(sessions_dir=tmp)
         buckets = lib.scan()
         if sorted(buckets) != ["calm_observant", "drawing", "energized_engaged"]:
             failures.append(f"bucketing wrong: {sorted(buckets)}")
+        if any("wip" in fn for fns in buckets.values() for fn in fns):
+            failures.append("a projects/ save leaked into the runtime library scan")
         if lib.bundle_for("energized_engaged", drawing=True) != "session_drawing_a.json":
             failures.append("drawing state did not override emotion")
         if lib.bundle_for("withdrawn_distant", drawing=False) is None:

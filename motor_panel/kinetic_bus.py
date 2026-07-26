@@ -76,7 +76,8 @@ class TemperamentLibrary:
     "session_energized_engaged_a.json" -> energized_engaged bundle;
     "session_drawing_slow.json" -> the drawing-state bundle. Chains are
     trained lazily and cached per (file, mtime), restricted to the channels
-    the bus owns."""
+    the bus owns. The projects/ subfolder is the panel's working area —
+    deliberately never scanned; only Export ▸ runtime publishes here."""
 
     def __init__(self, sessions_dir: str = SESSIONS_DIR, owned: set = OWNED_CHANNELS):
         self.sessions_dir = sessions_dir

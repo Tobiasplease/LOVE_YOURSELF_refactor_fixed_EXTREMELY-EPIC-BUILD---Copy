@@ -180,8 +180,12 @@ changes.
   simultaneously.** Relink + retrain any time without re-recording. (The
   session file keeps the group field — "A" = linked — so old files load.)
 - **Speed slider** (0.25-2×) retempos playback and generation.
-- Sessions persist as `movement_recordings/arms/session_{name}.json`
-  (`format 4.1_session_groups`); name them per emotion state.
+- **Project vs runtime saves** (July 26): **Save project** writes to
+  `movement_recordings/arms/projects/` — the working area, free to iterate,
+  deliberately invisible to the kinetic bus. **Export ▸ runtime** publishes
+  into the library root where the bus picks bundles by state prefix (the
+  export warns if the name has no state prefix). Load lists both
+  (`projects/...` first). Same file format (`4.1_session_groups`) either way.
 - **Legacy hand datasets** (`movement_recordings/*.json`, 13 present, per
   emotion) import as hand-track takes via the hand tab (tiled to the loop;
   originals untouched).

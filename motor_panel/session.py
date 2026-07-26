@@ -90,10 +90,15 @@ class Session:
             out[key] = engine.train(self._joint_samples(tracks), channels)
         return out
 
-    def save(self) -> str:
-        os.makedirs(SESSIONS_DIR, exist_ok=True)
+    def save(self, export: bool = False) -> str:
+        """Project saves (the default) live in projects/ — the working area,
+        free to iterate, never scanned by the runtime. export=True publishes
+        into the runtime library root, where the kinetic bus picks bundles
+        by their state-name prefix."""
+        base = SESSIONS_DIR if export else os.path.join(SESSIONS_DIR, "projects")
+        os.makedirs(base, exist_ok=True)
         safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in self.name) or "session"
-        path = os.path.join(SESSIONS_DIR, f"session_{safe}.json")
+        path = os.path.join(base, f"session_{safe}.json")
         with open(path, "w") as f:
             json.dump(
                 {
@@ -122,9 +127,15 @@ class Session:
 
     @staticmethod
     def list_saved() -> List[str]:
-        if not os.path.isdir(SESSIONS_DIR):
-            return []
-        return sorted(f for f in os.listdir(SESSIONS_DIR) if f.startswith("session_") and f.endswith(".json"))
+        """Projects first (the working set, shown as projects/...), then the
+        runtime library. Load() takes either form."""
+        out = []
+        proj = os.path.join(SESSIONS_DIR, "projects")
+        if os.path.isdir(proj):
+            out += [f"projects/{f}" for f in sorted(os.listdir(proj)) if f.startswith("session_") and f.endswith(".json")]
+        if os.path.isdir(SESSIONS_DIR):
+            out += sorted(f for f in os.listdir(SESSIONS_DIR) if f.startswith("session_") and f.endswith(".json"))
+        return out
 
 
 LEGACY_HAND_DIR = os.path.join(os.path.dirname(SESSIONS_DIR))  # movement_recordings/

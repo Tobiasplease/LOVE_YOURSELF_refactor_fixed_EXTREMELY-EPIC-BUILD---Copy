@@ -1116,12 +1116,13 @@ class SessionFrame(ttk.LabelFrame):
 
         def name_by_state(_ev):
             base = self.state_var.get()
-            n = len([s for s in Session.list_saved() if s.startswith(f"session_{base}")])
+            n = len([s for s in Session.list_saved() if os.path.basename(s).startswith(f"session_{base}")])
             self.name_entry.delete(0, "end")
             self.name_entry.insert(0, f"{base}_{chr(ord('a') + n) if n < 26 else n}")
 
         state_menu.bind("<<ComboboxSelected>>", name_by_state)
-        ttk.Button(sr, text="Save", command=self.save).pack(side="left", padx=2)
+        ttk.Button(sr, text="Save project", command=self.save).pack(side="left", padx=2)
+        ttk.Button(sr, text="Export ▸ runtime", command=self.export_runtime).pack(side="left", padx=2)
         self.saved_var = tk.StringVar()
         self.saved_menu = ttk.Combobox(sr, textvariable=self.saved_var, width=24, state="readonly")
         self.saved_menu.pack(side="left", padx=2)
@@ -1390,9 +1391,25 @@ class SessionFrame(ttk.LabelFrame):
         self.saved_menu["values"] = Session.list_saved()
 
     def save(self):
+        """Working save — projects/ is the editing area, invisible to the
+        runtime. Iterate freely, then Export when a take deserves to be a
+        temperament."""
         self.session.name = self.name_entry.get().strip() or "session"
         path = self.session.save()
-        self.log("session", f"saved {os.path.basename(path)}", False)
+        self.log("session", f"project saved: {os.path.basename(path)}", False)
+        self.status.config(text=f"project saved: {self.session.name} (edit freely — runtime can't see it)")
+        self._refresh_saved()
+
+    def export_runtime(self):
+        """Publish the current session into the runtime library, where the
+        kinetic bus picks temperament bundles by state-name prefix."""
+        self.session.name = self.name_entry.get().strip() or "session"
+        path = self.session.save(export=True)
+        states = ["drawing"] + EMOTIONS
+        named_ok = any(self.session.name == s or self.session.name.startswith(s + "_") for s in states)
+        note = "" if named_ok else " — ⚠ no state prefix, the kinetic bus will IGNORE it (use the state dropdown)"
+        self.log("session", f"exported to runtime library: {os.path.basename(path)}", False)
+        self.status.config(text=f"exported: {self.session.name}{note}")
         self._refresh_saved()
 
     def load(self):
