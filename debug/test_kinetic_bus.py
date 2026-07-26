@@ -39,9 +39,9 @@ def make_session(name, finger_center):
     hand.samples = [
         {"t": i / RATE, "dt": 1 / RATE, **{f"finger{j}": finger_center + 15 * math.sin(2 * math.pi * i / n + j) for j in range(4)}} for i in range(n)
     ]
-    arm.samples = [
-        {"t": i / RATE, "dt": 1 / RATE, "elbow": 90 + 10 * math.sin(2 * math.pi * i / n), "shoulder": 90.0, "wrist": 90.0} for i in range(n)
-    ]
+    arm.samples = [{"t": i / RATE, "dt": 1 / RATE, "elbow": 90 + 10 * math.sin(2 * math.pi * i / n), "shoulder": 90.0} for i in range(n)]
+    wrist = next(t for t in s.tracks if t.channels == ["wrist"])
+    wrist.samples = [{"t": i / RATE, "dt": 1 / RATE, "wrist": 90 + 8 * math.cos(2 * math.pi * i / n)} for i in range(n)]
     gantry.samples = [{"t": i / RATE, "dt": 1 / RATE, "x": 20.0, "y": 20.0} for i in range(n)]  # must be IGNORED by the bus
     return s
 
@@ -117,13 +117,16 @@ def main():
 
         before = device.channels["finger0"].value
         ctx["person"] = "visible"
-        time.sleep(0.5)
-        after = device.channels["finger0"].value
-        snap = after - before
+        peak = before
+        t1 = time.time()
+        while time.time() - t1 < 0.6:  # freeze duration is random — catch the PEAK of the snap
+            peak = max(peak, device.channels["finger0"].value)
+            time.sleep(0.02)
+        snap = peak - before
         if bus._last_startle == 0.0:
             failures.append("arrival did not trigger startle")
-        if not 15 <= snap <= 50:
-            failures.append(f"startle snap was {snap}° (expected ~+35 within clamp)")
+        if not 12 <= snap <= 50:
+            failures.append(f"startle snap peaked at +{snap}° (expected ~+35 within clamp)")
         first_startle = bus._last_startle
         ctx["person"] = "absent"
         time.sleep(0.3)

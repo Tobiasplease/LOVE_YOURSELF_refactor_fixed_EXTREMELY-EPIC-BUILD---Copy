@@ -673,6 +673,7 @@ class LinkageView(tk.Canvas):
         self.lefthand = lefthand
         self.s_ch = lefthand.channels["shoulder"]
         self.e_ch = lefthand.channels["elbow"]
+        self.w_ch = lefthand.channels["wrist"]
         span = max(self.s_ch.hi - self.s_ch.lo, self.e_ch.hi - self.e_ch.lo, 1)
         self.vg = self.VISUAL_SWEEP / span
         self.s_scale = 1.0  # joint-space range fractions (sensitivity knobs)
@@ -696,10 +697,21 @@ class LinkageView(tk.Canvas):
         self.bone2 = self.create_line(0, 0, 0, 0, fill="#12b3a4", width=4, capstyle="round")
         self.joint = self.create_oval(0, 0, 0, 0, fill="#dfe6e9", outline="")
         self.wrist = self.create_oval(0, 0, 0, 0, fill="#ffeaa7", outline="")
+        # wrist (pin 6): scroll wheel over the canvas rotates it — drag drives
+        # shoulder/elbow, the wheel is the third joint in the same hand
+        self.hand_seg = self.create_line(0, 0, 0, 0, fill="#f5c04a", width=3, capstyle="round")
+        x0, y0, x1, y1 = self.PAD
+        self.wrist_lbl = self.create_text((x0 + x1) // 2, y1 + 12, text="", fill="#667", font=("monospace", 8))
         self.bind("<B1-Motion>", self._drag)
         self.bind("<Button-1>", self._drag)
+        self.bind("<Button-4>", lambda e: self._wrist_nudge(+3))  # Linux wheel up
+        self.bind("<Button-5>", lambda e: self._wrist_nudge(-3))
+        self.bind("<MouseWheel>", lambda e: self._wrist_nudge(3 if e.delta > 0 else -3))
         self._update_pad_label()
         self._tick()
+
+    def _wrist_nudge(self, d: float):
+        self.lefthand.set_channel("wrist", self.w_ch.target + d)  # target, not value: wheel outruns the smoother
 
     # --- mapping --------------------------------------------------------------
     def _eff_range(self, ch, scale: float):
@@ -827,6 +839,12 @@ class LinkageView(tk.Canvas):
         self.coords(self.bone2, ex, ey, wx, wy)
         self.coords(self.joint, ex - 4, ey - 4, ex + 4, ey + 4)
         self.coords(self.wrist, wx - 5, wy - 5, wx + 5, wy + 5)
+        w = self.w_ch.value
+        span = max(1, self.w_ch.hi - self.w_ch.lo)
+        a3 = a2 + math.radians((w - self.w_ch.neutral) / span * 90)  # hand segment rotates with the wrist
+        hx, hy = wx + self.L2 * 0.45 * math.cos(a3), wy + self.L2 * 0.45 * math.sin(a3)
+        self.coords(self.hand_seg, wx, wy, hx, hy)
+        self.itemconfig(self.wrist_lbl, text=f"wrist {int(w)}°  (scroll wheel — own lane, overdub it)")
         u, v = self.inv_uv(s, e)
         x0, y0, x1, y1 = self.PAD
         px = x0 + (x1 - x0) * u
@@ -1042,7 +1060,7 @@ class SessionFrame(ttk.LabelFrame):
     # Record with no lane rec-enabled: record what you're performing on.
     TAB_TRACKS = {
         "right arm — bed": ["right arm (grbl)", "pen (right hand)"],
-        "left arm — linkage": ["left arm"],
+        "left arm — linkage": ["left arm", "wrist"],
         "hand": ["hand (fingers)"],
         "lung": ["lung"],
     }
@@ -1436,7 +1454,7 @@ def build_ui(root):
     grbl = GrblFrame(dev_col, log)
     grbl.pack(fill="x", pady=3)
 
-    ws_h = max(380, min(640, sh - 600))
+    ws_h = max(380, min(640, sh - 620))
     ws_w = max(760, min(1250, sw - 700))
     body = SessionFrame(cols, devices[0], devices[1], grbl, log, ws=(ws_w, ws_h))  # lunggaze, lefthand
     body.pack(side="left", fill="both", expand=True, padx=4, pady=3)

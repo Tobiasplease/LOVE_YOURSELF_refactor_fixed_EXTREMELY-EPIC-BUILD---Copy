@@ -136,6 +136,15 @@ changes.
 
 ## 5. The session looper (recording model)
 
+- **Layers within a limb = separate lanes** (July 26): a servo holds one
+  value, so overdubs can't sum like audio — intra-limb layering means
+  finer lanes. The wrist is the first example: its own lane, performed
+  with the SCROLL WHEEL over the linkage pad (drag = shoulder/elbow,
+  wheel = wrist — one hand, three joints; the skeleton grows a gold hand
+  segment). Record the arm, then ● only the wrist lane and overdub it
+  against the playing arm take. "link" keeps them training as ONE joint
+  chain, so generation preserves wrist-in-relation-to-arm. Any track can
+  be split the same way if a limb needs more layers.
 - **Track = a LANE with a timeline** (July 26 redesign, modeled on the
   servocontroller ui-modernize interface after the first UI read as a
   facade): each lane shows a waveform of its take (one autoscaled polyline
