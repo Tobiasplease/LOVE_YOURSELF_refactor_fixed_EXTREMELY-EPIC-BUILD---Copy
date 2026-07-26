@@ -404,7 +404,13 @@ them for dead code, and do not expect machine.py to reach them:
 - `tools/arm_gui_tk/` — 2-link arm kinematics GUI for skew correction
   (see docs/skew_calibration_quickstart.md)
 - `bcnc/` — G-code conversion library; the runtime entry is
-  `image_monitor/image_monitor.py` (raster → centerline SVG)
+  `image_monitor/image_monitor.py` (raster → centerline SVG). Since July 21
+  2026 the live tracer is `bcnc/svg_centerliner_v2.py` (skeleton graph walk,
+  every stroke drawn once); `svg_centerliner.py` (v1, contour-of-skeleton —
+  drew everything twice) is kept only until v2 is confirmed on paper.
+  Same date, anti-blur generation knobs: TRIGGER_PROMPT says "ink" not
+  "sketch" (config.py) and the depth ControlNet releases at end_percent 0.6
+  (COMFY_CNET_END_PERCENT → drawing/comfy.py node 711).
 - `labs/warp-fix-lab/` — experimental warp correction scripts, not integrated
 - `debug/` — 103 standalone test/calibration scripts (all verified to import
   only symbols that still exist, July 2026)

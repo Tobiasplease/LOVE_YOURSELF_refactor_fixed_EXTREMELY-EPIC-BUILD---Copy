@@ -264,15 +264,9 @@ class ImageMonitor:
                     print_message=f"[🔄] Converting PNG to centerline SVG: {base_name}",
                 )
 
-                # Run svg_centerliner
                 raster_to_centerline_svg(
                     input_path=png_path,
                     output_path=centerline_svg_path,
-                    threshold_value=0,  # Testa 160–200 beroende på bild
-                    blur_kernel=(1, 1),  # (1,1) = ingen blur, (3,3) = mild
-                    do_dilate=False,  # Sätt till False om det tar med för mycket
-                    dilation_iterations=1,  # Testa 0–2
-                    scale=1.0,  # SVG-skalning
                 )
 
                 # NOW end generation phase right before starting CNC execution

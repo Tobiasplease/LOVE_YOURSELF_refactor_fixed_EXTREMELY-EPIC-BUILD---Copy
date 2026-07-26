@@ -79,13 +79,16 @@ FLUX_GGUF_PATH = os.getenv("FLUX_GGUF_PATH", "flux1-dev-Q4_K_S.gguf")
 CONTROLNET_NET_PATH = os.getenv("CONTROLNET_NET_PATH", "flux-dev-controlnet-union-pro-2.safetensors")
 COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot-svg.json")
 COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
-TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black and white sketch line art ")
+# "sketch" pulled Flux toward the LoRA's photographed-graphite mode (soft gray blur); "ink" keeps it in pen territory
+TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black ink line art, sharp clean lines, high contrast, stark white background ")
 # Force single-image generation for stability (do not override via env)
 BATCH_SIZE = 1
 
 # === COMFY CONTROLLER SETTINGS ===
 COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
 COMFY_CNET_STRENGTH = float(os.getenv("COMFY_CNET_STRENGTH", 0.3))
+# Release the depth ControlNet before the final denoise steps — holding it to 1.0 forced photographic tonality
+COMFY_CNET_END_PERCENT = float(os.getenv("COMFY_CNET_END_PERCENT", 0.6))
 COMFY_FLUX_GUIDANCE = float(os.getenv("COMFY_FLUX_GUIDANCE", 4.0))
 COMFY_LATENT_WIDTH = int(os.getenv("COMFY_LATENT_WIDTH", 1024))
 COMFY_LATENT_HEIGHT = int(os.getenv("COMFY_LATENT_HEIGHT", 1024))

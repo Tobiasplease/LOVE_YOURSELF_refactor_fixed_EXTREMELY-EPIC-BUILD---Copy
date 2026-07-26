@@ -10,6 +10,7 @@ from urllib.error import URLError
 
 from config.config import (
     BATCH_SIZE,
+    COMFY_CNET_END_PERCENT,
     COMFY_LORA_PATH,
     COMFY_TEMPLATE_FILE,
     CONTROLNET_NET_PATH,
@@ -43,6 +44,7 @@ class ImpostorConfig:
     # ControlNet parameters
     cnet_strength: float = 0.45
     cnet_start_percent: float = 0.0
+    cnet_end_percent: float = COMFY_CNET_END_PERCENT
 
     # Flux parameters
     flux_guidance: float = 4.0
@@ -127,7 +129,13 @@ class ComfyUIController:
             # Flux guidance (node 300)
             "300": {"inputs": {"guidance": self.config.flux_guidance}},
             # ControlNet strength and start percent (node 711)
-            "711": {"inputs": {"strength": self.config.cnet_strength, "start_percent": self.config.cnet_start_percent}},
+            "711": {
+                "inputs": {
+                    "strength": self.config.cnet_strength,
+                    "start_percent": self.config.cnet_start_percent,
+                    "end_percent": self.config.cnet_end_percent,
+                }
+            },
             # LoRA path and strength (node 741)
             "779": {"inputs": {"lora_01": self.config.lora_path, "strength_01": self.config.lora_strength}},
             # Latent dimensions (node 5)
