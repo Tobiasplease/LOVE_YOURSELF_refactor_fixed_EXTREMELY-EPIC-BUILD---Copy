@@ -1086,6 +1086,7 @@ class SessionFrame(ttk.LabelFrame):
         ttk.Button(tr, text="▶ Play", command=self.play).pack(side="left", padx=2)
         ttk.Button(tr, text="■ Stop", command=self.transport_stop).pack(side="left", padx=2)
         ttk.Button(tr, text="∿ Generate", command=self.generate).pack(side="left", padx=2)
+        ttk.Button(tr, text="✕ Clear all", command=self.clear_all).pack(side="left", padx=(10, 2))
         ttk.Label(tr, text="loop").pack(side="left", padx=(10, 2))
         self.loop_var = tk.IntVar(value=int(self.session.loop_len))
         ttk.OptionMenu(
@@ -1286,6 +1287,17 @@ class SessionFrame(ttk.LabelFrame):
 
     def transport_stop(self):
         self.transport.stop()
+
+    def clear_all(self):
+        """Wipe every lane's take (saved session files are untouched —
+        reload to get them back)."""
+        self.transport.stop()
+        n = sum(1 for t in self.session.tracks if t.has_take)
+        for t in self.session.tracks:
+            t.samples = None
+            t.armed = False
+        self._refresh_tracks()
+        self.status.config(text=f"cleared {n} take(s) — saved sessions untouched")
 
     # --- track lanes ----------------------------------------------------------
     def _build_tracks(self):
