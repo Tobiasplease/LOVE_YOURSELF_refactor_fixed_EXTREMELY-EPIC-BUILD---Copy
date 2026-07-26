@@ -16,14 +16,14 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 USE_SERVO = True
 USE_HAND_CONTROLLER = True  # Enable hand controller system
 # Natural head movement limits for realistic gaze
-PAN_MIN = 45   # Left limit (±45° from center) - expanded range
+PAN_MIN = 45  # Left limit (±45° from center) - expanded range
 PAN_MAX = 135  # Right limit (±45° from center) - expanded range
 TILT_MIN = 65  # Down limit - matches current working position with lowered mount
-TILT_MAX = 150 # Up limit - expanded for upward viewing range
+TILT_MAX = 150  # Up limit - expanded for upward viewing range
 EASING_FACTOR = 0.15  # Slightly faster for more responsive movement
 
 # === SERVO FLIPPING ===
-FLIP_X = True   # Test flipping pan direction
+FLIP_X = True  # Test flipping pan direction
 FLIP_Y = True
 
 # === FACE DETECTION ===
@@ -117,17 +117,12 @@ GRBL_WARP_TRANSFORM = True
 GRBL_HOMING_MAX_RETRIES = 3  # Number of homing attempts before giving up
 
 # === ARMS DUET (motor_panel) ===
-# Envelope for joint left-arm + GRBL markov choreography. Recording/generation
-# clamps all XY to this zone; pen is asserted UP throughout. The machine's
-# whole working world is the 40x40mm drawing area (see GRBL_IDLE_ZONE and
-# warp_transform's [0,40] square) — the earlier 120mm default drove it into
-# the frame. Stay inside the same box the idle/drawing systems use.
-# DISCOVERY SETTING (July 19): opened wide IN ALL FOUR DIRECTIONS for range
-# exploration — the machine reports NEGATIVE work coords (work-zero was set
-# inside the reachable range, not at its corner), so the true territory
-# spans negative and positive. Tighten to surveyed reality after the warp
-# calibration lands.
-ARMS_DUET_ZONE = (-200, 200, -200, 200)  # x_min, x_max, y_min, y_max (mm)
+# XY clamping is no longer a config box. The panel projects EVERY target
+# (drag, jog, playback, generation) into the measured reach envelope —
+# grbl/warp_calibration.py MEASURED_BOUNDARY, walked on hardware July 20 —
+# via the same clamp_to_reach() margin/hysteresis the drawing pipeline uses.
+# The ±200 discovery box (July 19) served its purpose and is retired: the
+# polygon IS the surveyed reality.
 ARMS_DUET_MAX_FEED = 800  # mm/min cap — matches the idle system's ceiling
 
 # Left arm servo limits (degrees). The old 14-degree Python cages (81-95 /
@@ -135,7 +130,7 @@ ARMS_DUET_MAX_FEED = 800  # mm/min cap — matches the idle system's ceiling
 # swept 70-110 on BOTH joints through months of exhibition, so that envelope
 # is mechanically proven. Tighten/widen here after creeping the panel sliders
 # to the real binding points.
-LEFT_ARM_ELBOW_LIMITS = (60, 120, 90)   # lo, hi, neutral — pin 4 (widened from proven 70-110, July 19; creep further on hardware)
+LEFT_ARM_ELBOW_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 4 (widened from proven 70-110, July 19; creep further on hardware)
 LEFT_ARM_SHOULDER_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 5 (clean firmware allows 0-180; mechanics decide the real limit)
 
 # === PEN SERVO (via GRBL spindle PWM) ===
@@ -163,7 +158,7 @@ GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 56))
 GRBL_PEN_SETTLE_DWELL_S = float(os.getenv("GRBL_PEN_SETTLE_DWELL_S", 0.12))
 
 # Extra safety to ensure pen is fully UP before any homing ($H)
-GRBL_PEN_UP_REPEATS = int(os.getenv("GRBL_PEN_UP_REPEATS", 5))   # How many times to assert M3 S{UP} before homing
+GRBL_PEN_UP_REPEATS = int(os.getenv("GRBL_PEN_UP_REPEATS", 5))  # How many times to assert M3 S{UP} before homing
 GRBL_PEN_UP_DWELL_S = float(os.getenv("GRBL_PEN_UP_DWELL_S", 1.5))  # Dwell seconds after asserting UP before $H
 
 # If True, the pen-up position corresponds to a HIGHER S value; if False, pen-up is a LOWER S value.
@@ -207,13 +202,13 @@ GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAU
 # Drawing speed scaling — detail preservation is the priority.
 # Small/detailed moves get slow speeds; large strokes and traversals get fast speeds.
 # Traversals (pen up) always use max regardless of distance.
-GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 300))       # Slowest speed for micro-detail clusters (mm/min)
-GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 2000))      # Fastest speed for long strokes and traversals (mm/min)
-GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 700))     # Default/medium drawing speed (mm/min)
+GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 300))  # Slowest speed for micro-detail clusters (mm/min)
+GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 2000))  # Fastest speed for long strokes and traversals (mm/min)
+GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 700))  # Default/medium drawing speed (mm/min)
 
 # Distance thresholds for feed rate calculation (in mm)
-GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 1.0))   # Below this: detail speeds (slow)
-GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 8.0))   # Above this: max drawing speed
+GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 1.0))  # Below this: detail speeds (slow)
+GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 8.0))  # Above this: max drawing speed
 
 # === PEN LIFT OPTIMIZATION ===
 # Servo values for different pen operations - lower S = more lift (pen higher)
@@ -226,32 +221,30 @@ GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 8.0))  
 # fast cluster lift kept safely above the old grazing point.
 GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", GRBL_PEN_UP_S))
 GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))
-GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 38))       # dense clusters: shallower, still ~3 above the grazing 41
+GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 38))  # dense clusters: shallower, still ~3 above the grazing 41
 GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", GRBL_PEN_DOWN_S))  # was +5: pressing HARDER in clusters was backwards
 
 # Cluster detection parameters
 GRBL_CLUSTER_DISTANCE_THRESHOLD = float(os.getenv("GRBL_CLUSTER_DISTANCE_THRESHOLD", 5.0))  # Max distance between clustered pen lifts (mm)
-GRBL_CLUSTER_SEQUENCE_MIN = int(os.getenv("GRBL_CLUSTER_SEQUENCE_MIN", 3))                  # Minimum pen lifts to consider a cluster
+GRBL_CLUSTER_SEQUENCE_MIN = int(os.getenv("GRBL_CLUSTER_SEQUENCE_MIN", 3))  # Minimum pen lifts to consider a cluster
 
 # === EXPERIMENTAL PATH SIMPLIFICATION ===
 # WARNING: These are experimental features that may affect drawing quality
 # Only enable for testing - disable for production artwork
 GRBL_EXPERIMENTAL_SIMPLIFICATION = os.getenv("GRBL_EXPERIMENTAL_SIMPLIFICATION", "true").lower() in ("1", "true", "yes")
-GRBL_SIMPLIFICATION_TOLERANCE = float(os.getenv("GRBL_SIMPLIFICATION_TOLERANCE", 0.02))  # Tolerance for path simplification (mm) - smaller = higher quality
+GRBL_SIMPLIFICATION_TOLERANCE = float(
+    os.getenv("GRBL_SIMPLIFICATION_TOLERANCE", 0.02)
+)  # Tolerance for path simplification (mm) - smaller = higher quality
 GRBL_MERGE_TOLERANCE = float(os.getenv("GRBL_MERGE_TOLERANCE", 0.05))  # Tolerance for line merging (mm)
 
 # === UARM SWIFT PRO SETTINGS ===
 USE_UARM = True  # Enable uArm Swift Pro robotic arm integration
 UARM_PORT = "/dev/arduino_uarm"  # Fixed udev symlink (matches ARDUINO_DEVICES)
-UARM_MOVEMENT_NAMES = {
-    1: "pickup",    # Primary pickup motion
-    2: "place",     # Primary placement motion
-    3: "gesture"    # Gestural expression motion
-}
+UARM_MOVEMENT_NAMES = {1: "pickup", 2: "place", 3: "gesture"}  # Primary pickup motion  # Primary placement motion  # Gestural expression motion
 UARM_MOTION_STORAGE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "movement_recordings", "uarm")
 UARM_CONNECT_ON_STARTUP = True  # Connect to uArm during system initialization
-UARM_HOME_ON_CONNECT = False    # Avoid blocking/slow homing on connect; handled by Teach flow
-UARM_DEFAULT_SPEED = 100        # Default movement speed (1-250)
+UARM_HOME_ON_CONNECT = False  # Avoid blocking/slow homing on connect; handled by Teach flow
+UARM_DEFAULT_SPEED = 100  # Default movement speed (1-250)
 
 # --- uArm post-drawing playback ---
 # If True, after a drawing fully completes AND GRBL has homed, the uArm
@@ -279,7 +272,9 @@ CAPTION_INTERVAL = 7  # seconds between full caption cycles
 # Ego-compensated scene motion (vision/scene_motion.py): fraction of the frame
 # still moving after the camera's own movement is optically undone.
 # Calibrate with debug/test_scene_motion.py if it over/under-triggers.
-SCENE_MOTION_RESIDUAL_THRESHOLD = 0.02  # >2% of pixels moving = something is happening (post-erosion: small object ~0.019, camera sway alone 0.000, saccades excluded)
+SCENE_MOTION_RESIDUAL_THRESHOLD = (
+    0.02  # >2% of pixels moving = something is happening (post-erosion: small object ~0.019, camera sway alone 0.000, saccades excluded)
+)
 SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 
 # The stream (CoT-style continuity): prior captions ride as the machine's own
@@ -346,7 +341,7 @@ CLOSE_FACE_FRAC = float(os.getenv("CLOSE_FACE_FRAC", 0.035))
 # time anyone is in the room (June: 69% of captions). scene_motion still drives
 # video framing; only these thresholds strip the prompt.
 SALIENCE_MOTION_RESIDUAL = 0.10  # ego-compensated flow above this = big movement worth interrupting for (micro-shifts don't)
-SALIENCE_ARRIVAL_WINDOW = 10     # seconds an arrival keeps salience hot (~one live caption, then quiet)
+SALIENCE_ARRIVAL_WINDOW = 10  # seconds an arrival keeps salience hot (~one live caption, then quiet)
 
 # Presence is a sticky, uncertain belief (captioner._assess_scene): once someone
 # is seen, the machine keeps believing they're around through detection gaps
@@ -387,21 +382,21 @@ REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 mi
 REFLECTION_NUM_PREDICT = 320  # was 600 (padded to the brim, purple survey), then 220; raised for the dream (July 12) — the reflection now digests the raw hour of thought, which earns more room than a summary-of-summaries did. Brevity pressure IS register pressure; watch for padding at 320.
 
 # Drawing system intervals
-DEBUG_FAST_DRAWING = False # Set to True for rapid drawing testing (1 minute intervals)
+DEBUG_FAST_DRAWING = False  # Set to True for rapid drawing testing (1 minute intervals)
 DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 300  # 1 minute debug vs 5 minutes normal (check frequency)
 DRAWING_COOLDOWN = 120 if DEBUG_FAST_DRAWING else 720  # 2 minutes debug vs 12 minutes normal
 DRAWING_STARTUP_DELAY = 180  # Minimum seconds to wait after startup before first drawing (3 min for full init)
 
 # State-motivated drawing system (when DEBUG_FAST_DRAWING is False)
 DRAWING_USE_STATE_MOTIVATION = not DEBUG_FAST_DRAWING  # Enable sophisticated triggering
-DRAWING_MIN_INTERVAL = 120 if DEBUG_FAST_DRAWING else 900   # 2 min debug vs 15 min production (max 4/hour)
+DRAWING_MIN_INTERVAL = 120 if DEBUG_FAST_DRAWING else 900  # 2 min debug vs 15 min production (max 4/hour)
 DRAWING_MAX_INTERVAL = 180 if DEBUG_FAST_DRAWING else 1800  # 3 min debug vs 30 min production (min 2/hour)
 DRAWING_BASE_THRESHOLD = 0.72 if DEBUG_FAST_DRAWING else 0.45  # Lowered to allow triggering with modest state values
 DRAWING_NOVELTY_WEIGHT = 0.3  # How much novelty influences decision
-DRAWING_BOREDOM_WEIGHT = 0.4   # How much boredom influences decision
-DRAWING_MOOD_WEIGHT = 0.3      # How much mood influences decision
-DRAWING_PERSON_WEIGHT = 0.4    # How much person presence influences decision
-DRAWING_PERSON_BONUS = 0.2     # Additional motivation boost when person detected
+DRAWING_BOREDOM_WEIGHT = 0.4  # How much boredom influences decision
+DRAWING_MOOD_WEIGHT = 0.3  # How much mood influences decision
+DRAWING_PERSON_WEIGHT = 0.4  # How much person presence influences decision
+DRAWING_PERSON_BONUS = 0.2  # Additional motivation boost when person detected
 
 # Drawing scale target — vpype layout dimensions for the centerline SVG.
 # The warp transform maps this to the physical quad (~70x38mm).
@@ -425,17 +420,17 @@ YOLO_INTERVAL_TRACKING = 0.1  # cadence while a person is present — keeps bbox
 CAMERA_INDEX = 0  # or whichever index your camera uses
 
 # === CAMERA RESOLUTION ===
-CAMERA_WIDTH = 1280   # 720p for smooth 30fps live feed
-CAMERA_HEIGHT = 720   # LLM snapshots use this resolution
+CAMERA_WIDTH = 1280  # 720p for smooth 30fps live feed
+CAMERA_HEIGHT = 720  # LLM snapshots use this resolution
 
 # === CAMERA IMAGE QUALITY ===
-CAMERA_SHARPNESS = -1      # Sharpness (0-100, -1 for auto/default)
-CAMERA_SATURATION = -1     # Color saturation (-1 for auto/default)
-CAMERA_CONTRAST = -1       # Contrast (-1 for auto/default)
-CAMERA_BRIGHTNESS = -1     # Brightness (-1 for auto/default)
-CAMERA_EXPOSURE = -1       # Exposure (-1 for auto, or manual value)
-CAMERA_AUTO_FOCUS = True   # Enable autofocus if available (machine.py camera setup)
-CAMERA_AUTO_FOCUS = True   # Enable autofocus if available
+CAMERA_SHARPNESS = -1  # Sharpness (0-100, -1 for auto/default)
+CAMERA_SATURATION = -1  # Color saturation (-1 for auto/default)
+CAMERA_CONTRAST = -1  # Contrast (-1 for auto/default)
+CAMERA_BRIGHTNESS = -1  # Brightness (-1 for auto/default)
+CAMERA_EXPOSURE = -1  # Exposure (-1 for auto, or manual value)
+CAMERA_AUTO_FOCUS = True  # Enable autofocus if available (machine.py camera setup)
+CAMERA_AUTO_FOCUS = True  # Enable autofocus if available
 
 # === LLM CALL SETTINGS ===
 LLM_TIMEOUT_EVAL = 90
@@ -444,10 +439,12 @@ LLM_SHOW_PROGRESS = False  # Show animated progress bar during LLM calls
 
 # === CAPTIONING TEMPERATURE SETTINGS ===
 # Control creativity and expressiveness in different types of responses
-CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 0.85))       # Regular observations (0.85 for Qwen)
-DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.0))            # Drawing prompts (lowered from 1.2 for Qwen's higher base entropy)
-REFLECTION_TEMPERATURE = float(os.getenv("REFLECTION_TEMPERATURE", 0.75))     # Long-form reflection loop — stored output, keep it grounded (Qwen drifts ornate at higher temps)
-ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9)) # First observations (slightly more grounded)
+CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 0.85))  # Regular observations (0.85 for Qwen)
+DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.0))  # Drawing prompts (lowered from 1.2 for Qwen's higher base entropy)
+REFLECTION_TEMPERATURE = float(
+    os.getenv("REFLECTION_TEMPERATURE", 0.75)
+)  # Long-form reflection loop — stored output, keep it grounded (Qwen drifts ornate at higher temps)
+ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9))  # First observations (slightly more grounded)
 
 # === OUTPUT SETTINGS ===
 # Control which log types are printed to console

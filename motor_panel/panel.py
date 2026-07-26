@@ -30,7 +30,8 @@ from tkinter import scrolledtext, ttk
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.config import ARMS_DUET_MAX_FEED, ARMS_DUET_ZONE, GRBL_PEN_DOWN_S, GRBL_PEN_UP_S
+from config.config import ARMS_DUET_MAX_FEED, GRBL_PEN_DOWN_S, GRBL_PEN_UP_S
+from grbl.warp_calibration import clamp_to_reach, reach_polygon
 from motor_panel.devices import SerialDevice, build_devices
 from motor_panel.session import GROUPS, Session, Transport, import_legacy_hand_take, list_legacy_hand_datasets
 
@@ -463,15 +464,20 @@ class GrblFrame(ttk.LabelFrame):
         interleaved modal switch strands the machine in relative mode and
         every later absolute move becomes a wild relative lunge. Sent FIFO
         (not coalesced) so rapid clicks compound; position is updated
-        optimistically and corrected by the status poll."""
+        optimistically and corrected by the status poll. Targets clamp into
+        the measured reach polygon — a jog can only creep back toward the
+        envelope, never past a joint stop."""
         d = self.step.get()
-        x = self.position[0] + dx * d
-        y = self.position[1] + dy * d
+        x, y = clamp_to_reach(self.position[0] + dx * d, self.position[1] + dy * d)
         self.position = (x, y)
         self.send(f"G0 X{x:.2f} Y{y:.2f}")  # rapid — jogs are travel moves
 
     def goto(self, x: float, y: float, dt: float = None):
-        """Absolute move into the session envelope.
+        """Absolute move into the MEASURED reach envelope: every target —
+        drag, playback, generation — projects into the walked polygon
+        (grbl.warp_calibration.MEASURED_BOUNDARY, hardware truth July 20).
+        The polygon is convex, so straight moves between clamped points
+        stay inside; nothing the panel emits can grind a joint stop.
 
         dt=None (live performance — pad drags, jogs): G0 RAPID. Dragging is
         pen-up travel, and rapids are why deployment/homing/node-jumps feel
@@ -481,8 +487,7 @@ class GrblFrame(ttk.LabelFrame):
         so takes keep their performed tempo."""
         if self.alarm:
             return  # locked controller — motion is meaningless until $H
-        x = max(ARMS_DUET_ZONE[0], min(ARMS_DUET_ZONE[1], x))
-        y = max(ARMS_DUET_ZONE[2], min(ARMS_DUET_ZONE[3], y))
+        x, y = clamp_to_reach(x, y)
         if dt is None:
             feed = None  # rapid
         else:
@@ -527,30 +532,47 @@ class GrblFrame(ttk.LabelFrame):
 
 
 class BedView(tk.Canvas):
-    """Right-arm workspace: the plotting bed to scale — envelope, live
-    position, a fading trail of the last seconds. Left-drag to perform;
-    HOLD the right button to put the pen down (it draws — the pen is a
-    recordable layer). Pen-down drags move at the performed tempo (G1),
-    pen-up drags stay rapids."""
+    """Right-arm workspace: the MEASURED reach envelope drawn to scale
+    (uniform mm-per-px, aspect-true), live position, a fading trail.
+    Left-drag to perform — every target projects into the walked polygon
+    (grbl.warp_calibration.MEASURED_BOUNDARY), so the cursor physically
+    cannot ask for a pose past a joint stop. HOLD the right button to put
+    the pen down (it draws — the pen is a recordable layer). Pen-down
+    drags move at the performed tempo (G1), pen-up drags stay rapids."""
 
     TRAIL_SECONDS = 10.0
+    PAD_UNITS = 4.0  # view padding around the envelope, command units
+    GRID = 20.0  # reference grid spacing, command units
 
-    def __init__(self, parent, grbl: GrblFrame, size=340):
-        self.W = self.H = size  # the zone is square in mm — keep it square in px
-        self.M = max(22, size // 14)
+    def __init__(self, parent, grbl: GrblFrame, w=340, h=250):
+        self.W, self.H = w, h
+        self.M = 24
+        boundary = reach_polygon()
+        xs, ys = [p[0] for p in boundary], [p[1] for p in boundary]
+        self.x0, self.x1 = min(xs) - self.PAD_UNITS, max(xs) + self.PAD_UNITS
+        self.y0, self.y1 = min(ys) - self.PAD_UNITS, max(ys) + self.PAD_UNITS
+        # one scale for both axes: the polygon keeps its true shape
+        self.scale = min((self.W - 2 * self.M) / (self.x1 - self.x0), (self.H - 2 * self.M) / (self.y1 - self.y0))
+        self.ox = (self.W - (self.x1 - self.x0) * self.scale) / 2
+        self.oy = (self.H - (self.y1 - self.y0) * self.scale) / 2
         super().__init__(parent, width=self.W, height=self.H, bg="#101422", highlightthickness=0, cursor="crosshair")
         self.grbl = grbl
         self.trail = []  # (x, y, t)
-        x0, x1, y0, y1 = ARMS_DUET_ZONE
-        self.create_rectangle(*self._px(x0, y1), *self._px(x1, y0), outline="#3a4a6b")
-        for f in (1 / 3, 2 / 3):  # faint grid — spatial reference while performing
-            gx0, gy0 = self._px(x0 + (x1 - x0) * f, y0)
-            gx1, gy1 = self._px(x0 + (x1 - x0) * f, y1)
-            self.create_line(gx0, gy0, gx1, gy1, fill="#1c2438")
-            gx0, gy0 = self._px(x0, y0 + (y1 - y0) * f)
-            gx1, gy1 = self._px(x1, y0 + (y1 - y0) * f)
-            self.create_line(gx0, gy0, gx1, gy1, fill="#1c2438")
-        self.create_text(self.W // 2, 12, text=f"bed  {x0}-{x1} × {y0}-{y1} mm   ✛ = target   ● = machine", fill="#667", font=("monospace", 8))
+        g = self.GRID
+        gx = math.ceil(self.x0 / g) * g
+        while gx <= self.x1:  # reference grid every GRID command units
+            self.create_line(*self._px(gx, self.y0), *self._px(gx, self.y1), fill="#1c2438")
+            gx += g
+        gy = math.ceil(self.y0 / g) * g
+        while gy <= self.y1:
+            self.create_line(*self._px(self.x0, gy), *self._px(self.x1, gy), fill="#1c2438")
+            gy += g
+        # walked envelope (fill) and the actual clamp polygon (dashed, inset)
+        self.create_polygon(*[c for p in boundary for c in self._px(*p)], fill="#151d33", outline="#3a4a6b")
+        self.create_polygon(*[c for p in reach_polygon(0.5) for c in self._px(*p)], fill="", outline="#2f5c4c", dash=(3, 4))
+        hx, hy = self._px(0.0, 0.0)
+        self.create_text(hx + 4, hy + 10, anchor="w", text="0,0", fill="#556", font=("monospace", 8))
+        self.create_text(self.W // 2, 12, text="measured reach — targets clamp inside   ✛ = target   ● = machine", fill="#667", font=("monospace", 8))
         self.trail_line = self.create_line(0, 0, 0, 0, fill="#7a3448", smooth=True, width=2, state="hidden")
         # commanded target (where you asked it to go) vs reported position
         self.target_h = self.create_line(0, 0, 0, 0, fill="#f5c04a", width=1)
@@ -567,19 +589,19 @@ class BedView(tk.Canvas):
         self._tick()
 
     def _px(self, x: float, y: float):
-        x0, x1, y0, y1 = ARMS_DUET_ZONE
-        px = self.M + (x - x0) / (x1 - x0) * (self.W - 2 * self.M)
-        py = self.H - self.M - (y - y0) / (y1 - y0) * (self.H - 2 * self.M)
+        px = self.ox + (x - self.x0) * self.scale
+        py = self.H - self.oy - (y - self.y0) * self.scale
         return px, py
 
     def _from_px(self, px: float, py: float):
-        x0, x1, y0, y1 = ARMS_DUET_ZONE
-        x = x0 + (px - self.M) / (self.W - 2 * self.M) * (x1 - x0)
-        y = y0 + (self.H - self.M - py) / (self.H - 2 * self.M) * (y1 - y0)
-        return max(x0, min(x1, x)), max(y0, min(y1, y))
+        x = self.x0 + (px - self.ox) / self.scale
+        y = self.y0 + (self.H - self.oy - py) / self.scale
+        return x, y
 
     def _drag(self, ev):
-        x, y = self._from_px(ev.x, ev.y)
+        # project into the clamp polygon HERE too, so the crosshair shows
+        # the target the machine will actually get, not the raw cursor
+        x, y = clamp_to_reach(*self._from_px(ev.x, ev.y))
         px, py = self._px(x, y)
         self.coords(self.target_h, px - 7, py, px + 7, py)
         self.coords(self.target_v, px, py - 7, px, py + 7)
@@ -1081,7 +1103,7 @@ class SessionFrame(ttk.LabelFrame):
             return holder, side
 
         holder, side = make_tab("right arm — bed")
-        self.bed = BedView(holder, grbl, size=min(ws_h, cv_w))
+        self.bed = BedView(holder, grbl, w=cv_w, h=ws_h)
         self.bed.pack(anchor="nw")
         labeled_slider(side, "max feed (playback/gen)", 200, 3000, grbl.max_feed, lambda v: setattr(grbl, "max_feed", v), fmt=lambda v: str(int(v)))
         ttk.Label(

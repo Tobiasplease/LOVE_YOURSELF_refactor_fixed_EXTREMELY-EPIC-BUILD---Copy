@@ -72,7 +72,7 @@ Design rules that were paid for in debugging blood; do not regress them:
 | lunggaze | `/dev/arduino_lunggaze` @9600 | `PAN:{d}` `TILT:{d}` `LUNG:{d}` | pan 45-135/90, tilt 65-150/107, lung 60-110/85 |
 | lefthand | `/dev/arduino_lefthand` @9600 | `HAND,f0,f1,f2,f3` (composite), `SERVO,4/5,{d}`, `MOOD,{e}`, `LEFT_ARM_ENABLE/DISABLE` | fingers 0-180/90; elbow+shoulder from config `LEFT_ARM_*_LIMITS` (70-110/90, exhibition-proven) |
 | lightbulb | `/dev/arduino_lightbulb` @9600 | `B:{0-255}`, `F` flash | brightness |
-| grbl CNC | `/dev/arduino_cnc` @115200 | pre-1.1 fork G-code: `G0/G1`, `M3 S{n}` pen (up 34 / down 52), `$H`, `$X`, `?` realtime | x/y in `ARMS_DUET_ZONE` (5-40mm — the whole machine world is a 40×40 box) |
+| grbl CNC | `/dev/arduino_cnc` @115200 | pre-1.1 fork G-code: `G0/G1`, `M3 S{n}` pen (up 34 / down 52), `$H`, `$X`, `?` realtime | x/y clamped into the MEASURED reach polygon (`grbl/warp_calibration.py MEASURED_BOUNDARY`, walked July 20 — see §7) |
 
 Left-arm firmware (**critical, likely still pending**): `arduino_src/` has
 variants. The **"fixed"** variant has NO `SERVO` handler — the arm is driven
@@ -90,9 +90,15 @@ are unaffected by mounting flips), config-driven limits.
 
 ## 4. Workspaces
 
-- **right arm — bed**: envelope to scale, ✛ commanded target vs ● reported
-  machine dot (10Hz status polls), 10s fading trail, drag = G0 rapids.
-  Max-feed slider caps playback/generation only (rapids ignore F).
+- **right arm — bed**: the MEASURED reach envelope drawn to scale (July 26:
+  uniform mm-per-px, aspect-true — the walked polygon filled, the 0.5-unit
+  clamp inset dashed, 20-unit grid, 0,0 marked). ✛ commanded target vs
+  ● reported machine dot (10Hz status polls), 10s fading trail, drag = G0
+  rapids. **Every target — drag, jog, playback, generation — projects into
+  the polygon via `clamp_to_reach()`** (shared with the drawing pipeline;
+  convexity means straight moves between clamped points stay inside), so
+  the panel physically cannot command past a joint stop. Max-feed slider
+  caps playback/generation only (rapids ignore F).
   **Pen (July 19): hold the right button to put the pen down** — it draws;
   pen-down drags switch to G1 at the tempo you're performing (pen-up drags
   stay rapids), and the trail/indicator turn ink-white while down.
@@ -199,12 +205,17 @@ drawing gcode (`warp_transform_line`) through the fitted map; delete the
 file to revert. **Operational requirement: paper position on the bed must be
 consistent (mark it) — the map is command→ink-on-bed.**
 
-Interaction with the panel: none yet — `ARMS_DUET_ZONE` (raw command coords)
-is unaffected by the warp map. AFTER calibration validates, a natural step is
-expressing the bed workspace and duet takes in *paper mm* through the same
-map, unifying "where the pen draws" and "where the arm performs" into one
-physical frame (the left arm's calibrated square already lives in physical
-coords — the two arms could then share a room-space canvas).
+Interaction with the panel (July 26): the warp thread's measured envelope
+now BOUNDS the panel. `ARMS_DUET_ZONE` is retired; `clamp_to_reach()` /
+`reach_polygon()` (public API in `grbl/warp_calibration.py`, extracted from
+the TPS `_clamp_command`) project every panel target into
+`MEASURED_BOUNDARY` with the same 0.5-unit margin + 0.35 hysteresis shell
+the drawing g-code uses. `debug/test_reach_clamp.py` proves inside-pass /
+outside-project / hysteresis / convex-segment properties. Still open: the
+deeper unification — expressing the bed workspace and duet takes in *paper
+mm* through the TPS map itself, so "where the pen draws" and "where the arm
+performs" share one physical frame (the left arm's calibrated square
+already lives in physical coords).
 
 ## 8. Roadmap (consolidation thread)
 
@@ -236,6 +247,7 @@ coords — the two arms could then share a room-space canvas).
 | `debug/identify_hand_firmware.py` | which hand firmware is flashed (banner + SERVO echo) |
 | `debug/test_panel_layout.py` | panel layout fits the screen (headless, no window shown) |
 | `debug/test_pen_layer.py` | pen step-channel semantics: on-change-only through play/train/generate |
+| `debug/test_reach_clamp.py` | reach clamp: inside-pass, outside-project, hysteresis, convex segments |
 | `debug/test_face_tracking_stability.py` | gaze servo closed-loop stability (separate thread) |
 | `debug/warp_calibrate.py` | the whole warp workflow (`--run/--measure/--square`) |
 | `debug/test_warp_calibration.py` | warp method proof vs simulated 2-link arm |

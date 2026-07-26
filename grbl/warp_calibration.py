@@ -25,6 +25,7 @@ import json
 import math
 import os
 import re
+from functools import lru_cache
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -41,13 +42,50 @@ DEFAULT_DOMAIN = (0.0, 70.0, 0.0, 40.0)  # x0, x1, y0, y1
 # these are physical truth, ±a few units). Convexity verified: straight
 # edges between these points lie inside true reach. Order matters (polygon).
 MEASURED_BOUNDARY = [
-    (0.0, 0.0),      # home corner (bottom-left of reach)
-    (0.0, 47.0),     # upper-left: shoulder at travel limit
-    (13.4, 50.8),    # top apex: full arm aligned with +Y
-    (66.0, 20.9),    # upper-right: table edge
+    (0.0, 0.0),  # home corner (bottom-left of reach)
+    (0.0, 47.0),  # upper-left: shoulder at travel limit
+    (13.4, 50.8),  # top apex: full arm aligned with +Y
+    (66.0, 20.9),  # upper-right: table edge
     (110.2, -13.9),  # bottom-right: forearm mech limit, pen at table edge
-    (44.9, -7.0),    # bottom-center: forearm mech stop
+    (44.9, -7.0),  # bottom-center: forearm mech stop
 ]
+
+
+def reach_polygon(margin: float = 0.0) -> List[Tuple[float, float]]:
+    """The measured reach envelope, uniformly inset by `margin` command
+    units (0 = the walked boundary itself)."""
+    return list(_reach_inset(margin)) if margin > 0 else list(MEASURED_BOUNDARY)
+
+
+def clamp_to_reach(x: float, y: float, margin: float = 0.5, shell: float = 0.35) -> Tuple[float, float]:
+    """Command-space floor shared by the drawing pipeline AND the motor
+    panel: never emit a command outside the walked envelope. A command even
+    1-2 units past a joint stop grinds, loses steps (no encoders), and
+    poisons the REST of the stroke with a position offset — the July 21
+    'droopy corner that new data couldn't fix'.
+
+    PURE projection onto the clamp polygon (a straight envelope edge maps a
+    run of outside samples to collinear points = clean chamfer), with a
+    hysteresis shell: anything not clearly inside (the `shell` inset) gets
+    projected to the deeper `margin` inset, so near-boundary wiggle can't
+    alternate raw/clamped points into a zigzag (the July 21 'jagged corner'
+    after the droop fix). MEASURED_BOUNDARY is convex (verified), so any
+    straight move between two clamped points also stays inside."""
+    if _point_in_polygon(x, y, _reach_inset(shell)):
+        return x, y
+    poly = _reach_inset(margin)
+    best = None
+    n = len(poly)
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        dx, dy = x2 - x1, y2 - y1
+        t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / max(1e-9, dx * dx + dy * dy)))
+        px, py = x1 + t * dx, y1 + t * dy
+        d = (px - x) ** 2 + (py - y) ** 2
+        if best is None or d < best[0]:
+            best = (d, px, py)
+    return best[1], best[2]
 
 
 def _point_in_polygon(x: float, y: float, poly: List[Tuple[float, float]]) -> bool:
@@ -101,8 +139,12 @@ def _offset_polygon(poly: List[Tuple[float, float]], d: float) -> List[Tuple[flo
     return out
 
 
-def polygon_grid(boundary: List[Tuple[float, float]] = None, spacing: float = 10.0,
-                 inset: float = 0.92) -> List[Tuple[float, float]]:
+@lru_cache(maxsize=8)
+def _reach_inset(d: float) -> Tuple[Tuple[float, float], ...]:
+    return tuple(_offset_polygon(MEASURED_BOUNDARY, d))
+
+
+def polygon_grid(boundary: List[Tuple[float, float]] = None, spacing: float = 10.0, inset: float = 0.92) -> List[Tuple[float, float]]:
     """Survey dots: a spacing-mm lattice clipped to the inset reach polygon,
     serpentine-ordered row by row for sane clicking."""
     poly = _inset_polygon(boundary or MEASURED_BOUNDARY, inset)
@@ -130,6 +172,7 @@ def ring_points(cal: "WarpCalibration", spacing: float = 10.0) -> List[Tuple[flo
     the already-measured hull — the extrapolation territory a grown window
     leans on. Measuring the ring turns guessed commands into known ones."""
     from scipy.spatial import Delaunay
+
     hull = Delaunay(cal.command_pts)
     poly = _inset_polygon(MEASURED_BOUNDARY, 0.95)
     xs = [p[0] for p in poly]
@@ -161,8 +204,7 @@ def pick_anchors(cal: "WarpCalibration", k: int = 5) -> List[int]:
     ones inked as anchors) — July 21 lesson. The base grid never changes,
     so the same five physical dots stay anchors forever."""
     base = np.array(polygon_grid(spacing=10.0))
-    bi = [int(np.argmin(base[:, 0])), int(np.argmax(base[:, 0])),
-          int(np.argmin(base[:, 1])), int(np.argmax(base[:, 1]))]
+    bi = [int(np.argmin(base[:, 0])), int(np.argmax(base[:, 0])), int(np.argmin(base[:, 1])), int(np.argmax(base[:, 1]))]
     centroid = base.mean(axis=0)
     bi.append(int(np.argmin(np.linalg.norm(base - centroid, axis=1))))
     out = []
@@ -183,7 +225,7 @@ def similarity_transform(src: np.ndarray, dst: np.ndarray):
     if np.linalg.det(R) < 0:
         Vt[-1] *= -1
         R = (U @ Vt).T
-    scale = S.sum() / (s ** 2).sum()
+    scale = S.sum() / (s**2).sum()
     t = dc - scale * (R @ sc)
     return lambda pts: (scale * (np.asarray(pts) @ R.T)) + t
 
@@ -222,10 +264,15 @@ def grid_points(n: int = 5, domain: Tuple[float, float, float, float] = DEFAULT_
     return pts
 
 
-def generate_calibration_gcode(n: int = 5, domain=DEFAULT_DOMAIN,
-                               pen_up: int = 34, pen_down: int = 52,
-                               feed: int = 1500, points: Optional[List[Tuple[float, float]]] = None,
-                               dash: bool = True) -> List[str]:
+def generate_calibration_gcode(
+    n: int = 5,
+    domain=DEFAULT_DOMAIN,
+    pen_up: int = 34,
+    pen_down: int = 52,
+    feed: int = 1500,
+    points: Optional[List[Tuple[float, float]]] = None,
+    dash: bool = True,
+) -> List[str]:
     """Dot the grid + an orientation dash next to dot #1. Send these lines
     RAW (no warp transform) — they define command space itself."""
     pts = points if points is not None else grid_points(n, domain)
@@ -247,8 +294,7 @@ def generate_calibration_gcode(n: int = 5, domain=DEFAULT_DOMAIN,
     return lines
 
 
-def best_rect_rotated(paper: np.ndarray, aspect: float,
-                      angles=range(-90, 91, 2)) -> Tuple[float, float, float, float, float]:
+def best_rect_rotated(paper: np.ndarray, aspect: float, angles=range(-90, 91, 2)) -> Tuple[float, float, float, float, float]:
     """Largest aspect-true rectangle inscribed in the measured footprint,
     searching position, size AND rotation. The reach envelope is a tilted
     band — an axis-aligned window wastes most of it (the July 20 '54% of A4'
@@ -290,6 +336,7 @@ def best_rect(paper: np.ndarray, aspect: float) -> Tuple[Tuple[float, float, flo
     survey sheet, then ask for the largest A4-aspect window the measured
     region can honestly serve — and tape the real sheet exactly there."""
     from scipy.spatial import Delaunay
+
     tri = Delaunay(paper)
     x0, y0 = paper.min(axis=0)
     x1, y1 = paper.max(axis=0)
@@ -298,8 +345,7 @@ def best_rect(paper: np.ndarray, aspect: float) -> Tuple[Tuple[float, float, flo
         hw, hh = h * aspect / 2, h / 2
         xs = np.linspace(cx - hw, cx + hw, 5)
         ys = np.linspace(cy - hh, cy + hh, 5)
-        border = [(x, ys[0]) for x in xs] + [(x, ys[-1]) for x in xs] \
-               + [(xs[0], y) for y in ys] + [(xs[-1], y) for y in ys]
+        border = [(x, ys[0]) for x in xs] + [(x, ys[-1]) for x in xs] + [(xs[0], y) for y in ys] + [(xs[-1], y) for y in ys]
         return bool((tri.find_simplex(np.array(border)) >= 0).all())
 
     best = None
@@ -331,6 +377,7 @@ def _inscribed_rect(paper: np.ndarray) -> Tuple[float, float, float, float]:
     Binary-search a centered rectangle (bbox aspect) against hull
     containment, then inset 5% for safety."""
     from scipy.spatial import Delaunay
+
     tri = Delaunay(paper)
     cx, cy = paper.mean(axis=0)
     hw = (paper[:, 0].max() - paper[:, 0].min()) / 2
@@ -339,8 +386,7 @@ def _inscribed_rect(paper: np.ndarray) -> Tuple[float, float, float, float]:
     def inside(s: float) -> bool:
         xs = np.linspace(cx - hw * s, cx + hw * s, 5)
         ys = np.linspace(cy - hh * s, cy + hh * s, 5)
-        border = [(x, ys[0]) for x in xs] + [(x, ys[-1]) for x in xs] \
-               + [(xs[0], y) for y in ys] + [(xs[-1], y) for y in ys]
+        border = [(x, ys[0]) for x in xs] + [(x, ys[-1]) for x in xs] + [(xs[0], y) for y in ys] + [(xs[-1], y) for y in ys]
         return bool((tri.find_simplex(np.array(border)) >= 0).all())
 
     lo, hi = 0.0, 1.0
@@ -357,17 +403,20 @@ def _inscribed_rect(paper: np.ndarray) -> Tuple[float, float, float, float]:
 class WarpCalibration:
     """Thin-plate-spline inverse map: paper mm -> command coords."""
 
-    def __init__(self, command_pts: List[Tuple[float, float]],
-                 paper_pts: List[Tuple[float, float]],
-                 paper_area: Tuple[float, float, float, float],
-                 paper_window: Optional[Tuple[float, float, float, float, float]] = None):
+    def __init__(
+        self,
+        command_pts: List[Tuple[float, float]],
+        paper_pts: List[Tuple[float, float]],
+        paper_area: Tuple[float, float, float, float],
+        paper_window: Optional[Tuple[float, float, float, float, float]] = None,
+    ):
         from scipy.interpolate import RBFInterpolator
+
         self.command_pts = np.asarray(command_pts, dtype=float)
         self.paper_pts = np.asarray(paper_pts, dtype=float)
         self.paper_area = paper_area  # legacy axis-aligned fallback (x0, y0, x1, y1)
         self.paper_window = paper_window  # rotated drawing window (cx, cy, w, h, angle_deg)
-        self._rbf = RBFInterpolator(self.paper_pts, self.command_pts,
-                                    kernel="thin_plate_spline", smoothing=1e-3)
+        self._rbf = RBFInterpolator(self.paper_pts, self.command_pts, kernel="thin_plate_spline", smoothing=1e-3)
 
     # --- fitting ---------------------------------------------------------------
     @classmethod
@@ -381,7 +430,7 @@ class WarpCalibration:
         """Round-trip check in command space: rms, max (should be ~0.1mm)."""
         back = self._rbf(self.paper_pts)
         err = np.linalg.norm(back - self.command_pts, axis=1)
-        return float(np.sqrt((err ** 2).mean())), float(err.max())
+        return float(np.sqrt((err**2).mean())), float(err.max())
 
     # --- application -----------------------------------------------------------
     def paper_target(self, u: float, v: float, aspect: float = 1.0) -> Tuple[float, float]:
@@ -409,33 +458,10 @@ class WarpCalibration:
         return self._clamp_command(float(out[0]), float(out[1]))
 
     def _clamp_command(self, x: float, y: float) -> Tuple[float, float]:
-        """Command-space floor: never emit a command outside the walked
-        envelope. A command even 1-2 units past a joint stop grinds, loses
-        steps (no encoders), and poisons the REST of the stroke with a
-        position offset — the July 21 'droopy corner that new data couldn't
-        fix'.
-
-        PURE projection onto the clamp polygon (a straight envelope edge
-        maps a run of outside samples to collinear points = clean chamfer),
-        with a hysteresis shell: anything not clearly inside gets projected,
-        so near-boundary TPS wiggle can't alternate raw/clamped points into
-        a zigzag (the July 21 'jagged corner' after the droop fix)."""
-        shell = _offset_polygon(MEASURED_BOUNDARY, 0.35)  # must be CLEARLY inside this
-        if _point_in_polygon(x, y, shell):
-            return x, y
-        poly = _offset_polygon(MEASURED_BOUNDARY, 0.5)   # projection target: ~5mm paper margin
-        best = None
-        n = len(poly)
-        for i in range(n):
-            x1, y1 = poly[i]
-            x2, y2 = poly[(i + 1) % n]
-            dx, dy = x2 - x1, y2 - y1
-            t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / max(1e-9, dx * dx + dy * dy)))
-            px, py = x1 + t * dx, y1 + t * dy
-            d = (px - x) ** 2 + (py - y) ** 2
-            if best is None or d < best[0]:
-                best = (d, px, py)
-        return best[1], best[2]
+        """Never emit a command outside the walked envelope — see
+        clamp_to_reach (module level, shared with the motor panel) for the
+        July 21 lessons baked into the projection + hysteresis shell."""
+        return clamp_to_reach(x, y)
 
     def apply_to_line(self, gcode_line: str, max_x: float, max_y: float) -> str:
         """Drop-in for warp_transform_line: ideal gcode -> command gcode."""
@@ -454,13 +480,17 @@ class WarpCalibration:
     # --- persistence -------------------------------------------------------------
     def save(self, path: str = CALIBRATION_PATH) -> str:
         with open(path, "w") as f:
-            json.dump({
-                "format": "warp_calibration_tps_v1",
-                "command_pts": self.command_pts.tolist(),
-                "paper_pts": self.paper_pts.tolist(),
-                "paper_area": list(self.paper_area),
-                "paper_window": list(self.paper_window) if self.paper_window else None,
-            }, f, indent=1)
+            json.dump(
+                {
+                    "format": "warp_calibration_tps_v1",
+                    "command_pts": self.command_pts.tolist(),
+                    "paper_pts": self.paper_pts.tolist(),
+                    "paper_area": list(self.paper_area),
+                    "paper_window": list(self.paper_window) if self.paper_window else None,
+                },
+                f,
+                indent=1,
+            )
         return path
 
     @classmethod
@@ -469,7 +499,6 @@ class WarpCalibration:
             with open(path) as f:
                 d = json.load(f)
             pw = d.get("paper_window")
-            return cls(d["command_pts"], d["paper_pts"], tuple(d["paper_area"]),
-                       tuple(pw) if pw else None)
+            return cls(d["command_pts"], d["paper_pts"], tuple(d["paper_area"]), tuple(pw) if pw else None)
         except Exception:
             return None
