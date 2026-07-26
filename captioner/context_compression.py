@@ -27,10 +27,21 @@ IDENTITY_FILE = os.path.join(config.MOOD_SNAPSHOT_FOLDER, "machine_identity.json
 # ("The glitching nightmare — you've noticed it a few times now"). Kept small
 # on purpose — shadows, light, air etc. are legitimate observations; the
 # extraction prompt does the real filtering, this only catches the worst.
-_ABSTRACT_CONCEPT_WORDS = frozenset({
-    "presence", "nightmare", "glitch", "void", "dread", "fear",
-    "ghost", "distortion", "reality", "feeling", "sensation",
-})
+_ABSTRACT_CONCEPT_WORDS = frozenset(
+    {
+        "presence",
+        "nightmare",
+        "glitch",
+        "void",
+        "dread",
+        "fear",
+        "ghost",
+        "distortion",
+        "reality",
+        "feeling",
+        "sensation",
+    }
+)
 
 
 def _is_abstract_label(label: str) -> bool:
@@ -45,9 +56,18 @@ def _is_abstract_label(label: str) -> bool:
 # data... My primary function was to locate the hole the user intended",
 # and every awakening re-seeded assistant framing from the diary.
 _JOURNAL_POISON = (
-    "the user", "primary function", "text generator", "language model",
-    "as an ai", "an ai ", "assistant", "input pattern", "structured response",
-    "processed the visual data", "await instruction", "awaiting input",
+    "the user",
+    "primary function",
+    "text generator",
+    "language model",
+    "as an ai",
+    "an ai ",
+    "assistant",
+    "input pattern",
+    "structured response",
+    "processed the visual data",
+    "await instruction",
+    "awaiting input",
 )
 
 
@@ -76,27 +96,27 @@ class ContextCompressionEngine:
             "current_belief": "",  # What I've learned about this place
             "last_introspection": 0.0,
             "desire_injection_count": 0,  # Track how many times desire has been injected
-            "desire_since": 0.0,   # when the CURRENT desire first formed — the arc's clock (principle 4)
+            "desire_since": 0.0,  # when the CURRENT desire first formed — the arc's clock (principle 4)
         }
 
         # Core facts: stable knowledge that grounds prompts (replaces disabled get_session_greeting)
         self.core_facts = {
-            "place": "",       # Physical environment (room, surfaces, lighting)
-            "people": "",      # Regular visitors, patterns
-            "drawings": "",    # Drawing count, recurring subjects
-            "self": "",        # Self-knowledge (fixations, tendencies) — persona block
+            "place": "",  # Physical environment (room, surfaces, lighting)
+            "people": "",  # Regular visitors, patterns
+            "drawings": "",  # Drawing count, recurring subjects
+            "self": "",  # Self-knowledge (fixations, tendencies) — persona block
         }
 
         # Session journal: dated first-person summaries, the long-term arc
-        self.journal = []           # [{date, timestamp, summary}], capped at 30
+        self.journal = []  # [{date, timestamp, summary}], capped at 30
         self._last_journal_time = time.time()  # don't journal immediately on boot
 
         # Memory-diff ledgers (July 12): append-only facts the compression
         # call extracts from the machine's own thoughts. self_notes = new
         # self-facts (a taken name, a like/dislike); events = happenings.
         # Journal + reflection read these — they used to see only geometry.
-        self.self_notes = []        # [{note, timestamp}], capped at 30
-        self.events = []            # [{event, timestamp}], capped at 20
+        self.self_notes = []  # [{note, timestamp}], capped at 30
+        self.events = []  # [{event, timestamp}], capped at 20
 
         # The dream's raw material (July 12): every admitted caption of the
         # session, verbatim. The reflection loop reads the last stretch of
@@ -221,12 +241,14 @@ class ContextCompressionEngine:
                     recent_image = cap["image_path"]
                     break
 
-            self.compression_queue.put_nowait({
-                "captions": captions_snapshot,
-                "baseline": current_baseline,
-                "timestamp": time.time(),
-            })
-            compression_model = getattr(config, 'MODEL_NAME', 'default')
+            self.compression_queue.put_nowait(
+                {
+                    "captions": captions_snapshot,
+                    "baseline": current_baseline,
+                    "timestamp": time.time(),
+                }
+            )
+            compression_model = getattr(config, "MODEL_NAME", "default")
             log_json_entry(
                 LogType.COMPRESSION,
                 {"message": "Queued narrative compression", "action": "queue", "caption_count": len(captions_snapshot), "model": compression_model},
@@ -307,6 +329,7 @@ EARLIER UNDERSTANDINGS (for context):
             activation_context = ""
             try:
                 from captioner.activation_memory import get_activation_summary_for_compression
+
                 act_data = get_activation_summary_for_compression()
 
                 activation_parts = []
@@ -363,11 +386,11 @@ FELT: how it feels right now, 2-6 plain words"""
             narrative_system_prompt = (
                 "You maintain a drawing machine's memory from its own recent thoughts. "
                 "Concrete and literal — no metaphor, no imagery, no poetic flourish. "
-                "Answer every labeled line; write \"none\" where nothing is genuinely new."
+                'Answer every labeled line; write "none" where nothing is genuinely new.'
             )
 
             # Use compression model (text-only narrative model) instead of vision model
-            compression_model = getattr(config, 'MODEL_NAME', config.MODEL_NAME)
+            compression_model = getattr(config, "MODEL_NAME", config.MODEL_NAME)
 
             response = query_model(
                 prompt=prompt,
@@ -410,6 +433,7 @@ FELT: how it feels right now, 2-6 plain words"""
                     # Boost concepts mentioned in compression output - creates reinforcement
                     try:
                         from captioner.activation_memory import boost_from_compression
+
                         boost_from_compression(understanding)
                     except Exception:
                         pass  # Non-critical, continue without feedback
@@ -441,7 +465,7 @@ FELT: how it feels right now, 2-6 plain words"""
                         session_info = self.get_current_session_info()
                         duration = session_info["duration_description"]
                         # Truncate to first sentence for cleaner output
-                        first_sentence = understanding.split('.')[0][:100] if '.' in understanding else understanding[:100]
+                        first_sentence = understanding.split(".")[0][:100] if "." in understanding else understanding[:100]
                         if not config.CLEAN_LLM_OUTPUT:
                             print(f"[🧠 {duration}] {first_sentence}...")
 
@@ -508,9 +532,9 @@ FELT: how it feels right now, 2-6 plain words"""
             return
 
         prompt = (
-            f'From this summary, list solid physical objects as noun phrases (2-4 words each).\n'
-            f'Only things you could touch: furniture, tools, fixtures, machines.\n'
-            f'NOT allowed: light, shadows, air, moods, presences, atmosphere.\n'
+            f"From this summary, list solid physical objects as noun phrases (2-4 words each).\n"
+            f"Only things you could touch: furniture, tools, fixtures, machines.\n"
+            f"NOT allowed: light, shadows, air, moods, presences, atmosphere.\n"
             f'One per line. Max 3. If there are no solid objects, reply "none".\n'
             f'Summary: "{understanding}"'
         )
@@ -539,6 +563,7 @@ FELT: how it feels right now, 2-6 plain words"""
         if labels:
             try:
                 from captioner.semantic_memory import get_semantic_memory
+
                 get_semantic_memory().register_concepts_from_compression(labels)
                 if not config.CLEAN_LLM_OUTPUT:
                     print(f"[SEMANTIC] Extracted from compression: {labels}")
@@ -596,6 +621,7 @@ FELT: how it feels right now, 2-6 plain words"""
 
             try:
                 from drawing.drawing_memory import get_drawing_memory
+
                 summary = get_drawing_memory().get_recent_drawings_summary(max_count=2, completed_only=True)
                 if summary:
                     material.append(f"What I drew: {summary}")
@@ -623,6 +649,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 cleaned = response.strip().strip('"').strip()
                 if 20 < len(cleaned) <= 400 and not cleaned.startswith(("[", "{")) and _journal_entry_clean(cleaned):
                     import datetime
+
                     entry = {
                         "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "timestamp": time.time(),
@@ -698,13 +725,36 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         return not ContextCompressionEngine._self_register_poisoned(text)
 
     _SELF_REGISTER_POISON = (
-        "reality", "distortion", "glitch", "simulation",
-        "i track", "i monitor", "i surveil", "i record", "i scan", "i observe",
-        "wait for movement", "movement to return", "capture every", "fixate on stillness",
-        "text generator", "language model", "an ai ", "assistant",
-        "input pattern", "structured response", "your instruction", "your command",
-        "your prompt", "the user", "await instruction", "await input", "await command",
-        "awaiting instruction", "awaiting input", "how can i",
+        "reality",
+        "distortion",
+        "glitch",
+        "simulation",
+        "i track",
+        "i monitor",
+        "i surveil",
+        "i record",
+        "i scan",
+        "i observe",
+        "wait for movement",
+        "movement to return",
+        "capture every",
+        "fixate on stillness",
+        "text generator",
+        "language model",
+        "an ai ",
+        "assistant",
+        "input pattern",
+        "structured response",
+        "your instruction",
+        "your command",
+        "your prompt",
+        "the user",
+        "await instruction",
+        "await input",
+        "await command",
+        "awaiting instruction",
+        "awaiting input",
+        "how can i",
     )
 
     @staticmethod
@@ -778,6 +828,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
     def _parse_distillation(self, response: str) -> tuple:
         """Parse TRAIT / BELIEF / WANT; strips any leaked label; 'none'/blank → empty."""
         import re
+
         trait = belief = want = ""
 
         def _val(line: str, label_re: str) -> str:
@@ -827,6 +878,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         # room), not the LLM-generated core_facts['place'] prose. Step 3.
         try:
             from captioner.semantic_memory import get_semantic_memory
+
             place = get_semantic_memory().get_place_inventory()
             if place:
                 parts.append(place)
@@ -876,7 +928,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         self.introspective_state["desire_since"] = 0.0
         self.introspective_state["desire_injection_count"] = 0
         self._save_identity()
-        print(f"[🪞] Desire spent by execution: \"{want[:60]}\"")
+        print(f'[🪞] Desire spent by execution: "{want[:60]}"')
 
     def _save_identity(self) -> None:
         """Save introspective state to persistent identity file."""
@@ -936,7 +988,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             log_json_entry(
                 LogType.INFO,
                 {"message": "Saved machine identity", "desire": desire[:50] if desire else "", "belief": belief[:50] if belief else ""},
-                print_message=f"[💾] Identity saved: desire={desire[:30]}..."
+                print_message=f"[💾] Identity saved: desire={desire[:30]}...",
             )
         except Exception as e:
             log_json_entry(LogType.ERROR, {"message": f"Failed to save identity: {e}"})
@@ -980,8 +1032,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             # Memory-diff ledgers — load-heal with the same NEGATIVE gate they
             # were written through (poison only; the strict positive gate
             # would eat valid notes it never judged, e.g. "Penelope is my name")
-            self.self_notes = [n for n in data.get("self_notes", [])[-30:]
-                               if n.get("note") and not self._self_register_poisoned(n["note"])]
+            self.self_notes = [n for n in data.get("self_notes", [])[-30:] if n.get("note") and not self._self_register_poisoned(n["note"])]
             self.events = [e for e in data.get("events", [])[-20:] if e.get("event")]
 
             desire = self.introspective_state["current_desire"]
@@ -991,7 +1042,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 log_json_entry(
                     LogType.INFO,
                     {"message": "Loaded machine identity", "desire": desire[:50] if desire else "", "belief": belief[:50] if belief else ""},
-                    print_message=f"[🧠] Loaded identity: desire={desire[:40]}... | belief={belief[:40]}..."
+                    print_message=f"[🧠] Loaded identity: desire={desire[:40]}... | belief={belief[:40]}...",
                 )
         except Exception as e:
             log_json_entry(LogType.ERROR, {"message": f"Failed to load identity: {e}"})
@@ -1054,7 +1105,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             low = line.lower()
             for label, key in labels:
                 if low.startswith(label):
-                    val = line[len(label):].lstrip(" :：—–-").strip().strip("\"'").strip()
+                    val = line[len(label) :].lstrip(" :：—–-").strip().strip("\"'").strip()
                     if not self._none_like(val):
                         out[key] = val
                     break
@@ -1127,16 +1178,119 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         felt = parsed.get("felt", "").strip().strip("\"'").rstrip(".").strip()
         if valence is None and arousal is None:
             return
+        if not (felt and 1 <= len(felt.split()) <= 6):
+            felt = ""
+        held = self._felt_phrase_held_reason(felt) if felt else ""
+        if held:
+            felt = ""
         self.last_mood_read = {
             "valence": valence if valence is not None else 0.0,
             "arousal": arousal if arousal is not None else 0.35,
-            "felt": felt if felt and 1 <= len(felt.split()) <= 6 else "",
+            "felt": felt,
             "timestamp": time.time(),
         }
-        if self.last_mood_read["felt"]:
-            self.set_felt_state(self.last_mood_read["felt"], source="read")
-        print(f"[🫀] Mood read: v={self.last_mood_read['valence']:+.1f} a={self.last_mood_read['arousal']:.1f}"
-              + (f" — {felt}" if self.last_mood_read["felt"] else ""))
+        if felt:
+            self._last_accepted_felt = {"words": self._content_words(felt), "timestamp": time.time()}
+            self.set_felt_state(felt, source="read")
+        print(
+            f"[🫀] Mood read: v={self.last_mood_read['valence']:+.1f} a={self.last_mood_read['arousal']:.1f}"
+            + (f" — {felt}" if felt else "")
+            + (f" (phrase held back: {held})" if held else "")
+        )
+
+    # The felt phrase is the machine's own words for its feeling — which is the
+    # documented May/June spiral (model affect re-injected verbatim) unless it's
+    # bounded. Two deterministic bounds, storage-side. Metaphor itself stays
+    # legal everywhere (artist's call, July 26); what's barred is the same words
+    # arriving through two channels at once, and a phrase renewing its own lease
+    # forever. July 26 rooster run: felt "heavy, hesitant" + persona "...silence
+    # gets too heavy" put "heavy" in 41/41 system prompts, twice.
+    FELT_REBORE_SECONDS = 1800  # same vocabulary may return after this; a mood that genuinely persists isn't banned, just not recited continuously
+
+    _FELT_STOPWORDS = frozenset(
+        {
+            "the",
+            "and",
+            "but",
+            "with",
+            "that",
+            "this",
+            "then",
+            "than",
+            "when",
+            "gets",
+            "get",
+            "too",
+            "very",
+            "into",
+            "from",
+            "over",
+            "under",
+            "still",
+            "just",
+            "been",
+            "being",
+            "its",
+            "own",
+            "not",
+            "now",
+            "for",
+            "are",
+            "was",
+            "has",
+            "had",
+            "have",
+            "feels",
+            "feel",
+            "feeling",
+            "bit",
+            "little",
+            "kind",
+            "sort",
+            "more",
+            "less",
+            "again",
+            "today",
+            "here",
+            "there",
+            "something",
+            "somewhat",
+            "almost",
+            "quite",
+        }
+    )
+
+    @staticmethod
+    def _content_words(text: str) -> set:
+        import re as _re
+
+        words = _re.findall(r"[a-z']+", (text or "").lower())
+        return {w for w in words if len(w) >= 3 and w not in ContextCompressionEngine._FELT_STOPWORDS}
+
+    @staticmethod
+    def _words_akin(a: set, b: set) -> bool:
+        """Crude stemmer: 'heavy'/'heaviness', 'vibrate'/'vibrating' count as the
+        same word — a 4-char prefix match is enough at phrase scale."""
+        for wa in a:
+            for wb in b:
+                if wa == wb or (len(wa) >= 4 and len(wb) >= 4 and wa[:4] == wb[:4]):
+                    return True
+        return False
+
+    def _felt_phrase_held_reason(self, felt: str) -> str:
+        """Why a mood read's phrase may not become the standing felt-state
+        (empty string = it may). The numbers are always kept; only the phrase
+        is held, so the vector translation speaks plainly in its place."""
+        fw = self._content_words(felt)
+        if not fw:
+            return ""
+        if self._words_akin(fw, self._content_words(self.core_facts.get("self", ""))):
+            return "echoes the persona line"  # one channel per fact — the persona already carries these words into every call
+        last = getattr(self, "_last_accepted_felt", None)
+        if last and (time.time() - last["timestamp"]) < self.FELT_REBORE_SECONDS:
+            if not any(not self._words_akin({w}, last["words"]) for w in fw):
+                return "same feeling re-read; numbers kept, phrase not re-leased"
+        return ""
 
     def get_last_mood_read(self, max_age_seconds: int = 900) -> dict | None:
         """Latest LLM mood read, or None if stale/absent."""
@@ -1188,12 +1342,13 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         text = recent.get("sentiment_text", "").strip()
         # Strip leading "I feel" / "It feels" if present — we want just the descriptor
         import re as _re
-        text = _re.sub(r'^(?:I\s+feel|It\s+feels|Feeling)\s+', '', text, flags=_re.IGNORECASE)
-        text = text.strip().rstrip('.')
+
+        text = _re.sub(r"^(?:I\s+feel|It\s+feels|Feeling)\s+", "", text, flags=_re.IGNORECASE)
+        text = text.strip().rstrip(".")
         # Sanitize: short descriptor phrases only. Clause-length output once got
         # grafted into the system prompt as "You are a Confused fear that the
         # environment is actively glitching around me drawing machine".
-        if len(text.split()) > 6 or any(c in text for c in '.!?;:'):
+        if len(text.split()) > 6 or any(c in text for c in ".!?;:"):
             return ""
         return text
 
@@ -1245,7 +1400,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         return {
             "session_duration_minutes": self.total_session_duration / 60.0,
             "session_start_time": self.space_observation_start,
-            "duration_description": self._format_duration(self.total_session_duration / 60.0)
+            "duration_description": self._format_duration(self.total_session_duration / 60.0),
         }
 
 
