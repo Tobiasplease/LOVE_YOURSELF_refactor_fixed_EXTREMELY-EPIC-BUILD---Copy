@@ -34,6 +34,7 @@ from config.config import (
     CAMERA_AUTO_FOCUS,
     CONFIDENCE_THRESHOLD,
     DEBUG_REACTIVITY_PAUSE,
+    KINETIC_BUS_ENABLED,
     MODEL_PATH,
     MOOD_EVALUATION_INTERVAL,
     MOOD_SNAPSHOT_FOLDER,
@@ -217,6 +218,7 @@ debug_print("Camera opened successfully", "INIT")
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
 
+
 # Set camera image quality properties
 def set_camera_property_safe(cap, prop, value, name):
     """Safely set camera property with error handling"""
@@ -229,6 +231,7 @@ def set_camera_property_safe(cap, prop, value, name):
                 debug_print(f"Camera {name} setting failed (not supported)", "WARN")
         except Exception as e:
             debug_print(f"Camera {name} error: {e}", "ERROR")
+
 
 # Apply camera quality settings
 set_camera_property_safe(cap, cv2.CAP_PROP_SHARPNESS, CAMERA_SHARPNESS, "sharpness")
@@ -270,7 +273,7 @@ if USE_SERVO:
 
             # Startup movement sequence disabled to prevent timing conflicts
             debug_print("Servo controller ready with initial positioning", "INIT")
-            
+
         except Exception as e:
             print(f"ERROR: Servo controller init failed on {servo_port}: {e}")
             print("  Device may not be ready or firmware mismatch")
@@ -320,6 +323,7 @@ if USE_UARM and UARM_BACKEND:
                     # Startup reassurance play (non-blocking)
                     try:
                         from config.config import UARM_PLAY_ON_START, UARM_START_PLAY_FILE
+
                         if UARM_PLAY_ON_START:
                             import threading
 
@@ -414,8 +418,15 @@ def emergency_cleanup():
 
         # Emergency organic left arm stop
         try:
-            if 'organic_left_arm' in globals() and organic_left_arm:
+            if "organic_left_arm" in globals() and organic_left_arm:
                 organic_left_arm.shutdown()
+        except Exception:
+            pass
+
+        # Emergency kinetic bus stop
+        try:
+            if "kinetic_bus" in globals() and kinetic_bus:
+                kinetic_bus.shutdown()
         except Exception:
             pass
 
@@ -528,11 +539,19 @@ def graceful_cleanup():
 
     # Stop organic left arm controller
     try:
-        if 'organic_left_arm' in globals() and organic_left_arm:
+        if "organic_left_arm" in globals() and organic_left_arm:
             organic_left_arm.shutdown()
             print("[🦾] Organic left arm controller shutdown")
     except Exception as e:
         print(f"[ERROR] Error stopping organic left arm: {e}")
+
+    # Stop kinetic bus
+    try:
+        if "kinetic_bus" in globals() and kinetic_bus:
+            kinetic_bus.shutdown()
+            print("[🦾] Kinetic bus shutdown")
+    except Exception as e:
+        print(f"[ERROR] Error stopping kinetic bus: {e}")
 
     # Stop uArm controller
     if uarm_controller:
@@ -541,7 +560,7 @@ def graceful_cleanup():
             uarm_controller.disconnect()
         except Exception as e:
             print(f"[ERROR] Error stopping uArm controller: {e}")
-    elif 'uarm_teach_app' in globals() and uarm_teach_app:
+    elif "uarm_teach_app" in globals() and uarm_teach_app:
         try:
             debug_print("Disconnecting uArm (Teach API)", "CLEANUP")
             uarm_teach_app.disconnect()
@@ -597,6 +616,7 @@ def graceful_cleanup():
     if USE_CAPTION_DISPLAY:
         try:
             from utils.caption_display import close_caption_display
+
             close_caption_display()
             print("[📟] LCD caption display closed")
         except Exception as e:
@@ -692,6 +712,7 @@ _global_mood_engine = mood_engine
 # the Ollama fallback was retired with mistral-nemo; the query paths
 # auto-restart the server if it dies mid-run)
 from utils.llama_server import is_server_running, start_server
+
 if not is_server_running():
     print("[INIT] Starting llama-server...")
     if not start_server():
@@ -714,6 +735,7 @@ if USE_CAPTION_DISPLAY:
     debug_print("Initializing LCD caption display", "INIT")
     try:
         from utils.caption_display import init_caption_display
+
         init_caption_display(CAPTION_DISPLAY_PORT)
         log_json_entry(
             LogType.INFO,
@@ -729,8 +751,28 @@ if USE_CAPTION_DISPLAY:
 else:
     debug_print("LCD caption display disabled in config", "INIT")
 
-# Initialize direct hand controller integration
-if USE_HAND_CONTROLLER:
+# Initialize the lefthand actuators: EITHER the kinetic bus (recorded
+# temperament bundles from the motor panel, markov generation behind the
+# mood system) OR the legacy pair (hand controller autonomous mode +
+# organic_left_arm blind wander). Both own /dev/arduino_lefthand — never both.
+kinetic_bus = None
+if KINETIC_BUS_ENABLED:
+    debug_print("Initializing kinetic bus (replaces hand controller autonomous + organic left arm)", "INIT")
+    try:
+        from motor_panel.kinetic_bus import KineticBus
+
+        kinetic_bus = KineticBus()
+        kinetic_bus.enable()
+        log_json_entry(
+            LogType.INFO,
+            {"message": "Kinetic bus initialized", "port": ARDUINO_DEVICES["LEFTHAND"]},
+            print_message=f"🦾 Kinetic bus initialized on {ARDUINO_DEVICES['LEFTHAND']}",
+        )
+    except Exception as e:
+        debug_print(f"Failed to initialize kinetic bus: {e}", "ERROR")
+        kinetic_bus = None
+    hand_controller_started = False
+elif USE_HAND_CONTROLLER:
     debug_print("Initializing direct hand controller integration", "INIT")
     hand_controller_started = start_hand_controller(headless=False)
 else:
@@ -779,7 +821,8 @@ if hand_controller_started:
         organic_left_arm = None
 
 else:
-    debug_print("Hand controller failed to start", "WARN")
+    if USE_HAND_CONTROLLER and not KINETIC_BUS_ENABLED:
+        debug_print("Hand controller failed to start", "WARN")
     organic_left_arm = None
 
 # Initialize camera reactivity engine
@@ -823,10 +866,12 @@ image_monitor.start()
 try:
     import utils.hooks as _hooks
     from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+
     if USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE:
+
         def _normalize_smooth(path: str) -> str:
             base, ext = os.path.splitext(path)
-            while base.lower().endswith('.smooth'):
+            while base.lower().endswith(".smooth"):
                 base = base[:-7]
             return f"{base}{ext or '.txt'}"
 
@@ -846,12 +891,13 @@ try:
                     target = _normalize_smooth(UARM_PLAY_FILE)
                     app = None
                     try:
-                        if 'uarm_teach_app' in globals() and uarm_teach_app:
+                        if "uarm_teach_app" in globals() and uarm_teach_app:
                             app = uarm_teach_app
                     except Exception:
                         app = None
                     if app is None:
                         from uarm_control.teach_menu import UArmTeachApp
+
                         app = UArmTeachApp()
                         app.connect()
                     try:
@@ -866,12 +912,11 @@ try:
                     app.play()
 
                     # Wait for actual movement completion instead of fixed 30s delay
-                    if hasattr(app, 'teach') and app.teach:
+                    if hasattr(app, "teach") and app.teach:
                         print("[uArm] Waiting for movement completion...")
                         timeout = 60.0  # Maximum wait time
                         start_time = time.time()
-                        while (app.teach.is_playing() and
-                               (time.time() - start_time) < timeout):
+                        while app.teach.is_playing() and (time.time() - start_time) < timeout:
                             time.sleep(0.5)
 
                         if app.teach.is_playing():
@@ -903,6 +948,7 @@ try:
 except Exception as e:
     print(f"[DEBUG] GRBL hook registration failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 # Load previous session state if available
@@ -919,7 +965,8 @@ if previous_state:
     # Direct integration - set emotion based on mood
     emotion = mood_engine.get_emotion_for_hand_controller()
     change_to_emotion(emotion)
-    debug_print(f"Set hand controller emotion: {emotion}", "INIT")
+    if kinetic_bus is not None:
+        kinetic_bus.set_emotion(emotion)
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
 
     # Start idle CNC movements with restored emotion
@@ -1016,8 +1063,8 @@ def mood_update_thread(mood_frame, timestamp):
                     mood_engine.analyze_mood(
                         clean_caption,
                         saw_person=best_box is not None,
-                        image_path=snapshot_path if 'snapshot_path' in locals() else None,
-                        memory_context=captioner.memory_manager if hasattr(captioner, 'memory_manager') else None
+                        image_path=snapshot_path if "snapshot_path" in locals() else None,
+                        memory_context=captioner.memory_manager if hasattr(captioner, "memory_manager") else None,
                     )
                     debug_print(f"Processed caption through mood analysis: {clean_caption[:100]}...", "MOOD")
 
@@ -1047,6 +1094,11 @@ def mood_update_thread(mood_frame, timestamp):
                     # Update hand controller with new emotional state
                     change_to_emotion(thread_emotion)
                     debug_print(f"Updated hand controller emotion: {thread_emotion}", "HAND")
+
+                    # Kinetic bus picks the temperament bundle for this emotion
+                    if kinetic_bus is not None:
+                        kinetic_bus.set_emotion(thread_emotion)
+                        debug_print(f"Updated kinetic bus emotion: {thread_emotion}", "HAND")
 
                     # Update CNC idle movements with new emotional state
                     update_emotion(thread_emotion)
@@ -1089,35 +1141,27 @@ default_contrast = CAMERA_CONTRAST if CAMERA_CONTRAST != -1 else 50
 default_saturation = CAMERA_SATURATION if CAMERA_SATURATION != -1 else 50
 default_sharpness = CAMERA_SHARPNESS if CAMERA_SHARPNESS != -1 else 50
 
+
 def load_camera_settings():
     """Load camera settings from file, return defaults if file doesn't exist"""
     try:
-        with open(CAMERA_SETTINGS_FILE, 'r') as f:
+        with open(CAMERA_SETTINGS_FILE, "r") as f:
             settings = json.load(f)
             return {
-                'brightness': settings.get('brightness', default_brightness),
-                'contrast': settings.get('contrast', default_contrast),
-                'saturation': settings.get('saturation', default_saturation),
-                'sharpness': settings.get('sharpness', default_sharpness)
+                "brightness": settings.get("brightness", default_brightness),
+                "contrast": settings.get("contrast", default_contrast),
+                "saturation": settings.get("saturation", default_saturation),
+                "sharpness": settings.get("sharpness", default_sharpness),
             }
     except (FileNotFoundError, json.JSONDecodeError):
-        return {
-            'brightness': default_brightness,
-            'contrast': default_contrast,
-            'saturation': default_saturation,
-            'sharpness': default_sharpness
-        }
+        return {"brightness": default_brightness, "contrast": default_contrast, "saturation": default_saturation, "sharpness": default_sharpness}
+
 
 def save_camera_settings(brightness, contrast, saturation, sharpness):
     """Save current camera settings to file"""
     try:
-        settings = {
-            'brightness': brightness,
-            'contrast': contrast,
-            'saturation': saturation,
-            'sharpness': sharpness
-        }
-        with open(CAMERA_SETTINGS_FILE, 'w') as f:
+        settings = {"brightness": brightness, "contrast": contrast, "saturation": saturation, "sharpness": sharpness}
+        with open(CAMERA_SETTINGS_FILE, "w") as f:
             json.dump(settings, f, indent=2)
         if DEBUG_MODE:
             debug_print("Camera settings saved", "CAMERA")
@@ -1125,12 +1169,14 @@ def save_camera_settings(brightness, contrast, saturation, sharpness):
         if DEBUG_MODE:
             debug_print(f"Failed to save camera settings: {e}", "CAMERA")
 
+
 # Load saved settings
 saved_settings = load_camera_settings()
-current_brightness = saved_settings['brightness']
-current_contrast = saved_settings['contrast']
-current_saturation = saved_settings['saturation']
-current_sharpness = saved_settings['sharpness']
+current_brightness = saved_settings["brightness"]
+current_contrast = saved_settings["contrast"]
+current_saturation = saved_settings["saturation"]
+current_sharpness = saved_settings["sharpness"]
+
 
 def on_brightness_change(val):
     global current_brightness
@@ -1144,6 +1190,7 @@ def on_brightness_change(val):
         if DEBUG_MODE:
             debug_print(f"Brightness adjustment error: {e}", "CAMERA")
 
+
 def on_contrast_change(val):
     global current_contrast
     current_contrast = val
@@ -1155,6 +1202,7 @@ def on_contrast_change(val):
     except Exception as e:
         if DEBUG_MODE:
             debug_print(f"Contrast adjustment error: {e}", "CAMERA")
+
 
 def on_saturation_change(val):
     global current_saturation
@@ -1168,6 +1216,7 @@ def on_saturation_change(val):
         if DEBUG_MODE:
             debug_print(f"Saturation adjustment error: {e}", "CAMERA")
 
+
 def on_sharpness_change(val):
     global current_sharpness
     current_sharpness = val
@@ -1179,6 +1228,7 @@ def on_sharpness_change(val):
     except Exception as e:
         if DEBUG_MODE:
             debug_print(f"Sharpness adjustment error: {e}", "CAMERA")
+
 
 def reset_camera_controls():
     """Reset all camera controls to default values"""
@@ -1202,6 +1252,7 @@ def reset_camera_controls():
     save_camera_settings(default_brightness, default_contrast, default_saturation, default_sharpness)
     if DEBUG_MODE:
         debug_print("Camera controls reset to defaults", "CAMERA")
+
 
 # Create trackbars for real-time camera adjustment
 cv2.namedWindow("mslint camera", cv2.WINDOW_NORMAL)
@@ -1262,7 +1313,7 @@ try:
         state_manager.update_shared_frame(frame)
 
         object_detector.set_frame(frame)  # YOLO person detection enabled
-        aruco_detector.set_frame(frame)   # Real-time ArUco marker detection
+        aruco_detector.set_frame(frame)  # Real-time ArUco marker detection
 
         # Store full-resolution frame for LLM captioning
         full_res_frame = frame.copy()
@@ -1408,6 +1459,7 @@ try:
         # Servo position lets the buffer flag ego-motion (camera moved vs scene moved).
         try:
             from vision.gaze import physics_state as _gaze_phys
+
             _cam_pan, _cam_tilt = _gaze_phys.pan, _gaze_phys.tilt
         except Exception:
             _cam_pan, _cam_tilt = None, None
@@ -1437,16 +1489,19 @@ try:
                 _face_frac = max(0, (_fx2 - _fx1)) * max(0, (_fy2 - _fy1)) / float(max(1, w * h))
             except Exception:
                 pass
-        frame_buffer.push(frame, detection={
-            "face": best_box is not None,
-            "face_frac": _face_frac,
-            "person": ("person" in labels) and not own_body_likely,
-            "person_count": 0 if own_body_likely else DetectionMemory.get_person_count(),
-            "track_id": DetectionMemory.get_best_track_id(),
-            "pan": _cam_pan,
-            "tilt": _cam_tilt,
-            "person_angle": _person_angle,
-        })
+        frame_buffer.push(
+            frame,
+            detection={
+                "face": best_box is not None,
+                "face_frac": _face_frac,
+                "person": ("person" in labels) and not own_body_likely,
+                "person_count": 0 if own_body_likely else DetectionMemory.get_person_count(),
+                "track_id": DetectionMemory.get_best_track_id(),
+                "pan": _cam_pan,
+                "tilt": _cam_tilt,
+                "person_angle": _person_angle,
+            },
+        )
 
         if now - last_mood_time > MOOD_EVALUATION_INTERVAL:
             # Check if mood analysis is already running to prevent overlapping threads
@@ -1475,7 +1530,6 @@ try:
         if smoothed_person_detected and smoothed_bbox is None and random.random() < 0.02:
             debug_print(f"WARN: Person detected but no bbox available", "GAZE")
 
-
         # Update gaze with face tracking AND YOLO awareness
         person_present, pan, tilt = update_gaze(
             frame,
@@ -1483,7 +1537,7 @@ try:
             mood_engine.get_emotion_for_hand_controller(),
             yolo_person_detected=smoothed_person_detected,
             person_direction=person_direction,
-            person_bbox=smoothed_bbox
+            person_bbox=smoothed_bbox,
         )
 
         # Feed servo position to person detection for spatial memory
@@ -1498,6 +1552,7 @@ try:
         # idle-cadence boxes. "remembered" keeps the fast cadence through
         # search sweeps so a re-appearing person is re-acquired immediately.
         from vision.gaze import get_gaze_state
+
         gaze_state_info = get_gaze_state()
         gaze_state_name = gaze_state_info.get("state", "idle") if isinstance(gaze_state_info, dict) else "idle"
         is_tracking_person = gaze_state_name in ("aware", "tracking", "grace") or person_state.get("person_state", "absent") != "absent"
@@ -1505,6 +1560,7 @@ try:
 
         # Manage gaze search mode based on person detection state
         from vision.gaze import activate_search_mode, deactivate_search_mode, is_search_mode_active
+
         current_person_state = person_state.get("person_state", "absent")
 
         # Only activate search mode if person has been "remembered" (not visible) for 3+ seconds
@@ -1517,7 +1573,7 @@ try:
             activate_search_mode(
                 last_seen_pan=person_detection.last_seen_servo_pan,
                 last_seen_tilt=person_detection.last_seen_servo_tilt,
-                zones_visited=person_detection.scan_zones_visited
+                zones_visited=person_detection.scan_zones_visited,
             )
         elif current_person_state == "visible" and is_search_mode_active():
             # Person found - stop searching
@@ -1542,6 +1598,7 @@ try:
 
         # Add person count from YOLO for multi-person awareness
         from perception.detection_memory import DetectionMemory
+
         reactivity_with_view["person_count"] = DetectionMemory.get_person_count()
         # Face bbox rides with the frame so the captioner can crop a
         # face-context image during eye contact (expressions are unreadable
@@ -1701,4 +1758,3 @@ try:
 except KeyboardInterrupt:
     graceful_cleanup()
     sys.exit(0)
-                                                        

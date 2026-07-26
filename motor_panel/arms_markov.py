@@ -141,7 +141,13 @@ def _weighted(nxts: Dict[str, dict]) -> str:
 class Generator:
     """Walks the joint chain: ease channels interpolate at SUBSTEP rate via
     send_ease(dict); plan channels go out once per transition via
-    send_plan(dict, dt_seconds)."""
+    send_plan(dict, dt_seconds).
+
+    Entry is SEAMLESS: from wherever the body is, the generator eases over
+    `enter_ease` seconds into the NEAREST demonstrated state (bin-normalized
+    distance), not a random one — this is what makes temperament switches
+    read as one continuous body changing its mind. freeze() holds the body
+    mid-motion for startle/hesitation beats."""
 
     SUBSTEP = 0.05
 
@@ -153,6 +159,7 @@ class Generator:
         speed: float = 1.0,
         on_state: Optional[Callable[[str], None]] = None,
         send_step: Optional[Callable[[Dict[str, float]], None]] = None,
+        enter_ease: float = 2.0,
     ):
         self.chain = chain
         self.channels = chain["channels"]
@@ -165,6 +172,8 @@ class Generator:
         self.send_step = send_step
         self.speed = speed
         self.on_state = on_state
+        self.enter_ease = enter_ease
+        self._pause_until = 0.0
         self._running = False
         self._thread = None
 
@@ -178,14 +187,30 @@ class Generator:
         if self._thread:
             self._thread.join(timeout=2)
 
+    def freeze(self, seconds: float):
+        """Hold the body exactly where it is for `seconds` — the startle /
+        hesitation beat. Motion resumes mid-transition, no state is lost."""
+        self._pause_until = max(self._pause_until, time.time() + seconds)
+
+    def _nearest_key(self, current: Dict[str, float], first: Dict[str, dict]) -> str:
+        """The demonstrated state closest to where the body actually is,
+        distance in bin units so channels with coarse bins don't dominate."""
+        best, best_d = None, float("inf")
+        for key in first:
+            state = _unkey(key, self.channels, self.bins)
+            d = sum(((state[c] - current.get(c, state[c])) / self.bins[c]) ** 2 for c in self.channels)
+            if d < best_d:
+                best, best_d = key, d
+        return best
+
     def _loop(self, current: Dict[str, float]):
         first = self.chain["servo_transitions"]
         second = self.chain.get("servo_second_order", {})
         prev_key = None
         cur_key = _key(current, self.channels, self.bins)
-        if cur_key not in first:  # ease to a known state to enter the chain
-            cur_key = random.choice(list(first.keys()))
-            self._transition(current, self._state(cur_key), 2.0)
+        if cur_key not in first:  # ease to the nearest known state to enter the chain
+            cur_key = self._nearest_key(current, first)
+            self._transition(current, self._state(cur_key), self.enter_ease)
             current = self._state(cur_key)
 
         while self._running:
@@ -219,6 +244,8 @@ class Generator:
         for i in range(1, steps + 1):
             if not self._running:
                 return
+            while time.time() < self._pause_until and self._running:  # freeze: hold mid-transition
+                time.sleep(0.02)
             f = i / steps
             if self.ease_channels:
                 self.send_ease({c: frm[c] + (to[c] - frm[c]) * f for c in self.ease_channels})

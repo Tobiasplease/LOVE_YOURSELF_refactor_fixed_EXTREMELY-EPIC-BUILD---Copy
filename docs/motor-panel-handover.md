@@ -245,15 +245,20 @@ already lives in physical coords).
    cadence). Needs a new track *type* (parameter vs motor) in session.py and
    a workspace with parameter sliders recorded over the loop.
 4. **Lightbulb track** (trivial: brightness channel on the existing engine).
-5. **Runtime kinetic bus**: lift `devices.py` + `Generator` into the running
-   build behind the mood system — mood read picks the session bundle; the
-   markov generators replace `organic_left_arm.py`, the firmware wanderer,
-   `grbl/idle_movements.py`, and the hand interface's generation loop.
-   Port arbitration (panel vs runtime) becomes moot once the runtime owns the
-   devices and the panel becomes a "practice room" mode of the same stack.
-6. **Retire superseded systems** once 5 lands (legibility directive: fully,
-   with runtime-map updates): the 5400-line hand interface's generation path,
-   organic_left_arm, idle_movements' Lissajous wanderer.
+5. **Runtime kinetic bus** — **v1 SHIPPED July 26** (`motor_panel/kinetic_bus.py`,
+   behind `KINETIC_BUS_ENABLED`, default off; see runtime-map.md "Kinetic
+   bus"): lefthand device only. Session bundles bucketed by name
+   (`{emotion}_*`, `drawing_*` — the panel's "state" dropdown names them);
+   drawing overrides emotion; SEAMLESS switches (generators seed from live
+   positions, ease to the NEAREST demonstrated state — `Generator`
+   enter_nearest + `freeze()`); modifiers: gaze→range nudges, person-arrival
+   startle (freeze + finger snap + cooldown). Remaining for v2: gantry/pen
+   generation at runtime (port arbitration with the drawing pipeline),
+   lung/gaze tracks. **Turn the flag on only after recording real bundles.**
+6. **Retire superseded systems** once 5 is ON in an exhibition build
+   (legibility directive: fully, with runtime-map updates): the 5400-line
+   hand interface's generation path, organic_left_arm, idle_movements'
+   Lissajous wanderer.
 
 ## 9. Debug/verification tools
 
@@ -264,6 +269,7 @@ already lives in physical coords).
 | `debug/test_pen_layer.py` | pen step-channel semantics: on-change-only through play/train/generate |
 | `debug/test_reach_clamp.py` | reach clamp: inside-pass, outside-project, hysteresis, convex segments |
 | `debug/test_session_flow.py` | looper round-trip: record commits real motion, play reproduces it, Stop keeps partials |
+| `debug/test_kinetic_bus.py` | runtime bus: bundle bucketing, seamless temperament switch, gaze nudge, startle, drawing override |
 | `debug/test_face_tracking_stability.py` | gaze servo closed-loop stability (separate thread) |
 | `debug/warp_calibrate.py` | the whole warp workflow (`--run/--measure/--square`) |
 | `debug/test_warp_calibration.py` | warp method proof vs simulated 2-link arm |

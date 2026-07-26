@@ -134,6 +134,21 @@ LEFT_ARM_ELBOW_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 4 (widened from
 LEFT_ARM_SHOULDER_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 5 (clean firmware allows 0-180; mechanics decide the real limit)
 LEFT_ARM_WRIST_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 6 (July 26: reserved in firmware, servo not yet mounted; creep once it exists)
 
+# === KINETIC BUS (motor_panel/kinetic_bus.py — runtime temperament engine) ===
+# When True, machine.py starts the kinetic bus INSTEAD of organic_left_arm +
+# the old hand interface's autonomous mode: the lefthand device plays markov
+# generation from recorded session bundles picked by mood ("{emotion}_*"
+# session names) and drawing state ("drawing_*"). Default off until real
+# temperament bundles exist (record them in the panel).
+KINETIC_BUS_ENABLED = False
+KINETIC_CROSSFADE_S = 2.5  # seamless morph: ease into the new temperament's nearest state over this long
+KINETIC_ROTATE_S = 300  # dwell before rotating among same-state bundles (variety)
+KINETIC_GAZE_NUDGE = {"shoulder": 10, "elbow": 5, "wrist": 8}  # max degrees of bias at full gaze deflection
+KINETIC_STARTLE_ENABLED = True
+KINETIC_STARTLE_FREEZE_S = (0.4, 1.2)  # freeze duration range on person arrival
+KINETIC_STARTLE_CURL = 35  # degrees of finger snap on startle
+KINETIC_STARTLE_COOLDOWN_S = 20  # a flickering detector must not twitch the hand
+
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.
 GRBL_SPINDLE_MAX_S = int(os.getenv("GRBL_SPINDLE_MAX_S", 255))  # -> $30

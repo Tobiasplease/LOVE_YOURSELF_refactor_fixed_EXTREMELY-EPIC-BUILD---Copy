@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import ARMS_DUET_MAX_FEED, GRBL_PEN_DOWN_S, GRBL_PEN_UP_S
 from grbl.warp_calibration import clamp_to_reach, reach_polygon
-from motor_panel.devices import SerialDevice, build_devices
+from motor_panel.devices import EMOTIONS, SerialDevice, build_devices
 from motor_panel.session import Session, Transport, import_legacy_hand_take, list_legacy_hand_datasets
 
 JOG_STEPS = [0.5, 1, 2, 5, 10]
@@ -1088,6 +1088,20 @@ class SessionFrame(ttk.LabelFrame):
         self.name_entry = ttk.Entry(sr, width=16)
         self.name_entry.insert(0, self.session.name)
         self.name_entry.pack(side="left", padx=2)
+        # name-by-state: the runtime kinetic bus buckets sessions by this
+        # prefix ("{emotion}_*" / "drawing_*") to pick temperament bundles
+        ttk.Label(sr, text="state").pack(side="left", padx=(8, 2))
+        self.state_var = tk.StringVar()
+        state_menu = ttk.Combobox(sr, textvariable=self.state_var, width=18, state="readonly", values=["drawing"] + EMOTIONS)
+        state_menu.pack(side="left", padx=2)
+
+        def name_by_state(_ev):
+            base = self.state_var.get()
+            n = len([s for s in Session.list_saved() if s.startswith(f"session_{base}")])
+            self.name_entry.delete(0, "end")
+            self.name_entry.insert(0, f"{base}_{chr(ord('a') + n) if n < 26 else n}")
+
+        state_menu.bind("<<ComboboxSelected>>", name_by_state)
         ttk.Button(sr, text="Save", command=self.save).pack(side="left", padx=2)
         self.saved_var = tk.StringVar()
         self.saved_menu = ttk.Combobox(sr, textvariable=self.saved_var, width=24, state="readonly")

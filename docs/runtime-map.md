@@ -391,6 +391,32 @@ context_rich_multi_step_drawing_analysis — env essay / emotion manufacture
 (from the flatlined mood, converging on invented stasis drama every time) /
 intent / technique fiction / synthesis.
 
+## Kinetic bus (July 26 — wired, default OFF: KINETIC_BUS_ENABLED)
+
+`motor_panel/kinetic_bus.py` — the motor panel's markov generation lifted
+into the runtime, behind the mood system. When the config flag is ON,
+machine.py starts it INSTEAD of `start_hand_controller()` +
+`organic_left_arm` (all three want /dev/arduino_lefthand — never two at
+once). It owns the lefthand device only (fingers, elbow, shoulder, wrist);
+gantry idle stays with grbl/idle_movements, gaze/lung with their systems.
+
+- Bundle choice: session files `movement_recordings/arms/session_{state}_*.json`,
+  state = the 5 mood emotions or "drawing" (overrides emotion while
+  `state_manager.is_executing_cnc`). Several per state rotate on a dwell.
+- Emotion arrives by push: machine.py calls `kinetic_bus.set_emotion(...)`
+  at the same two sites as `change_to_emotion(...)`.
+- Transitions are seamless: new generators seed from live servo positions
+  and ease into the NEAREST demonstrated state (KINETIC_CROSSFADE_S).
+- Modifiers: gaze deflection biases arm channels (KINETIC_GAZE_NUDGE, polls
+  vision.gaze.get_gaze_state); person ARRIVAL (perception
+  person_detection_state absent→visible) freezes the body and snaps the
+  fingers (KINETIC_STARTLE_*), with cooldown.
+- Proof: `debug/test_kinetic_bus.py` (bucketing, ownership, seamlessness
+  bound, nudge, startle, drawing override).
+- When the flag turns on for real, retire per the legibility directive:
+  organic_left_arm, the hand interface's generation path, and this entry
+  moves from "wired, default OFF" to live.
+
 ## Manual tools (real code, NOT in the runtime path)
 
 Standalone utilities run by hand for calibration and setup — do not mistake
