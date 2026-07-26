@@ -123,6 +123,179 @@ def prune_spurs(paths: list, nodes: set, deg: dict, width_map: np.ndarray,
     return out
 
 
+def _end_direction(path: list, end: int, span: int = 6) -> np.ndarray:
+    """Unit vector pointing INTO the path from the given end (0=start, 1=end)."""
+    if end == 0:
+        a, b = np.array(path[0], float), np.array(path[min(span, len(path) - 1)], float)
+    else:
+        a, b = np.array(path[-1], float), np.array(path[max(-span - 1, -len(path))], float)
+    v = b - a
+    n = np.linalg.norm(v)
+    return v / n if n else v
+
+
+def merge_through_junctions(paths: list, angle_thresh_deg: float = 35.0) -> list:
+    """Rejoin strokes that a junction chopped up: where two edges meet at a
+    node and continue in nearly the same direction (a hatch line crossing
+    another), stitch them into one polyline. Cross-hatching keeps its long
+    directional strokes instead of becoming thousands of stubs = pen lifts."""
+    ends = {}
+    for i, p in enumerate(paths):
+        if p[0] == p[-1]:
+            continue  # closed loops stay as they are
+        ends.setdefault(p[0], []).append((i, 0))
+        ends.setdefault(p[-1], []).append((i, 1))
+
+    cos_limit = -np.cos(np.radians(angle_thresh_deg))  # directions must be near-opposite
+    partner = {}
+    for node, incident in ends.items():
+        if len(incident) < 2:
+            continue
+        dirs = {(i, e): _end_direction(paths[i], e) for i, e in incident}
+        cands = []
+        for a in range(len(incident)):
+            for b in range(a + 1, len(incident)):
+                ia, ib = incident[a], incident[b]
+                if ia[0] == ib[0]:
+                    continue
+                c = float(np.dot(dirs[ia], dirs[ib]))
+                if c < cos_limit:  # near-antiparallel: straight continuation
+                    cands.append((c, ia, ib))
+        cands.sort()
+        for _, ia, ib in cands:
+            if ia in partner or ib in partner:
+                continue
+            partner[ia] = ib
+            partner[ib] = ia
+
+    def oriented(i, start_end):
+        return paths[i][:] if start_end == 0 else paths[i][::-1]
+
+    merged, consumed = [], set()
+    for i, p in enumerate(paths):
+        if i in consumed:
+            continue
+        if p[0] == p[-1]:
+            merged.append(p)
+            consumed.add(i)
+            continue
+        # walk backwards to the chain's true start
+        cur, end = i, 0
+        seen = {i}
+        while (cur, end) in partner:
+            nxt, nend = partner[(cur, end)]
+            if nxt in seen:
+                break  # cycle: start anywhere
+            seen.add(nxt)
+            cur, end = nxt, 1 - nend
+        # walk forward stitching
+        chain = oriented(cur, end)
+        consumed.add(cur)
+        pos = (cur, 1 - end)
+        while pos in partner:
+            nxt, nend = partner[pos]
+            if nxt in consumed:
+                break
+            chain += oriented(nxt, nend)[1:]
+            consumed.add(nxt)
+            pos = (nxt, 1 - nend)
+        merged.append(chain)
+    return merged
+
+
+def split_fills(binary: np.ndarray, width_map: np.ndarray, fill_factor: float = 2.2):
+    """Separate thin strokes from solid blobs. Skeletonizing a filled region
+    yields honeycomb mush (the mesh between white holes), so blobs get
+    outline+hatch treatment instead. Returns (stroke_mask, fill_mask, w_half)."""
+    skel = skeletonize(binary)
+    on_skel = width_map[skel]
+    if on_skel.size == 0:
+        return binary, np.zeros_like(binary), 1.0
+    w_half = float(np.median(on_skel))
+    core = width_map > fill_factor * w_half
+    if not core.any():
+        return binary, np.zeros_like(binary), w_half
+    r = max(2, int(round(2 * w_half)))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+    fill = (cv2.dilate(core.astype(np.uint8), kernel) > 0) & binary
+    # a fat spot on a stroke is not a fill region — keep only sizeable masses
+    min_area = (5 * w_half) ** 2
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(fill.astype(np.uint8))
+    keep = np.zeros_like(fill)
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] >= min_area:
+            keep |= lab == i
+    fill = keep
+    if fill.sum() < 0.01 * binary.sum():
+        return binary, np.zeros_like(binary), w_half
+    return binary & ~fill, fill, w_half
+
+
+def hatch_fills(fill_mask: np.ndarray, w_half: float, angle_deg: float = 45.0,
+                spacing_factor: float = 3.0) -> list:
+    """Fill regions the way a pen does: contour outlines plus serpentine
+    hatch lines. Consecutive hatch rows are linked into zigzags where they
+    overlap, so a dark mass costs a handful of pen lifts, not hundreds."""
+    polylines = []
+    mask8 = fill_mask.astype(np.uint8)
+    contours, _ = cv2.findContours(mask8, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    for c in contours:
+        if cv2.arcLength(c, True) < 6 * w_half:
+            continue
+        approx = cv2.approxPolyDP(c, 1.2, True).reshape(-1, 2).astype(np.float64)
+        if len(approx) >= 3:
+            polylines.append(np.vstack([approx, approx[:1]]))
+
+    spacing = max(4, int(round(spacing_factor * w_half)))
+    h, w = fill_mask.shape
+    diag = int(np.ceil(np.hypot(h, w)))
+    M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), angle_deg, 1.0)
+    M[0, 2] += (diag - w) / 2.0
+    M[1, 2] += (diag - h) / 2.0
+    rot = cv2.warpAffine(mask8 * 255, M, (diag, diag), flags=cv2.INTER_NEAREST)
+    Minv = cv2.invertAffineTransform(M)
+
+    def unrotate(x, y):
+        return (Minv[0, 0] * x + Minv[0, 1] * y + Minv[0, 2],
+                Minv[1, 0] * x + Minv[1, 1] * y + Minv[1, 2])
+
+    chains, open_chains = [], []  # open: (last_x0, last_x1, points)
+    for y in range(spacing // 2, diag, spacing):
+        row = rot[y] > 127
+        idx = np.flatnonzero(row)
+        runs = []
+        if idx.size >= 2:
+            splits = np.flatnonzero(np.diff(idx) > 1)
+            runs = [(int(r[0]), int(r[-1])) for r in np.split(idx, splits + 1) if r.size >= max(2, spacing // 2)]
+        next_open = []
+        used = set()
+        for x0, x1 in runs:
+            best = None
+            for k, (px0, px1, pts) in enumerate(open_chains):
+                if k in used or min(x1, px1) - max(x0, px0) <= 0:
+                    continue
+                if best is None or abs((x0 + x1) - (open_chains[best][0] + open_chains[best][1])) > abs((x0 + x1) - (px0 + px1)):
+                    best = k
+            if best is not None:
+                used.add(best)
+                pts = open_chains[best][2]
+                near_x1 = abs(pts[-1][0] - x1) < abs(pts[-1][0] - x0)
+                pts.append((x1, y) if near_x1 else (x0, y))
+                pts.append((x0, y) if near_x1 else (x1, y))
+                next_open.append((x0, x1, pts))
+            else:
+                next_open.append((x0, x1, [(x0, y), (x1, y)]))
+        for k, ch in enumerate(open_chains):
+            if k not in used:
+                chains.append(ch[2])
+        open_chains = next_open
+    chains.extend(ch[2] for ch in open_chains)
+
+    for pts in chains:
+        polylines.append(np.array([unrotate(x, y) for x, y in pts], dtype=np.float64))
+    return polylines
+
+
 def _chaikin(pts: np.ndarray, iterations: int = 1) -> np.ndarray:
     for _ in range(iterations):
         if len(pts) < 3:
@@ -152,6 +325,9 @@ def raster_to_centerline_svg(input_path: str, output_path: str,
                              threshold_value: int = 180,
                              min_component: int = 12,
                              spur_factor: float = 1.6,
+                             merge_angle_deg: float = 35.0,
+                             hatch_angle_deg: float = 45.0,
+                             hatch_spacing_factor: float = 3.0,
                              simplify_epsilon: float = 1.2,
                              smooth_iterations: int = 1,
                              min_path_px: int = 5,
@@ -167,17 +343,21 @@ def raster_to_centerline_svg(input_path: str, output_path: str,
         base = output_path.rsplit(".", 1)[0]
         cv2.imwrite(f"{base}_v2_step1_binary.png", binary.astype(np.uint8) * 255)
 
-    skel = skeletonize(binary)
+    width_map = cv2.distanceTransform(binary.astype(np.uint8), cv2.DIST_L2, 3)
+    strokes, fills, w_half = split_fills(binary, width_map)
+
+    skel = skeletonize(strokes)
     if save_steps:
         cv2.imwrite(f"{base}_v2_step2_skeleton.png", skel.astype(np.uint8) * 255)
-
-    # local stroke half-width for width-aware pruning
-    width_map = cv2.distanceTransform(binary.astype(np.uint8), cv2.DIST_L2, 3)
+        cv2.imwrite(f"{base}_v2_step2_fills.png", fills.astype(np.uint8) * 255)
 
     paths, nodes, deg = skeleton_paths(skel)
     paths = prune_spurs(paths, nodes, deg, width_map, spur_factor)
+    paths = merge_through_junctions(paths, merge_angle_deg)
     polylines = [simplify(p, simplify_epsilon, smooth_iterations)
                  for p in paths if len(p) >= min_path_px]
+    if fills.any():
+        polylines += hatch_fills(fills, w_half, hatch_angle_deg, hatch_spacing_factor)
 
     h, w = skel.shape
     dwg = svgwrite.Drawing(output_path, size=(f"{w * scale}px", f"{h * scale}px"))
