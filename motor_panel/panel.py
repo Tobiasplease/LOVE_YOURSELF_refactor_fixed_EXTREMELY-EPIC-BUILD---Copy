@@ -1055,7 +1055,7 @@ class SessionFrame(ttk.LabelFrame):
         self.grbl = grbl
         self.log = log
         self.session = Session()
-        self._route = {c: lefthand for c in ("elbow", "shoulder", "finger0", "finger1", "finger2", "finger3")}
+        self._route = {c: lefthand for c in ("elbow", "shoulder", "wrist", "finger0", "finger1", "finger2", "finger3")}
         self._route["lung"] = lunggaze
         self.transport = self._make_transport()
         self._lane_w = max(320, ws[0] - 450)

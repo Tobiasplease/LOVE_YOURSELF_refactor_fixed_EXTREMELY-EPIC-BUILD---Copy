@@ -132,6 +132,7 @@ ARMS_DUET_MAX_FEED = 800  # mm/min cap — matches the idle system's ceiling
 # to the real binding points.
 LEFT_ARM_ELBOW_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 4 (widened from proven 70-110, July 19; creep further on hardware)
 LEFT_ARM_SHOULDER_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 5 (clean firmware allows 0-180; mechanics decide the real limit)
+LEFT_ARM_WRIST_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 6 (July 26: reserved in firmware, servo not yet mounted; creep once it exists)
 
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.
@@ -284,13 +285,32 @@ STREAM_WINDOW = 6  # how many prior captions the model sees as its own turns. ON
 STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
 
 # How the stream reaches the model (July 2026, docs/continuity-plan.md):
+# "world" — THE INVERSION (July 26): the stream rides as a TIMESTAMPED LOG
+#   ("14:02 — the lamp's still on") in one assistant message, and the world's
+#   turn — frames, what changed, the present — comes LAST. Generation always
+#   begins right after the world, never after the machine's own prose: every
+#   call answers something outside itself (closed loop), instead of extending
+#   its own essay (open loop — the drift/rambling physics). The log rendering
+#   is genre framing per north-star P7: a log is the text-shape of a working
+#   mind, and logs are plain by genre; the lonely-soliloquy frame summoned
+#   poetry no one asked for.
 # "document" — the monologue-so-far is sent as ONE trailing assistant message
 #   and llama-server CONTINUES it (assistant prefill; requires
 #   enable_thinking=false or the server rejects the request). The model's next
-#   tokens are literally the next tokens of its own text — real continuity.
+#   tokens are literally the next tokens of its own text — real continuity,
+#   but text momentum outweighs the frame: perception becomes decor (the
+#   rooster run) and a truncated tail forces run-on continuation.
 # "turns" — legacy: each prior caption as a separate assistant turn-pair.
 #   Bred template imitation (openings cloned across captions), kept as A/B.
-STREAM_MODE = os.getenv("STREAM_MODE", "document")
+STREAM_MODE = os.getenv("STREAM_MODE", "world")
+
+# View-replacement detector (world shape's honest change line): if the servo
+# barely moved between caption cycles but the frame content changed past this
+# threshold (normalized mean abs diff on 64px grays), the WORLD changed — a
+# bumped camera, a swapped scene, lights out. Fires salience + a named event.
+# Breathing sway measures ~0.05-0.1 at this scale; a scene replacement ~0.4+.
+WORLD_VIEW_DIFF_THRESHOLD = float(os.getenv("WORLD_VIEW_DIFF_THRESHOLD", 0.30))
+WORLD_VIEW_SERVO_STILL_DEG = 3.0  # above this pan+tilt delta the change is self-caused (a gaze turn), already carried by the situational line
 
 # Anti-echo storage gate: a caption that OPENS with the same N words as a
 # recent stream entry is a template imitation, not a continuation. One retry

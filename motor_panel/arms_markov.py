@@ -30,6 +30,7 @@ from typing import Callable, Dict, List, Optional
 DEFAULT_BINS = {
     "elbow": 1.0,
     "shoulder": 1.0,
+    "wrist": 1.0,
     "x": 2.0,
     "y": 2.0,
     "finger0": 4.0,

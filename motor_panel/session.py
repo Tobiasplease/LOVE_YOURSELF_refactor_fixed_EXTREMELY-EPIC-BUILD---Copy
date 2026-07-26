@@ -50,7 +50,7 @@ class Session:
         self.tracks: List[Track] = [
             Track("right arm (grbl)", ["x", "y"], group="A"),
             Track("pen (right hand)", ["pen"], group="solo"),  # group with the arm to learn WHERE it draws
-            Track("left arm", ["elbow", "shoulder"], group="A"),
+            Track("left arm", ["elbow", "shoulder", "wrist"], group="A"),
             Track("hand (fingers)", ["finger0", "finger1", "finger2", "finger3"], group="solo"),
             Track("lung", ["lung"], group="solo"),
         ]

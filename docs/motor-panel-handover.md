@@ -70,7 +70,7 @@ Design rules that were paid for in debugging blood; do not regress them:
 | Device | Port @ baud | Protocol | Channels (lo-hi, neutral) |
 |---|---|---|---|
 | lunggaze | `/dev/arduino_lunggaze` @9600 | `PAN:{d}` `TILT:{d}` `LUNG:{d}` | pan 45-135/90, tilt 65-150/107, lung 60-110/85 |
-| lefthand | `/dev/arduino_lefthand` @9600 | `HAND,f0,f1,f2,f3` (composite), `SERVO,4/5,{d}`, `MOOD,{e}`, `LEFT_ARM_ENABLE/DISABLE` | fingers 0-180/90; elbow+shoulder from config `LEFT_ARM_*_LIMITS` (70-110/90, exhibition-proven) |
+| lefthand | `/dev/arduino_lefthand` @9600 | `HAND,f0,f1,f2,f3` (composite), `SERVO,4/5/6,{d}`, `MOOD,{e}`, `LEFT_ARM_ENABLE/DISABLE` | fingers 0-180/90; elbow (pin 4), shoulder (pin 5), wrist (pin 6 — July 26: firmware slot + panel channel ready, servo not yet mounted) from config `LEFT_ARM_*_LIMITS` (60-120, creeping) |
 | lightbulb | `/dev/arduino_lightbulb` @9600 | `B:{0-255}`, `F` flash | brightness |
 | grbl CNC | `/dev/arduino_cnc` @115200 | pre-1.1 fork G-code: `G0/G1`, `M3 S{n}` pen (up 34 / down 52), `$H`, `$X`, `?` realtime | x/y clamped into the MEASURED reach polygon (`grbl/warp_calibration.py MEASURED_BOUNDARY`, walked July 20 — see §7) |
 

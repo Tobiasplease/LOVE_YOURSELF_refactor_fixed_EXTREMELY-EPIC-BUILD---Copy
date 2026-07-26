@@ -1,8 +1,8 @@
 #include <Servo.h>
 
-const int NUM_SERVOS = 6;  // 4 hand servos + 2 left arm servos
-const int pins[NUM_SERVOS] = {8, 9, 10, 11, 4, 5};  // Hand servos on 8-11, left arm on 4-5
-const bool isMirrored[NUM_SERVOS] = {false, false, true, true, false, false};
+const int NUM_SERVOS = 7;  // 4 hand servos + 2 left arm servos + wrist
+const int pins[NUM_SERVOS] = {8, 9, 10, 11, 4, 5, 6};  // Hand on 8-11, left arm on 4-5, wrist on 6
+const bool isMirrored[NUM_SERVOS] = {false, false, true, true, false, false, false};
 
 Servo servos[NUM_SERVOS];
 int currentAngles[NUM_SERVOS];
@@ -28,6 +28,7 @@ void setup() {
   // Set faster speeds for left arm servos (will be controlled by Python)
   speeds[4] = 5;  // Left arm servo 1
   speeds[5] = 5;  // Left arm servo 2
+  speeds[6] = 5;  // Wrist (pin 6) — same direct-control gait as the arm; attaches on first SERVO command
 
   Serial.println("Ready for commands (0-180 degree range)");
 }

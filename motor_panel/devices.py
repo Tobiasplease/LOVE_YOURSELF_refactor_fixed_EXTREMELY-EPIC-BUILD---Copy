@@ -43,11 +43,13 @@ def save_directions(device: str, channel: str, flag: bool):
     with open(DIRECTIONS_PATH, "w") as f:
         json.dump(d, f, indent=1)
 
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import (
     LEFT_ARM_ELBOW_LIMITS,
     LEFT_ARM_SHOULDER_LIMITS,
+    LEFT_ARM_WRIST_LIMITS,
     LUNG_MAX,
     LUNG_MIN,
     PAN_MAX,
@@ -85,10 +87,17 @@ class Channel:
 class SerialDevice:
     """One Arduino: a port, its channels, and named one-shot commands."""
 
-    def __init__(self, name: str, port: str, baud: int, channels: List[Channel],
-                 extras: Optional[Dict[str, str]] = None,
-                 group_fmt: Optional[Dict[str, Callable[[List[int]], str]]] = None,
-                 boot_delay: float = 2.0, min_interval: float = 0.02):
+    def __init__(
+        self,
+        name: str,
+        port: str,
+        baud: int,
+        channels: List[Channel],
+        extras: Optional[Dict[str, str]] = None,
+        group_fmt: Optional[Dict[str, Callable[[List[int]], str]]] = None,
+        boot_delay: float = 2.0,
+        min_interval: float = 0.02,
+    ):
         self.name = name
         self.port = port
         self.baud = baud
@@ -222,8 +231,7 @@ class SerialDevice:
             return  # the smoother emits the actual motion
         ch.value = max(ch.lo, min(ch.hi, int(value)))
         if ch.group:
-            vals = [self._wire(self.channels[n], self.channels[n].value)
-                    for n in self.channel_order if self.channels[n].group == ch.group]
+            vals = [self._wire(self.channels[n], self.channels[n].value) for n in self.channel_order if self.channels[n].group == ch.group]
             self.send_line(self.group_fmt[ch.group](vals), key=f"group:{ch.group}")
         else:
             self.send_line(ch.fmt(self._wire(ch, ch.value)), key=f"ch:{name}")
@@ -242,8 +250,7 @@ class SerialDevice:
             if ch.group:
                 if ch.group not in groups_done:
                     groups_done.add(ch.group)
-                    vals = [self._wire(self.channels[n], self.channels[n].neutral)
-                            for n in self.channel_order if self.channels[n].group == ch.group]
+                    vals = [self._wire(self.channels[n], self.channels[n].neutral) for n in self.channel_order if self.channels[n].group == ch.group]
                     self.send_line(self.group_fmt[ch.group](vals), key=f"group:{ch.group}")
             else:
                 self.send_line(ch.fmt(self._wire(ch, ch.neutral)), key=f"ch:{cname}")
@@ -255,17 +262,20 @@ EMOTIONS = ["energized_engaged", "alert_curious", "calm_observant", "quiet_detac
 def build_devices() -> List[SerialDevice]:
     lunggaze = SerialDevice(
         "lunggaze",
-        os.getenv("LUNGGAZE_PORT", "/dev/arduino_lunggaze"), 9600,
+        os.getenv("LUNGGAZE_PORT", "/dev/arduino_lunggaze"),
+        9600,
         channels=[
             Channel("pan", PAN_MIN, PAN_MAX, 90, fmt=lambda v: f"PAN:{v}"),
             Channel("tilt", TILT_MIN, TILT_MAX, (TILT_MIN + TILT_MAX) // 2, fmt=lambda v: f"TILT:{v}"),
             Channel("lung", LUNG_MIN, LUNG_MAX, (LUNG_MIN + LUNG_MAX) // 2, fmt=lambda v: f"LUNG:{v}"),
         ],
-        boot_delay=0.5, min_interval=0.01,
+        boot_delay=0.5,
+        min_interval=0.01,
     )
     lefthand = SerialDevice(
         "lefthand",
-        os.getenv("HAND_CONTROLLER_PORT", "/dev/arduino_lefthand"), 9600,
+        os.getenv("HAND_CONTROLLER_PORT", "/dev/arduino_lefthand"),
+        9600,
         channels=[
             Channel("finger0", 0, 180, 90, group="hand"),
             Channel("finger1", 0, 180, 90, group="hand"),
@@ -273,18 +283,21 @@ def build_devices() -> List[SerialDevice]:
             Channel("finger3", 0, 180, 90, group="hand"),
             Channel("elbow", *LEFT_ARM_ELBOW_LIMITS, fmt=lambda v: f"SERVO,4,{v}", smooth=True),
             Channel("shoulder", *LEFT_ARM_SHOULDER_LIMITS, fmt=lambda v: f"SERVO,5,{v}", smooth=True),
+            Channel("wrist", *LEFT_ARM_WRIST_LIMITS, fmt=lambda v: f"SERVO,6,{v}", smooth=True),
         ],
-        extras={"arm autonomous ON": "LEFT_ARM_ENABLE", "arm autonomous OFF": "LEFT_ARM_DISABLE",
-                **{f"mood: {e}": f"MOOD,{e}" for e in EMOTIONS}},
+        extras={"arm autonomous ON": "LEFT_ARM_ENABLE", "arm autonomous OFF": "LEFT_ARM_DISABLE", **{f"mood: {e}": f"MOOD,{e}" for e in EMOTIONS}},
         group_fmt={"hand": lambda vals: "HAND," + ",".join(str(v) for v in vals)},
-        boot_delay=2.0, min_interval=0.02,
+        boot_delay=2.0,
+        min_interval=0.02,
     )
     lightbulb = SerialDevice(
         "lightbulb",
-        os.getenv("LIGHTBULB_PORT", "/dev/arduino_lightbulb"), 9600,
+        os.getenv("LIGHTBULB_PORT", "/dev/arduino_lightbulb"),
+        9600,
         channels=[Channel("brightness", 0, 255, 0, fmt=lambda v: f"B:{v}")],
         extras={"caption flash": "F"},
-        boot_delay=0.2, min_interval=0.02,
+        boot_delay=0.2,
+        min_interval=0.02,
     )
     devices = [lunggaze, lefthand, lightbulb]
     saved = load_directions()
