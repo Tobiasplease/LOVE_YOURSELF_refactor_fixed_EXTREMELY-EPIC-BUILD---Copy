@@ -199,13 +199,23 @@ class Transport:
         self._recorder: Optional[engine.Recorder] = None
         self._generators: List[engine.Generator] = []
         self._rec_timer: Optional[threading.Timer] = None
+        self._t0: Optional[float] = None  # transport start, for the playhead
+        self._speed = 1.0
+
+    def loop_pos(self) -> Optional[float]:
+        """Seconds into the loop right now, or None when there's no playhead
+        (idle / generating — generation freewheels, it has no timeline)."""
+        if self._t0 is None or self.state not in ("recording", "playing"):
+            return None
+        t = (time.time() - self._t0) * self._speed
+        return t % self.session.loop_len if self.state == "playing" else min(t, self.session.loop_len)
 
     # --- record one loop pass (layered) --------------------------------------
     def record(self):
         self.stop()
         armed = [t for t in self.session.tracks if t.armed]
         if not armed:
-            self.on_status("arm a track first")
+            self.on_status("enable ● rec on a track first")
             return
         for t in self.session.tracks:
             if t.has_take and not t.armed and not t.mute:
@@ -215,21 +225,22 @@ class Transport:
         self._recorder = engine.Recorder(self.get_state)
         self._recorder.start()
         self.state = "recording"
-        self.on_status(f"recording {'+'.join(t.name for t in armed)} — one {self.session.loop_len:.0f}s pass")
+        self._t0 = time.time()
+        self._speed = 1.0
+        self.on_status(f"● recording {'+'.join(t.name for t in armed)} — {self.session.loop_len:.0f}s pass (Stop keeps the partial)")
         self._rec_timer = threading.Timer(self.session.loop_len, self._finish_record)
         self._rec_timer.daemon = True
         self._rec_timer.start()
 
-        def ticker():
-            t0 = time.time()
-            while self.state == "recording":
-                left = self.session.loop_len - (time.time() - t0)
-                if left <= 0:
-                    break
-                self.on_status(f"● recording — {left:.0f}s left")
-                time.sleep(1.0)
-
-        threading.Thread(target=ticker, daemon=True).start()
+    def _commit_take(self, samples: List[dict]):
+        """Hand the captured pass to every rec-enabled track. Called from the
+        full-pass timer AND from stop() — a performance is never discarded
+        silently (the pre-July-26 behavior: Stop mid-pass threw the take
+        away, which read as 'recording is a facade')."""
+        for t in self.session.tracks:
+            if t.armed:
+                t.samples = [{**{c: s[c] for c in t.channels if c in s}, "t": s["t"], "dt": s["dt"]} for s in samples]
+                t.armed = False
 
     def _finish_record(self):
         if self.state != "recording":
@@ -237,11 +248,9 @@ class Transport:
         samples = self._recorder.stop()
         self._recorder = None
         self._stop_players()
-        for t in self.session.tracks:
-            if t.armed:
-                t.samples = [{**{c: s[c] for c in t.channels if c in s}, "t": s["t"], "dt": s["dt"]} for s in samples]
-                t.armed = False
+        self._commit_take(samples)
         self.state = "idle"
+        self._t0 = None
         self.on_status(f"pass captured ({len(samples)} samples)")
 
     # --- playback -------------------------------------------------------------
@@ -256,9 +265,11 @@ class Transport:
                 started += 1
         if started:
             self.state = "playing"
+            self._t0 = time.time()
+            self._speed = max(0.1, speed)
             self.on_status(f"looping {started} track(s) at {speed:.2g}x")
         else:
-            self.on_status("nothing to play")
+            self.on_status("nothing to play — record a take first")
 
     # --- generation -----------------------------------------------------------
     def generate(self, speed: float = 1.0):
@@ -281,16 +292,21 @@ class Transport:
         if self._rec_timer:
             self._rec_timer.cancel()
             self._rec_timer = None
+        msg = "stopped"
         if self._recorder:
-            self._recorder.stop()
+            samples = self._recorder.stop()
             self._recorder = None
+            if self.state == "recording" and samples:  # Stop ends the pass, keeps the take
+                self._commit_take(samples)
+                msg = f"stopped — partial take kept ({samples[-1]['t']:.1f}s)"
         for gen in self._generators:
             gen.stop()
         self._generators = []
         self._stop_players()
+        self._t0 = None
         if self.state != "idle":
             self.state = "idle"
-            self.on_status("stopped")
+            self.on_status(msg)
 
     def _stop_players(self):
         for p in self._players:

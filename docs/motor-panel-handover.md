@@ -133,10 +133,21 @@ changes.
 
 ## 5. The session looper (recording model)
 
-- **Track** = channel subset (right arm x/y; pen; left arm elbow/shoulder;
-  hand finger0-3; lung). Per-track: **arm** (record-enable: armed tracks
-  capture during the next Record pass), **mute** (excluded everywhere),
-  **group**.
+- **Track = a LANE with a timeline** (July 26 redesign, modeled on the
+  servocontroller ui-modernize interface after the first UI read as a
+  facade): each lane shows a waveform of its take (one autoscaled polyline
+  per channel; partial takes visibly stop mid-lane; flat takes are flat
+  lines — the lane never lies) and a shared playhead sweeps all lanes
+  during record/play. Per-lane: **● rec-enable** (red, DAW style — was
+  labeled "arm", which read as robot-arm nonsense), **mute**, **link**, ✕
+  clear.
+- **Record** captures the rec-enabled lanes for one pass while other takes
+  play back (that's layering). With NO lane enabled it records the
+  workspace tab you're standing on (bed → right arm + pen). **Stop
+  mid-pass COMMITS the partial take** — before July 26 it silently
+  discarded the performance, which was the real "recordings don't work".
+  `debug/test_session_flow.py` proves the record→play round-trip
+  (~0.2° mean playback error) and the partial-commit path.
 - **Pen layer (July 19)**: the pen (M3 S) is its own track on a third
   channel family — **step channels**: recorded continuously like everything
   else but emitted ONLY on value change, never interpolated (a half-lowered
@@ -149,12 +160,13 @@ changes.
   semantics closed-loop (player/trainer/generator/transport).
 - **Record pass** records exactly one loop length (15-60s); unarmed tracks
   with takes play back during it — that's layering. Countdown in status line.
-- **Groups (A/B/solo)** are a *training-time* concept: tracks sharing a letter
-  train into ONE joint chain (they move in relation — collision safety and
-  correlation come from the choreography, provably: generation can only visit
-  demonstrated states and transitions). Solo tracks get independent chains.
-  **∿ Generate runs every chain simultaneously.** Regroup + retrain any time
-  without re-recording.
+- **link** (was A/B/solo — training-time vocabulary that leaked into the
+  recording UI): linked lanes train into ONE joint chain (they move in
+  relation — collision safety and correlation come from the choreography,
+  provably: generation can only visit demonstrated states and transitions).
+  Unlinked lanes get independent chains. **∿ Generate runs every chain
+  simultaneously.** Relink + retrain any time without re-recording. (The
+  session file keeps the group field — "A" = linked — so old files load.)
 - **Speed slider** (0.25-2×) retempos playback and generation.
 - Sessions persist as `movement_recordings/arms/session_{name}.json`
   (`format 4.1_session_groups`); name them per emotion state.
@@ -248,6 +260,7 @@ already lives in physical coords).
 | `debug/test_panel_layout.py` | panel layout fits the screen (headless, no window shown) |
 | `debug/test_pen_layer.py` | pen step-channel semantics: on-change-only through play/train/generate |
 | `debug/test_reach_clamp.py` | reach clamp: inside-pass, outside-project, hysteresis, convex segments |
+| `debug/test_session_flow.py` | looper round-trip: record commits real motion, play reproduces it, Stop keeps partials |
 | `debug/test_face_tracking_stability.py` | gaze servo closed-loop stability (separate thread) |
 | `debug/warp_calibrate.py` | the whole warp workflow (`--run/--measure/--square`) |
 | `debug/test_warp_calibration.py` | warp method proof vs simulated 2-link arm |

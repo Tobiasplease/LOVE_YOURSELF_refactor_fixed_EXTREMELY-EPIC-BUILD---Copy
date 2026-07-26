@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.config import ARMS_DUET_MAX_FEED, GRBL_PEN_DOWN_S, GRBL_PEN_UP_S
 from grbl.warp_calibration import clamp_to_reach, reach_polygon
 from motor_panel.devices import SerialDevice, build_devices
-from motor_panel.session import GROUPS, Session, Transport, import_legacy_hand_take, list_legacy_hand_datasets
+from motor_panel.session import Session, Transport, import_legacy_hand_take, list_legacy_hand_datasets
 
 JOG_STEPS = [0.5, 1, 2, 5, 10]
 LOOP_LENGTHS = [15, 30, 45, 60]
@@ -1030,10 +1030,23 @@ class LungStrip(tk.Canvas):
 
 
 class SessionFrame(ttk.LabelFrame):
-    """The looper: tracks per subsystem, one workspace per track, layered
-    recording against a fixed loop. Tracks share a group (trained as ONE
-    joint chain — they move in relation) or go solo (own chain); Generate
-    runs every chain simultaneously."""
+    """The looper, timeline-first (July 26 — modeled on the servocontroller
+    ui-modernize interface): every track is a LANE with a waveform of its
+    take and a shared playhead. ● on a lane = record-enable (red, DAW
+    style — it was labeled 'arm', which read as robot-arm nonsense);
+    Record with nothing enabled records the workspace you're standing on.
+    Stop mid-pass KEEPS the partial take. 'link'ed lanes train as ONE
+    joint chain (they move in relation); unlinked lanes get their own.
+    Generate runs every chain simultaneously."""
+
+    # Record with no lane rec-enabled: record what you're performing on.
+    TAB_TRACKS = {
+        "right arm — bed": ["right arm (grbl)", "pen (right hand)"],
+        "left arm — linkage": ["left arm"],
+        "hand": ["hand (fingers)"],
+        "lung": ["lung"],
+    }
+    LANE_COLORS = ["#8a63d2", "#3ba7a0", "#f5c04a", "#e94560"]
 
     def __init__(self, parent, lunggaze: SerialDevice, lefthand: SerialDevice, grbl: GrblFrame, log, ws=(760, 380)):
         super().__init__(parent, text="body session  (layered choreography → joint markov)")
@@ -1045,12 +1058,14 @@ class SessionFrame(ttk.LabelFrame):
         self._route = {c: lefthand for c in ("elbow", "shoulder", "finger0", "finger1", "finger2", "finger3")}
         self._route["lung"] = lunggaze
         self.transport = self._make_transport()
+        self._lane_w = max(320, ws[0] - 450)
+        self._lanes = []
 
         # transport row
         tr = ttk.Frame(self)
         tr.pack(fill="x", padx=4, pady=2)
-        ttk.Button(tr, text="● Record pass", command=self.record).pack(side="left", padx=2)
-        ttk.Button(tr, text="▶ Play loop", command=self.play).pack(side="left", padx=2)
+        ttk.Button(tr, text="● Record", command=self.record).pack(side="left", padx=2)
+        ttk.Button(tr, text="▶ Play", command=self.play).pack(side="left", padx=2)
         ttk.Button(tr, text="■ Stop", command=self.transport_stop).pack(side="left", padx=2)
         ttk.Button(tr, text="∿ Generate", command=self.generate).pack(side="left", padx=2)
         ttk.Label(tr, text="loop").pack(side="left", padx=(10, 2))
@@ -1089,7 +1104,7 @@ class SessionFrame(ttk.LabelFrame):
         ws_w, ws_h = ws
         side_w = 250
         cv_w = max(520, ws_w - side_w)
-        nb = ttk.Notebook(self)
+        nb = self.nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=4, pady=3)
 
         def make_tab(title):
@@ -1175,6 +1190,7 @@ class SessionFrame(ttk.LabelFrame):
         self.lung_strip.pack(anchor="nw")
         ttk.Label(side, text="drag vertically —\nbreathe with the wave", font=("monospace", 8), foreground="#888").pack(anchor="w", pady=6)
 
+        self._playhead_tick()  # one shared timer for all lanes, started once
         self.status = ttk.Label(self, text="idle")
         self.status.pack(fill="x", padx=6, pady=2)
 
@@ -1215,9 +1231,16 @@ class SessionFrame(ttk.LabelFrame):
         return False
 
     def record(self):
+        if not any(t.armed for t in self.session.tracks):
+            # nothing rec-enabled: record the workspace you're standing on
+            names = self.TAB_TRACKS.get(self.nb.tab(self.nb.select(), "text"), [])
+            for t in self.session.tracks:
+                t.armed = t.name in names
+            self._refresh_tracks()
         if not self._pen_layer_active():
             self.grbl.set_pen(GRBL_PEN_UP_S)
         self.transport.record()
+        self._refresh_tracks()
 
     def play(self):
         if not self._pen_layer_active():
@@ -1232,31 +1255,91 @@ class SessionFrame(ttk.LabelFrame):
     def transport_stop(self):
         self.transport.stop()
 
-    # --- tracks ----------------------------------------------------------------
+    # --- track lanes ----------------------------------------------------------
     def _build_tracks(self):
         for w in self.tracks_box.winfo_children():
             w.destroy()
-        self._track_widgets = []
+        self._lanes = []
         for t in self.session.tracks:
             row = ttk.Frame(self.tracks_box)
-            row.pack(fill="x")
-            arm_var = tk.BooleanVar(value=t.armed)
+            row.pack(fill="x", pady=1)
+            rec_btn = tk.Button(row, text="●", width=2, relief="flat", bd=0, activeforeground="#e94560", command=lambda t=t: self._toggle_rec(t))
+            rec_btn.pack(side="left")
+            ttk.Label(row, text=t.name, width=16).pack(side="left")
+            cv = tk.Canvas(row, width=self._lane_w, height=24, bg="#141824", highlightthickness=0)
+            cv.pack(side="left", fill="x", expand=True, padx=3)
+            ph = cv.create_line(0, 0, 0, 24, fill="#ffeaa7", state="hidden")
             mute_var = tk.BooleanVar(value=t.mute)
-            ttk.Checkbutton(row, text="arm", variable=arm_var, command=lambda t=t, v=arm_var: setattr(t, "armed", v.get())).pack(side="left")
-            ttk.Checkbutton(row, text="mute", variable=mute_var, command=lambda t=t, v=mute_var: setattr(t, "mute", v.get())).pack(side="left")
-            group_var = tk.StringVar(value=t.group)
-            ttk.OptionMenu(row, group_var, t.group, *GROUPS, command=lambda v, t=t: setattr(t, "group", v)).pack(side="left", padx=2)
-            take_lbl = tk.Label(row, text="●", fg="green" if t.has_take else "gray")
-            take_lbl.pack(side="left", padx=4)
-            ttk.Label(row, text=f"{t.name}  [{', '.join(t.channels)}]").pack(side="left")
-            ttk.Button(row, text="clear", width=5, command=lambda t=t: (setattr(t, "samples", None), self._refresh_tracks())).pack(side="right")
-            self._track_widgets.append((t, arm_var, mute_var, take_lbl))
+            ttk.Checkbutton(
+                row, text="mute", variable=mute_var, command=lambda t=t, v=mute_var: (setattr(t, "mute", v.get()), self._refresh_tracks())
+            ).pack(side="left")
+            link_var = tk.BooleanVar(value=t.group != "solo")
+            ttk.Checkbutton(
+                row, text="link", variable=link_var, command=lambda t=t, v=link_var: setattr(t, "group", "A" if v.get() else "solo")
+            ).pack(side="left")
+            ttk.Button(row, text="✕", width=2, command=lambda t=t: (setattr(t, "samples", None), self._refresh_tracks())).pack(side="left", padx=2)
+            self._lanes.append({"t": t, "rec": rec_btn, "cv": cv, "ph": ph, "mute": mute_var, "link": link_var})
+        self._refresh_tracks()
+
+    def _toggle_rec(self, t):
+        t.armed = not t.armed
+        self._refresh_tracks()
 
     def _refresh_tracks(self):
-        for t, arm_var, mute_var, take_lbl in self._track_widgets:
-            arm_var.set(t.armed)
-            mute_var.set(t.mute)
-            take_lbl.config(fg="green" if t.has_take else "gray")
+        for lane in self._lanes:
+            t = lane["t"]
+            lane["rec"].config(fg="#e94560" if t.armed else "#555")
+            lane["mute"].set(t.mute)
+            lane["link"].set(t.group != "solo")
+            self._draw_take(lane)
+
+    def _draw_take(self, lane):
+        """The take, visible: one polyline per channel across the loop, each
+        autoscaled to its own range. A partial take stops mid-lane; a flat
+        take is a flat line — the lane never lies about what was captured."""
+        t, cv = lane["t"], lane["cv"]
+        cv.delete("wave")
+        w = cv.winfo_width() if cv.winfo_width() > 1 else int(cv["width"])
+        h = int(cv["height"])
+        if not t.has_take:
+            cv.create_text(w // 2, h // 2, text="empty — ● then Record", fill="#333", font=("monospace", 8), tags="wave")
+            cv.tag_raise(lane["ph"])
+            return
+        loop = max(0.1, self.session.loop_len)
+        for ci, c in enumerate(t.channels):
+            vals = [(s["t"], s[c]) for s in t.samples if c in s]
+            if not vals:
+                continue
+            vmin = min(v for _, v in vals)
+            vmax = max(v for _, v in vals)
+            span = vmax - vmin
+            step = max(1, len(vals) // max(1, w))
+            pts = []
+            for st, v in vals[::step]:
+                x = min(w - 1, st / loop * w)
+                y = h / 2 if span < 1e-6 else h - 3 - (v - vmin) / span * (h - 6)
+                pts.extend((x, y))
+            if len(pts) >= 4:
+                color = "#3a4152" if t.mute else self.LANE_COLORS[ci % len(self.LANE_COLORS)]
+                cv.create_line(*pts, fill=color, tags="wave")
+        cv.tag_raise(lane["ph"])
+
+    def _playhead_tick(self):
+        pos = self.transport.loop_pos()
+        recording = self.transport.state == "recording"
+        for lane in self._lanes:
+            cv, ph, t = lane["cv"], lane["ph"], lane["t"]
+            if pos is None:
+                cv.itemconfig(ph, state="hidden")
+            else:
+                w = cv.winfo_width() if cv.winfo_width() > 1 else int(cv["width"])
+                x = pos / max(0.1, self.session.loop_len) * w
+                cv.coords(ph, x, 0, x, int(cv["height"]))
+                cv.itemconfig(ph, state="normal", fill="#e94560" if recording and t.armed else "#ffeaa7")
+            want = "#241019" if recording and t.armed else "#141824"
+            if cv["bg"] != want:
+                cv.config(bg=want)
+        self.after(100, self._playhead_tick)
 
     # --- persistence -------------------------------------------------------------
     def _refresh_saved(self):
