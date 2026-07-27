@@ -147,6 +147,39 @@ def main():
         print(f"drawing override: active bundle {bus._active_bundle}")
 
         bus.shutdown()
+
+        # --- practice-room mode: injected callbacks, full-body ownership -------
+        full = {"x", "y", "pen", "elbow", "shoulder", "wrist", "finger0", "finger1", "finger2", "finger3", "lung"}
+        lib2 = kb.TemperamentLibrary(sessions_dir=tmp, owned=full)
+        sends = {"ease": 0, "plan": 0}
+        live = {c: 90.0 for c in full}
+        live.update({"x": 20.0, "y": 20.0, "pen": 34.0})
+        bus2 = kb.KineticBus(
+            library=lib2,
+            is_drawing=lambda: False,
+            get_gaze=lambda: (0.0, 0.0),
+            get_person=lambda: "absent",
+            on_log=lambda m: None,
+            send_ease=lambda d: sends.__setitem__("ease", sends["ease"] + 1),
+            send_plan=lambda d, dt: sends.__setitem__("plan", sends["plan"] + 1),
+            send_step=lambda d: None,
+            get_state=lambda: dict(live),
+            owned=full,
+        )
+        bus2.enable()
+        bus2.set_emotion("energized_engaged")
+        time.sleep(3.0)
+        if bus2.device is not None:
+            failures.append("practice-room bus built a device it must not own")
+        if sends["ease"] == 0 or sends["plan"] == 0:
+            failures.append(f"practice-room bus not driving injected callbacks: {sends}")
+        bus2.shutdown()
+
+        # --- retire: bundle disappears from the runtime scan --------------------
+        lib2.retire("session_drawing_a.json")
+        if "drawing" in lib2.scan():
+            failures.append("retired bundle still visible to the scan")
+        print(f"practice-room: {sends['ease']} ease + {sends['plan']} plan sends via callbacks; retire hides the bundle")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

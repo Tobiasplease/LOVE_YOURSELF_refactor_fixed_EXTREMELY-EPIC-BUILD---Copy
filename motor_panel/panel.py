@@ -33,10 +33,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.config import ARMS_DUET_MAX_FEED, GRBL_PEN_DOWN_S, GRBL_PEN_UP_S
 from grbl.warp_calibration import clamp_to_reach, reach_polygon
 from motor_panel.devices import EMOTIONS, SerialDevice, build_devices
+from motor_panel.kinetic_bus import KineticBus, TemperamentLibrary
 from motor_panel.session import Session, Transport, import_legacy_hand_take, list_legacy_hand_datasets
 
 JOG_STEPS = [0.5, 1, 2, 5, 10]
 LOOP_LENGTHS = [15, 30, 45, 60]
+# the lab hosts the runtime bus with the FULL body (runtime v1 owns lefthand only)
+LAB_CHANNELS = {"x", "y", "pen", "elbow", "shoulder", "wrist", "finger0", "finger1", "finger2", "finger3", "lung"}
 
 
 def labeled_slider(parent, label, lo, hi, init, cb, fmt=lambda v: f"{v:.2f}"):
@@ -1100,31 +1103,18 @@ class SessionFrame(ttk.LabelFrame):
         )
         self.speed_lbl.pack(side="left")
 
-        # session persistence row
+        # session persistence row — project workflow only; publishing to the
+        # runtime library lives in the "temperaments" tab, where you SEE
+        # what you're assigning to
         sr = ttk.Frame(self)
         sr.pack(fill="x", padx=4, pady=2)
         ttk.Label(sr, text="session").pack(side="left")
         self.name_entry = ttk.Entry(sr, width=16)
         self.name_entry.insert(0, self.session.name)
         self.name_entry.pack(side="left", padx=2)
-        # name-by-state: the runtime kinetic bus buckets sessions by this
-        # prefix ("{emotion}_*" / "drawing_*") to pick temperament bundles
-        ttk.Label(sr, text="state").pack(side="left", padx=(8, 2))
-        self.state_var = tk.StringVar()
-        state_menu = ttk.Combobox(sr, textvariable=self.state_var, width=18, state="readonly", values=["drawing"] + EMOTIONS)
-        state_menu.pack(side="left", padx=2)
-
-        def name_by_state(_ev):
-            base = self.state_var.get()
-            n = len([s for s in Session.list_saved() if os.path.basename(s).startswith(f"session_{base}")])
-            self.name_entry.delete(0, "end")
-            self.name_entry.insert(0, f"{base}_{chr(ord('a') + n) if n < 26 else n}")
-
-        state_menu.bind("<<ComboboxSelected>>", name_by_state)
         ttk.Button(sr, text="Save project", command=self.save).pack(side="left", padx=2)
-        ttk.Button(sr, text="Export ▸ runtime", command=self.export_runtime).pack(side="left", padx=2)
         self.saved_var = tk.StringVar()
-        self.saved_menu = ttk.Combobox(sr, textvariable=self.saved_var, width=24, state="readonly")
+        self.saved_menu = ttk.Combobox(sr, textvariable=self.saved_var, width=28, state="readonly")
         self.saved_menu.pack(side="left", padx=2)
         ttk.Button(sr, text="Load", command=self.load).pack(side="left", padx=2)
         self._refresh_saved()
@@ -1224,29 +1214,42 @@ class SessionFrame(ttk.LabelFrame):
         self.lung_strip.pack(anchor="nw")
         ttk.Label(side, text="drag vertically —\nbreathe with the wave", font=("monospace", 8), foreground="#888").pack(anchor="w", pady=6)
 
+        holder, side = make_tab("temperaments")
+        self._build_temperaments(holder, side)
+        nb.bind("<<NotebookTabChanged>>", lambda e: self._refresh_library() if "temperaments" in nb.tab(nb.select(), "text") else None)
+
         self._playhead_tick()  # one shared timer for all lanes, started once
         self.status = ttk.Label(self, text="idle")
         self.status.pack(fill="x", padx=6, pady=2)
 
     # --- transport plumbing ---------------------------------------------------
+    # --- routing (shared by the looper transport and the temperament lab) -----
+    def _route_state(self) -> dict:
+        s = {c: dev.channels[c].value for c, dev in self._route.items()}
+        s["x"], s["y"] = self.grbl.position
+        s["pen"] = float(self.grbl.pen_s)
+        return s
+
+    def _route_ease(self, d):
+        for c, v in d.items():
+            if c in self._route:
+                self._route[c].set_channel(c, int(round(v)))
+
+    def _route_plan(self, d, dt):
+        self.grbl.goto(d["x"], d["y"], dt)
+
+    def _route_step(self, d):
+        if "pen" in d:
+            self.grbl.pen_command(int(round(d["pen"])))
+
     def _make_transport(self) -> Transport:
-        def get_state():
-            s = {c: dev.channels[c].value for c, dev in self._route.items()}
-            s["x"], s["y"] = self.grbl.position
-            s["pen"] = float(self.grbl.pen_s)
-            return s
-
-        def send_step(d):
-            if "pen" in d:
-                self.grbl.pen_command(int(round(d["pen"])))
-
         return Transport(
             self.session,
-            get_state=get_state,
-            send_ease=lambda d: [self._route[c].set_channel(c, int(round(v))) for c, v in d.items()],
-            send_plan=lambda d, dt: self.grbl.goto(d["x"], d["y"], dt),
+            get_state=self._route_state,
+            send_ease=self._route_ease,
+            send_plan=self._route_plan,
             on_status=self._set_status,
-            send_step=send_step,
+            send_step=self._route_step,
         )
 
     def _set_status(self, msg: str):
@@ -1265,6 +1268,7 @@ class SessionFrame(ttk.LabelFrame):
         return False
 
     def record(self):
+        self._lab_stop()  # the lab and the looper share the body — one owner
         if not any(t.armed for t in self.session.tracks):
             # nothing rec-enabled: record the workspace you're standing on
             names = self.TAB_TRACKS.get(self.nb.tab(self.nb.select(), "text"), [])
@@ -1277,11 +1281,13 @@ class SessionFrame(ttk.LabelFrame):
         self._refresh_tracks()
 
     def play(self):
+        self._lab_stop()
         if not self._pen_layer_active():
             self.grbl.set_pen(GRBL_PEN_UP_S)
         self.transport.play(speed=self.speed_var.get())
 
     def generate(self):
+        self._lab_stop()
         if not self._pen_layer_active():
             self.grbl.set_pen(GRBL_PEN_UP_S)
         self.transport.generate(speed=self.speed_var.get())
@@ -1299,6 +1305,149 @@ class SessionFrame(ttk.LabelFrame):
             t.armed = False
         self._refresh_tracks()
         self.status.config(text=f"cleared {n} take(s) — saved sessions untouched")
+
+    # --- temperaments tab: the library made visible + the runtime bus, live ----
+    def _build_temperaments(self, holder, side):
+        """Left: the temperament library as a tree — each state and exactly
+        which bundles are assigned to it (assignment was an invisible
+        filename side-effect before; now it's an explicit act on a visible
+        target). Right: the LAB — the actual KineticBus running the panel's
+        routing, so you can audition every emotional spectrum, watch chains
+        crossfade on state clicks, and fire the runtime modifiers by hand."""
+        self._lab_ctx = {"drawing": False, "gx": 0.0, "gy": 0.0}
+        self._lab_on = False
+        self.lab = KineticBus(
+            library=TemperamentLibrary(owned=LAB_CHANNELS),
+            is_drawing=lambda: self._lab_ctx["drawing"],
+            get_gaze=lambda: (self._lab_ctx["gx"], self._lab_ctx["gy"]),
+            get_person=lambda: "absent",  # startle is fired by the ⚡ button
+            on_log=lambda m: self.log("lab", m, False),
+            send_ease=self._route_ease,
+            send_plan=self._route_plan,
+            send_step=self._route_step,
+            get_state=self._route_state,
+            owned=LAB_CHANNELS,
+        )
+
+        self.temp_tree = ttk.Treeview(holder, show="tree", selectmode="browse")
+        self.temp_tree.pack(fill="both", expand=True, pady=2)
+        self.lab_status = ttk.Label(holder, text="", font=("monospace", 9))
+        self.lab_status.pack(fill="x", pady=2)
+
+        ttk.Label(side, text="library", font=("monospace", 9, "bold")).pack(anchor="w")
+        ttk.Button(side, text="Assign session ▸ selected state", command=self._assign_selected).pack(fill="x", pady=2)
+        ttk.Button(side, text="Load selected for editing", command=self._load_selected).pack(fill="x", pady=2)
+        ttk.Button(side, text="Retire selected ▸ projects", command=self._retire_selected).pack(fill="x", pady=2)
+
+        ttk.Separator(side).pack(fill="x", pady=8)
+        ttk.Label(side, text="lab — the runtime bus, live", font=("monospace", 9, "bold")).pack(anchor="w")
+        self.lab_btn = ttk.Button(side, text="▶ Start lab", command=self._lab_toggle)
+        self.lab_btn.pack(fill="x", pady=2)
+        for e in EMOTIONS:
+            ttk.Button(side, text=e, command=lambda e=e: self.lab.set_emotion(e)).pack(fill="x", pady=1)
+        draw_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            side, text="drawing state (overrides mood)", variable=draw_var, command=lambda: self._lab_ctx.__setitem__("drawing", draw_var.get())
+        ).pack(anchor="w", pady=2)
+        labeled_slider(side, "gaze x (nudges arm)", -1.0, 1.0, 0.0, lambda v: self._lab_ctx.__setitem__("gx", v))
+        labeled_slider(side, "gaze y", -1.0, 1.0, 0.0, lambda v: self._lab_ctx.__setitem__("gy", v))
+        ttk.Button(side, text="⚡ startle", command=lambda: self.lab.startle() if self._lab_on else None).pack(fill="x", pady=4)
+        self._refresh_library()
+        self._lab_tick()
+
+    def _refresh_library(self):
+        tree = self.temp_tree
+        tree.delete(*tree.get_children())
+        buckets = self.lab.library.scan()
+        for state in ["drawing"] + EMOTIONS:
+            fns = buckets.get(state, [])
+            parent = tree.insert("", "end", iid=f"state:{state}", text=f"{state}   — {len(fns)} bundle(s)", open=True)
+            for fn in fns:
+                tree.insert(parent, "end", iid=f"bundle:{fn}", text=f"  {fn[len('session_'):-len('.json')]}")
+        projects = [s for s in Session.list_saved() if s.startswith("projects/")]
+        parent = tree.insert("", "end", iid="state:projects", text=f"projects (working — runtime can't see)   — {len(projects)}", open=False)
+        for p in projects:
+            tree.insert(parent, "end", iid=f"project:{p}", text=f"  {os.path.basename(p)[len('session_'):-len('.json')]}")
+
+    def _selected_state(self):
+        sel = self.temp_tree.selection()
+        if not sel:
+            return None
+        iid = sel[0]
+        if iid.startswith("bundle:"):
+            iid = self.temp_tree.parent(iid)
+        if iid.startswith("state:"):
+            return iid[len("state:") :]
+        return None
+
+    def _assign_selected(self):
+        state = self._selected_state()
+        if state is None or state == "projects":
+            self.status.config(text="pick a state (or one of its bundles) in the tree, then Assign")
+            return
+        if not any(t.has_take for t in self.session.tracks):
+            self.status.config(text="nothing to assign — record a take first")
+            return
+        existing = set(self.lab.library.scan().get(state, []))
+        name = f"{state}_{len(existing)}"
+        for i in range(26):  # first FREE letter — count-based naming overwrites after a retire leaves a gap
+            cand = f"{state}_{chr(ord('a') + i)}"
+            if f"session_{cand}.json" not in existing:
+                name = cand
+                break
+        self.session.name = name
+        self.name_entry.delete(0, "end")
+        self.name_entry.insert(0, name)
+        self.session.save(export=True)
+        self.status.config(text=f"assigned current session to {state} as {name}")
+        self._refresh_library()
+        self._refresh_saved()
+
+    def _load_selected(self):
+        sel = self.temp_tree.selection()
+        if not sel:
+            return
+        iid = sel[0]
+        if iid.startswith("bundle:"):
+            self._load_file(iid[len("bundle:") :])
+        elif iid.startswith("project:"):
+            self._load_file(iid[len("project:") :])
+
+    def _retire_selected(self):
+        sel = self.temp_tree.selection()
+        if not sel or not sel[0].startswith("bundle:"):
+            self.status.config(text="select a bundle to retire (states and projects can't be retired)")
+            return
+        fn = sel[0][len("bundle:") :]
+        dst = self.lab.library.retire(fn)
+        self.status.config(text=f"retired {fn} ▸ projects/{os.path.basename(dst)}")
+        self._refresh_library()
+        self._refresh_saved()
+
+    def _lab_toggle(self):
+        if self._lab_on:
+            self._lab_stop()
+        else:
+            self.transport.stop()  # the lab and the looper share the body
+            self.grbl.set_pen(GRBL_PEN_UP_S)  # bundles with pen takes will lower it themselves
+            self.lab.enable()
+            self._lab_on = True
+            self.lab_btn.config(text="■ Stop lab")
+
+    def _lab_stop(self):
+        if getattr(self, "_lab_on", False):
+            self.lab.shutdown()
+            self._lab_on = False
+            self.lab_btn.config(text="▶ Start lab")
+
+    def _lab_tick(self):
+        if self._lab_on:
+            s = self.lab.status()
+            txt = f"lab ▶  state: {s['state'] or '…'}   bundle: {s['bundle'] or '(none — assign one)'}   chains: {s['chains']}"
+        else:
+            txt = "lab off — Start runs the REAL runtime bus on this panel's body; click states to hear it change its mind"
+        self.lab_status.config(text=txt)
+        self.after(500, self._lab_tick)
 
     # --- track lanes ----------------------------------------------------------
     def _build_tracks(self):
@@ -1400,23 +1549,13 @@ class SessionFrame(ttk.LabelFrame):
         self.status.config(text=f"project saved: {self.session.name} (edit freely — runtime can't see it)")
         self._refresh_saved()
 
-    def export_runtime(self):
-        """Publish the current session into the runtime library, where the
-        kinetic bus picks temperament bundles by state-name prefix."""
-        self.session.name = self.name_entry.get().strip() or "session"
-        path = self.session.save(export=True)
-        states = ["drawing"] + EMOTIONS
-        named_ok = any(self.session.name == s or self.session.name.startswith(s + "_") for s in states)
-        note = "" if named_ok else " — ⚠ no state prefix, the kinetic bus will IGNORE it (use the state dropdown)"
-        self.log("session", f"exported to runtime library: {os.path.basename(path)}", False)
-        self.status.config(text=f"exported: {self.session.name}{note}")
-        self._refresh_saved()
-
     def load(self):
-        if not self.saved_var.get():
-            return
+        if self.saved_var.get():
+            self._load_file(self.saved_var.get())
+
+    def _load_file(self, filename: str):
         self.transport.stop()
-        self.session = Session.load(self.saved_var.get())
+        self.session = Session.load(filename)
         self.loop_var.set(int(self.session.loop_len))
         self.name_entry.delete(0, "end")
         self.name_entry.insert(0, self.session.name)
@@ -1426,6 +1565,7 @@ class SessionFrame(ttk.LabelFrame):
 
     def shutdown(self):
         self.transport.stop()
+        self._lab_stop()
 
 
 def build_ui(root):

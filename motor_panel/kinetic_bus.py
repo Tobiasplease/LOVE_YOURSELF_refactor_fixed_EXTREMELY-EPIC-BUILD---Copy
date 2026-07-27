@@ -112,6 +112,21 @@ class TemperamentLibrary:
         pool = [fn for state, fns in buckets.items() if state != DRAWING_STATE for fn in fns]
         return random.choice(pool) if pool else None
 
+    def retire(self, filename: str) -> str:
+        """Un-publish a runtime bundle: move it back to projects/ (the take
+        survives, the bus stops seeing it on its next scan)."""
+        src = os.path.join(self.sessions_dir, filename)
+        proj = os.path.join(self.sessions_dir, "projects")
+        os.makedirs(proj, exist_ok=True)
+        dst = os.path.join(proj, filename)
+        i = 1
+        while os.path.exists(dst):
+            dst = os.path.join(proj, filename[: -len(".json")] + f"_{i}.json")
+            i += 1
+        os.rename(src, dst)
+        self._chain_cache.pop(filename, None)
+        return dst
+
     def chains(self, filename: str) -> Dict[str, dict]:
         """Trained chains for a session, owned channels only, mtime-cached."""
         path = os.path.join(self.sessions_dir, filename)
@@ -163,8 +178,15 @@ def _default_person_provider() -> str:
 
 
 class KineticBus:
-    """Owns the lefthand device at runtime; keeps one temperament's
-    generators alive, morphs between temperaments as context changes."""
+    """Keeps one temperament's generators alive, morphs between temperaments
+    as context changes. Two hosting modes, same behavior:
+
+    RUNTIME (machine.py): no callbacks given — the bus builds and owns the
+    lefthand device itself.
+    PRACTICE ROOM (the panel's temperament lab): send_ease/send_plan/
+    send_step/get_state injected, `owned` widened to the full body — the
+    SAME bus drives the panel's routing, so what you audition in the lab is
+    literally the runtime code path."""
 
     SUPERVISOR_TICK = 0.2  # startle needs sub-second arrival detection
 
@@ -177,15 +199,25 @@ class KineticBus:
         get_gaze: Callable[[], Tuple[float, float]] = _default_gaze_provider,
         get_person: Callable[[], str] = _default_person_provider,
         on_log: Callable[[str], None] = lambda m: print(f"[kinetic] {m}"),
+        send_ease: Optional[Callable[[Dict[str, float]], None]] = None,
+        send_plan: Optional[Callable[[Dict[str, float], float], None]] = None,
+        send_step: Optional[Callable[[Dict[str, float]], None]] = None,
+        get_state: Optional[Callable[[], Dict[str, float]]] = None,
+        owned: Optional[set] = None,
     ):
         self.device = device  # built lazily in enable() so tests can inject
-        self.library = library or TemperamentLibrary()
+        self.owned = owned or OWNED_CHANNELS
+        self.library = library or TemperamentLibrary(owned=self.owned)
         self._emotion = "calm_observant"
         self.get_emotion = get_emotion  # optional pull; set_emotion() is the push path
         self.is_drawing = is_drawing
         self.get_gaze = get_gaze
         self.get_person = get_person
         self.log = on_log
+        self._ext_ease = send_ease
+        self._ext_plan = send_plan
+        self._ext_step = send_step
+        self._ext_state = get_state
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -200,15 +232,20 @@ class KineticBus:
     def set_emotion(self, emotion: str):
         self._emotion = emotion
 
+    def status(self) -> dict:
+        return {"running": self._running, "state": self._active_state, "bundle": self._active_bundle, "chains": len(self._gens)}
+
     # --- lifecycle ------------------------------------------------------------
     def enable(self):
-        if self.device is None:
-            from motor_panel.devices import build_devices
+        if self._ext_ease is None:  # runtime mode: the bus owns the device
+            if self.device is None:
+                from motor_panel.devices import build_devices
 
-            self.device = build_devices()[1]  # lefthand
-        msg = self.device.connect()
-        self.log(f"lefthand: {msg}")
+                self.device = build_devices()[1]  # lefthand
+            msg = self.device.connect()
+            self.log(f"lefthand: {msg}")
         self._running = True
+        self._bundle_since = 0.0  # re-enable picks a bundle immediately
         self._thread = threading.Thread(target=self._supervise, daemon=True)
         self._thread.start()
 
@@ -217,6 +254,7 @@ class KineticBus:
         if self._thread:
             self._thread.join(timeout=3)
         self._stop_gens()
+        self._active_bundle = self._active_state = None
         if self.device is not None:
             try:
                 self.device.all_neutral()
@@ -227,10 +265,25 @@ class KineticBus:
 
     # --- actuation ------------------------------------------------------------
     def _send_ease(self, d: Dict[str, float]):
-        for c, v in d.items():
-            self.device.set_channel(c, v + self._offsets.get(c, 0.0))  # device clamps
+        d = {c: v + self._offsets.get(c, 0.0) for c, v in d.items()}
+        if self._ext_ease is not None:
+            self._ext_ease(d)  # panel routing clamps per channel
+        else:
+            for c, v in d.items():
+                self.device.set_channel(c, v)  # device clamps
+
+    def _send_plan(self, d: Dict[str, float], dt: float):
+        if self._ext_plan is not None:
+            self._ext_plan(d, dt)
+        # runtime v1 has no gantry — plan channels never train there (owned)
+
+    def _send_step(self, d: Dict[str, float]):
+        if self._ext_step is not None:
+            self._ext_step(d)
 
     def _live_state(self) -> Dict[str, float]:
+        if self._ext_state is not None:
+            return dict(self._ext_state())
         return {c: float(ch.value) for c, ch in self.device.channels.items()}
 
     def _stop_gens(self):
@@ -292,7 +345,9 @@ class KineticBus:
         self._stop_gens()
         seed = self._live_state()
         for key, chain in chains.items():
-            gen = engine.Generator(chain, send_ease=self._send_ease, send_plan=lambda d, dt: None, enter_ease=KINETIC_CROSSFADE_S)
+            gen = engine.Generator(
+                chain, send_ease=self._send_ease, send_plan=self._send_plan, send_step=self._send_step, enter_ease=KINETIC_CROSSFADE_S
+            )
             gen.start(seed)
             self._gens.append(gen)
         self._active_bundle, self._active_state = bundle, state
@@ -318,6 +373,11 @@ class KineticBus:
         self._last_startle = now
         self._startle()
 
+    def startle(self):
+        """Public trigger (the lab's ⚡ button); arrivals call it with the
+        cooldown applied in _watch_person."""
+        self._startle()
+
     def _startle(self):
         """Freeze mid-motion, one fast finger snap, then the temperament
         resumes and eases back — the firmware's adaptive slew makes both
@@ -325,8 +385,13 @@ class KineticBus:
         hold = random.uniform(*KINETIC_STARTLE_FREEZE_S)
         for g in self._gens:
             g.freeze(hold)
-        for i in range(4):
-            ch = self.device.channels.get(f"finger{i}")
-            if ch is not None:
-                self.device.set_channel(f"finger{i}", ch.value + KINETIC_STARTLE_CURL)
+        live = self._live_state()
+        snap = {f"finger{i}": live[f"finger{i}"] + KINETIC_STARTLE_CURL for i in range(4) if f"finger{i}" in live}
+        if snap:
+            offsets_free = dict(snap)  # bypass gaze offsets: a flinch is absolute
+            if self._ext_ease is not None:
+                self._ext_ease(offsets_free)
+            else:
+                for c, v in offsets_free.items():
+                    self.device.set_channel(c, v)
         self.log(f"startle — frozen {hold:.1f}s")

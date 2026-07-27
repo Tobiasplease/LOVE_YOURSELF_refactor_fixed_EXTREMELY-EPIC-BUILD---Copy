@@ -182,10 +182,22 @@ changes.
 - **Speed slider** (0.25-2×) retempos playback and generation.
 - **Project vs runtime saves** (July 26): **Save project** writes to
   `movement_recordings/arms/projects/` — the working area, free to iterate,
-  deliberately invisible to the kinetic bus. **Export ▸ runtime** publishes
-  into the library root where the bus picks bundles by state prefix (the
-  export warns if the name has no state prefix). Load lists both
-  (`projects/...` first). Same file format (`4.1_session_groups`) either way.
+  deliberately invisible to the kinetic bus. Publishing happens in the
+  **temperaments tab** (see below), where the target is visible. Load lists
+  both (`projects/...` first). Same file format (`4.1_session_groups`).
+- **Temperaments tab** (July 26 — assignment made visible + the lab): the
+  library as a tree (each state with exactly its bundles, plus projects);
+  **Assign session ▸ selected state** publishes the looper's session with
+  an auto state name (this replaced the name-prefix dropdown, which made
+  assignment an invisible filename side-effect); **Load selected** pulls
+  any bundle/project back into the looper; **Retire ▸ projects**
+  un-publishes. The **lab** runs the REAL KineticBus (practice-room mode:
+  injected panel routing, full body incl. gantry/pen/lung) — Start it,
+  click emotion states and watch chains crossfade seamlessly, toggle the
+  drawing override, slide gaze x/y to feel the range nudges, fire ⚡
+  startle. The looper transport and the lab are mutually exclusive (one
+  owner of the body at a time). What you audition here is literally the
+  runtime code path.
 - **Legacy hand datasets** (`movement_recordings/*.json`, 13 present, per
   emotion) import as hand-track takes via the hand tab (tiled to the loop;
   originals untouched).
