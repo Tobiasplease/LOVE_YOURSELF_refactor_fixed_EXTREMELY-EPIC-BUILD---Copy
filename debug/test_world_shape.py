@@ -87,6 +87,16 @@ check(
 )
 check("honest time talk survives", "past 19:00" in Captioner._strip_list_shape("It's past 19:00 now and still quiet."))
 
+
+print("— refrain gate (July 27) —")
+cap2 = object.__new__(Captioner)
+cap2._stream = deque(["My springs coil tight again from that moment when nothing moves but waits for something else to happen first."], maxlen=6)
+refrain = "The air thickens; my springs coil tight from that moment when nothing moves but waits for something else to happen first."
+check("verbatim chorus caught mid-sentence", cap2._refrain_of_stream(refrain))
+themed = "The springs are quiet now; he's gone and the chair is still turning."
+check("thematic reuse (short motif) passes", not cap2._refrain_of_stream(themed))
+check("short captions never trip it", not cap2._refrain_of_stream("Still there."))
+
 print()
 if failures:
     print(f"{len(failures)} FAILURE(S): {failures}")

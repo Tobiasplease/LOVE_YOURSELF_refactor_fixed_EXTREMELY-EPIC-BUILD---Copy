@@ -684,6 +684,24 @@ class Captioner(MemoryMixin):
         func = sum(1 for w in words if w in cls._FUNCTION_WORDS)
         return func / len(words) < 0.15
 
+    _REFRAIN_NGRAM_WORDS = 6
+
+    def _refrain_of_stream(self, caption: str) -> bool:
+        """True when the caption shares a run of _REFRAIN_NGRAM_WORDS
+        consecutive words with any stream entry — a verbatim chorus riding
+        the thread, invisible to the opening-echo gate."""
+        n = self._REFRAIN_NGRAM_WORDS
+        words = self._norm_words(caption)
+        if len(words) < n:
+            return False
+        shingles = {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
+        for past in self._stream:
+            pw = self._norm_words(past)
+            for i in range(len(pw) - n + 1):
+                if " ".join(pw[i : i + n]) in shingles:
+                    return True
+        return False
+
     def _caption_reject_reason(self, caption: str, prompt_text: str = "") -> Optional[str]:
         """Mouth gate (retry-once-else-silence). Rejects, in order:
         template_echo — opens like a recent stream entry;
@@ -701,6 +719,16 @@ class Captioner(MemoryMixin):
         norm = " ".join(self._norm_words(caption))
         if norm and any(norm == " ".join(self._norm_words(past)) for past in self._stream):
             return "template_echo"
+        # REFRAIN (July 27, first world-thread run): with the thread frame the
+        # window carries phrases forward — good — but a verbatim formula rode
+        # it as a chorus ("...from that moment when nothing moves but waits
+        # for something else to happen first" x3, "nothing new outside, just
+        # the weight of time passing while I stay bolted here" x2). Opening-
+        # echo can't see mid-sentence repeats. Any shared run of
+        # REFRAIN_NGRAM_WORDS consecutive words with a stream entry is
+        # recitation, not continuity; thematic reuse (2-3 word motifs) passes.
+        if self._refrain_of_stream(caption):
+            return "refrain_echo"
         if any(m in low for m in self._STREAM_META_MARKERS):
             return "assistant_speak"
         # Qwen drifts into CJK at high temperatures; one 哎呀 in the document

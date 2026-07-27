@@ -72,7 +72,12 @@ perpetually hot while a person moved around (the June sustained-event
 anti-pattern, reintroduced July 26, caught in one run); (4) persona slot
 cleared (vibration/hum/gears saturation; backup
 machine_identity.json.pre-world-bak) — judge what re-grows under the log
-frame.
+frame. **The clear was CLOBBERED**: the file was edited while machine.py ran,
+and the process's next identity save wrote its in-memory persona straight
+back — the second world run had "I vibrate when the silence gets too heavy"
+in every call again. Lesson: never edit machine_identity.json under a live
+process; use `debug/clear_sticky_slots.py` (refuses while machine.py runs,
+backs up, clears persona+desire+belief only).
 
 `"document"` (previous live mode, kept for A/B): the last `STREAM_WINDOW`
 captions sent as ONE trailing assistant message and llama-server **continues**
@@ -347,7 +352,12 @@ state-checked; free while GRBL executes; "as I draw closer/breath" idioms
 exempt) · word_salad (≥12 words with <15% function words — salad is
 maximally novel, invisible to every similarity gate; July 9 lesson) · tail_echo (a second consecutive short fragment re-saying the
 tail; ONE short restatement is emphasis and passes — artist's call) ·
-prompt_parrot (short caption fuzzy-matching a prompt line). Strips
+prompt_parrot (short caption fuzzy-matching a prompt line) ·
+refrain_echo (NEW July 27: a shared run of 6+ consecutive words with any
+stream entry — the world thread carries phrases forward and a verbatim
+formula rode it as a chorus, "…nothing moves but waits for something else
+to happen first" ×3; opening-echo can't see mid-sentence repeats; 2-3 word
+thematic motifs still pass). Strips
 (salvage, not reject): "1)" enum prefixes, "12... 11..." countdowns,
 trailing #hashtags. Watch-only: >0.6 word-overlap vs last two thoughts.
 
