@@ -176,6 +176,13 @@ KINETIC_STARTLE_HOLD_S = 3.0  # held tension before the slow release
 KINETIC_STARTLE_DELTAS = {"finger0": 40, "finger1": 40, "finger2": 40, "finger3": 40, "wrist": 25, "lung": 20}  # fallback flinch, degrees relative
 KINETIC_STARTLE_COOLDOWN_S = 20  # a flickering detector must not twitch the hand
 
+# Homing safety: a take assigned under the "homing" state (record the left
+# arm HOLDING its tucked-clear pose) moves the arm FULLY there before the
+# gantry homes and holds until homing completes. No dataset = the bus
+# refuses to guess a pose. The max hold releases a stranded arm if the
+# completion signal is ever missed (GRBL's homing quiet-wait is 60s).
+KINETIC_HOMING_MAX_HOLD_S = 75
+
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.
 GRBL_SPINDLE_MAX_S = int(os.getenv("GRBL_SPINDLE_MAX_S", 255))  # -> $30

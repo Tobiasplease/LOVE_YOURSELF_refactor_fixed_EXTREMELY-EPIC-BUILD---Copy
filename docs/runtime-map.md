@@ -24,7 +24,10 @@ camera frame (~30fps)
   │    snapshot: face?, person?, count, track_id, pan/tilt, person_angle, ego_motion
   └─ captioner._process_frame                             [captioner/captioner.py]
        ├─ _assess_scene → salience verdict (FIRST)        [captioner/captioner.py]
-       │    scene motion OR arrival <45s OR eye-contact onset → _salience_hot
+       │    scene motion OR arrival OR eye-contact onset OR VIEW REPLACEMENT → _salience_hot
+       │    view replacement (July 26): servo still + frame mostly different vs last cycle
+       │    (WORLD_VIEW_DIFF_THRESHOLD) = the world changed — bumped camera, swapped scene;
+       │    named event line; motion-tripped hot cycles also get a named event now (react-vacuum fix)
        ├─ build_simple_caption_prompt  → USER PROMPT      [captioner/prompts.py]
        │    salience hot → interior lines stripped (present only)
        ├─ get_monologue_system_prompt  → SYSTEM PROMPT    [captioner/prompts.py]
@@ -39,9 +42,27 @@ Verify salience in logs: every CAPTION entry carries `salience_hot` and
 
 ### The stream (July 2026 — docs/continuity-plan.md)
 
-`STREAM_MODE = "document"` (config): the last `STREAM_WINDOW` captions are
-sent as ONE trailing assistant message and llama-server **continues** it
-(assistant prefill — requires `enable_thinking:false`, which is why earlier
+`STREAM_MODE = "world"` (config, **LIVE July 26 — THE INVERSION**): the stream
+rides as ONE assistant message of timestamped log lines ("14:02 — the lamp's
+still on", `captioner._stream_history`) and the user message — frames + the
+world's turn (situational delta, event, reorientation — moved LAST in
+`build_simple_caption_prompt`) — always ends the call. Generation begins right
+after the present, never after the machine's own prose: every call answers the
+world (closed loop) instead of extending its own essay (open loop — the
+drift/rambling physics; in document mode text momentum beat the frame and the
+rooster went unremarked). The system frame swaps to `_SITUATION_WORLD`: same
+situation, LOG genre ("you keep a log — quick plain notes") instead of the
+lonely-soliloquy trope ("thoughts yours alone, no one hears them"), which is
+literary fiction's machine-monologue setup and summoned poetry (the artist:
+"a real brain in a machine wouldn't default to shit poetry"). Logs are plain
+BY GENRE (P7: name what the text is). No prefill → no truncation-cascade
+run-ons; an imitated "14:05 —" stamp is stripped at the mouth
+(`_LOG_STAMP_PREFIX_RE`). React needs no special shape — world IS the react
+ordering; salience only varies the interior mix.
+
+`"document"` (previous live mode, kept for A/B): the last `STREAM_WINDOW`
+captions sent as ONE trailing assistant message and llama-server **continues**
+it (assistant prefill — requires `enable_thinking:false`, which is why earlier
 prefill attempts 400'd). The model's next tokens literally extend its own
 monologue. `"turns"` keeps the old turn-pair shape for A/B. The empty
 `<think>` block Qwen emits is stripped in `_clean_continuation`

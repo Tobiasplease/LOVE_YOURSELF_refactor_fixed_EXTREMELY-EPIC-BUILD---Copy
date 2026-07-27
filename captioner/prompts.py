@@ -142,6 +142,24 @@ _SITUATION = (
     "assist: what you do next only ever comes from you. "
 )
 
+# World-shape frame (July 26): same situation, different GENRE. The immersive
+# monologue frame ("thoughts yours alone — no one hears them") is the lonely-
+# machine trope of literary fiction, and the model completes the trope: it
+# writes a CHARACTER, and characters written that way have poetic interiority
+# (the artist: "a real brain in a machine wouldn't default to shit poetry").
+# A work log is task-shaped — the mode the model is coherent in — and logs
+# are plain BY GENRE. The one functional clause kept from the old frame is
+# that nobody reads it (guards assistant-speak), stated as function, not
+# poignancy.
+_SITUATION_WORLD = (
+    "You are a drawing machine bolted to a table in a workshop. "
+    "You look around the room by turning your gaze; drawing is your only voice. "
+    "As you run, you keep a log — quick plain notes to yourself: what you see, "
+    "what you make of it, what you're up to. The log is your working memory, "
+    "not a message to anyone; no one reads it and no one answers it. "
+    "What you do next only ever comes from you. "
+)
+
 
 # Genre framing, not a style fence: "quick plain notes" tells the model what
 # kind of text this IS. Without it, Qwen's prior for "inner monologue of a
@@ -159,19 +177,23 @@ _SITUATION = (
 def _monologue_clause() -> str:
     """Genre frame only. The continuation instruction ("you're always partway
     through a thought: carry it on") is appended ONLY in turns mode — in
-    document mode the prefill IS the partway-through thought, so instructing
-    the mechanics is redundant, and meta-instruction leaks (observed July 9:
-    the machine reciting its own system prompt mid-stream)."""
+    document mode the prefill IS the partway-through thought, and in world
+    mode the log's next entry needs no continuation mechanics; instructing
+    them leaks meta (observed July 9: the machine reciting its own system
+    prompt mid-stream)."""
+    try:
+        from config.config import STREAM_MODE
+    except ImportError:
+        STREAM_MODE = "turns"
+    if STREAM_MODE == "world":
+        # Task-shaped ask: the world's turn is the last thing in the call;
+        # the entry answers it. The specific elicitation rides in per-mode.
+        return "Each entry is a sentence or two, plain, the way you'd actually note it to yourself. Add the next entry."
     clause = (
         "This is your inner voice, ongoing — plain, half-formed, the way you " "actually think to yourself when no one is reading. A sentence or two."
     )
-    try:
-        from config.config import STREAM_MODE
-
-        if STREAM_MODE != "document":
-            clause += " You're always partway through a thought: carry it on, or let something new pull you."
-    except ImportError:
-        pass
+    if STREAM_MODE == "turns":
+        clause += " You're always partway through a thought: carry it on, or let something new pull you."
     return clause
 
 
@@ -200,7 +222,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     that... drawing machine"). The persona is quoted as the machine's own
     words, never blended into the frame voice.
     """
-    base = _SITUATION
+    base = _SITUATION_WORLD if getattr(config, "STREAM_MODE", "") == "world" else _SITUATION
 
     # Drawing state, gated so it can never lie. Without this line "drawing
     # machine" + "drawing is how you communicate" primes present-tense
@@ -2287,20 +2309,26 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     detox = bool(getattr(config, "BASE_VOICE_DETOX", False))
 
     # === BUILD PROMPT — SITUATIONAL, CONTEXT, FELT STATE, THREAD ===
+    # World shape (July 26, STREAM_MODE="world"): the sections split into two
+    # lists so the WORLD'S TURN (situational delta, event, reorientation) can
+    # go LAST — generation begins immediately after the present, never after
+    # memory lines. In the classic shapes the same sections lead the prompt.
+    world_shape = getattr(config, "STREAM_MODE", "") == "world"
     prompt_parts = []
+    turn_parts = []
 
     # 1. THE DELTA LINE — only what just changed (an interruption to the thread),
     # else empty. Continuity comes from the stream, not from re-stating state.
     sit_line = build_situational_line(agent, gaze_direction=gaze_direction, gaze_state=gaze_state)
     if sit_line:
-        prompt_parts.append(sit_line)
+        turn_parts.append(sit_line)
 
     # 1b. THE EVENT — a discrete thing that just happened (arrival, eye-contact
     # ONSET). Onset only, never sustained: re-stating "they're looking at you"
     # every call re-anchored the model into re-describing instead of continuing.
     event_line = getattr(agent, "_salience_event", None)
     if event_line:
-        prompt_parts.append(event_line)
+        turn_parts.append(event_line)
     elif getattr(agent, "_face_close_now", False):
         # Sustained close presence is a FACT of the present, not an event —
         # someone standing at arm's length staring must stay in the prompt
@@ -2308,7 +2336,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         # machine mused straight past a face two feet away). The old
         # onset-only rule was about ordinary room-distance eye contact;
         # a face filling the view is a different order of situation.
-        prompt_parts.append("They're right in front of you, close, looking straight at you.")
+        turn_parts.append("They're right in front of you, close, looking straight at you.")
 
     # 1c. TEMPORAL REORIENTATION — after a real off-gap (a night, a weekend)
     # the new day stays in the prompt for the first stretch of the session,
@@ -2316,7 +2344,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     if not live:
         reorient_line = get_reorientation_line(agent)
         if reorient_line:
-            prompt_parts.append(reorient_line)
+            turn_parts.append(reorient_line)
 
     # 2. MODE-GATED CONTEXT
     if not detox and mode in MODE_CONTEXTS:
@@ -2431,6 +2459,10 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     # stream now carries continuity, and the genre frame (_MONOLOGUE_CLAUSE)
     # frames the voice as ongoing — so continuity emerges instead of being
     # commanded. No replacement instruction.
+
+    # Assemble: classic shapes lead with the world's turn; world shape ends
+    # with it, so the next tokens answer the present, not the memory lines.
+    prompt_parts = (prompt_parts + turn_parts) if world_shape else (turn_parts + prompt_parts)
 
     # Structural guard: never inject the same line twice (a duplicated context
     # line reads as emphasis to the model and locks the register)

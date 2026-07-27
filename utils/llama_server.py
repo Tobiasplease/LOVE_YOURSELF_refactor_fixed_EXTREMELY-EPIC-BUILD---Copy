@@ -57,8 +57,12 @@ SHOW_PROGRESS = os.getenv("LLAMA_SHOW_PROGRESS", "true").lower() == "true"
 # default, far short of the stream's length, so a verbatim prior caption sits
 # outside its window entirely.
 _SAMPLER_PASSTHROUGH = (
-    "repeat_last_n", "min_p",
-    "dry_multiplier", "dry_base", "dry_allowed_length", "dry_penalty_last_n",
+    "repeat_last_n",
+    "min_p",
+    "dry_multiplier",
+    "dry_base",
+    "dry_allowed_length",
+    "dry_penalty_last_n",
 )
 
 
@@ -66,6 +70,7 @@ def _forward_sampler_options(payload: dict, options: dict) -> None:
     for k in _SAMPLER_PASSTHROUGH:
         if k in options:
             payload[k] = options[k]
+
 
 _server_process = None
 
@@ -90,6 +95,7 @@ _THINK_OPEN_RE = re.compile(r"<think>.*\Z", re.DOTALL)
 
 def _stream_mode() -> str:
     from config import config as _c
+
     return getattr(_c, "STREAM_MODE", "turns")
 
 
@@ -133,10 +139,24 @@ def _append_stream_and_user(messages: list, history: Optional[List[str]], user_m
     continuing past it. Attention capture truncates rehearsal; the reaction is
     stored into the stream, so the interruption becomes part of the document.
 
+    "world" (July 26, the inversion): the stream rides as ONE assistant
+    message of timestamped log lines (formatted upstream by the captioner),
+    and the user message — frames + the world's turn — always comes LAST.
+    Generation begins right after the present, never after the machine's own
+    prose: every call answers the world instead of extending an essay. The
+    react ordering made the default; react needs no special case here,
+    salience only changes how much interior material rides in the user prompt.
+
     "turns": legacy turn-pairs, then the user message.
 
-    Returns the prefill text ("" in turns/react modes) for seam cleaning + logging.
+    Returns the prefill text ("" in world/turns/react modes) for seam cleaning + logging.
     """
+    if _stream_mode() == "world":
+        lines = [p for p in ((h or "").strip() for h in history or []) if p]
+        if lines:
+            messages.append({"role": "assistant", "content": "\n".join(lines)})
+        messages.append(user_message)
+        return ""
     if _stream_mode() == "document":
         if react:
             recent = [p for p in ((h or "").strip() for h in history or []) if p][-2:]
@@ -178,6 +198,7 @@ def _clean_continuation(text: str, prefill: str = "") -> str:
 # Server lifecycle
 # ---------------------------------------------------------------------------
 
+
 def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int = None) -> bool:
     """Start llama-server as a subprocess. Returns True if started successfully."""
     global _server_process
@@ -196,11 +217,16 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
 
     cmd = [
         LLAMA_SERVER_BIN,
-        "-m", model,
-        "--host", "0.0.0.0",
-        "--port", "8080",
-        "--ctx-size", str(ctx),
-        "-ngl", str(LLAMA_GPU_LAYERS),
+        "-m",
+        model,
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--ctx-size",
+        str(ctx),
+        "-ngl",
+        str(LLAMA_GPU_LAYERS),
         "--jinja",
     ]
     if mmproj and os.path.exists(mmproj):
@@ -274,6 +300,7 @@ def is_server_running() -> bool:
 # Drawing completion wait
 # ---------------------------------------------------------------------------
 
+
 def _wait_for_drawing_completion() -> None:
     """Wait for ComfyUI generation to complete before making LLM calls."""
     try:
@@ -320,6 +347,7 @@ def _wait_for_drawing_completion() -> None:
 # ---------------------------------------------------------------------------
 # Single-image query
 # ---------------------------------------------------------------------------
+
 
 def query_llama_server(
     prompt: str,
@@ -509,6 +537,7 @@ def query_llama_server(
 # Multi-frame video query (new capability)
 # ---------------------------------------------------------------------------
 
+
 def _query_multi_image(
     prompt: str,
     frames: List[bytes],
@@ -644,13 +673,15 @@ def _query_superframe(
         if img is not None:
             rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             h, w = rgb.shape[:2]
-            temp_frames.append(Frame(
-                data=rgb,
-                index=i,
-                timestamp=i / fps,
-                width=w,
-                height=h,
-            ))
+            temp_frames.append(
+                Frame(
+                    data=rgb,
+                    index=i,
+                    timestamp=i / fps,
+                    width=w,
+                    height=h,
+                )
+            )
 
     if not temp_frames:
         return "[WARNING] No valid frames to process"
@@ -788,14 +819,19 @@ def query_llama_server_video(
             print("[llama-server] Restart failed — falling back to single frame")
             if frames:
                 return query_llama_server(
-                    prompt=prompt, image=frames[-1], system_prompt=system_prompt,
-                    options=options, timeout=timeout, show_progress=show_progress,
+                    prompt=prompt,
+                    image=frames[-1],
+                    system_prompt=system_prompt,
+                    options=options,
+                    timeout=timeout,
+                    show_progress=show_progress,
                     skip_generation_wait=True,
                 )
             return "[WARNING] llama-server unavailable"
 
     if not mode:
         from config.config import VIDEO_MODE
+
         mode = VIDEO_MODE
 
     if mode == "superframe":

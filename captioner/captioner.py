@@ -192,6 +192,9 @@ class Captioner(MemoryMixin):
         from config.config import STREAM_WINDOW
 
         self._stream: Deque[str] = deque(maxlen=max(STREAM_WINDOW, 0))
+        # Parallel timestamps (same maxlen, so overflow keeps them in sync) —
+        # world shape renders the stream as a timestamped log ("14:02 — ...")
+        self._stream_ts: Deque[float] = deque(maxlen=max(STREAM_WINDOW, 0))
         self.last_memory_mode_time: float = time.time()  # Track memory mode trigger (every 4 min)
 
         # Track session continuity
@@ -244,6 +247,30 @@ class Captioner(MemoryMixin):
                         print(f"[💭] Prior session caption rejected (garbage): {caption[:30]}...")
         except Exception:
             pass
+
+    def _stream_push(self, text: str) -> None:
+        """All stream writes go through here so the timestamp deque stays in sync."""
+        self._stream.append(text)
+        self._stream_ts.append(time.time())
+
+    def _stream_clear(self) -> None:
+        self._stream.clear()
+        self._stream_ts.clear()
+
+    def _stream_history(self) -> list:
+        """The stream as the model sees it. World shape: timestamped log lines
+        ("14:02 — the lamp's still on") — the log rendering is genre framing
+        (north-star P7: a log is the text-shape of a working mind, and logs
+        are plain by genre). Other shapes: raw text, unchanged."""
+        entries = list(self._stream)
+        from config.config import STREAM_MODE
+
+        if STREAM_MODE != "world" or not entries:
+            return entries
+        ts = list(self._stream_ts)
+        while len(ts) < len(entries):  # defensive: consolidation/restore drift
+            ts.insert(0, ts[0] if ts else time.time())
+        return [f"{time.strftime('%H:%M', time.localtime(t))} — {text}" for t, text in zip(ts[-len(entries) :], entries)]
 
     @property
     def is_processing(self) -> bool:
@@ -391,6 +418,38 @@ class Captioner(MemoryMixin):
             info["face_close"] = bool(close_frames > len(recent_meta) * 0.4)
             info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4 and (info["person_present_in_window"] or info["face_close"]))
 
+        # VIEW REPLACEMENT (July 26): the ego-compensated flow calls a huge
+        # frame shift a saccade and returns invalid — so a bumped camera, a
+        # swapped scene or lights-out was NOT an event to the salience system
+        # (the rooster run: the camera fell, ended up pointed at a toy rooster,
+        # and the machine mused straight past it). Cheap cross-cycle check: if
+        # the servo barely moved since the last caption cycle but the frame
+        # content is mostly different, the WORLD changed. Servo state unknown →
+        # don't fire (a gaze turn already explains changed pixels).
+        view_changed = False
+        try:
+            if recent_meta:
+                import cv2 as _cv2
+                import numpy as _np
+
+                from config.config import WORLD_VIEW_DIFF_THRESHOLD, WORLD_VIEW_SERVO_STILL_DEG
+
+                last_det = recent_meta[-1].get("detection", {}) or {}
+                arr = _np.frombuffer(recent_meta[-1]["jpeg"], dtype=_np.uint8)
+                img = _cv2.imdecode(arr, _cv2.IMREAD_GRAYSCALE)
+                if img is not None:
+                    cur_gray = _cv2.resize(img, (64, 64))
+                    pan, tilt = last_det.get("pan"), last_det.get("tilt")
+                    prev = getattr(self, "_view_prev", None)
+                    if prev is not None and None not in (pan, tilt, prev.get("pan"), prev.get("tilt")):
+                        servo_delta = abs(pan - prev["pan"]) + abs(tilt - prev["tilt"])
+                        score = float(_np.mean(_np.abs(cur_gray.astype(_np.int16) - prev["gray"].astype(_np.int16))) / 255.0)
+                        view_changed = bool(servo_delta < WORLD_VIEW_SERVO_STILL_DEG and score > WORLD_VIEW_DIFF_THRESHOLD)
+                    self._view_prev = {"gray": cur_gray, "pan": pan, "tilt": tilt}
+        except Exception:
+            view_changed = False
+        info["view_changed"] = view_changed
+
         # Update the sticky presence belief from live detection. "Seen now" is
         # any current evidence of a person — world-angle hit, eye contact, or an
         # active gaze lock. The belief persists through gaps so a glance away
@@ -446,7 +505,7 @@ class Captioner(MemoryMixin):
         # must be free to think about itself and its work while someone is
         # quietly in the room (north-star principles 6 + 7).
         strong_motion = info["max_residual"] > SALIENCE_MOTION_RESIDUAL
-        self._salience_hot = bool(eye_onset or arrival or strong_motion or close_onset)
+        self._salience_hot = bool(eye_onset or arrival or strong_motion or close_onset or view_changed)
         if self._salience_hot:
             self._last_salience_time = time.time()
             try:
@@ -464,10 +523,19 @@ class Captioner(MemoryMixin):
         # by the presence line itself ("Someone's just come in"), so naming it
         # again here would be a duplicate (reads as emphasis, locks register).
         event = None
-        if close_onset:
+        if view_changed:
+            event = "The view in front of you has just changed — this isn't what you were looking at a moment ago."
+        elif close_onset:
             event = "They've come right up close — their face is filling your view, looking straight at you."
         elif eye_onset:
             event = "They just looked straight at you."
+        elif strong_motion and not arrival:
+            # The react-vacuum fix (July 26): a motion-tripped hot cycle used
+            # to carry NO event text — the rooster run's one react call had
+            # "heavy, hesitant." as its entire user prompt, and a stripped
+            # prompt with no event invites atmosphere. Arrival stays unnamed
+            # here: the presence line already states it (one channel per fact).
+            event = "Something just moved in front of you."
         self._salience_event = event
         return info
 
@@ -533,10 +601,16 @@ class Captioner(MemoryMixin):
     # hashtag-only caption strips to nothing and the empty gate rejects it.
     _HASHTAG_TAIL_RE = re.compile(r"(?:\s*#\w+)+\s*$")
 
+    # World shape renders the stream as "14:02 — ..." log lines; if the model
+    # imitates the stamp on its own entry, strip it — the captioner owns the
+    # clock (a self-written stamp would drift and then read as scene text).
+    _LOG_STAMP_PREFIX_RE = re.compile(r"^\s*\d{1,2}:\d{2}\s*[—–-]\s*")
+
     @classmethod
     def _strip_list_shape(cls, text: str) -> str:
         t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
         t = cls._COUNTDOWN_PREFIX_RE.sub("", t)
+        t = cls._LOG_STAMP_PREFIX_RE.sub("", t)
         return cls._HASHTAG_TAIL_RE.sub("", t).strip()
 
     @classmethod
@@ -705,8 +779,12 @@ class Captioner(MemoryMixin):
             if not (20 < len(line) < 220) or not self._stream_admissible(line):
                 return  # bad compression — keep the raw entries, window churns anyway
             rebuilt = [line] + entries[3:]
+            ts_list = list(self._stream_ts)
+            ts_rebuilt = ([ts_list[0]] if ts_list else [time.time()]) + ts_list[3:]  # consolidated line keeps the oldest entry's time
             self._stream.clear()
             self._stream.extend(rebuilt)
+            self._stream_ts.clear()
+            self._stream_ts.extend(ts_rebuilt[-len(rebuilt) :])
             log_json_entry(
                 LogType.DEBUG,
                 {"message": "Stream consolidated", "action": "stream_consolidated", "line": line[:100]},
@@ -776,7 +854,7 @@ class Captioner(MemoryMixin):
         from config.config import STREAM_BREAK_SECONDS
 
         if self.last_caption_time and now - self.last_caption_time > STREAM_BREAK_SECONDS:
-            self._stream.clear()
+            self._stream_clear()
 
         # Store reactivity data for later cycles
         self._current_reactivity_data = reactivity_data
@@ -1106,7 +1184,7 @@ class Captioner(MemoryMixin):
                                     system_prompt=system_prompt,
                                     options=_opts,
                                     timeout=60,
-                                    history=list(self._stream),
+                                    history=self._stream_history(),
                                     react=bool(self._salience_hot),
                                 )
 
@@ -1132,7 +1210,7 @@ class Captioner(MemoryMixin):
                                     log_dir=MOOD_SNAPSHOT_FOLDER,
                                     options=_opts,
                                     prompt_type="caption",
-                                    history=list(self._stream),
+                                    history=self._stream_history(),
                                     react=bool(self._salience_hot),
                                 )
 
@@ -1174,7 +1252,7 @@ class Captioner(MemoryMixin):
                                 # clear the window and let it start fresh.
                                 self._skip_streak = getattr(self, "_skip_streak", 0) + 1
                                 if self._skip_streak >= 3:
-                                    self._stream.clear()
+                                    self._stream_clear()
                                     self._skip_streak = 0
                                     log_json_entry(
                                         LogType.DEBUG,
@@ -1400,7 +1478,7 @@ class Captioner(MemoryMixin):
         # Admit into the stream window (the model's own visible turns) —
         # meta/markdown slips are displayed and logged but never propagate
         if caption and self._stream_admissible(caption):
-            self._stream.append(caption.strip())
+            self._stream_push(caption.strip())
             self._consolidate_stream_if_needed()
 
         # Track recent captions for continuity thread (used by flowing thread)
@@ -2019,7 +2097,7 @@ class Captioner(MemoryMixin):
             # restarts (July 9) — a poisoned thought doesn't deserve
             # continuity; better to wake with an empty stream.
             if prior and prior not in self._stream and self._stream_admissible(prior) and not self._caption_reject_reason(prior, ""):
-                self._stream.append(prior)
+                self._stream_push(prior)
             print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
             self._blink_resumed = True
             return True
@@ -2206,7 +2284,7 @@ class Captioner(MemoryMixin):
                     "dry_penalty_last_n": 128,
                 },
                 prompt_type="drawing_watch",
-                history=list(self._stream),
+                history=self._stream_history(),
                 skip_generation_wait=True,
             )
             caption = self._strip_list_shape(caption)
@@ -2226,7 +2304,7 @@ class Captioner(MemoryMixin):
                 if cap_words and len(cap_words & past_words) / max(1, len(cap_words | past_words)) > 0.5:
                     return
             if self._stream_admissible(caption):
-                self._stream.append(caption.strip())
+                self._stream_push(caption.strip())
                 self._consolidate_stream_if_needed()
             self.last_caption = caption
             log_json_entry(
