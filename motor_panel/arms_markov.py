@@ -21,6 +21,7 @@ motor_panel/panel.py provides the surfaces. Run  python motor_panel/panel.py
 
 import ast
 import json
+import math
 import os
 import random
 import threading
@@ -160,10 +161,14 @@ class Generator:
         on_state: Optional[Callable[[str], None]] = None,
         send_step: Optional[Callable[[Dict[str, float]], None]] = None,
         enter_ease: float = 2.0,
+        bias: Optional[Callable[[], Dict[str, float]]] = None,
+        bias_strength: float = 1.5,
     ):
         self.chain = chain
         self.channels = chain["channels"]
         self.bins = chain["discretization"]
+        self.bias = bias  # -> {channel: -1..1 direction preference} (gaze etc.)
+        self.bias_strength = bias_strength
         self.ease_channels = [c for c in self.channels if c not in PLAN_CHANNELS and c not in STEP_CHANNELS]
         self.plan_channels = [c for c in self.channels if c in PLAN_CHANNELS]
         self.step_channels = [c for c in self.channels if c in STEP_CHANNELS]
@@ -227,7 +232,7 @@ class Generator:
                 nxts = nxts or first.get(walk_cur)
                 if not nxts:
                     break
-                nxt = _weighted(nxts)
+                nxt = self._pick(nxts, self._state(walk_cur))
                 dt = max(0.1, nxts[nxt]["avg_dt"] / max(0.1, self.speed))
                 target = self._state(nxt)
                 self._dispatch(self._state(walk_cur), target, dt)
@@ -247,6 +252,34 @@ class Generator:
 
     def _state(self, key: str) -> Dict[str, float]:
         return _unkey(key, self.channels, self.bins)
+
+    def _pick(self, nxts: Dict[str, dict], cur_state: Dict[str, float]) -> str:
+        """Transition choice, optionally biased by a movement vector: each
+        candidate's probability is reweighted by how well its DIRECTION
+        aligns with the bias (gaze, etc.) — exp(strength * alignment). The
+        body tends toward where it looks without ever being pushed: only
+        demonstrated states and transitions are reachable, poses are never
+        distorted, and there is nothing to clip at the range limits (the
+        failure modes of additive position offsets)."""
+        b = self.bias() if self.bias else None
+        if not b or not any(abs(v) > 1e-3 for v in b.values()):
+            return _weighted(nxts)
+        weights = {}
+        for dst in nxts:
+            to = self._state(dst)
+            align = 0.0
+            for c, pref in b.items():
+                if c in to and c in cur_state:
+                    step = (to[c] - cur_state[c]) / self.bins.get(c, 1.0)
+                    align += pref * max(-2.0, min(2.0, step)) / 2.0
+            weights[dst] = nxts[dst]["prob"] * math.exp(self.bias_strength * align)
+        r = random.random() * sum(weights.values())
+        acc = 0.0
+        for dst, w in weights.items():
+            acc += w
+            if r <= acc:
+                return dst
+        return dst  # rounding fallthrough
 
     def _dispatch(self, frm: Dict[str, float], to: Dict[str, float], dt: float):
         """Plan + step leave at WALK time (ahead of the ease), in stream

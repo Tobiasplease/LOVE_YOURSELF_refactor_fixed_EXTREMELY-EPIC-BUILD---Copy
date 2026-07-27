@@ -407,10 +407,17 @@ gantry idle stays with grbl/idle_movements, gaze/lung with their systems.
   at the same two sites as `change_to_emotion(...)`.
 - Transitions are seamless: new generators seed from live servo positions
   and ease into the NEAREST demonstrated state (KINETIC_CROSSFADE_S).
-- Modifiers: gaze deflection biases arm channels (KINETIC_GAZE_NUDGE, polls
-  vision.gaze.get_gaze_state); person ARRIVAL (perception
-  person_detection_state absent→visible) freezes the body and snaps the
-  fingers (KINETIC_STARTLE_*), with cooldown.
+- Modifiers: gaze deflection (polls vision.gaze.get_gaze_state) in two
+  modes — KINETIC_GAZE_MODE "vector" (default, July 27): reweights the
+  markov transition CHOICE toward gaze-aligned movement directions
+  (KINETIC_GAZE_X/Y_CHANNELS, KINETIC_GAZE_BIAS_STRENGTH; poses never
+  distorted, only demonstrated states reachable — proof
+  debug/test_gaze_bias.py); "offset": legacy additive degrees
+  (KINETIC_GAZE_NUDGE). Person ARRIVAL (perception person_detection_state
+  absent→visible) freezes the body and snaps the fingers
+  (KINETIC_STARTLE_*), with cooldown. All auditionable in the panel's
+  runtime tab (gaze pad, mode radio, ⚡ button); the panel opens on that
+  tab when KINETIC_BUS_ENABLED is set.
 - Proof: `debug/test_kinetic_bus.py` (bucketing, ownership, seamlessness
   bound, nudge, startle, drawing override).
 - When the flag turns on for real, retire per the legibility directive:

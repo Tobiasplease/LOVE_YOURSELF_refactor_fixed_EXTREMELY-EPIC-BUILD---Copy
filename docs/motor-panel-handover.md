@@ -185,19 +185,27 @@ changes.
   deliberately invisible to the kinetic bus. Publishing happens in the
   **temperaments tab** (see below), where the target is visible. Load lists
   both (`projects/...` first). Same file format (`4.1_session_groups`).
-- **Temperaments tab** (July 26 — assignment made visible + the lab): the
-  library as a tree (each state with exactly its bundles, plus projects);
-  **Assign session ▸ selected state** publishes the looper's session with
-  an auto state name (this replaced the name-prefix dropdown, which made
-  assignment an invisible filename side-effect); **Load selected** pulls
-  any bundle/project back into the looper; **Retire ▸ projects**
-  un-publishes. The **lab** runs the REAL KineticBus (practice-room mode:
-  injected panel routing, full body incl. gantry/pen/lung) — Start it,
-  click emotion states and watch chains crossfade seamlessly, toggle the
-  drawing override, slide gaze x/y to feel the range nudges, fire ⚡
-  startle. The looper transport and the lab are mutually exclusive (one
-  owner of the body at a time). What you audition here is literally the
-  runtime code path.
+- **Runtime tab** (July 26-27 — assignment made visible + the lab; laid out
+  legacy-controller style, one column per concern): LEFT the library tree
+  (each state with exactly its bundles, plus projects; Assign session ▸
+  selected state / Load for editing / Retire ▸ projects — this replaced
+  the name-prefix dropdown, which made assignment an invisible filename
+  side-effect). CENTER the **gaze simulation pad**: drag to point the
+  machine's eyes, double-click to recenter; the arrow is the modifier.
+  Two gaze modes (radio, live-switchable; KINETIC_GAZE_MODE default
+  "vector"): **movement (flow bias)** reweights which transitions the
+  chains prefer by direction alignment — dynamic range nudging regardless
+  of positioning, poses never distorted, generation still only visits
+  demonstrated states (proof: debug/test_gaze_bias.py — gaze-up walks
+  live ~50° above gaze-down walks on the same chain, all in vocabulary;
+  note: a DETERMINISTIC gesture leaves no choice to bias — vary your
+  recordings if you want gaze to matter); **position (lean)** is the
+  legacy additive offset. RIGHT the **lab**: the REAL KineticBus on the
+  panel's routing (full body incl. gantry/pen/lung) — Start, click
+  emotion states to watch chains crossfade, toggle the drawing override,
+  fire ⚡ startle. Transport and lab are mutually exclusive. **When
+  KINETIC_BUS_ENABLED is set, the panel opens on this tab** — the
+  runtime-tuning entry point once the bus is slotted into machine.py.
 - **Legacy hand datasets** (`movement_recordings/*.json`, 13 present, per
   emotion) import as hand-track takes via the hand tab (tiled to the loop;
   originals untouched).

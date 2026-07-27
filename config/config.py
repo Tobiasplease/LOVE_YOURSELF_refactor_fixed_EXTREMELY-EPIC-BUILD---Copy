@@ -143,7 +143,17 @@ LEFT_ARM_WRIST_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 6 (July 26: res
 KINETIC_BUS_ENABLED = False
 KINETIC_CROSSFADE_S = 2.5  # seamless morph: ease into the new temperament's nearest state over this long
 KINETIC_ROTATE_S = 300  # dwell before rotating among same-state bundles (variety)
-KINETIC_GAZE_NUDGE = {"shoulder": 10, "elbow": 5, "wrist": 8}  # max degrees of bias at full gaze deflection
+# Gaze -> movement. Two modes (switchable live in the panel's runtime tab):
+#   "vector" (default): gaze reweights the markov CHOICE toward transitions
+#     moving in the gazed direction — dynamic range nudging regardless of
+#     positioning; poses never distorted, nothing clips at range limits,
+#     generation still only visits demonstrated states.
+#   "offset": legacy additive degrees on servo targets (a static lean).
+KINETIC_GAZE_MODE = "vector"
+KINETIC_GAZE_BIAS_STRENGTH = 1.5  # exp coefficient on direction alignment; ~4.5x preference at full alignment
+KINETIC_GAZE_X_CHANNELS = {"shoulder": 1.0, "wrist": 1.0, "x": 1.0}  # channels that follow horizontal gaze (sign = direction)
+KINETIC_GAZE_Y_CHANNELS = {"elbow": 1.0, "y": 1.0}  # channels that follow vertical gaze
+KINETIC_GAZE_NUDGE = {"shoulder": 10, "elbow": 5, "wrist": 8}  # offset mode: max degrees at full gaze deflection
 KINETIC_STARTLE_ENABLED = True
 KINETIC_STARTLE_FREEZE_S = (0.4, 1.2)  # freeze duration range on person arrival
 KINETIC_STARTLE_CURL = 35  # degrees of finger snap on startle

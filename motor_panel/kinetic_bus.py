@@ -55,7 +55,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import (
     KINETIC_CROSSFADE_S,
+    KINETIC_GAZE_BIAS_STRENGTH,
+    KINETIC_GAZE_MODE,
     KINETIC_GAZE_NUDGE,
+    KINETIC_GAZE_X_CHANNELS,
+    KINETIC_GAZE_Y_CHANNELS,
     KINETIC_ROTATE_S,
     KINETIC_STARTLE_COOLDOWN_S,
     KINETIC_STARTLE_CURL,
@@ -218,6 +222,7 @@ class KineticBus:
         self._ext_plan = send_plan
         self._ext_step = send_step
         self._ext_state = get_state
+        self.gaze_mode = KINETIC_GAZE_MODE  # "vector" | "offset"; the runtime tab can flip it live
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -346,7 +351,13 @@ class KineticBus:
         seed = self._live_state()
         for key, chain in chains.items():
             gen = engine.Generator(
-                chain, send_ease=self._send_ease, send_plan=self._send_plan, send_step=self._send_step, enter_ease=KINETIC_CROSSFADE_S
+                chain,
+                send_ease=self._send_ease,
+                send_plan=self._send_plan,
+                send_step=self._send_step,
+                enter_ease=KINETIC_CROSSFADE_S,
+                bias=self._gaze_bias,
+                bias_strength=KINETIC_GAZE_BIAS_STRENGTH,
             )
             gen.start(seed)
             self._gens.append(gen)
@@ -354,7 +365,23 @@ class KineticBus:
         self.log(f"temperament -> {bundle} ({state}, {len(chains)} chain(s))")
 
     # --- modifiers ------------------------------------------------------------
+    def _gaze_bias(self) -> Dict[str, float]:
+        """Movement-vector mode: gaze as a direction preference per channel,
+        read LIVE by every generator at each transition choice."""
+        if self.gaze_mode != "vector":
+            return {}
+        gx, gy = self.get_gaze()
+        bias: Dict[str, float] = {}
+        for c, w in KINETIC_GAZE_X_CHANNELS.items():
+            bias[c] = bias.get(c, 0.0) + gx * w
+        for c, w in KINETIC_GAZE_Y_CHANNELS.items():
+            bias[c] = bias.get(c, 0.0) + gy * w
+        return bias
+
     def _update_gaze_offsets(self):
+        if self.gaze_mode != "offset":
+            self._offsets = {}
+            return
         gx, gy = self.get_gaze()
         self._offsets = {
             "shoulder": gx * KINETIC_GAZE_NUDGE.get("shoulder", 0),

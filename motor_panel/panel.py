@@ -30,7 +30,7 @@ from tkinter import scrolledtext, ttk
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.config import ARMS_DUET_MAX_FEED, GRBL_PEN_DOWN_S, GRBL_PEN_UP_S
+from config.config import ARMS_DUET_MAX_FEED, GRBL_PEN_DOWN_S, GRBL_PEN_UP_S, KINETIC_BUS_ENABLED
 from grbl.warp_calibration import clamp_to_reach, reach_polygon
 from motor_panel.devices import EMOTIONS, SerialDevice, build_devices
 from motor_panel.kinetic_bus import KineticBus, TemperamentLibrary
@@ -1050,6 +1050,43 @@ class LungStrip(tk.Canvas):
         self.after(80, self._tick)
 
 
+class GazePad(tk.Canvas):
+    """Gaze simulation for the runtime tab: drag to point the machine's
+    eyes. The arrow from center IS the modifier — in vector mode it biases
+    which transitions the markov chains prefer (movement direction), in
+    offset mode it leans the servo targets. Double-click to re-center."""
+
+    def __init__(self, parent, size, on_gaze):
+        super().__init__(parent, width=size, height=size, bg="#101820", highlightthickness=0, cursor="crosshair")
+        self.S = size
+        self.on_gaze = on_gaze
+        c, r = size / 2, size / 2 - 16
+        self.c, self.r = c, r
+        self.create_oval(c - r, c - r, c + r, c + r, outline="#33445a")
+        self.create_oval(c - r / 2, c - r / 2, c + r / 2, c + r / 2, outline="#1e2a38")
+        self.create_line(c - r, c, c + r, c, fill="#1e2a38")
+        self.create_line(c, c - r, c, c + r, fill="#1e2a38")
+        self.create_text(c, 10, text="gaze — drag to look; the arrow nudges the flow", fill="#667", font=("monospace", 8))
+        self.arrow = self.create_line(c, c, c, c, fill="#f5c04a", width=2, arrow="last")
+        self.dot = self.create_oval(c - 5, c - 5, c + 5, c + 5, fill="#ffeaa7", outline="")
+        self.readout = self.create_text(c, size - 10, text="gaze +0.00, +0.00", fill="#667", font=("monospace", 8))
+        self.bind("<B1-Motion>", self._drag)
+        self.bind("<Button-1>", self._drag)
+        self.bind("<Double-Button-1>", lambda e: self.set_gaze(0.0, 0.0))
+
+    def _drag(self, ev):
+        gx = max(-1.0, min(1.0, (ev.x - self.c) / self.r))
+        gy = max(-1.0, min(1.0, (self.c - ev.y) / self.r))
+        self.set_gaze(gx, gy)
+
+    def set_gaze(self, gx: float, gy: float):
+        px, py = self.c + gx * self.r, self.c - gy * self.r
+        self.coords(self.dot, px - 5, py - 5, px + 5, py + 5)
+        self.coords(self.arrow, self.c, self.c, px, py)
+        self.itemconfig(self.readout, text=f"gaze {gx:+.2f}, {gy:+.2f}")
+        self.on_gaze(gx, gy)
+
+
 class SessionFrame(ttk.LabelFrame):
     """The looper, timeline-first (July 26 — modeled on the servocontroller
     ui-modernize interface): every track is a LANE with a waveform of its
@@ -1214,9 +1251,12 @@ class SessionFrame(ttk.LabelFrame):
         self.lung_strip.pack(anchor="nw")
         ttk.Label(side, text="drag vertically —\nbreathe with the wave", font=("monospace", 8), foreground="#888").pack(anchor="w", pady=6)
 
-        holder, side = make_tab("temperaments")
-        self._build_temperaments(holder, side)
-        nb.bind("<<NotebookTabChanged>>", lambda e: self._refresh_library() if "temperaments" in nb.tab(nb.select(), "text") else None)
+        rt = ttk.Frame(nb)
+        nb.add(rt, text="runtime")
+        self._build_runtime(rt, ws_h)
+        nb.bind("<<NotebookTabChanged>>", lambda e: self._refresh_library() if nb.tab(nb.select(), "text") == "runtime" else None)
+        if KINETIC_BUS_ENABLED:
+            nb.select(rt)  # runtime build: open where the tuning happens
 
         self._playhead_tick()  # one shared timer for all lanes, started once
         self.status = ttk.Label(self, text="idle")
@@ -1306,14 +1346,19 @@ class SessionFrame(ttk.LabelFrame):
         self._refresh_tracks()
         self.status.config(text=f"cleared {n} take(s) — saved sessions untouched")
 
-    # --- temperaments tab: the library made visible + the runtime bus, live ----
-    def _build_temperaments(self, holder, side):
-        """Left: the temperament library as a tree — each state and exactly
-        which bundles are assigned to it (assignment was an invisible
-        filename side-effect before; now it's an explicit act on a visible
-        target). Right: the LAB — the actual KineticBus running the panel's
-        routing, so you can audition every emotional spectrum, watch chains
-        crossfade on state clicks, and fire the runtime modifiers by hand."""
+    # --- runtime tab: library | gaze simulation | lab controls -----------------
+    def _build_runtime(self, parent, ws_h):
+        """The runtime room, laid out like the legacy hand controller: a
+        column per concern instead of everything crammed against a canvas
+        template. LEFT — the temperament library as a tree (each state and
+        exactly which bundles it owns; assignment used to be an invisible
+        filename side-effect). CENTER — the gaze simulation pad: drag to
+        look, the arrow is the modifier; in vector mode it biases WHICH
+        transitions the chains prefer (movement direction — dynamic range
+        nudging that never distorts poses), in offset mode it leans servo
+        targets. RIGHT — the lab: the actual KineticBus on this panel's
+        routing. machine.py-flagged builds (KINETIC_BUS_ENABLED) open the
+        panel on this tab."""
         self._lab_ctx = {"drawing": False, "gx": 0.0, "gy": 0.0}
         self._lab_on = False
         self.lab = KineticBus(
@@ -1329,31 +1374,52 @@ class SessionFrame(ttk.LabelFrame):
             owned=LAB_CHANNELS,
         )
 
-        self.temp_tree = ttk.Treeview(holder, show="tree", selectmode="browse")
+        left = ttk.Frame(parent)
+        left.pack(side="left", fill="both", expand=True, padx=6, pady=4)
+        ttk.Label(left, text="temperament library", font=("monospace", 9, "bold")).pack(anchor="w")
+        self.temp_tree = ttk.Treeview(left, show="tree", selectmode="browse")
         self.temp_tree.pack(fill="both", expand=True, pady=2)
-        self.lab_status = ttk.Label(holder, text="", font=("monospace", 9))
-        self.lab_status.pack(fill="x", pady=2)
+        lrow = ttk.Frame(left)
+        lrow.pack(fill="x")
+        ttk.Button(lrow, text="Assign session ▸ state", command=self._assign_selected).pack(side="left", padx=2)
+        ttk.Button(lrow, text="Load for editing", command=self._load_selected).pack(side="left", padx=2)
+        ttk.Button(lrow, text="Retire ▸ projects", command=self._retire_selected).pack(side="left", padx=2)
 
-        ttk.Label(side, text="library", font=("monospace", 9, "bold")).pack(anchor="w")
-        ttk.Button(side, text="Assign session ▸ selected state", command=self._assign_selected).pack(fill="x", pady=2)
-        ttk.Button(side, text="Load selected for editing", command=self._load_selected).pack(fill="x", pady=2)
-        ttk.Button(side, text="Retire selected ▸ projects", command=self._retire_selected).pack(fill="x", pady=2)
+        center = ttk.Frame(parent)
+        center.pack(side="left", fill="y", padx=6, pady=4)
+        pad_size = max(240, min(340, ws_h - 90))
+        self.gaze_pad = GazePad(center, pad_size, on_gaze=self._on_gaze)
+        self.gaze_pad.pack()
+        self.gaze_mode_var = tk.StringVar(value=self.lab.gaze_mode)
+        modes = ttk.Frame(center)
+        modes.pack(fill="x", pady=4)
+        ttk.Label(modes, text="gaze nudges:", font=("monospace", 8)).pack(side="left")
+        for mode, label in (("vector", "movement (flow bias)"), ("offset", "position (lean)")):
+            ttk.Radiobutton(
+                modes, text=label, value=mode, variable=self.gaze_mode_var, command=lambda: setattr(self.lab, "gaze_mode", self.gaze_mode_var.get())
+            ).pack(side="left", padx=4)
+        self.lab_status = ttk.Label(center, text="", font=("monospace", 9), wraplength=pad_size)
+        self.lab_status.pack(fill="x", pady=4)
 
-        ttk.Separator(side).pack(fill="x", pady=8)
-        ttk.Label(side, text="lab — the runtime bus, live", font=("monospace", 9, "bold")).pack(anchor="w")
-        self.lab_btn = ttk.Button(side, text="▶ Start lab", command=self._lab_toggle)
-        self.lab_btn.pack(fill="x", pady=2)
+        right = ttk.Frame(parent, width=210)
+        right.pack(side="left", fill="y", padx=6, pady=4)
+        right.pack_propagate(False)
+        ttk.Label(right, text="lab — the runtime bus, live", font=("monospace", 9, "bold")).pack(anchor="w")
+        self.lab_btn = ttk.Button(right, text="▶ Start lab", command=self._lab_toggle)
+        self.lab_btn.pack(fill="x", pady=3)
         for e in EMOTIONS:
-            ttk.Button(side, text=e, command=lambda e=e: self.lab.set_emotion(e)).pack(fill="x", pady=1)
+            ttk.Button(right, text=e, command=lambda e=e: self.lab.set_emotion(e)).pack(fill="x", pady=1)
         draw_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            side, text="drawing state (overrides mood)", variable=draw_var, command=lambda: self._lab_ctx.__setitem__("drawing", draw_var.get())
-        ).pack(anchor="w", pady=2)
-        labeled_slider(side, "gaze x (nudges arm)", -1.0, 1.0, 0.0, lambda v: self._lab_ctx.__setitem__("gx", v))
-        labeled_slider(side, "gaze y", -1.0, 1.0, 0.0, lambda v: self._lab_ctx.__setitem__("gy", v))
-        ttk.Button(side, text="⚡ startle", command=lambda: self.lab.startle() if self._lab_on else None).pack(fill="x", pady=4)
+            right, text="drawing state\n(overrides mood)", variable=draw_var, command=lambda: self._lab_ctx.__setitem__("drawing", draw_var.get())
+        ).pack(anchor="w", pady=3)
+        ttk.Button(right, text="⚡ startle", command=lambda: self.lab.startle() if self._lab_on else None).pack(fill="x", pady=3)
         self._refresh_library()
         self._lab_tick()
+
+    def _on_gaze(self, gx: float, gy: float):
+        self._lab_ctx["gx"] = gx
+        self._lab_ctx["gy"] = gy
 
     def _refresh_library(self):
         tree = self.temp_tree

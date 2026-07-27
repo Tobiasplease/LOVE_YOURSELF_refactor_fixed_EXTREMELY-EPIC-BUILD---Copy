@@ -111,12 +111,20 @@ def main():
 
         # --- 4: gaze nudge + startle ------------------------------------------
         ctx["gaze"] = (1.0, 0.0)
+        bus.gaze_mode = "offset"  # legacy mode: additive lean
         bus._update_gaze_offsets()
         bus._send_ease({"shoulder": 90.0})
         target = device.channels["shoulder"].target
         if not 98 <= target <= 102:
-            failures.append(f"gaze nudge missing: shoulder target {target}, expected ~100")
-        print(f"gaze nudge: shoulder 90 -> target {target}")
+            failures.append(f"offset-mode gaze nudge missing: shoulder target {target}, expected ~100")
+        bus.gaze_mode = "vector"  # default mode: movement-direction bias
+        bus._update_gaze_offsets()
+        if bus._offsets:
+            failures.append(f"vector mode must not lean positions, got offsets {bus._offsets}")
+        bias = bus._gaze_bias()
+        if bias.get("shoulder") != 1.0 or bias.get("x") != 1.0 or bias.get("elbow", 0.0) != 0.0:
+            failures.append(f"vector bias map wrong for gaze (1,0): {bias}")
+        print(f"gaze: offset mode leans shoulder -> {target}; vector mode biases {sorted(k for k, v in bias.items() if v)}")
 
         before = device.channels["finger0"].value
         ctx["person"] = "visible"
