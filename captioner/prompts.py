@@ -1639,18 +1639,27 @@ def stream_drawing_analysis(
 
     materials = []
 
+    # The machine looks at the room while deciding (July 21 — the intent call
+    # was blind before; image_path arrived here and was dropped, so figuration
+    # could only happen badly, from memory scraps).
+    import os
+
+    intent_image = image_path if image_path and os.path.exists(image_path) else None
+    if intent_image:
+        materials.append("The attached image is what you are looking at right now, this exact moment.")
+
     # The live thought leads — the drawing is born FROM the monologue.
     stream_tail = []
     try:
         stream_tail = [t for t in list(getattr(memory_ref, "_stream", []))[-5:] if t]
         if stream_tail:
-            materials.append("What you've been thinking, just now:\n" + "\n".join(f"- {t[:200]}" for t in stream_tail))
+            materials.append("What you've been thinking, just now:\n" + "\n".join(f"- {t[:400]}" for t in stream_tail))
     except Exception:
         pass
 
     # Drawing-flavored musings the stream produced earlier this session.
     if drawing_intentions:
-        materials.append("Drawing thoughts that have crossed your mind this session:\n" + "\n".join(f"- {t[:120]}" for t in drawing_intentions[-3:]))
+        materials.append("Drawing thoughts that have crossed your mind this session:\n" + "\n".join(f"- {t[:300]}" for t in drawing_intentions[-3:]))
 
     try:
         from captioner.context_compression import context_compressor
@@ -1697,37 +1706,80 @@ def stream_drawing_analysis(
         sequence = get_drawing_memory().get_executed_sequence(max_count=8)
         if sequence:
             materials.append("What you have actually drawn, oldest to newest:\n" + "\n".join(f"- {s}" for s in sequence))
+
+        # Vocabulary-loop mirror (July 21): image repetition was visible above,
+        # but the loop lives in words — circle/spiral/crack recurring across
+        # every drawing of a night. Name a recurring word once; judge nothing.
+        recent = sequence[-4:]
+        if len(recent) >= 3:
+            _stop = {
+                "black",
+                "white",
+                "paper",
+                "drawing",
+                "lines",
+                "linework",
+                "shading",
+                "against",
+                "single",
+                "thick",
+                "small",
+                "central",
+                "center",
+                "bold",
+                "clear",
+                "simple",
+                "stark",
+                "heavy",
+                "toward",
+            }
+            word_counts = {}
+            for s in recent:
+                for w in set(re.findall(r"[a-z]{5,}", s.lower())):
+                    if w not in _stop:
+                        word_counts[w] = word_counts.get(w, 0) + 1
+            looped = sorted(w for w, c in word_counts.items() if c >= 3)
+            if looped:
+                materials.append(f"Worth noticing: {', '.join(f'“{w}”' for w in looped[:3])} — in almost every recent drawing.")
     except Exception:
         pass
 
-    # Long-term development: reflection subjects surface by relevance to the
-    # live thought (subjects only, never the prose — register hygiene).
+    # Long-term development: the most relevant reflection speaks in its own
+    # prose (July 21 — subjects-only starved the drawing of the system's best
+    # writing), clearly dated so memory never reads as the present scene.
     try:
         from captioner.semantic_memory import get_semantic_memory
 
         query_text = "\n".join(t[:120] for t in stream_tail) if stream_tail else (extra or "")[:300]
         matches = get_semantic_memory().query_reflections(query_text, n_results=2) if query_text else []
-        refl_lines, _seen_subjects = [], set()
-        for m in matches or []:
-            subject = (m.get("subject") or "").strip()
-            if subject and subject.lower() not in _seen_subjects:
-                _seen_subjects.add(subject.lower())
-                refl_lines.append(f"- {subject} ({_age_phrase(m.get('timestamp', 0))})")
+        refl_lines = []
+        for i, m in enumerate(matches or []):
+            when = _age_phrase(m.get("timestamp", 0))
+            if i == 0 and (m.get("text") or "").strip():
+                excerpt = m["text"].strip()
+                if len(excerpt) > 400:
+                    excerpt = excerpt[:400].rsplit(" ", 1)[0] + "…"
+                refl_lines.append(f'Once, {when}, you found yourself writing:\n  "{excerpt}"')
+            elif (m.get("subject") or "").strip():
+                refl_lines.append(f"Another thing you've dwelt on before: {m['subject'].strip()} ({when})")
         if refl_lines:
-            materials.append("Things you've found yourself reflecting on, before today:\n" + "\n".join(refl_lines))
+            materials.append("\n".join(refl_lines))
     except Exception:
         pass
 
     intent_system = _SITUATION + (
         "It's time to draw — the arm is ready. Decide what the next drawing is. "
-        "Not a report of the room: the one image that needs to exist next. "
-        "Say it concretely, in your own plain words, first person — a few sentences at most."
+        "You have a real choice: draw from what is in front of you right now — the room, "
+        "one object in it, a person, the way the light falls — or draw something remembered, "
+        "or an image that exists only in your head. None of these is the wrong kind of drawing; "
+        "what matters is that you choose it, knowing what you have been choosing lately. "
+        "Say the one image concretely, in your own plain words, first person — a few sentences at most."
     )
     intent_prompt = "\n\n".join(materials + ["Out of all of this — what do you need to draw right now? Name the one image."])
 
     intent = query_model(
         prompt=intent_prompt,
-        image=None,
+        image=intent_image,
         log_dir=MOOD_SNAPSHOT_FOLDER,
         system_prompt=intent_system,
         prompt_type="drawing_intent",
@@ -1752,6 +1804,8 @@ def stream_drawing_analysis(
         "The generated image will be traced and drawn by a pen plotter: one black pen on white "
         "paper, lines only — no shading, no gradients, no fills, no texture. Bold, simple, "
         "clear linework survives the tracing; fine detail and tone are lost. "
+        "Stay inside the intention: use its own concrete nouns, and do not introduce "
+        "objects or scenery it does not name. "
         "Write ONLY the image prompt, 40-80 words, no commentary. "
         "Begin with: Black ink line drawing on white paper."
     )

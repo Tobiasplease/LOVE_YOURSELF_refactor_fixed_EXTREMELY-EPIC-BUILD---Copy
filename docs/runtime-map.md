@@ -389,23 +389,41 @@ paper is an intention, not part of the oeuvre. Window: 24 entries.
 TWO calls (prompts.stream_drawing_analysis), replacing the 5-step committee:
 
 1. **Intent** — one call in the machine's own voice (_SITUATION system
-   prompt + "it's time to draw"). Materials, in this order: live stream tail
-   (5 entries — the drawing is born FROM the monologue), drawing musings
-   from the session, felt state, the sticky slots each stated ONCE with age
+   prompt + "it's time to draw"). **Sighted since July 27**: the current
+   camera frame rides on the call (it arrived as image_path and was DROPPED
+   before — the machine decided what to draw blind, which is half of why
+   everything became abstract gesture). The system prompt names the choice
+   explicitly — draw the room / an object / a person, or something
+   remembered, or something imagined; nothing is the wrong kind of drawing
+   (the old "Not a report of the room" prohibition structurally excluded
+   figuration and is gone). Materials, in this order: "the attached image
+   is what you see right now", live stream tail (5 entries × 400 chars —
+   was 200), drawing musings from the session (300 chars — was 120,
+   mid-word), felt state, the sticky slots each stated ONCE with age
    ("Since earlier today, you've wanted: ..." — the 5-step printed
    identity==belief twice and led with them, so every drawing became a
    portrait of the same sentence: hovering-pencil ×3 on July 10), the
    executed body of work as plain chronological lines
    (`get_executed_sequence`, no LLM — repetition stays VISIBLE, never
    forbidden: motif fixation is a choice per the artist, drawing the same
-   image blindly is a loop), and 1-2 reflection subjects matched against
-   the live thought. The intent is stored as the memory entry's
-   compressed_summary (the machine's own words, not ComfyUI prose) and
-   logged as `prompt_type: drawing_intent`.
+   image blindly is a loop), a **vocabulary-loop mirror** (a ≥5-char
+   content word present in ≥3 of the last 4 executed lines gets named
+   once: "Worth noticing: 'spiral' — in almost every recent drawing" —
+   the circle/crack/spiral night of July 20 looped in words, not images),
+   and the best-matched reflection as a DATED 400-char prose excerpt
+   ("Once, 6 days ago, you found yourself writing: ...") — subjects-only
+   starved the drawing of the system's best writing; the date framing is
+   the memory/present-conflation rule. The intent is stored as the memory
+   entry's compressed_summary (the machine's own words, not ComfyUI prose)
+   and logged as `prompt_type: drawing_intent`.
 2. **Render** — mechanical translation to a ComfyUI prompt under hardware
    truth: one black pen, lines only, no shading/fills/texture (the 5-step's
-   technique stage planned india-ink washes the plotter cannot do). Temp
-   0.5, logged as `prompt_type: drawing_render`. Fallback: prefix + intent.
+   technique stage planned india-ink washes the plotter cannot do), and
+   since July 27 pinned to the intention's own concrete nouns — it invented
+   scenery ("industrial chassis viewed from above" from an atmospheric
+   intent). Temp 0.5, logged as `prompt_type: drawing_render`. Fallback:
+   prefix + intent. Inspect offline: `debug/test_drawing_intent_prompt.py`
+   assembles the real intent prompt from disk state, no model needed.
 
 LEGACY (kept for A/B: DRAWING_ANALYSIS_MODE="multi_step"): the 5-step
 context_rich_multi_step_drawing_analysis — env essay / emotion manufacture
