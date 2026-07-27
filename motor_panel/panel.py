@@ -93,6 +93,7 @@ class DeviceFrame(ttk.LabelFrame):
         ttk.Button(top, text="Neutral", command=self.device.all_neutral, width=8).pack(side="left")
 
         self.sliders = {}
+        self._syncing = False  # True while _sync_tick writes vars — their command must not echo back to the device
         for name in device.channel_order:
             ch = device.channels[name]
             row = ttk.Frame(self)
@@ -103,7 +104,8 @@ class DeviceFrame(ttk.LabelFrame):
 
             def on_move(v, n=name, vl=val_lbl):
                 vl.config(text=str(int(float(v))))
-                self.device.set_channel(n, int(float(v)))  # non-blocking: writer queue
+                if not self._syncing:
+                    self.device.set_channel(n, int(float(v)))  # non-blocking: writer queue
 
             s = ttk.Scale(row, from_=ch.lo, to=ch.hi, variable=var, command=on_move)
             s.pack(side="left", fill="x", expand=True, padx=4)
@@ -121,6 +123,23 @@ class DeviceFrame(ttk.LabelFrame):
                     row = ttk.Frame(ex)
                     row.pack(fill="x")
                 ttk.Button(row, text=label, command=lambda l=label: self.device.send_extra(l)).pack(side="left", padx=2, pady=1)
+        self._sync_tick()
+
+    def _sync_tick(self):
+        """Sliders follow the CHANNELS, not just the hand that drags them:
+        playback/generation/lab moves used to leave every slider stale,
+        which read as broken. Writing the same value back is free (the
+        writer queue dedupes identical lines)."""
+        self._syncing = True
+        try:
+            for name, (s, var, val_lbl) in self.sliders.items():
+                v = self.device.channels[name].value
+                if var.get() != v:
+                    var.set(v)
+                    val_lbl.config(text=str(int(v)))
+        finally:
+            self._syncing = False
+        self.after(300, self._sync_tick)
 
     def toggle(self):
         if self.device.connected:

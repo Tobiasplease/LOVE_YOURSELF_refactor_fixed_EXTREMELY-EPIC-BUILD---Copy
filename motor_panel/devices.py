@@ -285,7 +285,9 @@ def build_devices() -> List[SerialDevice]:
             Channel("shoulder", *LEFT_ARM_SHOULDER_LIMITS, fmt=lambda v: f"SERVO,5,{v}", smooth=True),
             Channel("wrist", *LEFT_ARM_WRIST_LIMITS, fmt=lambda v: f"SERVO,6,{v}", smooth=True),
         ],
-        extras={"arm autonomous ON": "LEFT_ARM_ENABLE", "arm autonomous OFF": "LEFT_ARM_DISABLE", **{f"mood: {e}": f"MOOD,{e}" for e in EMOTIONS}},
+        # extras removed July 27: MOOD,{e} and LEFT_ARM_ENABLE/DISABLE were
+        # wanderer-firmware commands — the clean firmware ignores them all
+        # (the temperament system replaced what they did)
         group_fmt={"hand": lambda vals: "HAND," + ",".join(str(v) for v in vals)},
         boot_delay=2.0,
         min_interval=0.02,
