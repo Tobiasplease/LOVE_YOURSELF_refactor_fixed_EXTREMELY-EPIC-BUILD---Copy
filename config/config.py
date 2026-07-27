@@ -135,12 +135,16 @@ LEFT_ARM_SHOULDER_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 5 (clean fir
 LEFT_ARM_WRIST_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 6 (July 26: reserved in firmware, servo not yet mounted; creep once it exists)
 
 # === KINETIC BUS (motor_panel/kinetic_bus.py — runtime temperament engine) ===
-# When True, machine.py starts the kinetic bus INSTEAD of organic_left_arm +
-# the old hand interface's autonomous mode: the lefthand device plays markov
-# generation from recorded session bundles picked by mood ("{emotion}_*"
-# session names) and drawing state ("drawing_*"). Default off until real
-# temperament bundles exist (record them in the panel).
-KINETIC_BUS_ENABLED = False
+# machine.py starts the kinetic bus INSTEAD of organic_left_arm + the old
+# hand interface's autonomous mode (all three want /dev/arduino_lefthand):
+# the lefthand device plays markov generation from recorded datasets picked
+# by mood ("{emotion}_*" names), drawing state ("drawing_*"), with startle/
+# homing interrupt poses. ON since July 27 — the bus pulls its emotion
+# straight from the mood engine (get_emotion_for_hand_controller) every
+# supervisor tick, so it does not depend on the old push plumbing. Set False
+# to fall back to the legacy pair.
+KINETIC_BUS_ENABLED = True
+KINETIC_MONITOR_UI = True  # small read-only Tk window opened by machine.py (the old hand controller's slot)
 KINETIC_CROSSFADE_S = 2.5  # seamless morph: ease into the new temperament's nearest state over this long
 KINETIC_ROTATE_S = 300  # dwell before rotating among same-state bundles (variety)
 # Gaze -> movement: one directional CURRENT, three coordinated effects all

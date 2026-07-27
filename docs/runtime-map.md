@@ -412,14 +412,31 @@ context_rich_multi_step_drawing_analysis — env essay / emotion manufacture
 (from the flatlined mood, converging on invented stasis drama every time) /
 intent / technique fiction / synthesis.
 
-## Kinetic bus (July 26 — wired, default OFF: KINETIC_BUS_ENABLED)
+## Kinetic bus (LIVE — default ON since July 27: KINETIC_BUS_ENABLED)
 
 `motor_panel/kinetic_bus.py` — the motor panel's markov generation lifted
-into the runtime, behind the mood system. When the config flag is ON,
-machine.py starts it INSTEAD of `start_hand_controller()` +
-`organic_left_arm` (all three want /dev/arduino_lefthand — never two at
-once). It owns the lefthand device only (fingers, elbow, shoulder, wrist);
-gantry idle stays with grbl/idle_movements, gaze/lung with their systems.
+into the runtime, behind the mood system. machine.py starts it INSTEAD of
+`start_hand_controller()` + `organic_left_arm` (all three want
+/dev/arduino_lefthand — never two at once; set the flag False to fall back
+to the legacy pair). It owns the lefthand device only (fingers, elbow,
+shoulder, wrist); gantry idle stays with grbl/idle_movements, gaze/lung
+with their systems.
+
+- EMOTION IS PULLED, not pushed: the bus calls
+  `mood_engine.get_emotion_for_hand_controller` (injected at construction)
+  every supervisor tick. The old push sites (`change_to_emotion` + the
+  mood thread) remain as redundancy but nothing depends on them —
+  deliberate hardening against years of push-plumbing accretion.
+  Mapping verified: debug/test_runtime_wiring.py.
+- HOMING: `grbl_utils.ensure_homed` calls hooks
+  (`utils.hooks.on_grbl_homing_start/_done`, registered by machine.py):
+  before every $H attempt the left arm ramps to its "homing" tuck pose and
+  the sweep WAITS for it; on completion the arm blends back.
+- MONITOR: `motor_panel/runtime_monitor.py` — a small read-only Tk window
+  opened by machine.py in the old hand controller's slot
+  (KINETIC_MONITOR_UI): NOW PLAYING + rotation countdown, pulled mood,
+  dataset tree with the playing one marked, gaze vector, ⚡ test.
+  The full practice room stays the standalone panel (ports exclusive).
 
 - Bundle choice: session files `movement_recordings/arms/session_{state}_*.json`,
   state = the 5 mood emotions or "drawing" (overrides emotion while
@@ -452,10 +469,12 @@ gantry idle stays with grbl/idle_movements, gaze/lung with their systems.
   (gaze pad, influence slider, ⚡ button); the panel opens on that tab
   when KINETIC_BUS_ENABLED is set.
 - Proof: `debug/test_kinetic_bus.py` (bucketing, ownership, seamlessness
-  bound, nudge, startle, drawing override).
-- When the flag turns on for real, retire per the legibility directive:
-  organic_left_arm, the hand interface's generation path, and this entry
-  moves from "wired, default OFF" to live.
+  bound, gaze current, startle, homing tuck, drawing gate) +
+  `debug/test_runtime_wiring.py` (mood mapping, pull, homing hooks).
+- PENDING RETIREMENT (legibility directive, after the first validated
+  exhibition-length run on the bus): organic_left_arm.py, the hand
+  interface's generation path, and the firmware wanderer variants — they
+  are now bypassed by default but still in the tree as the fallback.
 
 ## Manual tools (real code, NOT in the runtime path)
 

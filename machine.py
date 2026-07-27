@@ -35,6 +35,7 @@ from config.config import (
     CONFIDENCE_THRESHOLD,
     DEBUG_REACTIVITY_PAUSE,
     KINETIC_BUS_ENABLED,
+    KINETIC_MONITOR_UI,
     MODEL_PATH,
     MOOD_EVALUATION_INTERVAL,
     MOOD_SNAPSHOT_FOLDER,
@@ -759,10 +760,29 @@ kinetic_bus = None
 if KINETIC_BUS_ENABLED:
     debug_print("Initializing kinetic bus (replaces hand controller autonomous + organic left arm)", "INIT")
     try:
+        import utils.hooks as _kinetic_hooks
         from motor_panel.kinetic_bus import KineticBus
 
-        kinetic_bus = KineticBus()
+        kinetic_bus = KineticBus(
+            # PULL the emotion straight from the mood engine every supervisor
+            # tick — the old push plumbing stays as redundancy, but the bus
+            # never depends on it (the push path is years of accretion)
+            get_emotion=mood_engine.get_emotion_for_hand_controller,
+            on_log=lambda m: debug_print(m, "KINETIC"),
+        )
         kinetic_bus.enable()
+        # homing safety: grbl_utils.ensure_homed tucks the left arm clear
+        # (and waits out the ramp) before every $H, releases on completion
+        _kinetic_hooks.on_grbl_homing_start = kinetic_bus.home_clear
+        _kinetic_hooks.on_grbl_homing_done = kinetic_bus.home_release
+        if KINETIC_MONITOR_UI:
+            try:
+                from motor_panel.runtime_monitor import start_runtime_monitor
+
+                start_runtime_monitor(kinetic_bus)
+                debug_print("Kinetic runtime monitor window started", "INIT")
+            except Exception as e:
+                debug_print(f"Runtime monitor unavailable (headless?): {e}", "KINETIC")
         log_json_entry(
             LogType.INFO,
             {"message": "Kinetic bus initialized", "port": ARDUINO_DEVICES["LEFTHAND"]},

@@ -298,20 +298,21 @@ already lives in physical coords).
    cadence). Needs a new track *type* (parameter vs motor) in session.py and
    a workspace with parameter sliders recorded over the loop.
 4. **Lightbulb track** (trivial: brightness channel on the existing engine).
-5. **Runtime kinetic bus** — **v1 SHIPPED July 26** (`motor_panel/kinetic_bus.py`,
-   behind `KINETIC_BUS_ENABLED`, default off; see runtime-map.md "Kinetic
-   bus"): lefthand device only. Session bundles bucketed by name
-   (`{emotion}_*`, `drawing_*` — the panel's "state" dropdown names them);
-   drawing overrides emotion; SEAMLESS switches (generators seed from live
-   positions, ease to the NEAREST demonstrated state — `Generator`
-   enter_nearest + `freeze()`); modifiers: gaze→range nudges, person-arrival
-   startle (freeze + finger snap + cooldown). Remaining for v2: gantry/pen
-   generation at runtime (port arbitration with the drawing pipeline),
-   lung/gaze tracks. **Turn the flag on only after recording real bundles.**
-6. **Retire superseded systems** once 5 is ON in an exhibition build
-   (legibility directive: fully, with runtime-map updates): the 5400-line
-   hand interface's generation path, organic_left_arm, idle_movements'
-   Lissajous wanderer.
+5. **Runtime kinetic bus** — **LIVE, default ON July 27**
+   (`motor_panel/kinetic_bus.py`; runtime-map.md "Kinetic bus" is the
+   wiring truth): machine.py starts the bus INSTEAD of the hand
+   controller + organic_left_arm, PULLS the emotion straight from the
+   mood engine each tick (push plumbing kept only as redundancy), wires
+   homing tuck hooks through `grbl_utils.ensure_homed`, and opens
+   `motor_panel/runtime_monitor.py` — a small read-only window in the old
+   controller's slot (NOW PLAYING, mood, dataset tree, gaze, ⚡ test).
+   Remaining for v2: gantry/pen generation at runtime (port arbitration
+   with the drawing pipeline), lung/gaze tracks.
+6. **Retire superseded systems** after the first validated
+   exhibition-length run on the bus (legibility directive: fully, with
+   runtime-map updates): the 5400-line hand interface's generation path,
+   organic_left_arm, idle_movements' Lissajous wanderer, wanderer firmware
+   variants. All currently bypassed-by-default fallbacks.
 
 ## 9. Debug/verification tools
 

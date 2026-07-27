@@ -13,6 +13,7 @@ from serial.tools import list_ports
 
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
+
 try:
     from .warp_transform import warp_transform_line, find_max_xy_from_lines
 except ImportError:
@@ -80,12 +81,14 @@ class DrawingLightbulbFluctuation:
         # Try to get lightbulb controller instance
         try:
             from utils.state_manager import state_manager
-            if hasattr(state_manager, 'lightbulb') and state_manager.lightbulb:
+
+            if hasattr(state_manager, "lightbulb") and state_manager.lightbulb:
                 self.lightbulb_controller = state_manager.lightbulb
             else:
                 # Try to import and create if not available
                 from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
                 from config.config import USE_LIGHTBULB_PWM
+
                 if USE_LIGHTBULB_PWM:
                     self.lightbulb_controller = NonBlockingLightbulbController("/dev/arduino_lightbulb", debug=False)
         except Exception as e:
@@ -98,7 +101,9 @@ class DrawingLightbulbFluctuation:
         self.running = True
         self.thread = threading.Thread(target=self._fluctuation_loop, daemon=True)
         self.thread.start()
-        print(f"[💡] Started smooth lightbulb fluctuation during drawing (range: {self.min_brightness}-{self.max_brightness}, period: {self.period_seconds}s)")
+        print(
+            f"[💡] Started smooth lightbulb fluctuation during drawing (range: {self.min_brightness}-{self.max_brightness}, period: {self.period_seconds}s)"
+        )
 
     def stop_fluctuation(self):
         """Stop the brightness fluctuation."""
@@ -193,16 +198,16 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None, continuo
 
     # Filter out excluded ports to prevent interference
     filtered_ports = [p for p in ports if p.device not in excluded_ports]
-    
+
     log_json_entry(
         LogType.GRBL,
         {
-            "message": "Available serial ports for GRBL scanning", 
-            "action": "port_discovery", 
+            "message": "Available serial ports for GRBL scanning",
+            "action": "port_discovery",
             "all_ports": [p.device for p in ports],
             "excluded_ports": list(excluded_ports),
-            "scannable_ports": [p.device for p in filtered_ports], 
-            "port_count": len(filtered_ports)
+            "scannable_ports": [p.device for p in filtered_ports],
+            "port_count": len(filtered_ports),
         },
         print_message=f"[🔌] Scannable ports for GRBL: {', '.join(p.device for p in filtered_ports)}",
     )
@@ -270,6 +275,7 @@ def send_cmd(ser, cmd, wait_ok=True, timeout=DEFAULT_CMD_TIMEOUT):
     # Only print GRBL commands if verbose mode is enabled
     try:
         from config.config import PRINT_CLEAN_CAPTIONS
+
         if not PRINT_CLEAN_CAPTIONS:
             print(f"[📤] {cmd}")
     except ImportError:
@@ -327,7 +333,6 @@ def wait_until_idle(ser, max_wait, poll_interval=DEFAULT_STATUS_POLL):
 def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
     """Ensure GRBL is homed and setup coordinate system with continuous retry logic"""
 
-
     # PREP: Clear ALARM first and set minimal spindle config so pen-up will be accepted
     try:
         status = get_status(ser)
@@ -360,12 +365,17 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
         except Exception as e:
             log_json_entry(
                 LogType.GRBL,
-                {"message": f"CRITICAL: Centralized startup pen-up failed, using emergency fallback", "action": "startup_pen_emergency_fallback", "error": str(e)},
+                {
+                    "message": f"CRITICAL: Centralized startup pen-up failed, using emergency fallback",
+                    "action": "startup_pen_emergency_fallback",
+                    "error": str(e),
+                },
                 print_message=f"[❌ CRITICAL] Centralized pen-up failed, emergency fallback: {e}",
             )
             # Emergency fallback: replicate the original logic exactly
             try:
                 from config.config import GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING, GRBL_PEN_UP_IS_HIGH
+
                 if GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING:
                     sup = GRBL_SPINDLE_MAX_S if GRBL_PEN_UP_IS_HIGH else GRBL_SPINDLE_MIN_S
                     send_cmd(ser, f"M3 S{sup}", wait_ok=False)
@@ -453,6 +463,24 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                 time.sleep(2.0)  # Wait for reset to complete
                 ser.reset_input_buffer()
 
+            # Kinetic bus: tuck the left arm clear and WAIT out its gentle
+            # ramp before the gantry sweeps (per attempt — a long retry
+            # cycle can outlive the bus's max-hold failsafe)
+            try:
+                from utils import hooks as _kin_hooks
+
+                if _kin_hooks.on_grbl_homing_start:
+                    _tuck_wait = float(_kin_hooks.on_grbl_homing_start() or 0.0)
+                    if _tuck_wait > 0:
+                        log_json_entry(
+                            LogType.GRBL,
+                            {"message": "Waiting for left arm tuck before homing", "action": "homing_tuck_wait", "seconds": _tuck_wait},
+                            print_message=f"[🦾] Left arm tucking clear — homing in {_tuck_wait:.1f}s",
+                        )
+                        time.sleep(_tuck_wait)
+            except Exception:
+                pass
+
             log_json_entry(
                 LogType.GRBL,
                 {"message": "Running homing cycle", "action": "homing_start", "command": "$H", "timeout": home_timeout, "attempt": attempt + 1},
@@ -487,6 +515,16 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                         },
                         print_message="[✅] Homing complete",
                     )
+
+                    # Kinetic bus: release the tucked left arm — it blends
+                    # back into its running dataset
+                    try:
+                        from utils import hooks as _kin_hooks
+
+                        if _kin_hooks.on_grbl_homing_done:
+                            _kin_hooks.on_grbl_homing_done()
+                    except Exception:
+                        pass
 
                     # Ensure pen is up after homing completes (double-assert with dwell for servo to catch)
                     try:
@@ -601,7 +639,9 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
         if scale_to:
             cmd.extend(["layout", "--fit-to-margins", "1cm", scale_to])
 
-        cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesimplify", "--tolerance", "0.05mm", "linesort", "gwrite", "--profile", "gcodemm", output_file])
+        cmd.extend(
+            ["linemerge", "--tolerance", "0.1mm", "linesimplify", "--tolerance", "0.05mm", "linesort", "gwrite", "--profile", "gcodemm", output_file]
+        )
 
         log_json_entry(
             LogType.GRBL,
@@ -712,7 +752,7 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
                 # Write optimized G-code
                 with open(output_gcode, "w") as f:
                     for line in optimized_lines:
-                        f.write(line + '\n')
+                        f.write(line + "\n")
 
             else:
                 # Skip optimization if both are disabled
@@ -723,7 +763,7 @@ def convert_gcode_to_servo_format(input_gcode, output_gcode):
             log_json_entry(
                 LogType.GRBL,
                 {"message": "G-code optimization not available, using original method", "action": "optimization_fallback"},
-                print_message="[⚠️] G-code optimization not available"
+                print_message="[⚠️] G-code optimization not available",
             )
 
             with open(output_gcode, "w") as f:
@@ -951,12 +991,18 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     # Start CNC execution tracking NOW (when actual GRBL execution begins)
     try:
         from utils.state_manager import state_manager
-        original_prompt = getattr(state_manager, 'current_drawing_prompt', None) or getattr(state_manager, 'last_completed_drawing_prompt', None) or "actively drawing"
+
+        original_prompt = (
+            getattr(state_manager, "current_drawing_prompt", None)
+            or getattr(state_manager, "last_completed_drawing_prompt", None)
+            or "actively drawing"
+        )
         state_manager.start_cnc_execution(gcode_file, original_prompt)
 
         # Display drawing summary on LCD during execution
         try:
             from utils.caption_display import _caption_display
+
             if _caption_display and _caption_display.connected:
                 # Send with HIGH priority to override regular captions during drawing
                 _caption_display.send_caption(original_prompt, priority="HIGH")
@@ -970,8 +1016,10 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     # Pause idle movements NOW for actual drawing execution
     try:
         from grbl.idle_movement_manager import pause_for_drawing
+
         try:
             from config.config import PRINT_CLEAN_CAPTIONS
+
             if not PRINT_CLEAN_CAPTIONS:
                 print("[🌊] Pausing idle movements for drawing execution...")
         except ImportError:
@@ -979,16 +1027,16 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         pause_for_drawing()
     except Exception as e:
         print(f"[⚠️] Could not pause idle movements: {e}")
-    
+
     # Notify drawing state manager with actual drawing prompt
     try:
         from utils.drawing_state import DrawingState
         from utils.state_manager import state_manager
         import os
-        
+
         # Get drawing summary for state tracking
         # The drawing summary was generated and stored in drawing.py during prompt generation
-        drawing_summary = getattr(state_manager, 'current_drawing_prompt', None) or getattr(state_manager, 'last_completed_drawing_prompt', None)
+        drawing_summary = getattr(state_manager, "current_drawing_prompt", None) or getattr(state_manager, "last_completed_drawing_prompt", None)
         if drawing_summary and isinstance(drawing_summary, str) and len(drawing_summary.strip()) > 0:
             # Use the concise drawing summary directly (already generated by model)
             compressed_description = drawing_summary.strip()
@@ -999,18 +1047,17 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
 
         # Drawing state tracking with compressed description
         DrawingState.start_drawing(
-            drawing_file=gcode_file,
-            description=compressed_description,
-            intent=compressed_description  # Use the summary as the intent too
+            drawing_file=gcode_file, description=compressed_description, intent=compressed_description  # Use the summary as the intent too
         )
-        
+
     except Exception as e:
         print(f"[⚠️] Could not update drawing state: {e}")
-    
+
     # Lock gaze system to drawing position during execution
     try:
         from config.config import USE_SERVO, TILT_MIN
         from vision.gaze import set_drawing_mode
+
         if USE_SERVO:
             print("[👁️] Locking gaze to drawing surface...")
             set_drawing_mode(active=True, drawing_pan=90, drawing_tilt=TILT_MIN + 2)
@@ -1019,13 +1066,10 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         print(f"[⚠️] Could not lock gaze for drawing observation: {e}")
 
     # Start smooth lightbulb fluctuation during drawing
-    lightbulb_fluctuation = DrawingLightbulbFluctuation(
-        min_brightness=40,
-        max_brightness=200,
-        period_seconds=3.0
-    )
+    lightbulb_fluctuation = DrawingLightbulbFluctuation(min_brightness=40, max_brightness=200, period_seconds=3.0)
     try:
         from config.config import USE_LIGHTBULB_PWM
+
         if USE_LIGHTBULB_PWM:
             lightbulb_fluctuation.start_fluctuation()
     except Exception as e:
@@ -1134,6 +1178,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         # Ensure gaze unlock even on error
         try:
             from vision.gaze import set_drawing_mode
+
             set_drawing_mode(active=False)
         except Exception:
             pass
@@ -1158,14 +1203,15 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     # === DRAWING COMPLETION RITUAL ===
     # NOTE: Gaze stays locked to drawing surface through the entire completion ritual
     # (homing, pen-up, pause). Unlocked at the end of the ritual, not here.
-    
+
     # Step 1: End drawing state (releases drawing context from captions)
     try:
         from utils.drawing_state import DrawingState
+
         DrawingState.end_drawing()
     except Exception as e:
         print(f"[⚠️] Could not update drawing state: {e}")
-    
+
     # Step 2: Home the machine and pause for completion ritual
     print(f"🏠 [DEBUG] COMPLETION RITUAL STARTING")
     try:
@@ -1174,7 +1220,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             {"message": "Starting completion ritual", "action": "completion_ritual_start"},
             print_message="[🏠] Starting completion ritual - homing and pausing...",
         )
-        
+
         # CRITICAL: Ensure pen is up before homing in completion ritual
         # This is especially important after drawing when pen might still be down
         for i in range(int(GRBL_PEN_UP_REPEATS)):
@@ -1183,14 +1229,14 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                 time.sleep(0.25)
             except Exception:
                 pass
-        
+
         # Dwell to ensure servo has responded
         try:
             send_cmd(ser, f"G4 P{GRBL_PEN_UP_DWELL_S}", wait_ok=False)
             time.sleep(float(GRBL_PEN_UP_DWELL_S))
         except Exception:
             pass
-        
+
         # Now safe to send homing command
         send_cmd(ser, "$H")
         wait_until_idle(ser, 30)  # Wait for homing to complete
@@ -1200,42 +1246,45 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             time.sleep(0.4)
         except Exception:
             pass
-        
+
         log_json_entry(
             LogType.GRBL,
             {"message": "Homed for completion ritual - staying at home for 30-second pause", "action": "completion_homing_complete"},
             print_message="[✅] Homing complete - beginning 30-second completion pause at home position",
         )
-        
+
         # Step 3: Unlock gaze system during completion pause
         print("[DEBUG] About to unlock gaze system...")
         try:
             from vision.gaze import set_drawing_mode
+
             set_drawing_mode(active=False)
             print("[👁️] ✅ Gaze unlocked for completion ritual")
         except Exception as e:
             print(f"[❌] Could not unlock gaze system: {e}")
             import traceback
+
             traceback.print_exc()
-        
+
         # Step 4: Trigger self-critique during 7-second pause (AT HOME POSITION)
         completion_thread_running = threading.Event()
-        
+
         def completion_self_critique():
             """Generate self-critique reflection during completion pause."""
             try:
                 # Get the drawing context for self-critique
                 from utils.state_manager import state_manager
                 from captioner.prompt_interface import PromptInterface
-                
+
                 # Get drawing details
-                drawing_prompt = getattr(state_manager, 'current_drawing_prompt', 'recent drawing')
-                
+                drawing_prompt = getattr(state_manager, "current_drawing_prompt", "recent drawing")
+
                 # Get the compressed description if available
                 from utils.drawing_state import DrawingState
+
                 drawing_info = DrawingState.get_drawing_info()
-                compressed_desc = drawing_info.get('description', 'a drawing') if drawing_info else 'a drawing'
-                
+                compressed_desc = drawing_info.get("description", "a drawing") if drawing_info else "a drawing"
+
                 # Build self-critique prompt using existing system
                 critique_prompt = f"""You have just finished drawing. Look at what you created.
                 
@@ -1246,67 +1295,66 @@ The pen has lifted, the machine has returned home. You can feel the completion.
 How do you reflect on this creative act? What did you express through these lines?
 
 Respond with 2-3 sentences of honest self-reflection about your artwork."""
-                
+
                 # Use the captioner system to generate reflection
                 try:
                     from captioner.captioner import Captioner
                     from utils.inference import query_model
                     from config import config
-                    
+
                     # Create critique using reflection system
                     model_options = {"temperature": 0.8, "top_p": 0.9, "num_predict": 100}
-                    
+
                     # Import consolidated system prompt
                     from captioner.prompts import SELF_CRITIQUE_SYSTEM_PROMPT
-                    
+
                     self_critique = query_model(
-                        critique_prompt,
-                        model=config.MODEL_NAME,
-                        system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
-                        options=model_options,
-                        timeout=30
+                        critique_prompt, model=config.MODEL_NAME, system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT, options=model_options, timeout=30
                     )
-                    
+
                     if self_critique and self_critique.strip():
                         log_json_entry(
                             LogType.REFLECTION,
                             {
                                 "message": "Drawing completion self-critique",
-                                "action": "drawing_self_critique", 
+                                "action": "drawing_self_critique",
                                 "drawing_intent": drawing_prompt,
                                 "drawing_description": compressed_desc,
                                 "self_critique": self_critique.strip(),
-                                "completion_type": "post_drawing_reflection"
+                                "completion_type": "post_drawing_reflection",
                             },
                             print_message=f"[🎨💭] Drawing self-critique: {self_critique.strip()}",
                         )
-                        
+
                         # Store the completion memory for future reference
                         try:
-                            if hasattr(state_manager, 'captioner') and hasattr(state_manager.captioner, 'observe'):
+                            if hasattr(state_manager, "captioner") and hasattr(state_manager.captioner, "observe"):
                                 completion_text = f"Completed drawing {compressed_desc}. Reflection: {self_critique.strip()[:100]}"
                                 state_manager.captioner.observe(
                                     completion_text,
-                                    state_manager.captioner.current_mood if hasattr(state_manager.captioner, 'current_mood') else 0.5,
+                                    state_manager.captioner.current_mood if hasattr(state_manager.captioner, "current_mood") else 0.5,
                                     "",
-                                    memory_type="drawing_completion"
+                                    memory_type="drawing_completion",
                                 )
                                 print(f"[📝] Stored drawing completion in memory: {completion_text[:50]}...")
                             else:
-                                print(f"[⚠️] Drawing completion not stored: state_manager.captioner exists={hasattr(state_manager, 'captioner')}, observe method exists={hasattr(state_manager.captioner, 'observe') if hasattr(state_manager, 'captioner') else False}")
+                                print(
+                                    f"[⚠️] Drawing completion not stored: state_manager.captioner exists={hasattr(state_manager, 'captioner')}, observe method exists={hasattr(state_manager.captioner, 'observe') if hasattr(state_manager, 'captioner') else False}"
+                                )
                         except Exception as e:
                             print(f"[❌] Failed to store drawing completion: {e}")
                             import traceback
+
                             traceback.print_exc()
-                    
+
                 except Exception as e:
                     print(f"[⚠️] Could not generate drawing self-critique: {e}")
-                    
+
             except Exception as e:
                 print(f"[⚠️] Error in completion self-critique: {e}")
             finally:
                 completion_thread_running.set()
-        
+
         # Start self-critique in background thread
         critique_thread = threading.Thread(target=completion_self_critique, daemon=True)
         critique_thread.start()
@@ -1316,6 +1364,7 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
         hook_completed_successfully = False
         try:
             from utils.hooks import on_grbl_drawing_complete
+
             print(f"[DEBUG] GRBL completion hook check: callable={callable(on_grbl_drawing_complete)}")
             if callable(on_grbl_drawing_complete):
                 print(f"[DEBUG] Calling GRBL completion hook (uArm starts NOW during pause)")
@@ -1331,11 +1380,11 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
 
         # 30-second completion pause AT HOME POSITION (allows time for uArm movement to complete)
         time.sleep(30.0)
-        
+
         # Ensure self-critique thread completes
         if not completion_thread_running.is_set():
             completion_thread_running.wait(timeout=5.0)
-        
+
         log_json_entry(
             LogType.GRBL,
             {"message": "Completion ritual finished at home position", "action": "completion_ritual_complete"},
@@ -1354,13 +1403,14 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
     if hook_completed_successfully:
         try:
             from utils.state_manager import state_manager
+
             print(f"[DEBUG] Clearing CNC execution state AFTER hook completion")
             state_manager.finish_cnc_execution()
         except Exception as e:
             print(f"[⚠️] Could not clear CNC execution state: {e}")
     else:
         print(f"[DEBUG] Skipping CNC state clear due to hook failure")
-    
+
     # Step 6: Stop lightbulb fluctuation after completion ritual
     try:
         lightbulb_fluctuation.stop_fluctuation()
@@ -1370,8 +1420,10 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
     # Step 7: Resume idle movements after completion ritual (and uArm action)
     try:
         from grbl.idle_movement_manager import resume_after_drawing
+
         try:
             from config.config import PRINT_CLEAN_CAPTIONS
+
             if not PRINT_CLEAN_CAPTIONS:
                 print("[🌊] Resuming idle movements after completion ritual...")
         except ImportError:
@@ -1532,7 +1584,14 @@ def process_svg_to_grbl(
 
                 # === PAPER CHECK AFTER HOMING (opt-in) ===
                 try:
-                    from config.config import ENABLE_PAPER_DETECTION, ENABLE_POST_HOME_PAPER_CHECK, ALLOW_PAPER_DETECTION_OVERRIDE, PAPER_DETECTION_GAZE_PAN, PAPER_DETECTION_GAZE_TILT, PAPER_USE_DRAWING_TILT
+                    from config.config import (
+                        ENABLE_PAPER_DETECTION,
+                        ENABLE_POST_HOME_PAPER_CHECK,
+                        ALLOW_PAPER_DETECTION_OVERRIDE,
+                        PAPER_DETECTION_GAZE_PAN,
+                        PAPER_DETECTION_GAZE_TILT,
+                        PAPER_USE_DRAWING_TILT,
+                    )
                 except Exception:
                     ENABLE_PAPER_DETECTION = False
                     ENABLE_POST_HOME_PAPER_CHECK = False
@@ -1540,6 +1599,7 @@ def process_svg_to_grbl(
                     PAPER_DETECTION_GAZE_PAN = 90
                     PAPER_USE_DRAWING_TILT = True
                     from config.config import TILT_MIN
+
                     PAPER_DETECTION_GAZE_TILT = TILT_MIN + 2
 
                 def _paper_check_after_homing() -> bool:
@@ -1548,8 +1608,9 @@ def process_svg_to_grbl(
                     try:
                         # Get camera and servos from state manager
                         from utils.state_manager import state_manager as _sm
-                        camera_obj = getattr(_sm, 'camera', None)
-                        servos_obj = getattr(_sm, 'servos', None)
+
+                        camera_obj = getattr(_sm, "camera", None)
+                        servos_obj = getattr(_sm, "servos", None)
 
                         if camera_obj is None:
                             print("[📄] No camera - defaulting to ALLOW drawing")
@@ -1557,6 +1618,7 @@ def process_svg_to_grbl(
 
                         # Call centralized ArUco detection
                         from safety.paper_detection import check_paper_before_drawing
+
                         paper_present = check_paper_before_drawing(camera_obj, servos_obj, None)
 
                         print(f"[📄] ArUco check result: {'PAPER PRESENT' if paper_present else 'NO PAPER'}")
@@ -1565,6 +1627,7 @@ def process_svg_to_grbl(
                     except Exception as e:
                         print(f"[📄] Paper check error: {e} - defaulting to ALLOW drawing")
                         import traceback
+
                         traceback.print_exc()
                         return True
 
@@ -1573,9 +1636,12 @@ def process_svg_to_grbl(
                     try:
                         # Force a visible console print regardless of clean-caption settings
                         print("[📄] Post-home paper check enabled")
-                        import sys as _sys; _sys.stdout.flush()
+                        import sys as _sys
+
+                        _sys.stdout.flush()
                         ok = _paper_check_after_homing()
-                        print(f"[📄] Post-home paper check result: {'OK' if ok else 'BLOCK'}"); _sys.stdout.flush()
+                        print(f"[📄] Post-home paper check result: {'OK' if ok else 'BLOCK'}")
+                        _sys.stdout.flush()
                         if not ok:
                             try:
                                 ser.close()
@@ -1584,19 +1650,22 @@ def process_svg_to_grbl(
                             # Mark skip for image monitor to log gracefully
                             try:
                                 from utils.state_manager import state_manager as _sm
+
                                 _sm.last_no_paper_skip_ts = time.time()
                             except Exception:
                                 pass
                             # Ensure gaze unlocked after skip
                             try:
                                 from vision.gaze import set_drawing_mode
+
                                 set_drawing_mode(active=False)
                             except Exception:
                                 pass
                             return None
                     except Exception as e:
                         # Never block drawing due to check errors
-                        print(f"[📄] Paper check error ({e}) — proceeding"); _sys.stdout.flush()
+                        print(f"[📄] Paper check error ({e}) — proceeding")
+                        _sys.stdout.flush()
                 else:
                     print("[📄] Post-home paper check skipped (disabled)")
 
@@ -1606,6 +1675,7 @@ def process_svg_to_grbl(
                 try:
                     from config.config import USE_SERVO, TILT_MIN
                     from vision.gaze import set_drawing_mode
+
                     if USE_SERVO:
                         set_drawing_mode(active=True, drawing_pan=90, drawing_tilt=TILT_MIN + 2)
                 except Exception:
@@ -1630,14 +1700,14 @@ def process_svg_to_grbl(
                         gcode_error = e
                     finally:
                         gcode_complete.set()
-                
+
                 gcode_thread = threading.Thread(target=execute_gcode_threaded, daemon=False)
                 gcode_thread.start()
-                
+
                 # Wait for completion with periodic checks (allows captions to continue)
                 while not gcode_complete.is_set():
                     time.sleep(0.1)  # Short sleep allows other threads to run
-                
+
                 # Re-raise any errors that occurred in the thread
                 if gcode_error:
                     print(f"🚨 [DEBUG] GCODE_ERROR OCCURRED: {gcode_error}")
@@ -1664,28 +1734,33 @@ def process_svg_to_grbl(
 
                     # Get the captioner instance via state_manager (more reliable than sys.modules)
                     print(f"[🔍 DEBUG] Attempting to register drawing completion...")
-                    captioner = getattr(state_manager, 'captioner', None)
+                    captioner = getattr(state_manager, "captioner", None)
                     print(f"[🔍 DEBUG] captioner from state_manager: {captioner is not None}")
 
                     if captioner is None:
                         # Fallback: try sys.modules (old method)
                         print(f"[🔍 DEBUG] Fallback: trying sys.modules['machine']")
-                        if 'machine' in sys.modules:
-                            machine_module = sys.modules['machine']
-                            captioner = getattr(machine_module, '_global_captioner', None) or getattr(machine_module, 'captioner', None)
+                        if "machine" in sys.modules:
+                            machine_module = sys.modules["machine"]
+                            captioner = getattr(machine_module, "_global_captioner", None) or getattr(machine_module, "captioner", None)
                             print(f"[🔍 DEBUG] captioner from sys.modules: {captioner is not None}")
 
                     if captioner:
                         print(f"[🔍 DEBUG] has 'drawing' attr: {hasattr(captioner, 'drawing')}")
-                        print(f"[🔍 DEBUG] has 'register_drawing' method: {hasattr(captioner.drawing, 'register_drawing') if hasattr(captioner, 'drawing') else False}")
+                        print(
+                            f"[🔍 DEBUG] has 'register_drawing' method: {hasattr(captioner.drawing, 'register_drawing') if hasattr(captioner, 'drawing') else False}"
+                        )
 
-                        if hasattr(captioner, 'drawing') and hasattr(captioner.drawing, 'register_drawing'):
+                        if hasattr(captioner, "drawing") and hasattr(captioner.drawing, "register_drawing"):
                             captioner.drawing.register_drawing(drawing_prompt)
                             print(f"✅ [SUCCESS] Drawing cooldown timer started after GRBL completion")
                             log_json_entry(
                                 LogType.DEBUG,
-                                {"message": "Drawing cooldown started after physical completion", "prompt": drawing_prompt[:50] + "..." if len(drawing_prompt) > 50 else drawing_prompt},
-                                print_message=f"[⏰] Drawing cooldown started: {captioner.drawing.cooldown}s"
+                                {
+                                    "message": "Drawing cooldown started after physical completion",
+                                    "prompt": drawing_prompt[:50] + "..." if len(drawing_prompt) > 50 else drawing_prompt,
+                                },
+                                print_message=f"[⏰] Drawing cooldown started: {captioner.drawing.cooldown}s",
                             )
                         else:
                             print(f"[❌ CRITICAL] Captioner found but missing drawing/register_drawing!")
@@ -1694,6 +1769,7 @@ def process_svg_to_grbl(
                 except Exception as e:
                     print(f"🎯 [DEBUG] Error registering drawing completion: {e}")
                     import traceback
+
                     traceback.print_exc()
                     # Don't fail the whole process if cooldown registration fails
 
