@@ -86,6 +86,13 @@ from motor_panel.session import SESSIONS_DIR, Session
 
 EMOTIONS = ["energized_engaged", "alert_curious", "calm_observant", "quiet_detached", "withdrawn_distant"]
 ARM_CALIB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arm_calibration.json")
+# Per-channel direction sense for the gaze-following currents (reach, lean,
+# choice/tempo bias) — NOT the wire-level rev flags and NOT the recordings:
+# "left" in the room must mean left for each joint, and only this layer
+# knows the room. Tuned in the runtime tab, persisted here, shared by lab
+# and runtime.
+GAZE_DIRECTIONS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gaze_directions.json")
+DIRECTION_CHANNELS = ["shoulder", "elbow", "wrist", "x", "y"]
 _ARM_NEUTRALS = {"shoulder": LEFT_ARM_SHOULDER_LIMITS[2], "elbow": LEFT_ARM_ELBOW_LIMITS[2], "wrist": LEFT_ARM_WRIST_LIMITS[2]}
 
 
@@ -285,6 +292,8 @@ class KineticBus:
         self.arm_calib_path = ARM_CALIB_PATH  # tests inject their own grid
         self._reach_amount = 0.0  # 0..1 presence ramp — the arm leans out while someone is tracked
         self._calib_cache: Tuple[float, Optional[list]] = (0.0, None)
+        self.directions_path = GAZE_DIRECTIONS_PATH
+        self._dir_flips: Dict[str, bool] = self._load_direction_flips()
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -298,6 +307,36 @@ class KineticBus:
     # --- context pushes -------------------------------------------------------
     def set_emotion(self, emotion: str):
         self._emotion = emotion
+
+    # --- direction sense (gaze-following layer only) ---------------------------
+    def _load_direction_flips(self) -> Dict[str, bool]:
+        try:
+            import json
+
+            with open(self.directions_path) as f:
+                d = json.load(f)
+            return {c: bool(d.get(c, False)) for c in DIRECTION_CHANNELS}
+        except Exception:
+            return {c: False for c in DIRECTION_CHANNELS}
+
+    def direction_flips(self) -> Dict[str, bool]:
+        return dict(self._dir_flips)
+
+    def set_direction_flip(self, channel: str, flipped: bool):
+        """Reverse one channel's response to gaze DIRECTION — reach, lean,
+        and the choice/tempo bias all follow. Recordings and wire-level rev
+        flags are untouched. Persisted; runtime and lab share the file."""
+        self._dir_flips[channel] = bool(flipped)
+        try:
+            import json
+
+            with open(self.directions_path, "w") as f:
+                json.dump(self._dir_flips, f, indent=1)
+        except Exception as e:
+            self.log(f"⚠ could not persist direction flips: {e}")
+
+    def _sign(self, channel: str) -> float:
+        return -1.0 if self._dir_flips.get(channel) else 1.0
 
     def status(self) -> dict:
         rotate_in = None
@@ -473,7 +512,7 @@ class KineticBus:
         gx, gy = self._gaze_vector()
         if abs(gx) < 1e-3 and abs(gy) < 1e-3:
             return {}
-        return {c: (gx if axis == "x" else gy) for c, (axis, _deg) in KINETIC_GAZE_LEAN.items()}
+        return {c: (gx if axis == "x" else gy) * self._sign(c) for c, (axis, _deg) in KINETIC_GAZE_LEAN.items()}
 
     def _arm_calib(self) -> Optional[list]:
         """The 9-point arm calibration grid, mtime-cached; None until the
@@ -519,11 +558,11 @@ class KineticBus:
         reach: Dict[str, float] = {}
         if self._reach_amount > 0.02:
             for c, pose_v in self._reach_pose(raw_gx, raw_gy).items():
-                delta = (pose_v - _ARM_NEUTRALS.get(c, 90.0)) * KINETIC_REACH_STRENGTH
+                delta = (pose_v - _ARM_NEUTRALS.get(c, 90.0)) * KINETIC_REACH_STRENGTH * self._sign(c)
                 reach[c] = max(-KINETIC_REACH_MAX_DEG, min(KINETIC_REACH_MAX_DEG, delta))
         f = min(1.0, self.SUPERVISOR_TICK / KINETIC_GAZE_LEAN_TAU)
         for c, (axis, deg) in KINETIC_GAZE_LEAN.items():
-            ambient = (gx if axis == "x" else gy) * deg
+            ambient = (gx if axis == "x" else gy) * deg * self._sign(c)
             if c in reach:  # crossfade ambient lean -> reach as presence ramps in
                 target = ambient * (1.0 - self._reach_amount) + reach[c] * self._reach_amount
             else:

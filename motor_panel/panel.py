@@ -1456,6 +1456,16 @@ class SessionFrame(ttk.LabelFrame):
         self.gaze_pad.pack()
         # one knob for the whole gaze current (lean + tempo + choice together)
         labeled_slider(center, "gaze influence", 0.0, 2.0, self.lab.gaze_strength, lambda v: setattr(self.lab, "gaze_strength", v))
+        # direction sense per channel — for when a joint follows the gaze
+        # BACKWARDS in the room (recordings and wire rev are untouched;
+        # persisted, shared with the runtime)
+        flips = ttk.Frame(center)
+        flips.pack(fill="x", pady=2)
+        ttk.Label(flips, text="⇄ flip:", font=("monospace", 8)).pack(side="left")
+        current_flips = self.lab.direction_flips()
+        for ch in ("shoulder", "elbow", "wrist", "x", "y"):
+            v = tk.BooleanVar(value=current_flips.get(ch, False))
+            ttk.Checkbutton(flips, text=ch, variable=v, command=lambda ch=ch, v=v: self.lab.set_direction_flip(ch, v.get())).pack(side="left", padx=1)
         self.lab_status = ttk.Label(center, text="", font=("monospace", 9), width=1, anchor="w")  # width=1: text never resizes the column
         self.lab_status.pack(fill="x", pady=4)
 

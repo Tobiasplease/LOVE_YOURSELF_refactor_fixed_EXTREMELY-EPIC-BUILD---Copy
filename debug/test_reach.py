@@ -93,6 +93,31 @@ def main():
     finally:
         os.unlink(tmp.name)
 
+    # --- direction flips: this-mode-only reversal, persisted -------------------
+    ctx3 = {"gx": 1.0, "gy": 0.0, "person": "visible"}
+    bus3 = make_bus(ctx3)
+    bus3.arm_calib_path = "/nonexistent/never.json"
+    dtmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+    dtmp.close()
+    os.unlink(dtmp.name)
+    bus3.directions_path = dtmp.name
+    bus3._dir_flips = bus3._load_direction_flips()
+    bus3.set_direction_flip("shoulder", True)
+    settle(bus3)
+    off_flipped = bus3._offsets.get("shoulder", 0.0)
+    if not -16 <= off_flipped <= -12:
+        failures.append(f"flipped shoulder should reach the OTHER way (got {off_flipped:.1f}, expected ~-14.4)")
+    bias = bus3._gaze_bias()
+    if bias.get("shoulder", 0) >= 0 or bias.get("wrist", 0) <= 0:
+        failures.append(f"flip must reverse the choice/tempo bias for that channel only: {bias}")
+    bus4 = make_bus(ctx3)
+    bus4.directions_path = dtmp.name
+    bus4._dir_flips = bus4._load_direction_flips()
+    if not bus4.direction_flips().get("shoulder"):
+        failures.append("direction flip did not persist across bus instances")
+    os.unlink(dtmp.name)
+    print(f"direction flip: shoulder reaches {off_flipped:+.1f}° (reversed), bias flipped for shoulder only, persisted")
+
     print("\n" + ("ALL OK" if not failures else "FAILURES:\n  " + "\n  ".join(failures)))
     return 0 if not failures else 1
 
