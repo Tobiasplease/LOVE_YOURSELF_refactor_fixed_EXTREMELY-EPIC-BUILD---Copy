@@ -707,14 +707,18 @@ class LinkageView(tk.Canvas):
         self.wrist_lbl = self.create_text((x0 + x1) // 2, y1 + 12, text="", fill="#667", font=("monospace", 8))
         self.bind("<B1-Motion>", self._drag)
         self.bind("<Button-1>", self._drag)
-        self.bind("<Button-4>", lambda e: self._wrist_nudge(+3))  # Linux wheel up
-        self.bind("<Button-5>", lambda e: self._wrist_nudge(-3))
-        self.bind("<MouseWheel>", lambda e: self._wrist_nudge(3 if e.delta > 0 else -3))
+        self.bind("<Button-4>", lambda e: self._wrist_nudge(+1))  # Linux wheel up
+        self.bind("<Button-5>", lambda e: self._wrist_nudge(-1))
+        self.bind("<MouseWheel>", lambda e: self._wrist_nudge(1 if e.delta > 0 else -1))
+        self.wheel_step = 3.0  # degrees per wheel notch — the wrist's sensitivity knob
+        self.w_scale = 1.0  # wrist range fraction around neutral
         self._update_pad_label()
         self._tick()
 
-    def _wrist_nudge(self, d: float):
-        self.lefthand.set_channel("wrist", self.w_ch.target + d)  # target, not value: wheel outruns the smoother
+    def _wrist_nudge(self, direction: float):
+        lo, hi = self._eff_range(self.w_ch, self.w_scale)
+        target = self.w_ch.target + direction * self.wheel_step  # target, not value: wheel outruns the smoother
+        self.lefthand.set_channel("wrist", max(lo, min(hi, target)))
 
     # --- mapping --------------------------------------------------------------
     def _eff_range(self, ch, scale: float):
@@ -808,6 +812,8 @@ class LinkageView(tk.Canvas):
     def set_scale(self, joint: str, frac: float):
         if joint == "shoulder":
             self.s_scale = frac
+        elif joint == "wrist":
+            self.w_scale = frac
         else:
             self.e_scale = frac
 
@@ -889,6 +895,7 @@ class HandSpace(tk.Canvas):
         self.pressed = set()
         self.locked = [False] * 4
         self.lock_target = [90.0] * 4
+        self.key_step = self.STEP  # degrees per tick while a key is held — keyboard sensitivity
 
         self.create_text(
             self.W // 2,
@@ -975,7 +982,7 @@ class HandSpace(tk.Canvas):
         for key in self.pressed:
             i, d = self.KEYS[key]
             if self.locked[i]:
-                self.lock_target[i] = max(0.0, min(180.0, self.lock_target[i] + d * self.STEP))
+                self.lock_target[i] = max(0.0, min(180.0, self.lock_target[i] + d * self.key_step))
                 self.lefthand.set_channel(f"finger{i}", self.lock_target[i])
         if self.mouse is not None:
             u, v = self.mouse
@@ -1194,6 +1201,8 @@ class SessionFrame(ttk.LabelFrame):
         self.linkage.pack(anchor="nw")
         labeled_slider(side, "elbow range %", 10, 100, 100, lambda v: self.linkage.set_scale("elbow", v / 100), fmt=lambda v: str(int(v)))
         labeled_slider(side, "shoulder range %", 10, 100, 100, lambda v: self.linkage.set_scale("shoulder", v / 100), fmt=lambda v: str(int(v)))
+        labeled_slider(side, "wrist range %", 10, 100, 100, lambda v: self.linkage.set_scale("wrist", v / 100), fmt=lambda v: str(int(v)))
+        labeled_slider(side, "wrist °/wheel notch", 0.5, 10.0, 3.0, lambda v: setattr(self.linkage, "wheel_step", v), fmt=lambda v: f"{v:.1f}")
         labeled_slider(side, "smoothing s", 0.05, 0.8, 0.25, lambda v: setattr(lefthand, "smooth_time", v))
         self.cal_lbl = ttk.Label(side, text="", font=("monospace", 8), wraplength=side_w - 16)
 
@@ -1225,6 +1234,7 @@ class SessionFrame(ttk.LabelFrame):
         labeled_slider(side, "gravity width", 0.05, 1.0, 0.4, hs.gravity.set)
         labeled_slider(side, "default curl °", 0, 180, 90, hs.default_pos.set, fmt=lambda v: str(int(v)))
         labeled_slider(side, "range ±°", 10, 90, 60, hs.servo_range.set, fmt=lambda v: str(int(v)))
+        labeled_slider(side, "key step °/tick", 0.5, 6.0, 2.0, lambda v: setattr(hs, "key_step", v), fmt=lambda v: f"{v:.1f}")
         ttk.Checkbutton(side, text="reverse vertical", variable=hs.reverse).pack(anchor="w", pady=4)
         ttk.Label(side, text="legacy dataset", font=("monospace", 8)).pack(anchor="w", pady=(12, 2))
         self.legacy_var = tk.StringVar()
