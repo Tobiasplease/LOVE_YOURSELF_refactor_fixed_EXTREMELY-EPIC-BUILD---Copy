@@ -26,13 +26,16 @@ How the body chooses what to be:
     enter_nearest). One continuous body, changing its mind.
 
 Modifiers (context leaking into recorded movement):
-  - Gaze nudge: where the machine looks biases the arm — per-channel degree
-    offsets proportional to normalized pan/tilt (KINETIC_GAZE_NUDGE),
-    applied at send time, clamped by the device layer.
-  - Startle: a person ARRIVING freezes the body mid-motion for a beat
-    (Generator.freeze), snaps the fingers (one HAND command — the firmware's
-    adaptive slew makes it read as a flinch), then generation resumes and
-    eases back. Cooldown so a flickering detector doesn't twitch the hand.
+  - The gaze current (KINETIC_GAZE_*): one direction vector, three
+    coordinated effects — a smoothed bounded LEAN every applicable channel
+    drifts along (felt immediately, together), TEMPO eagerness (aligned
+    transitions quick, opposed reluctant), and the transition CHOICE bias.
+    Directional logic throughout: poses only ever lean by a bounded,
+    settling amount; the walk never leaves demonstrated states.
+  - Startle: prefers a RECORDED gesture (a dataset assigned under the
+    "startle" state) — crossfades into it flinch-fast, plays it through,
+    blends back into the running temperament. Falls back to freeze +
+    finger snap until one exists. Cooldown against detector flicker.
 
 Wiring (machine.py, behind KINETIC_BUS_ENABLED, default False):
     bus = KineticBus()
@@ -55,13 +58,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import (
     KINETIC_CROSSFADE_S,
-    KINETIC_GAZE_BIAS_STRENGTH,
-    KINETIC_GAZE_MODE,
-    KINETIC_GAZE_NUDGE,
-    KINETIC_GAZE_X_CHANNELS,
-    KINETIC_GAZE_Y_CHANNELS,
+    KINETIC_GAZE_CHOICE_K,
+    KINETIC_GAZE_LEAN,
+    KINETIC_GAZE_LEAN_TAU,
+    KINETIC_GAZE_STRENGTH,
+    KINETIC_GAZE_TEMPO_K,
     KINETIC_ROTATE_S,
     KINETIC_STARTLE_COOLDOWN_S,
+    KINETIC_STARTLE_CROSSFADE_S,
     KINETIC_STARTLE_CURL,
     KINETIC_STARTLE_ENABLED,
     KINETIC_STARTLE_FREEZE_S,
@@ -71,6 +75,8 @@ from motor_panel.session import SESSIONS_DIR, Session
 
 EMOTIONS = ["energized_engaged", "alert_curious", "calm_observant", "quiet_detached", "withdrawn_distant"]
 DRAWING_STATE = "drawing"
+STARTLE_STATE = "startle"  # recorded startle gestures — interrupts, never mood-picked
+STATES = [DRAWING_STATE, STARTLE_STATE] + EMOTIONS
 OWNED_CHANNELS = {"finger0", "finger1", "finger2", "finger3", "elbow", "shoulder", "wrist"}
 
 
@@ -98,7 +104,7 @@ class TemperamentLibrary:
             if not (fn.startswith("session_") and fn.endswith(".json")):
                 continue
             stem = fn[len("session_") : -len(".json")]
-            for state in [DRAWING_STATE] + EMOTIONS:
+            for state in STATES:
                 if stem == state or stem.startswith(state + "_"):
                     buckets.setdefault(state, []).append(fn)
                     break
@@ -107,13 +113,14 @@ class TemperamentLibrary:
     def bundle_for(self, emotion: str, drawing: bool) -> Optional[str]:
         """Pick a session filename for the current state. Drawing overrides
         emotion; a missing bucket falls back to any emotion bundle rather
-        than stillness (an unfamiliar mood shouldn't paralyze the body)."""
+        than stillness (an unfamiliar mood shouldn't paralyze the body).
+        Startle datasets are interrupts — never mood-picked, never fallback."""
         buckets = self.scan()
         if drawing and buckets.get(DRAWING_STATE):
             return random.choice(buckets[DRAWING_STATE])
         if buckets.get(emotion):
             return random.choice(buckets[emotion])
-        pool = [fn for state, fns in buckets.items() if state != DRAWING_STATE for fn in fns]
+        pool = [fn for state, fns in buckets.items() if state not in (DRAWING_STATE, STARTLE_STATE) for fn in fns]
         return random.choice(pool) if pool else None
 
     def retire(self, filename: str) -> str:
@@ -225,7 +232,8 @@ class KineticBus:
         self._ext_plan = send_plan
         self._ext_step = send_step
         self._ext_state = get_state
-        self.gaze_mode = KINETIC_GAZE_MODE  # "vector" | "offset"; the runtime tab can flip it live
+        self.gaze_strength = KINETIC_GAZE_STRENGTH  # master gaze influence; the runtime tab slider
+        self._startle_until = 0.0  # while set, a recorded startle owns the body
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -273,6 +281,8 @@ class KineticBus:
             self._thread.join(timeout=3)
         self._stop_gens()
         self._active_bundle = self._active_state = None
+        self._startle_until = 0.0
+        self._offsets = {}
         if self.device is not None:
             try:
                 self.device.all_neutral()
@@ -292,6 +302,7 @@ class KineticBus:
 
     def _send_plan(self, d: Dict[str, float], dt: float):
         if self._ext_plan is not None:
+            d = {c: v + self._offsets.get(c, 0.0) for c, v in d.items()}  # the lean current reaches the gantry too
             self._ext_plan(d, dt)
         # runtime v1 has no gantry — plan channels never train there (owned)
 
@@ -315,9 +326,9 @@ class KineticBus:
         while self._running:
             now = time.time()
             self._watch_person(now)
-            if now - last_slow >= 2.0:  # bundle choice + gaze at a calmer rate
+            self._update_lean()  # the lean current settles/releases at tick rate
+            if now - last_slow >= 2.0:  # bundle choice at a calmer rate
                 last_slow = now
-                self._update_gaze_offsets()
                 self._update_bundle(now)
             time.sleep(self.SUPERVISOR_TICK)
 
@@ -330,6 +341,8 @@ class KineticBus:
         return DRAWING_STATE if self.is_drawing() else self._emotion
 
     def _update_bundle(self, now: float):
+        if now < self._startle_until:
+            return  # a recorded startle owns the body until it has played through
         desired = self._desired_state()
         dwell_over = now - self._bundle_since > KINETIC_ROTATE_S
         if desired == self._active_state and not dwell_over:
@@ -360,6 +373,11 @@ class KineticBus:
         if not chains:
             self.log(f"bundle {bundle} has no takes on owned channels")
             return
+        self._start_chains(chains, KINETIC_CROSSFADE_S)
+        self._active_bundle, self._active_state = bundle, state
+        self.log(f"temperament -> {bundle} ({state}, {len(chains)} chain(s))")
+
+    def _start_chains(self, chains: Dict[str, dict], enter_ease: float):
         self._stop_gens()
         seed = self._live_state()
         for key, chain in chains.items():
@@ -368,39 +386,41 @@ class KineticBus:
                 send_ease=self._send_ease,
                 send_plan=self._send_plan,
                 send_step=self._send_step,
-                enter_ease=KINETIC_CROSSFADE_S,
+                enter_ease=enter_ease,
                 bias=self._gaze_bias,
-                bias_strength=KINETIC_GAZE_BIAS_STRENGTH,
+                bias_strength=KINETIC_GAZE_CHOICE_K,
+                tempo_strength=KINETIC_GAZE_TEMPO_K,
             )
             gen.start(seed)
             self._gens.append(gen)
-        self._active_bundle, self._active_state = bundle, state
-        self.log(f"temperament -> {bundle} ({state}, {len(chains)} chain(s))")
 
-    # --- modifiers ------------------------------------------------------------
+    # --- modifiers: the gaze current -------------------------------------------
+    # One direction vector, three coordinated effects (config block
+    # KINETIC_GAZE_*): a smoothed bounded LEAN on every applicable channel
+    # (felt immediately, together), TEMPO eagerness on aligned transitions,
+    # and the CHOICE bias — all scaled by gaze_strength.
+    def _gaze_vector(self) -> Tuple[float, float]:
+        gx, gy = self.get_gaze()
+        return gx * self.gaze_strength, gy * self.gaze_strength
+
     def _gaze_bias(self) -> Dict[str, float]:
-        """Movement-vector mode: gaze as a direction preference per channel,
-        read LIVE by every generator at each transition choice."""
-        if self.gaze_mode != "vector":
+        """Direction preference per channel, read LIVE by every generator at
+        each transition choice (and for tempo eagerness)."""
+        gx, gy = self._gaze_vector()
+        if abs(gx) < 1e-3 and abs(gy) < 1e-3:
             return {}
-        gx, gy = self.get_gaze()
-        bias: Dict[str, float] = {}
-        for c, w in KINETIC_GAZE_X_CHANNELS.items():
-            bias[c] = bias.get(c, 0.0) + gx * w
-        for c, w in KINETIC_GAZE_Y_CHANNELS.items():
-            bias[c] = bias.get(c, 0.0) + gy * w
-        return bias
+        return {c: (gx if axis == "x" else gy) for c, (axis, _deg) in KINETIC_GAZE_LEAN.items()}
 
-    def _update_gaze_offsets(self):
-        if self.gaze_mode != "offset":
-            self._offsets = {}
-            return
-        gx, gy = self.get_gaze()
-        self._offsets = {
-            "shoulder": gx * KINETIC_GAZE_NUDGE.get("shoulder", 0),
-            "wrist": gx * KINETIC_GAZE_NUDGE.get("wrist", 0),
-            "elbow": gy * KINETIC_GAZE_NUDGE.get("elbow", 0),
-        }
+    def _update_lean(self):
+        """The felt component: every applicable channel drifts toward the
+        gaze — bounded degrees, settling over LEAN_TAU and releasing the
+        same way. A current the whole body moves inside, never a snap."""
+        gx, gy = self._gaze_vector()
+        f = min(1.0, self.SUPERVISOR_TICK / KINETIC_GAZE_LEAN_TAU)
+        for c, (axis, deg) in KINETIC_GAZE_LEAN.items():
+            target = (gx if axis == "x" else gy) * deg
+            cur = self._offsets.get(c, 0.0)
+            self._offsets[c] = cur + (target - cur) * f
 
     def _watch_person(self, now: float):
         state = self.get_person()
@@ -419,19 +439,39 @@ class KineticBus:
         self._startle()
 
     def _startle(self):
-        """Freeze mid-motion, one fast finger snap, then the temperament
-        resumes and eases back — the firmware's adaptive slew makes both
-        the snap and the recovery read as reflex, not command."""
+        """A RECORDED startle when one is assigned: crossfade fast into the
+        startle dataset from wherever the body stands, play it through,
+        then blend back into the running temperament — the same seamless
+        machinery as every other transition, so all movements flow into
+        each other. Falls back to freeze + finger snap until a startle
+        take exists."""
+        buckets = self.library.scan()
+        picked = random.choice(buckets[STARTLE_STATE]) if buckets.get(STARTLE_STATE) else None
+        if picked:
+            try:
+                chains = self.library.chains(picked)
+            except Exception as e:
+                self.log(f"startle dataset {picked} failed: {e}")
+                chains = {}
+            if chains:
+                dur = max(chain["total_samples"] / engine.SAMPLE_RATE for chain in chains.values())
+                dur = max(1.0, min(6.0, dur)) + KINETIC_STARTLE_CROSSFADE_S
+                self._startle_until = time.time() + dur  # claim the body BEFORE starting (⚡ races the supervisor)
+                self._start_chains(chains, KINETIC_STARTLE_CROSSFADE_S)  # a flinch-fast entry
+                self._active_bundle, self._active_state = picked, STARTLE_STATE
+                self.log(f"startle — {picked} interrupts for {dur:.1f}s, then blends back")
+                return
+        # fallback: freeze mid-motion + one fast finger snap (firmware slew
+        # sells the flinch); retire this path once startle takes exist
         hold = random.uniform(*KINETIC_STARTLE_FREEZE_S)
         for g in self._gens:
             g.freeze(hold)
         live = self._live_state()
         snap = {f"finger{i}": live[f"finger{i}"] + KINETIC_STARTLE_CURL for i in range(4) if f"finger{i}" in live}
         if snap:
-            offsets_free = dict(snap)  # bypass gaze offsets: a flinch is absolute
             if self._ext_ease is not None:
-                self._ext_ease(offsets_free)
+                self._ext_ease(snap)
             else:
-                for c, v in offsets_free.items():
+                for c, v in snap.items():
                     self.device.set_channel(c, v)
-        self.log(f"startle — frozen {hold:.1f}s")
+        self.log(f"startle — frozen {hold:.1f}s (no startle dataset recorded yet)")

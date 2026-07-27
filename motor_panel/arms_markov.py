@@ -163,12 +163,14 @@ class Generator:
         enter_ease: float = 2.0,
         bias: Optional[Callable[[], Dict[str, float]]] = None,
         bias_strength: float = 1.5,
+        tempo_strength: float = 0.0,
     ):
         self.chain = chain
         self.channels = chain["channels"]
         self.bins = chain["discretization"]
         self.bias = bias  # -> {channel: -1..1 direction preference} (gaze etc.)
         self.bias_strength = bias_strength
+        self.tempo_strength = tempo_strength  # aligned transitions eager, opposed reluctant
         self.ease_channels = [c for c in self.channels if c not in PLAN_CHANNELS and c not in STEP_CHANNELS]
         self.plan_channels = [c for c in self.channels if c in PLAN_CHANNELS]
         self.step_channels = [c for c in self.channels if c in STEP_CHANNELS]
@@ -234,10 +236,15 @@ class Generator:
                 nxts = nxts or first.get(walk_cur)
                 if not nxts:
                     break
-                nxt = self._pick(nxts, self._state(walk_cur))
+                walk_state = self._state(walk_cur)
+                nxt = self._pick(nxts, walk_state)
                 dt = max(0.1, nxts[nxt]["avg_dt"] / max(0.1, self.speed))
                 target = self._state(nxt)
-                self._dispatch(self._state(walk_cur), target, dt)
+                if self.bias is not None and self.tempo_strength:
+                    b = self.bias()
+                    if b:  # eager toward the look, reluctant away — tempo, not position
+                        dt = max(0.06, dt * math.exp(-self.tempo_strength * self._alignment(walk_state, target, b)))
+                self._dispatch(walk_state, target, dt)
                 queue.append((nxt, dt, target))
                 walk_prev, walk_cur = walk_cur, nxt
             if not queue:  # dead end with nothing in flight — re-enter gently
@@ -255,6 +262,16 @@ class Generator:
     def _state(self, key: str) -> Dict[str, float]:
         return _unkey(key, self.channels, self.bins)
 
+    def _alignment(self, frm: Dict[str, float], to: Dict[str, float], b: Dict[str, float]) -> float:
+        """How well a transition's direction agrees with the bias vector,
+        per channel in bin units, clamped so one big step can't dominate."""
+        a = 0.0
+        for c, pref in b.items():
+            if c in to and c in frm:
+                step = (to[c] - frm[c]) / self.bins.get(c, 1.0)
+                a += pref * max(-2.0, min(2.0, step)) / 2.0
+        return a
+
     def _pick(self, nxts: Dict[str, dict], cur_state: Dict[str, float]) -> str:
         """Transition choice, optionally biased by a movement vector: each
         candidate's probability is reweighted by how well its DIRECTION
@@ -268,13 +285,7 @@ class Generator:
             return _weighted(nxts)
         weights = {}
         for dst in nxts:
-            to = self._state(dst)
-            align = 0.0
-            for c, pref in b.items():
-                if c in to and c in cur_state:
-                    step = (to[c] - cur_state[c]) / self.bins.get(c, 1.0)
-                    align += pref * max(-2.0, min(2.0, step)) / 2.0
-            weights[dst] = nxts[dst]["prob"] * math.exp(self.bias_strength * align)
+            weights[dst] = nxts[dst]["prob"] * math.exp(self.bias_strength * self._alignment(cur_state, self._state(dst), b))
         r = random.random() * sum(weights.values())
         acc = 0.0
         for dst, w in weights.items():

@@ -111,20 +111,20 @@ def main():
 
         # --- 4: gaze nudge + startle ------------------------------------------
         ctx["gaze"] = (1.0, 0.0)
-        bus.gaze_mode = "offset"  # legacy mode: additive lean
-        bus._update_gaze_offsets()
-        bus._send_ease({"shoulder": 90.0})
-        target = device.channels["shoulder"].target
-        if not 98 <= target <= 102:
-            failures.append(f"offset-mode gaze nudge missing: shoulder target {target}, expected ~100")
-        bus.gaze_mode = "vector"  # default mode: movement-direction bias
-        bus._update_gaze_offsets()
-        if bus._offsets:
-            failures.append(f"vector mode must not lean positions, got offsets {bus._offsets}")
+        for _ in range(60):  # lean settles toward the per-channel map over ~tau
+            bus._update_lean()
+        lean = bus._offsets.get("shoulder", 0.0)
+        if not 6.5 <= lean <= 8.5:
+            failures.append(f"lean did not settle toward shoulder map (got {lean:.1f}, expected ~8)")
         bias = bus._gaze_bias()
-        if bias.get("shoulder") != 1.0 or bias.get("x") != 1.0 or bias.get("elbow", 0.0) != 0.0:
-            failures.append(f"vector bias map wrong for gaze (1,0): {bias}")
-        print(f"gaze: offset mode leans shoulder -> {target}; vector mode biases {sorted(k for k, v in bias.items() if v)}")
+        if bias.get("shoulder") != 1.0 or bias.get("x") != 1.0 or abs(bias.get("elbow", 0.0)) > 1e-9:
+            failures.append(f"gaze bias map wrong for gaze (1,0): {bias}")
+        ctx["gaze"] = (0.0, 0.0)
+        for _ in range(60):
+            bus._update_lean()
+        if abs(bus._offsets.get("shoulder", 0.0)) > 1.0:
+            failures.append(f"lean did not release after gaze recentered ({bus._offsets.get('shoulder'):.1f})")
+        print(f"gaze current: lean settled to {lean:.1f}° then released; bias on {sorted(k for k, v in bias.items() if v)}")
 
         before = device.channels["finger0"].value
         ctx["person"] = "visible"
@@ -153,6 +153,20 @@ def main():
         if bus._active_state != "drawing":
             failures.append(f"drawing state did not take over (state={bus._active_state})")
         print(f"drawing override: active bundle {bus._active_bundle}")
+
+        # --- recorded startle: interrupt fast, play through, blend back --------
+        make_session("startle_a", 120).save(export=True)
+        bus._last_startle = 0.0  # clear cooldown from the fallback test
+        bus.startle()
+        time.sleep(0.5)
+        if bus._active_state != "startle":
+            failures.append(f"recorded startle did not take the body (state={bus._active_state})")
+        t0s = time.time()
+        while time.time() - t0s < 8.0 and bus._active_state == "startle":
+            time.sleep(0.3)
+        if bus._active_state != "drawing":
+            failures.append(f"startle did not blend back to the running temperament (state={bus._active_state})")
+        print(f"recorded startle: interrupted, then blended back to {bus._active_state}")
 
         bus.shutdown()
 

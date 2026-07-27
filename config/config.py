@@ -143,20 +143,34 @@ LEFT_ARM_WRIST_LIMITS = (60, 120, 90)  # lo, hi, neutral — pin 6 (July 26: res
 KINETIC_BUS_ENABLED = False
 KINETIC_CROSSFADE_S = 2.5  # seamless morph: ease into the new temperament's nearest state over this long
 KINETIC_ROTATE_S = 300  # dwell before rotating among same-state bundles (variety)
-# Gaze -> movement. Two modes (switchable live in the panel's runtime tab):
-#   "vector" (default): gaze reweights the markov CHOICE toward transitions
-#     moving in the gazed direction — dynamic range nudging regardless of
-#     positioning; poses never distorted, nothing clips at range limits,
-#     generation still only visits demonstrated states.
-#   "offset": legacy additive degrees on servo targets (a static lean).
-KINETIC_GAZE_MODE = "vector"
-KINETIC_GAZE_BIAS_STRENGTH = 1.5  # exp coefficient on direction alignment; ~4.5x preference at full alignment
-KINETIC_GAZE_X_CHANNELS = {"shoulder": 1.0, "wrist": 1.0, "x": 1.0}  # channels that follow horizontal gaze (sign = direction)
-KINETIC_GAZE_Y_CHANNELS = {"elbow": 1.0, "y": 1.0}  # channels that follow vertical gaze
-KINETIC_GAZE_NUDGE = {"shoulder": 10, "elbow": 5, "wrist": 8}  # offset mode: max degrees at full gaze deflection
+# Gaze -> movement: one directional CURRENT, three coordinated effects all
+# driven by the same gaze vector and scaled by KINETIC_GAZE_STRENGTH (the
+# runtime tab's "gaze influence" slider):
+#   lean   — every applicable channel drifts a bounded number of degrees
+#            toward the gaze, settling over LEAN_TAU seconds and decaying
+#            back when the gaze recenters (the whole body sways WITH the
+#            look, together — never snaps, never clips)
+#   tempo  — gaze-aligned transitions play eager (quicker), opposed ones
+#            reluctant (slower); works even on momentum-locked recordings
+#   choice — markov transition choice reweighted toward gaze-aligned
+#            movement (needs branching in the recording to act on)
+# Directional logic, not absolute values: recorded poses are only ever
+# leaned by a bounded smoothed amount, and the walk itself stays inside
+# demonstrated states and transitions.
+KINETIC_GAZE_STRENGTH = 1.0  # master, 0..2
+KINETIC_GAZE_LEAN = {"shoulder": ("x", 8), "wrist": ("x", 6), "x": ("x", 2.5), "elbow": ("y", 5), "y": ("y", 2.5)}  # channel: (axis, deg @ full gaze)
+KINETIC_GAZE_LEAN_TAU = 1.5  # seconds for the lean to settle / release
+KINETIC_GAZE_CHOICE_K = 2.0  # transition-choice bias coefficient
+KINETIC_GAZE_TEMPO_K = 0.6  # eagerness: dt scales by exp(-K * alignment)
 KINETIC_STARTLE_ENABLED = True
-KINETIC_STARTLE_FREEZE_S = (0.4, 1.2)  # freeze duration range on person arrival
-KINETIC_STARTLE_CURL = 35  # degrees of finger snap on startle
+# Startle prefers a RECORDED gesture: assign a short take under the
+# "startle" state in the runtime tab and arrivals crossfade INTO it fast,
+# play it through, then blend back to the running temperament — the same
+# seamless machinery as every transition. The freeze+snap below is only
+# the fallback while no startle dataset exists.
+KINETIC_STARTLE_CROSSFADE_S = 0.3  # fast entry into the startle dataset (a flinch, not a lunge)
+KINETIC_STARTLE_FREEZE_S = (0.4, 1.2)  # fallback: freeze duration range on person arrival
+KINETIC_STARTLE_CURL = 35  # fallback: degrees of finger snap
 KINETIC_STARTLE_COOLDOWN_S = 20  # a flickering detector must not twitch the hand
 
 # === PEN SERVO (via GRBL spindle PWM) ===

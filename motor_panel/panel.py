@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.config import ARMS_DUET_MAX_FEED, GRBL_PEN_DOWN_S, GRBL_PEN_UP_S, KINETIC_BUS_ENABLED
 from grbl.warp_calibration import clamp_to_reach, reach_polygon
 from motor_panel.devices import EMOTIONS, SerialDevice, build_devices
-from motor_panel.kinetic_bus import KineticBus, TemperamentLibrary
+from motor_panel.kinetic_bus import STATES, KineticBus, TemperamentLibrary
 from motor_panel.session import Session, Transport, import_legacy_hand_take, list_legacy_hand_datasets
 
 JOG_STEPS = [0.5, 1, 2, 5, 10]
@@ -1411,14 +1411,8 @@ class SessionFrame(ttk.LabelFrame):
         pad_size = max(240, min(340, ws_h - 90))
         self.gaze_pad = GazePad(center, pad_size, on_gaze=self._on_gaze)
         self.gaze_pad.pack()
-        self.gaze_mode_var = tk.StringVar(value=self.lab.gaze_mode)
-        modes = ttk.Frame(center)
-        modes.pack(fill="x", pady=4)
-        ttk.Label(modes, text="gaze nudges:", font=("monospace", 8)).pack(side="left")
-        for mode, label in (("vector", "movement (flow bias)"), ("offset", "position (lean)")):
-            ttk.Radiobutton(
-                modes, text=label, value=mode, variable=self.gaze_mode_var, command=lambda: setattr(self.lab, "gaze_mode", self.gaze_mode_var.get())
-            ).pack(side="left", padx=4)
+        # one knob for the whole gaze current (lean + tempo + choice together)
+        labeled_slider(center, "gaze influence", 0.0, 2.0, self.lab.gaze_strength, lambda v: setattr(self.lab, "gaze_strength", v))
         self.lab_status = ttk.Label(center, text="", font=("monospace", 9), width=1, anchor="w")  # width=1: text never resizes the column
         self.lab_status.pack(fill="x", pady=4)
 
@@ -1455,7 +1449,7 @@ class SessionFrame(ttk.LabelFrame):
         tree = self.temp_tree
         tree.delete(*tree.get_children())
         buckets = self.lab.library.scan()
-        for state in ["drawing"] + EMOTIONS:
+        for state in STATES:
             fns = buckets.get(state, [])
             label = f"{state} — no datasets yet" if not fns else f"{state} — {len(fns)} dataset(s)"
             parent = tree.insert("", "end", iid=f"state:{state}", text=label, open=True, tags=() if fns else ("empty",))

@@ -192,15 +192,20 @@ changes.
   the name-prefix dropdown, which made assignment an invisible filename
   side-effect). CENTER the **gaze simulation pad**: drag to point the
   machine's eyes, double-click to recenter; the arrow is the modifier.
-  Two gaze modes (radio, live-switchable; KINETIC_GAZE_MODE default
-  "vector"): **movement (flow bias)** reweights which transitions the
-  chains prefer by direction alignment — dynamic range nudging regardless
-  of positioning, poses never distorted, generation still only visits
-  demonstrated states (proof: debug/test_gaze_bias.py — gaze-up walks
-  live ~50° above gaze-down walks on the same chain, all in vocabulary;
-  note: a DETERMINISTIC gesture leaves no choice to bias — vary your
-  recordings if you want gaze to matter); **position (lean)** is the
-  legacy additive offset. RIGHT the **lab**: the REAL KineticBus on the
+  The gaze is a CURRENT (July 27 redesign after the choice-only bias felt
+  inert): one direction vector, three coordinated effects scaled by the
+  "gaze influence" slider — **lean** (every applicable channel incl. the
+  gantry drifts a bounded number of degrees toward the gaze, settling and
+  releasing over ~1.5s: the felt one, the whole body sways together),
+  **tempo** (gaze-aligned transitions play eager, opposed reluctant —
+  works even on momentum-locked recordings), **choice** (transition
+  reweighting; needs branching — a DETERMINISTIC gesture leaves no choice
+  to bias, vary your recordings). Poses only ever lean by a bounded
+  smoothed amount; the walk never leaves demonstrated states
+  (debug/test_gaze_bias.py). **Startle is a recordable state**: assign a
+  short take under "startle" in the tree and arrivals/⚡ crossfade into it
+  flinch-fast, play it through, and blend back — the freeze+finger-snap
+  is only the fallback until you record one. RIGHT the **lab**: the REAL KineticBus on the
   panel's routing (full body incl. gantry/pen/lung) — Start, click
   emotion states to watch chains crossfade, toggle the drawing override,
   fire ⚡ startle. Transport and lab are mutually exclusive. **When
