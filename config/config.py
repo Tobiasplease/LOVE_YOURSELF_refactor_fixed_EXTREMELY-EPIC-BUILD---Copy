@@ -180,13 +180,18 @@ KINETIC_STARTLE_HOLD_S = 3.0  # held tension before the slow release
 KINETIC_STARTLE_DELTAS = {"finger0": 40, "finger1": 40, "finger2": 40, "finger3": 40, "wrist": 25, "lung": 20}  # fallback flinch, degrees relative
 KINETIC_STARTLE_COOLDOWN_S = 20  # a flickering detector must not twitch the hand
 
-# Homing safety: a take assigned under the "homing" state (record the left
-# arm HOLDING its tucked-clear pose) moves the arm FULLY there before the
-# gantry homes and holds until homing completes. No dataset = the bus
-# refuses to guess a pose. The max hold releases a stranded arm if the
-# completion signal is ever missed (GRBL's homing quiet-wait is 60s).
+# Homing safety: a take assigned under the "homing" state IS the escape
+# choreography — record the whole get-clear movement (ending tucked) and
+# it plays straight through (no markov) before the gantry homes: entry
+# eases into the take's first sample over TUCK_S, the take runs once, the
+# body holds its final pose until homing completes (in-process hook or the
+# cross-process sentinel — the idle subprocess homes at boot), then blends
+# back. machine.py startup homing triggers this automatically, so the
+# recorded movement is the machine's first gesture. No dataset = the bus
+# refuses to guess. Max hold releases a stranded arm if every completion
+# signal is missed (GRBL's homing quiet-wait is 60s).
 KINETIC_HOMING_MAX_HOLD_S = 75
-KINETIC_HOMING_TUCK_S = 2.0  # the tuck RAMPS to the pose over this long — no snapping — and $H waits for it
+KINETIC_HOMING_TUCK_S = 1.0  # entry ease into the choreography's first pose — no snapping
 
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.

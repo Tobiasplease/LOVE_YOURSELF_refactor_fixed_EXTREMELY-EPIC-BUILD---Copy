@@ -14,3 +14,9 @@ on_grbl_drawing_complete: Optional[Callable[[], None]] = None
 # homing completes so the arm blends back into its running dataset.
 on_grbl_homing_start: Optional[Callable[[], float]] = None
 on_grbl_homing_done: Optional[Callable[[], None]] = None
+
+# Cross-process homing completion: the idle-movements SUBPROCESS homes the
+# gantry at its startup, where the parent's hook registrations don't exist.
+# ensure_homed touches this file on completion (any process); the kinetic
+# bus watches its mtime to release the tucked left arm.
+HOMING_SENTINEL = "/tmp/grbl_homing_complete.flag"

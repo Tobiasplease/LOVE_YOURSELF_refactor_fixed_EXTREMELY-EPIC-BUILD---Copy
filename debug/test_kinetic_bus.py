@@ -178,41 +178,53 @@ def main():
             failures.append("no chains resumed after the startle release")
         print(f"recorded startle: flinch (+{moved:.0f}° fingers), held, blended back to {bus._active_state}")
 
-        # --- homing tuck: refuse without dataset, GENTLE ramp, FULL pose, release
+        # --- homing: refuse w/o dataset, PLAY the choreography, hold, sentinel --
         wait = bus.home_clear()
         if wait != 0.0:
-            failures.append(f"home_clear guessed a pose without a dataset (wait={wait})")
+            failures.append(f"home_clear guessed a path without a dataset (wait={wait})")
+        n = int(LOOP * RATE)
         s = Session("homing_a", loop_len=LOOP)
         arm = next(t for t in s.tracks if t.name == "left arm")
-        arm.samples = [{"t": i / RATE, "dt": 1 / RATE, "elbow": 62.0, "shoulder": 64.0} for i in range(int(LOOP * RATE))]
+        # the ESCAPE MOVEMENT: elbow travels 90 -> 62 across the take, ending tucked
+        arm.samples = [{"t": i / RATE, "dt": 1 / RATE, "elbow": 90.0 - 28.0 * i / (n - 1), "shoulder": 64.0} for i in range(n)]
         wrist_t = next(t for t in s.tracks if t.channels == ["wrist"])
-        wrist_t.samples = [{"t": i / RATE, "dt": 1 / RATE, "wrist": 66.0} for i in range(int(LOOP * RATE))]
+        wrist_t.samples = [{"t": i / RATE, "dt": 1 / RATE, "wrist": 66.0} for i in range(n)]
         s.save(export=True)
         wait = bus.home_clear()
-        if not 1.5 <= wait <= 5.0:
-            failures.append(f"home_clear should ask the caller to wait out the tuck (wait={wait})")
+        if not 2.5 <= wait <= 6.0:  # entry ease + the full take + margin
+            failures.append(f"home_clear must wait out the WHOLE choreography (wait={wait})")
         if bus._active_state != "homing":
             failures.append(f"homing did not claim the body (state={bus._active_state})")
         if bus.status()["chains"] != 0:
-            failures.append("generators kept running during the homing hold")
-        # gentleness: the elbow target must RAMP, never jump
+            failures.append("markov generators kept running during homing (must be straight playback)")
+        # the take must be TRAVERSED (playback), gently, ending at the tuck
         trace_t = []
         t0r = time.time()
-        while time.time() - t0r < wait + 0.5:
+        while time.time() - t0r < wait + 0.3:
             trace_t.append(device.channels["elbow"].target)
             time.sleep(0.1)
         max_step = max(abs(b - a) for a, b in zip(trace_t, trace_t[1:]))
+        mid = trace_t[len(trace_t) // 2]
         if max_step > 6:
-            failures.append(f"tuck SNAPPED: elbow target jumped {max_step:.1f}° in 100ms")
-        if abs(trace_t[-1] - 62.0) > 1.5:
-            failures.append(f"tuck did not fully reach the pose (elbow target {trace_t[-1]})")
-        bus.home_release()
+            failures.append(f"homing SNAPPED: elbow target jumped {max_step:.1f}° in 100ms")
+        if not 64 < mid < 90:
+            failures.append(f"take not traversed — mid-playback elbow {mid} (expected between start and tuck)")
+        if abs(trace_t[-1] - 62.0) > 2.0:
+            failures.append(f"choreography did not end at the tuck (elbow target {trace_t[-1]})")
+        # cross-process release: the idle SUBPROCESS homes; ensure_homed touches
+        # the sentinel and the bus must notice the fresh mtime
+        from utils.hooks import HOMING_SENTINEL
+
+        with open(HOMING_SENTINEL, "w") as hf:
+            hf.write(str(time.time()))
         t0h = time.time()
         while time.time() - t0h < 8.0 and bus._active_state == "homing":
             time.sleep(0.3)
         if bus._active_state != "drawing":
-            failures.append(f"homing hold did not release back (state={bus._active_state})")
-        print(f"homing: refused w/o dataset; ramped gently (max {max_step:.1f}°/100ms) to {trace_t[-1]}°, released back to {bus._active_state}")
+            failures.append(f"sentinel did not release the homing hold (state={bus._active_state})")
+        print(
+            f"homing: refused w/o dataset; played the escape ({max_step:.1f}°/100ms max, mid {mid:.0f}°, end {trace_t[-1]:.0f}°), sentinel released"
+        )
 
         bus.shutdown()
 

@@ -211,14 +211,18 @@ changes.
   MEDIAN of a take assigned under "startle" in the tree — **record
   yourself HOLDING the flinch** (lung in, wrist up, fingers up, arms
   toward default) — with built-in deltas as fallback. Gantry and pen
-  never flinch. **Homing safety** (July 27): a take under the "homing"
-  state = the left arm's tucked-clear pose; the panel's Home $H button
-  RAMPS the arm there gently over KINETIC_HOMING_TUCK_S (~2s, substep
-  interpolation — no snapping, ever) and **$H waits out the tuck** so
-  the arm is clear BEFORE the gantry sweeps; the pose is fully reached
-  (never nudged), held until GRBL reports homing complete (75s max-hold
-  failsafe), then blended back. **No homing dataset = the bus refuses to
-  guess** — record the tuck before trusting homing around the arm.
+  never flinch. **Homing safety** (July 27, playback semantics): the take
+  under "homing" IS the escape choreography — **record the whole
+  get-clear movement, ending tucked**. Homing eases into the take's
+  first sample (KINETIC_HOMING_TUCK_S, no snapping), plays it through
+  ONCE (straight playback, no markov), holds the final pose until GRBL
+  reports complete (in-process hook, or the cross-process sentinel for
+  the idle subprocess; 75s max-hold failsafe), then blends back. **$H
+  waits out the whole choreography** — panel Home button and
+  idle_movement_manager both delay the sweep. machine.py's startup
+  homing triggers it automatically: the recorded movement is the
+  machine's first gesture on boot. **No homing dataset = the bus refuses
+  to guess.**
   While the machine draws, the bus hard-drops all gantry/pen output
   (see runtime-map "drawing gate"). RIGHT the **lab**: the REAL KineticBus on the
   panel's routing (full body incl. gantry/pen/lung) — Start, click

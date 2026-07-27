@@ -50,6 +50,21 @@ class IdleMovementManager:
         self.emotion = emotion
         script_path = os.path.join(os.path.dirname(__file__), "run_idle_movements.py")
 
+        # Kinetic bus: the subprocess HOMES the gantry the moment it boots,
+        # so play the left arm's recorded homing choreography and wait it
+        # out here, in the parent — the hooks only exist in this process.
+        # (Covers startup AND every resume-after-drawing respawn.)
+        try:
+            from utils import hooks as _kin_hooks
+
+            if _kin_hooks.on_grbl_homing_start:
+                _wait = float(_kin_hooks.on_grbl_homing_start() or 0.0)
+                if _wait > 0:
+                    print(f"[🦾] Left arm clearing for homing — {_wait:.1f}s")
+                    time.sleep(_wait)
+        except Exception:
+            pass
+
         try:
             # Use the same Python interpreter as the parent process (respects virtualenv)
             self.process = subprocess.Popen(
@@ -59,6 +74,7 @@ class IdleMovementManager:
             )
             try:
                 from config.config import PRINT_CLEAN_CAPTIONS
+
                 if not PRINT_CLEAN_CAPTIONS:
                     print(f"[🌊] Started idle movements with emotion: {emotion}")
             except ImportError:

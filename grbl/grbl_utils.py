@@ -517,12 +517,16 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                     )
 
                     # Kinetic bus: release the tucked left arm — it blends
-                    # back into its running dataset
+                    # back into its running dataset. The sentinel makes this
+                    # work ACROSS PROCESSES: the idle subprocess homes, the
+                    # bus lives in machine.py and watches the file's mtime.
                     try:
                         from utils import hooks as _kin_hooks
 
                         if _kin_hooks.on_grbl_homing_done:
                             _kin_hooks.on_grbl_homing_done()
+                        with open(_kin_hooks.HOMING_SENTINEL, "w") as _hf:
+                            _hf.write(str(time.time()))
                     except Exception:
                         pass
 

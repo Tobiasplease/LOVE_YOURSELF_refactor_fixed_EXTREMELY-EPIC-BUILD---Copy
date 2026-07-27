@@ -255,7 +255,9 @@ class KineticBus:
         self._ext_step = send_step
         self._ext_state = get_state
         self.gaze_strength = KINETIC_GAZE_STRENGTH  # master gaze influence; the runtime tab slider
-        self._hold_until = 0.0  # while set, an interrupt pose (startle/homing) owns the body
+        self._hold_until = 0.0  # while set, an interrupt (startle/homing) owns the body
+        self._home_players: List[engine.Player] = []  # the homing choreography, playing straight through
+        self._home_started_at = 0.0
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -302,6 +304,9 @@ class KineticBus:
         if self._thread:
             self._thread.join(timeout=3)
         self._stop_gens()
+        for p in self._home_players:
+            p.stop()
+        self._home_players = []
         self._active_bundle = self._active_state = None
         self._hold_until = 0.0
         self._offsets = {}
@@ -356,6 +361,8 @@ class KineticBus:
             now = time.time()
             self._watch_person(now)
             self._update_lean()  # the lean current settles/releases at tick rate
+            if self._active_state == HOMING_STATE:
+                self._check_homing_sentinel()  # subprocess homing completes via the file
             if now - last_slow >= 2.0:  # bundle choice at a calmer rate
                 last_slow = now
                 self._update_bundle(now)
@@ -502,40 +509,70 @@ class KineticBus:
 
     # --- homing safety ---------------------------------------------------------
     def home_clear(self) -> float:
-        """Tuck the body clear of the gantry BEFORE homing: RAMP gently to
-        the homing pose over KINETIC_HOMING_TUCK_S (a tuck at speed is its
-        own hazard — never snap), reach it FULLY, and hold until
-        home_release() — with a max-hold failsafe so a missed completion
-        signal can't strand the arm. Returns the seconds the caller must
-        WAIT before actually homing (the arm must be clear first), 0.0
-        when refused. Requires a take assigned under the "homing" state;
-        without one we REFUSE to guess (a wrong pose could cause the
-        collision this exists to prevent)."""
+        """Play the RECORDED homing choreography — straight playback, no
+        markov: the take IS the escape path, ending in the tucked-clear
+        pose. Entry eases gently into the take's first sample (no
+        snapping), the take plays through ONCE, then the body HOLDS its
+        final pose until homing completes (home_release(), the
+        cross-process sentinel, or the max-hold failsafe), then blends
+        back through the normal crossfade. Returns the seconds the caller
+        must WAIT before homing (the whole choreography must finish
+        first); 0.0 when refused — without a homing dataset we REFUSE to
+        guess (a wrong path could cause the collision this prevents)."""
         buckets = self.library.scan()
         if not buckets.get(HOMING_STATE):
-            self.log("⚠ no homing dataset — record the tucked-clear pose and assign it under 'homing'")
+            self.log("⚠ no homing dataset — record the get-clear movement and assign it under 'homing'")
             return 0.0
         fn = random.choice(buckets[HOMING_STATE])
         try:
-            pose = self.library.pose_of(fn)
+            session = Session.load(fn)
         except Exception as e:
             self.log(f"⚠ homing dataset {fn} failed: {e}")
             return 0.0
-        if not pose:
-            self.log(f"⚠ homing dataset {fn} has no usable channels")
+        tracks = [t for t in session.tracks if t.has_take and set(t.channels) <= self.owned and not (set(t.channels) & {"x", "y", "pen"})]
+        if not tracks:
+            self.log(f"⚠ homing dataset {fn} has no usable takes")
             return 0.0
-        self._hold_until = time.time() + KINETIC_HOMING_MAX_HOLD_S  # claim before touching
+        duration = max(t.samples[-1]["t"] for t in tracks)
+        total = KINETIC_HOMING_TUCK_S + duration + 0.5
+        self._home_started_at = time.time()
+        self._hold_until = self._home_started_at + total + KINETIC_HOMING_MAX_HOLD_S
         self._stop_gens()
         self._active_state = HOMING_STATE
-        self._ease_to_pose(pose, KINETIC_HOMING_TUCK_S)
-        self.log(f"left arm tucking clear over {KINETIC_HOMING_TUCK_S:.0f}s ({fn}) — homing should wait for it")
-        return KINETIC_HOMING_TUCK_S + 0.3
+        first_pose = {}
+        for t in tracks:
+            for c in t.channels:
+                if c in t.samples[0]:
+                    first_pose[c] = float(t.samples[0][c])
+        self._ease_to_pose(first_pose, KINETIC_HOMING_TUCK_S)  # meet the take where it begins
+
+        def _begin_playback():
+            if self._active_state != HOMING_STATE or time.time() > self._hold_until:
+                return
+            for t in tracks:
+                p = engine.Player(t.samples, t.channels, send_ease=self._send_ease_raw, send_plan=lambda d, dt: None, loop=False)
+                self._home_players.append(p)
+                p.start()
+
+        self._home_players = []
+        timer = threading.Timer(KINETIC_HOMING_TUCK_S, _begin_playback)
+        timer.daemon = True
+        timer.start()
+        self.log(f"homing choreography {fn} — {total:.1f}s to clear, then holding until homing completes")
+        return total
+
+    def _send_ease_raw(self, d: Dict[str, float]):
+        """Ease without the gaze lean — safety movements are absolute."""
+        if self._ext_ease is not None:
+            self._ext_ease(d)
+        else:
+            for c, v in d.items():
+                self.device.set_channel(c, v)
 
     def _ease_to_pose(self, pose: Dict[str, float], seconds: float):
-        """Gentle ramp to a held pose in its own thread: interpolates from
-        the LIVE pose at substep rate — no snapping, ever. Sends raw (a
-        safety pose ignores the gaze lean). Aborts if the hold is released
-        early or expires."""
+        """Gentle ramp to a pose in its own thread: interpolates from the
+        LIVE pose at substep rate — no snapping, ever. Aborts if the hold
+        is released early or expires."""
         start = self._live_state()
         frm = {c: start[c] for c in pose if c in start}
 
@@ -545,19 +582,29 @@ class KineticBus:
                 if time.time() > self._hold_until:
                     return  # released or expired — stop pushing
                 f = i / steps
-                d = {c: frm[c] + (pose[c] - frm[c]) * f for c in frm}
-                if self._ext_ease is not None:
-                    self._ext_ease(d)
-                else:
-                    for c, v in d.items():
-                        self.device.set_channel(c, v)
+                self._send_ease_raw({c: frm[c] + (pose[c] - frm[c]) * f for c in frm})
                 time.sleep(0.05)
 
         threading.Thread(target=run, daemon=True).start()
 
+    def _check_homing_sentinel(self):
+        """Cross-process release: the idle subprocess homes the gantry and
+        ensure_homed touches the sentinel on completion — a fresh mtime
+        means our homing is done."""
+        try:
+            from utils.hooks import HOMING_SENTINEL
+
+            if os.path.getmtime(HOMING_SENTINEL) > self._home_started_at:
+                self.home_release()
+        except OSError:
+            pass
+
     def home_release(self):
-        """Homing finished: drop the hold; the supervisor blends the body
-        back into the running dataset with the normal slow crossfade."""
+        """Homing finished: stop the choreography, drop the hold; the
+        supervisor blends the body back into the running dataset."""
         if self._active_state == HOMING_STATE:
+            for p in self._home_players:
+                p.stop()
+            self._home_players = []
             self._hold_until = 0.0
             self.log("homing complete — blending back")

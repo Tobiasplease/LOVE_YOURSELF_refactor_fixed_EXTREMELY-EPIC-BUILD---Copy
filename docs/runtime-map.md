@@ -446,10 +446,18 @@ with their systems.
   mood thread) remain as redundancy but nothing depends on them —
   deliberate hardening against years of push-plumbing accretion.
   Mapping verified: debug/test_runtime_wiring.py.
-- HOMING: `grbl_utils.ensure_homed` calls hooks
-  (`utils.hooks.on_grbl_homing_start/_done`, registered by machine.py):
-  before every $H attempt the left arm ramps to its "homing" tuck pose and
-  the sweep WAITS for it; on completion the arm blends back.
+- HOMING (July 27, playback semantics): the "homing" dataset IS the escape
+  choreography — home_clear() eases into the take's first sample, PLAYS it
+  through once (straight playback, no markov), holds the final pose, then
+  blends back on completion. Two trigger paths, both required because the
+  idle subprocess is a separate process: (a) in-process —
+  `grbl_utils.ensure_homed` calls `utils.hooks.on_grbl_homing_start/_done`
+  (panel, manual tools); (b) cross-process — `idle_movement_manager.start()`
+  plays the choreography and WAITS before spawning the subprocess (covers
+  machine.py startup homing + every resume-after-drawing respawn: the
+  recorded movement is the machine's first gesture on boot), and
+  `ensure_homed` touches `utils.hooks.HOMING_SENTINEL` on completion, whose
+  fresh mtime the bus watches to release the arm.
 - MONITOR: `motor_panel/runtime_monitor.py` — a small read-only Tk window
   opened by machine.py in the old hand controller's slot
   (KINETIC_MONITOR_UI): NOW PLAYING + rotation countdown, pulled mood,
