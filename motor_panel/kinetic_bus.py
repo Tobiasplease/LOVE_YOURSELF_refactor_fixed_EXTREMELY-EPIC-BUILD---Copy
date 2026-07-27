@@ -65,6 +65,7 @@ from config.config import (
     KINETIC_GAZE_LEAN_TAU,
     KINETIC_GAZE_STRENGTH,
     KINETIC_GAZE_TEMPO_K,
+    KINETIC_HOMING_MAX_HOLD_S,
     KINETIC_ROTATE_S,
     KINETIC_STARTLE_COOLDOWN_S,
     KINETIC_STARTLE_DELTAS,
@@ -77,8 +78,9 @@ from motor_panel.session import SESSIONS_DIR, Session
 
 EMOTIONS = ["energized_engaged", "alert_curious", "calm_observant", "quiet_detached", "withdrawn_distant"]
 DRAWING_STATE = "drawing"
-STARTLE_STATE = "startle"  # recorded startle gestures — interrupts, never mood-picked
-STATES = [DRAWING_STATE, STARTLE_STATE] + EMOTIONS
+STARTLE_STATE = "startle"  # recorded startle pose — interrupts, never mood-picked
+HOMING_STATE = "homing"  # tucked-clear pose while the gantry homes — interrupts, never mood-picked
+STATES = [DRAWING_STATE, STARTLE_STATE, HOMING_STATE] + EMOTIONS
 OWNED_CHANNELS = {"finger0", "finger1", "finger2", "finger3", "elbow", "shoulder", "wrist"}
 
 
@@ -122,13 +124,14 @@ class TemperamentLibrary:
             return random.choice(buckets[DRAWING_STATE])
         if buckets.get(emotion):
             return random.choice(buckets[emotion])
-        pool = [fn for state, fns in buckets.items() if state not in (DRAWING_STATE, STARTLE_STATE) for fn in fns]
+        pool = [fn for state, fns in buckets.items() if state not in (DRAWING_STATE, STARTLE_STATE, HOMING_STATE) for fn in fns]
         return random.choice(pool) if pool else None
 
-    def startle_pose(self, filename: str) -> Dict[str, float]:
-        """The flinch pose: per-channel MEDIAN of a startle take (record
-        yourself HOLDING the flinch and the median IS the pose). Gantry and
-        pen are excluded — a flinch lives in the servos."""
+    def pose_of(self, filename: str) -> Dict[str, float]:
+        """A held pose from a take: per-channel MEDIAN of its samples
+        (record yourself HOLDING the pose and the median IS the pose).
+        Gantry and pen are excluded — poses live in the servos. Used for
+        the startle flinch and the homing tuck."""
         session = Session.load(filename)
         pose: Dict[str, float] = {}
         for t in session.tracks:
@@ -251,7 +254,7 @@ class KineticBus:
         self._ext_step = send_step
         self._ext_state = get_state
         self.gaze_strength = KINETIC_GAZE_STRENGTH  # master gaze influence; the runtime tab slider
-        self._startle_until = 0.0  # while set, a recorded startle owns the body
+        self._hold_until = 0.0  # while set, an interrupt pose (startle/homing) owns the body
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -299,7 +302,7 @@ class KineticBus:
             self._thread.join(timeout=3)
         self._stop_gens()
         self._active_bundle = self._active_state = None
-        self._startle_until = 0.0
+        self._hold_until = 0.0
         self._offsets = {}
         if self.device is not None:
             try:
@@ -366,8 +369,8 @@ class KineticBus:
         return DRAWING_STATE if self.is_drawing() else self._emotion
 
     def _update_bundle(self, now: float):
-        if now < self._startle_until:
-            return  # a recorded startle owns the body until it has played through
+        if now < self._hold_until:
+            return  # an interrupt pose (startle / homing tuck) owns the body
         desired = self._desired_state()
         dwell_over = now - self._bundle_since > KINETIC_ROTATE_S
         if desired == self._active_state and not dwell_over:
@@ -468,7 +471,7 @@ class KineticBus:
         if buckets.get(STARTLE_STATE):
             fn = random.choice(buckets[STARTLE_STATE])
             try:
-                pose = self.library.startle_pose(fn)
+                pose = self.library.pose_of(fn)
                 if pose:
                     return pose, fn
             except Exception as e:
@@ -483,7 +486,7 @@ class KineticBus:
         re-enters the running dataset with the normal slow crossfade from
         the held pose. A short interruption that blends back naturally."""
         pose, source = self._startle_pose()
-        self._startle_until = time.time() + KINETIC_STARTLE_HOLD_S  # claim the body BEFORE touching it (⚡ races the supervisor)
+        self._hold_until = time.time() + KINETIC_STARTLE_HOLD_S  # claim the body BEFORE touching it (⚡ races the supervisor)
         self._stop_gens()  # mid-motion stop: the body catches its breath where it stands
         self._active_state = STARTLE_STATE  # forces the post-hold re-pick (= the slow blend back)
         live = self._live_state()
@@ -495,3 +498,46 @@ class KineticBus:
                 for c, v in nudge.items():
                     self.device.set_channel(c, v)
         self.log(f"startle — flinch toward {source}, hold {KINETIC_STARTLE_HOLD_S:.0f}s, slow return")
+
+    # --- homing safety ---------------------------------------------------------
+    def home_clear(self) -> str:
+        """Tuck the body clear of the gantry BEFORE homing: move FULLY to
+        the homing pose (a safety pose is reached, never nudged toward)
+        and hold until home_release() — with a max-hold failsafe so a
+        missed completion signal can't strand the arm. Requires a take
+        assigned under the "homing" state; without one we REFUSE to guess
+        (a wrong pose could cause the collision this exists to prevent)."""
+        buckets = self.library.scan()
+        if not buckets.get(HOMING_STATE):
+            msg = "⚠ no homing dataset — record the tucked-clear pose and assign it under 'homing'"
+            self.log(msg)
+            return msg
+        fn = random.choice(buckets[HOMING_STATE])
+        try:
+            pose = self.library.pose_of(fn)
+        except Exception as e:
+            msg = f"⚠ homing dataset {fn} failed: {e}"
+            self.log(msg)
+            return msg
+        if not pose:
+            msg = f"⚠ homing dataset {fn} has no usable channels"
+            self.log(msg)
+            return msg
+        self._hold_until = time.time() + KINETIC_HOMING_MAX_HOLD_S  # claim before touching
+        self._stop_gens()
+        self._active_state = HOMING_STATE
+        if self._ext_ease is not None:  # raw — a safety pose ignores the gaze lean
+            self._ext_ease(pose)
+        else:
+            for c, v in pose.items():
+                self.device.set_channel(c, v)
+        msg = f"left arm tucked ({fn}) — holding clear until homing completes"
+        self.log(msg)
+        return msg
+
+    def home_release(self):
+        """Homing finished: drop the hold; the supervisor blends the body
+        back into the running dataset with the normal slow crossfade."""
+        if self._active_state == HOMING_STATE:
+            self._hold_until = 0.0
+            self.log("homing complete — blending back")

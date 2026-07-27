@@ -171,7 +171,11 @@ class GrblFrame(ttk.LabelFrame):
         self.status.pack(side="left")
         self.btn = ttk.Button(top, text="Connect", command=self.toggle, width=11)
         self.btn.pack(side="left", padx=4)
-        ttk.Button(top, text="Home $H", command=lambda: self.send("$H")).pack(side="left", padx=2)
+        # homing hooks: main() wires these to the kinetic bus so the left
+        # arm tucks clear before the gantry homes and returns after
+        self.on_home = None
+        self.on_home_done = None
+        ttk.Button(top, text="Home $H", command=self._home_clicked).pack(side="left", padx=2)
         ttk.Button(top, text="Unlock $X", command=lambda: self.send("$X")).pack(side="left", padx=2)
         ttk.Button(top, text="Status ?", command=lambda: self.send("?")).pack(side="left", padx=2)
         self.state_lbl = ttk.Label(top, text="", width=1, anchor="w")  # GRBL status lines vary wildly — never let them push the row
@@ -439,6 +443,11 @@ class GrblFrame(ttk.LabelFrame):
                         self.ser.flush()
                     self._await_ok(5.0)
                 self.log("grbl", f"{cmd} complete — unlocked, G21/G90 re-asserted", False)
+                if cmd == "$H" and self.on_home_done:
+                    try:
+                        self.on_home_done()  # release the tucked left arm (writer thread — no Tk in the callback)
+                    except Exception:
+                        pass
             if any(g in low for g in self.GARBAGE_ERRORS):
                 garbage_streak += 1
                 if garbage_streak >= 3:
@@ -461,6 +470,14 @@ class GrblFrame(ttk.LabelFrame):
         if self.pen_var.get() != self.pen_s:  # playback/generation moved the pen — sync the slider
             self.pen_var.set(self.pen_s)
         self.after(150, self._label_tick)
+
+    def _home_clicked(self):
+        if self.on_home:
+            try:
+                self.on_home()  # tuck the left arm clear FIRST
+            except Exception:
+                pass
+        self.send("$H")
 
     def jog(self, dx: int, dy: int):
         """Computed absolute target — never G91: an out-of-order or
@@ -1749,6 +1766,10 @@ def build_ui(root):
     ws_w = max(760, min(1250, sw - 700))
     body = SessionFrame(cols, devices[0], devices[1], grbl, log, ws=(ws_w, ws_h))  # lunggaze, lefthand
     body.pack(side="left", fill="both", expand=True, padx=4, pady=3)
+    # homing safety: the left arm tucks to its "homing" dataset pose before
+    # $H and blends back when homing completes (bus max-hold as failsafe)
+    grbl.on_home = body.lab.home_clear
+    grbl.on_home_done = body.lab.home_release
 
     def on_close():
         body.shutdown()

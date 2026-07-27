@@ -178,6 +178,33 @@ def main():
             failures.append("no chains resumed after the startle release")
         print(f"recorded startle: flinch (+{moved:.0f}° fingers), held, blended back to {bus._active_state}")
 
+        # --- homing tuck: refuse without a dataset, FULL pose, hold, release ---
+        msg = bus.home_clear()
+        if "no homing dataset" not in msg:
+            failures.append(f"home_clear guessed a pose without a dataset: {msg}")
+        s = Session("homing_a", loop_len=LOOP)
+        arm = next(t for t in s.tracks if t.name == "left arm")
+        arm.samples = [{"t": i / RATE, "dt": 1 / RATE, "elbow": 62.0, "shoulder": 64.0} for i in range(int(LOOP * RATE))]
+        wrist_t = next(t for t in s.tracks if t.channels == ["wrist"])
+        wrist_t.samples = [{"t": i / RATE, "dt": 1 / RATE, "wrist": 66.0} for i in range(int(LOOP * RATE))]
+        s.save(export=True)
+        bus.home_clear()
+        if bus._active_state != "homing":
+            failures.append(f"homing did not claim the body (state={bus._active_state})")
+        if bus.status()["chains"] != 0:
+            failures.append("generators kept running during the homing hold")
+        time.sleep(0.3)
+        elbow_target = device.channels["elbow"].target
+        if abs(elbow_target - 62.0) > 1.5:
+            failures.append(f"tuck was not FULL (elbow target {elbow_target}, pose 62)")
+        bus.home_release()
+        t0h = time.time()
+        while time.time() - t0h < 8.0 and bus._active_state == "homing":
+            time.sleep(0.3)
+        if bus._active_state != "drawing":
+            failures.append(f"homing hold did not release back (state={bus._active_state})")
+        print(f"homing: refused without dataset, tucked FULLY (elbow → {elbow_target}), released back to {bus._active_state}")
+
         bus.shutdown()
 
         # --- practice-room mode: injected callbacks, full-body ownership -------

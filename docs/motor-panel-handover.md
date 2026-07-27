@@ -211,7 +211,14 @@ changes.
   MEDIAN of a take assigned under "startle" in the tree — **record
   yourself HOLDING the flinch** (lung in, wrist up, fingers up, arms
   toward default) — with built-in deltas as fallback. Gantry and pen
-  never flinch. RIGHT the **lab**: the REAL KineticBus on the
+  never flinch. **Homing safety** (July 27): a take under the "homing"
+  state = the left arm's tucked-clear pose; the panel's Home $H button
+  moves the arm FULLY there first (a safety pose is reached, never
+  nudged), holds until GRBL reports homing complete (75s max-hold
+  failsafe), then blends back. **No homing dataset = the bus refuses to
+  guess** — record the tuck before trusting homing around the arm.
+  While the machine draws, the bus hard-drops all gantry/pen output
+  (see runtime-map "drawing gate"). RIGHT the **lab**: the REAL KineticBus on the
   panel's routing (full body incl. gantry/pen/lung) — Start, click
   emotion states to watch chains crossfade, toggle the drawing override,
   fire ⚡ startle. Transport and lab are mutually exclusive. **When
