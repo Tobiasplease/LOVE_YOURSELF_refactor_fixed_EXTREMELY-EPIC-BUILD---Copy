@@ -76,6 +76,17 @@ sysp_doc = get_monologue_system_prompt("observational")
 check("document mode keeps the old frame (A/B intact)", "These thoughts are yours alone" in sysp_doc)
 config.STREAM_MODE = "world"
 
+
+print("— continuity fixes (July 27) —")
+check("world clause frames the thread", "one running thread" in get_monologue_system_prompt("observational"))
+check("quiet-mode elicitation suppressed in world", "What stands out" not in get_monologue_system_prompt("observational"))
+check("relational keeps its question", "What do you make of them being here?" in get_monologue_system_prompt("relational"))
+check(
+    "mid-entry stamp stripped",
+    Captioner._strip_list_shape("My motors spin up. 19:06 — A second figure appears.") == "My motors spin up. A second figure appears.",
+)
+check("honest time talk survives", "past 19:00" in Captioner._strip_list_shape("It's past 19:00 now and still quiet."))
+
 print()
 if failures:
     print(f"{len(failures)} FAILURE(S): {failures}")

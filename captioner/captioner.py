@@ -505,7 +505,15 @@ class Captioner(MemoryMixin):
         # must be free to think about itself and its work while someone is
         # quietly in the room (north-star principles 6 + 7).
         strong_motion = info["max_residual"] > SALIENCE_MOTION_RESIDUAL
-        self._salience_hot = bool(eye_onset or arrival or strong_motion or close_onset or view_changed)
+        # ONSET only (July 27): level-based motion kept salience hot for every
+        # cycle of a person moving around — perpetual react, interiority
+        # stripped the whole visit, and the first world run read as a string
+        # of isolated scene reports. Salience must be transient (north-star
+        # anti-pattern list): the spike happens when motion BEGINS; sustained
+        # activity is presence, carried by the presence line and the video.
+        motion_onset = strong_motion and not getattr(self, "_prev_strong_motion", False)
+        self._prev_strong_motion = strong_motion
+        self._salience_hot = bool(eye_onset or arrival or motion_onset or close_onset or view_changed)
         if self._salience_hot:
             self._last_salience_time = time.time()
             try:
@@ -529,12 +537,14 @@ class Captioner(MemoryMixin):
             event = "They've come right up close — their face is filling your view, looking straight at you."
         elif eye_onset:
             event = "They just looked straight at you."
-        elif strong_motion and not arrival:
+        elif motion_onset and not arrival:
             # The react-vacuum fix (July 26): a motion-tripped hot cycle used
             # to carry NO event text — the rooster run's one react call had
             # "heavy, hesitant." as its entire user prompt, and a stripped
-            # prompt with no event invites atmosphere. Arrival stays unnamed
-            # here: the presence line already states it (one channel per fact).
+            # prompt with no event invites atmosphere. Onset only (July 27),
+            # so sustained activity doesn't re-announce itself every cycle.
+            # Arrival stays unnamed here: the presence line already states it
+            # (one channel per fact).
             event = "Something just moved in front of you."
         self._salience_event = event
         return info
@@ -602,15 +612,17 @@ class Captioner(MemoryMixin):
     _HASHTAG_TAIL_RE = re.compile(r"(?:\s*#\w+)+\s*$")
 
     # World shape renders the stream as "14:02 — ..." log lines; if the model
-    # imitates the stamp on its own entry, strip it — the captioner owns the
-    # clock (a self-written stamp would drift and then read as scene text).
-    _LOG_STAMP_PREFIX_RE = re.compile(r"^\s*\d{1,2}:\d{2}\s*[—–-]\s*")
+    # imitates the stamp, strip it — the captioner owns the clock (a
+    # self-written stamp is invented time; the first world run wrote "19:06 —
+    # A second figure appears" MID-entry, and one stored stamp breeds). The
+    # dash requirement keeps honest time talk ("it's past 19:00 now") intact.
+    _LOG_STAMP_ANY_RE = re.compile(r"\s*\b\d{1,2}:\d{2}\s*[—–-]\s*")
 
     @classmethod
     def _strip_list_shape(cls, text: str) -> str:
         t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
         t = cls._COUNTDOWN_PREFIX_RE.sub("", t)
-        t = cls._LOG_STAMP_PREFIX_RE.sub("", t)
+        t = cls._LOG_STAMP_ANY_RE.sub(" ", t)
         return cls._HASHTAG_TAIL_RE.sub("", t).strip()
 
     @classmethod

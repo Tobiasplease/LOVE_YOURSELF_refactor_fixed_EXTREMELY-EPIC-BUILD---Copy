@@ -57,8 +57,22 @@ literary fiction's machine-monologue setup and summoned poetry (the artist:
 "a real brain in a machine wouldn't default to shit poetry"). Logs are plain
 BY GENRE (P7: name what the text is). No prefill → no truncation-cascade
 run-ons; an imitated "14:05 —" stamp is stripped at the mouth
-(`_LOG_STAMP_PREFIX_RE`). React needs no special shape — world IS the react
-ordering; salience only varies the interior mix.
+(`_LOG_STAMP_ANY_RE` — mid-entry stamps too; the first run wrote "19:06 — A
+second figure appears" and one stored stamp breeds). React needs no special
+shape — world IS the react ordering; salience only varies the interior mix.
+
+**Continuity fixes after the first world run (July 27)** — it read as
+isolated scene reports ("The room is full of motion... The room is alive
+again..."): (1) the genre clause now states the THREAD ("each entry follows
+from the ones above — what's new, what continues, what's still nagging");
+(2) quiet-mode elicitations suppressed in world like document — a fresh
+question every call produced a fresh scene report every call; (3) motion
+salience is ONSET-only (`motion_onset`) — level-based residual kept react
+perpetually hot while a person moved around (the June sustained-event
+anti-pattern, reintroduced July 26, caught in one run); (4) persona slot
+cleared (vibration/hum/gears saturation; backup
+machine_identity.json.pre-world-bak) — judge what re-grows under the log
+frame.
 
 `"document"` (previous live mode, kept for A/B): the last `STREAM_WINDOW`
 captions sent as ONE trailing assistant message and llama-server **continues**

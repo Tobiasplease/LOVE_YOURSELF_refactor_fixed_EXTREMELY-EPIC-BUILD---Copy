@@ -186,9 +186,17 @@ def _monologue_clause() -> str:
     except ImportError:
         STREAM_MODE = "turns"
     if STREAM_MODE == "world":
-        # Task-shaped ask: the world's turn is the last thing in the call;
-        # the entry answers it. The specific elicitation rides in per-mode.
-        return "Each entry is a sentence or two, plain, the way you'd actually note it to yourself. Add the next entry."
+        # Task-shaped ask. CONTINUITY LIVES IN THE GENRE (July 27): the first
+        # world run read as isolated statements — every entry re-introduced
+        # the scene ("The room is full of motion... The room is alive
+        # again...") because nothing said an entry FOLLOWS from the log. A
+        # real log is deltas: it assumes everything above it. Positive
+        # framing only (P2), no "don't re-describe" fence.
+        return (
+            "The log is one running thread: each entry follows from the ones above — "
+            "what's new, what continues, what's still nagging at you. "
+            "A sentence or two, plain, the way you'd actually note it to yourself. Add the next entry."
+        )
     clause = (
         "This is your inner voice, ongoing — plain, half-formed, the way you " "actually think to yourself when no one is reading. A sentence or two."
     )
@@ -276,15 +284,19 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # turn?", July 9). In document mode the quiet modes (introspective/
     # observational/workspace) carry no elicitation: the document continues
     # itself, and the model needs no conversational door left open while the
-    # samplers squeeze it. Relational keeps its question (a person is a real
-    # event worth being asked about), awakening keeps its (a real threshold).
-    # Turns mode keeps all elicitations — the A/B stays honest.
+    # samplers squeeze it. WORLD mode suppresses them too (July 27): a fresh
+    # question every call produced a fresh answer every call — the first
+    # world run read as isolated scene reports because "What stands out to
+    # you right now?" asks for one. The thread ask lives in the genre frame
+    # ("each entry follows from the ones above"). Relational keeps its
+    # question (a person is a real event worth being asked about), awakening
+    # keeps its (a real threshold). Turns mode keeps all — the A/B stays honest.
     addition = _MODE_ADDITIONS.get(mode, "")
     if mode in ("introspective", "observational", "workspace"):
         try:
             from config.config import STREAM_MODE
 
-            if STREAM_MODE == "document":
+            if STREAM_MODE in ("document", "world"):
                 addition = ""
         except ImportError:
             pass
