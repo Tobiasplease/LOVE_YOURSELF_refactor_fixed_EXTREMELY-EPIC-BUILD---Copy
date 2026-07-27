@@ -1622,9 +1622,8 @@ class SessionFrame(ttk.LabelFrame):
                 self.now_lbl.config(text=f"▶ PLAYING  {name}  ({s['state']})   —   next dataset in {mins}:{secs:02d}")
             else:
                 self.now_lbl.config(text=f"▶ {s['state'] or '…'} — no dataset assigned yet, body idle")
-            self.lab_status.config(
-                text=f"{s['chains']} chain(s) live · gaze {self._lab_ctx['gx']:+.2f}, {self._lab_ctx['gy']:+.2f} · reach {s['reach']:.2f}"
-            )
+            cur = " ".join(f"{c[:2]}{v:+.0f}°" for c, v in sorted(self.lab._offsets.items()) if abs(v) >= 0.5) or "—"
+            self.lab_status.config(text=f"{s['chains']} chain(s) · reach {s['reach']:.2f} · current: {cur}")
         else:
             self.now_lbl.config(text="nothing playing — ▶ Start lab runs the runtime bus")
             self.lab_status.config(text="")

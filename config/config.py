@@ -162,7 +162,9 @@ KINETIC_ROTATE_S = 300  # dwell before rotating among same-state bundles (variet
 # leaned by a bounded smoothed amount, and the walk itself stays inside
 # demonstrated states and transitions.
 KINETIC_GAZE_STRENGTH = 1.0  # master, 0..2
-KINETIC_GAZE_LEAN = {"shoulder": ("x", 8), "wrist": ("x", 6), "x": ("x", 2.5), "elbow": ("y", 5), "y": ("y", 2.5)}  # channel: (axis, deg @ full gaze)
+# degrees raised July 27 (8/6/5 was measurably working but perceptually
+# invisible — a slow center-drift hides inside the take's own motion)
+KINETIC_GAZE_LEAN = {"shoulder": ("x", 14), "wrist": ("x", 10), "x": ("x", 4), "elbow": ("y", 9), "y": ("y", 4)}  # channel: (axis, deg @ full gaze)
 KINETIC_GAZE_LEAN_TAU = 1.5  # seconds for the lean to settle / release
 KINETIC_GAZE_CHOICE_K = 2.0  # transition-choice bias coefficient
 KINETIC_GAZE_TEMPO_K = 0.6  # eagerness: dt scales by exp(-K * alignment)
@@ -190,8 +192,8 @@ KINETIC_STARTLE_COOLDOWN_S = 20  # a flickering detector must not twitch the han
 # markov motion keeps breathing through it — a lean, never snap-tracking.
 # Joint-space proportional fallback until the arm is calibrated.
 KINETIC_REACH_ENABLED = True
-KINETIC_REACH_STRENGTH = 0.6  # fraction of the way toward the reach pose at full ramp
-KINETIC_REACH_MAX_DEG = 20  # per-channel cap on the reach shift
+KINETIC_REACH_STRENGTH = 0.8  # fraction of the way toward the reach pose at full ramp
+KINETIC_REACH_MAX_DEG = 25  # per-channel cap on the reach shift
 KINETIC_REACH_TAU = 2.0  # seconds to lean out / settle back
 
 # Homing safety: a take assigned under the "homing" state IS the escape

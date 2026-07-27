@@ -82,6 +82,7 @@ def main():
             get_person=lambda: ctx["person"],
             on_log=lambda m: None,
         )
+        bus._dir_flips = {c: False for c in kb.DIRECTION_CHANNELS}  # isolate from the operator's real flip file
         bus.enable()
         bus.set_emotion("energized_engaged")
         time.sleep(3.0)  # supervisor picks the bundle, generators enter
@@ -114,8 +115,9 @@ def main():
         for _ in range(60):  # lean settles toward the per-channel map over ~tau
             bus._update_lean()
         lean = bus._offsets.get("shoulder", 0.0)
-        if not 6.5 <= lean <= 8.5:
-            failures.append(f"lean did not settle toward shoulder map (got {lean:.1f}, expected ~8)")
+        exp_lean = kb.KINETIC_GAZE_LEAN["shoulder"][1]
+        if not exp_lean - 1.5 <= lean <= exp_lean + 1.5:
+            failures.append(f"lean did not settle toward shoulder map (got {lean:.1f}, expected ~{exp_lean})")
         bias = bus._gaze_bias()
         if bias.get("shoulder") != 1.0 or bias.get("x") != 1.0 or abs(bias.get("elbow", 0.0)) > 1e-9:
             failures.append(f"gaze bias map wrong for gaze (1,0): {bias}")
@@ -270,6 +272,7 @@ def main():
             get_state=lambda: dict(live),
             owned=full,
         )
+        bus2._dir_flips = {c: False for c in kb.DIRECTION_CHANNELS}
         bus2.enable()
         bus2.set_emotion("energized_engaged")
         time.sleep(3.0)

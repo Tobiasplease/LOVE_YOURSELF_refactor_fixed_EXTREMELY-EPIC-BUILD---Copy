@@ -17,7 +17,7 @@ from motor_panel import kinetic_bus as kb
 
 
 def make_bus(ctx):
-    return kb.KineticBus(
+    b = kb.KineticBus(
         get_emotion=lambda: "calm_observant",
         is_drawing=lambda: False,
         get_gaze=lambda: (ctx["gx"], ctx["gy"]),
@@ -29,6 +29,8 @@ def make_bus(ctx):
         get_state=lambda: {},
         owned=kb.OWNED_CHANNELS,
     )
+    b._dir_flips = {c: False for c in kb.DIRECTION_CHANNELS}  # isolate from the operator's real flip file
+    return b
 
 
 def settle(bus, n=250):
@@ -45,9 +47,9 @@ def main():
     bus.arm_calib_path = "/nonexistent/never.json"
     settle(bus)
     off = bus._offsets.get("shoulder", 0.0)
-    # shoulder fallback pose at gx=1: neutral + range/2*0.8 = +24° -> *0.6 strength = 14.4
-    if not 12 <= off <= 16:
-        failures.append(f"fallback reach wrong (shoulder offset {off:.1f}, expected ~14.4)")
+    exp_fb = min(24 * kb.KINETIC_REACH_STRENGTH, kb.KINETIC_REACH_MAX_DEG)  # fallback pose at gx=1 is +24° from neutral
+    if not exp_fb - 2 <= off <= exp_fb + 2:
+        failures.append(f"fallback reach wrong (shoulder offset {off:.1f}, expected ~{exp_fb:.1f})")
     if bus.status()["reach"] < 0.95:
         failures.append(f"reach did not ramp to full presence ({bus.status()['reach']})")
     print(f"fallback reach: shoulder leans +{off:.1f}° toward gaze at full presence")
@@ -56,9 +58,9 @@ def main():
     ctx["person"] = "absent"
     settle(bus)
     off_after = bus._offsets.get("shoulder", 0.0)
-    # ambient lean at gx=1: 8° * strength 1.0
-    if not 6.5 <= off_after <= 9.5:
-        failures.append(f"reach did not decay to the ambient lean (shoulder {off_after:.1f}, expected ~8)")
+    amb = kb.KINETIC_GAZE_LEAN["shoulder"][1]  # ambient lean at gx=1, strength 1.0
+    if not amb - 1.5 <= off_after <= amb + 1.5:
+        failures.append(f"reach did not decay to the ambient lean (shoulder {off_after:.1f}, expected ~{amb})")
     print(f"departure: reach decayed, ambient lean holds at +{off_after:.1f}°")
 
     # --- calibrated reach: the 9-point grid IS the IK table --------------------
@@ -74,9 +76,9 @@ def main():
         settle(bus2)
         s_off = bus2._offsets.get("shoulder", 0.0)
         e_off = bus2._offsets.get("elbow", 0.0)
-        # gaze (1,0) -> u=1 (shoulder pose 120 -> delta +30*0.6=18), v=0.5 (elbow pose 90 -> delta 0)
-        if not 16 <= s_off <= 20:
-            failures.append(f"calibrated reach shoulder {s_off:.1f}, expected ~18 (pose 120)")
+        exp_cal = min(30 * kb.KINETIC_REACH_STRENGTH, kb.KINETIC_REACH_MAX_DEG)  # gaze (1,0) -> pose 120 = +30 from neutral
+        if not exp_cal - 2 <= s_off <= exp_cal + 2:
+            failures.append(f"calibrated reach shoulder {s_off:.1f}, expected ~{exp_cal:.1f} (pose 120)")
         if abs(e_off) > 2.0:
             failures.append(f"calibrated reach elbow {e_off:.1f}, expected ~0 (pose = neutral)")
         # cap: a grid with extreme poses must clamp at KINETIC_REACH_MAX_DEG
@@ -105,8 +107,8 @@ def main():
     bus3.set_direction_flip("shoulder", True)
     settle(bus3)
     off_flipped = bus3._offsets.get("shoulder", 0.0)
-    if not -16 <= off_flipped <= -12:
-        failures.append(f"flipped shoulder should reach the OTHER way (got {off_flipped:.1f}, expected ~-14.4)")
+    if not -(exp_fb + 2) <= off_flipped <= -(exp_fb - 2):
+        failures.append(f"flipped shoulder should reach the OTHER way (got {off_flipped:.1f}, expected ~-{exp_fb:.1f})")
     bias = bus3._gaze_bias()
     if bias.get("shoulder", 0) >= 0 or bias.get("wrist", 0) <= 0:
         failures.append(f"flip must reverse the choice/tempo bias for that channel only: {bias}")
