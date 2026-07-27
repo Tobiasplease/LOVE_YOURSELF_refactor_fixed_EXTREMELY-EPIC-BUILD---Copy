@@ -211,6 +211,8 @@ class Generator:
     def _loop(self, current: Dict[str, float]):
         first = self.chain["servo_transitions"]
         second = self.chain.get("servo_second_order", {})
+        if not first:  # a constant take trains ZERO transitions (a==b skipped) — nothing to walk
+            return
         cur_key = _key(current, self.channels, self.bins)
         if cur_key not in first:  # ease to the nearest known state to enter the chain
             cur_key = self._nearest_key(current, first)

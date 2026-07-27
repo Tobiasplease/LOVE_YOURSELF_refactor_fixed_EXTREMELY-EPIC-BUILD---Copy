@@ -142,9 +142,12 @@ class TemperamentLibrary:
         out: Dict[str, dict] = {}
         for key, tracks in session.chain_groups().items():
             tracks = [t for t in tracks if set(t.channels) <= self.owned]
-            if tracks:
-                channels = [c for t in tracks for c in t.channels]
-                out[key] = engine.train(session._joint_samples(tracks), channels)
+            if not tracks:
+                continue
+            channels = [c for t in tracks for c in t.channels]
+            chain = engine.train(session._joint_samples(tracks), channels)
+            if chain["servo_transitions"]:  # constant takes (e.g. an unmoved pen) train zero transitions — nothing to play
+                out[key] = chain
         self._chain_cache[filename] = (mtime, out)
         return out
 
@@ -238,7 +241,17 @@ class KineticBus:
         self._emotion = emotion
 
     def status(self) -> dict:
-        return {"running": self._running, "state": self._active_state, "bundle": self._active_bundle, "chains": len(self._gens)}
+        rotate_in = None
+        if self._running and self._active_bundle is not None:
+            rotate_in = max(0.0, KINETIC_ROTATE_S - (time.time() - self._bundle_since))
+        return {
+            "running": self._running,
+            "state": self._active_state,
+            "bundle": self._active_bundle,
+            "chains": len(self._gens),
+            "emotion": self._emotion,
+            "rotate_in": rotate_in,
+        }
 
     # --- lifecycle ------------------------------------------------------------
     def enable(self):

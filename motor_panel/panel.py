@@ -1389,13 +1389,21 @@ class SessionFrame(ttk.LabelFrame):
 
         left = ttk.Frame(parent)
         left.pack(side="left", fill="both", expand=True, padx=6, pady=4)
-        ttk.Label(left, text="temperament library", font=("monospace", 9, "bold")).pack(anchor="w")
+        ttk.Label(left, text="temperament library — one DATASET plays per state, several rotate on a timer", font=("monospace", 9, "bold")).pack(
+            anchor="w"
+        )
+        # the banner answers the confusing questions at a glance: what is
+        # playing NOW, and when does it rotate to the next dataset
+        self.now_lbl = tk.Label(left, text="", font=("monospace", 11, "bold"), fg="#8a63d2", anchor="w", width=1)
+        self.now_lbl.pack(fill="x", pady=(2, 4))
         self.temp_tree = ttk.Treeview(left, show="tree", selectmode="browse")
+        self.temp_tree.tag_configure("active", foreground="#8a63d2")
+        self.temp_tree.tag_configure("empty", foreground="#777")
         self.temp_tree.pack(fill="both", expand=True, pady=2)
         lrow = ttk.Frame(left)
         lrow.pack(fill="x")
-        ttk.Button(lrow, text="Assign session ▸ state", command=self._assign_selected).pack(side="left", padx=2)
-        ttk.Button(lrow, text="Load for editing", command=self._load_selected).pack(side="left", padx=2)
+        ttk.Button(lrow, text="＋ Assign looper session as dataset here", command=self._assign_selected).pack(side="left", padx=2)
+        ttk.Button(lrow, text="Edit in looper", command=self._load_selected).pack(side="left", padx=2)
         ttk.Button(lrow, text="Retire ▸ projects", command=self._retire_selected).pack(side="left", padx=2)
 
         center = ttk.Frame(parent)
@@ -1417,11 +1425,15 @@ class SessionFrame(ttk.LabelFrame):
         right = ttk.Frame(parent, width=210)
         right.pack(side="left", fill="y", padx=6, pady=4)
         right.pack_propagate(False)
-        ttk.Label(right, text="lab — the runtime bus, live", font=("monospace", 9, "bold")).pack(anchor="w")
+        ttk.Label(right, text="lab (runtime bus)", font=("monospace", 9, "bold")).pack(anchor="w")
         self.lab_btn = ttk.Button(right, text="▶ Start lab", command=self._lab_toggle)
         self.lab_btn.pack(fill="x", pady=3)
+        ttk.Label(right, text="mood — ▶ marks current", font=("monospace", 8), foreground="#888").pack(anchor="w")
+        self._emotion_btns = {}
         for e in EMOTIONS:
-            ttk.Button(right, text=e, command=lambda e=e: self.lab.set_emotion(e)).pack(fill="x", pady=1)
+            b = ttk.Button(right, text=e, command=lambda e=e: self.lab.set_emotion(e))
+            b.pack(fill="x", pady=1)
+            self._emotion_btns[e] = b
         draw_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             right, text="drawing state\n(overrides mood)", variable=draw_var, command=lambda: self._lab_ctx.__setitem__("drawing", draw_var.get())
@@ -1445,13 +1457,32 @@ class SessionFrame(ttk.LabelFrame):
         buckets = self.lab.library.scan()
         for state in ["drawing"] + EMOTIONS:
             fns = buckets.get(state, [])
-            parent = tree.insert("", "end", iid=f"state:{state}", text=f"{state}   — {len(fns)} bundle(s)", open=True)
+            label = f"{state} — no datasets yet" if not fns else f"{state} — {len(fns)} dataset(s)"
+            parent = tree.insert("", "end", iid=f"state:{state}", text=label, open=True, tags=() if fns else ("empty",))
             for fn in fns:
-                tree.insert(parent, "end", iid=f"bundle:{fn}", text=f"  {fn[len('session_'):-len('.json')]}")
+                tree.insert(parent, "end", iid=f"bundle:{fn}", text=f"   {fn[len('session_'):-len('.json')]}")
         projects = [s for s in Session.list_saved() if s.startswith("projects/")]
-        parent = tree.insert("", "end", iid="state:projects", text=f"projects (working — runtime can't see)   — {len(projects)}", open=False)
+        parent = tree.insert(
+            "", "end", iid="state:projects", text=f"projects (working area — the runtime never plays these) — {len(projects)}", open=False
+        )
         for p in projects:
-            tree.insert(parent, "end", iid=f"project:{p}", text=f"  {os.path.basename(p)[len('session_'):-len('.json')]}")
+            tree.insert(parent, "end", iid=f"project:{p}", text=f"   {os.path.basename(p)[len('session_'):-len('.json')]}")
+        self._active_marked = None  # force re-mark on next tick
+        self._mark_active()
+
+    def _mark_active(self):
+        """▶ on the dataset the bus is playing RIGHT NOW (and its state row)."""
+        bundle = self.lab.status()["bundle"] if self._lab_on else None
+        if bundle == getattr(self, "_active_marked", None):
+            return
+        tree = self.temp_tree
+        for iid in tree.get_children(""):
+            for child in tree.get_children(iid):
+                if child.startswith("bundle:"):
+                    fn = child[len("bundle:") :]
+                    active = fn == bundle
+                    tree.item(child, text=("▶  " if active else "   ") + fn[len("session_") : -len(".json")], tags=("active",) if active else ())
+        self._active_marked = bundle
 
     def _selected_state(self):
         sel = self.temp_tree.selection()
@@ -1483,9 +1514,10 @@ class SessionFrame(ttk.LabelFrame):
         self.name_entry.delete(0, "end")
         self.name_entry.insert(0, name)
         self.session.save(export=True)
-        self.status.config(text=f"assigned current session to {state} as {name}")
+        self.status.config(text=f"assigned as dataset {name} under {state}")
         self._refresh_library()
         self._refresh_saved()
+        self.temp_tree.selection_set(f"bundle:session_{name}.json")  # show exactly where it landed
 
     def _load_selected(self):
         sel = self.temp_tree.selection()
@@ -1525,13 +1557,21 @@ class SessionFrame(ttk.LabelFrame):
             self.lab_btn.config(text="▶ Start lab")
 
     def _lab_tick(self):
+        s = self.lab.status()
         if self._lab_on:
-            s = self.lab.status()
-            bundle = (s["bundle"] or "no bundle — assign one").replace("session_", "").replace(".json", "")
-            txt = f"▶ {s['state'] or '…'} · {bundle} · {s['chains']} chain(s)"
+            if s["bundle"]:
+                name = s["bundle"][len("session_") : -len(".json")]
+                mins, secs = divmod(int(s["rotate_in"] or 0), 60)
+                self.now_lbl.config(text=f"▶ PLAYING  {name}  ({s['state']})   —   next dataset in {mins}:{secs:02d}")
+            else:
+                self.now_lbl.config(text=f"▶ {s['state'] or '…'} — no dataset assigned yet, body idle")
+            self.lab_status.config(text=f"{s['chains']} chain(s) live · gaze {self._lab_ctx['gx']:+.2f}, {self._lab_ctx['gy']:+.2f}")
         else:
-            txt = "lab off — Start to audition the runtime bus"
-        self.lab_status.config(text=txt)
+            self.now_lbl.config(text="nothing playing — ▶ Start lab runs the runtime bus")
+            self.lab_status.config(text="")
+        for e, b in self._emotion_btns.items():
+            b.config(text=("▶ " + e) if (self._lab_on and s["emotion"] == e) else e)
+        self._mark_active()
         self.after(500, self._lab_tick)
 
     # --- track lanes ----------------------------------------------------------
