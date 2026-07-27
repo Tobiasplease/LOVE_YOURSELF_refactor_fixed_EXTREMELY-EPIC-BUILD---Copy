@@ -163,14 +163,17 @@ KINETIC_GAZE_LEAN_TAU = 1.5  # seconds for the lean to settle / release
 KINETIC_GAZE_CHOICE_K = 2.0  # transition-choice bias coefficient
 KINETIC_GAZE_TEMPO_K = 0.6  # eagerness: dt scales by exp(-K * alignment)
 KINETIC_STARTLE_ENABLED = True
-# Startle prefers a RECORDED gesture: assign a short take under the
-# "startle" state in the runtime tab and arrivals crossfade INTO it fast,
-# play it through, then blend back to the running temperament — the same
-# seamless machinery as every transition. The freeze+snap below is only
-# the fallback while no startle dataset exists.
-KINETIC_STARTLE_CROSSFADE_S = 0.3  # fast entry into the startle dataset (a flinch, not a lunge)
-KINETIC_STARTLE_FREEZE_S = (0.4, 1.2)  # fallback: freeze duration range on person arrival
-KINETIC_STARTLE_CURL = 35  # fallback: degrees of finger snap
+# Startle = flinch -> hold -> slow release. Every servo NUDGES partway
+# toward a startle pose — quick, never a full transition into it — then
+# the body freezes in that held tension for HOLD_S, then slowly blends
+# back into the running dataset (the normal crossfade re-entry). The pose
+# comes from a take assigned under the "startle" state (record yourself
+# HOLDING the flinch — its per-channel median is the pose); the DELTAS
+# below are the built-in fallback until one exists. Gantry and pen never
+# take part in a flinch.
+KINETIC_STARTLE_NUDGE = 0.6  # fraction of the way toward the startle pose
+KINETIC_STARTLE_HOLD_S = 3.0  # held tension before the slow release
+KINETIC_STARTLE_DELTAS = {"finger0": 40, "finger1": 40, "finger2": 40, "finger3": 40, "wrist": 25, "lung": 20}  # fallback flinch, degrees relative
 KINETIC_STARTLE_COOLDOWN_S = 20  # a flickering detector must not twitch the hand
 
 # === PEN SERVO (via GRBL spindle PWM) ===

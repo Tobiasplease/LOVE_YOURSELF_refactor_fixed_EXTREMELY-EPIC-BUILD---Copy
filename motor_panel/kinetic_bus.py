@@ -32,10 +32,12 @@ Modifiers (context leaking into recorded movement):
     transitions quick, opposed reluctant), and the transition CHOICE bias.
     Directional logic throughout: poses only ever lean by a bounded,
     settling amount; the walk never leaves demonstrated states.
-  - Startle: prefers a RECORDED gesture (a dataset assigned under the
-    "startle" state) — crossfades into it flinch-fast, plays it through,
-    blends back into the running temperament. Falls back to freeze +
-    finger snap until one exists. Cooldown against detector flicker.
+  - Startle: flinch -> hold -> slow release. Servos NUDGE partway toward
+    a startle pose (the per-channel median of a take assigned under the
+    "startle" state — record yourself holding the flinch; built-in deltas
+    as fallback), freeze in that tension for HOLD_S, then blend back into
+    the running dataset via the normal slow crossfade. Cooldown against
+    detector flicker; gantry/pen never flinch.
 
 Wiring (machine.py, behind KINETIC_BUS_ENABLED, default False):
     bus = KineticBus()
@@ -65,10 +67,10 @@ from config.config import (
     KINETIC_GAZE_TEMPO_K,
     KINETIC_ROTATE_S,
     KINETIC_STARTLE_COOLDOWN_S,
-    KINETIC_STARTLE_CROSSFADE_S,
-    KINETIC_STARTLE_CURL,
+    KINETIC_STARTLE_DELTAS,
     KINETIC_STARTLE_ENABLED,
-    KINETIC_STARTLE_FREEZE_S,
+    KINETIC_STARTLE_HOLD_S,
+    KINETIC_STARTLE_NUDGE,
 )
 from motor_panel import arms_markov as engine
 from motor_panel.session import SESSIONS_DIR, Session
@@ -122,6 +124,22 @@ class TemperamentLibrary:
             return random.choice(buckets[emotion])
         pool = [fn for state, fns in buckets.items() if state not in (DRAWING_STATE, STARTLE_STATE) for fn in fns]
         return random.choice(pool) if pool else None
+
+    def startle_pose(self, filename: str) -> Dict[str, float]:
+        """The flinch pose: per-channel MEDIAN of a startle take (record
+        yourself HOLDING the flinch and the median IS the pose). Gantry and
+        pen are excluded — a flinch lives in the servos."""
+        session = Session.load(filename)
+        pose: Dict[str, float] = {}
+        for t in session.tracks:
+            if not t.has_take:
+                continue
+            for c in t.channels:
+                if c in self.owned and c not in ("x", "y", "pen"):
+                    vals = sorted(s[c] for s in t.samples if c in s)
+                    if vals:
+                        pose[c] = float(vals[len(vals) // 2])
+        return pose
 
     def retire(self, filename: str) -> str:
         """Un-publish a runtime bundle: move it back to projects/ (the take
@@ -438,40 +456,35 @@ class KineticBus:
         cooldown applied in _watch_person."""
         self._startle()
 
-    def _startle(self):
-        """A RECORDED startle when one is assigned: crossfade fast into the
-        startle dataset from wherever the body stands, play it through,
-        then blend back into the running temperament — the same seamless
-        machinery as every other transition, so all movements flow into
-        each other. Falls back to freeze + finger snap until a startle
-        take exists."""
+    def _startle_pose(self) -> Tuple[Dict[str, float], str]:
         buckets = self.library.scan()
-        picked = random.choice(buckets[STARTLE_STATE]) if buckets.get(STARTLE_STATE) else None
-        if picked:
+        if buckets.get(STARTLE_STATE):
+            fn = random.choice(buckets[STARTLE_STATE])
             try:
-                chains = self.library.chains(picked)
+                pose = self.library.startle_pose(fn)
+                if pose:
+                    return pose, fn
             except Exception as e:
-                self.log(f"startle dataset {picked} failed: {e}")
-                chains = {}
-            if chains:
-                dur = max(chain["total_samples"] / engine.SAMPLE_RATE for chain in chains.values())
-                dur = max(1.0, min(6.0, dur)) + KINETIC_STARTLE_CROSSFADE_S
-                self._startle_until = time.time() + dur  # claim the body BEFORE starting (⚡ races the supervisor)
-                self._start_chains(chains, KINETIC_STARTLE_CROSSFADE_S)  # a flinch-fast entry
-                self._active_bundle, self._active_state = picked, STARTLE_STATE
-                self.log(f"startle — {picked} interrupts for {dur:.1f}s, then blends back")
-                return
-        # fallback: freeze mid-motion + one fast finger snap (firmware slew
-        # sells the flinch); retire this path once startle takes exist
-        hold = random.uniform(*KINETIC_STARTLE_FREEZE_S)
-        for g in self._gens:
-            g.freeze(hold)
+                self.log(f"startle dataset {fn} failed: {e}")
         live = self._live_state()
-        snap = {f"finger{i}": live[f"finger{i}"] + KINETIC_STARTLE_CURL for i in range(4) if f"finger{i}" in live}
-        if snap:
+        return {c: live[c] + d for c, d in KINETIC_STARTLE_DELTAS.items() if c in live}, "built-in deltas"
+
+    def _startle(self):
+        """Flinch -> hold -> slow release. Every servo NUDGES partway toward
+        the startle pose (quick — never a full transition into it), the
+        body freezes in that held tension for HOLD_S, then the supervisor
+        re-enters the running dataset with the normal slow crossfade from
+        the held pose. A short interruption that blends back naturally."""
+        pose, source = self._startle_pose()
+        self._startle_until = time.time() + KINETIC_STARTLE_HOLD_S  # claim the body BEFORE touching it (⚡ races the supervisor)
+        self._stop_gens()  # mid-motion stop: the body catches its breath where it stands
+        self._active_state = STARTLE_STATE  # forces the post-hold re-pick (= the slow blend back)
+        live = self._live_state()
+        nudge = {c: live[c] + (pose[c] - live[c]) * KINETIC_STARTLE_NUDGE for c in pose if c in live}
+        if nudge:  # sent raw, bypassing the gaze lean — a flinch is absolute
             if self._ext_ease is not None:
-                self._ext_ease(snap)
+                self._ext_ease(nudge)
             else:
-                for c, v in snap.items():
+                for c, v in nudge.items():
                     self.device.set_channel(c, v)
-        self.log(f"startle — frozen {hold:.1f}s (no startle dataset recorded yet)")
+        self.log(f"startle — flinch toward {source}, hold {KINETIC_STARTLE_HOLD_S:.0f}s, slow return")

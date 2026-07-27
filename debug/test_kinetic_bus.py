@@ -147,26 +147,36 @@ def main():
             failures.append("startle retriggered inside cooldown")
         print(f"startle: snap +{snap}° with freeze, cooldown respected")
 
-        # --- drawing override --------------------------------------------------
+        # --- drawing override (poll: the fallback startle above holds ~3s) -----
         ctx["drawing"] = True
-        time.sleep(2.5)
+        t0d = time.time()
+        while time.time() - t0d < 8.0 and bus._active_state != "drawing":
+            time.sleep(0.3)
         if bus._active_state != "drawing":
             failures.append(f"drawing state did not take over (state={bus._active_state})")
         print(f"drawing override: active bundle {bus._active_bundle}")
 
-        # --- recorded startle: interrupt fast, play through, blend back --------
+        # --- recorded startle: flinch toward pose, hold, slow blend back -------
         make_session("startle_a", 120).save(export=True)
         bus._last_startle = 0.0  # clear cooldown from the fallback test
+        finger_before = device.channels["finger0"].value
         bus.startle()
-        time.sleep(0.5)
         if bus._active_state != "startle":
-            failures.append(f"recorded startle did not take the body (state={bus._active_state})")
+            failures.append(f"startle did not claim the body (state={bus._active_state})")
+        if bus.status()["chains"] != 0:
+            failures.append("generators kept running through the held flinch")
+        time.sleep(0.4)
+        moved = abs(device.channels["finger0"].value - finger_before)
+        if moved < 3:
+            failures.append(f"flinch nudge did not move the fingers (moved {moved:.1f}°)")
         t0s = time.time()
         while time.time() - t0s < 8.0 and bus._active_state == "startle":
             time.sleep(0.3)
         if bus._active_state != "drawing":
-            failures.append(f"startle did not blend back to the running temperament (state={bus._active_state})")
-        print(f"recorded startle: interrupted, then blended back to {bus._active_state}")
+            failures.append(f"startle did not blend back to the running dataset (state={bus._active_state})")
+        if bus.status()["chains"] == 0:
+            failures.append("no chains resumed after the startle release")
+        print(f"recorded startle: flinch (+{moved:.0f}° fingers), held, blended back to {bus._active_state}")
 
         bus.shutdown()
 

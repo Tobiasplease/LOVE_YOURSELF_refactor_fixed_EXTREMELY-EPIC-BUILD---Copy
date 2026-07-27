@@ -202,10 +202,16 @@ changes.
   reweighting; needs branching — a DETERMINISTIC gesture leaves no choice
   to bias, vary your recordings). Poses only ever lean by a bounded
   smoothed amount; the walk never leaves demonstrated states
-  (debug/test_gaze_bias.py). **Startle is a recordable state**: assign a
-  short take under "startle" in the tree and arrivals/⚡ crossfade into it
-  flinch-fast, play it through, and blend back — the freeze+finger-snap
-  is only the fallback until you record one. RIGHT the **lab**: the REAL KineticBus on the
+  (debug/test_gaze_bias.py). **Startle = flinch → hold → slow release**
+  (July 27, semantics from the artist): every servo NUDGES partway
+  (KINETIC_STARTLE_NUDGE, 0.6) toward a startle POSE — quick, never a
+  full transition — freezes in that tension for ~3s
+  (KINETIC_STARTLE_HOLD_S), then slowly blends back into the running
+  dataset via the normal crossfade re-entry. The pose is the per-channel
+  MEDIAN of a take assigned under "startle" in the tree — **record
+  yourself HOLDING the flinch** (lung in, wrist up, fingers up, arms
+  toward default) — with built-in deltas as fallback. Gantry and pen
+  never flinch. RIGHT the **lab**: the REAL KineticBus on the
   panel's routing (full body incl. gantry/pen/lung) — Start, click
   emotion states to watch chains crossfade, toggle the drawing override,
   fire ⚡ startle. Transport and lab are mutually exclusive. **When
