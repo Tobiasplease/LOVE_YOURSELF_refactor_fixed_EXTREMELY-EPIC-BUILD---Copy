@@ -183,16 +183,20 @@ def main():
         if wait != 0.0:
             failures.append(f"home_clear guessed a path without a dataset (wait={wait})")
         n = int(LOOP * RATE)
-        s = Session("homing_a", loop_len=LOOP)
+        s = Session("homing_a", loop_len=LOOP * 2)
         arm = next(t for t in s.tracks if t.name == "left arm")
-        # the ESCAPE MOVEMENT: elbow travels 90 -> 62 across the take, ending tucked
-        arm.samples = [{"t": i / RATE, "dt": 1 / RATE, "elbow": 90.0 - 28.0 * i / (n - 1), "shoulder": 64.0} for i in range(n)]
+        # the ESCAPE MOVEMENT (2s: elbow 90 -> 62) followed by a 2s STILL
+        # TAIL (holding the tuck while the record pass runs out) — the wait
+        # must cover the MOTION only, never the tail
+        arm.samples = [{"t": i / RATE, "dt": 1 / RATE, "elbow": 90.0 - 28.0 * i / (n - 1), "shoulder": 64.0} for i in range(n)] + [
+            {"t": (n + i) / RATE, "dt": 1 / RATE, "elbow": 62.0, "shoulder": 64.0} for i in range(n)
+        ]
         wrist_t = next(t for t in s.tracks if t.channels == ["wrist"])
-        wrist_t.samples = [{"t": i / RATE, "dt": 1 / RATE, "wrist": 66.0} for i in range(n)]
+        wrist_t.samples = [{"t": i / RATE, "dt": 1 / RATE, "wrist": 66.0} for i in range(2 * n)]
         s.save(export=True)
         wait = bus.home_clear()
-        if not 2.5 <= wait <= 6.0:  # entry ease + the full take + margin
-            failures.append(f"home_clear must wait out the WHOLE choreography (wait={wait})")
+        if not 2.5 <= wait <= 4.6:  # entry ease + MOTION + margin — a 5.5s+ wait means the still tail leaked in
+            failures.append(f"wait must cover the motion, not the still tail (wait={wait}, take 4s, motion 2s)")
         if bus._active_state != "homing":
             failures.append(f"homing did not claim the body (state={bus._active_state})")
         if bus.status()["chains"] != 0:
@@ -216,7 +220,7 @@ def main():
         bus.home_clear()  # run 2 starts from the held tuck
         time.sleep(1.8)  # deep into run 2's playback
         wait3 = bus.home_clear()  # run 3 lands MID-PLAYBACK — the fight case
-        if not 2.5 <= wait3 <= 6.0:
+        if not 2.5 <= wait3 <= 4.6:
             failures.append(f"mid-playback re-trigger did not restart (wait={wait3})")
         trace2 = []
         t0r2 = time.time()

@@ -544,8 +544,13 @@ class KineticBus:
         for p in self._home_players:
             p.stop()
         self._home_players = []
-        duration = max(t.samples[-1]["t"] for t in tracks)
-        total = KINETIC_HOMING_TUCK_S + duration + 0.5
+        take_len = max(t.samples[-1]["t"] for t in tracks)
+        # Wait for the MOTION, not the recording: a homing take usually ends
+        # with the pose held while the record pass runs out — that still
+        # tail IS the hold, not something homing should wait through (a 20s
+        # take with 6s of movement was stalling every homing by 14s).
+        motion_end = self._motion_end(tracks)
+        total = KINETIC_HOMING_TUCK_S + motion_end + 0.5
         self._home_started_at = time.time()
         self._hold_until = self._home_started_at + total + KINETIC_HOMING_MAX_HOLD_S
         self._stop_gens()
@@ -568,8 +573,22 @@ class KineticBus:
         timer = threading.Timer(KINETIC_HOMING_TUCK_S, _begin_playback)
         timer.daemon = True
         timer.start()
-        self.log(("homing RE-TRIGGERED — restarting the choreography" if restarting else f"homing choreography {fn}") + f" — {total:.1f}s to clear")
+        head = "homing RE-TRIGGERED — restarting the choreography" if restarting else f"homing choreography {fn}"
+        self.log(f"{head} — motion {motion_end:.1f}s of a {take_len:.1f}s take, clearing in {total:.1f}s")
         return total
+
+    @staticmethod
+    def _motion_end(tracks) -> float:
+        """Where the take's MOVEMENT ends: the last sample that still
+        differs from the final pose by more than smoothing noise."""
+        end = 0.0
+        for t in tracks:
+            final = {c: t.samples[-1].get(c) for c in t.channels}
+            for s in reversed(t.samples):
+                if any(c in s and final[c] is not None and abs(s[c] - final[c]) > 1.5 for c in t.channels):
+                    end = max(end, s["t"])
+                    break
+        return end
 
     def _send_ease_raw(self, d: Dict[str, float]):
         """Ease without the gaze lean — safety movements are absolute."""
