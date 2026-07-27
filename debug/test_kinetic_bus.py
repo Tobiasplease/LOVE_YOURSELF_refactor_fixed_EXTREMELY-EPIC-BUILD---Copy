@@ -211,6 +211,25 @@ def main():
             failures.append(f"take not traversed — mid-playback elbow {mid} (expected between start and tuck)")
         if abs(trace_t[-1] - 62.0) > 2.0:
             failures.append(f"choreography did not end at the tuck (elbow target {trace_t[-1]})")
+        # RE-TRIGGER mid-playback: must RESTART cleanly, never overlap —
+        # two player sets fighting shows up as zigzagging targets
+        bus.home_clear()  # run 2 starts from the held tuck
+        time.sleep(1.8)  # deep into run 2's playback
+        wait3 = bus.home_clear()  # run 3 lands MID-PLAYBACK — the fight case
+        if not 2.5 <= wait3 <= 6.0:
+            failures.append(f"mid-playback re-trigger did not restart (wait={wait3})")
+        trace2 = []
+        t0r2 = time.time()
+        while time.time() - t0r2 < wait3 + 0.3:
+            trace2.append(device.channels["elbow"].target)
+            time.sleep(0.1)
+        max_step2 = max(abs(b - a) for a, b in zip(trace2, trace2[1:]))
+        if max_step2 > 6:
+            failures.append(f"re-triggered homing OVERLAPPED the old run (elbow jumped {max_step2:.1f}°/100ms)")
+        if abs(trace2[-1] - 62.0) > 2.0:
+            failures.append(f"restarted choreography did not end at the tuck ({trace2[-1]})")
+        print(f"re-trigger mid-playback: restarted without overlap (max {max_step2:.1f}°/100ms, end {trace2[-1]:.0f}°)")
+
         # cross-process release: the idle SUBPROCESS homes; ensure_homed touches
         # the sentinel and the bus must notice the fresh mtime
         from utils.hooks import HOMING_SENTINEL

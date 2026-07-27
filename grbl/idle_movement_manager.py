@@ -10,6 +10,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from typing import Optional
 
@@ -27,8 +28,17 @@ class IdleMovementManager:
         self.process: Optional[subprocess.Popen] = None
         self.is_paused = False
         self.emotion = "calm_observant"
+        # resume_after_drawing() is called from BOTH the GRBL completion
+        # ritual and image_monitor — two threads racing in here used to
+        # spawn twice (double homing, double left-arm choreography). One
+        # lock, one spawn.
+        self._lock = threading.RLock()
 
     def start(self, emotion: str = "calm_observant") -> bool:
+        with self._lock:
+            return self._start_locked(emotion)
+
+    def _start_locked(self, emotion: str) -> bool:
         """Start idle movements subprocess"""
         # Do not start if a CNC drawing is currently executing
         if state_manager and getattr(state_manager, "is_executing_cnc", False):
@@ -85,6 +95,10 @@ class IdleMovementManager:
             return False
 
     def pause_for_drawing(self) -> bool:
+        with self._lock:
+            return self._pause_locked()
+
+    def _pause_locked(self) -> bool:
         """Pause idle movements to free serial port for drawing"""
         if not self.process or self.process.poll() is not None:
             print("[INFO] No idle movements to pause")
@@ -111,6 +125,10 @@ class IdleMovementManager:
             return False
 
     def resume_after_drawing(self) -> bool:
+        with self._lock:
+            return self._resume_locked()
+
+    def _resume_locked(self) -> bool:
         """Resume idle movements after drawing completes"""
         # If CNC is still executing, do not resume yet
         if state_manager and getattr(state_manager, "is_executing_cnc", False):
@@ -144,6 +162,10 @@ class IdleMovementManager:
         return success
 
     def stop(self):
+        with self._lock:
+            self._stop_locked()
+
+    def _stop_locked(self):
         """Stop idle movements completely"""
         if self.process and self.process.poll() is None:
             try:

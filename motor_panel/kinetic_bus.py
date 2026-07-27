@@ -258,6 +258,7 @@ class KineticBus:
         self._hold_until = 0.0  # while set, an interrupt (startle/homing) owns the body
         self._home_players: List[engine.Player] = []  # the homing choreography, playing straight through
         self._home_started_at = 0.0
+        self._home_token: object = None  # generation marker — a re-triggered homing invalidates the previous run
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -533,6 +534,16 @@ class KineticBus:
         if not tracks:
             self.log(f"⚠ homing dataset {fn} has no usable takes")
             return 0.0
+        # RE-TRIGGER = RESTART, never overlap: homing takes a variable time
+        # and can fire from several paths in succession — a second call
+        # stops the running choreography cleanly and performs it again from
+        # wherever the arm is NOW. The token invalidates the previous run's
+        # ramp thread and playback timer so two runs can never fight.
+        restarting = self._active_state == HOMING_STATE and (self._home_players or time.time() < self._hold_until)
+        self._home_token = token = object()
+        for p in self._home_players:
+            p.stop()
+        self._home_players = []
         duration = max(t.samples[-1]["t"] for t in tracks)
         total = KINETIC_HOMING_TUCK_S + duration + 0.5
         self._home_started_at = time.time()
@@ -544,21 +555,20 @@ class KineticBus:
             for c in t.channels:
                 if c in t.samples[0]:
                     first_pose[c] = float(t.samples[0][c])
-        self._ease_to_pose(first_pose, KINETIC_HOMING_TUCK_S)  # meet the take where it begins
+        self._ease_to_pose(first_pose, KINETIC_HOMING_TUCK_S, still_valid=lambda: self._home_token is token)
 
         def _begin_playback():
-            if self._active_state != HOMING_STATE or time.time() > self._hold_until:
+            if self._home_token is not token or self._active_state != HOMING_STATE or time.time() > self._hold_until:
                 return
             for t in tracks:
                 p = engine.Player(t.samples, t.channels, send_ease=self._send_ease_raw, send_plan=lambda d, dt: None, loop=False)
                 self._home_players.append(p)
                 p.start()
 
-        self._home_players = []
         timer = threading.Timer(KINETIC_HOMING_TUCK_S, _begin_playback)
         timer.daemon = True
         timer.start()
-        self.log(f"homing choreography {fn} — {total:.1f}s to clear, then holding until homing completes")
+        self.log(("homing RE-TRIGGERED — restarting the choreography" if restarting else f"homing choreography {fn}") + f" — {total:.1f}s to clear")
         return total
 
     def _send_ease_raw(self, d: Dict[str, float]):
@@ -569,18 +579,18 @@ class KineticBus:
             for c, v in d.items():
                 self.device.set_channel(c, v)
 
-    def _ease_to_pose(self, pose: Dict[str, float], seconds: float):
+    def _ease_to_pose(self, pose: Dict[str, float], seconds: float, still_valid=None):
         """Gentle ramp to a pose in its own thread: interpolates from the
         LIVE pose at substep rate — no snapping, ever. Aborts if the hold
-        is released early or expires."""
+        is released/expired or `still_valid` says a newer run took over."""
         start = self._live_state()
         frm = {c: start[c] for c in pose if c in start}
 
         def run():
             steps = max(1, int(seconds / 0.05))
             for i in range(1, steps + 1):
-                if time.time() > self._hold_until:
-                    return  # released or expired — stop pushing
+                if time.time() > self._hold_until or (still_valid is not None and not still_valid()):
+                    return  # released, expired, or superseded — stop pushing
                 f = i / steps
                 self._send_ease_raw({c: frm[c] + (pose[c] - frm[c]) * f for c in frm})
                 time.sleep(0.05)
