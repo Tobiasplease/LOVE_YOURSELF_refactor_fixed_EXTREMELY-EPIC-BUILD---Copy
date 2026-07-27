@@ -178,32 +178,41 @@ def main():
             failures.append("no chains resumed after the startle release")
         print(f"recorded startle: flinch (+{moved:.0f}° fingers), held, blended back to {bus._active_state}")
 
-        # --- homing tuck: refuse without a dataset, FULL pose, hold, release ---
-        msg = bus.home_clear()
-        if "no homing dataset" not in msg:
-            failures.append(f"home_clear guessed a pose without a dataset: {msg}")
+        # --- homing tuck: refuse without dataset, GENTLE ramp, FULL pose, release
+        wait = bus.home_clear()
+        if wait != 0.0:
+            failures.append(f"home_clear guessed a pose without a dataset (wait={wait})")
         s = Session("homing_a", loop_len=LOOP)
         arm = next(t for t in s.tracks if t.name == "left arm")
         arm.samples = [{"t": i / RATE, "dt": 1 / RATE, "elbow": 62.0, "shoulder": 64.0} for i in range(int(LOOP * RATE))]
         wrist_t = next(t for t in s.tracks if t.channels == ["wrist"])
         wrist_t.samples = [{"t": i / RATE, "dt": 1 / RATE, "wrist": 66.0} for i in range(int(LOOP * RATE))]
         s.save(export=True)
-        bus.home_clear()
+        wait = bus.home_clear()
+        if not 1.5 <= wait <= 5.0:
+            failures.append(f"home_clear should ask the caller to wait out the tuck (wait={wait})")
         if bus._active_state != "homing":
             failures.append(f"homing did not claim the body (state={bus._active_state})")
         if bus.status()["chains"] != 0:
             failures.append("generators kept running during the homing hold")
-        time.sleep(0.3)
-        elbow_target = device.channels["elbow"].target
-        if abs(elbow_target - 62.0) > 1.5:
-            failures.append(f"tuck was not FULL (elbow target {elbow_target}, pose 62)")
+        # gentleness: the elbow target must RAMP, never jump
+        trace_t = []
+        t0r = time.time()
+        while time.time() - t0r < wait + 0.5:
+            trace_t.append(device.channels["elbow"].target)
+            time.sleep(0.1)
+        max_step = max(abs(b - a) for a, b in zip(trace_t, trace_t[1:]))
+        if max_step > 6:
+            failures.append(f"tuck SNAPPED: elbow target jumped {max_step:.1f}° in 100ms")
+        if abs(trace_t[-1] - 62.0) > 1.5:
+            failures.append(f"tuck did not fully reach the pose (elbow target {trace_t[-1]})")
         bus.home_release()
         t0h = time.time()
         while time.time() - t0h < 8.0 and bus._active_state == "homing":
             time.sleep(0.3)
         if bus._active_state != "drawing":
             failures.append(f"homing hold did not release back (state={bus._active_state})")
-        print(f"homing: refused without dataset, tucked FULLY (elbow → {elbow_target}), released back to {bus._active_state}")
+        print(f"homing: refused w/o dataset; ramped gently (max {max_step:.1f}°/100ms) to {trace_t[-1]}°, released back to {bus._active_state}")
 
         bus.shutdown()
 

@@ -182,6 +182,7 @@ KINETIC_STARTLE_COOLDOWN_S = 20  # a flickering detector must not twitch the han
 # refuses to guess a pose. The max hold releases a stranded arm if the
 # completion signal is ever missed (GRBL's homing quiet-wait is 60s).
 KINETIC_HOMING_MAX_HOLD_S = 75
+KINETIC_HOMING_TUCK_S = 2.0  # the tuck RAMPS to the pose over this long — no snapping — and $H waits for it
 
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.

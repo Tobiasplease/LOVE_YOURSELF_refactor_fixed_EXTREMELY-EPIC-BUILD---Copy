@@ -66,6 +66,7 @@ from config.config import (
     KINETIC_GAZE_STRENGTH,
     KINETIC_GAZE_TEMPO_K,
     KINETIC_HOMING_MAX_HOLD_S,
+    KINETIC_HOMING_TUCK_S,
     KINETIC_ROTATE_S,
     KINETIC_STARTLE_COOLDOWN_S,
     KINETIC_STARTLE_DELTAS,
@@ -500,40 +501,59 @@ class KineticBus:
         self.log(f"startle — flinch toward {source}, hold {KINETIC_STARTLE_HOLD_S:.0f}s, slow return")
 
     # --- homing safety ---------------------------------------------------------
-    def home_clear(self) -> str:
-        """Tuck the body clear of the gantry BEFORE homing: move FULLY to
-        the homing pose (a safety pose is reached, never nudged toward)
-        and hold until home_release() — with a max-hold failsafe so a
-        missed completion signal can't strand the arm. Requires a take
-        assigned under the "homing" state; without one we REFUSE to guess
-        (a wrong pose could cause the collision this exists to prevent)."""
+    def home_clear(self) -> float:
+        """Tuck the body clear of the gantry BEFORE homing: RAMP gently to
+        the homing pose over KINETIC_HOMING_TUCK_S (a tuck at speed is its
+        own hazard — never snap), reach it FULLY, and hold until
+        home_release() — with a max-hold failsafe so a missed completion
+        signal can't strand the arm. Returns the seconds the caller must
+        WAIT before actually homing (the arm must be clear first), 0.0
+        when refused. Requires a take assigned under the "homing" state;
+        without one we REFUSE to guess (a wrong pose could cause the
+        collision this exists to prevent)."""
         buckets = self.library.scan()
         if not buckets.get(HOMING_STATE):
-            msg = "⚠ no homing dataset — record the tucked-clear pose and assign it under 'homing'"
-            self.log(msg)
-            return msg
+            self.log("⚠ no homing dataset — record the tucked-clear pose and assign it under 'homing'")
+            return 0.0
         fn = random.choice(buckets[HOMING_STATE])
         try:
             pose = self.library.pose_of(fn)
         except Exception as e:
-            msg = f"⚠ homing dataset {fn} failed: {e}"
-            self.log(msg)
-            return msg
+            self.log(f"⚠ homing dataset {fn} failed: {e}")
+            return 0.0
         if not pose:
-            msg = f"⚠ homing dataset {fn} has no usable channels"
-            self.log(msg)
-            return msg
+            self.log(f"⚠ homing dataset {fn} has no usable channels")
+            return 0.0
         self._hold_until = time.time() + KINETIC_HOMING_MAX_HOLD_S  # claim before touching
         self._stop_gens()
         self._active_state = HOMING_STATE
-        if self._ext_ease is not None:  # raw — a safety pose ignores the gaze lean
-            self._ext_ease(pose)
-        else:
-            for c, v in pose.items():
-                self.device.set_channel(c, v)
-        msg = f"left arm tucked ({fn}) — holding clear until homing completes"
-        self.log(msg)
-        return msg
+        self._ease_to_pose(pose, KINETIC_HOMING_TUCK_S)
+        self.log(f"left arm tucking clear over {KINETIC_HOMING_TUCK_S:.0f}s ({fn}) — homing should wait for it")
+        return KINETIC_HOMING_TUCK_S + 0.3
+
+    def _ease_to_pose(self, pose: Dict[str, float], seconds: float):
+        """Gentle ramp to a held pose in its own thread: interpolates from
+        the LIVE pose at substep rate — no snapping, ever. Sends raw (a
+        safety pose ignores the gaze lean). Aborts if the hold is released
+        early or expires."""
+        start = self._live_state()
+        frm = {c: start[c] for c in pose if c in start}
+
+        def run():
+            steps = max(1, int(seconds / 0.05))
+            for i in range(1, steps + 1):
+                if time.time() > self._hold_until:
+                    return  # released or expired — stop pushing
+                f = i / steps
+                d = {c: frm[c] + (pose[c] - frm[c]) * f for c in frm}
+                if self._ext_ease is not None:
+                    self._ext_ease(d)
+                else:
+                    for c, v in d.items():
+                        self.device.set_channel(c, v)
+                time.sleep(0.05)
+
+        threading.Thread(target=run, daemon=True).start()
 
     def home_release(self):
         """Homing finished: drop the hold; the supervisor blends the body

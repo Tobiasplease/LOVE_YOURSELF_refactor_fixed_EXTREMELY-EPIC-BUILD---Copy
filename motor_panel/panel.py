@@ -472,12 +472,19 @@ class GrblFrame(ttk.LabelFrame):
         self.after(150, self._label_tick)
 
     def _home_clicked(self):
+        delay = 0.0
         if self.on_home:
             try:
-                self.on_home()  # tuck the left arm clear FIRST
+                delay = float(self.on_home() or 0.0)  # seconds the tuck ramp needs
             except Exception:
-                pass
-        self.send("$H")
+                delay = 0.0
+        if delay > 0:
+            # the arm must be CLEAR before the gantry sweeps — $H waits out
+            # the gentle tuck instead of racing it
+            self.log("grbl", f"homing in {delay:.1f}s — left arm tucking clear", False)
+            self.after(int(delay * 1000), lambda: self.send("$H"))
+        else:
+            self.send("$H")
 
     def jog(self, dx: int, dy: int):
         """Computed absolute target — never G91: an out-of-order or

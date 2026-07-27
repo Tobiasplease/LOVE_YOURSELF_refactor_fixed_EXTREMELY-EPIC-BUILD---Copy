@@ -213,9 +213,11 @@ changes.
   toward default) — with built-in deltas as fallback. Gantry and pen
   never flinch. **Homing safety** (July 27): a take under the "homing"
   state = the left arm's tucked-clear pose; the panel's Home $H button
-  moves the arm FULLY there first (a safety pose is reached, never
-  nudged), holds until GRBL reports homing complete (75s max-hold
-  failsafe), then blends back. **No homing dataset = the bus refuses to
+  RAMPS the arm there gently over KINETIC_HOMING_TUCK_S (~2s, substep
+  interpolation — no snapping, ever) and **$H waits out the tuck** so
+  the arm is clear BEFORE the gantry sweeps; the pose is fully reached
+  (never nudged), held until GRBL reports homing complete (75s max-hold
+  failsafe), then blended back. **No homing dataset = the bus refuses to
   guess** — record the tuck before trusting homing around the arm.
   While the machine draws, the bus hard-drops all gantry/pen output
   (see runtime-map "drawing gate"). RIGHT the **lab**: the REAL KineticBus on the
