@@ -186,9 +186,10 @@ def main():
         sends = {"ease": 0, "plan": 0}
         live = {c: 90.0 for c in full}
         live.update({"x": 20.0, "y": 20.0, "pen": 34.0})
+        ctx2 = {"drawing": False}
         bus2 = kb.KineticBus(
             library=lib2,
-            is_drawing=lambda: False,
+            is_drawing=lambda: ctx2["drawing"],
             get_gaze=lambda: (0.0, 0.0),
             get_person=lambda: "absent",
             on_log=lambda m: None,
@@ -205,6 +206,19 @@ def main():
             failures.append("practice-room bus built a device it must not own")
         if sends["ease"] == 0 or sends["plan"] == 0:
             failures.append(f"practice-room bus not driving injected callbacks: {sends}")
+
+        # --- the drawing gate: while the machine draws, the gantry/pen are
+        # UNTOUCHABLE no matter what the active chains contain ---------------
+        ctx2["drawing"] = True
+        time.sleep(3.0)  # supervisor switches to the drawing dataset; its group chain still holds x/y dims
+        plan_frozen = sends["plan"]
+        ease_before = sends["ease"]
+        time.sleep(2.0)
+        if sends["plan"] != plan_frozen:
+            failures.append(f"bus contested the gantry during drawing ({sends['plan'] - plan_frozen} plan sends leaked)")
+        if sends["ease"] <= ease_before:
+            failures.append("left hand stopped acting during drawing (it should keep its temperament)")
+        print(f"drawing gate: plan sends frozen at {plan_frozen}, ease kept flowing ({sends['ease'] - ease_before} in 2s)")
         bus2.shutdown()
 
         # --- retire: bundle disappears from the runtime scan --------------------

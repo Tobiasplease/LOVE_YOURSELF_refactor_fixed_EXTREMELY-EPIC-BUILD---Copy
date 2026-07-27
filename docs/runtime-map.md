@@ -403,6 +403,12 @@ gantry idle stays with grbl/idle_movements, gaze/lung with their systems.
 - Bundle choice: session files `movement_recordings/arms/session_{state}_*.json`,
   state = the 5 mood emotions or "drawing" (overrides emotion while
   `state_manager.is_executing_cnc`). Several per state rotate on a dwell.
+- DRAWING GATE (July 27): while is_drawing(), the bus drops ALL plan (x/y)
+  and step (pen) sends at the output layer — the right hand belongs to the
+  GRBL execution, whatever the active dataset's chains contain. Runtime v1
+  is doubly safe (owned=lefthand: gantry channels never even train there);
+  the gate future-proofs any widened ownership and makes the panel lab's
+  drawing checkbox faithful.
 - Emotion arrives by push: machine.py calls `kinetic_bus.set_emotion(...)`
   at the same two sites as `change_to_emotion(...)`.
 - Transitions are seamless: new generators seed from live servo positions

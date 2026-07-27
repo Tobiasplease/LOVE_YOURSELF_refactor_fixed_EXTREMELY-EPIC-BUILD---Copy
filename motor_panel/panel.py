@@ -1430,7 +1430,10 @@ class SessionFrame(ttk.LabelFrame):
             self._emotion_btns[e] = b
         draw_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            right, text="drawing state\n(overrides mood)", variable=draw_var, command=lambda: self._lab_ctx.__setitem__("drawing", draw_var.get())
+            right,
+            text="drawing state\n(overrides mood;\nright hand yields)",
+            variable=draw_var,
+            command=lambda: self._lab_ctx.__setitem__("drawing", draw_var.get()),
         ).pack(anchor="w", pady=3)
         ttk.Button(right, text="⚡ startle", command=lambda: self.lab.startle() if self._lab_on else None).pack(fill="x", pady=3)
         self._refresh_library()

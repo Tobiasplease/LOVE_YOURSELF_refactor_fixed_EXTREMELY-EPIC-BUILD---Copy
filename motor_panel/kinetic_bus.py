@@ -319,12 +319,19 @@ class KineticBus:
                 self.device.set_channel(c, v)  # device clamps
 
     def _send_plan(self, d: Dict[str, float], dt: float):
+        # HARD GATE: while the machine draws, the right hand belongs to the
+        # GRBL execution — the bus never contests the gantry, regardless of
+        # what the active dataset's chains contain. (Runtime v1 is doubly
+        # safe: owned=lefthand means no plan channel ever trains there.)
+        if self.is_drawing():
+            return
         if self._ext_plan is not None:
             d = {c: v + self._offsets.get(c, 0.0) for c, v in d.items()}  # the lean current reaches the gantry too
             self._ext_plan(d, dt)
-        # runtime v1 has no gantry — plan channels never train there (owned)
 
     def _send_step(self, d: Dict[str, float]):
+        if self.is_drawing():  # the pen belongs to the drawing too
+            return
         if self._ext_step is not None:
             self._ext_step(d)
 
