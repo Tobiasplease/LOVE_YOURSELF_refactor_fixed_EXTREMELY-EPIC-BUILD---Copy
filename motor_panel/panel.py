@@ -1415,13 +1415,13 @@ class SessionFrame(ttk.LabelFrame):
         targets. RIGHT — the lab: the actual KineticBus on this panel's
         routing. machine.py-flagged builds (KINETIC_BUS_ENABLED) open the
         panel on this tab."""
-        self._lab_ctx = {"drawing": False, "gx": 0.0, "gy": 0.0}
+        self._lab_ctx = {"drawing": False, "gx": 0.0, "gy": 0.0, "person": "absent"}
         self._lab_on = False
         self.lab = KineticBus(
             library=TemperamentLibrary(owned=LAB_CHANNELS),
             is_drawing=lambda: self._lab_ctx["drawing"],
             get_gaze=lambda: (self._lab_ctx["gx"], self._lab_ctx["gy"]),
-            get_person=lambda: "absent",  # startle is fired by the ⚡ button
+            get_person=lambda: self._lab_ctx["person"],  # toggle = arrival startle + reach ramp, like the runtime
             on_log=lambda m: self.log("lab", m, False),
             send_ease=self._route_ease,
             send_plan=self._route_plan,
@@ -1477,6 +1477,13 @@ class SessionFrame(ttk.LabelFrame):
             text="drawing state\n(overrides mood;\nright hand yields)",
             variable=draw_var,
             command=lambda: self._lab_ctx.__setitem__("drawing", draw_var.get()),
+        ).pack(anchor="w", pady=3)
+        person_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            right,
+            text="person present\n(startle on arrival,\narm reaches at gaze)",
+            variable=person_var,
+            command=lambda: self._lab_ctx.__setitem__("person", "visible" if person_var.get() else "absent"),
         ).pack(anchor="w", pady=3)
         ttk.Button(right, text="⚡ startle", command=lambda: self.lab.startle() if self._lab_on else None).pack(fill="x", pady=3)
         self._refresh_library()
@@ -1605,7 +1612,9 @@ class SessionFrame(ttk.LabelFrame):
                 self.now_lbl.config(text=f"▶ PLAYING  {name}  ({s['state']})   —   next dataset in {mins}:{secs:02d}")
             else:
                 self.now_lbl.config(text=f"▶ {s['state'] or '…'} — no dataset assigned yet, body idle")
-            self.lab_status.config(text=f"{s['chains']} chain(s) live · gaze {self._lab_ctx['gx']:+.2f}, {self._lab_ctx['gy']:+.2f}")
+            self.lab_status.config(
+                text=f"{s['chains']} chain(s) live · gaze {self._lab_ctx['gx']:+.2f}, {self._lab_ctx['gy']:+.2f} · reach {s['reach']:.2f}"
+            )
         else:
             self.now_lbl.config(text="nothing playing — ▶ Start lab runs the runtime bus")
             self.lab_status.config(text="")

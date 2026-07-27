@@ -180,6 +180,20 @@ KINETIC_STARTLE_HOLD_S = 3.0  # held tension before the slow release
 KINETIC_STARTLE_DELTAS = {"finger0": 40, "finger1": 40, "finger2": 40, "finger3": 40, "wrist": 25, "lung": 20}  # fallback flinch, degrees relative
 KINETIC_STARTLE_COOLDOWN_S = 20  # a flickering detector must not twitch the hand
 
+# Reach: while someone is being TRACKED, the arm leans out toward them.
+# Face tracking already points the gaze at the person, so gaze direction =
+# person direction; that direction picks a point in the arm's MEASURED
+# 9-point calibration square (motor_panel/arm_calibration.json — bilinear
+# over captured poses IS the inverse kinematics, measured-not-modeled like
+# the warp map) and the temperament's whole field shifts partway toward
+# that pose, ramping in/out over REACH_TAU as people come and go. The
+# markov motion keeps breathing through it — a lean, never snap-tracking.
+# Joint-space proportional fallback until the arm is calibrated.
+KINETIC_REACH_ENABLED = True
+KINETIC_REACH_STRENGTH = 0.6  # fraction of the way toward the reach pose at full ramp
+KINETIC_REACH_MAX_DEG = 20  # per-channel cap on the reach shift
+KINETIC_REACH_TAU = 2.0  # seconds to lean out / settle back
+
 # Homing safety: a take assigned under the "homing" state IS the escape
 # choreography — record the whole get-clear movement (ending tucked) and
 # it plays straight through (no markov) before the gantry homes: entry

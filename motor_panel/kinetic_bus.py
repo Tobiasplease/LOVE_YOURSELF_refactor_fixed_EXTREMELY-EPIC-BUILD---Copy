@@ -67,17 +67,40 @@ from config.config import (
     KINETIC_GAZE_TEMPO_K,
     KINETIC_HOMING_MAX_HOLD_S,
     KINETIC_HOMING_TUCK_S,
+    KINETIC_REACH_ENABLED,
+    KINETIC_REACH_MAX_DEG,
+    KINETIC_REACH_STRENGTH,
+    KINETIC_REACH_TAU,
     KINETIC_ROTATE_S,
     KINETIC_STARTLE_COOLDOWN_S,
     KINETIC_STARTLE_DELTAS,
     KINETIC_STARTLE_ENABLED,
     KINETIC_STARTLE_HOLD_S,
     KINETIC_STARTLE_NUDGE,
+    LEFT_ARM_ELBOW_LIMITS,
+    LEFT_ARM_SHOULDER_LIMITS,
+    LEFT_ARM_WRIST_LIMITS,
 )
 from motor_panel import arms_markov as engine
 from motor_panel.session import SESSIONS_DIR, Session
 
 EMOTIONS = ["energized_engaged", "alert_curious", "calm_observant", "quiet_detached", "withdrawn_distant"]
+ARM_CALIB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arm_calibration.json")
+_ARM_NEUTRALS = {"shoulder": LEFT_ARM_SHOULDER_LIMITS[2], "elbow": LEFT_ARM_ELBOW_LIMITS[2], "wrist": LEFT_ARM_WRIST_LIMITS[2]}
+
+
+def _bilinear_pose(grid, u: float, v: float) -> Tuple[float, float]:
+    """(shoulder, elbow) from the 9-point calibration grid — the same
+    bilinear the linkage pad uses. Measured poses in, measured pose out."""
+    u, v = max(0.0, min(1.0, u)), max(0.0, min(1.0, v))
+    gx_, gy_ = min(u * 2, 1.999), min(v * 2, 1.999)
+    ix, iy = int(gx_), int(gy_)
+    fx, fy = gx_ - ix, gy_ - iy
+    s = (grid[iy][ix][0] * (1 - fx) + grid[iy][ix + 1][0] * fx) * (1 - fy) + (grid[iy + 1][ix][0] * (1 - fx) + grid[iy + 1][ix + 1][0] * fx) * fy
+    e = (grid[iy][ix][1] * (1 - fx) + grid[iy][ix + 1][1] * fx) * (1 - fy) + (grid[iy + 1][ix][1] * (1 - fx) + grid[iy + 1][ix + 1][1] * fx) * fy
+    return s, e
+
+
 DRAWING_STATE = "drawing"
 STARTLE_STATE = "startle"  # recorded startle pose — interrupts, never mood-picked
 HOMING_STATE = "homing"  # tucked-clear pose while the gantry homes — interrupts, never mood-picked
@@ -259,6 +282,9 @@ class KineticBus:
         self._home_players: List[engine.Player] = []  # the homing choreography, playing straight through
         self._home_started_at = 0.0
         self._home_token: object = None  # generation marker — a re-triggered homing invalidates the previous run
+        self.arm_calib_path = ARM_CALIB_PATH  # tests inject their own grid
+        self._reach_amount = 0.0  # 0..1 presence ramp — the arm leans out while someone is tracked
+        self._calib_cache: Tuple[float, Optional[list]] = (0.0, None)
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -284,6 +310,7 @@ class KineticBus:
             "chains": len(self._gens),
             "emotion": self._emotion,
             "rotate_in": rotate_in,
+            "reach": round(self._reach_amount, 2),
         }
 
     # --- lifecycle ------------------------------------------------------------
@@ -448,14 +475,59 @@ class KineticBus:
             return {}
         return {c: (gx if axis == "x" else gy) for c, (axis, _deg) in KINETIC_GAZE_LEAN.items()}
 
+    def _arm_calib(self) -> Optional[list]:
+        """The 9-point arm calibration grid, mtime-cached; None until the
+        user captures it in the linkage tab."""
+        try:
+            mtime = os.path.getmtime(self.arm_calib_path)
+        except OSError:
+            return None
+        if self._calib_cache[0] != mtime:
+            try:
+                import json
+
+                with open(self.arm_calib_path) as f:
+                    self._calib_cache = (mtime, json.load(f)["grid"])
+            except Exception:
+                self._calib_cache = (mtime, None)
+        return self._calib_cache[1]
+
+    def _reach_pose(self, gx: float, gy: float) -> Dict[str, float]:
+        """Where the arm reaches for a given look: the MEASURED calibration
+        square is the IK table — gaze direction picks the point, bilinear
+        over captured poses gives (shoulder, elbow). Until the arm is
+        calibrated: proportional joint-space reach inside the config range."""
+        grid = self._arm_calib()
+        if grid:
+            s, e = _bilinear_pose(grid, (gx + 1) / 2, (gy + 1) / 2)
+            return {"shoulder": s, "elbow": e}
+        s_lo, s_hi, s_n = LEFT_ARM_SHOULDER_LIMITS
+        e_lo, e_hi, e_n = LEFT_ARM_ELBOW_LIMITS
+        return {"shoulder": s_n + gx * (s_hi - s_lo) / 2 * 0.8, "elbow": e_n + gy * (e_hi - e_lo) / 2 * 0.8}
+
     def _update_lean(self):
-        """The felt component: every applicable channel drifts toward the
-        gaze — bounded degrees, settling over LEAN_TAU and releasing the
-        same way. A current the whole body moves inside, never a snap."""
+        """The felt currents: ambient gaze lean on every applicable channel,
+        and — while someone is being tracked — the REACH: the arm's field
+        shifts partway toward the measured pose that points at them.
+        Everything bounded, settling over LEAN_TAU, decaying on release. A
+        current the whole body moves inside, never a snap."""
         gx, gy = self._gaze_vector()
+        raw_gx, raw_gy = self.get_gaze()  # reach uses the LOOK itself, unscaled by influence
+        reach_on = KINETIC_REACH_ENABLED and self.get_person() == "visible"
+        f_r = min(1.0, self.SUPERVISOR_TICK / KINETIC_REACH_TAU)
+        self._reach_amount += ((1.0 if reach_on else 0.0) - self._reach_amount) * f_r
+        reach: Dict[str, float] = {}
+        if self._reach_amount > 0.02:
+            for c, pose_v in self._reach_pose(raw_gx, raw_gy).items():
+                delta = (pose_v - _ARM_NEUTRALS.get(c, 90.0)) * KINETIC_REACH_STRENGTH
+                reach[c] = max(-KINETIC_REACH_MAX_DEG, min(KINETIC_REACH_MAX_DEG, delta))
         f = min(1.0, self.SUPERVISOR_TICK / KINETIC_GAZE_LEAN_TAU)
         for c, (axis, deg) in KINETIC_GAZE_LEAN.items():
-            target = (gx if axis == "x" else gy) * deg
+            ambient = (gx if axis == "x" else gy) * deg
+            if c in reach:  # crossfade ambient lean -> reach as presence ramps in
+                target = ambient * (1.0 - self._reach_amount) + reach[c] * self._reach_amount
+            else:
+                target = ambient
             cur = self._offsets.get(c, 0.0)
             self._offsets[c] = cur + (target - cur) * f
 

@@ -511,6 +511,15 @@ with their systems.
   the recording). Scaled by KINETIC_GAZE_STRENGTH (runtime tab slider).
   Poses only ever lean by a bounded smoothed amount; the walk never
   leaves demonstrated states (debug/test_gaze_bias.py).
+  REACH (July 27, KINETIC_REACH_*): while a person is TRACKED
+  (person_state visible — and face tracking already points the gaze at
+  them, so gaze direction = person direction), the arm leans OUT toward
+  them: the gaze picks a point in the arm's measured 9-point calibration
+  square (motor_panel/arm_calibration.json; bilinear over captured poses
+  IS the IK — measured, not modeled) and the temperament's field shifts
+  partway toward that pose, ramping over REACH_TAU on arrival/departure,
+  capped at REACH_MAX_DEG. Proportional joint-space fallback until the
+  arm is calibrated. Proof: debug/test_reach.py.
   STARTLE prefers a RECORDED gesture: a dataset assigned under the
   "startle" state interrupts flinch-fast (KINETIC_STARTLE_CROSSFADE_S),
   plays through, blends back to the running temperament; freeze+snap only

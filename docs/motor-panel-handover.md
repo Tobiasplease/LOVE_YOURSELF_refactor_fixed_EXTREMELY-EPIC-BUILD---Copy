@@ -202,7 +202,17 @@ changes.
   reweighting; needs branching — a DETERMINISTIC gesture leaves no choice
   to bias, vary your recordings). Poses only ever lean by a bounded
   smoothed amount; the walk never leaves demonstrated states
-  (debug/test_gaze_bias.py). **Startle = flinch → hold → slow release**
+  (debug/test_gaze_bias.py). **Reach** (July 27): while a person is
+  tracked, the arm leans OUT toward them — gaze direction (= person
+  direction under face tracking) picks a point in the **measured 9-point
+  arm calibration square**, whose bilinear interpolation IS the inverse
+  kinematics (measured-not-modeled, like the warp map); the temperament
+  field shifts partway toward that pose (KINETIC_REACH_STRENGTH, capped
+  REACH_MAX_DEG), ramping in/out over ~2s with presence. Proportional
+  fallback until the arm is calibrated — **capture the 9-point
+  calibration to make reach true to the room's geometry**. Audition in
+  the lab: "person present" checkbox + drag the gaze pad.
+  **Startle = flinch → hold → slow release**
   (July 27, semantics from the artist): every servo NUDGES partway
   (KINETIC_STARTLE_NUDGE, 0.6) toward a startle POSE — quick, never a
   full transition — freezes in that tension for ~3s
