@@ -174,8 +174,8 @@ class GrblFrame(ttk.LabelFrame):
         ttk.Button(top, text="Home $H", command=lambda: self.send("$H")).pack(side="left", padx=2)
         ttk.Button(top, text="Unlock $X", command=lambda: self.send("$X")).pack(side="left", padx=2)
         ttk.Button(top, text="Status ?", command=lambda: self.send("?")).pack(side="left", padx=2)
-        self.state_lbl = ttk.Label(top, text="")
-        self.state_lbl.pack(side="left", padx=8)
+        self.state_lbl = ttk.Label(top, text="", width=1, anchor="w")  # GRBL status lines vary wildly — never let them push the row
+        self.state_lbl.pack(side="left", fill="x", expand=True, padx=8)
         self.state_text = ""  # writer thread writes this; the label polls it (no cross-thread Tk)
 
         jog = ttk.Frame(self)
@@ -1066,7 +1066,7 @@ class GazePad(tk.Canvas):
         self.create_oval(c - r / 2, c - r / 2, c + r / 2, c + r / 2, outline="#1e2a38")
         self.create_line(c - r, c, c + r, c, fill="#1e2a38")
         self.create_line(c, c - r, c, c + r, fill="#1e2a38")
-        self.create_text(c, 10, text="gaze — drag to look; the arrow nudges the flow", fill="#667", font=("monospace", 8))
+        self.create_text(c, 10, text="gaze — drag to look (drives pan/tilt live); the arrow nudges the flow", fill="#667", font=("monospace", 8))
         self.arrow = self.create_line(c, c, c, c, fill="#f5c04a", width=2, arrow="last")
         self.dot = self.create_oval(c - 5, c - 5, c + 5, c + 5, fill="#ffeaa7", outline="")
         self.readout = self.create_text(c, size - 10, text="gaze +0.00, +0.00", fill="#667", font=("monospace", 8))
@@ -1259,7 +1259,10 @@ class SessionFrame(ttk.LabelFrame):
             nb.select(rt)  # runtime build: open where the tuning happens
 
         self._playhead_tick()  # one shared timer for all lanes, started once
-        self.status = ttk.Label(self, text="idle")
+        # width=1 + fill="x": the label stretches to the frame but its text
+        # can never REQUEST width — long status lines used to widen the
+        # whole session frame and shove the canvas mid-recording
+        self.status = ttk.Label(self, text="idle", width=1, anchor="w")
         self.status.pack(fill="x", padx=6, pady=2)
 
     # --- transport plumbing ---------------------------------------------------
@@ -1398,7 +1401,7 @@ class SessionFrame(ttk.LabelFrame):
             ttk.Radiobutton(
                 modes, text=label, value=mode, variable=self.gaze_mode_var, command=lambda: setattr(self.lab, "gaze_mode", self.gaze_mode_var.get())
             ).pack(side="left", padx=4)
-        self.lab_status = ttk.Label(center, text="", font=("monospace", 9), wraplength=pad_size)
+        self.lab_status = ttk.Label(center, text="", font=("monospace", 9), width=1, anchor="w")  # width=1: text never resizes the column
         self.lab_status.pack(fill="x", pady=4)
 
         right = ttk.Frame(parent, width=210)
@@ -1420,6 +1423,11 @@ class SessionFrame(ttk.LabelFrame):
     def _on_gaze(self, gx: float, gy: float):
         self._lab_ctx["gx"] = gx
         self._lab_ctx["gy"] = gy
+        # the pad IS the head: drive pan/tilt whenever the lunggaze arduino
+        # is connected (sim-logged otherwise) — not only while the lab runs
+        pan, tilt = self.lunggaze.channels["pan"], self.lunggaze.channels["tilt"]
+        self.lunggaze.set_channel("pan", pan.neutral + gx * (pan.hi - pan.lo) / 2)
+        self.lunggaze.set_channel("tilt", tilt.neutral + gy * (tilt.hi - tilt.lo) / 2)
 
     def _refresh_library(self):
         tree = self.temp_tree
@@ -1509,9 +1517,10 @@ class SessionFrame(ttk.LabelFrame):
     def _lab_tick(self):
         if self._lab_on:
             s = self.lab.status()
-            txt = f"lab ▶  state: {s['state'] or '…'}   bundle: {s['bundle'] or '(none — assign one)'}   chains: {s['chains']}"
+            bundle = (s["bundle"] or "no bundle — assign one").replace("session_", "").replace(".json", "")
+            txt = f"▶ {s['state'] or '…'} · {bundle} · {s['chains']} chain(s)"
         else:
-            txt = "lab off — Start runs the REAL runtime bus on this panel's body; click states to hear it change its mind"
+            txt = "lab off — Start to audition the runtime bus"
         self.lab_status.config(text=txt)
         self.after(500, self._lab_tick)
 
