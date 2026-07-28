@@ -97,6 +97,25 @@ check("'what do you think' inadmissible to stream", not Captioner._stream_admiss
 check("self-deliberation stays admissible", Captioner._stream_admissible("Should I draw the mannequin first, or the shelf?"))
 check("talking to room objects stays admissible", Captioner._stream_admissible("That rooster again. Will you ever move?"))
 
+print("— outward register, measured (July 28) —")
+from captioner.model_wrapper import _is_plantable_prior as _plant
+
+cap3 = object.__new__(Captioner)
+cap3._stream = deque([], maxlen=6)
+check(
+    "two second-person tokens rejected at mouth",
+    cap3._caption_reject_reason("I am ready to start drawing again when you give me your input!") == "outward_address",
+)
+check(
+    "planning opener rejected",
+    cap3._caption_reject_reason("I'll begin by focusing on the mannequin silhouette against the wall.") == "outward_address",
+)
+check("(Note:...) meta rejected", cap3._caption_reject_reason("(Note: This response format requires a direct question.)") == "outward_address")
+check("single you (talking to the rooster) passes mouth", cap3._caption_reject_reason("That rooster again. Will you ever move, I wonder.") is None)
+check("plain thought passes mouth", cap3._caption_reject_reason("The lamp is still on; nobody has touched the chair.") is None)
+check("assistant tail can't seed next session", not _plant("What do you think? Your thoughts matter to me."))
+check("plain prior still plantable", _plant("The lamp is still on; the chair has not moved."))
+
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)
 cap2._stream = deque(["My springs coil tight again from that moment when nothing moves but waits for something else to happen first."], maxlen=6)

@@ -82,6 +82,13 @@ def _is_plantable_prior(text: str) -> bool:
         return False
     if "*you " in t_lower or "*your " in t_lower:
         return False
+    # Outward register by density (July 28): the previous session ended in
+    # "What do you think?" escalation, got saved as the prior thought, and
+    # seeded the next session's awakening straight into assistant mode. Two
+    # second-person tokens = the text has a reader; it must not seed a
+    # monologue. One stays plantable (self-address, talking to objects).
+    if len(re.findall(r"\b(?:you|your|yours|yourself)\b", t_lower)) >= 2:
+        return False
 
     # Chatbot mode
     if "i'm sorry" in t_lower or "i apologize" in t_lower:

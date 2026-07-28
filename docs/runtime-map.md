@@ -42,7 +42,14 @@ Verify salience in logs: every CAPTION entry carries `salience_hot` and
 
 ### The stream (July 2026 — docs/continuity-plan.md)
 
-`STREAM_MODE = "world"` (config, **LIVE July 26 — THE INVERSION**): the stream
+**LIVE MODE: `"document"` again since July 28** — the rooster was a detection
+failure, not a shape failure; document + the new detectors/gates had never
+been tested, and the artist judged the continuous flow the more alive machine
+(world's delta framing also bred fake-delta tropes: "the light feels
+different now"). VIDEO_MODE=multi since the same day (plain stills, standard
+mtmd, no patched fork). World remains below for A/B.
+
+`STREAM_MODE = "world"` (the July 26 inversion, now the A/B arm): the stream
 rides as ONE assistant message of timestamped log lines ("14:02 — the lamp's
 still on", `captioner._stream_history`) and the user message — frames + the
 world's turn (situational delta, event, reorientation — moved LAST in
@@ -357,7 +364,14 @@ refrain_echo (NEW July 27: a shared run of 6+ consecutive words with any
 stream entry — the world thread carries phrases forward and a verbatim
 formula rode it as a chorus, "…nothing moves but waits for something else
 to happen first" ×3; opening-echo can't see mid-sentence repeats; 2-3 word
-thematic motifs still pass). Strips
+thematic motifs still pass) ·
+outward_address (NEW July 28, register measured not enumerated: ≥2
+second-person tokens = the text has acquired a reader — the machine's own
+voice says "you" at most once, to a rooster; also planning openers "I'll
+begin by…" and parenthetical meta "(Note: …)". The marker list alone leaked
+18/58 captions the day the reflexive frame landed. Same density screen on
+`_is_plantable_prior` so an assistant tail can't seed the next session's
+awakening). Strips
 (salvage, not reject): "1)" enum prefixes, "12... 11..." countdowns,
 trailing #hashtags. Watch-only: >0.6 word-overlap vs last two thoughts.
 

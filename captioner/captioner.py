@@ -642,7 +642,26 @@ class Captioner(MemoryMixin):
         "what would you",
         "shall we",
         "don't you agree",
+        "do you see",
+        "your input",
+        "you provide",
+        "please provide",
+        "you give me",
     )
+
+    # Register-level outward detection (July 28). The marker list is
+    # enumerative and always behind: the run after the reflexive frame still
+    # leaked second-person address into 18/58 captions ("when you give me
+    # your input!", "I'll begin by focusing on...", "(Note: this response
+    # format...)"). The general signal is WHO the text is addressed to: the
+    # machine's own voice says "you" at most once per thought (talking to the
+    # rooster), assistant mode always says it twice or more. Density, not
+    # vocabulary — no content word is banned.
+    _SECOND_PERSON_RE = re.compile(r"\b(?:you|your|yours|yourself)\b", re.IGNORECASE)
+    _PLANNING_OPENER_RE = re.compile(
+        r"^\s*(?:i(?:'ll| will) (?:begin|start) by|first,? i(?:'ll| will)|my next (?:action|step)|once i have|let's get started)", re.IGNORECASE
+    )
+    _META_PAREN_RE = re.compile(r"\(\s*note:|^\s*\*\(", re.IGNORECASE)
 
     @classmethod
     def _stream_admissible(cls, text: str) -> bool:
@@ -752,6 +771,14 @@ class Captioner(MemoryMixin):
             return "refrain_echo"
         if any(m in low for m in self._STREAM_META_MARKERS):
             return "assistant_speak"
+        # Outward register, measured not enumerated: two second-person tokens
+        # means the text has acquired a reader; one stays free (self-address,
+        # talking to the rooster). Planning openers and parenthetical meta are
+        # the assistant's stage machinery — never a thought.
+        if len(self._SECOND_PERSON_RE.findall(caption)) >= 2:
+            return "outward_address"
+        if self._PLANNING_OPENER_RE.match(caption) or self._META_PAREN_RE.search(caption):
+            return "outward_address"
         # Qwen drifts into CJK at high temperatures; one 哎呀 in the document
         # breeds more. English voice only — reject any CJK character.
         if any("　" <= ch <= "ヿ" or "一" <= ch <= "鿿" or "＀" <= ch <= "￯" for ch in caption):
