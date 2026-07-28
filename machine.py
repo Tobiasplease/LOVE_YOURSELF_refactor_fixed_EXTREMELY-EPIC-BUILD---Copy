@@ -991,12 +991,9 @@ if previous_state:
     if kinetic_bus is not None:
         kinetic_bus.set_emotion(emotion)
     debug_print(f"Set hand controller emotion: {emotion}", "INIT")
-
-    # Start idle CNC movements with restored emotion
-    if start_idle_movements(emotion):
-        debug_print(f"Idle CNC movements started with emotion: {emotion}", "INIT")
-    else:
-        debug_print("Failed to start idle CNC movements", "WARN")
+    # NOTE: idle CNC / homing no longer starts here (mid-init) — the
+    # awakening is staged at the main-loop threshold below, so the homing
+    # choreography, the gantry sweep, and the waking senses converge
 
     # Reset last_caption so remnants from previous session are not printed
     captioner.last_caption = ""
@@ -1315,6 +1312,19 @@ def _freeze_watchdog():
 
 
 threading.Thread(target=_freeze_watchdog, daemon=True, name="freeze-watchdog").start()
+
+# THE AWAKENING — staged at the threshold, not scattered through init:
+# machine.py has been silent and still until this moment (the kinetic bus
+# holds the body via await_homing). Now, as the camera loop begins: the
+# homing choreography plays (the first gesture), the gantry homes behind
+# it, gaze/lung/bulb come alive with the window, and the first temperament
+# blooms when homing completes. Previously this fired mid-init — and only
+# when a previous session existed, so fresh runs never homed at all.
+_awakening_emotion = mood_engine.get_emotion_for_hand_controller()
+if start_idle_movements(_awakening_emotion):
+    debug_print(f"Awakening: idle CNC + homing started with emotion {_awakening_emotion}", "INIT")
+else:
+    debug_print("Awakening: idle CNC failed to start", "WARN")
 
 try:
     prev_gray = None

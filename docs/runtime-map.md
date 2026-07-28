@@ -464,14 +464,23 @@ to the legacy pair). It owns the lefthand device only (fingers, elbow,
 shoulder, wrist); gantry idle stays with grbl/idle_movements, gaze/lung
 with their systems.
 
-- THE AWAKENING (July 27): machine.py enables the bus with
-  await_homing=True — the body holds STILL through the whole init (it
-  used to solo a dataset ~2s after bus init, minutes before anything
-  else woke); the startup homing choreography is the machine's first
-  gesture and the first temperament blooms as homing completes, all
-  motors together. Failsafe KINETIC_AWAKENING_MAX_WAIT_S if homing
-  never arrives. After ANY homing, the SAME dataset resumes
-  (continuity, not a random same-state re-pick).
+- THE AWAKENING (July 27, restaged July 28): machine.py enables the bus
+  with await_homing=True — the body holds STILL through the whole init —
+  and the homing/idle start now fires AT THE MAIN-LOOP THRESHOLD, not
+  mid-init (and no longer only in the session-restore branch — fresh runs
+  never homed at all before): the choreography, the gantry sweep, the
+  camera window, and gaze/lung waking all converge, and the first
+  temperament blooms when homing completes. Failsafe
+  KINETIC_AWAKENING_MAX_WAIT_S if homing never arrives. After ANY homing,
+  the SAME dataset resumes (continuity, not a random same-state re-pick).
+- GAZE/LUNG DROPOUTS (diagnosed July 28): the lunggaze Arduino
+  re-enumerates on USB hiccups (the /dev/arduino_lunggaze symlink
+  vanishes and returns) and ServoController used to DISABLE ITSELF
+  PERMANENTLY on the first I/O error — gaze+lung dead until restart,
+  long predating the panel work. Now it drops the stale handle and
+  auto-reconnects (throttled 3s) when the device returns, resending
+  fresh state. If dropouts persist, the remaining suspect is physical:
+  that board's cable/hub/power.
 - EMOTION IS PULLED, not pushed: the bus calls
   `mood_engine.get_emotion_for_hand_controller` (injected at construction)
   every supervisor tick. The old push sites (`change_to_emotion` + the
