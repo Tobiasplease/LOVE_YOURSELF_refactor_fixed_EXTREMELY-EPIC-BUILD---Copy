@@ -208,6 +208,12 @@ KINETIC_REACH_TAU = 2.0  # seconds to lean out / settle back
 # signal is missed (GRBL's homing quiet-wait is 60s).
 KINETIC_HOMING_MAX_HOLD_S = 75
 KINETIC_HOMING_TUCK_S = 1.0  # entry ease into the choreography's first pose — no snapping
+# The AWAKENING: at machine.py boot the bus holds the body STILL until the
+# startup homing flow runs — the homing choreography is the machine's first
+# gesture and the first temperament blooms as homing completes, all motors
+# together (previously the left hand soloed a dataset ~2s after init, long
+# before anything else woke). Failsafe: bloom anyway if homing never comes.
+KINETIC_AWAKENING_MAX_WAIT_S = 180
 
 # === PEN SERVO (via GRBL spindle PWM) ===
 # Scale GRBL $30/$31 to match your servo mapping. Many forks (including Robottini) map S in 0–255.

@@ -770,7 +770,10 @@ if KINETIC_BUS_ENABLED:
             get_emotion=mood_engine.get_emotion_for_hand_controller,
             on_log=lambda m: debug_print(m, "KINETIC"),
         )
-        kinetic_bus.enable()
+        # await_homing: the body holds STILL through init; the startup homing
+        # choreography is the machine's first gesture and the first
+        # temperament blooms as homing completes — the awakening, together
+        kinetic_bus.enable(await_homing=True)
         # homing safety: grbl_utils.ensure_homed tucks the left arm clear
         # (and waits out the ramp) before every $H, releases on completion
         _kinetic_hooks.on_grbl_homing_start = kinetic_bus.home_clear

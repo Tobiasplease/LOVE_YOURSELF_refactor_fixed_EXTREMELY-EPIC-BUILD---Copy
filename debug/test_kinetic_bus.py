@@ -237,7 +237,9 @@ def main():
         print(f"re-trigger mid-playback: restarted without overlap (max {max_step2:.1f}°/100ms, end {trace2[-1]:.0f}°)")
 
         # cross-process release: the idle SUBPROCESS homes; ensure_homed touches
-        # the sentinel and the bus must notice the fresh mtime
+        # the sentinel and the bus must notice the fresh mtime — and the SAME
+        # dataset that was playing must return (continuity, not a re-pick)
+        pre_home_bundle = bus._resume_bundle
         from utils.hooks import HOMING_SENTINEL
 
         with open(HOMING_SENTINEL, "w") as hf:
@@ -247,9 +249,40 @@ def main():
             time.sleep(0.3)
         if bus._active_state != "drawing":
             failures.append(f"sentinel did not release the homing hold (state={bus._active_state})")
+        if pre_home_bundle and bus._active_bundle != pre_home_bundle:
+            failures.append(f"resume re-picked ({bus._active_bundle}) instead of returning to {pre_home_bundle}")
         print(
-            f"homing: refused w/o dataset; played the escape ({max_step:.1f}°/100ms max, mid {mid:.0f}°, end {trace_t[-1]:.0f}°), sentinel released"
+            f"homing: refused w/o dataset; played the escape ({max_step:.1f}°/100ms max, mid {mid:.0f}°, end {trace_t[-1]:.0f}°), sentinel released, same dataset resumed"
         )
+
+        # --- the awakening: enable(await_homing) stays STILL until homing ------
+        bus.shutdown()
+        bus_wake = kb.KineticBus(
+            device=device,
+            library=lib,
+            is_drawing=lambda: False,
+            get_gaze=lambda: (0.0, 0.0),
+            get_person=lambda: "absent",
+            on_log=lambda m: None,
+        )
+        bus_wake._dir_flips = {c: False for c in kb.DIRECTION_CHANNELS}
+        bus_wake.enable(await_homing=True)
+        bus_wake.set_emotion("calm_observant")
+        time.sleep(2.8)  # long past the normal bundle pick-up
+        if bus_wake.status()["chains"] != 0:
+            failures.append("awakening hold broken — the body performed before homing")
+        wait_wake = bus_wake.home_clear()  # the startup homing flow arrives
+        if wait_wake <= 0:
+            failures.append("awakening home_clear refused with a dataset present")
+        with open(HOMING_SENTINEL, "w") as hf:
+            hf.write(str(time.time()))
+        t0w = time.time()
+        while time.time() - t0w < 10.0 and bus_wake.status()["chains"] == 0:
+            time.sleep(0.3)
+        if bus_wake.status()["chains"] == 0 or bus_wake._active_state != "calm_observant":
+            failures.append(f"awakening did not bloom after homing (state={bus_wake._active_state}, chains={bus_wake.status()['chains']})")
+        print(f"awakening: still through init, choreography played, bloomed into {bus_wake._active_bundle}")
+        bus = bus_wake  # the final shutdown below closes this one
 
         bus.shutdown()
 

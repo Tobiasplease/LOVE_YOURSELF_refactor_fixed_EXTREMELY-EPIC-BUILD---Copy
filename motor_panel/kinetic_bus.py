@@ -59,6 +59,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import (
+    KINETIC_AWAKENING_MAX_WAIT_S,
     KINETIC_CROSSFADE_S,
     KINETIC_GAZE_CHOICE_K,
     KINETIC_GAZE_LEAN,
@@ -294,6 +295,7 @@ class KineticBus:
         self._calib_cache: Tuple[float, Optional[list]] = (0.0, None)
         self.directions_path = GAZE_DIRECTIONS_PATH
         self._dir_flips: Dict[str, bool] = self._load_direction_flips()
+        self._resume_bundle: Optional[str] = None  # what was playing before a homing hold
         self._gens: List[engine.Generator] = []
         self._offsets: Dict[str, float] = {}
         self._active_bundle: Optional[str] = None
@@ -353,7 +355,7 @@ class KineticBus:
         }
 
     # --- lifecycle ------------------------------------------------------------
-    def enable(self):
+    def enable(self, await_homing: bool = False):
         if self._ext_ease is None:  # runtime mode: the bus owns the device
             if self.device is None:
                 from motor_panel.devices import build_devices
@@ -363,6 +365,15 @@ class KineticBus:
             self.log(f"lefthand: {msg}")
         self._running = True
         self._bundle_since = 0.0  # re-enable picks a bundle immediately
+        if await_homing:
+            # THE AWAKENING: hold the body still until the startup homing
+            # flow runs. The homing choreography becomes the machine's
+            # first gesture and the first temperament blooms as homing
+            # completes — all motors together, no left-hand solo at boot.
+            self._active_state = HOMING_STATE
+            self._home_started_at = time.time()  # a stale sentinel must not release us
+            self._hold_until = time.time() + KINETIC_AWAKENING_MAX_WAIT_S
+            self.log(f"awakening hold — still until homing (failsafe {KINETIC_AWAKENING_MAX_WAIT_S:.0f}s)")
         self._thread = threading.Thread(target=self._supervise, daemon=True)
         self._thread.start()
 
@@ -451,6 +462,12 @@ class KineticBus:
         if desired == self._active_state and not dwell_over:
             return
         bundle = self.library.bundle_for(self._emotion, desired == DRAWING_STATE)
+        if self._active_state == HOMING_STATE and self._resume_bundle:
+            # leaving the homing hold: continuity beats variety — blend back
+            # into the dataset that was playing, not a fresh random pick
+            stem = self._resume_bundle[len("session_") : -len(".json")]
+            if stem == desired or stem.startswith(desired + "_"):
+                bundle = self._resume_bundle
         if bundle is None:
             if self._active_bundle is not None or int(now) % 60 == 0:
                 self.log("no session bundles found — body idle (record some in the panel)")
@@ -650,7 +667,9 @@ class KineticBus:
         # stops the running choreography cleanly and performs it again from
         # wherever the arm is NOW. The token invalidates the previous run's
         # ramp thread and playback timer so two runs can never fight.
-        restarting = self._active_state == HOMING_STATE and (self._home_players or time.time() < self._hold_until)
+        if self._active_state not in (HOMING_STATE, STARTLE_STATE):
+            self._resume_bundle = self._active_bundle  # the SAME dataset returns after homing — no random re-pick
+        restarting = self._active_state == HOMING_STATE and bool(self._home_players)
         self._home_token = token = object()
         for p in self._home_players:
             p.stop()

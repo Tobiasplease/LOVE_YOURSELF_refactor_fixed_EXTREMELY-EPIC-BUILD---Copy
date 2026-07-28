@@ -464,6 +464,14 @@ to the legacy pair). It owns the lefthand device only (fingers, elbow,
 shoulder, wrist); gantry idle stays with grbl/idle_movements, gaze/lung
 with their systems.
 
+- THE AWAKENING (July 27): machine.py enables the bus with
+  await_homing=True — the body holds STILL through the whole init (it
+  used to solo a dataset ~2s after bus init, minutes before anything
+  else woke); the startup homing choreography is the machine's first
+  gesture and the first temperament blooms as homing completes, all
+  motors together. Failsafe KINETIC_AWAKENING_MAX_WAIT_S if homing
+  never arrives. After ANY homing, the SAME dataset resumes
+  (continuity, not a random same-state re-pick).
 - EMOTION IS PULLED, not pushed: the bus calls
   `mood_engine.get_emotion_for_hand_controller` (injected at construction)
   every supervisor tick. The old push sites (`change_to_emotion` + the
