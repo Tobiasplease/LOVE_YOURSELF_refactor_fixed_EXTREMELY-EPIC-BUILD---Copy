@@ -464,14 +464,19 @@ to the legacy pair). It owns the lefthand device only (fingers, elbow,
 shoulder, wrist); gantry idle stays with grbl/idle_movements, gaze/lung
 with their systems.
 
-- THE AWAKENING (July 28, CONCURRENT): machine.py enables the bus with
-  await_homing=True — the body holds STILL through the whole init — and at
-  the main-loop threshold a background `_awakening` thread starts the
-  homing choreography + gantry homing + the uArm's opening play (deferred
-  from its connect-time slot) WHILE the main loop brings up the camera
-  window, gaze, lung and bulb. Everything wakes in one moment; the first
-  temperament blooms when homing completes. (Fresh runs used to never
-  home at all — the start sat in the session-restore branch only.)
+- THE AWAKENING (July 28, FULLY CONCURRENT): machine.py enables the bus
+  with await_homing=True — the body holds STILL through the whole init —
+  and at the main-loop threshold a background `_awakening` thread starts
+  the homing choreography + the idle subprocess + the uArm's opening play
+  (deferred from its connect-time slot) WHILE the main loop brings up the
+  camera window, gaze, lung and bulb. The subprocess spawns IMMEDIATELY
+  (its ~10s preamble moves nothing) and runs alongside the choreography;
+  `utils.hooks.ARM_CLEAR_SENTINEL` (clear-at epoch written by the idle
+  manager) gates $H in ensure_homed so the sweep fires the instant the
+  arm is clear — choreography and homing are simultaneous, not queued.
+  Everything wakes in one moment; the first temperament blooms when
+  homing completes. (Fresh runs used to never home at all — the start
+  sat in the session-restore branch only.)
   Failsafe KINETIC_AWAKENING_MAX_WAIT_S if homing never arrives. After
   ANY homing, the SAME dataset resumes (continuity, not a re-pick).
 - LEGACY MOVEMENT WIRING REMOVED (July 28): machine.py no longer

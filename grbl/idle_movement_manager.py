@@ -60,18 +60,20 @@ class IdleMovementManager:
         self.emotion = emotion
         script_path = os.path.join(os.path.dirname(__file__), "run_idle_movements.py")
 
-        # Kinetic bus: the subprocess HOMES the gantry the moment it boots,
-        # so play the left arm's recorded homing choreography and wait it
-        # out here, in the parent — the hooks only exist in this process.
-        # (Covers startup AND every resume-after-drawing respawn.)
+        # Kinetic bus: start the left arm's homing choreography and spawn
+        # IMMEDIATELY — the subprocess's preamble (port find, alarm clear,
+        # pen-up) moves nothing, so it runs in PARALLEL with the
+        # choreography; ensure_homed waits on the arm-clear sentinel before
+        # actually sending $H. (Covers startup AND every resume respawn.)
         try:
             from utils import hooks as _kin_hooks
 
             if _kin_hooks.on_grbl_homing_start:
                 _wait = float(_kin_hooks.on_grbl_homing_start() or 0.0)
+                with open(_kin_hooks.ARM_CLEAR_SENTINEL, "w") as _f:
+                    _f.write(str(time.time() + _wait))
                 if _wait > 0:
-                    print(f"[🦾] Left arm clearing for homing — {_wait:.1f}s")
-                    time.sleep(_wait)
+                    print(f"[🦾] Left arm clearing ({_wait:.1f}s) — homing prep runs alongside")
         except Exception:
             pass
 

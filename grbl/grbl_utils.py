@@ -463,9 +463,12 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                 time.sleep(2.0)  # Wait for reset to complete
                 ser.reset_input_buffer()
 
-            # Kinetic bus: tuck the left arm clear and WAIT out its gentle
-            # ramp before the gantry sweeps (per attempt — a long retry
-            # cycle can outlive the bus's max-hold failsafe)
+            # Kinetic bus: the left arm must be CLEAR before the sweep. Two
+            # gates, whichever applies: in-process hooks (panel, manual
+            # tools) start the choreography here and wait it out; the
+            # cross-process ARM_CLEAR sentinel (runtime: the parent started
+            # the choreography as it spawned us, our preamble ran alongside)
+            # holds $H only for whatever remains of the clearing time.
             try:
                 from utils import hooks as _kin_hooks
 
@@ -478,6 +481,20 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                             print_message=f"[🦾] Left arm tucking clear — homing in {_tuck_wait:.1f}s",
                         )
                         time.sleep(_tuck_wait)
+                else:
+                    try:
+                        with open(_kin_hooks.ARM_CLEAR_SENTINEL) as _f:
+                            _clear_at = float(_f.read().strip())
+                        _remaining = min(max(0.0, _clear_at - time.time()), 60.0)
+                        if _remaining > 0:
+                            log_json_entry(
+                                LogType.GRBL,
+                                {"message": "Waiting for left arm clear (sentinel)", "action": "homing_arm_clear_wait", "seconds": _remaining},
+                                print_message=f"[🦾] $H holds {_remaining:.1f}s for the left arm to clear",
+                            )
+                            time.sleep(_remaining)
+                    except (OSError, ValueError):
+                        pass  # no sentinel — nothing choreographing, home freely
             except Exception:
                 pass
 

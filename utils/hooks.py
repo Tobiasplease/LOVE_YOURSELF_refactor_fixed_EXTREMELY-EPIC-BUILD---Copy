@@ -20,3 +20,11 @@ on_grbl_homing_done: Optional[Callable[[], None]] = None
 # ensure_homed touches this file on completion (any process); the kinetic
 # bus watches its mtime to release the tucked left arm.
 HOMING_SENTINEL = "/tmp/grbl_homing_complete.flag"
+
+# Cross-process arm-clear gate: the parent starts the homing choreography
+# and writes the epoch time at which the left arm WILL be clear; the idle
+# subprocess spawns immediately (its ~10s of preamble — port find, alarm
+# clear, pen-up — moves nothing) and ensure_homed sleeps until that moment
+# before sending $H. Choreography and homing prep run in PARALLEL; the
+# sweep fires the instant the arm is clear.
+ARM_CLEAR_SENTINEL = "/tmp/left_arm_clear_at.flag"
