@@ -28,3 +28,10 @@ HOMING_SENTINEL = "/tmp/grbl_homing_complete.flag"
 # before sending $H. Choreography and homing prep run in PARALLEL; the
 # sweep fires the instant the arm is clear.
 ARM_CLEAR_SENTINEL = "/tmp/left_arm_clear_at.flag"
+
+# Gantry arbitration (July 28): the kinetic bus owns the gantry between
+# drawings; the drawing pipeline's legacy pause/resume call sites (routed
+# through grbl/idle_movement_manager) fire these so the bus releases the
+# port before a drawing and re-acquires (and re-homes) after.
+on_gantry_pause: Optional[Callable[[], None]] = None
+on_gantry_resume: Optional[Callable[[], None]] = None

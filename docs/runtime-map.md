@@ -489,13 +489,23 @@ with their systems.
   recorded to stay clear of the gantry; set True to restore
   clear-first gating. The first temperament blooms when homing completes.
 - IDLE WANDERER RETIRED (July 28): grbl/idle_movement_manager.start()
-  refuses (RETIRED flag) — the Lissajous wanderer no longer runs, at
-  startup or via the post-drawing resume path (resume/pause/stop are
-  quiet no-ops for their legacy call sites; stop_idle_movements kept in
-  cleanup to kill strays). Startup homing was only ever a side effect of
-  booting it; machine.py owns homing now. Gantry idle motion returns as
-  recorded datasets in bus v2 (port arbitration). The ARM_CLEAR_SENTINEL
-  cross-process gate remains in ensure_homed for any future subprocess.
+  refuses (RETIRED flag) — the Lissajous wanderer no longer runs. Its
+  pause/resume module functions now forward to the gantry arbitration
+  hooks below; stop_idle_movements kept in cleanup to kill strays.
+- THE RIGHT ARM IN THE TEMPERAMENT (July 28, KINETIC_GANTRY): the bus
+  owns a headless `motor_panel/gantry.py` GantryLink between drawings —
+  the datasets' recorded x/y play through the same markov chains as the
+  servos (reach-clamped, G1 at chain tempo, ≤3 segments pipelined, pen
+  UP unless KINETIC_GANTRY_PEN). The awakening `gantry_acquire()`s:
+  port open (resets GRBL) → ensure_homed (tuck choreography fires,
+  simultaneous with $H) → the link KEEPS the port and generation flows.
+  Drawing arbitration: the legacy pause/resume call sites (grbl_utils
+  completion ritual, image_monitor) fire `utils.hooks.on_gantry_pause/
+  on_gantry_resume` → bus releases (pen up, port closed) before a
+  drawing and re-acquires (re-home + choreography) after. The
+  is_drawing() hard gate still drops every plan/pen send as backstop.
+  Proof: debug/test_gantry_runtime.py (pty GRBL discipline + bus flow/
+  gate/release/re-acquire).
   Failsafe KINETIC_AWAKENING_MAX_WAIT_S if homing never arrives. After
   ANY homing, the SAME dataset resumes (continuity, not a re-pick).
 - LEGACY MOVEMENT WIRING REMOVED (July 28): machine.py no longer

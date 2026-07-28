@@ -216,12 +216,28 @@ def start_idle_movements(emotion: str = "calm_observant") -> bool:
 
 
 def pause_for_drawing() -> bool:
-    """Pause idle movements for drawing"""
+    """Drawing needs the gantry: the kinetic bus releases it (the wanderer
+    these calls used to pause is retired)."""
+    try:
+        from utils import hooks
+
+        if hooks.on_gantry_pause:
+            hooks.on_gantry_pause()
+    except Exception as e:
+        print(f"[WARN] gantry pause hook failed: {e}")
     return get_manager().pause_for_drawing()
 
 
 def resume_after_drawing() -> bool:
-    """Resume idle movements after drawing"""
+    """Drawing done: the bus re-acquires the gantry (re-homes — the port
+    open reset GRBL — which fires the tuck choreography)."""
+    try:
+        from utils import hooks
+
+        if hooks.on_gantry_resume:
+            hooks.on_gantry_resume()
+    except Exception as e:
+        print(f"[WARN] gantry resume hook failed: {e}")
     return get_manager().resume_after_drawing()
 
 

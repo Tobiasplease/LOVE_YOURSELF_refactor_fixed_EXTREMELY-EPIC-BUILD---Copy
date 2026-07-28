@@ -65,6 +65,7 @@ from config.config import (
     KINETIC_GAZE_LEAN,
     KINETIC_GAZE_LEAN_TAU,
     KINETIC_GAZE_STRENGTH,
+    KINETIC_GANTRY_PEN,
     KINETIC_GAZE_TEMPO_K,
     KINETIC_HOMING_MAX_HOLD_S,
     KINETIC_HOMING_TUCK_S,
@@ -272,8 +273,12 @@ class KineticBus:
         send_step: Optional[Callable[[Dict[str, float]], None]] = None,
         get_state: Optional[Callable[[], Dict[str, float]]] = None,
         owned: Optional[set] = None,
+        gantry=None,
     ):
         self.device = device  # built lazily in enable() so tests can inject
+        self.gantry = gantry  # runtime GantryLink: the right arm joins the temperament
+        if owned is None and gantry is not None:
+            owned = OWNED_CHANNELS | {"x", "y"} | ({"pen"} if KINETIC_GANTRY_PEN else set())
         self.owned = owned or OWNED_CHANNELS
         self.library = library or TemperamentLibrary(owned=self.owned)
         self._emotion = "calm_observant"
@@ -353,6 +358,7 @@ class KineticBus:
             "emotion": self._emotion,
             "rotate_in": rotate_in,
             "reach": round(self._reach_amount, 2),
+            "gantry": bool(self.gantry is not None and self.gantry.alive),
         }
 
     # --- lifecycle ------------------------------------------------------------
@@ -386,6 +392,8 @@ class KineticBus:
         for p in self._home_players:
             p.stop()
         self._home_players = []
+        if self.gantry is not None:
+            self.gantry.release()
         self._active_bundle = self._active_state = None
         self._hold_until = 0.0
         self._offsets = {}
@@ -409,19 +417,38 @@ class KineticBus:
     def _send_plan(self, d: Dict[str, float], dt: float):
         # HARD GATE: while the machine draws, the right hand belongs to the
         # GRBL execution — the bus never contests the gantry, regardless of
-        # what the active dataset's chains contain. (Runtime v1 is doubly
-        # safe: owned=lefthand means no plan channel ever trains there.)
+        # what the active dataset's chains contain.
         if self.is_drawing():
             return
+        d = {c: v + self._offsets.get(c, 0.0) for c, v in d.items()}  # the lean current reaches the gantry too
         if self._ext_plan is not None:
-            d = {c: v + self._offsets.get(c, 0.0) for c, v in d.items()}  # the lean current reaches the gantry too
             self._ext_plan(d, dt)
+        elif self.gantry is not None and self.gantry.alive:
+            self.gantry.goto(d.get("x", 0.0), d.get("y", 0.0), dt)
 
     def _send_step(self, d: Dict[str, float]):
         if self.is_drawing():  # the pen belongs to the drawing too
             return
         if self._ext_step is not None:
             self._ext_step(d)
+        elif self.gantry is not None and self.gantry.alive and KINETIC_GANTRY_PEN and "pen" in d:
+            self.gantry.pen(int(round(d["pen"])))
+
+    # --- gantry arbitration (drawing pipeline vs temperament) ------------------
+    def gantry_acquire(self):
+        """Take the gantry: open the port (resets GRBL) and home — the tuck
+        choreography fires with it. Called at the awakening and after every
+        drawing (the drawing pipeline's port open reset GRBL anyway)."""
+        if self.gantry is None:
+            return
+        self.gantry.on_log = self.log
+        if self.gantry.connect_and_home():
+            self.log("gantry acquired — right arm in the temperament")
+
+    def gantry_release(self):
+        """Drawing needs the port: pen up, close, step aside."""
+        if self.gantry is not None:
+            self.gantry.release()
 
     def _live_state(self) -> Dict[str, float]:
         if self._ext_state is not None:

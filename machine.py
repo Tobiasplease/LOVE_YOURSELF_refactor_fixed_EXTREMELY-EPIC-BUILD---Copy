@@ -35,6 +35,7 @@ from config.config import (
     CONFIDENCE_THRESHOLD,
     DEBUG_REACTIVITY_PAUSE,
     KINETIC_BUS_ENABLED,
+    KINETIC_GANTRY,
     KINETIC_MONITOR_UI,
     MODEL_PATH,
     MOOD_EVALUATION_INTERVAL,
@@ -700,12 +701,18 @@ if KINETIC_BUS_ENABLED:
         import utils.hooks as _kinetic_hooks
         from motor_panel.kinetic_bus import KineticBus
 
+        _gantry_link = None
+        if KINETIC_GANTRY:
+            from motor_panel.gantry import GantryLink
+
+            _gantry_link = GantryLink()  # the right arm joins the temperament (acquired at the awakening)
         kinetic_bus = KineticBus(
             # PULL the emotion straight from the mood engine every supervisor
             # tick — the old push plumbing stays as redundancy, but the bus
             # never depends on it (the push path is years of accretion)
             get_emotion=mood_engine.get_emotion_for_hand_controller,
             on_log=lambda m: debug_print(m, "KINETIC"),
+            gantry=_gantry_link,
         )
         # await_homing: the body holds STILL through init; the startup homing
         # choreography is the machine's first gesture and the first
@@ -715,6 +722,10 @@ if KINETIC_BUS_ENABLED:
         # (and waits out the ramp) before every $H, releases on completion
         _kinetic_hooks.on_grbl_homing_start = kinetic_bus.home_clear
         _kinetic_hooks.on_grbl_homing_done = kinetic_bus.home_release
+        # drawing arbitration: pause/resume call sites hand the gantry back
+        # and forth between the drawing pipeline and the temperament
+        _kinetic_hooks.on_gantry_pause = kinetic_bus.gantry_release
+        _kinetic_hooks.on_gantry_resume = kinetic_bus.gantry_acquire
         if KINETIC_MONITOR_UI:
             try:
                 from motor_panel.runtime_monitor import start_runtime_monitor
@@ -1198,24 +1209,27 @@ def _awakening():
     try:
         if _uarm_awakening_play is not None:
             threading.Thread(target=_uarm_awakening_play, daemon=True, name="UArmAwakeningPlay").start()
-        # Home the gantry DIRECTLY — no idle-wanderer subprocess in the
-        # path anymore (that legacy system is retired; homing was only
-        # ever a side effect of booting it). In-process means the homing
-        # hooks fire right here: the choreography starts and, in
-        # simultaneous mode, $H runs alongside the dance.
+        # Home the gantry and KEEP it — the bus's GantryLink acquires the
+        # port (the open resets GRBL), homes it (the tuck choreography
+        # fires, simultaneous with $H), and then plays the datasets'
+        # recorded x/y through the temperament until a drawing needs the
+        # port. No idle-wanderer subprocess anywhere in the path.
         try:
-            from grbl.grbl_utils import ensure_homed, find_grbl_port
-
-            _ser = find_grbl_port(preferred_port=os.getenv("GRBL_PORT", "/dev/arduino_cnc"))
-            if _ser:
-                ensure_homed(_ser, max_retries=3)
-                try:
-                    _ser.close()  # release the port for the drawing pipeline
-                except Exception:
-                    pass
-                debug_print("Awakening: gantry homed (direct, in-process)", "INIT")
+            if kinetic_bus is not None and getattr(kinetic_bus, "gantry", None) is not None:
+                kinetic_bus.gantry_acquire()
             else:
-                debug_print("Awakening: no GRBL found — homing skipped", "WARN")
+                from grbl.grbl_utils import ensure_homed, find_grbl_port
+
+                _ser = find_grbl_port(preferred_port=os.getenv("GRBL_PORT", "/dev/arduino_cnc"))
+                if _ser:
+                    ensure_homed(_ser, max_retries=3)
+                    try:
+                        _ser.close()
+                    except Exception:
+                        pass
+                    debug_print("Awakening: gantry homed (direct, in-process)", "INIT")
+                else:
+                    debug_print("Awakening: no GRBL found — homing skipped", "WARN")
         except Exception as e:
             debug_print(f"Awakening homing failed: {e}", "ERROR")
     except Exception as e:

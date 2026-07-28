@@ -219,6 +219,15 @@ KINETIC_HOMING_TUCK_S = 1.0  # entry ease into the choreography's first pose —
 # gantry, so $H does not wait for it. True restores clear-first: $H holds
 # until the arm has finished getting out of the way.
 KINETIC_HOMING_WAIT_CLEAR = False
+# The right arm in the temperament (July 28 — "bus v2" landed early): the
+# bus owns a headless GantryLink between drawings, playing the datasets'
+# recorded x/y through the same markov chains as the servos (reach-clamped,
+# G1 at chain tempo). The drawing pipeline's pause/resume call sites
+# release/re-acquire the port; every re-acquire re-homes (a serial open
+# resets GRBL), firing the tuck choreography. Pen stays UP during
+# generation unless KINETIC_GANTRY_PEN lets recorded pen takes ink.
+KINETIC_GANTRY = True
+KINETIC_GANTRY_PEN = False
 # The AWAKENING: at machine.py boot the bus holds the body STILL until the
 # startup homing flow runs — the homing choreography is the machine's first
 # gesture and the first temperament blooms as homing completes, all motors
