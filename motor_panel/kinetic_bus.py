@@ -452,8 +452,15 @@ class KineticBus:
 
     def _live_state(self) -> Dict[str, float]:
         if self._ext_state is not None:
-            return dict(self._ext_state())
-        return {c: float(ch.value) for c, ch in self.device.channels.items()}
+            st = dict(self._ext_state())
+        else:
+            st = {c: float(ch.value) for c, ch in self.device.channels.items()}
+        # the servo device knows nothing of x/y — the gantry's position is
+        # commanded, not sensed. Seed generators with the link's truth
+        # ((0,0) right after homing) or the whole owning chain dies on it.
+        if self.gantry is not None and "x" in self.owned and "x" not in st:
+            st["x"], st["y"] = self.gantry.position
+        return st
 
     def _stop_gens(self):
         for g in self._gens:

@@ -215,6 +215,12 @@ class Generator:
         second = self.chain.get("servo_second_order", {})
         if not first:  # a constant take trains ZERO transitions (a==b skipped) — nothing to walk
             return
+        if any(c not in current for c in self.channels):
+            # the live body can't report every channel (gantry x/y is
+            # commanded, not sensed) — adopt the nearest demonstrated
+            # values for the gaps instead of dying on the first key
+            near = self._state(self._nearest_key(current, first))
+            current = {**near, **{c: current[c] for c in self.channels if c in current}}
         cur_key = _key(current, self.channels, self.bins)
         if cur_key not in first:  # ease to the nearest known state to enter the chain
             cur_key = self._nearest_key(current, first)

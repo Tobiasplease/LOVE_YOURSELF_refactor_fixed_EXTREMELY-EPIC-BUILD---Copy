@@ -523,6 +523,17 @@ with their systems.
   reply (error:N / ALARM) deduplicated. Diagnosis on hardware:
   debug/test_gantry_live.py (machine.py stopped) homes and sends
   dataset coordinates echoing every GRBL reply.
+- THE ACTUAL PARKED-ARM BUG (July 28, caught live in the terminal):
+  KeyError 'x' — generators seed from the body's LIVE state, and the
+  servo device reports no x/y (gantry position is commanded, not
+  sensed), so the group chain owning the gantry DIED on its first step
+  at every bloom (one dead thread per temperament switch; the surviving
+  solo chain kept some servos moving, masking it). Fixed at both ends:
+  engine._loop fills missing channels from the nearest demonstrated
+  state instead of dying; kinetic_bus._live_state merges
+  gantry.position ((0,0) after homing) into the seed. Regression:
+  test_gantry_runtime's bus test now uses the production shape (a
+  servo-only get_state).
 - ONE MACHINE PER BODY (July 28): the "phantom left arm" (moving with
   machine.py 'off', glitching during runtime) traced to a forgotten
   login autostart — ~/.config/autostart/impostor.desktop →

@@ -111,6 +111,7 @@ def main():
             def __init__(self):
                 self.alive = False
                 self.gotos = []
+                self.position = (0.0, 0.0)  # like the real link: commanded, (0,0) after homing
                 self.on_log = lambda m: None
 
             def connect_and_home(self):
@@ -119,6 +120,7 @@ def main():
 
             def goto(self, x, y, dt=None):
                 self.gotos.append((x, y))
+                self.position = (x, y)
 
             def pen(self, s):
                 pass
@@ -136,7 +138,10 @@ def main():
             get_person=lambda: "absent",
             on_log=lambda m: None,
             send_ease=lambda d: None,
-            get_state=lambda: {"x": 25.0, "y": 20.0, "elbow": 90.0, "shoulder": 90.0},
+            # PRODUCTION SHAPE: the servo device reports NO x/y — this exact
+            # gap killed every gantry-owning generator on July 28 (KeyError
+            # 'x' seeding the chain from the live state)
+            get_state=lambda: {"elbow": 90.0, "shoulder": 90.0},
             gantry=fake,
         )
         if "x" not in bus.owned or "y" not in bus.owned:
