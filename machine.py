@@ -82,6 +82,10 @@ def parse_args():
 
 args = parse_args()
 
+from utils.single_instance import claim_machine_or_exit
+
+claim_machine_or_exit()
+
 # Debug mode setup
 DEBUG_MODE = args.debug
 

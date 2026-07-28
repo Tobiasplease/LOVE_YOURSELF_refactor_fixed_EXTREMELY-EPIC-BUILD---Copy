@@ -23,7 +23,7 @@ class ServoController:
 
     def _connect(self, verbose=False) -> bool:
         try:
-            self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
+            self.ser = serial.Serial(self.port, self.baudrate, timeout=1, exclusive=True)
             self.serial = self.ser  # For optional external use
             # Skip DTR manipulation - causes issues with lint arduinoserial sketch
             time.sleep(0.5)  # Brief delay for Arduino initialization

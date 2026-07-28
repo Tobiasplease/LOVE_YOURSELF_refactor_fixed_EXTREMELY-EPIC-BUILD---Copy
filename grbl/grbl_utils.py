@@ -151,7 +151,7 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None, continuo
                 {"message": "Testing preferred GRBL port", "action": "preferred_port_test", "port": preferred_port, "baud": baud},
                 print_message=f"[🔌] Testing preferred port {preferred_port}...",
             )
-            ser = serial.Serial(preferred_port, baud, timeout=timeout)
+            ser = serial.Serial(preferred_port, baud, timeout=timeout, exclusive=True)
             time.sleep(2.0)
             ser.reset_input_buffer()
             ser.write(b"?")
@@ -219,7 +219,7 @@ def find_grbl_port(baud=DEFAULT_BAUD, timeout=0.5, preferred_port=None, continuo
                 {"message": "Testing port for GRBL", "action": "port_test", "port": p.device, "baud": baud},
                 print_message=f"[🔌] Testing {p.device}...",
             )
-            ser = serial.Serial(p.device, baud, timeout=timeout)
+            ser = serial.Serial(p.device, baud, timeout=timeout, exclusive=True)
             time.sleep(2.0)
             ser.reset_input_buffer()
             ser.write(b"?")

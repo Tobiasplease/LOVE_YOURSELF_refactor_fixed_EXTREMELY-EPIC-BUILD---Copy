@@ -508,6 +508,25 @@ with their systems.
   gate/release/re-acquire).
   Failsafe KINETIC_AWAKENING_MAX_WAIT_S if homing never arrives. After
   ANY homing, the SAME dataset resumes (continuity, not a re-pick).
+- ONE MACHINE PER BODY (July 28): the "phantom left arm" (moving with
+  machine.py 'off', glitching during runtime) traced to a forgotten
+  login autostart — ~/.config/autostart/impostor.desktop →
+  start_impostor.sh → hidden tmux session `impostor-system` running
+  machine.py in a 5s restart loop since Sep 2025. Two machine.py
+  processes interleaved bytes on the same serial ports. Guards now:
+  (1) machine.py claims a flock via utils/single_instance.py — a second
+  instance exits with a message; the lock dies with the process, so
+  restart loops keep working; (2) every serial open (devices.py
+  lefthand, servo_control lunggaze, grbl_utils CNC ×2) passes
+  exclusive=True — a second opener fails loudly instead of garbling
+  commands, and find_grbl_port's "?" probe now skips ports other
+  subsystems hold. The autostart file itself is the operator's to
+  remove (`rm ~/.config/autostart/impostor.desktop`) or keep for
+  exhibition boot — the flock makes it safe either way. Firmware ruled
+  out: the flashed clean variant has no autonomous code (the legacy
+  .ino wanderers need a LEFT_ARM_ENABLE nothing live sends — panel
+  extras removed July 27; debug/identify_hand_firmware.py verifies a
+  flash in doubt). Proof: debug/test_exclusive_ports.py.
 - LEGACY MOVEMENT WIRING REMOVED (July 28): machine.py no longer
   imports/starts/stops the old hand controller or organic_left_arm —
   no more change_to_emotion, start_autonomous_mode, send_reactivity_data

@@ -134,7 +134,7 @@ class SerialDevice:
         if self.connected:
             return "already connected"
         try:
-            self.ser = serial.Serial(self.port, self.baud, timeout=1)
+            self.ser = serial.Serial(self.port, self.baud, timeout=1, exclusive=True)
             time.sleep(self.boot_delay)
             return f"connected {self.port} @ {self.baud}"
         except Exception as e:
