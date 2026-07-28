@@ -60,7 +60,13 @@ PAUSE_DURATION = 1.5
 # so ALL calls — captions, reflections, compression, drawing steps — run on the
 # one model below via the patched llama-server (video super-frames, prefill).
 VIDEO_MODE_ENABLED = os.getenv("VIDEO_MODE_ENABLED", "true").lower() == "true"
-VIDEO_MODE = os.getenv("VIDEO_MODE", "superframe")  # "multi" (plain multi-image) or "superframe" (Conv3D temporal encoding via llama-video)
+# "multi" default since July 28 (artist's call): superframe's Conv3D temporal
+# encoding needs steady frames, and servo sway smeared them — the model wrote
+# about blur; logs showed frequent "only 1/6 steady frames" fallbacks anyway.
+# Plain multi-image sends legible stills, runs on STANDARD llama.cpp mtmd (no
+# patched fork — frees model choice for the upgrade A/B), and keeps the same
+# upstream motion/steady-frame decision logic. "superframe" stays a toggle.
+VIDEO_MODE = os.getenv("VIDEO_MODE", "multi")  # "multi" (plain multi-image) or "superframe" (Conv3D temporal encoding via llama-video)
 MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # Frame diff below this = static, use single image
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 

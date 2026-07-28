@@ -127,7 +127,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 
 - `LLAMA_SERVER_URL`: llama-server endpoint (default `http://localhost:8080`)
 - `LLAMA_MODEL_PATH` / `LLAMA_MMPROJ_PATH`: model weights for llama-server
-- `VIDEO_MODE_ENABLED` / `VIDEO_MODE`: temporal video perception (`superframe` default, or `multi`)
+- `VIDEO_MODE_ENABLED` / `VIDEO_MODE`: multi-frame perception (`multi` default since July 2026 — plain stills on standard llama.cpp mtmd; `superframe` = patched Conv3D temporal encoding, needs steady frames)
 - `MOTION_THRESHOLD`: frame-diff threshold below which a single still is sent
 - `MOOD_SNAPSHOT_FOLDER`: Override default event log storage location
 
