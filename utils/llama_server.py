@@ -296,6 +296,36 @@ def is_server_running() -> bool:
         return False
 
 
+def _free_comfyui_vram() -> None:
+    """Ask ComfyUI to release its models/VRAM. Harmless (caught) if ComfyUI
+    isn't running. Flux can linger on the GPU after a generation and starve the
+    -ngl load, so this must run before restarting llama-server."""
+    try:
+        requests.post(
+            "http://localhost:8188/free",
+            json={"unload_models": True, "free_memory": True},
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
+def ensure_server_up() -> bool:
+    """Bring llama-server back up robustly: free ComfyUI VRAM first, then start,
+    retrying once. The bare start_server() failed 'during GRBL execution' — a
+    query hit a down server while Flux still held the VRAM, so -ngl couldn't
+    allocate and the 60s health check timed out."""
+    if is_server_running():
+        return True
+    _free_comfyui_vram()
+    for attempt in range(2):
+        if start_server():
+            return True
+        _free_comfyui_vram()
+        time.sleep(2)
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Drawing completion wait
 # ---------------------------------------------------------------------------
@@ -326,22 +356,10 @@ def _wait_for_drawing_completion() -> None:
         print_message="llama-server resumed",
     )
 
-    # Free ComfyUI VRAM
-    try:
-        resp = requests.post(
-            "http://localhost:8188/free",
-            json={"unload_models": True, "free_memory": True},
-            timeout=10,
-        )
-        if resp.ok:
-            print("[llama-server] Freed ComfyUI VRAM")
-    except Exception:
-        pass
-
-    # Restart llama-server if it was stopped for VRAM
+    # Restart llama-server if it was stopped for VRAM (frees ComfyUI VRAM first).
     if not is_server_running():
         print("[llama-server] Restarting after ComfyUI...")
-        start_server()
+        ensure_server_up()
 
 
 # ---------------------------------------------------------------------------
@@ -376,10 +394,12 @@ def query_llama_server(
     if not skip_generation_wait:
         _wait_for_drawing_completion()
 
-    # Auto-restart if llama-server has crashed
+    # Auto-restart if llama-server has crashed. ensure_server_up frees ComfyUI
+    # VRAM first + retries — a bare start_server() failed during the GRBL draw
+    # phase when Flux still held the GPU.
     if not is_server_running():
         print("[llama-server] Server not responding — attempting restart...")
-        if not start_server():
+        if not ensure_server_up():
             return f"[WARNING] llama-server unavailable and restart failed"
 
     # Encode image
@@ -810,10 +830,10 @@ def query_llama_server_video(
     if not skip_generation_wait:
         _wait_for_drawing_completion()
 
-    # Auto-restart if llama-server has crashed
+    # Auto-restart if llama-server has crashed (frees ComfyUI VRAM first + retries)
     if not is_server_running():
         print("[llama-server] Server not responding — attempting restart...")
-        if start_server():
+        if ensure_server_up():
             print("[llama-server] Restarted successfully")
         else:
             print("[llama-server] Restart failed — falling back to single frame")
