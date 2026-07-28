@@ -214,6 +214,11 @@ KINETIC_REACH_TAU = 2.0  # seconds to lean out / settle back
 # signal is missed (GRBL's homing quiet-wait is 60s).
 KINETIC_HOMING_MAX_HOLD_S = 75
 KINETIC_HOMING_TUCK_S = 1.0  # entry ease into the choreography's first pose — no snapping
+# False (July 28, artist's call): the homing dance and the gantry sweep run
+# SIMULTANEOUSLY — the choreography is recorded to stay clear of the
+# gantry, so $H does not wait for it. True restores clear-first: $H holds
+# until the arm has finished getting out of the way.
+KINETIC_HOMING_WAIT_CLEAR = False
 # The AWAKENING: at machine.py boot the bus holds the body STILL until the
 # startup homing flow runs — the homing choreography is the machine's first
 # gesture and the first temperament blooms as homing completes, all motors

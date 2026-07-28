@@ -57,7 +57,7 @@ from config.config import (
 from event_logging.event_logger import get_current_run_id, log_json_entry, set_start_time
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
-from grbl.idle_movement_manager import start_idle_movements, stop_idle_movements, update_emotion
+from grbl.idle_movement_manager import stop_idle_movements  # cleanup-only: kills stray wanderer processes
 from image_monitor import ImageMonitor
 from mood.mood import MoodEngine
 from perception.detection_memory import DetectionMemory
@@ -911,12 +911,7 @@ else:
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
 
-    # Start idle CNC movements with default emotion
-    default_emotion = "calm_observant"
-    if start_idle_movements(default_emotion):
-        debug_print(f"Idle CNC movements started with default emotion: {default_emotion}", "INIT")
-    else:
-        debug_print("Failed to start idle CNC movements", "WARN")
+    # (idle CNC wanderer retired July 28 — homing happens at the awakening)
 
 debug_print("System initialization complete", "INIT")
 
@@ -1000,10 +995,6 @@ def mood_update_thread(mood_frame, timestamp):
                     if kinetic_bus is not None:
                         kinetic_bus.set_emotion(thread_emotion)
                         debug_print(f"Updated kinetic bus emotion: {thread_emotion}", "HAND")
-
-                    # Update CNC idle movements with new emotional state
-                    update_emotion(thread_emotion)
-                    debug_print(f"Updated CNC emotion: {thread_emotion}", "CNC")
 
                     # Third: Update captioner's mood state and pattern data for next cycle
                     captioner.current_mood = thread_mood
@@ -1207,11 +1198,26 @@ def _awakening():
     try:
         if _uarm_awakening_play is not None:
             threading.Thread(target=_uarm_awakening_play, daemon=True, name="UArmAwakeningPlay").start()
-        _emotion = mood_engine.get_emotion_for_hand_controller()
-        if start_idle_movements(_emotion):
-            debug_print(f"Awakening: choreography + homing started with emotion {_emotion}", "INIT")
-        else:
-            debug_print("Awakening: idle CNC failed to start", "WARN")
+        # Home the gantry DIRECTLY — no idle-wanderer subprocess in the
+        # path anymore (that legacy system is retired; homing was only
+        # ever a side effect of booting it). In-process means the homing
+        # hooks fire right here: the choreography starts and, in
+        # simultaneous mode, $H runs alongside the dance.
+        try:
+            from grbl.grbl_utils import ensure_homed, find_grbl_port
+
+            _ser = find_grbl_port(preferred_port=os.getenv("GRBL_PORT", "/dev/arduino_cnc"))
+            if _ser:
+                ensure_homed(_ser, max_retries=3)
+                try:
+                    _ser.close()  # release the port for the drawing pipeline
+                except Exception:
+                    pass
+                debug_print("Awakening: gantry homed (direct, in-process)", "INIT")
+            else:
+                debug_print("Awakening: no GRBL found — homing skipped", "WARN")
+        except Exception as e:
+            debug_print(f"Awakening homing failed: {e}", "ERROR")
     except Exception as e:
         debug_print(f"Awakening failed: {e}", "ERROR")
 

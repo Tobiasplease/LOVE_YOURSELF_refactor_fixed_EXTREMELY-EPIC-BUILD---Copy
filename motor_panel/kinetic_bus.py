@@ -68,6 +68,7 @@ from config.config import (
     KINETIC_GAZE_TEMPO_K,
     KINETIC_HOMING_MAX_HOLD_S,
     KINETIC_HOMING_TUCK_S,
+    KINETIC_HOMING_WAIT_CLEAR,
     KINETIC_REACH_ENABLED,
     KINETIC_REACH_MAX_DEG,
     KINETIC_REACH_STRENGTH,
@@ -704,6 +705,11 @@ class KineticBus:
         timer.daemon = True
         timer.start()
         head = "homing RE-TRIGGERED — restarting the choreography" if restarting else f"homing choreography {fn}"
+        if not KINETIC_HOMING_WAIT_CLEAR:
+            # simultaneous mode: the dance is recorded to stay clear of the
+            # gantry, so the sweep does not wait for it — they move together
+            self.log(f"{head} — motion {motion_end:.1f}s, homing runs alongside")
+            return 0.0
         self.log(f"{head} — motion {motion_end:.1f}s of a {take_len:.1f}s take, clearing in {total:.1f}s")
         return total
 

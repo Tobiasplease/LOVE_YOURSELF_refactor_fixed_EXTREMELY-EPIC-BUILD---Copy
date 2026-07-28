@@ -196,9 +196,13 @@ def main():
         wrist_t = next(t for t in s.tracks if t.channels == ["wrist"])
         wrist_t.samples = [{"t": i / RATE, "dt": 1 / RATE, "wrist": 66.0} for i in range(2 * n)]
         s.save(export=True)
+        dance = kb.KINETIC_HOMING_TUCK_S + 2.0 + 0.5  # entry ease + the take's MOTION + margin
         wait = bus.home_clear()
-        if not 2.5 <= wait <= 4.6:  # entry ease + MOTION + margin — a 5.5s+ wait means the still tail leaked in
-            failures.append(f"wait must cover the motion, not the still tail (wait={wait}, take 4s, motion 2s)")
+        if kb.KINETIC_HOMING_WAIT_CLEAR:
+            if not dance - 1.0 <= wait <= dance + 1.1:  # a 5.5s+ wait means the still tail leaked in
+                failures.append(f"wait must cover the motion, not the still tail (wait={wait}, take 4s, motion 2s)")
+        elif wait != 0.0:
+            failures.append(f"simultaneous mode must not gate homing (wait={wait})")
         if bus._active_state != "homing":
             failures.append(f"homing did not claim the body (state={bus._active_state})")
         if bus.status()["chains"] != 0:
@@ -206,7 +210,7 @@ def main():
         # the take must be TRAVERSED (playback), gently, ending at the tuck
         trace_t = []
         t0r = time.time()
-        while time.time() - t0r < wait + 0.3:
+        while time.time() - t0r < dance + 0.3:
             trace_t.append(device.channels["elbow"].target)
             time.sleep(0.1)
         max_step = max(abs(b - a) for a, b in zip(trace_t, trace_t[1:]))
@@ -221,12 +225,10 @@ def main():
         # two player sets fighting shows up as zigzagging targets
         bus.home_clear()  # run 2 starts from the held tuck
         time.sleep(1.8)  # deep into run 2's playback
-        wait3 = bus.home_clear()  # run 3 lands MID-PLAYBACK — the fight case
-        if not 2.5 <= wait3 <= 4.6:
-            failures.append(f"mid-playback re-trigger did not restart (wait={wait3})")
+        bus.home_clear()  # run 3 lands MID-PLAYBACK — the fight case
         trace2 = []
         t0r2 = time.time()
-        while time.time() - t0r2 < wait3 + 0.3:
+        while time.time() - t0r2 < dance + 0.3:
             trace2.append(device.channels["elbow"].target)
             time.sleep(0.1)
         max_step2 = max(abs(b - a) for a, b in zip(trace2, trace2[1:]))
@@ -271,9 +273,9 @@ def main():
         time.sleep(2.8)  # long past the normal bundle pick-up
         if bus_wake.status()["chains"] != 0:
             failures.append("awakening hold broken — the body performed before homing")
-        wait_wake = bus_wake.home_clear()  # the startup homing flow arrives
-        if wait_wake <= 0:
-            failures.append("awakening home_clear refused with a dataset present")
+        bus_wake.home_clear()  # the startup homing flow arrives
+        if bus_wake._active_state != "homing":
+            failures.append("awakening home_clear did not claim the body")
         with open(HOMING_SENTINEL, "w") as hf:
             hf.write(str(time.time()))
         t0w = time.time()

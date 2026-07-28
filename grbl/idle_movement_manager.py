@@ -34,7 +34,17 @@ class IdleMovementManager:
         # lock, one spawn.
         self._lock = threading.RLock()
 
+    # RETIRED July 28: the Lissajous wanderer is superseded by the kinetic
+    # bus philosophy (recorded temperament, not blind wandering) and startup
+    # homing now runs directly in machine.py's awakening. start() refuses so
+    # the post-drawing resume path cannot resurrect the wanderer; pause/
+    # resume/stop remain as safe no-ops for their legacy call sites. Gantry
+    # idle motion returns as recorded datasets in bus v2 (port arbitration).
+    RETIRED = True
+
     def start(self, emotion: str = "calm_observant") -> bool:
+        if self.RETIRED:
+            return False
         with self._lock:
             return self._start_locked(emotion)
 
@@ -127,6 +137,8 @@ class IdleMovementManager:
             return False
 
     def resume_after_drawing(self) -> bool:
+        if self.RETIRED:
+            return True  # nothing to resume — quiet success for the legacy call sites
         with self._lock:
             return self._resume_locked()
 

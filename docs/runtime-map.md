@@ -464,19 +464,24 @@ to the legacy pair). It owns the lefthand device only (fingers, elbow,
 shoulder, wrist); gantry idle stays with grbl/idle_movements, gaze/lung
 with their systems.
 
-- THE AWAKENING (July 28, FULLY CONCURRENT): machine.py enables the bus
-  with await_homing=True — the body holds STILL through the whole init —
-  and at the main-loop threshold a background `_awakening` thread starts
-  the homing choreography + the idle subprocess + the uArm's opening play
-  (deferred from its connect-time slot) WHILE the main loop brings up the
-  camera window, gaze, lung and bulb. The subprocess spawns IMMEDIATELY
-  (its ~10s preamble moves nothing) and runs alongside the choreography;
-  `utils.hooks.ARM_CLEAR_SENTINEL` (clear-at epoch written by the idle
-  manager) gates $H in ensure_homed so the sweep fires the instant the
-  arm is clear — choreography and homing are simultaneous, not queued.
-  Everything wakes in one moment; the first temperament blooms when
-  homing completes. (Fresh runs used to never home at all — the start
-  sat in the session-restore branch only.)
+- THE AWAKENING (July 28, final form): machine.py enables the bus with
+  await_homing=True — the body holds STILL through the whole init — and
+  at the main-loop threshold a background `_awakening` thread HOMES THE
+  GANTRY DIRECTLY (find_grbl_port + ensure_homed in-process, port closed
+  after — no subprocess in the path) and starts the uArm's opening play,
+  WHILE the main loop brings up the camera window, gaze, lung and bulb.
+  KINETIC_HOMING_WAIT_CLEAR=False (artist's call): the homing
+  choreography and the $H sweep run SIMULTANEOUSLY — the dance is
+  recorded to stay clear of the gantry; set True to restore
+  clear-first gating. The first temperament blooms when homing completes.
+- IDLE WANDERER RETIRED (July 28): grbl/idle_movement_manager.start()
+  refuses (RETIRED flag) — the Lissajous wanderer no longer runs, at
+  startup or via the post-drawing resume path (resume/pause/stop are
+  quiet no-ops for their legacy call sites; stop_idle_movements kept in
+  cleanup to kill strays). Startup homing was only ever a side effect of
+  booting it; machine.py owns homing now. Gantry idle motion returns as
+  recorded datasets in bus v2 (port arbitration). The ARM_CLEAR_SENTINEL
+  cross-process gate remains in ensure_homed for any future subprocess.
   Failsafe KINETIC_AWAKENING_MAX_WAIT_S if homing never arrives. After
   ANY homing, the SAME dataset resumes (continuity, not a re-pick).
 - LEGACY MOVEMENT WIRING REMOVED (July 28): machine.py no longer
