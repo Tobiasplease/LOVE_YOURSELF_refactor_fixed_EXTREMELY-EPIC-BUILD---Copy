@@ -231,6 +231,12 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
     ]
     if mmproj and os.path.exists(mmproj):
         cmd.extend(["--mmproj", mmproj])
+    # Extra launch flags via env (July 28) — the Qwen3.6-27B experiment needs
+    # MTP speculative decoding ("--spec-type draft-mtp --spec-draft-n-max 2
+    # -fa on") without hardcoding model-specific flags here. See run_27b.sh.
+    extra = os.getenv("LLAMA_EXTRA_ARGS", "").split()
+    if extra:
+        cmd.extend(extra)
 
     print(f"[llama-server] Starting: {' '.join(cmd)}")
     _server_process = subprocess.Popen(

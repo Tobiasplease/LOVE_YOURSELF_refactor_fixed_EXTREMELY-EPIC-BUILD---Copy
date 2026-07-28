@@ -71,8 +71,11 @@ MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # Frame diff b
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 
 # Label only: the weights llama-server loads come from LLAMA_MODEL_PATH
-# (utils/llama_server.py). This name appears in logs and model_settings lookups.
-MODEL_NAME = "qwen3.5:9b"
+# (utils/llama_server.py). This name appears in logs and model_settings lookups
+# (which fall back to defaults for unknown names — no key exists for either
+# qwen label, so overriding is behavior-neutral). Env-overridable July 28 so
+# the 27B experiment's logs say what actually ran (run_27b.sh sets it).
+MODEL_NAME = os.getenv("MODEL_NAME", "qwen3.5:9b")
 
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log"))
 
