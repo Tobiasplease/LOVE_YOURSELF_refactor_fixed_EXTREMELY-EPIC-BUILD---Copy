@@ -464,15 +464,25 @@ to the legacy pair). It owns the lefthand device only (fingers, elbow,
 shoulder, wrist); gantry idle stays with grbl/idle_movements, gaze/lung
 with their systems.
 
-- THE AWAKENING (July 27, restaged July 28): machine.py enables the bus
-  with await_homing=True — the body holds STILL through the whole init —
-  and the homing/idle start now fires AT THE MAIN-LOOP THRESHOLD, not
-  mid-init (and no longer only in the session-restore branch — fresh runs
-  never homed at all before): the choreography, the gantry sweep, the
-  camera window, and gaze/lung waking all converge, and the first
-  temperament blooms when homing completes. Failsafe
-  KINETIC_AWAKENING_MAX_WAIT_S if homing never arrives. After ANY homing,
-  the SAME dataset resumes (continuity, not a random same-state re-pick).
+- THE AWAKENING (July 28, CONCURRENT): machine.py enables the bus with
+  await_homing=True — the body holds STILL through the whole init — and at
+  the main-loop threshold a background `_awakening` thread starts the
+  homing choreography + gantry homing + the uArm's opening play (deferred
+  from its connect-time slot) WHILE the main loop brings up the camera
+  window, gaze, lung and bulb. Everything wakes in one moment; the first
+  temperament blooms when homing completes. (Fresh runs used to never
+  home at all — the start sat in the session-restore branch only.)
+  Failsafe KINETIC_AWAKENING_MAX_WAIT_S if homing never arrives. After
+  ANY homing, the SAME dataset resumes (continuity, not a re-pick).
+- LEGACY MOVEMENT WIRING REMOVED (July 28): machine.py no longer
+  imports/starts/stops the old hand controller or organic_left_arm —
+  no more change_to_emotion, start_autonomous_mode, send_reactivity_data
+  (the "WARNING Hand controller not available" log spam is gone with
+  them); the reactivity-pause block that drove the dead Markov loop is
+  retired (the bus has startle/reach for person-reactivity). The unused
+  hand_control_v2/ directory (zero consumers) is deleted. hand_control/
+  modules remain on disk for the standalone legacy tools only — nothing
+  in the runtime touches them; full deletion after the validated run.
 - GAZE/LUNG DROPOUTS (diagnosed July 28): the lunggaze Arduino
   re-enumerates on USB hiccups (the /dev/arduino_lunggaze symlink
   vanishes and returns) and ServoController used to DISABLE ITSELF

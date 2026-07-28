@@ -43,7 +43,6 @@ from config.config import (
     REACTIVITY_PAUSE_COOLDOWN,
     REACTIVITY_PAUSE_DURATION,
     REACTIVITY_PAUSE_THRESHOLD,
-    USE_HAND_CONTROLLER,
     USE_LIGHTBULB_PWM,
     USE_SERVO,
     USE_UARM,
@@ -109,47 +108,8 @@ if args.config_override:
         sys.exit(1)
 
 
-# Imports moved to top of file
-
-try:
-    import config.config as config_module
-
-    if getattr(config_module, "NO_HANDS", False):
-        raise ImportError("Hand control disabled by NO_HANDS config")
-
-    from hand_control.direct_hand_control import change_to_emotion  # type: ignore
-    from hand_control.direct_hand_control import get_status  # type: ignore
-    from hand_control.direct_hand_control import send_reactivity_data  # type: ignore
-    from hand_control.direct_hand_control import start_autonomous_mode  # type: ignore
-    from hand_control.direct_hand_control import start_hand_controller  # type: ignore
-    from hand_control.direct_hand_control import (  # set_emotion,
-        stop_hand_controller,
-    )
-
-    HAND_CONTROL_AVAILABLE = True
-except ImportError:
-    print("Warning: hand_control module not available (tkinter dependency missing). Hand control features disabled.")
-    HAND_CONTROL_AVAILABLE = False
-
-    # Define stub functions
-    def start_hand_controller(headless=False):
-        return False
-
-    def stop_hand_controller():
-        pass
-
-    def send_reactivity_data(*stub_args, **stub_kwargs):
-        pass
-
-    def get_status():
-        return "disabled"
-
-    def change_to_emotion(*stub_args, **stub_kwargs):
-        pass
-
-    def start_autonomous_mode(*stub_args, **stub_kwargs):
-        pass
-
+# Legacy hand-controller import block REMOVED July 28 — the kinetic bus
+# (motor_panel/kinetic_bus.py) is the left hand's only driver now.
 
 # Moved to top
 
@@ -345,7 +305,10 @@ if USE_UARM and UARM_BACKEND:
                                 except Exception as e:
                                     print(f"[uArm] Startup play failed: {e}")
 
-                            threading.Thread(target=_uarm_start_play, daemon=True, name="UArmStartupPlay").start()
+                            # DEFERRED to the awakening (July 28): this play used
+                            # to fire here at connect, minutes before anything
+                            # else moved — now it joins the opening moment
+                            _uarm_awakening_play = _uarm_start_play
                     except Exception:
                         pass
                 except Exception as e:
@@ -359,6 +322,8 @@ if USE_UARM and UARM_BACKEND:
         motion_manager = None
 else:
     debug_print("uArm control disabled in config", "INIT")
+
+_uarm_awakening_play = _uarm_awakening_play if "_uarm_awakening_play" in dir() else None
 
 # Initialize breathing variables regardless of servo setting
 lung_angle = 0.0
@@ -388,7 +353,6 @@ _global_state_manager = None
 _global_start_time = None
 _global_run_id = None
 _caption_monitor_proc = None
-organic_left_arm = None
 
 
 def emergency_cleanup():
@@ -410,19 +374,6 @@ def emergency_cleanup():
             _global_image_monitor.stop()
         if _global_cap:
             _global_cap.release()
-
-        # Emergency hand controller stop
-        try:
-            stop_hand_controller()
-        except Exception:
-            pass
-
-        # Emergency organic left arm stop
-        try:
-            if "organic_left_arm" in globals() and organic_left_arm:
-                organic_left_arm.shutdown()
-        except Exception:
-            pass
 
         # Emergency kinetic bus stop
         try:
@@ -531,20 +482,6 @@ def graceful_cleanup():
             _global_image_monitor.stop()
         except Exception as e:
             print(f"[ERROR] Error stopping image monitor: {e}")
-
-    # Stop hand controller
-    try:
-        stop_hand_controller()
-    except Exception as e:
-        print(f"[ERROR] Error stopping hand controller: {e}")
-
-    # Stop organic left arm controller
-    try:
-        if "organic_left_arm" in globals() and organic_left_arm:
-            organic_left_arm.shutdown()
-            print("[🦾] Organic left arm controller shutdown")
-    except Exception as e:
-        print(f"[ERROR] Error stopping organic left arm: {e}")
 
     # Stop kinetic bus
     try:
@@ -752,13 +689,13 @@ if USE_CAPTION_DISPLAY:
 else:
     debug_print("LCD caption display disabled in config", "INIT")
 
-# Initialize the lefthand actuators: EITHER the kinetic bus (recorded
-# temperament bundles from the motor panel, markov generation behind the
-# mood system) OR the legacy pair (hand controller autonomous mode +
-# organic_left_arm blind wander). Both own /dev/arduino_lefthand — never both.
+# The lefthand actuators: the kinetic bus is the ONLY driver (recorded
+# temperament datasets from the motor panel, markov generation behind the
+# mood system). The legacy pair — hand controller autonomous mode +
+# organic_left_arm blind wander — was REMOVED July 28.
 kinetic_bus = None
 if KINETIC_BUS_ENABLED:
-    debug_print("Initializing kinetic bus (replaces hand controller autonomous + organic left arm)", "INIT")
+    debug_print("Initializing kinetic bus (the left hand's driver)", "INIT")
     try:
         import utils.hooks as _kinetic_hooks
         from motor_panel.kinetic_bus import KineticBus
@@ -794,59 +731,8 @@ if KINETIC_BUS_ENABLED:
     except Exception as e:
         debug_print(f"Failed to initialize kinetic bus: {e}", "ERROR")
         kinetic_bus = None
-    hand_controller_started = False
-elif USE_HAND_CONTROLLER:
-    debug_print("Initializing direct hand controller integration", "INIT")
-    hand_controller_started = start_hand_controller(headless=False)
 else:
-    debug_print("Hand controller disabled in config", "INIT")
-    hand_controller_started = False
-
-if hand_controller_started:
-    debug_print("Hand controller started with UI", "INIT")
-
-    # Start autonomous mode (Markov generation) after successful initialization
-    time.sleep(1)  # Give time for datasets to load
-    if start_autonomous_mode():
-        debug_print("Hand controller autonomous mode activated", "INIT")
-    else:
-        debug_print("Failed to start autonomous mode", "INIT")
-    status = get_status()
-    debug_print(f"Hand controller status: {status}", "INIT")
-
-    # Initialize organic left arm controller for servo pins 4 and 5
-    debug_print("Initializing organic left arm controller", "INIT")
-    try:
-        from hand_control.organic_left_arm import OrganicLeftArmController
-        import serial
-
-        # Create serial connection to left hand Arduino
-        left_arm_serial = serial.Serial(ARDUINO_DEVICES["LEFTHAND"], 9600, timeout=1)
-        time.sleep(2)  # Allow Arduino to reset
-
-        # Initialize organic controller
-        organic_left_arm = OrganicLeftArmController(serial_connection=left_arm_serial)
-        organic_left_arm.enable()
-
-        debug_print("Organic left arm controller started successfully", "INIT")
-        log_json_entry(
-            LogType.INFO,
-            {"message": "Organic left arm controller initialized", "port": ARDUINO_DEVICES["LEFTHAND"]},
-            print_message=f"🦾 Organic left arm controller initialized on {ARDUINO_DEVICES['LEFTHAND']}",
-        )
-    except Exception as e:
-        debug_print(f"Failed to initialize organic left arm controller: {e}", "ERROR")
-        log_json_entry(
-            LogType.ERROR,
-            {"message": f"Failed to initialize organic left arm: {e}"},
-            print_message=f"❌ Failed to initialize organic left arm: {e}",
-        )
-        organic_left_arm = None
-
-else:
-    if USE_HAND_CONTROLLER and not KINETIC_BUS_ENABLED:
-        debug_print("Hand controller failed to start", "WARN")
-    organic_left_arm = None
+    debug_print("Kinetic bus disabled — left hand will not move", "WARN")
 
 # Initialize camera reactivity engine
 debug_print("Initializing camera reactivity engine", "INIT")
@@ -987,10 +873,9 @@ if previous_state:
 
     # Direct integration - set emotion based on mood
     emotion = mood_engine.get_emotion_for_hand_controller()
-    change_to_emotion(emotion)
     if kinetic_bus is not None:
         kinetic_bus.set_emotion(emotion)
-    debug_print(f"Set hand controller emotion: {emotion}", "INIT")
+    debug_print(f"Restored emotion for kinetic bus: {emotion}", "INIT")
     # NOTE: idle CNC / homing no longer starts here (mid-init) — the
     # awakening is staged at the main-loop threshold below, so the homing
     # choreography, the gantry sweep, and the waking senses converge
@@ -1110,10 +995,6 @@ def mood_update_thread(mood_frame, timestamp):
                                 last_state_save_time = thread_now
                             except Exception as e:
                                 print(f"[ERROR] Periodic state save failed: {e}")
-
-                    # Update hand controller with new emotional state
-                    change_to_emotion(thread_emotion)
-                    debug_print(f"Updated hand controller emotion: {thread_emotion}", "HAND")
 
                     # Kinetic bus picks the temperament bundle for this emotion
                     if kinetic_bus is not None:
@@ -1313,18 +1194,29 @@ def _freeze_watchdog():
 
 threading.Thread(target=_freeze_watchdog, daemon=True, name="freeze-watchdog").start()
 
-# THE AWAKENING — staged at the threshold, not scattered through init:
-# machine.py has been silent and still until this moment (the kinetic bus
-# holds the body via await_homing). Now, as the camera loop begins: the
-# homing choreography plays (the first gesture), the gantry homes behind
-# it, gaze/lung/bulb come alive with the window, and the first temperament
-# blooms when homing completes. Previously this fired mid-init — and only
-# when a previous session existed, so fresh runs never homed at all.
-_awakening_emotion = mood_engine.get_emotion_for_hand_controller()
-if start_idle_movements(_awakening_emotion):
-    debug_print(f"Awakening: idle CNC + homing started with emotion {_awakening_emotion}", "INIT")
-else:
-    debug_print("Awakening: idle CNC failed to start", "WARN")
+
+# THE AWAKENING — one concurrent moment at the threshold, nothing serial:
+# machine.py has been silent and still through the whole init (the kinetic
+# bus holds the body via await_homing). The awakening thread starts the
+# homing choreography + gantry homing + the uArm's opening play WHILE the
+# main loop below brings up the camera window, gaze, lung and bulb — so
+# everything wakes together and the first temperament blooms when homing
+# completes. (Previously each piece fired wherever its init happened to
+# sit, minutes apart — uArm first, arm solo, senses, homing last.)
+def _awakening():
+    try:
+        if _uarm_awakening_play is not None:
+            threading.Thread(target=_uarm_awakening_play, daemon=True, name="UArmAwakeningPlay").start()
+        _emotion = mood_engine.get_emotion_for_hand_controller()
+        if start_idle_movements(_emotion):
+            debug_print(f"Awakening: choreography + homing started with emotion {_emotion}", "INIT")
+        else:
+            debug_print("Awakening: idle CNC failed to start", "WARN")
+    except Exception as e:
+        debug_print(f"Awakening failed: {e}", "ERROR")
+
+
+threading.Thread(target=_awakening, daemon=True, name="awakening").start()
 
 try:
     prev_gray = None
@@ -1409,16 +1301,9 @@ try:
 
         if current_activity > REACTIVITY_PAUSE_THRESHOLD and not pause_is_active and now - last_pause_time > REACTIVITY_PAUSE_COOLDOWN:
 
-            # High activity detected - pause Markov generation
-            pause_data = {
-                "action": "pause",
-                "duration": REACTIVITY_PAUSE_DURATION,
-                "activity_level": float(current_activity),  # Convert numpy to Python float
-            }
-            if DEBUG_REACTIVITY_PAUSE:
-                debug_print(f"🚨 Sending pause command: {pause_data}", "REACTIVITY")
-
-            send_reactivity_data(pause_data)
+            # (legacy reactivity pause removed July 28 — it drove the old hand
+            # controller's Markov loop; the kinetic bus has its own
+            # person-reactivity via startle/reach)
             pause_is_active = True
             last_pause_time = now
             if DEBUG_REACTIVITY_PAUSE:
@@ -1432,11 +1317,6 @@ try:
         ):  # Only resume early if activity is very low AND at least 2s have passed
             # Pause duration expired or activity dropped - resume Markov generation
             resume_reason = "duration expired" if now - last_pause_time > REACTIVITY_PAUSE_DURATION else "very low activity"
-            resume_data = {"action": "resume", "activity_level": float(current_activity)}  # Convert numpy to Python float
-            if DEBUG_REACTIVITY_PAUSE:
-                debug_print(f"RESUME Sending resume command ({resume_reason}): {resume_data}", "REACTIVITY")
-
-            send_reactivity_data(resume_data)
             pause_is_active = False
             if DEBUG_REACTIVITY_PAUSE:
                 debug_print(f"SUCCESS Resume triggered by {resume_reason} - resuming hand controller", "REACTIVITY")
