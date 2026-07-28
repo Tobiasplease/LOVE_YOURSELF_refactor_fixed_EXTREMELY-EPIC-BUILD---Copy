@@ -2,6 +2,7 @@
 Compressed drawing memory for thematic continuity.
 Stores minimal metadata about recent drawings to inform future drawing decisions.
 """
+
 import json
 import os
 from pathlib import Path
@@ -23,10 +24,10 @@ class DrawingMemory:
         self._last_failure = None
         if self.memory_file.exists():
             try:
-                with open(self.memory_file, 'r') as f:
+                with open(self.memory_file, "r") as f:
                     data = json.load(f)
-                    self._history = data.get('drawings', [])[:self.max_history]
-                    self._last_failure = data.get('last_failure', None)
+                    self._history = data.get("drawings", [])[: self.max_history]
+                    self._last_failure = data.get("last_failure", None)
             except Exception as e:
                 print(f"[⚠️] Could not load drawing memory: {e}")
                 self._history = []
@@ -35,10 +36,10 @@ class DrawingMemory:
         """Save drawing memory to disk."""
         try:
             self.memory_file.parent.mkdir(parents=True, exist_ok=True)
-            data = {'drawings': self._history}
+            data = {"drawings": self._history}
             if self._last_failure:
-                data['last_failure'] = self._last_failure
-            with open(self.memory_file, 'w') as f:
+                data["last_failure"] = self._last_failure
+            with open(self.memory_file, "w") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
             print(f"[⚠️] Could not save drawing memory: {e}")
@@ -58,28 +59,30 @@ class DrawingMemory:
 
         # Ensure compressed_summary is meaningful, fall back to cleaned comfy_prompt
         if not compressed_summary or len(compressed_summary.strip()) < 5:
-            cleaned = (comfy_prompt or "")
-            for prefix in ["Black ink line drawing on white paper. ",
-                           "Black ink line drawing on white paper.",
-                           "Black ink drawing on white paper. ",
-                           "black ink line drawing on white paper. "]:
+            cleaned = comfy_prompt or ""
+            for prefix in [
+                "Black ink line drawing on white paper. ",
+                "Black ink line drawing on white paper.",
+                "Black ink drawing on white paper. ",
+                "black ink line drawing on white paper. ",
+            ]:
                 if cleaned.lower().startswith(prefix.lower()):
-                    cleaned = cleaned[len(prefix):]
+                    cleaned = cleaned[len(prefix) :]
                     break
             compressed_summary = cleaned[:120] if cleaned.strip() else "untitled drawing"
 
         entry = {
-            'timestamp': time.time(),
-            'compressed_summary': compressed_summary[:120],
-            'theme_tags': (theme_tags or [])[:3],
-            'emotional_tone': (emotional_tone or '')[:30],
-            'narrative_thread': (narrative_thread or '')[:50],
-            'comfy_prompt': (comfy_prompt or '')[:200],
-            'completed': completed,
+            "timestamp": time.time(),
+            "compressed_summary": compressed_summary[:120],
+            "theme_tags": (theme_tags or [])[:3],
+            "emotional_tone": (emotional_tone or "")[:30],
+            "narrative_thread": (narrative_thread or "")[:50],
+            "comfy_prompt": (comfy_prompt or "")[:200],
+            "completed": completed,
         }
 
         self._history.insert(0, entry)
-        self._history = self._history[:self.max_history]
+        self._history = self._history[: self.max_history]
         self._save_memory()
 
         print(f"[📚] Stored drawing memory: {compressed_summary}")
@@ -91,14 +94,14 @@ class DrawingMemory:
         if not self._history:
             return
         entry = self._history[0]
-        limits = {'compressed_summary': 120, 'emotional_tone': 30, 'narrative_thread': 50, 'comfy_prompt': 200}
+        limits = {"compressed_summary": 120, "emotional_tone": 30, "narrative_thread": 50, "comfy_prompt": 200}
         for k, v in fields.items():
             if v in (None, "", []):
                 continue
-            if k == 'theme_tags':
+            if k == "theme_tags":
                 entry[k] = list(v)[:3]
             elif k in limits:
-                entry[k] = str(v)[:limits[k]]
+                entry[k] = str(v)[: limits[k]]
             else:
                 entry[k] = v
         self._save_memory()
@@ -110,8 +113,8 @@ class DrawingMemory:
         excluded from the arc: the body of work is what reached paper."""
         if not self._history:
             return
-        if not self._history[0].get('completed', False):
-            self._history[0]['completed'] = True
+        if not self._history[0].get("completed", False):
+            self._history[0]["completed"] = True
             self._save_memory()
             print(f"[📚] Drawing marked EXECUTED: {self._history[0].get('compressed_summary', '')[:60]}")
 
@@ -120,16 +123,16 @@ class DrawingMemory:
         import time
 
         self._last_failure = {
-            'timestamp': time.time(),
-            'reason': reason,
-            'prompt': (prompt or '')[:200],
+            "timestamp": time.time(),
+            "reason": reason,
+            "prompt": (prompt or "")[:200],
         }
         self._save_memory()
         print(f"[📚] Drawing failed: {reason}")
 
     def get_last_failure(self) -> Optional[Dict]:
         """Get the most recent drawing failure, if any."""
-        return getattr(self, '_last_failure', None)
+        return getattr(self, "_last_failure", None)
 
     def get_recent_drawings_summary(self, max_count: int = 3, completed_only: bool = True) -> str:
         """LEDGER (June 28; un-starved July 11): one short phrase per drawing
@@ -153,7 +156,7 @@ class DrawingMemory:
 
         phrases = []
         for entry in recent:
-            s = self._strip_comfy_preamble((entry.get("compressed_summary") or "").strip())
+            s = self._subject_phrase(entry)
             if s:
                 if len(s) > 70:
                     s = s[:70].rsplit(" ", 1)[0] + "…"
@@ -172,16 +175,16 @@ class DrawingMemory:
         again blindly is a loop). No LLM, unlike get_artistic_arc."""
         import time
 
-        executed = [d for d in self._history if d.get('completed', False)][:max_count]
+        executed = [d for d in self._history if d.get("completed", False)][:max_count]
         lines = []
         for entry in reversed(executed):
-            desc = self._strip_comfy_preamble(entry.get('comfy_prompt', '')) or entry.get('compressed_summary', '')
+            desc = self._strip_comfy_preamble(entry.get("comfy_prompt", "")) or self._subject_phrase(entry)
             desc = (desc or "").strip()
             if not desc:
                 continue
             if len(desc) > 90:
                 desc = desc[:90].rsplit(" ", 1)[0] + "..."
-            elapsed = time.time() - entry.get('timestamp', time.time())
+            elapsed = time.time() - entry.get("timestamp", time.time())
             if elapsed < 3600:
                 when = f"{max(1, int(elapsed / 60))} minutes ago"
             elif elapsed < 86400:
@@ -200,16 +203,17 @@ class DrawingMemory:
         executed_only: skip entries that never reached paper (intents).
         """
         if executed_only:
-            candidates = [d for d in self._history if d.get('completed', False)]
+            candidates = [d for d in self._history if d.get("completed", False)]
         else:
             candidates = self._history
         if not candidates:
             return ""
 
         import time
+
         entry = candidates[0]
 
-        elapsed = time.time() - entry.get('timestamp', time.time())
+        elapsed = time.time() - entry.get("timestamp", time.time())
         if elapsed < 120:
             when = "just now"
         elif elapsed < 3600:
@@ -234,16 +238,12 @@ class DrawingMemory:
         all_tones = []
 
         for entry in self._history[:3]:
-            all_tags.extend(entry.get('theme_tags', []))
-            tone = entry.get('emotional_tone', '')
+            all_tags.extend(entry.get("theme_tags", []))
+            tone = entry.get("emotional_tone", "")
             if tone:
                 all_tones.append(tone)
 
-        return {
-            'recurring_themes': list(set(all_tags)),
-            'recent_tones': all_tones,
-            'drawing_count': len(self._history)
-        }
+        return {"recurring_themes": list(set(all_tags)), "recent_tones": all_tones, "drawing_count": len(self._history)}
 
     def get_artistic_arc(self) -> str:
         """Synthesize the trajectory of recent work via LLM.
@@ -254,7 +254,7 @@ class DrawingMemory:
         """
         # The arc is the body of WORK — executed drawings only. A prompt that
         # never reached paper is an intention, not part of the oeuvre.
-        executed = [d for d in self._history if d.get('completed', False)]
+        executed = [d for d in self._history if d.get("completed", False)]
         if len(executed) < 2:
             return ""
 
@@ -265,16 +265,16 @@ class DrawingMemory:
         drawings_chronological = list(reversed(executed))[-10:]
         lines = []
         for i, entry in enumerate(drawings_chronological, 1):
-            desc = self._strip_comfy_preamble(entry.get('comfy_prompt', ''))
+            desc = self._strip_comfy_preamble(entry.get("comfy_prompt", ""))
             if not desc:
-                desc = entry.get('compressed_summary', 'unknown subject')
+                desc = entry.get("compressed_summary", "unknown subject")
             if len(desc) > 80:
                 desc = desc[:80].rsplit(" ", 1)[0] + "..."
 
-            tone = entry.get('emotional_tone', '')
-            thread = entry.get('narrative_thread', '')
+            tone = entry.get("emotional_tone", "")
+            thread = entry.get("narrative_thread", "")
 
-            elapsed = time.time() - entry.get('timestamp', time.time())
+            elapsed = time.time() - entry.get("timestamp", time.time())
             if elapsed < 3600:
                 age = f"{int(elapsed / 60)}m ago"
             else:
@@ -294,6 +294,7 @@ class DrawingMemory:
 
             try:
                 from config.config import MODEL_NAME
+
                 model = MODEL_NAME
             except (ImportError, AttributeError):
                 model = None
@@ -346,14 +347,42 @@ Write as "I" — this is your own artistic development."""
         the first sentence IF that sentence is style preamble ("Black ink line
         drawing on white paper with high contrast..."), not subject matter."""
         import re
-        m = re.match(r'^(black ink[^.]{0,80}\.)\s*', desc, flags=re.IGNORECASE)
+
+        m = re.match(r"^(black ink[^.]{0,80}\.)\s*", desc, flags=re.IGNORECASE)
         if m and len(desc) > m.end():
-            return desc[m.end():]
+            return desc[m.end() :]
         return desc
+
+    @staticmethod
+    def _subject_phrase(entry: Dict) -> str:
+        """A drawing as a SUBJECT ("the man in black against the pink shelf"),
+        for surfaces that say "drawings were of: X". compressed_summary holds
+        the intent verbatim (the machine's words — provenance), but since the
+        sighted intent (July 27) that's decision-speak: "I choose to draw
+        **the man in black...**". Strip the decision preamble and markdown;
+        if the intent is action-prose that can't read as a subject ("I press
+        the nib..."), fall back to the comfy depiction, which always is one."""
+        import re
+
+        t = (entry.get("compressed_summary") or "").strip()
+        t = re.sub(r"\*+", "", t)
+        t = re.sub(
+            r"^i(?:'m|\s+am|\s+will|\s+have\s+decided|\s+choose|\s+decide|\s+need|\s+want|\s+intend)?"
+            r"\s*(?:going\s+to\s+|about\s+to\s+|to\s+)?draw(?:ing)?\b\s*[:,]?\s*",
+            "",
+            t,
+            flags=re.IGNORECASE,
+        ).strip()
+        if not t or t.lower().startswith("i "):
+            depiction = DrawingMemory._strip_comfy_preamble((entry.get("comfy_prompt") or "").strip())
+            if depiction:
+                t = depiction
+        return t.strip()
 
 
 # Global singleton
 _drawing_memory = None
+
 
 def get_drawing_memory() -> DrawingMemory:
     """Get the global drawing memory instance."""
