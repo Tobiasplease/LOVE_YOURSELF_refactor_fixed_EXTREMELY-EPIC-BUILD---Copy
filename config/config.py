@@ -383,7 +383,14 @@ STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restart
 #   rooster run) and a truncated tail forces run-on continuation.
 # "turns" — legacy: each prior caption as a separate assistant turn-pair.
 #   Bred template imitation (openings cloned across captions), kept as A/B.
-STREAM_MODE = os.getenv("STREAM_MODE", "world")
+# FLIPPED BACK July 28 (artist's call, and the missing experiment): the rooster
+# failure was a DETECTION failure, not a shape failure — document + the new
+# detectors (view replacement, motion onset) + the new storage gates (felt,
+# event provenance, refrain, place-occasional) has never been run. Document
+# had momentum (aliveness); world had grounding but answered a static room
+# forty times an hour (flat) and its delta framing elicited fake-delta tropes
+# ("the light feels different now"). A/B directly against the world runs.
+STREAM_MODE = os.getenv("STREAM_MODE", "document")
 
 # View-replacement detector (world shape's honest change line): if the servo
 # barely moved between caption cycles but the frame content changed past this
