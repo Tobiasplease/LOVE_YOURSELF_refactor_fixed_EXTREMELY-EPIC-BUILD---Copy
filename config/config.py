@@ -385,7 +385,9 @@ SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 # The stream (CoT-style continuity): prior captions ride as the machine's own
 # assistant turns so each caption continues a visible thought. 0 disables and
 # reverts to amnesiac single-turn captions.
-STREAM_WINDOW = 6  # how many prior captions the model sees as its own turns. ON (June 28) now the base voice is healthy: chiefly to break the amnesiac REPETITION (the persistent "dust motes" tic — each call couldn't see it already said it). Admissibility-gated (_stream_admissible: no meta, no markdown/stage-directions) and breaks on >180s gaps. WATCH: the stream amplifies whatever register is in the window — if it breeds purple instead of varying, set back to 0.
+STREAM_WINDOW = int(
+    os.getenv("STREAM_WINDOW", 6)
+)  # ENV-TUNABLE July 28 (window size is an information budget: the model repeats what it can't see it already said — six entries is ~40s of visible selfhood, a 9B-era relic per north-star P5; the 27B holds 20-30). # how many prior captions the model sees as its own turns. ON (June 28) now the base voice is healthy: chiefly to break the amnesiac REPETITION (the persistent "dust motes" tic — each call couldn't see it already said it). Admissibility-gated (_stream_admissible: no meta, no markdown/stage-directions) and breaks on >180s gaps. WATCH: the stream amplifies whatever register is in the window — if it breeds purple instead of varying, set back to 0.
 STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
 
 # How the stream reaches the model (July 2026, docs/continuity-plan.md):
@@ -428,6 +430,11 @@ WORLD_VIEW_SERVO_STILL_DEG = 3.0  # above this pan+tilt delta the change is self
 # at a hotter temperature; if it still echoes, the cycle is skipped (silence
 # over restatement). A gate, not a style fence.
 ANTI_ECHO_WORDS = 5
+# Opening-echo compares against the RECENT tail only (July 28): with the
+# window env-tunable to 20-30 entries, a whole-window check would punish an
+# opening reused forty minutes later — that's a callback (memory), not a
+# template tic. Tics live in the last few entries.
+ANTI_ECHO_COMPARE_TAIL = int(os.getenv("ANTI_ECHO_COMPARE_TAIL", 8))
 ANTI_ECHO_RETRY_TEMP_BUMP = 0.15
 
 # A blink is not a night: below this offline gap, restarting skips the full
@@ -457,7 +464,9 @@ DRAWING_WATCH_INTERVAL_S = int(os.getenv("DRAWING_WATCH_INTERVAL_S", 20))
 # the machine's own words) so the thought moves forward instead of
 # accumulating run-ons — an over-long document is also what squeezes the
 # repetition penalties into word-salad collapses. 0 disables.
-STREAM_CONSOLIDATE_CHARS = 800
+STREAM_CONSOLIDATE_CHARS = int(
+    os.getenv("STREAM_CONSOLIDATE_CHARS", 800)
+)  # scale with STREAM_WINDOW (~250 chars/entry) or consolidation eats the bigger window
 
 # A face occupying this fraction of the frame is a person AT CLOSE RANGE —
 # categorically different from a mannequin head on a shelf. Close faces count

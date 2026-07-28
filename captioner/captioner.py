@@ -690,13 +690,15 @@ class Captioner(MemoryMixin):
         """True when the caption OPENS with the same words as a recent stream
         entry — the template-imitation signature ("The motors hum…" x3). Checks
         openings only: returning to a subject mid-thought is development, not echo."""
-        from config.config import ANTI_ECHO_WORDS
+        from config.config import ANTI_ECHO_COMPARE_TAIL, ANTI_ECHO_WORDS
 
         words = self._norm_words(caption)
         if len(words) < ANTI_ECHO_WORDS:
             return False
         head = words[:ANTI_ECHO_WORDS]
-        for past in self._stream:
+        # Recent tail only: with big windows (STREAM_WINDOW 20+), an opening
+        # reused from forty minutes ago is a callback, not a template tic.
+        for past in list(self._stream)[-ANTI_ECHO_COMPARE_TAIL:]:
             if self._norm_words(past)[:ANTI_ECHO_WORDS] == head:
                 return True
         return False

@@ -20,4 +20,15 @@ export LLAMA_CTX_SIZE=16384
 export LLAMA_EXTRA_ARGS="--spec-type draft-mtp --spec-draft-n-max 2 -fa on"
 export MODEL_NAME="qwen3.6:27b"
 
+# The information budget (July 28): repetition is what the model can't see it
+# already said. Six entries was a 9B relic; the 27B holds minutes of visible
+# selfhood. Consolidation threshold scales with it (~250 chars/entry).
+export STREAM_WINDOW=24
+export STREAM_CONSOLIDATE_CHARS=6000
+
+# Next experiment when ready: the world shape on a model that can follow it —
+# uncomment for grounded + connected + naturally varied, or prefix at launch:
+#   STREAM_MODE=world ./run_27b.sh
+# export STREAM_MODE=world
+
 exec python machine.py "$@"
