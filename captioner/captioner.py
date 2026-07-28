@@ -625,6 +625,25 @@ class Captioner(MemoryMixin):
         t = cls._LOG_STAMP_ANY_RE.sub(" ", t)
         return cls._HASHTAG_TAIL_RE.sub("", t).strip()
 
+    # Outward-addressed engagement hooks (July 28): "What do you think?" bred
+    # into full assistant mode across one document run — one hook admitted to
+    # the window and the document faithfully continued the register. ADMISSION
+    # gate only, deliberately not a mouth reject: the machine may say it once
+    # (the artist reads a lone aside as charming); it may not re-seed. Kept
+    # tight to unambiguous ask-the-reader shapes — "should I...?" is genuine
+    # deliberation and talking TO things in the room ("will you ever move")
+    # stays free.
+    _OUTWARD_HOOKS = (
+        "what do you think",
+        "do you think",
+        "what do you say",
+        "you tell me",
+        "wouldn't you",
+        "what would you",
+        "shall we",
+        "don't you agree",
+    )
+
     @classmethod
     def _stream_admissible(cls, text: str) -> bool:
         """Admission gate for the stream window (guard at storage, not mouth)."""
@@ -633,6 +652,8 @@ class Captioner(MemoryMixin):
             return False
         if any(m in t for m in cls._STREAM_META_MARKERS):
             return False
+        if any(h in t for h in cls._OUTWARD_HOOKS):
+            return False  # spoken once, never re-seeded
         if t.count("*") >= 2 or t.startswith(("- ", "* ", "#")):
             return False  # markdown scaffolding breeds in-stream too
         if cls._ENUM_PREFIX_RE.match(t) or re.search(r"\b\d\)\s.+\b\d\)\s", t):

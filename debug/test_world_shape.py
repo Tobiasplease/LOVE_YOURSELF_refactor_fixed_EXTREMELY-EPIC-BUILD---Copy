@@ -73,7 +73,11 @@ check("lonely-soliloquy trope gone in world frame", "no one hears them" not in s
 check("task ask present", "Add the next entry." in sysp)
 config.STREAM_MODE = "document"
 sysp_doc = get_monologue_system_prompt("observational")
-check("document mode keeps the old frame (A/B intact)", "These thoughts are yours alone" in sysp_doc)
+check("document mode gets the reflexive frame", "your own senses reporting" in sysp_doc)
+check("negation pile gone", "no one hears" not in sysp_doc and "no one to instruct" not in sysp_doc)
+check("assistant vocabulary gone from frame", "assist" not in sysp_doc.split("What you've")[0])
+check("questions get an answer-path", "you asking yourself" in sysp_doc)
+check("pen absent from answer-path (no false agency)", "next look, or your own next thought" in sysp_doc)
 config.STREAM_MODE = "world"
 
 
@@ -87,6 +91,11 @@ check(
 )
 check("honest time talk survives", "past 19:00" in Captioner._strip_list_shape("It's past 19:00 now and still quiet."))
 
+
+print("— outward hooks (July 28) —")
+check("'what do you think' inadmissible to stream", not Captioner._stream_admissible("A quiet day in here. What do you think?"))
+check("self-deliberation stays admissible", Captioner._stream_admissible("Should I draw the mannequin first, or the shelf?"))
+check("talking to room objects stays admissible", Captioner._stream_admissible("That rooster again. Will you ever move?"))
 
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)

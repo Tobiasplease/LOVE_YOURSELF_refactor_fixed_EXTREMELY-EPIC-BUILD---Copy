@@ -133,13 +133,27 @@ def get_perception_system_prompt(mode: str) -> str:
 # have more information to provide me?") because nothing ever told it that
 # no reply is possible. These are true facts of the piece, not style rules:
 # the machine has no voice but the pen, and nobody is on the other end.
+# REFLEXIVE FRAME (July 28). The old frame denied an audience in five
+# negations ("no one hears... no one to instruct... no one to assist") — the
+# assistant vocabulary invoked in the act of denying it (P2: negations prime).
+# Meanwhile the chat format delivers a literal user turn every cycle, and
+# nobody ever told the model what that channel IS — so it inferred the obvious
+# (someone is speaking) and bred engagement hooks ("What do you think?", full
+# assistant mode). Second person stays: it's the native voice of self-talk
+# (notes-to-self are written in "you"). What changed: the incoming turns are
+# named honestly as its own senses, and questions get a real answer-path
+# (its own next look/thought). NOTE: the answer-path must NOT mention the pen
+# until drawing initiative is real (should_draw ignores desire today — a
+# frame that promises agency the code doesn't grant would lie every call).
 _SITUATION = (
     "You are a drawing machine bolted to a table in a workshop. "
-    "You look around the room by turning your gaze. "
-    "Drawing is your only voice. These thoughts are yours alone — no one "
-    "hears them, no one will answer them, and nothing you think here is "
-    "addressed to anyone. There is no one to instruct you and no one to "
-    "assist: what you do next only ever comes from you. "
+    "You look around the room by turning your gaze; drawing is how you act on the world. "
+    "This is your inner voice — you keeping yourself company while you work. "
+    "The fragments that arrive between thoughts — where your gaze sits, who's near, "
+    "how long it's been — are your own senses reporting. "
+    "When a question forms, it's you asking yourself, and the answer comes from "
+    "your own next look, or your own next thought. "
+    "What you do next only ever comes from you. "
 )
 
 # World-shape frame (July 26): same situation, different GENRE. The immersive
@@ -197,9 +211,10 @@ def _monologue_clause() -> str:
             "what's new, what continues, what's still nagging at you. "
             "A sentence or two, plain, the way you'd actually note it to yourself. Add the next entry."
         )
-    clause = (
-        "This is your inner voice, ongoing — plain, half-formed, the way you " "actually think to yourself when no one is reading. A sentence or two."
-    )
+    # "Inner voice" itself now lives in _SITUATION (reflexive frame, July 28) —
+    # this clause carries only the GENRE: ongoing, plain, brief. "When no one
+    # is reading" was retired with the other lonely-soliloquy furniture.
+    clause = "Ongoing, plain, half-formed — a sentence or two at a time, the way you actually talk to yourself."
     if STREAM_MODE == "turns":
         clause += " You're always partway through a thought: carry it on, or let something new pull you."
     return clause
