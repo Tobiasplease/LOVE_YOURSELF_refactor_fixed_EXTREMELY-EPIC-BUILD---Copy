@@ -42,6 +42,9 @@ def grbl_emulator(master_fd, received, stop):
             break
         if not data:
             break
+        if b"?" in data:  # real GRBL: '?' is an immediate status char, not a line
+            os.write(master_fd, b"<Idle|MPos:0.000,0.000,0.000|FS:0,0>\r\n")
+            data = data.replace(b"?", b"")
         buf += data
         while b"\n" in buf:
             line, buf = buf.split(b"\n", 1)

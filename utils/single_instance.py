@@ -11,7 +11,7 @@ import fcntl
 import os
 import sys
 
-LOCK_PATH = "/tmp/love_yourself_machine.lock"
+LOCK_PATH = os.getenv("MACHINE_LOCK_PATH", "/tmp/love_yourself_machine.lock")  # env override: tests run beside a live machine
 _lock_file = None  # held for the life of the process
 
 

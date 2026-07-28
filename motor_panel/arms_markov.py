@@ -363,16 +363,24 @@ class Player:
         self.on_done = on_done
         self._running = False
         self._thread = None
+        self._stopped = False
+        self._lifecycle = threading.Lock()  # stop() can race start() (homing released mid-assembly)
 
     def start(self):
-        self._running = True
-        self._thread = threading.Thread(target=self._loop_fn, daemon=True)
-        self._thread.start()
+        with self._lifecycle:
+            if self._stopped:
+                return  # stopped before it ever began — stay stopped, no zombie playback
+            self._running = True
+            self._thread = threading.Thread(target=self._loop_fn, daemon=True)
+            self._thread.start()
 
     def stop(self):
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=2)
+        with self._lifecycle:
+            self._stopped = True
+            self._running = False
+            t = self._thread
+        if t is not None and t.ident is not None:
+            t.join(timeout=2)
 
     def _plan_points(self) -> List[Tuple[float, float, Dict[str, float]]]:
         """Take decimated to PLAN_INTERVAL spacing: (t, dt_from_prev, target)."""

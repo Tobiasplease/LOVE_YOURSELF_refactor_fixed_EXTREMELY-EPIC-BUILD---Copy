@@ -508,6 +508,21 @@ with their systems.
   gate/release/re-acquire).
   Failsafe KINETIC_AWAKENING_MAX_WAIT_S if homing never arrives. After
   ANY homing, the SAME dataset resumes (continuity, not a re-pick).
+- GANTRY LISTENING + RELEASE RACE (July 28 evening): the first live run
+  parked the right arm despite a healthy pipeline (offline repro with
+  the real datasets flows 60+ targets/12s — debug/repro pattern in
+  test_gantry_runtime). Two fixes: (1) Player.stop() could race
+  start() during the homing choreography assembly — a crash inside
+  home_release that ensure_homed silently swallowed, which could also
+  eat the HOMING_SENTINEL write (sentinel now writes BEFORE the hook;
+  Player start/stop take a lifecycle lock and a stopped latch).
+  (2) GantryLink was DEAF: it never read GRBL's replies, so an
+  alarm-locked or error-rejecting GRBL looked identical to success.
+  The link now probes '?' at attach (logs the status line, shouts if
+  Alarm), logs its first three streamed G1s, and reports any non-ok
+  reply (error:N / ALARM) deduplicated. Diagnosis on hardware:
+  debug/test_gantry_live.py (machine.py stopped) homes and sends
+  dataset coordinates echoing every GRBL reply.
 - ONE MACHINE PER BODY (July 28): the "phantom left arm" (moving with
   machine.py 'off', glitching during runtime) traced to a forgotten
   login autostart — ~/.config/autostart/impostor.desktop →

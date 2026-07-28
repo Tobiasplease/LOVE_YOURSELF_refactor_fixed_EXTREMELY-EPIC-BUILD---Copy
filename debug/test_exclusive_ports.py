@@ -40,7 +40,8 @@ print("serial: second opener refused while held, admitted after close")
 
 # --- 2: machine single-instance lock ---------------------------------------
 HOLDER = """
-import sys, time
+import os, sys, time
+os.environ["MACHINE_LOCK_PATH"] = {lock!r}
 sys.path.insert(0, {root!r})
 from utils.single_instance import claim_machine_or_exit
 claim_machine_or_exit()
@@ -48,17 +49,20 @@ print("claimed", flush=True)
 time.sleep(10)
 """
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-a = subprocess.Popen([sys.executable, "-c", HOLDER.format(root=root)], stdout=subprocess.PIPE, text=True)
+test_lock = os.path.join(os.getenv("TMPDIR", "/tmp"), f"machine_lock_test_{os.getpid()}.lock")
+a = subprocess.Popen([sys.executable, "-c", HOLDER.format(root=root, lock=test_lock)], stdout=subprocess.PIPE, text=True)
 line = a.stdout.readline().strip()
 if line != "claimed":
     failures.append(f"first instance failed to claim: {line!r}")
-b = subprocess.run([sys.executable, "-c", HOLDER.format(root=root)], capture_output=True, text=True, timeout=15)
+b = subprocess.run([sys.executable, "-c", HOLDER.format(root=root, lock=test_lock)], capture_output=True, text=True, timeout=15)
 if b.returncode != 1 or "already running" not in b.stdout:
     failures.append(f"second instance not refused (rc={b.returncode}, out={b.stdout!r})")
 a.kill()
 a.wait()
 time.sleep(0.2)
-c = subprocess.run([sys.executable, "-c", HOLDER.format(root=root).replace("time.sleep(10)", "pass")], capture_output=True, text=True, timeout=15)
+c = subprocess.run(
+    [sys.executable, "-c", HOLDER.format(root=root, lock=test_lock).replace("time.sleep(10)", "pass")], capture_output=True, text=True, timeout=15
+)
 if c.returncode != 0 or "claimed" not in c.stdout:
     failures.append(f"lock not released on process death (rc={c.returncode}, out={c.stdout!r})")
 print("lock: second machine.py refused with message, lock freed on death")

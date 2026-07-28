@@ -44,6 +44,8 @@ class GantryLink:
         self._resp_q: "queue.Queue" = queue.Queue()
         self._lock = threading.Lock()  # attach/release vs writer
         self._running = False
+        self._sent = 0
+        self._last_err = ""
         self.on_log = lambda m: None
 
     @property
@@ -83,9 +85,29 @@ class GantryLink:
         self._path.clear()
         self._drain(self._cmd_q)
         self._drain(self._resp_q)
+        self._probe_status()
+        self._sent = 0
+        self._last_err = ""
         self._running = True
         threading.Thread(target=self._reader_loop, daemon=True, name="gantry-reader").start()
         threading.Thread(target=self._writer_loop, daemon=True, name="gantry-writer").start()
+
+    def _probe_status(self):
+        """One '?' before the threads own the port: if GRBL sits in Alarm,
+        every G1 we ever send dies silently — say so out loud instead."""
+        try:
+            self.ser.reset_input_buffer()
+            self.ser.write(b"?")
+            self.ser.flush()
+            for _ in range(4):
+                line = self.ser.readline().decode(errors="replace").strip()
+                if line.startswith("<"):
+                    self.on_log(f"gantry: status {line}")
+                    if "Alarm" in line:
+                        self.on_log("gantry: ⚠ GRBL IS ALARM-LOCKED — motion will be rejected until homed/unlocked")
+                    return
+        except Exception:
+            pass
 
     def release(self):
         """Give the port back (drawing pipeline needs it). Pen up first —
@@ -147,6 +169,11 @@ class GantryLink:
                 continue
             if not line or line.startswith("<"):
                 continue  # no status polling — position is commanded, not reported
+            # GRBL talking back is DATA — a deaf link parked the right arm
+            # for a whole evening. Repeats collapse to one line.
+            if line != "ok" and line != self._last_err:
+                self._last_err = line
+                self.on_log(f"gantry: GRBL said {line!r}")
             self._resp_q.put(line)
 
     def _writer_loop(self):
@@ -185,6 +212,9 @@ class GantryLink:
                     self.ser.flush()
                     unacked += 1
                     self.position = (x, y)
+                    self._sent += 1
+                    if self._sent <= 3:
+                        self.on_log(f"gantry: streaming {line}" + (" …" if self._sent == 3 else ""))
                 except Exception as e:
                     self.on_log(f"gantry write failed: {e}")
                 continue

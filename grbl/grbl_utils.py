@@ -540,10 +540,15 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                     try:
                         from utils import hooks as _kin_hooks
 
-                        if _kin_hooks.on_grbl_homing_done:
-                            _kin_hooks.on_grbl_homing_done()
+                        # sentinel FIRST — a crashing hook must not eat the
+                        # cross-process release (both release paths fire)
                         with open(_kin_hooks.HOMING_SENTINEL, "w") as _hf:
                             _hf.write(str(time.time()))
+                        if _kin_hooks.on_grbl_homing_done:
+                            try:
+                                _kin_hooks.on_grbl_homing_done()
+                            except Exception as _he:
+                                print(f"[WARN] homing-done hook failed: {_he}")
                     except Exception:
                         pass
 
