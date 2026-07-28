@@ -239,8 +239,11 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
         stderr=subprocess.PIPE,
     )
 
-    # Wait for server to be ready
-    for i in range(60):
+    # Wait for the server to be ready. A big model on -ngl loads for many
+    # seconds — longer on a contended GPU — and the poll is silent, so a slow
+    # load looks exactly like a freeze. Print a heartbeat, bail fast if the
+    # subprocess actually died (port in use / OOM), and allow up to 150s.
+    for i in range(150):
         try:
             resp = requests.get(f"{LLAMA_SERVER_URL}/health", timeout=2)
             if resp.ok:
@@ -248,9 +251,14 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
                 return True
         except requests.ConnectionError:
             pass
+        if _server_process and _server_process.poll() is not None:
+            print("[llama-server] process exited during load — check stderr (port in use? VRAM OOM?)")
+            return False
+        if i and i % 10 == 0:
+            print(f"[llama-server] still loading model... ({i}s)")
         time.sleep(1)
 
-    print("[llama-server] Failed to start within 60s")
+    print("[llama-server] Failed to become ready within 150s")
     return False
 
 
