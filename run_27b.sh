@@ -3,9 +3,12 @@
 # Everything else is unchanged: STREAM_MODE=document, VIDEO_MODE=multi, all
 # gates live. Plain `python machine.py` still runs the 9B as before.
 #
-# Known rough edge for this experiment: ComfyUI drawing generation may fail
-# while ~21GB is resident (the stop→generate→unload→restart handoff bracket
-# is not built yet) — the drawing aborts, the machine carries on.
+# VRAM handoff around drawings is ALREADY BUILT and applies here unchanged:
+# drawing.py unloads llama-server before ComfyUI allocates, and every query
+# path restores it via ensure_server_up() — which frees ComfyUI's VRAM
+# (/free) first, then restarts with retry (~6s warm reload for this model).
+# 27B deltas vs 9B: thinner margins (21.3GB resident) and a longer reload
+# silence — watch the first drawing cycle, expect it to just work.
 set -e
 cd "$(dirname "$0")"
 source .venv/bin/activate
