@@ -618,11 +618,21 @@ class Captioner(MemoryMixin):
     # dash requirement keeps honest time talk ("it's past 19:00 now") intact.
     _LOG_STAMP_ANY_RE = re.compile(r"\s*\b\d{1,2}:\d{2}\s*[—–-]\s*")
 
+    # "Log entry:" label creep (July 31): the model dramatized the log genre
+    # into a literal label, one stored instance bred through the stream, and
+    # 76/84 entries opened identically within an hour. The label carries no
+    # temporal information — the renderer's timestamp IS the log form — so it
+    # strips at storage like the stamp; the stream stops showing it and the
+    # aping decays. Colon required: talking ABOUT the log ("another log
+    # entry, then") stays intact.
+    _LOG_LABEL_RE = re.compile(r"\s*\blog entry\s*:\s*", re.IGNORECASE)
+
     @classmethod
     def _strip_list_shape(cls, text: str) -> str:
         t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
         t = cls._COUNTDOWN_PREFIX_RE.sub("", t)
         t = cls._LOG_STAMP_ANY_RE.sub(" ", t)
+        t = cls._LOG_LABEL_RE.sub(" ", t)
         return cls._HASHTAG_TAIL_RE.sub("", t).strip()
 
     # Outward-addressed engagement hooks (July 28): "What do you think?" bred
