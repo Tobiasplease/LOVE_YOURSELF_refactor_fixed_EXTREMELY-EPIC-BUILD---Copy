@@ -35,3 +35,10 @@ ARM_CLEAR_SENTINEL = "/tmp/left_arm_clear_at.flag"
 # port before a drawing and re-acquires (and re-homes) after.
 on_gantry_pause: Optional[Callable[[], None]] = None
 on_gantry_resume: Optional[Callable[[], None]] = None
+
+# Paper check (July 30): before the camera inspects the paper, the bus
+# plays the recorded get-clear move (both arms out of the view, gantry
+# included). _start returns the seconds to WAIT before starting detection;
+# _done releases the held pose so the body blends back.
+on_paper_check_start: Optional[Callable[[], float]] = None
+on_paper_check_done: Optional[Callable[[], None]] = None

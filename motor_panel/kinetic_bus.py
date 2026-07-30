@@ -6,13 +6,12 @@ behind the mood system. The panel and the runtime are now two modes of the
 same stack — same devices.py actuator layer, same arms_markov engine, same
 session files.
 
-v1 SCOPE: the bus owns the LEFTHAND device only (fingers, elbow, shoulder,
-wrist). It replaces organic_left_arm's blind wander and the old hand
-interface's generation loop. The gantry stays with the drawing pipeline +
-grbl/idle_movements until port arbitration is designed; gaze and lung stay
-with their own systems. Sessions may contain gantry/pen takes — the bus
-simply ignores tracks whose channels it doesn't own (a "link" between left
-arm and right arm degrades to left-arm-only at runtime, by design).
+SCOPE (v2, July 28): the bus owns the LEFTHAND device (fingers, elbow,
+shoulder, wrist) AND — behind KINETIC_GANTRY — the gantry between
+drawings, via a headless GantryLink (motor_panel/gantry.py) with
+hook-driven port arbitration against the drawing pipeline. Pen stays UP
+during generation unless KINETIC_GANTRY_PEN. Gaze and lung stay with
+their own systems.
 
 How the body chooses what to be:
   - Sessions are named per state in the panel: "{emotion}_*" for the five
@@ -32,12 +31,17 @@ Modifiers (context leaking into recorded movement):
     transitions quick, opposed reluctant), and the transition CHOICE bias.
     Directional logic throughout: poses only ever lean by a bounded,
     settling amount; the walk never leaves demonstrated states.
-  - Startle: flinch -> hold -> slow release. Servos NUDGE partway toward
-    a startle pose (the per-channel median of a take assigned under the
-    "startle" state — record yourself holding the flinch; built-in deltas
-    as fallback), freeze in that tension for HOLD_S, then blend back into
-    the running dataset via the normal slow crossfade. Cooldown against
-    detector flicker; gantry/pen never flinch.
+  - Startle (reworked July 30): the take assigned under "startle" plays
+    RELATIVE — its motion, scaled by NUDGE, unfolds from wherever the
+    body is (first sample = zero offset, so entry never snaps). The
+    whole body flinches, gantry included; then HOLD_S of held tension
+    and the slow crossfade back. Built-in deltas as fallback; cooldown
+    against detector flicker; suppressed while homing/paper own the body.
+  - Paper check (July 30): paper_clear() plays the take assigned under
+    "paper" — both arms out of the camera's view, gantry included — and
+    HOLDS until paper_release() (hooks fired by safety/paper_detection
+    around the ArUco search). Same continuity rule as homing: the SAME
+    dataset resumes.
 
 Wiring (machine.py, behind KINETIC_BUS_ENABLED, default False):
     bus = KineticBus()
@@ -69,6 +73,8 @@ from config.config import (
     KINETIC_GAZE_TEMPO_K,
     KINETIC_HOMING_MAX_HOLD_S,
     KINETIC_HOMING_TUCK_S,
+    KINETIC_PAPER_MAX_HOLD_S,
+    KINETIC_PAPER_TUCK_S,
     KINETIC_HOMING_WAIT_CLEAR,
     KINETIC_REACH_ENABLED,
     KINETIC_REACH_MAX_DEG,
@@ -114,7 +120,9 @@ def _bilinear_pose(grid, u: float, v: float) -> Tuple[float, float]:
 DRAWING_STATE = "drawing"
 STARTLE_STATE = "startle"  # recorded startle pose — interrupts, never mood-picked
 HOMING_STATE = "homing"  # tucked-clear pose while the gantry homes — interrupts, never mood-picked
-STATES = [DRAWING_STATE, STARTLE_STATE, HOMING_STATE] + EMOTIONS
+PAPER_STATE = "paper"  # get-clear move while the camera inspects the paper — interrupts, never mood-picked
+INTERRUPT_STATES = (STARTLE_STATE, HOMING_STATE, PAPER_STATE)
+STATES = [DRAWING_STATE, STARTLE_STATE, HOMING_STATE, PAPER_STATE] + EMOTIONS
 OWNED_CHANNELS = {"finger0", "finger1", "finger2", "finger3", "elbow", "shoulder", "wrist"}
 
 
@@ -158,7 +166,7 @@ class TemperamentLibrary:
             return random.choice(buckets[DRAWING_STATE])
         if buckets.get(emotion):
             return random.choice(buckets[emotion])
-        pool = [fn for state, fns in buckets.items() if state not in (DRAWING_STATE, STARTLE_STATE, HOMING_STATE) for fn in fns]
+        pool = [fn for state, fns in buckets.items() if state != DRAWING_STATE and state not in INTERRUPT_STATES for fn in fns]
         return random.choice(pool) if pool else None
 
     def pose_of(self, filename: str) -> Dict[str, float]:
@@ -296,6 +304,7 @@ class KineticBus:
         self._home_players: List[engine.Player] = []  # the homing choreography, playing straight through
         self._home_started_at = 0.0
         self._home_token: object = None  # generation marker — a re-triggered homing invalidates the previous run
+        self._startle_token: object = None  # generation marker for the relative flinch playback
         self.arm_calib_path = ARM_CALIB_PATH  # tests inject their own grid
         self._reach_amount = 0.0  # 0..1 presence ramp — the arm leans out while someone is tracked
         self._calib_cache: Tuple[float, Optional[list]] = (0.0, None)
@@ -497,7 +506,7 @@ class KineticBus:
         if desired == self._active_state and not dwell_over:
             return
         bundle = self.library.bundle_for(self._emotion, desired == DRAWING_STATE)
-        if self._active_state == HOMING_STATE and self._resume_bundle:
+        if self._active_state in (HOMING_STATE, PAPER_STATE) and self._resume_bundle:
             # leaving the homing hold: continuity beats variety — blend back
             # into the dataset that was playing, not a fresh random pick
             stem = self._resume_bundle[len("session_") : -len(".json")]
@@ -638,38 +647,87 @@ class KineticBus:
         cooldown applied in _watch_person."""
         self._startle()
 
-    def _startle_pose(self) -> Tuple[Dict[str, float], str]:
+    def _startle_tracks(self):
         buckets = self.library.scan()
-        if buckets.get(STARTLE_STATE):
-            fn = random.choice(buckets[STARTLE_STATE])
-            try:
-                pose = self.library.pose_of(fn)
-                if pose:
-                    return pose, fn
-            except Exception as e:
-                self.log(f"startle dataset {fn} failed: {e}")
-        live = self._live_state()
-        return {c: live[c] + d for c, d in KINETIC_STARTLE_DELTAS.items() if c in live}, "built-in deltas"
+        if not buckets.get(STARTLE_STATE):
+            return None
+        fn = random.choice(buckets[STARTLE_STATE])
+        try:
+            session = Session.load(fn)
+        except Exception as e:
+            self.log(f"startle dataset {fn} failed: {e}")
+            return None
+        gantry_ok = self.gantry is not None or self._ext_plan is not None
+        tracks = [
+            t
+            for t in session.tracks
+            if t.has_take
+            and ((set(t.channels) <= self.owned and not (set(t.channels) & {"x", "y", "pen"})) or (gantry_ok and set(t.channels) & {"x", "y"}))
+        ]
+        return (tracks, fn) if tracks else None
 
     def _startle(self):
-        """Flinch -> hold -> slow release. Every servo NUDGES partway toward
-        the startle pose (quick — never a full transition into it), the
-        body freezes in that held tension for HOLD_S, then the supervisor
-        re-enters the running dataset with the normal slow crossfade from
-        the held pose. A short interruption that blends back naturally."""
-        pose, source = self._startle_pose()
+        """The startle take plays RELATIVE: the recording's MOTION, scaled
+        by NUDGE, unfolds from wherever the body is right now — the first
+        sample is a zero offset, so entry is seamless by construction (no
+        snap, no frozen pose). The whole body flinches, gantry included.
+        After the motion: HOLD_S of held tension, then the supervisor's
+        slow crossfade back. Without a take: the built-in delta nudge."""
+        if self._active_state in (HOMING_STATE, PAPER_STATE) and time.time() < self._hold_until:
+            self.log("startle suppressed — a safety clearing owns the body")
+            return
         self._hold_until = time.time() + KINETIC_STARTLE_HOLD_S  # claim the body BEFORE touching it (⚡ races the supervisor)
         self._stop_gens()  # mid-motion stop: the body catches its breath where it stands
         self._active_state = STARTLE_STATE  # forces the post-hold re-pick (= the slow blend back)
-        live = self._live_state()
-        nudge = {c: live[c] + (pose[c] - live[c]) * KINETIC_STARTLE_NUDGE for c in pose if c in live}
-        if nudge:  # sent raw, bypassing the gaze lean — a flinch is absolute
-            if self._ext_ease is not None:
-                self._ext_ease(nudge)
-            else:
-                for c, v in nudge.items():
-                    self.device.set_channel(c, v)
-        self.log(f"startle — flinch toward {source}, hold {KINETIC_STARTLE_HOLD_S:.0f}s, slow return")
+        found = self._startle_tracks()
+        live0 = self._live_state()
+        if found is None:
+            nudge = {c: live0[c] + d * KINETIC_STARTLE_NUDGE for c, d in KINETIC_STARTLE_DELTAS.items() if c in live0}
+            if nudge:  # sent raw, bypassing the gaze lean — a flinch is absolute
+                self._send_ease_raw(nudge)
+            self.log(f"startle — built-in flinch, hold {KINETIC_STARTLE_HOLD_S:.0f}s, slow return")
+            return
+        tracks, fn = found
+        motion = self._motion_end(tracks)
+        self._hold_until = time.time() + motion + KINETIC_STARTLE_HOLD_S
+        self._startle_token = token = object()
+        for t in tracks:
+            self._relative_play(t, live0, KINETIC_STARTLE_NUDGE, token, motion)
+        self.log(f"startle — {fn}'s flinch from the live pose (×{KINETIC_STARTLE_NUDGE}), {motion:.1f}s + hold {KINETIC_STARTLE_HOLD_S:.0f}s")
+
+    def _relative_play(self, track, live0: Dict[str, float], scale: float, token, cutoff: float):
+        """Walk one take on the wall clock sending live0 + (sample - first)
+        × scale — the recorded gesture as an offset from the live pose.
+        Plan channels decimate to gantry cadence; stops at the motion end
+        (the still tail IS the hold) or when superseded."""
+        base = {c: float(track.samples[0][c]) for c in track.channels if c in track.samples[0] and c in live0}
+        if not base:
+            return
+        plan = bool(set(track.channels) & {"x", "y"})
+
+        def run():
+            t0 = time.time()
+            last_plan = -1.0
+            for s in track.samples:
+                if s["t"] > cutoff + 0.05:
+                    return
+                while time.time() - t0 < s["t"]:
+                    time.sleep(0.01)
+                    if self._startle_token is not token or self._active_state != STARTLE_STATE:
+                        return
+                if self._startle_token is not token or self._active_state != STARTLE_STATE:
+                    return
+                out = {c: live0[c] + (s[c] - base[c]) * scale for c in base if c in s}
+                if not out:
+                    continue
+                if plan:
+                    if s["t"] - last_plan >= 0.2:
+                        last_plan = s["t"]
+                        self._send_plan_raw(out, 0.2)
+                else:
+                    self._send_ease_raw(out)
+
+        threading.Thread(target=run, daemon=True).start()
 
     # --- homing safety ---------------------------------------------------------
     def home_clear(self) -> float:
@@ -807,3 +865,82 @@ class KineticBus:
             self._home_players = []
             self._hold_until = 0.0
             self.log("homing complete — blending back")
+
+    # --- paper check ------------------------------------------------------------
+    def _send_plan_raw(self, d: Dict[str, float], dt: float):
+        """Plan without the gaze lean — safety and flinch moves are absolute."""
+        if self.is_drawing():
+            return
+        if self._ext_plan is not None:
+            self._ext_plan(d, dt)
+        elif self.gantry is not None and self.gantry.alive:
+            self.gantry.goto(d.get("x", 0.0), d.get("y", 0.0), dt)
+
+    def paper_clear(self) -> float:
+        """The camera is about to inspect the paper: play the recorded
+        get-clear move — BOTH arms, gantry included — then hold it until
+        paper_release() (or the max-hold failsafe). Returns the seconds
+        until the view is clear; 0.0 without a dataset (no guessing —
+        an invented path could occlude the very thing being checked)."""
+        buckets = self.library.scan()
+        if not buckets.get(PAPER_STATE):
+            self.log("⚠ no paper dataset — record the get-clear move and assign it under 'paper'")
+            return 0.0
+        fn = random.choice(buckets[PAPER_STATE])
+        try:
+            session = Session.load(fn)
+        except Exception as e:
+            self.log(f"⚠ paper dataset {fn} failed: {e}")
+            return 0.0
+        gantry_ok = self.gantry is not None or self._ext_plan is not None
+        servo_tracks = [t for t in session.tracks if t.has_take and set(t.channels) <= self.owned and not (set(t.channels) & {"x", "y", "pen"})]
+        plan_tracks = [t for t in session.tracks if t.has_take and set(t.channels) & {"x", "y"}] if gantry_ok else []
+        if not servo_tracks and not plan_tracks:
+            self.log(f"⚠ paper dataset {fn} has no usable takes")
+            return 0.0
+        if self._active_state not in INTERRUPT_STATES:
+            self._resume_bundle = self._active_bundle  # continuity: the SAME dataset returns after the check
+        self._home_token = token = object()  # supersedes any running choreography (re-trigger = restart)
+        for p in self._home_players:
+            p.stop()
+        self._home_players = []
+        motion_end = self._motion_end(servo_tracks + plan_tracks)
+        total = KINETIC_PAPER_TUCK_S + motion_end + 0.5
+        self._home_started_at = time.time()
+        self._hold_until = self._home_started_at + total + KINETIC_PAPER_MAX_HOLD_S
+        self._stop_gens()
+        self._active_state = PAPER_STATE
+        first_pose = {}
+        for t in servo_tracks:
+            for c in t.channels:
+                if c in t.samples[0]:
+                    first_pose[c] = float(t.samples[0][c])
+        self._ease_to_pose(first_pose, KINETIC_PAPER_TUCK_S, still_valid=lambda: self._home_token is token)
+
+        def _begin_playback():
+            if self._home_token is not token or self._active_state != PAPER_STATE or time.time() > self._hold_until:
+                return
+            for t in servo_tracks:
+                p = engine.Player(t.samples, t.channels, send_ease=self._send_ease_raw, send_plan=lambda d, dt: None, loop=False)
+                self._home_players.append(p)
+                p.start()
+            for t in plan_tracks:
+                p = engine.Player(t.samples, t.channels, send_ease=lambda d: None, send_plan=self._send_plan_raw, loop=False)
+                self._home_players.append(p)
+                p.start()
+
+        timer = threading.Timer(KINETIC_PAPER_TUCK_S, _begin_playback)
+        timer.daemon = True
+        timer.start()
+        self.log(f"paper check — clearing the view via {fn}, clear in {total:.1f}s")
+        return total
+
+    def paper_release(self):
+        """Check finished: stop the clearing move, drop the hold; the
+        supervisor blends the body back into the running dataset."""
+        if self._active_state == PAPER_STATE:
+            for p in self._home_players:
+                p.stop()
+            self._home_players = []
+            self._hold_until = 0.0
+            self.log("paper check done — blending back")

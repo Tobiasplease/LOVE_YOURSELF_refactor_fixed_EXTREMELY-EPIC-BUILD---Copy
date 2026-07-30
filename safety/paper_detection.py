@@ -22,6 +22,7 @@ from event_logging.event_logger import log_json_entry, LogType
 @dataclass
 class PaperCheckResult:
     """Result of paper detection check."""
+
     paper_present: bool
     confidence: float
     method_used: str
@@ -46,16 +47,37 @@ class PaperDetector:
                     method_used="disabled",
                     check_image_path="",
                     timestamp=start_time,
-                    llm_response="Paper detection disabled in config"
+                    llm_response="Paper detection disabled in config",
                 )
 
             log_json_entry(
-                LogType.DEBUG,
-                {"action": "paper_check_start", "method": "aruco"},
-                print_message="[📄] Checking for paper using aruco method..."
+                LogType.DEBUG, {"action": "paper_check_start", "method": "aruco"}, print_message="[📄] Checking for paper using aruco method..."
             )
 
-            result = self._check_aruco_detection_continuous(camera)
+            # Kinetic bus: both arms play their recorded get-clear move so
+            # they don't occlude the marker; released again in the finally.
+            _clear_wait = 0.0
+            try:
+                from utils import hooks as _kin_hooks
+
+                if _kin_hooks.on_paper_check_start:
+                    _clear_wait = min(float(_kin_hooks.on_paper_check_start() or 0.0), 20.0)
+            except Exception:
+                pass
+            if _clear_wait > 0:
+                print(f"[📄] Arms clearing the view ({_clear_wait:.1f}s)…")
+                time.sleep(_clear_wait)
+
+            try:
+                result = self._check_aruco_detection_continuous(camera)
+            finally:
+                try:
+                    from utils import hooks as _kin_hooks
+
+                    if _kin_hooks.on_paper_check_done:
+                        _kin_hooks.on_paper_check_done()
+                except Exception:
+                    pass
             result.timestamp = start_time
 
             log_json_entry(
@@ -65,9 +87,9 @@ class PaperDetector:
                     "paper_present": result.paper_present,
                     "confidence": result.confidence,
                     "method": result.method_used,
-                    "duration": time.time() - start_time
+                    "duration": time.time() - start_time,
                 },
-                print_message=f"[📄] {'✓' if result.paper_present else '✗'} Paper detection: {result.confidence:.2f} confidence"
+                print_message=f"[📄] {'✓' if result.paper_present else '✗'} Paper detection: {result.confidence:.2f} confidence",
             )
 
             return result
@@ -75,13 +97,8 @@ class PaperDetector:
         except Exception as e:
             log_json_entry(
                 LogType.ERROR,
-                {
-                    "action": "paper_check_failed",
-                    "error": str(e),
-                    "component": "paper_detection",
-                    "default_behavior": "allow_drawing"
-                },
-                print_message=f"[📄] ⚠️ Paper detection failed: {e} → Defaulting to ALLOW drawing"
+                {"action": "paper_check_failed", "error": str(e), "component": "paper_detection", "default_behavior": "allow_drawing"},
+                print_message=f"[📄] ⚠️ Paper detection failed: {e} → Defaulting to ALLOW drawing",
             )
             return PaperCheckResult(
                 paper_present=True,
@@ -90,7 +107,7 @@ class PaperDetector:
                 check_image_path="",
                 timestamp=start_time,
                 llm_response="",
-                error_message=str(e)
+                error_message=str(e),
             )
 
     def _check_aruco_detection_continuous(self, camera) -> PaperCheckResult:
@@ -113,17 +130,13 @@ class PaperDetector:
             search_center_pan = PAPER_DETECTION_GAZE_PAN
             search_center_tilt = PAPER_DETECTION_GAZE_TILT
             search_range_pan = 20.0  # ±20° pan range
-            search_range_tilt = 8.0   # ±8° tilt range — tighter, biased toward bottom in gaze.py
+            search_range_tilt = 8.0  # ±8° tilt range — tighter, biased toward bottom in gaze.py
             search_duration = 12.0  # Total search time in seconds
             check_interval = 0.1  # Check ArUco every 100ms
 
             # Activate organic search mode
             set_paper_search_mode(
-                active=True,
-                center_pan=search_center_pan,
-                center_tilt=search_center_tilt,
-                range_pan=search_range_pan,
-                range_tilt=search_range_tilt
+                active=True, center_pan=search_center_pan, center_tilt=search_center_tilt, range_pan=search_range_pan, range_tilt=search_range_tilt
             )
 
             # Give gaze time to reach search area before starting detection
@@ -168,7 +181,7 @@ class PaperDetector:
                     method_used="aruco_search",
                     check_image_path="",
                     timestamp=time.time(),
-                    llm_response=f"ArUco marker detected during {elapsed_total:.1f}s organic search - no paper covering surface"
+                    llm_response=f"ArUco marker detected during {elapsed_total:.1f}s organic search - no paper covering surface",
                 )
             else:
                 print(f"[📄] ✗ Paper marker NOT VISIBLE during {elapsed_total:.1f}s search → Paper present → ALLOWING draw")
@@ -178,13 +191,14 @@ class PaperDetector:
                     method_used="aruco_search",
                     check_image_path="",
                     timestamp=time.time(),
-                    llm_response=f"ArUco marker not detected during {elapsed_total:.1f}s search ({total_checks} checks) - paper present"
+                    llm_response=f"ArUco marker not detected during {elapsed_total:.1f}s search ({total_checks} checks) - paper present",
                 )
 
         except Exception as e:
             # Ensure search mode is deactivated on error
             try:
                 from vision.gaze import set_paper_search_mode
+
                 set_paper_search_mode(active=False)
             except:
                 pass
@@ -196,7 +210,7 @@ class PaperDetector:
                 check_image_path="",
                 timestamp=time.time(),
                 llm_response="",
-                error_message=f"Paper search error: {str(e)} (defaulting to allow drawing)"
+                error_message=f"Paper search error: {str(e)} (defaulting to allow drawing)",
             )
 
     def get_detection_status(self) -> Dict[str, Any]:

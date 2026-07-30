@@ -523,6 +523,19 @@ with their systems.
   reply (error:N / ALARM) deduplicated. Diagnosis on hardware:
   debug/test_gantry_live.py (machine.py stopped) homes and sends
   dataset coordinates echoing every GRBL reply.
+- PAPER-CHECK INTERRUPT + ORGANIC STARTLE (July 30): new bus state
+  "paper" (session_paper_*.json) — when safety/paper_detection starts
+  its ArUco search it fires hooks.on_paper_check_start → bus.paper_clear
+  plays the recorded get-clear move (BOTH arms, gantry included via raw
+  plan sends), waits the returned clearing time, searches, then
+  on_paper_check_done → paper_release blends the SAME dataset back.
+  Config: KINETIC_PAPER_TUCK_S / KINETIC_PAPER_MAX_HOLD_S. Panel: the
+  runtime lab gained a "📄 paper check" preview button; the state list
+  picks "paper" up automatically. STARTLE reworked: the startle take now
+  plays RELATIVE (live pose + (sample − first) × NUDGE — zero-offset
+  entry, no more frozen median pose), whole body including gantry;
+  startle is suppressed while homing/paper own the body. Proof:
+  debug/test_paper_startle.py.
 - THE ACTUAL PARKED-ARM BUG (July 28, caught live in the terminal):
   KeyError 'x' — generators seed from the body's LIVE state, and the
   servo device reports no x/y (gantry position is commanded, not

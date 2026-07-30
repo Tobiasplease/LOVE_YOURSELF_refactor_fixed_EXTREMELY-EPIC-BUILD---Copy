@@ -1496,8 +1496,21 @@ class SessionFrame(ttk.LabelFrame):
             command=lambda: self._lab_ctx.__setitem__("person", "visible" if person_var.get() else "absent"),
         ).pack(anchor="w", pady=3)
         ttk.Button(right, text="⚡ startle", command=lambda: self.lab.startle() if self._lab_on else None).pack(fill="x", pady=3)
+        ttk.Button(right, text="📄 paper check", command=self._lab_paper_check).pack(fill="x", pady=3)
         self._refresh_library()
         self._lab_tick()
+
+    def _lab_paper_check(self):
+        """Preview the paper-check clearing: play the 'paper' take, hold as
+        long as the real camera search would, then blend back."""
+        if not self._lab_on:
+            return
+        wait = self.lab.paper_clear()
+        if wait > 0:
+            hold = wait + 6.0  # the real search runs ~6-12s after the arms clear
+            t = threading.Timer(hold, self.lab.paper_release)
+            t.daemon = True
+            t.start()
 
     def _on_gaze(self, gx: float, gy: float):
         self._lab_ctx["gx"] = gx

@@ -730,6 +730,10 @@ if KINETIC_BUS_ENABLED:
         # and forth between the drawing pipeline and the temperament
         _kinetic_hooks.on_gantry_pause = kinetic_bus.gantry_release
         _kinetic_hooks.on_gantry_resume = kinetic_bus.gantry_acquire
+        # paper check: both arms play their recorded get-clear move while
+        # the camera inspects the paper, blend back when the check ends
+        _kinetic_hooks.on_paper_check_start = kinetic_bus.paper_clear
+        _kinetic_hooks.on_paper_check_done = kinetic_bus.paper_release
         if KINETIC_MONITOR_UI:
             try:
                 from motor_panel.runtime_monitor import start_runtime_monitor

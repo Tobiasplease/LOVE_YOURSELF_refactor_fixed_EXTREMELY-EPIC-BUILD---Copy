@@ -217,6 +217,11 @@ KINETIC_REACH_TAU = 2.0  # seconds to lean out / settle back
 # signal is missed (GRBL's homing quiet-wait is 60s).
 KINETIC_HOMING_MAX_HOLD_S = 75
 KINETIC_HOMING_TUCK_S = 1.0  # entry ease into the choreography's first pose — no snapping
+# Paper check: the recorded get-clear move (assign under 'paper') plays and
+# HOLDS while the camera inspects the paper — both arms, gantry included.
+# Max hold covers the ~12s organic search plus margin.
+KINETIC_PAPER_TUCK_S = 0.8
+KINETIC_PAPER_MAX_HOLD_S = 30.0
 # False (July 28, artist's call): the homing dance and the gantry sweep run
 # SIMULTANEOUSLY — the choreography is recorded to stay clear of the
 # gantry, so $H does not wait for it. True restores clear-first: $H holds
