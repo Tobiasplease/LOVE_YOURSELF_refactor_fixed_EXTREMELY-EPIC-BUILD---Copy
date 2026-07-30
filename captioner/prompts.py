@@ -294,6 +294,16 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
                 base += f' What you\'ve come to know about yourself: "{self_knowledge}"'
         except Exception:
             pass
+        # Durable ledger (July 30): facts that held across days ride every
+        # frame — the permanence spine's read-back surface. Empty until earned.
+        try:
+            from captioner.durable_ledger import get_durable_ledger
+
+            durable = get_durable_ledger().render()
+            if durable:
+                base += f' What has stayed true across days: "{durable}"'
+        except Exception:
+            pass
 
     # Standing QUESTIONS invite answers — and reciprocation ("What's your
     # turn?", July 9). In document mode the quiet modes (introspective/
@@ -546,6 +556,14 @@ def get_reflection_system_prompt() -> str:
         self_knowledge = context_compressor.core_facts.get("self", "").strip()
         if self_knowledge and len(self_knowledge) > 10:
             base += f' What you\'ve come to know about yourself: "{self_knowledge}"'
+    except Exception:
+        pass
+    try:
+        from captioner.durable_ledger import get_durable_ledger
+
+        durable = get_durable_ledger().render()
+        if durable:
+            base += f' What has stayed true across days: "{durable}"'
     except Exception:
         pass
     return base

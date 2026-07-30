@@ -809,6 +809,12 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             if trait and self._valid_self_fact(trait):
                 self.core_facts["self"] = trait
                 changed.append(f"self={trait}")
+                try:
+                    from captioner.durable_ledger import get_durable_ledger
+
+                    get_durable_ledger().note_fact(trait, source="distill")
+                except Exception:
+                    pass
             if belief:
                 self.introspective_state["current_belief"] = belief
                 changed.append(f"belief={belief}")
@@ -1156,6 +1162,17 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 if prior and self._roughly_same(note, prior):
                     reason = "duplicate"
                     break
+        # Durable ledger (July 30): any note that passes the mechanical gates
+        # feeds the permanence spine — INCLUDING dedupe hits, because to the
+        # ledger a re-noticed fact is a confirmation, not a duplicate. This is
+        # the channel by which "My name is Penelope" can survive forever.
+        if reason in ("", "duplicate"):
+            try:
+                from captioner.durable_ledger import get_durable_ledger
+
+                get_durable_ledger().note_fact(note, source="memory_diff")
+            except Exception:
+                pass
         if reason:
             if reason != "duplicate":
                 print(f"[🧬] Self note rejected ({reason}): {note[:60]}")
