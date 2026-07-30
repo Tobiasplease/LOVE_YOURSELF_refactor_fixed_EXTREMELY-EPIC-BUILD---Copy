@@ -17,9 +17,13 @@ tmux split-window -v -t $SESSION_NAME:0.1
 tmux send-keys -t $SESSION_NAME:0.0 'cd /home/impostor/ComfyUI' C-m
 tmux send-keys -t $SESSION_NAME:0.0 'while true; do echo "Starting ComfyUI..."; source .venv/bin/activate && python3.12 main.py; echo "ComfyUI crashed, restarting in 5 seconds..."; sleep 5; done' C-m
 
-# Pane 1 (top right): Main Machine
+# Pane 1 (top right): Main Machine — 27B world stack (July 31; run_27b.sh
+# owns the env: model paths, MTP flags, STREAM_WINDOW/CONSOLIDATE, honest
+# MODEL_NAME label). Plain `python3.12 machine.py` here silently reverts to
+# the 9B document stack — that's still the A/B fallback, just never the
+# accidental default again.
 tmux send-keys -t $SESSION_NAME:0.1 'cd /home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy' C-m
-tmux send-keys -t $SESSION_NAME:0.1 'while true; do echo "Starting Machine..."; source .venv/bin/activate && python3.12 machine.py; echo "Machine crashed, restarting in 5 seconds..."; sleep 5; done' C-m
+tmux send-keys -t $SESSION_NAME:0.1 'while true; do echo "Starting Machine (27B world)..."; STREAM_MODE=world ./run_27b.sh; echo "Machine crashed, restarting in 5 seconds..."; sleep 5; done' C-m
 
 # Pane 2 (bottom right): Log Viewer
 tmux send-keys -t $SESSION_NAME:0.2 'cd /home/impostor/impostor-log-viewer/webapp' C-m
