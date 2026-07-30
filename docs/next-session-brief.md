@@ -33,7 +33,22 @@ no fragments, no picking up its own thread. Two hypotheses on the table:
    length" fix was proposed and **rejected by the artist as an artificial
    randomizer** — do not re-propose it as-is; the complaint is cadence and
    self-questioning, not just length.
-2. **The think-channel hypothesis (UNTESTED — first move next session).**
+2. **The think-channel hypothesis (TESTED July 30 — DEAD, by its own kill
+   criterion).** Four real caption calls from the July 28 live session
+   replayed with `enable_thinking:true` (`debug/test_think_probe.py`,
+   results verbatim in `debug/think_probe_results.md`): the think channel
+   is task-meta in all four ("Here's a thinking process that leads to the
+   suggested response", "Analyze the Persona", "the user wants me to
+   continue the narrative", "in these roleplay scenarios"). The messy
+   register DOES appear inside it — but as numbered draft iterations of a
+   response for an imagined user, persona held at arm's length; it is the
+   most performed register in the stack, not unperformed notes. Also
+   operationally fatal: 17–20s/call vs the 4s cadence, and thinking eats
+   the token budget before the answer. Salvage: the model's "Iteration 1"
+   drafts are closer to the wanted register than its polished output — the
+   polish is alignment behavior filtering the mess out, which supports the
+   LoRA path, not a harvesting scheme. Original hypothesis kept below for
+   the record.
    Qwen3.x with `enable_thinking:false` puts polished conclusions in the
    output and the messy deliberative register ("wait — no, that's the same
    guy… should I…") inside the suppressed think block. The 9B leaked; the 27B
