@@ -460,6 +460,32 @@ class DrawingController:
     # ------------------------------------------------------------------
     def _invoke_comfyui_drawing(self, drawing_prompt: str, latest_image: str) -> None:
         try:
+            # Reachability first (July 30): with ComfyUI unplugged, unloading
+            # llama-server here bought a pointless reload and the block stayed
+            # invisible to the machine. Check before touching VRAM; a blocked
+            # attempt is a code-attested event the identity layer should see.
+            import requests as _rq
+
+            from utils.drawing_state import DrawingState
+
+            try:
+                _rq.get("http://localhost:8188/system_stats", timeout=3)
+                DrawingState.mark_vision_online()
+            except Exception:
+                DrawingState.mark_vision_offline()
+                try:
+                    from captioner.context_compression import context_compressor
+
+                    context_compressor.note_perception_event("drawing_blocked")
+                except Exception:
+                    pass
+                log_json_entry(
+                    LogType.DECISION,
+                    {"decision": "drawing_blocked", "reason": "comfyui_unreachable", "drawing_prompt": drawing_prompt[:120]},
+                    print_message="[🎨] ComfyUI unreachable — the machine reached for a drawing and nothing could form",
+                )
+                return
+
             # Unload the inference model from VRAM so ComfyUI/Flux can allocate
             self._unload_inference_model()
 

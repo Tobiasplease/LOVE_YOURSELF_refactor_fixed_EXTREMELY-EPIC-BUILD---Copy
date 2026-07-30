@@ -135,6 +135,23 @@ class SemanticMemory:
         )
         return refl_id
 
+    def set_reflection_kernel(self, refl_id: str, kernel: str) -> None:
+        """Attach the distilled kernel (the reflection's one load-bearing
+        sentence) to an already-stored entry. Merge-update: Chroma's update
+        replaces the metadata dict, so re-read and merge. Old entries without
+        a kernel keep surfacing as bare subjects (purple-era containment)."""
+        kernel = (kernel or "").strip()
+        if not refl_id or not kernel:
+            return
+        try:
+            got = self._reflections.get(ids=[refl_id], include=["metadatas"])
+            metas = got.get("metadatas") or []
+            meta = dict(metas[0]) if metas else {}
+            meta["kernel"] = kernel[:200]
+            self._reflections.update(ids=[refl_id], metadatas=[meta])
+        except Exception:
+            pass
+
     def get_recent_reflections(self, limit: int = 3) -> List[Dict]:
         """Most recent reflections, oldest first — the thread of self-thought
         each new reflection gets to see (across sessions)."""
@@ -166,7 +183,16 @@ class SemanticMemory:
         out = []
         for rid, doc, meta, dist in zip(res["ids"][0], res["documents"][0], res["metadatas"][0], res["distances"][0]):
             if dist <= max_distance:
-                out.append({"id": rid, "text": doc, "subject": meta.get("subject", ""), "timestamp": meta.get("timestamp", 0), "distance": dist})
+                out.append(
+                    {
+                        "id": rid,
+                        "text": doc,
+                        "subject": meta.get("subject", ""),
+                        "kernel": meta.get("kernel", ""),
+                        "timestamp": meta.get("timestamp", 0),
+                        "distance": dist,
+                    }
+                )
         return out
 
     # ------------------------------------------------------------------

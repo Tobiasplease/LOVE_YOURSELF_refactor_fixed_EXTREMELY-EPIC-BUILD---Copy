@@ -136,6 +136,19 @@ class ReflectionLoop:
 
             dm = get_drawing_memory()
             parts = []
+            # Vision offline (July 30): an evening of not-being-able-to-draw is
+            # identity-pertinent fact — the reflection should know it, dated.
+            try:
+                from utils.drawing_state import DrawingState
+
+                hours = DrawingState.vision_offline_hours()
+                if hours is not None:
+                    if hours < 1:
+                        parts.append("Drawing is not possible right now — you reached for one and nothing could form.")
+                    else:
+                        parts.append(f"No drawing has been able to form for over {int(hours)} hour{'s' if int(hours) != 1 else ''} — the picturing part is dark.")
+            except Exception:
+                pass
             last = dm.get_last_drawing_description(executed_only=True)
             if last:
                 parts.append(f"The last drawing that actually reached paper: {last}.")
@@ -281,7 +294,11 @@ class ReflectionLoop:
         # introspection/self-synthesis (retired June 28).
         try:
             from captioner.context_compression import context_compressor
-            context_compressor.distill_reflection(text, subject, model=config.MODEL_NAME)
+            kernel = context_compressor.distill_reflection(text, subject, model=config.MODEL_NAME)
+            # Echo kernel (July 30): ride the stored entry so the echo line can
+            # surface a re-thinkable clause instead of a bare subject label.
+            if kernel and refl_id:
+                get_semantic_memory().set_reflection_kernel(refl_id, kernel)
         except Exception as e:
             print(f"[REFLECT] distill failed: {e}")
 

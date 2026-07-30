@@ -677,6 +677,25 @@ def get_drawing_echo_line(agent) -> str:
     seed = (getattr(agent, "last_caption", "") or "").lower()
     if not any(w in seed for w in _DRAWING_LEXICON):
         return ""
+    # Vision offline (July 30): when ComfyUI is unplugged, the pertinent fact
+    # about drawing isn't the last drawing — it's the incapacity. Same
+    # trigger-worded recall, same say-once dedupe (the line changes as the
+    # outage grows, so it can resurface each new hour of it).
+    try:
+        from utils.drawing_state import DrawingState
+
+        _hours = DrawingState.vision_offline_hours()
+    except Exception:
+        _hours = None
+    if _hours is not None:
+        if _hours < 1:
+            line = "You reached for the next drawing and nothing formed — you can't visualise drawings right now."
+        else:
+            line = f"You can't visualise drawings right now — nothing has been able to form for over {int(_hours)} hour{'s' if int(_hours) != 1 else ''}."
+        if getattr(agent, "_last_drawing_echo", None) == line:
+            return ""
+        agent._last_drawing_echo = line
+        return line
     try:
         from drawing.drawing_memory import get_drawing_memory
 
@@ -720,13 +739,21 @@ def get_reflection_echo_line(agent) -> str:
         if m.get("id") == last_id:
             continue
         subject = (m.get("subject") or "").strip()
-        if not subject:
+        kernel = (m.get("kernel") or "").strip()
+        if not subject and not kernel:
             continue
         agent._last_reflection_echo_id = m.get("id")
         # LEDGER (Step 6): surface the SUBJECT to re-think (re-express), never
         # the reflection PROSE to re-read (replay) — quoting the long-form text
         # re-poisoned the register ("the residue of what almost happened…"). The
         # full text stays only for the reflection thread's own continuity.
+        # KERNEL upgrade (July 30, 27B era): when the distill stored the
+        # reflection's one load-bearing sentence, surface THAT — a clause the
+        # present can rhyme against, not a category. Old entries have no
+        # kernel and keep the label behavior (purple-era containment); the
+        # refrain/parrot gates catch any verbatim re-say downstream.
+        if kernel:
+            return f"Something you worked out {_age_phrase(m.get('timestamp', 0))}: {kernel.rstrip('.')}."
         return f"Something that was on your mind {_age_phrase(m.get('timestamp', 0))}: {subject}."
     return ""
 

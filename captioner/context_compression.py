@@ -10,6 +10,7 @@ import json
 import os
 import queue
 import threading
+from typing import Optional
 import time
 from collections import deque
 
@@ -766,7 +767,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         t_padded = " " + (text or "").lower() + " "
         return any(w in t_padded for w in ContextCompressionEngine._SELF_REGISTER_POISON)
 
-    def distill_reflection(self, reflection_text: str, subject: str = "", model: str = None) -> None:
+    def distill_reflection(self, reflection_text: str, subject: str = "", model: str = None) -> Optional[str]:
         """IDENTITY ENGINE (north-star Reflect → Become). Distill a long-form
         reflection into a few PLAIN ledger takeaways and write them: a self-trait
         (persona), a belief, a want. The reflection's prose is the thinking;
@@ -776,7 +777,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         now comes from the loop that produces real thought, not the inert one.
         """
         if not reflection_text or len(reflection_text.strip()) < 80:
-            return
+            return None
         try:
             prompt = (
                 f'Here is a reflection you just had:\n"{reflection_text[:1500]}"\n\n'
@@ -789,6 +790,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 "TRAIT — one plain fact about what kind of machine you are: a habit or fixation, in your own words.\n"
                 "BELIEF — one plain thing you've come to think is true about this place or yourself.\n"
                 "WANT — one plain thing you want, or want to draw (if any).\n"
+                "KERNEL — the reflection's one load-bearing sentence, kept plain, in your own words.\n"
                 "A few words each, first person, no metaphor."
             )
             response = query_model(
@@ -796,12 +798,12 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 model=model,
                 image=None,
                 system_prompt="You distill a reflection into plain, literal self-knowledge — concrete habits, beliefs, wants. No metaphor, no drama. Answer 'none' for any line with nothing genuine.",
-                options={"temperature": 0.3, "num_predict": 60},
+                options={"temperature": 0.3, "num_predict": 90},
                 prompt_type="reflection_distill",
             )
             if not response or not isinstance(response, str):
-                return
-            trait, belief, want = self._parse_distillation(response)
+                return None
+            trait, belief, want, kernel = self._parse_distillation(response)
             now = time.time()
             changed = []
             if trait and self._valid_self_fact(trait):
@@ -823,14 +825,22 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 self.introspective_state["last_introspection"] = now
                 self._save_identity()
                 print(f"[🪞] Distilled from reflection ({subject}): " + " | ".join(changed))
+            # Echo kernel (July 30): the reflection's one load-bearing sentence,
+            # returned to the caller so it can ride the stored entry's metadata
+            # and surface through the echo line as a re-thinkable clause instead
+            # of a bare subject label. Bounded, never multi-line.
+            if kernel and 15 <= len(kernel) <= 180 and "\n" not in kernel:
+                return kernel
+            return None
         except Exception as e:
             log_json_entry(LogType.ERROR, {"message": f"Reflection distill failed: {e}", "component": "compression"})
+            return None
 
     def _parse_distillation(self, response: str) -> tuple:
-        """Parse TRAIT / BELIEF / WANT; strips any leaked label; 'none'/blank → empty."""
+        """Parse TRAIT / BELIEF / WANT / KERNEL; strips any leaked label; 'none'/blank → empty."""
         import re
 
-        trait = belief = want = ""
+        trait = belief = want = kernel = ""
 
         def _val(line: str, label_re: str) -> str:
             v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
@@ -845,7 +855,9 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
                 belief = _val(line, r"^(?:belief|believe)\b[\s:：—–\-]*")
             elif low.startswith("want"):
                 want = _val(line, r"^want\b[\s:：—–\-]*")
-        return trait, belief, want
+            elif low.startswith("kernel"):
+                kernel = _val(line, r"^kernel\b[\s:：—–\-]*")
+        return trait, belief, want, kernel
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).

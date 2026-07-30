@@ -47,6 +47,35 @@ class DrawingState:
         """Check if currently drawing"""
         with cls._lock:
             return cls._is_drawing
+
+    # ------------------------------------------------------------------
+    # Vision offline (July 30): ComfyUI unplugged means no drawing can be
+    # visualised. The machine should KNOW that — a blocked draw attempt sets
+    # this; the caption prompt and the reflection context read it, so an
+    # evening of not-being-able-to-draw becomes identity-pertinent fact
+    # instead of a silent failure.
+    # ------------------------------------------------------------------
+
+    _vision_offline_since: Optional[float] = None
+
+    @classmethod
+    def mark_vision_offline(cls):
+        with cls._lock:
+            if cls._vision_offline_since is None:
+                cls._vision_offline_since = time.time()
+
+    @classmethod
+    def mark_vision_online(cls):
+        with cls._lock:
+            cls._vision_offline_since = None
+
+    @classmethod
+    def vision_offline_hours(cls) -> Optional[float]:
+        """Hours since drawing generation became impossible, or None if fine."""
+        with cls._lock:
+            if cls._vision_offline_since is None:
+                return None
+            return (time.time() - cls._vision_offline_since) / 3600.0
     
     @classmethod
     def get_drawing_info(cls) -> Dict[str, Any]:
