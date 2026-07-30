@@ -22,9 +22,14 @@ export MODEL_NAME="qwen3.6:27b"
 
 # The information budget (July 28): repetition is what the model can't see it
 # already said. Six entries was a 9B relic; the 27B holds minutes of visible
-# selfhood. Consolidation threshold scales with it (~250 chars/entry).
+# selfhood. Consolidation threshold scales with it — and with the model's
+# actual verbosity: 6000 assumed ~250 chars/entry, but the 27B writes ~400,
+# so the stream sat permanently over threshold and consolidation thrashed
+# (~140 folds in 2h on July 30, churning the visible past and doubling the
+# long-call load that correlates with server wedges). 12000 puts the
+# threshold above the 24-entry steady state; folds become occasional again.
 export STREAM_WINDOW=24
-export STREAM_CONSOLIDATE_CHARS=6000
+export STREAM_CONSOLIDATE_CHARS=12000
 
 # Next experiment when ready: the world shape on a model that can follow it —
 # uncomment for grounded + connected + naturally varied, or prefix at launch:
