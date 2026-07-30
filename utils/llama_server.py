@@ -74,6 +74,41 @@ def _forward_sampler_options(payload: dict, options: dict) -> None:
 
 _server_process = None
 
+# Wedge watchdog (July 30): the 27B server can hang mid-generation while
+# /health still answers ok — observed 3x in one session, always on
+# multi-image calls (suspected mtmd+MTP interaction). is_server_running()
+# cannot see this failure class, so the machine sat timing out until an
+# operator killed the process. Consecutive read-timeouts are the only
+# signal: two in a row force a full stop/start. Connection-refused errors
+# don't count (that's the drawing handoff's intentional unload).
+import threading as _threading
+
+_timeout_streak = 0
+_recovery_lock = _threading.Lock()
+
+
+def _note_query_outcome(error_msg: Optional[str] = None) -> None:
+    """Call with None on success, the error string on failure."""
+    global _timeout_streak
+    if error_msg is None:
+        _timeout_streak = 0
+        return
+    if "timed out" not in error_msg.lower():
+        return
+    _timeout_streak += 1
+    if _timeout_streak < 2:
+        return
+    if not _recovery_lock.acquire(blocking=False):
+        return  # another thread is already recovering
+    try:
+        _timeout_streak = 0
+        print("[llama-server] WEDGED — 2 consecutive read-timeouts with health ok; forcing restart")
+        stop_server()
+        ensure_server_up()
+    finally:
+        _recovery_lock.release()
+
+
 # ---------------------------------------------------------------------------
 # Logging (reuse existing infrastructure)
 # ---------------------------------------------------------------------------
@@ -541,10 +576,12 @@ def query_llama_server(
             prefill_tail=prefill[-150:] if prefill else None,
         )
 
+        _note_query_outcome(None)
         return response_text
 
     except Exception as e:
         error_msg = str(e)
+        _note_query_outcome(error_msg)
         if progress_bar:
             progress_bar.stop(success=False)
 
@@ -665,6 +702,7 @@ def _query_multi_image(
         prefill_tail=prefill[-150:] if prefill else None,
     )
 
+    _note_query_outcome(None)
     return response_text
 
 
@@ -901,6 +939,7 @@ def query_llama_server_video(
             )
         except Exception as e:
             error_msg = str(e)
+            _note_query_outcome(error_msg)
             print(f"[llama-server] Multi-image failed: {error_msg}")
 
     # Final fallback: single last frame

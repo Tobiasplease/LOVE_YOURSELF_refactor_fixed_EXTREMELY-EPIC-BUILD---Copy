@@ -233,6 +233,18 @@ class ReflectionLoop:
         # markdown emphasis is a format artifact, and num_predict can cut the
         # final sentence mid-thought — trim to the last complete one.
         text = (response or "").strip().strip('"').strip()
+        # Failed queries return their error as TEXT ("[WARNING] llama-server
+        # API failed: ... Read timed out.") — 100+ chars ending in a period,
+        # which sailed past the too-short gate and entered ChromaDB as a
+        # first-class memory three times during the July 30 wedge outage.
+        if text.startswith("[WARNING]") or "llama-server API failed" in text:
+            log_json_entry(
+                LogType.REFLECTION,
+                {"message": "Reflection was an API error string, skipped", "action": "skip_error_string", "subject": subject},
+                print_message="[REFLECT] Query failed — no reflection this cycle",
+            )
+            self.last_reflection_time = time.time()
+            return
         text = text.replace("**", "").replace("##", "")
         if text and text[-1] not in ".!?":
             cut = max(text.rfind("."), text.rfind("!"), text.rfind("?"))
