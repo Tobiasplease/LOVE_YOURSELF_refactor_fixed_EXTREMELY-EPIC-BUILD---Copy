@@ -1333,36 +1333,41 @@ class Captioner(MemoryMixin):
                             if retry and not retry_reason:
                                 caption = retry
                             else:
-                                # Escape hatch: a skip doesn't advance the stream,
-                                # so a degenerate document would otherwise reject
-                                # every continuation FOREVER (observed live: the
-                                # 'forevermore' deadlock — same 6 entries for
-                                # minutes, machine mute, retries doubling latency).
-                                # Consecutive skips = the thought has collapsed;
-                                # clear the window and let it start fresh.
+                                # Escape hatch, v3 (July 30). v1 wiped the whole
+                                # stream after 3 rejected cycles (built for the
+                                # 9B's word-salad 'forevermore' deadlock); v2
+                                # dropped just the newest entry. Live 27B data
+                                # killed both: these rejections are the model
+                                # RE-TYPING its one-entry visible document from
+                                # the top — a too-short document has no momentum
+                                # to continue — and ANY subtraction resets depth,
+                                # so the stream oscillated at 1-2 entries forever
+                                # (8 drops vs 9 stores in 6 min). The cure is
+                                # depth, not amputation: never mutate the stream
+                                # on echo streaks. Silence is the designed
+                                # outcome; the streak is logged for observability
+                                # and the thread stays whole so it can grow past
+                                # the re-typing regime.
                                 self._skip_streak = getattr(self, "_skip_streak", 0) + 1
-                                if self._skip_streak >= 3:
-                                    self._stream_clear()
-                                    self._skip_streak = 0
+                                if self._skip_streak == 3:
                                     log_json_entry(
                                         LogType.DEBUG,
                                         {
-                                            "message": "Stream collapsed — cleared after 3 consecutive rejected cycles",
-                                            "action": "stream_collapse_reset",
+                                            "message": "Seam stuck — 3 consecutive rejected cycles; stream kept intact",
+                                            "action": "stream_seam_stuck",
                                         },
-                                        print_message="[🔄] Thought collapsed — clearing the stream, starting fresh",
+                                        print_message="[🔄] Seam stuck (3 rejected cycles) — keeping the thread, waiting for the scene to move",
                                     )
-                                else:
-                                    log_json_entry(
-                                        LogType.DEBUG,
-                                        {
-                                            "message": f"Caption skipped: {retry_reason or reason} persisted after retry",
-                                            "action": "anti_echo_skip",
-                                            "reason": retry_reason or reason,
-                                            "caption_preview": (retry or caption)[:60],
-                                        },
-                                        print_message=f"[🔇] {retry_reason or reason} persisted — staying quiet this cycle ({self._skip_streak}/3)",
-                                    )
+                                log_json_entry(
+                                    LogType.DEBUG,
+                                    {
+                                        "message": f"Caption skipped: {retry_reason or reason} persisted after retry",
+                                        "action": "anti_echo_skip",
+                                        "reason": retry_reason or reason,
+                                        "caption_preview": (retry or caption)[:60],
+                                    },
+                                    print_message=f"[🔇] {retry_reason or reason} persisted — staying quiet this cycle (streak {self._skip_streak})",
+                                )
                                 self.last_caption_time = now
                                 return None
 
