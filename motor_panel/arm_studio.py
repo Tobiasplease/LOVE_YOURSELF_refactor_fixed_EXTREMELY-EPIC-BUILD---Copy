@@ -35,7 +35,7 @@ from tkinter import ttk
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import CAMERA_INDEX, LEFT_ARM_ELBOW_LIMITS, LEFT_ARM_SHOULDER_LIMITS, LEFT_ARM_WRIST_LIMITS
-from motor_panel.arm_model import HAND_RADIUS, ArmModel, GantryArmModel, arms_separation, load_models, save_models
+from motor_panel.arm_model import HAND_RADIUS, ArmModel, GantryArmModel, _two_link_elbow, arms_separation, load_models, save_models
 
 VIEW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arm_studio_view.json")
 WORLD = 100.0  # the square: 0..100 studio units each axis
@@ -101,6 +101,7 @@ class Studio:
         self.gaze = None
         self.gantry = None
         self._drag = None  # (arm_key, joint_key)
+        self._grip = {"l1": 30.0, "l2": 30.0, "sign": 1.0, "rel": 0.0}  # rigid-drag state, cached at press
         self._load_view()
         self._build()
         self.cam = Camera(self.cam_label)
@@ -230,7 +231,14 @@ class Studio:
             col = "#4d4" if sep > MARGIN else "#d44"
             c.create_text(8, 8, anchor="nw", fill=col, text=f"arm separation {sep:.1f} (floor {MARGIN:.0f})", font=("TkFixedFont", 10))
         elif not verify:
-            c.create_text(8, 8, anchor="nw", fill="#888", text="drag base □ / elbow ○ / hand ◯ on either arm", font=("TkFixedFont", 9))
+            c.create_text(
+                8,
+                8,
+                anchor="nw",
+                fill="#888",
+                text="drag: hand ◯ = IK · elbow ○ = swing · base □ = move arm · shift-drag stretches links",
+                font=("TkFixedFont", 9),
+            )
 
     def _press(self, ev):
         if self.verify.get():
@@ -243,13 +251,49 @@ class Studio:
                 if d < best:
                     best, hit = d, (arm, joint)
         self._drag = hit
+        if hit:
+            sk = self.skel[hit[0]]
+            b, e, h = sk["base"], sk["elbow"], sk["hand"]
+            cross = (h[0] - b[0]) * (e[1] - b[1]) - (h[1] - b[1]) * (e[0] - b[0])
+            self._grip = {
+                "l1": max(1.0, math.hypot(e[0] - b[0], e[1] - b[1])),
+                "l2": max(1.0, math.hypot(h[0] - e[0], h[1] - e[1])),
+                "sign": 1.0 if cross >= 0 else -1.0,
+                "rel": math.atan2(h[1] - e[1], h[0] - e[0]) - math.atan2(e[1] - b[1], e[0] - b[0]),
+            }
 
     def _motion(self, ev):
         if not self._drag:
             return
         arm, joint = self._drag
         wx, wy = self._unproject(ev.x, ev.y)
-        self.skel[arm][joint][:] = [max(0.0, min(WORLD, wx)), max(0.0, min(WORLD, wy))]
+        wx, wy = max(0.0, min(WORLD, wx)), max(0.0, min(WORLD, wy))
+        sk, g = self.skel[arm], self._grip
+        if ev.state & 0x0001:  # shift-drag: free stretch — the only way lengths change
+            sk[joint][:] = [wx, wy]
+            return
+        if joint == "base":  # the whole arm translates rigidly
+            dx, dy = wx - sk["base"][0], wy - sk["base"][1]
+            for j in ("base", "elbow", "hand"):
+                sk[j][:] = [sk[j][0] + dx, sk[j][1] + dy]
+        elif joint == "hand":  # IK: target clamped to the reach annulus, elbow follows
+            b = sk["base"]
+            d = math.hypot(wx - b[0], wy - b[1])
+            lo, hi = abs(g["l1"] - g["l2"]) + 0.5, g["l1"] + g["l2"] - 0.01
+            if d > 1e-6 and not (lo <= d <= hi):
+                f = max(lo, min(hi, d)) / d
+                wx, wy = b[0] + (wx - b[0]) * f, b[1] + (wy - b[1]) * f
+            sk["hand"][:] = [wx, wy]
+            sk["elbow"][:] = list(_two_link_elbow(b, (wx, wy), g["l1"], g["l2"], g["sign"]))
+        elif joint == "elbow":  # swing: elbow orbits the base, forearm keeps its bend
+            b = sk["base"]
+            d = math.hypot(wx - b[0], wy - b[1])
+            if d < 1e-6:
+                return
+            ux, uy = (wx - b[0]) / d, (wy - b[1]) / d
+            sk["elbow"][:] = [b[0] + g["l1"] * ux, b[1] + g["l1"] * uy]
+            t2 = math.atan2(uy, ux) + g["rel"]
+            sk["hand"][:] = [sk["elbow"][0] + g["l2"] * math.cos(t2), sk["elbow"][1] + g["l2"] * math.sin(t2)]
 
     # --- calibration actions ------------------------------------------------------
     def _capture_left(self):
