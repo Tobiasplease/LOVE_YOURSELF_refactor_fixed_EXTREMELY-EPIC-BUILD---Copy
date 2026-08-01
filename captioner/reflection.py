@@ -20,6 +20,7 @@ reasoning, output discarded each cycle) and the SemanticMemory per-concept
 reflection worker.
 """
 
+import re
 import threading
 import time
 
@@ -39,12 +40,14 @@ class ReflectionLoop:
         self._subject_idx = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._drawings_cache: tuple | None = None
         # Resume rotation after the last stored subject — resetting to index 0
         # on every restart made "the room" dominate (6 of 11 reflections on a
         # restart-heavy day)
         try:
             from captioner.prompts import REFLECTION_SUBJECTS
             from captioner.semantic_memory import get_semantic_memory
+
             last = get_semantic_memory().get_recent_reflections(limit=1)
             if last:
                 names = [s for s, _ in REFLECTION_SUBJECTS]
@@ -80,6 +83,7 @@ class ReflectionLoop:
         # desire) AND writes long-form prose back, both contamination channels.
         # Pause it entirely under detox so the store stops filling with purple.
         from config.config import BASE_VOICE_DETOX
+
         if BASE_VOICE_DETOX:
             return False
         elapsed = time.time() - self.last_reflection_time
@@ -130,7 +134,19 @@ class ReflectionLoop:
 
     def _gather_drawings(self) -> str:
         """Framed sentences, executed-only — this used to inject a bare,
-        unframed tag list ("chair, cables, desk") that read as scene noise."""
+        unframed tag list ("chair, cables, desk") that read as scene noise.
+
+        Cached for the cycle: _next_subject calls this as a material gate and
+        the drawings diet calls it again moments later.
+        """
+        now = time.time()
+        if self._drawings_cache and now - self._drawings_cache[0] < 60:
+            return self._drawings_cache[1]
+        result = self._build_drawings_line()
+        self._drawings_cache = (now, result)
+        return result
+
+    def _build_drawings_line(self) -> str:
         try:
             from drawing.drawing_memory import get_drawing_memory
 
@@ -146,7 +162,9 @@ class ReflectionLoop:
                     if hours < 1:
                         parts.append("Drawing is not possible right now — you reached for one and nothing could form.")
                     else:
-                        parts.append(f"No drawing has been able to form for over {int(hours)} hour{'s' if int(hours) != 1 else ''} — the picturing part is dark.")
+                        parts.append(
+                            f"No drawing has been able to form for over {int(hours)} hour{'s' if int(hours) != 1 else ''} — the picturing part is dark."
+                        )
             except Exception:
                 pass
             last = dm.get_last_drawing_description(executed_only=True)
@@ -159,12 +177,13 @@ class ReflectionLoop:
         except Exception:
             return ""
 
-    def _gather_context(self) -> dict:
-        """Rich context, all of it the machine's own past material."""
+    def _gather_spine(self) -> dict:
+        """The generic material every gather starts from, and the liveness
+        check. What actually REACHES a prompt is chosen per organ below."""
         from captioner.context_compression import context_compressor
         from captioner.semantic_memory import get_semantic_memory
 
-        data = {}
+        spine = {}
         try:
             # THE DREAM'S RAW MATERIAL (July 12): the machine's actual thoughts
             # from the last stretch, verbatim. Every prior input to reflection
@@ -173,60 +192,228 @@ class ReflectionLoop:
             # addressed to a visitor that nothing ever answered).
             cutoff = time.time() - 75 * 60
             hour = [e["text"][:220] for e in context_compressor.hour_log if e.get("timestamp", 0) > cutoff]
-            data["hour"] = hour[-80:]
+            spine["hour"] = hour[-80:]
         except Exception:
             pass
         try:
             history = context_compressor.get_compression_history(max_entries=6)
-            data["today"] = [h["understanding"] for h in history if h.get("understanding")]
+            spine["today"] = [h["understanding"] for h in history if h.get("understanding")]
         except Exception:
             pass
         try:
-            data["reflections"] = get_semantic_memory().get_recent_reflections(limit=3)
+            spine["journal"] = list(context_compressor.journal)
         except Exception:
             pass
         try:
-            data["journal"] = list(context_compressor.journal)[-3:]
+            spine["lived"] = bool(get_semantic_memory().get_recent_reflections(limit=1))
         except Exception:
             pass
+        return spine
+
+    @staticmethod
+    def _has_lived(spine: dict) -> bool:
+        """Is there any real material at all? Deliberately checks the WHOLE
+        spine, not the organ bundle — a thin organ (a day with no visitor)
+        must not read as an unlived day and postpone the loop forever."""
+        return bool(spine.get("hour") or spine.get("today") or spine.get("journal") or spine.get("lived"))
+
+    def _gather_context(self, subject: str, spine: dict) -> dict:
+        """The organ's diet (July 31). Each subject sees a DIFFERENT bundle —
+        that is the whole point: the variety has to live in the DATA, not in
+        the question. Five lenses over one identical bundle collapsed into one
+        thought every time; the lens stays soft, the material behind it is what
+        changes. Specialize data and consequence, never the voice.
+
+        Shared spine: the dream (the raw record of recent thought) — no subject
+        should be blind to what just went through its own head.
+        """
+        from captioner.semantic_memory import get_semantic_memory
+
+        data = {"hour": spine.get("hour") or []}
+        try:
+            # This organ's OWN thread, not the last three of any subject.
+            data["reflections"] = get_semantic_memory().get_recent_reflections(limit=3, subject=subject)
+        except Exception:
+            pass
+
+        diet = {
+            "the room": self._diet_room,
+            "the visitor": self._diet_visitor,
+            "the drawings": self._diet_drawings,
+            "time passing": self._diet_time,
+            "yourself": self._diet_self,
+        }.get(subject)
+        if diet:
+            try:
+                diet(data, spine)
+            except Exception as e:
+                print(f"[REFLECT] Context for '{subject}' came up incomplete: {e}")
+        return data
+
+    def _diet_room(self, data: dict, spine: dict) -> None:
+        """The place itself: what is in it, and what the compressions made of
+        it. Compressions are scene-heavy, so they live here.
+
+        Deliberately NO events ledger — it reads as people-and-happenings, and
+        four organs sharing one block is how this collapsed the first time.
+        """
+        from captioner.semantic_memory import get_semantic_memory
+
+        data["today"] = spine.get("today") or []
+        try:
+            # The concepts ledger, not core_facts['place'] — that prose is
+            # retired from surfacing (see get_core_facts_string).
+            inventory = get_semantic_memory().get_place_inventory(max_items=8, min_times_seen=3)
+            if inventory:
+                data["place_inventory"] = inventory
+        except Exception:
+            pass
+
+    def _diet_visitor(self, data: dict, spine: dict) -> None:
+        """The people: presence spans from the episodic log — how long they
+        stayed, how long since — plus what has been learned about them."""
+        from captioner.context_compression import context_compressor
+
+        try:
+            from utils.episodic_log import get_episodic_log
+
+            log = get_episodic_log()
+            pairs = log.get_pairs_in_window("person_arrived", "person_left", window_seconds=72 * 3600)
+            spans = []
+            for p in pairs[-6:]:
+                start = p["start"].get("timestamp", 0)
+                minutes = max(1, int(p.get("duration_seconds", 0) / 60))
+                if p.get("end"):
+                    spans.append(f"someone was here about {minutes} minutes, starting {log.format_ago(time.time() - start)}")
+                else:
+                    spans.append(f"someone arrived {log.format_ago(time.time() - start)} and you never saw them go")
+            if spans:
+                data["visitor_spans"] = spans
+        except Exception:
+            pass
+        try:
+            people = (context_compressor.core_facts.get("people") or "").strip()
+            if people:
+                data["people_note"] = people
+        except Exception:
+            pass
+        try:
+            data["events"] = context_compressor.events[-5:]
+        except Exception:
+            pass
+
+    def _diet_drawings(self, data: dict, spine: dict) -> None:
+        """The fat one. "The ones you've made and the ones you've wanted to
+        make" is literally the executed sequence plus the desire history — the
+        organ used to get a three-line scrap and then wonder why it had nothing
+        to say about drawing."""
+        from captioner.context_compression import context_compressor
+
         data["drawings"] = self._gather_drawings()
         try:
-            # Memory-diff ledgers (July 12): the reflection used to see only
-            # room geometry — never the machine's own life. Now it gets what
-            # happened and what it learned about itself.
-            data["events"] = context_compressor.events[-5:]
-            data["self_notes"] = context_compressor.self_notes[-3:]
+            from drawing.drawing_memory import get_drawing_memory
+
+            dm = get_drawing_memory()
+            data["executed"] = dm.get_executed_sequence(max_count=8)
+            # An LLM call, and a channel that has run purple before — trimmed
+            # to its first two sentences and framed as a past look, never as a
+            # present reading. Returns "" under two executed drawings.
+            arc = (dm.get_artistic_arc() or "").strip().replace("**", "")
+            if arc:
+                sentences = [s for s in re.split(r"(?<=[.!?])\s+", arc) if s.strip()]
+                data["arc"] = " ".join(sentences[:2])[:320]
         except Exception:
             pass
         try:
+            # The wants, spent and unspent — the other half of "the ones you've
+            # wanted to make". Current desire first, then the trail behind it.
             data["desire"] = context_compressor.get_current_desire()
-            # Desire arc: a freshly spent want enters the reflection as a fact,
-            # so the next want forms informed by the act instead of amnesiac.
             if not data["desire"]:
                 spent = context_compressor.introspective_state.get("last_spent_desire") or {}
                 if spent.get("desire") and time.time() - spent.get("spent", 0) < 48 * 3600:
                     data["desire_spent"] = spent
+            history = (context_compressor.get_full_identity() or {}).get("desire_history") or []
+            current = (data.get("desire") or "").strip().lower()
+            past = [h for h in history[-6:] if (h.get("desire") or "").strip().lower() != current]
+            if past:
+                data["desire_history"] = past
         except Exception:
             pass
-        return data
+
+    def _diet_time(self, data: dict, spine: dict) -> None:
+        """The long clock: the diary as chronology, how long this session has
+        run, and how long the durable facts have held."""
+        from captioner.context_compression import context_compressor
+
+        data["journal"] = (spine.get("journal") or [])[-6:]
+        try:
+            data["session"] = context_compressor.get_current_session_info()
+        except Exception:
+            pass
+        try:
+            from captioner.durable_ledger import get_durable_ledger
+
+            spans = []
+            for f in get_durable_ledger().all_facts():
+                if f.get("cls") not in ("permanent", "stable"):
+                    continue
+                days = len(f.get("days") or [])
+                if days >= 2:
+                    spans.append({"fact": f.get("fact", ""), "days": days, "established": f.get("established", 0)})
+            spans.sort(key=lambda s: -s["days"])
+            if spans:
+                data["ledger_spans"] = spans[:5]
+        except Exception:
+            pass
+        try:
+            data["events"] = context_compressor.events[-5:]
+        except Exception:
+            pass
+
+    def _diet_self(self, data: dict, spine: dict) -> None:
+        """Already effectively this organ's diet via distill — made explicit.
+        The identity slots stay HERE now rather than riding every subject's
+        system prompt. self_notes is this organ's own event ledger, so the
+        general one is left to the room-and-people subjects."""
+        from captioner.context_compression import context_compressor
+
+        try:
+            data["self_notes"] = context_compressor.self_notes[-4:]
+        except Exception:
+            pass
+        try:
+            data["identity"] = {
+                "persona": (context_compressor.core_facts.get("self") or "").strip(),
+                "belief": (context_compressor.get_current_belief() or "").strip(),
+                "desire": (context_compressor.get_current_desire() or "").strip(),
+                "desire_since": context_compressor.introspective_state.get("desire_since", 0.0),
+            }
+        except Exception:
+            pass
 
     def _reflect(self) -> None:
         from captioner.prompts import build_reflection_loop_prompt, get_reflection_system_prompt
         from captioner.semantic_memory import get_semantic_memory
         from utils.inference import query_model
 
-        data = self._gather_context()
+        # Spine first, then the subject, THEN the subject's own material — the
+        # order matters now that the bundle depends on which organ is up. The
+        # liveness gate runs before _next_subject so a postponed cycle doesn't
+        # burn a rotation slot.
+        spine = self._gather_spine()
         # Nothing lived yet — reflecting on an empty store just invents a
         # past, and a stored invention echoes back into captions forever.
         # Wait until at least some real material exists.
-        if not (data.get("hour") or data.get("today") or data.get("journal") or data.get("reflections")):
+        if not self._has_lived(spine):
             print("[REFLECT] Nothing lived yet — postponing reflection until there is real material.")
             self.last_reflection_time = time.time() - REFLECTION_LOOP_INTERVAL + 300  # retry in 5 min
             return
 
+        self._drawings_cache = None  # fresh gather per cycle
         subject, question = self._next_subject()
+        data = self._gather_context(subject, spine)
         prompt = build_reflection_loop_prompt(question, data)
-        system_prompt = get_reflection_system_prompt()
+        system_prompt = get_reflection_system_prompt(subject)
 
         print(f"[REFLECT] Stepping back to think about {subject}...")
         response = query_model(
@@ -294,6 +481,7 @@ class ReflectionLoop:
         # introspection/self-synthesis (retired June 28).
         try:
             from captioner.context_compression import context_compressor
+
             kernel = context_compressor.distill_reflection(text, subject, model=config.MODEL_NAME)
             # Echo kernel (July 30): ride the stored entry so the echo line can
             # surface a re-thinkable clause instead of a bare subject label.

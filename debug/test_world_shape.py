@@ -139,10 +139,32 @@ check("seam is bounded by HYBRID_PREFILL_CHARS", len(pf3) <= config.HYBRID_PREFI
 from captioner.prompts import get_monologue_system_prompt as _g
 
 h = _g("observational")
-check("hybrid uses the log-genre frame", "you keep a log" in h)
+check("hybrid uses the reflexive frame (log frame invited telemetry)", "keep a log" not in h and "your own senses reporting" in h)
 check("hybrid clause has no 'add the next entry' ask", "Add the next entry" not in h)
 check("hybrid suppresses quiet elicitation", "What stands out" not in h)
 config.STREAM_MODE = "world"
+
+print("— log-label creep, mutated form (Aug 1) —")
+check(
+    "numbered telemetry header stripped", Captioner._strip_list_shape("Log entry #1044 Status: Pen parked. Motor idle.") == "Pen parked. Motor idle."
+)
+check("original colon form still stripped", Captioner._strip_list_shape("Log entry: the lamp is still on.") == "the lamp is still on.")
+check("bare Status: field stripped", Captioner._strip_list_shape("Status: Pen parked.") == "Pen parked.")
+check(
+    "talking ABOUT the log survives",
+    Captioner._strip_list_shape("Another log entry, then. Nothing moved.") == "Another log entry, then. Nothing moved.",
+)
+
+print("— telemetry register (Aug 1) —")
+check("telemetry block inadmissible", not Captioner._stream_admissible("Log entry #1042\nStatus: Pen parked. Motor idle.\nVision scan initiated."))
+check("scanner verbs inadmissible", not Captioner._stream_admissible("Vision scan update... Target acquired. Human male wearing beige."))
+check("thinking about its own motors survives", Captioner._stream_admissible("My motor is idle and the pen has not moved all evening."))
+check("person observation survives", Captioner._stream_admissible("He came right up close, close enough that I could see his headphones."))
+config.STREAM_MODE = "hybrid"
+_h = get_monologue_system_prompt("observational")
+check("hybrid uses the reflexive frame, not the log frame", "keep a log" not in _h and "your own senses reporting" in _h)
+config.STREAM_MODE = "world"
+check("world keeps the log frame", "you keep a log" in get_monologue_system_prompt("observational"))
 
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)

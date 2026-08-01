@@ -152,9 +152,17 @@ class SemanticMemory:
         except Exception:
             pass
 
-    def get_recent_reflections(self, limit: int = 3) -> List[Dict]:
+    def get_recent_reflections(self, limit: int = 3, subject: str = "") -> List[Dict]:
         """Most recent reflections, oldest first — the thread of self-thought
-        each new reflection gets to see (across sessions)."""
+        each new reflection gets to see (across sessions).
+
+        subject: restrict to one subject's thread. Each reflection organ reads
+        its OWN past (July 31). Quoting the last three reflections of ANY
+        subject was a direct copy-the-theme channel: three counting-themed
+        reflections in a row were pasted verbatim into the top of the fourth,
+        whatever its subject — one of the homogenisers behind the
+        five-lenses-one-thought collapse.
+        """
         try:
             got = self._reflections.get(include=["documents", "metadatas"])
         except Exception:
@@ -163,6 +171,8 @@ class SemanticMemory:
             zip(got["ids"], got["documents"], got["metadatas"]),
             key=lambda r: r[2].get("timestamp", 0),
         )
+        if subject:
+            rows = [r for r in rows if (r[2].get("subject") or "") == subject]
         return [
             {"id": rid, "text": doc, "subject": meta.get("subject", ""), "timestamp": meta.get("timestamp", 0)}
             for rid, doc, meta in rows[-limit:]

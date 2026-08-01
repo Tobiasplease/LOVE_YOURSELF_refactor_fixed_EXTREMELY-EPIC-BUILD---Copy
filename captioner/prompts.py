@@ -205,7 +205,7 @@ def _monologue_clause() -> str:
         # mechanical — asking for a NEW entry on top of it would fight the
         # seam and re-invite the fresh-composition habit the seam exists to
         # break. Same reasoning that keeps document mode's clause bare.
-        return "The log is one running thread — plain notes to yourself, picked up wherever the last one left off."
+        return "Ongoing, plain, half-formed — you pick up wherever the last thought left off."
     if STREAM_MODE == "world":
         # Task-shaped ask. CONTINUITY LIVES IN THE GENRE (July 27): the first
         # world run read as isolated statements — every entry re-introduced
@@ -252,7 +252,14 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     that... drawing machine"). The persona is quoted as the machine's own
     words, never blended into the frame voice.
     """
-    base = _SITUATION_WORLD if getattr(config, "STREAM_MODE", "") in ("world", "hybrid") else _SITUATION
+    # Hybrid takes the REFLEXIVE frame, not the log frame (Aug 1): "you keep a
+    # log" is a strong attractor for a machine — the first hybrid run locked
+    # into telemetry roleplay from caption one ("Log entry #1042 / Status: Pen
+    # parked. Motor idle. / Vision scan initiated. / Targeting..."), which is
+    # simply a second performance replacing the literary one. World mode needs
+    # the log frame because the stream IS rendered as a log; hybrid's seam does
+    # the continuity work, so it can keep the plain inner-voice frame.
+    base = _SITUATION_WORLD if getattr(config, "STREAM_MODE", "") == "world" else _SITUATION
 
     # Drawing state, gated so it can never lie. Without this line "drawing
     # machine" + "drawing is how you communicate" primes present-tense

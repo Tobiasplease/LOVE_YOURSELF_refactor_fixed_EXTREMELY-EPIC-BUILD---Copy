@@ -629,7 +629,21 @@ class Captioner(MemoryMixin):
     # strips at storage like the stamp; the stream stops showing it and the
     # aping decays. Colon required: talking ABOUT the log ("another log
     # entry, then") stays intact.
-    _LOG_LABEL_RE = re.compile(r"\s*\blog entry\s*:\s*", re.IGNORECASE)
+    # Aug 1: the label mutated past the colon requirement — "Log entry #1044
+    # Status: Pen parked. Motor idle." The genre frame invites a machine to
+    # write machine-telemetry, and a filter keyed to one spelling just teaches
+    # it another. Widened to the whole header shape: optional #number, then a
+    # colon or a "Status:" field. Talking ABOUT the log still passes ("another
+    # log entry, then"), because a bare mention has neither number nor colon.
+    _LOG_LABEL_RE = re.compile(r"\s*\blog entry\s*(?:#\s*\d+)?\s*(?::|(?=status\s*:))\s*", re.IGNORECASE)
+    _STATUS_FIELD_RE = re.compile(r"^\s*status\s*:\s*", re.IGNORECASE)
+    _TELEMETRY_RE = re.compile(
+        r"(?:^|\n)\s*(?:status|vision scan|visual sensors?|target(?:ing)?|scan|diagnostics?|system|motor|sensor)\s*:"
+        r"|\bvision scan (?:initiated|update)"
+        r"|\btarget acquired\b"
+        r"|\bhuman (?:male|female|subject)\b",
+        re.IGNORECASE,
+    )
 
     @classmethod
     def _strip_list_shape(cls, text: str) -> str:
@@ -637,6 +651,7 @@ class Captioner(MemoryMixin):
         t = cls._COUNTDOWN_PREFIX_RE.sub("", t)
         t = cls._LOG_STAMP_ANY_RE.sub(" ", t)
         t = cls._LOG_LABEL_RE.sub(" ", t)
+        t = cls._STATUS_FIELD_RE.sub("", t.lstrip())
         return cls._HASHTAG_TAIL_RE.sub("", t).strip()
 
     # Outward-addressed engagement hooks (July 28): "What do you think?" bred
@@ -687,6 +702,14 @@ class Captioner(MemoryMixin):
             return False
         if any(h in t for h in cls._OUTWARD_HOOKS):
             return False  # spoken once, never re-seeded
+        # Telemetry register (Aug 1): "Status: Pen parked. Motor idle. / Vision
+        # scan initiated. / Targeting... / Target acquired. Human male." One
+        # such entry in the stream and every continuation is a status report —
+        # the deadlock that ate the first hybrid run. Field-label shape is the
+        # tell, not the words: a colon-terminated label opening a line, or the
+        # scanner verbs. Thinking ABOUT its motors stays free.
+        if cls._TELEMETRY_RE.search(t):
+            return False
         if t.count("*") >= 2 or t.startswith(("- ", "* ", "#")):
             return False  # markdown scaffolding breeds in-stream too
         if cls._ENUM_PREFIX_RE.match(t) or re.search(r"\b\d\)\s.+\b\d\)\s", t):
@@ -751,7 +774,16 @@ class Captioner(MemoryMixin):
         if len(words) < n:
             return False
         shingles = {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
-        for past in self._stream:
+        # Recent tail only (Aug 1). This gate scanned the WHOLE window, so
+        # raising STREAM_WINDOW 6->24 quadrupled its surface area: it fired 113
+        # times in one run and became the dominant filter (48% pass rate, and
+        # every rejection costs a retry — the "slow, filters itself" symptom).
+        # Same argument as the opening-echo tail: sharing six words with
+        # something said twenty minutes ago is a callback; sharing them with
+        # the last few thoughts is a chorus.
+        from config.config import ANTI_ECHO_COMPARE_TAIL
+
+        for past in list(self._stream)[-ANTI_ECHO_COMPARE_TAIL:]:
             pw = self._norm_words(past)
             for i in range(len(pw) - n + 1):
                 if " ".join(pw[i : i + n]) in shingles:
