@@ -265,7 +265,7 @@ class Captioner(MemoryMixin):
         entries = list(self._stream)
         from config.config import STREAM_MODE
 
-        if STREAM_MODE != "world" or not entries:
+        if STREAM_MODE not in ("world", "hybrid") or not entries:
             return entries
         ts = list(self._stream_ts)
         while len(ts) < len(entries):  # defensive: consolidation/restore drift

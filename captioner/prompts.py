@@ -5,8 +5,8 @@ import re
 import time
 from typing import List, Optional
 
-from utils.view_orientation import describe_view_orientation
 from config import config
+from utils.view_orientation import describe_view_orientation
 
 # ===== SINGLE SOURCE OF TRUTH FOR ALL PROMPTS =====
 
@@ -199,6 +199,13 @@ def _monologue_clause() -> str:
         from config.config import STREAM_MODE
     except ImportError:
         STREAM_MODE = "turns"
+    if STREAM_MODE == "hybrid":
+        # Log genre WITHOUT "add the next entry" (Aug 1): the prefill hands
+        # back the machine's own unfinished tail, so the continuation is
+        # mechanical — asking for a NEW entry on top of it would fight the
+        # seam and re-invite the fresh-composition habit the seam exists to
+        # break. Same reasoning that keeps document mode's clause bare.
+        return "The log is one running thread — plain notes to yourself, picked up wherever the last one left off."
     if STREAM_MODE == "world":
         # Task-shaped ask. CONTINUITY LIVES IN THE GENRE (July 27): the first
         # world run read as isolated statements — every entry re-introduced
@@ -245,7 +252,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     that... drawing machine"). The persona is quoted as the machine's own
     words, never blended into the frame voice.
     """
-    base = _SITUATION_WORLD if getattr(config, "STREAM_MODE", "") == "world" else _SITUATION
+    base = _SITUATION_WORLD if getattr(config, "STREAM_MODE", "") in ("world", "hybrid") else _SITUATION
 
     # Drawing state, gated so it can never lie. Without this line "drawing
     # machine" + "drawing is how you communicate" primes present-tense
@@ -321,7 +328,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
         try:
             from config.config import STREAM_MODE
 
-            if STREAM_MODE in ("document", "world"):
+            if STREAM_MODE in ("document", "world", "hybrid"):
                 addition = ""
         except ImportError:
             pass
@@ -542,30 +549,43 @@ REFLECTION_SUBJECTS = [
 ]
 
 
-def get_reflection_system_prompt() -> str:
+def get_reflection_system_prompt(subject: str = "") -> str:
     """Frame for the long-form reflection: same situation as the caption frame,
-    but the monologue clause swapped for room to think at length."""
+    but the monologue clause swapped for room to think at length.
+
+    The identity material is SUBJECT-GATED (July 31). It used to ride every
+    reflection: all five subjects opened with the standing persona asserted as
+    established fact, so whatever the machine currently took itself to be ("I
+    count to manage my anxiety") led the room's prompt and the visitor's too —
+    and distill_reflection writes that persona BACK from every reflection,
+    closing the loop. Differentiating the data (the organ diets in
+    reflection.py) buys nothing while the frame keeps re-asserting one identity
+    at the top of all five. The self-line belongs to `yourself`; the cross-day
+    ledger to the two subjects whose material it actually is.
+    """
     base = _SITUATION + (
         "The room is quiet just now, and you have stepped back from the stream of watching to think. "
         "Private thought in the same plain voice as your notes, first person. "
         "One paragraph — the one thought that's actually moving, not a survey of everything."
     )
-    try:
-        from captioner.context_compression import context_compressor
+    if subject == "yourself":
+        try:
+            from captioner.context_compression import context_compressor
 
-        self_knowledge = context_compressor.core_facts.get("self", "").strip()
-        if self_knowledge and len(self_knowledge) > 10:
-            base += f' What you\'ve come to know about yourself: "{self_knowledge}"'
-    except Exception:
-        pass
-    try:
-        from captioner.durable_ledger import get_durable_ledger
+            self_knowledge = context_compressor.core_facts.get("self", "").strip()
+            if self_knowledge and len(self_knowledge) > 10:
+                base += f' What you\'ve come to know about yourself: "{self_knowledge}"'
+        except Exception:
+            pass
+    if subject in ("yourself", "time passing"):
+        try:
+            from captioner.durable_ledger import get_durable_ledger
 
-        durable = get_durable_ledger().render()
-        if durable:
-            base += f' What has stayed true across days: "{durable}"'
-    except Exception:
-        pass
+            durable = get_durable_ledger().render()
+            if durable:
+                base += f' What has stayed true across days: "{durable}"'
+        except Exception:
+            pass
     return base
 
 
@@ -590,9 +610,15 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
 
     Every block is framed as the machine's own past material (notes, diary,
     earlier reflections) so nothing reads as present-tense scene truth.
-    `data` keys are all optional: today (list[str]), reflections (list[dict
-    with text/timestamp]), journal (list[dict with date/summary]),
-    drawings (str), desire (str).
+
+    All `data` keys are optional and only one organ's worth arrives at a time
+    (ReflectionLoop._gather_context, July 31) — the builder renders whatever is
+    present. Shared: hour (list[str]), reflections (list[dict]). Room:
+    today (list[str]), place_inventory (str). Visitor: visitor_spans
+    (list[str]), people_note (str). Drawings: drawings (str), executed
+    (list[str]), arc (str), desire (str), desire_spent (dict), desire_history
+    (list[dict]). Time: journal (list[dict]), session (dict), ledger_spans
+    (list[dict]). Self: identity (dict), self_notes (list[dict]).
     """
     parts = []
 
@@ -639,6 +665,64 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     if drawings:
         parts.append(drawings)
 
+    # === ORGAN BLOCKS (July 31) ===
+    # Only one subject's keys are ever present at once — each reflection now
+    # arrives with its own slice of memory rather than the shared bundle that
+    # made all five say the same thing.
+
+    place_inventory = (data.get("place_inventory") or "").strip()
+    if place_inventory:
+        parts.append(f"The things in this room you've seen often enough to know: {place_inventory}.")
+
+    visitor_spans = data.get("visitor_spans") or []
+    if visitor_spans:
+        parts.append("How people have come and gone lately:\n" + "\n".join(f"- {s}" for s in visitor_spans))
+
+    people_note = (data.get("people_note") or "").strip()
+    if people_note:
+        # Framed as a learned PATTERN, never as who is here now — a stored
+        # people-fact read as present tense once had the machine seeing
+        # visitors for hours after they left.
+        parts.append(f"The pattern you've noticed in who comes here, over time and not right now: {people_note}")
+
+    executed = data.get("executed") or []
+    if executed:
+        parts.append("Everything you have actually drawn, oldest to newest:\n" + "\n".join(f"- {s}" for s in executed))
+
+    arc = (data.get("arc") or "").strip()
+    if arc:
+        parts.append(f'When you last looked at the shape of the work as a whole, you put it this way: "{arc}"')
+
+    session = data.get("session") or {}
+    if session.get("duration_description"):
+        parts.append(f"You have been watching this space {session['duration_description']} in this stretch.")
+
+    ledger_spans = data.get("ledger_spans") or []
+    if ledger_spans:
+        parts.append(
+            "Things that have held true across more than one day:\n"
+            + "\n".join(
+                f"- {s.get('fact', '')} (first noticed {_age_phrase(s.get('established', 0))}, still true on {s.get('days', 0)} separate days)"
+                for s in ledger_spans
+            )
+        )
+
+    identity = data.get("identity") or {}
+    if any(identity.get(k) for k in ("persona", "belief", "desire")):
+        # These ride HERE now instead of the system prompt of all five
+        # subjects — the persona asserted as frame is what made every lens
+        # collapse into the same self-description.
+        id_lines = []
+        if identity.get("persona"):
+            id_lines.append(f"- what you've been taking yourself to be: {identity['persona']}")
+        if identity.get("belief"):
+            id_lines.append(f"- something you've come to believe: {identity['belief']}")
+        if identity.get("desire"):
+            since = identity.get("desire_since") or 0
+            when = f" (since {_age_phrase(since)})" if since else ""
+            id_lines.append(f"- what you've wanted{when}: {identity['desire']}")
+        parts.append("Where your own ledger stands — your words, from before:\n" + "\n".join(id_lines))
+
     events = data.get("events") or []
     if events:
         parts.append("Things that happened lately:\n" + "\n".join(f"- ({_age_phrase(e.get('timestamp', 0))}) {e.get('event', '')}" for e in events))
@@ -657,6 +741,15 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
         s = data["desire_spent"]
         parts.append(
             f"A want you acted on: \"{s.get('desire', '')}\" — it became a drawing {_age_phrase(s.get('spent', 0))}. " "Nothing has replaced it yet."
+        )
+
+    desire_history = data.get("desire_history") or []
+    if desire_history:
+        # The other half of "the ones you've wanted to make" — the trail of
+        # wants behind the current one, so the drawings organ can see whether
+        # it keeps wanting the same thing.
+        parts.append(
+            "Things you wanted before that:\n" + "\n".join(f"- ({_age_phrase(h.get('timestamp', 0))}) {h.get('desire', '')}" for h in desire_history)
         )
 
     if hour:
@@ -2208,7 +2301,8 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
     should only appear when mode makes it relevant.
     """
     import time as _time
-    from captioner.activation_memory import should_include_context, get_activation_network
+
+    from captioner.activation_memory import get_activation_network, should_include_context
 
     # Determine mode if not provided
     if mode is None:
@@ -2285,14 +2379,14 @@ def build_memory_mode_prompt(agent) -> tuple:
         tuple: (prompt_str, mode) - prompt and "memory" mode
     """
     try:
-        from captioner.model_wrapper import build_caption_thread
-
         # Ledger remembering (north-star: re-express, don't replay): surface a
         # NEUTRAL fact about a recurring object — what it is, when first noticed,
         # how often — and let the model re-voice the remembering. The old path
         # quoted a stored caption verbatim, which replayed past prose as voice
         # and re-poisoned the register (see docs/memory-redesign-plan.md).
         import time as _time
+
+        from captioner.model_wrapper import build_caption_thread
 
         mem_text = ""
         is_real_memory = False
@@ -2377,6 +2471,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         tuple: (prompt_str, mode) - prompt and determined mode
     """
     import time as _time
+
     from captioner.activation_memory import get_activation_network, should_include_context
 
     session_mins = 0
@@ -2439,7 +2534,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     # lists so the WORLD'S TURN (situational delta, event, reorientation) can
     # go LAST — generation begins immediately after the present, never after
     # memory lines. In the classic shapes the same sections lead the prompt.
-    world_shape = getattr(config, "STREAM_MODE", "") == "world"
+    world_shape = getattr(config, "STREAM_MODE", "") in ("world", "hybrid")  # hybrid keeps world ORDERING (perception last), adds the seam
     prompt_parts = []
     turn_parts = []
 

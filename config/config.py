@@ -422,6 +422,12 @@ STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restart
 # ("the light feels different now"). A/B directly against the world runs.
 STREAM_MODE = os.getenv("STREAM_MODE", "document")
 
+# HYBRID seam size (Aug 1): how many chars of the machine's latest thought are
+# handed back as the continuation prefill in STREAM_MODE="hybrid". Short on
+# purpose — enough to land mid-voice, never the whole document (that is what
+# deadlocked Aug 1). ~220 chars ≈ the last 30-35 words.
+HYBRID_PREFILL_CHARS = int(os.getenv("HYBRID_PREFILL_CHARS", 220))
+
 # View-replacement detector (world shape's honest change line): if the servo
 # barely moved between caption cycles but the frame content changed past this
 # threshold (normalized mean abs diff on 64px grays), the WORLD changed — a

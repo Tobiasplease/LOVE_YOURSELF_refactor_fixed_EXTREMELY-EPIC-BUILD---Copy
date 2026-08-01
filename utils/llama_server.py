@@ -134,6 +134,17 @@ def _stream_mode() -> str:
     return getattr(_c, "STREAM_MODE", "turns")
 
 
+# Hybrid seam: the log lines arrive stamped ("14:02 — ..."); the prefill must
+# be raw voice, or the model continues a timestamp instead of a thought.
+_LOG_STAMP_RE = re.compile(r"^\s*\d{1,2}:\d{2}\s*[—–-]\s*")
+
+
+def _hybrid_prefill_chars() -> int:
+    from config import config as _c
+
+    return int(getattr(_c, "HYBRID_PREFILL_CHARS", 220))
+
+
 def _trim_to_sentence(text: str) -> str:
     """Cut to the last complete sentence (keeps text intact if none found)."""
     cut = max(text.rfind("."), text.rfind("!"), text.rfind("?"), text.rfind("…"))
@@ -182,10 +193,38 @@ def _append_stream_and_user(messages: list, history: Optional[List[str]], user_m
     react ordering made the default; react needs no special case here,
     salience only changes how much interior material rides in the user prompt.
 
+    "hybrid" (Aug 1): world ORDERING with a document SEAM. The older log rides
+    as an assistant message, the world's turn (frames + present) comes next —
+    so perception stays last and grounding is preserved — and then the tail of
+    the machine's own latest thought is appended as a SHORT assistant prefill,
+    so generation begins inside its own voice mid-turn instead of composing a
+    fresh caption. Motivation (measured, Aug 1 world run): perception-last
+    maximised grounding AND the image-captioning prior — 72-76% of entries
+    opened "The ___", 69% carried a semicolon, length pinned at 37-61 words.
+    You cannot open with "The" when you are handed your own unfinished clause.
+    Poison exposure stays bounded: the prefill is ONE short tail, never the
+    whole document (the Aug 1 deadlock came from prefilling a poisoned
+    document 187 times). react drops the prefill entirely — an interruption
+    should be answered, not continued.
+
     "turns": legacy turn-pairs, then the user message.
 
     Returns the prefill text ("" in world/turns/react modes) for seam cleaning + logging.
     """
+    if _stream_mode() == "hybrid":
+        lines = [p for p in ((h or "").strip() for h in history or []) if p]
+        prefill = ""
+        if lines and not react:
+            tail = _LOG_STAMP_RE.sub("", lines.pop())  # newest entry leaves the log, becomes the seam
+            if tail:
+                budget = _hybrid_prefill_chars()
+                prefill = (tail if len(tail) <= budget else tail[-budget:].lstrip()) + " "
+        if lines:
+            messages.append({"role": "assistant", "content": "\n".join(lines)})
+        messages.append(user_message)
+        if prefill:
+            messages.append({"role": "assistant", "content": prefill})
+        return prefill
     if _stream_mode() == "world":
         lines = [p for p in ((h or "").strip() for h in history or []) if p]
         if lines:

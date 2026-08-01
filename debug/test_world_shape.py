@@ -116,6 +116,34 @@ check("plain thought passes mouth", cap3._caption_reject_reason("The lamp is sti
 check("assistant tail can't seed next session", not _plant("What do you think? Your thoughts matter to me."))
 check("plain prior still plantable", _plant("The lamp is still on; the chair has not moved."))
 
+print("— hybrid shape (Aug 1) —")
+config.STREAM_MODE = "hybrid"
+import importlib, utils.llama_server as _ls
+
+msgs = [{"role": "system", "content": "sys"}]
+u = {"role": "user", "content": "the world turn"}
+pf = _ls._append_stream_and_user(msgs, ["14:01 — first note", "14:02 — the pen is still parked and I keep looking at"], u, react=False)
+roles = [m["role"] for m in msgs]
+check("shape is system, log, user, prefill", roles == ["system", "assistant", "user", "assistant"])
+check("world turn precedes the seam (perception stays last-but-one)", msgs[2] is u)
+check("prefill is the newest thought, stamp stripped", pf.strip() == "the pen is still parked and I keep looking at")
+check("older entry stays in the log", msgs[1]["content"] == "14:01 — first note")
+check("prefill message is last", msgs[-1]["content"] == pf)
+msgs2 = [{"role": "system", "content": "sys"}]
+pf2 = _ls._append_stream_and_user(msgs2, ["14:01 — a", "14:02 — b"], u, react=True)
+check("react drops the seam (answer the moment)", pf2 == "" and msgs2[-1] is u)
+long_tail = "x" * 400
+msgs3 = [{"role": "system", "content": "sys"}]
+pf3 = _ls._append_stream_and_user(msgs3, ["14:01 — old", "14:02 — " + long_tail], u, react=False)
+check("seam is bounded by HYBRID_PREFILL_CHARS", len(pf3) <= config.HYBRID_PREFILL_CHARS + 1)
+from captioner.prompts import get_monologue_system_prompt as _g
+
+h = _g("observational")
+check("hybrid uses the log-genre frame", "you keep a log" in h)
+check("hybrid clause has no 'add the next entry' ask", "Add the next entry" not in h)
+check("hybrid suppresses quiet elicitation", "What stands out" not in h)
+config.STREAM_MODE = "world"
+
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)
 cap2._stream = deque(["My springs coil tight again from that moment when nothing moves but waits for something else to happen first."], maxlen=6)
