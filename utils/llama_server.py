@@ -145,6 +145,42 @@ def _hybrid_prefill_chars() -> int:
     return int(getattr(_c, "HYBRID_PREFILL_CHARS", 220))
 
 
+# Sentence boundary, used to cut the seam at a coherent joint.
+_SENTENCE_END_RE = re.compile(r"[.!?…]['\")\]]?\s+")
+
+
+def _seam_of(entry: str, budget: int) -> str:
+    """The tail of `entry` to hand back as continuation prefill.
+
+    CUT AT A SENTENCE BOUNDARY (Aug 1). A raw char-slice starts mid-word, and
+    a model handed a partial assistant turn that begins mid-word does not
+    continue it — it RE-TYPES the passage properly from an earlier point and
+    appends a few words. Measured: the model reproduced a whole prior entry
+    and added "It's good.", the exact-prefix stripper could not match, and the
+    re-typed text was stored as a mid-word slice ("rocessing over there at his
+    screens..."), which then became the next seam. That is the "very truncated"
+    feed: each entry a shifted window of the same passage.
+
+    Starting at the last sentence boundary keeps the seam a coherent unit. If
+    the previous thought was itself cut off mid-sentence, the seam is that
+    partial sentence — so genuine mid-clause continuation still happens, it is
+    just never mid-WORD.
+    """
+    entry = (entry or "").strip()
+    if not entry:
+        return ""
+    marks = [m.end() for m in _SENTENCE_END_RE.finditer(entry)]
+    seam = entry[marks[-1] :] if marks else entry
+    if not seam.strip():  # entry ended exactly on a boundary — keep its final sentence
+        seam = entry[marks[-2] :] if len(marks) > 1 else entry
+    if len(seam) > budget:
+        seam = seam[-budget:]
+        cut = seam.find(" ")
+        if cut > 0:
+            seam = seam[cut + 1 :]
+    return seam.strip()
+
+
 def _trim_to_sentence(text: str) -> str:
     """Cut to the last complete sentence (keeps text intact if none found)."""
     cut = max(text.rfind("."), text.rfind("!"), text.rfind("?"), text.rfind("…"))
@@ -216,9 +252,9 @@ def _append_stream_and_user(messages: list, history: Optional[List[str]], user_m
         prefill = ""
         if lines and not react:
             tail = _LOG_STAMP_RE.sub("", lines.pop())  # newest entry leaves the log, becomes the seam
-            if tail:
-                budget = _hybrid_prefill_chars()
-                prefill = (tail if len(tail) <= budget else tail[-budget:].lstrip()) + " "
+            seam = _seam_of(tail, _hybrid_prefill_chars())
+            if seam:
+                prefill = seam + " "
         if lines:
             messages.append({"role": "assistant", "content": "\n".join(lines)})
         messages.append(user_message)
@@ -265,6 +301,21 @@ def _clean_continuation(text: str, prefill: str = "") -> str:
             if text.startswith(tail[-n:]):
                 text = text[n:].lstrip()
                 break
+        else:
+            # RE-TYPING (Aug 1): the model doesn't always resume at the seam —
+            # it reproduces the passage from an earlier point and appends its
+            # new words at the END ("...And him working...  It's good."). The
+            # prefix test above can't see that, so the whole re-typed passage
+            # was stored as a caption, arriving as a mid-word slice and then
+            # becoming the next seam — the shifted-window feed that read as
+            # "very truncated". If the seam's own ending appears anywhere in
+            # the output, everything up to and including it is the model
+            # catching up, and only what follows is new.
+            key = tail[-40:]
+            if len(key) >= 12:
+                idx = text.find(key)
+                if idx >= 0:
+                    text = text[idx + len(key) :].lstrip()
     return text
 
 

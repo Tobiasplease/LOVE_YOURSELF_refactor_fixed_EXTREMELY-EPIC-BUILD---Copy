@@ -190,6 +190,22 @@ capE._stream_ts.popleft()
 check("erosion drops oldest and keeps timestamps aligned", list(capE._stream) == ["b", "c"] and len(capE._stream_ts) == 2)
 config.STREAM_MODE = "world"
 
+print("— seam coherence + re-typing (Aug 1) —")
+from utils.llama_server import _seam_of as _so, _clean_continuation as _cc
+
+check(
+    "seam starts at a sentence boundary, never mid-word",
+    _so("She left the door open. The hum from inside me feels less urgent now.", 220) == "The hum from inside me feels less urgent now.",
+)
+check(
+    "a genuinely cut-off thought still yields a mid-clause seam",
+    _so("I turn back to the page. The wood grain runs diagonal and I keep", 220) == "The wood grain runs diagonal and I keep",
+)
+_pf = "Just the steady thrum of being alive and waiting.  And him working... "
+_rs = "at his screens.  Just the steady thrum of being alive and waiting.  And him working...  It's good."
+check("re-typed passage stripped to just the new words", _cc(_rs, _pf) == "It's good.")
+check("ordinary continuation untouched", _cc("and the light shifted again.", "The room went quiet ") == "and the light shifted again.")
+
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)
 cap2._stream = deque(["My springs coil tight again from that moment when nothing moves but waits for something else to happen first."], maxlen=6)
