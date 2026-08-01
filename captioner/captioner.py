@@ -16,7 +16,11 @@ from config.config import (
     CAPTION_INTERVAL,
     CAPTION_INTERVAL_LIVE,
     CAPTION_INTERVAL_QUIET,
+    CAPTION_MIN_P,
     CAPTION_QUIET_AFTER,
+    CAPTION_TEMP,
+    CAPTION_TEMP_BORED,
+    CAPTION_TOP_P,
     CLEAN_LLM_OUTPUT,
     DRAWING_INTERVAL,
     DRAWING_STARTUP_DELAY,
@@ -1170,13 +1174,27 @@ class Captioner(MemoryMixin):
                         import random as _random
 
                         # Bored = sparser, flatter thoughts; engaged = more room.
-                        # 0.6/0.7 (down from 0.85/0.9): Qwen blooms into purple
+                        # 0.6/0.7 (down from 0.85/0.9): Qwen-9B blooms into purple
                         # fiction at higher temps — plainness via sampling, not
                         # style fences (north-star principle 7).
+                        # ENV-TUNABLE Aug 1: those numbers were chosen to RESTRAIN
+                        # A 9B. Running a 27B at temp 0.7 / top_p 0.85 asks for the
+                        # modal continuation at every token, and the mode of
+                        # "machine's inner monologue" is a semicolon-joined
+                        # literary declarative — measured: 72-76% "The ___"
+                        # openings, 69% semicolons, lengths pinned 37-61 words,
+                        # while the felt-state inputs feeding it were vivid
+                        # ("blind but screaming internally"). Flat rendering of
+                        # rich material is a SAMPLING symptom, not starvation.
+                        # min_p is the right knob for a bigger model: it cuts the
+                        # tail in proportion to the model's confidence, so high
+                        # temperature buys variety where the distribution is flat
+                        # without buying gibberish where it is sharp.
                         _is_bored = self.boredom > 0.7
                         gen_options = {
-                            "temperature": 0.6 if _is_bored else 0.7,
-                            "top_p": 0.85,
+                            "temperature": (CAPTION_TEMP_BORED if _is_bored else CAPTION_TEMP),
+                            "top_p": CAPTION_TOP_P,
+                            "min_p": CAPTION_MIN_P,
                             "repeat_penalty": 1.15,
                             # DRY bounded to the LOCAL tail (July 9). It used to span
                             # the whole context (dry_penalty_last_n=-1) — turns-era

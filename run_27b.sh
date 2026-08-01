@@ -17,8 +17,28 @@ export LLAMA_SERVER_BIN="$HOME/llama.cpp-27b/build/bin/llama-server"
 export LLAMA_MODEL_PATH="$HOME/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q4_K_M.gguf"
 export LLAMA_MMPROJ_PATH="$HOME/models/qwen3.6-27b-mtp/mmproj-F16.gguf"
 export LLAMA_CTX_SIZE=16384
-export LLAMA_EXTRA_ARGS="--spec-type draft-mtp --spec-draft-n-max 2 -fa on"
+# MTP off by default since Aug 1: speculative decoding is meant to preserve the
+# sampling distribution, but it is a variable the 9B never had, and the voice
+# question is a distribution question. Re-enable to get the ~1.7x decode speed
+# back once the register is settled: LLAMA_MTP=1 ./run_27b.sh
+if [ "${LLAMA_MTP:-0}" = "1" ]; then
+  export LLAMA_EXTRA_ARGS="--spec-type draft-mtp --spec-draft-n-max 2 -fa on"
+else
+  export LLAMA_EXTRA_ARGS="-fa on"
+fi
 export MODEL_NAME="qwen3.6:27b"
+
+# SAMPLING (Aug 1): 0.7/top_p 0.85 was tuned to restrain a 9B; on a 27B it pins
+# every token to the mode — measured as 72-76% "The ___" openings, 69%
+# semicolons, lengths welded to 37-61 words, while vivid felt-state inputs
+# ("blind but screaming internally") came out as polished literature. Temp 1.0
+# with min_p instead of top_p: the tail is cut in proportion to the model's
+# confidence, so variety arrives where the distribution is genuinely flat and
+# no gibberish arrives where it is sharp. top_p 1.0 = off (min_p replaces it).
+export CAPTION_TEMP="${CAPTION_TEMP:-1.0}"
+export CAPTION_TEMP_BORED="${CAPTION_TEMP_BORED:-0.9}"
+export CAPTION_TOP_P="${CAPTION_TOP_P:-1.0}"
+export CAPTION_MIN_P="${CAPTION_MIN_P:-0.05}"
 
 # The information budget (July 28): repetition is what the model can't see it
 # already said. Six entries was a 9B relic; the 27B holds minutes of visible

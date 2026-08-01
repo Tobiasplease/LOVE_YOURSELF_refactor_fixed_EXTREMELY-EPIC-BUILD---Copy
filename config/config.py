@@ -428,6 +428,16 @@ STREAM_MODE = os.getenv("STREAM_MODE", "document")
 # deadlocked Aug 1). ~220 chars ≈ the last 30-35 words.
 HYBRID_PREFILL_CHARS = int(os.getenv("HYBRID_PREFILL_CHARS", 220))
 
+# CAPTION SAMPLING (env-tunable Aug 1). Defaults preserve the 9B-era settings
+# exactly; run_27b.sh overrides them. The 0.6/0.7 + top_p 0.85 pair was chosen
+# to stop a 9B blooming purple — on a 27B it just pins output to the mode.
+# min_p (0 = off) is the better tail-cut for a larger model: proportional to
+# confidence, so temperature can rise without degenerating.
+CAPTION_TEMP = float(os.getenv("CAPTION_TEMP", 0.7))
+CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.6))
+CAPTION_TOP_P = float(os.getenv("CAPTION_TOP_P", 0.85))
+CAPTION_MIN_P = float(os.getenv("CAPTION_MIN_P", 0.0))
+
 # View-replacement detector (world shape's honest change line): if the servo
 # barely moved between caption cycles but the frame content changed past this
 # threshold (normalized mean abs diff on 64px grays), the WORLD changed — a
