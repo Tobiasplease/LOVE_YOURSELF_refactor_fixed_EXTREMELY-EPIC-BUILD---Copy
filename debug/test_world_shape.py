@@ -166,6 +166,30 @@ check("hybrid uses the reflexive frame, not the log frame", "keep a log" not in 
 config.STREAM_MODE = "world"
 check("world keeps the log frame", "you keep a log" in get_monologue_system_prompt("observational"))
 
+print("— seam exclusion + erosion (Aug 1) —")
+from collections import deque as _dq
+
+config.STREAM_MODE = "hybrid"
+capS = object.__new__(Captioner)
+capS._stream = _dq(["the pen is parked and I keep looking at the empty page", "older unrelated thought about the shelf"], maxlen=24)
+cont = "the empty page and I keep looking at it, wondering when the line starts"
+check("continuing the seam is not self-plagiarism", not capS._refrain_of_stream(cont))
+capS2 = object.__new__(Captioner)
+capS2._stream = _dq(["chanting the same six words again and again", "a", "b"], maxlen=24)
+check("chanting an OLDER entry still caught", capS2._refrain_of_stream("well, chanting the same six words again and again"))
+config.STREAM_MODE = "world"
+capW = object.__new__(Captioner)
+capW._stream = _dq(["the pen is parked and I keep looking at the empty page"], maxlen=24)
+check("world mode (no prefill) judges the newest entry too", capW._refrain_of_stream("the pen is parked and I keep looking at the empty page now"))
+config.STREAM_MODE = "hybrid"
+capE = object.__new__(Captioner)
+capE._stream = _dq(["poison", "b", "c"], maxlen=24)
+capE._stream_ts = _dq([1.0, 2.0, 3.0], maxlen=24)
+capE._stream.popleft()
+capE._stream_ts.popleft()
+check("erosion drops oldest and keeps timestamps aligned", list(capE._stream) == ["b", "c"] and len(capE._stream_ts) == 2)
+config.STREAM_MODE = "world"
+
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)
 cap2._stream = deque(["My springs coil tight again from that moment when nothing moves but waits for something else to happen first."], maxlen=6)

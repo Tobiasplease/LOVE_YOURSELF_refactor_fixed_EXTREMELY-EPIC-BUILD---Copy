@@ -735,7 +735,7 @@ class Captioner(MemoryMixin):
         head = words[:ANTI_ECHO_WORDS]
         # Recent tail only: with big windows (STREAM_WINDOW 20+), an opening
         # reused from forty minutes ago is a callback, not a template tic.
-        for past in list(self._stream)[-ANTI_ECHO_COMPARE_TAIL:]:
+        for past in self._comparable_stream()[-ANTI_ECHO_COMPARE_TAIL:]:
             if self._norm_words(past)[:ANTI_ECHO_WORDS] == head:
                 return True
         return False
@@ -765,6 +765,31 @@ class Captioner(MemoryMixin):
 
     _REFRAIN_NGRAM_WORDS = 6
 
+    @staticmethod
+    def _prefill_mode() -> bool:
+        """True when the model is handed its own text to continue (document,
+        hybrid). In those modes the newest stream entry IS the prompt's tail,
+        so reusing its words is what continuation MEANS — see _seam_entries."""
+        from config.config import STREAM_MODE
+
+        return STREAM_MODE in ("document", "hybrid")
+
+    def _comparable_stream(self) -> list:
+        """The stream entries a new caption may fairly be judged against.
+
+        THE SEAM IS EXCLUDED IN PREFILL MODES (Aug 1). Measured on the 58-minute
+        hybrid run: 457 refrain rejections, and replaying 408 of them against
+        their reconstructed streams showed 235 (58%) fired ONLY because the
+        caption overlapped the entry it was being asked to continue. The gate
+        was calling continuation self-plagiarism, killing 97% of output while
+        the survivors were the best captions of the day. Older entries are
+        still fair game — chanting is still chanting.
+        """
+        entries = list(self._stream)
+        if self._prefill_mode() and entries:
+            entries = entries[:-1]
+        return entries
+
     def _refrain_of_stream(self, caption: str) -> bool:
         """True when the caption shares a run of _REFRAIN_NGRAM_WORDS
         consecutive words with any stream entry — a verbatim chorus riding
@@ -783,7 +808,7 @@ class Captioner(MemoryMixin):
         # the last few thoughts is a chorus.
         from config.config import ANTI_ECHO_COMPARE_TAIL
 
-        for past in list(self._stream)[-ANTI_ECHO_COMPARE_TAIL:]:
+        for past in self._comparable_stream()[-ANTI_ECHO_COMPARE_TAIL:]:
             pw = self._norm_words(past)
             for i in range(len(pw) - n + 1):
                 if " ".join(pw[i : i + n]) in shingles:
@@ -805,7 +830,7 @@ class Captioner(MemoryMixin):
         # exact repeats of ANY length ("What do you think?" twice) — the
         # opening-echo check needs 5 words and misses short full-duplicates
         norm = " ".join(self._norm_words(caption))
-        if norm and any(norm == " ".join(self._norm_words(past)) for past in self._stream):
+        if norm and any(norm == " ".join(self._norm_words(past)) for past in self._comparable_stream()):
             return "template_echo"
         # REFRAIN (July 27, first world-thread run): with the thread frame the
         # window carries phrases forward — good — but a verbatim formula rode
@@ -1409,14 +1434,34 @@ class Captioner(MemoryMixin):
                                 # and the thread stays whole so it can grow past
                                 # the re-typing regime.
                                 self._skip_streak = getattr(self, "_skip_streak", 0) + 1
-                                if self._skip_streak == 3:
+                                # EROSION, not amnesia (Aug 1). Two prior designs
+                                # both failed: v1 wiped the whole stream after 3
+                                # rejections (five-second amnesia, 12 wipes in 10
+                                # minutes), v3 kept it forever and logged a note —
+                                # which made a poisoned stream permanent, because
+                                # the prefill deterministically reproduces the same
+                                # output no matter what the scene does (Aug 1: 459
+                                # calls, 10 distinct outputs, 3% pass, one run
+                                # silent for hours). Now the thread erodes from the
+                                # FRONT, one entry per stuck cycle: the oldest entry
+                                # is the likeliest poison (it arrived first and has
+                                # blocked everything since), recency survives, and
+                                # in the worst case the window empties gradually
+                                # instead of vanishing at a stroke.
+                                if self._skip_streak >= 3 and len(self._stream) > 1:
+                                    dropped = self._stream.popleft()
+                                    if self._stream_ts:
+                                        self._stream_ts.popleft()
                                     log_json_entry(
                                         LogType.DEBUG,
                                         {
-                                            "message": "Seam stuck — 3 consecutive rejected cycles; stream kept intact",
-                                            "action": "stream_seam_stuck",
+                                            "message": "Seam stuck — eroding the oldest stream entry",
+                                            "action": "stream_erosion",
+                                            "streak": self._skip_streak,
+                                            "dropped": dropped[:60],
+                                            "remaining": len(self._stream),
                                         },
-                                        print_message="[🔄] Seam stuck (3 rejected cycles) — keeping the thread, waiting for the scene to move",
+                                        print_message=f"[🪨] Stuck {self._skip_streak} cycles — dropped the oldest thought ({len(self._stream)} left)",
                                     )
                                 log_json_entry(
                                     LogType.DEBUG,
