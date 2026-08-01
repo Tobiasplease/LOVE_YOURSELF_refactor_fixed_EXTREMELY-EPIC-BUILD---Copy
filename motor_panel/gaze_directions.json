@@ -1,0 +1,7 @@
+{
+ "shoulder": true,
+ "elbow": true,
+ "wrist": false,
+ "x": false,
+ "y": false
+}

@@ -1,3 +1,4 @@
 {
- "lefthand.shoulder": false
+ "lefthand.shoulder": true,
+ "lefthand.elbow": false
 }
