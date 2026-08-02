@@ -438,6 +438,13 @@ CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.6))
 CAPTION_TOP_P = float(os.getenv("CAPTION_TOP_P", 0.85))
 CAPTION_MIN_P = float(os.getenv("CAPTION_MIN_P", 0.0))
 
+# Drawing calls get a real timeout (Aug 2). query_model defaults to 30s — a
+# 9B-era number. The drawing INTENT prompt is the largest in the system (stream
+# tail + musings + felt + desire + the executed body of work + reflections, plus
+# an image) and asks for 180 tokens; on the 27B that routinely exceeds 30s, and
+# the timeout error string was then used AS the drawing prompt.
+DRAWING_CALL_TIMEOUT = int(os.getenv("DRAWING_CALL_TIMEOUT", 180))
+
 # View-replacement detector (world shape's honest change line): if the servo
 # barely moved between caption cycles but the frame content changed past this
 # threshold (normalized mean abs diff on 64px grays), the WORLD changed — a

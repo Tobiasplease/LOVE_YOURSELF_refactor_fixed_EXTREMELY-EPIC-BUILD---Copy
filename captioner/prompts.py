@@ -1798,10 +1798,10 @@ def stream_drawing_analysis(
     mechanical render call translates the intent into a ComfyUI prompt under
     hardware truth: one black pen, lines only.
     """
-    from config.config import CLEAN_LLM_OUTPUT, DRAWING_TEMPERATURE, MOOD_SNAPSHOT_FOLDER
+    from config.config import CLEAN_LLM_OUTPUT, DRAWING_CALL_TIMEOUT, DRAWING_TEMPERATURE, MOOD_SNAPSHOT_FOLDER
     from event_logging.event_logger import log_json_entry
     from event_logging.log_type import LogType
-    from utils.inference import query_model
+    from utils.inference import is_failed_response, query_model
 
     def _say(msg):
         if not CLEAN_LLM_OUTPUT:
@@ -1955,11 +1955,16 @@ def stream_drawing_analysis(
         log_dir=MOOD_SNAPSHOT_FOLDER,
         system_prompt=intent_system,
         prompt_type="drawing_intent",
+        timeout=DRAWING_CALL_TIMEOUT,
         options={"temperature": DRAWING_TEMPERATURE, "num_predict": 180, "top_p": 0.9, "repeat_penalty": 1.15},
     )
-    intent = (intent or "").strip()
-    if not intent:
-        raise RuntimeError("stream drawing pipeline: empty intent")
+    # A failed call RETURNS its error as text; only checking for emptiness let
+    # "[WARNING] llama-server API failed..." become the drawing's intent, its
+    # stored memory, and the ComfyUI prompt (Aug 2). Abort instead — no drawing
+    # is better than a drawing of an error message.
+    if is_failed_response(intent):
+        raise RuntimeError(f"stream drawing pipeline: intent call failed ({(intent or 'empty')[:80]})")
+    intent = intent.strip()
     _say(f"[🎨] Intent: {intent[:250]}")
 
     # The intent in the machine's own words is the drawing's meaning — the
@@ -1987,8 +1992,11 @@ def stream_drawing_analysis(
         log_dir=MOOD_SNAPSHOT_FOLDER,
         system_prompt=render_system,
         prompt_type="drawing_render",
+        timeout=DRAWING_CALL_TIMEOUT,
         options={"temperature": 0.5, "num_predict": 160, "top_p": 0.9, "repeat_penalty": 1.2},
     )
+    if is_failed_response(final_result):
+        final_result = ""  # fall back to the intent, which is real text
     final_result = (final_result or "").strip()
     if not final_result:
         final_result = f"Black ink line drawing on white paper. {intent[:150]}"
@@ -2041,7 +2049,7 @@ def context_rich_multi_step_drawing_analysis(
     from config.config import CLEAN_LLM_OUTPUT, DRAWING_TEMPERATURE, MOOD_SNAPSHOT_FOLDER
     from event_logging.event_logger import log_json_entry
     from event_logging.log_type import LogType
-    from utils.inference import query_model
+    from utils.inference import is_failed_response, query_model
 
     def _say(msg):
         if not CLEAN_LLM_OUTPUT:

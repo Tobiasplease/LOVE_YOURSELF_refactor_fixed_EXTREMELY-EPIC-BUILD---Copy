@@ -17,7 +17,11 @@ tmux send-keys -t $SESSION_NAME:0 'while true; do echo "Starting ComfyUI..."; so
 # Window 1: Main Machine
 tmux new-window -t $SESSION_NAME -n 'Machine'
 tmux send-keys -t $SESSION_NAME:1 'cd /home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy' C-m
-tmux send-keys -t $SESSION_NAME:1 'while true; do echo "Starting Machine..."; source .venv/bin/activate && python3.12 machine.py; echo "Machine crashed, restarting in 5 seconds..."; sleep 5; done' C-m
+# Same stack as start_impostor_panes.sh (Aug 2). This script used to run a
+# bare `python3.12 machine.py`, which silently starts the 9B on document
+# defaults — an experiment could be attributed to the wrong model just by
+# choosing the other launcher. Run the 9B deliberately if you want it.
+tmux send-keys -t $SESSION_NAME:1 'while true; do echo "Starting Machine (27B hybrid)..."; STREAM_MODE=hybrid ./run_27b.sh; echo "Machine crashed, restarting in 5 seconds..."; sleep 5; done' C-m
 
 # Window 2: Log Viewer
 tmux new-window -t $SESSION_NAME -n 'LogViewer'

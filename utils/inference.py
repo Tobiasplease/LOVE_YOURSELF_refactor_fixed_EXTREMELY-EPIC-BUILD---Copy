@@ -16,6 +16,21 @@ from typing import List, Optional, Union
 from config import config as _cfg  # kept for MODEL_NAME/log defaults
 
 
+def is_failed_response(text: Optional[str]) -> bool:
+    """True when a query returned an ERROR SENTINEL rather than model output.
+
+    The backend reports failure by RETURNING a string ("[WARNING] llama-server
+    API failed: ... Read timed out"), so every caller that only checks for
+    emptiness treats the error text as if the machine had said it. Aug 2: a
+    timed-out drawing call put that sentence through the whole pipeline —
+    printed as the intent, stored in drawing memory as what the machine wanted
+    to draw, fed to the render call as "the machine's own words", and finally
+    queued to ComfyUI, which rendered an image of an error message.
+    """
+    t = (text or "").strip()
+    return not t or t.startswith("[WARNING]") or t.startswith("[ERROR]")
+
+
 def query_model(
     prompt: str,
     model: str = "",
@@ -45,6 +60,7 @@ def query_model(
         log_dir = _cfg.MOOD_SNAPSHOT_FOLDER
 
     from utils.llama_server import query_llama_server
+
     return query_llama_server(
         prompt=prompt,
         model=model,
@@ -77,6 +93,7 @@ def query_model_video(
 ) -> str:
     """Query with multiple video frames (super-frame or multi-image mode)."""
     from utils.llama_server import query_llama_server_video
+
     return query_llama_server_video(
         prompt=prompt,
         frames=frames,
@@ -93,14 +110,17 @@ def query_model_video(
 
 # --- VRAM lifecycle (used by drawing.py) ---
 
+
 def unload_model() -> None:
     """Free VRAM before ComfyUI generation."""
     from utils.llama_server import stop_server
+
     stop_server()
 
 
 def reload_model() -> None:
     """Reload model into VRAM after ComfyUI is done."""
     from utils.llama_server import is_server_running, start_server
+
     if not is_server_running():
         start_server()
