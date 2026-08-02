@@ -958,9 +958,18 @@ def mood_update_thread(mood_frame, timestamp):
         debug_print("Mood update thread started", "MOOD")
         thread_now = time.time()
         if thread_now - last_snapshot_time >= 10:
-            snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(thread_now)}.jpg")
-            cv2.imwrite(snapshot_path, mood_frame)
-            debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
+            # Don't record a frame the camera never filled (Aug 2). ~7% of these
+            # snapshots were uniform legal-black (mean 16, stddev 0.0) — an
+            # unfilled buffer, not a dark room. They never reached the model
+            # (that path writes its own frame), but they polluted the image
+            # record and fed the mood engine a picture of nothing. Zero
+            # deviation is unambiguous: no real scene has it.
+            if float(mood_frame.std()) < 1.0:
+                debug_print("Snapshot skipped: blank frame (camera buffer not filled)", "MOOD")
+            else:
+                snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(thread_now)}.jpg")
+                cv2.imwrite(snapshot_path, mood_frame)
+                debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
 
             try:
                 # Use existing MoodEngine for emotional state - single source of truth

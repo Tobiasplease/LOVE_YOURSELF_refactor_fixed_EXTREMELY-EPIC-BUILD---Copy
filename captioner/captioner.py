@@ -24,8 +24,9 @@ from config.config import (
     CLEAN_LLM_OUTPUT,
     DRAWING_INTERVAL,
     DRAWING_STARTUP_DELAY,
-    MOOD_SNAPSHOT_FOLDER,
     LLM_SHOW_PROGRESS,
+    MOOD_SNAPSHOT_FOLDER,
+    VIDEO_SEND_FRAMES,
 )
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
@@ -1165,57 +1166,48 @@ class Captioner(MemoryMixin):
                         )
 
                         if inward:
+                            # THE IMAGE DROPS, NOTHING IS ANNOUNCED (Aug 2).
+                            # This used to REPLACE the whole user prompt with
+                            # "Your eyes are off the room now — nothing new to
+                            # look at. Your mind goes to its own thoughts." —
+                            # which did the opposite of its purpose twice over.
+                            # It threw away the very interior material the beat
+                            # exists to weight toward (desire, felt, drawing
+                            # memory, reflection echo were all discarded), and
+                            # it ANNOUNCED the mechanism, so the machine
+                            # narrated the mechanism: "the lens cap clicks
+                            # shut", "I've turned my gaze inward" — 18 lens-cap
+                            # captions and a self-note ("I shut my lenses by
+                            # internal command") grown from a line about its
+                            # own plumbing. Now the beat is what it always
+                            # claimed to be: the same prompt, its own history
+                            # intact, and no picture competing with it. The
+                            # machine is not told it isn't looking; it simply
+                            # isn't given anything to look at.
+                            user_prompt, _ = build_simple_caption_prompt(self, person_present=person_present)
                             caption_mode = "introspective"
-                            # Real temporal anchors, rotated. The inward line used
-                            # to be one static sentence, 100+ identical calls per
-                            # run — and time-starved, so the model INVENTED time
-                            # ("497 days without new ink", countdowns). True
-                            # numbers displace confabulated ones.
-                            user_prompt = "Your eyes are off the room now — nothing new to look at. Your mind goes to its own thoughts."
                             self._inward_count = getattr(self, "_inward_count", 0) + 1
+                            # One true temporal anchor, rotated — kept because a
+                            # time-starved inward turn INVENTS time ("497 days
+                            # without new ink"). A fact, not a stage direction.
                             try:
-                                if self._inward_count % 4 == 1:
+                                anchor = ""
+                                if self._inward_count % 3 == 1:
                                     from captioner.prompts import casual_time_string
 
                                     awake_mins = (now - self.true_session_start) / 60.0
-                                    if awake_mins >= 2:  # "awake just now" reads broken
-                                        user_prompt = (
-                                            f"Your eyes are off the room now — nothing new to look at. "
-                                            f"You've been awake {casual_time_string(awake_mins)}. "
-                                            f"Your mind goes to its own thoughts."
-                                        )
-                                elif self._inward_count % 4 == 2:
+                                    if awake_mins >= 2:
+                                        anchor = f"You've been awake {casual_time_string(awake_mins)}."
+                                elif self._inward_count % 3 == 2:
                                     from utils.continuity import get_current_time_description
 
-                                    day_part = get_current_time_description().split(" (")[0]
-                                    user_prompt = (
-                                        f"Your eyes are off the room now — nothing new to look at. "
-                                        f"It's {day_part}. "
-                                        f"Your mind goes to its own thoughts."
-                                    )
-                                elif self._inward_count % 4 == 3:
-                                    # Tenure: its whole life in this room, from
-                                    # lifetime_state.json — the longest true
-                                    # number it has, surfaced sparsely.
+                                    anchor = f"It's {get_current_time_description().split(' (')[0]}."
+                                else:
                                     from captioner.prompts import get_tenure_line
 
-                                    tenure = get_tenure_line()
-                                    if tenure:
-                                        user_prompt = (
-                                            f"Your eyes are off the room now — nothing new to look at. "
-                                            f"{tenure} "
-                                            f"Your mind goes to its own thoughts."
-                                        )
-                            except Exception:
-                                pass
-                            try:
-                                # Fresh off a real gap, the inward turn should
-                                # know what it's returning FROM.
-                                from captioner.prompts import get_reorientation_line
-
-                                _reorient = get_reorientation_line(self)
-                                if _reorient:
-                                    user_prompt = f"{_reorient} {user_prompt}"
+                                    anchor = get_tenure_line() or ""
+                                if anchor:
+                                    user_prompt = f"{user_prompt}\n{anchor}".strip()
                             except Exception:
                                 pass
                             system_prompt = get_monologue_system_prompt("introspective", agent=self)
@@ -1327,6 +1319,20 @@ class Captioner(MemoryMixin):
                                 use_video = False
                                 print(
                                     f"[VIDEO] Skipped: still room, only {len(steady_meta)}/{len(recent_meta)} steady frames (camera was moving) — sending still image"
+                                )
+
+                            # THIN THE SET (Aug 2). Whatever survived above, send at
+                            # most VIDEO_SEND_FRAMES. Measured: 784 calls at six
+                            # frames, ~4k image tokens apiece, which is most of why
+                            # video cycles crawl on the 27B — and six near-identical
+                            # views of a static room carry almost nothing three
+                            # don't. Sampled evenly (first … last) so the window's
+                            # SPAN survives the thinning: the point of multi-frame
+                            # is the interval between them, not their number.
+                            if use_video and len(send_meta) > VIDEO_SEND_FRAMES:
+                                step = (len(send_meta) - 1) / (VIDEO_SEND_FRAMES - 1) if VIDEO_SEND_FRAMES > 1 else 0
+                                send_meta = (
+                                    [send_meta[-1]] if VIDEO_SEND_FRAMES == 1 else [send_meta[round(i * step)] for i in range(VIDEO_SEND_FRAMES)]
                                 )
 
                         if use_video:

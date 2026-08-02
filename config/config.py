@@ -67,7 +67,12 @@ VIDEO_MODE_ENABLED = os.getenv("VIDEO_MODE_ENABLED", "true").lower() == "true"
 # patched fork — frees model choice for the upgrade A/B), and keeps the same
 # upstream motion/steady-frame decision logic. "superframe" stays a toggle.
 VIDEO_MODE = os.getenv("VIDEO_MODE", "multi")  # "multi" (plain multi-image) or "superframe" (Conv3D temporal encoding via llama-video)
-MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # Frame diff below this = static, use single image
+MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # frame diff below this = static, use a single image
+# How many frames a video call actually sends (Aug 2). The buffer collects up to
+# six; six were being sent, ~4k image tokens per call, and on the 27B that is
+# most of the cost of a video cycle. Three keeps the temporal span (they are
+# sampled evenly across the window) at half the tokens.
+VIDEO_SEND_FRAMES = int(os.getenv("VIDEO_SEND_FRAMES", 3))
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 
 # Label only: the weights llama-server loads come from LLAMA_MODEL_PATH

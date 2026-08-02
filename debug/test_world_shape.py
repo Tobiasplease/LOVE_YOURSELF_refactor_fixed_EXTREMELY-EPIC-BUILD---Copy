@@ -206,6 +206,23 @@ _rs = "at his screens.  Just the steady thrum of being alive and waiting.  And h
 check("re-typed passage stripped to just the new words", _cc(_rs, _pf) == "It's good.")
 check("ordinary continuation untouched", _cc("and the light shifted again.", "The room went quiet ") == "and the light shifted again.")
 
+print("— video frame thinning (Aug 2) —")
+
+
+def _thin(n, k):
+    meta = list(range(n))
+    if len(meta) > k:
+        step = (len(meta) - 1) / (k - 1) if k > 1 else 0
+        meta = [meta[-1]] if k == 1 else [meta[round(i * step)] for i in range(k)]
+    return meta
+
+
+check("six frames thin to three, span preserved", _thin(6, 3) == [0, 2, 5])
+check("first and last always survive", _thin(6, 3)[0] == 0 and _thin(6, 3)[-1] == 5)
+check("a set at or under the cap is untouched", _thin(3, 3) == [0, 1, 2] and _thin(2, 3) == [0, 1])
+check("cap of one keeps the newest", _thin(6, 1) == [5])
+check("thinning never grows the set", all(len(_thin(n, 3)) <= max(n, 0) for n in range(1, 8)))
+
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)
 cap2._stream = deque(["My springs coil tight again from that moment when nothing moves but waits for something else to happen first."], maxlen=6)
