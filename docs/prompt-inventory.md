@@ -19,6 +19,13 @@ Anything added later without a `prompt_type` is invisible to this audit — that
 is the one hole in the method, and the panel's manifest (Phase 0) closes it by
 making the assembly itself the record.
 
+**The panel found one on its first run (Aug 2).** A pass labelled `general` was
+talking to the model: the video path's degrade-to-a-single-still fallback called
+`query_llama_server` without a `prompt_type`, so genuine captions were logged
+under the default label and were invisible to every per-type measurement made
+this week. Fixed. This is the panel's real job — an undocumented pass shows up
+as ⚠ in the sidebar rather than waiting to be grepped for.
+
 ---
 
 ## A. Live passes (18)

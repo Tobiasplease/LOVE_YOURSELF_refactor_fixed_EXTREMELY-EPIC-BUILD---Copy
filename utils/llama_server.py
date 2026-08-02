@@ -982,6 +982,9 @@ def query_llama_server_video(
             if frames:
                 return query_llama_server(
                     prompt=prompt,
+                    # without prompt_type these land in the log as "general" — a
+                    # real caption invisible to every per-type measurement (Aug 2)
+                    prompt_type="caption",
                     image=frames[-1],
                     system_prompt=system_prompt,
                     options=options,
@@ -1037,6 +1040,7 @@ def query_llama_server_video(
         print("[llama-server] Falling back to single-frame caption")
         return query_llama_server(
             prompt=prompt,
+            prompt_type="caption",
             image=frames[-1],
             system_prompt=system_prompt,
             options=options,
