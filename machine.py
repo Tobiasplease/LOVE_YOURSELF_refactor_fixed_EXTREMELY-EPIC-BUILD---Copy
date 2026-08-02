@@ -909,23 +909,23 @@ if previous_state:
     time_since_last = describe_duration(save_time)
     previous_beliefs = previous_state["captioner"].get("beliefs", {})
 
-    awakening_msg = captioner.generate_awakening_message(time_since_last, previous_beliefs)
-
-    if awakening_msg:  # empty = short-gap resume, no ceremony to log
-        log_json_entry(
-            LogType.INFO,
-            {"message": awakening_msg, "continuity": True, "time_since_last": time_since_last},
-        )
+    # The awakening is ONE path now (Aug 2): generate_internal_awakening, run as
+    # the first caption. This used to also call generate_awakening_message here
+    # — a second, older ceremony whose result was only logged, never spoken.
+    # Two awakenings coexisted since June; the log recorded the one the machine
+    # never said.
+    log_json_entry(
+        LogType.INFO,
+        {"message": "Session restored — awakening runs as the first caption", "continuity": True, "time_since_last": time_since_last},
+    )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()
 else:
     # Fresh start
     captioner.memory_loaded_from_previous = False
-    awakening_msg = captioner.generate_awakening_message()
-
     log_json_entry(
         LogType.INFO,
-        {"message": awakening_msg, "continuity": False},
+        {"message": "Fresh start — awakening runs as the first caption", "continuity": False},
     )
     # Mark awakening complete to avoid duplicate environmental description
     captioner.mark_awakening_complete()

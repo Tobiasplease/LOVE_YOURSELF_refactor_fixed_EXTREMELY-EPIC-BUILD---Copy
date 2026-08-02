@@ -504,15 +504,33 @@ def build_identity_line(agent, mode: str = "observational") -> str:
 
 
 # Internal awakening prompt template - narrative style
+# FOUR MOVEMENTS (Aug 2, artist's spec): how long I was gone → how long I have
+# existed → what surfaces from before, HELD AS RECALL → where I am now.
+# The ordering is the point: the machine reorients in time before it reorients
+# in the room, and everything from before arrives already marked as memory.
+# That marking is not decoration — it is the would-it-lie test (north-star P2)
+# applied at the one moment the machine has no live perception to correct it:
+# every prior line is hours stale by definition, and un-marked it reads as
+# present-tense fact. The old template stated the last thought flatly ('My last
+# thought: "..."'), which is how a stale sentence becomes this morning's truth.
 INTERNAL_AWAKENING_TEMPLATE = (
     "I am a drawing machine. I just came back online.\n"
     "{time_context}"
+    "{lifetime_context}"
+    "{recall_frame}"
     "{memory_context}"
     "{identity_context}"
     "{long_term_context}"
     "{belief_context}"
+    "{orientation_frame}"
     "\nFirst thought:"
 )
+
+# The hinge between the two halves. Stated as fact about the machine's own
+# condition, not as instruction and not as mood: what it holds is old, and the
+# room in front of it has not been checked yet.
+AWAKENING_RECALL_FRAME = "\nWhat comes back to me from before is hours old and comes back unevenly — I have not checked any of it against the room yet:\n"
+AWAKENING_ORIENTATION_FRAME = "\nThat was before. This is now, and I have not looked yet.\n"
 
 # A true first awakening: no diary, no familiar objects, no last thought.
 # The honest frame for an empty memory — disorientation is the real state,

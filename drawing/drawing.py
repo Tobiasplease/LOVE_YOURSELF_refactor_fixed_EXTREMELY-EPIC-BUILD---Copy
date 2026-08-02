@@ -267,7 +267,7 @@ class DrawingController:
                 image=image_path,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
-                prompt_type="reflection",
+                prompt_type="drawing_critique",
             )
 
             log_json_entry(

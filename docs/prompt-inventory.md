@@ -26,9 +26,9 @@ making the assembly itself the record.
 | # | prompt_type | Trigger / cadence | Builder | Backend call |
 |---|---|---|---|---|
 | 1 | `caption` | every caption cycle (4/7/12s breathing) | `prompts.build_simple_caption_prompt` + `get_monologue_system_prompt` | `query_model` / `query_model_video` (captioner.py `_generate`) |
-| 2 | `memory` | memory mode, ~every 4 min | inline in `_process_frame` (memory_system) | `_call_ollama` wrapper path |
+| 2 | `memory` | memory mode, ~every 4 min | inline in `_process_frame` (memory_system) | `query_model` + stream — **on the live path since Aug 2** |
 | 3 | `awakening` | first caption of a session | `generate_internal_awakening` | `query_model` |
-| 4 | `awakening` | machine.py startup — **result only logged** | `generate_awakening_message` | wrapper path |
+| 4 | ~~`awakening` (legacy)~~ | **DELETED Aug 2** — one awakening path now | — | — |
 | 5 | `drawing_watch` | every 20s while GRBL executes | `_watch_drawing` | `query_model` |
 | 6 | `drawing_thematic_consolidation` | at drawing start | `_generate_drawing_thematic_reflection_with_llm` | `query_model` |
 | 7 | `stream_consolidation` | when joined stream > `STREAM_CONSOLIDATE_CHARS` | `_consolidate_stream_if_needed` | `query_model` |
@@ -37,12 +37,12 @@ making the assembly itself the record.
 | 10 | `journal` | every 30 min + shutdown | `_write_journal_entry` | `query_model` |
 | 11 | `reflection` | every ~20 quiet min | `reflection.py _reflect` | `query_model` |
 | 12 | `reflection_distill` | after each reflection | `context_compression.distill_reflection` | `query_model` |
-| 13 | `reflection` ⚠️ | after a drawing completes | `drawing.py critique_drawing` | `query_model` |
+| 13 | `drawing_critique` | after a drawing completes | `drawing.py critique_drawing` | `query_model` (renamed Aug 2 — shared `reflection` with #11) |
 | 14 | `drawing_intent` | drawing triggered | `prompts.stream_drawing_analysis` (call 1) | `query_model` |
 | 15 | `drawing_render` | drawing triggered | `prompts.stream_drawing_analysis` (call 2) | `query_model` |
 | 16 | `drawing_summary` | during drawing flow | `drawing.handle_drawing_flow` | `query_model` |
 | 17 | `artistic_arc` | when drawing context is built | `drawing_memory.get_artistic_arc` | `query_model` |
-| 18 | `caption` (fallback) ⚠️ | **exception path only** — image file missing/not ready | `model_wrapper.caption_image` | `_call_ollama` / `_call_natsumura_introspective` |
+| 18 | `caption_blind` | **exception path only** — frame not on disk yet | `build_simple_caption_prompt` (same builder as #1) | `query_model`, no image — **reworked Aug 2** |
 
 ⚠️ = needs a decision, see section C.
 
@@ -54,9 +54,12 @@ making the assembly itself the record.
 | `perception` — `perceive()` | **DEAD** — 0 callers (only a docstring mention) | model_wrapper.py |
 | `drawing_step1_environmental` … `drawing_step5_synthesis` | **DORMANT** — reachable only when `DRAWING_ANALYSIS_MODE="multi_step"`; live value is `"stream"` | the retired 5-step committee, kept for A/B |
 
-## C. Findings that need a decision before the panel is built
+## C. Findings — ALL RESOLVED August 2
 
-1. **The shadow caption path (#18).** When the primary caption call raises
+Every item below was found by the audit above and fixed the same day; kept as
+the record of what was wrong and why the fix took the shape it did.
+
+1. **RESOLVED — the shadow caption path (#18).** When the primary caption call raises
    "No image found"/"does not exist", `_process_frame` retries through
    `model_wrapper.caption_image` — a *completely different prompt builder* that
    predates the June teardown. It does not use the reflexive frame, the stream,
@@ -65,18 +68,18 @@ making the assembly itself the record.
    cycle is cheaper than a caption in the old voice), or route it through the
    same builder. **Nothing should be able to speak in a voice the panel cannot
    show.**
-2. **`reflection` names two different passes** (#11 the reflection loop, #13 the
+2. **RESOLVED (renamed `drawing_critique`) — `reflection` named two different passes** (#11 the reflection loop, #13 the
    post-drawing critique). Every per-type metric we have ever computed on
    "reflection" silently mixed them. Rename #13 to `drawing_critique`.
-3. **`_call_ollama` is a fossil name** — Ollama was retired July 9; the method
+3. **RESOLVED (deleted) — `_call_ollama` was a fossil name** — Ollama was retired July 9; the method
    now calls llama-server. It is the entry point for #2, #4 and #18. Rename, or
    fold those three onto the single `query_model` path.
-4. **Two awakening paths still coexist** (#3 live seed, #4 logged-only) —
+4. **RESOLVED — two awakening paths coexisted** (#3 live seed, #4 logged-only) —
    flagged in `runtime-map.md` since June and still true.
-5. **The caption event does not record its mode.** The console prints
+5. **RESOLVED (mode now logged) — the caption event did not record its mode.** The console prints
    `(relational)`, `(workspace)` etc.; the event log stores `mode: None`. Any
    analysis of mode behaviour is currently impossible.
-6. **Modes are half-retired.** `relational / observational / workspace /
+6. **OPEN — modes are half-retired.** `relational / observational / workspace /
    introspective / awakening` each still route a distinct context function, but
    observational/workspace/introspective have had their elicitation suppressed
    in document/world/hybrid — so three of five change what *arrives* but not

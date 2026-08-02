@@ -1100,18 +1100,31 @@ class Captioner(MemoryMixin):
                         # Memory mode: pull actual caption text from long-term memory
                         from captioner.prompts import build_memory_mode_prompt
                         from captioner.prompts import get_monologue_system_prompt
+                        from utils.inference import query_model
 
                         memory_prompt, caption_mode = build_memory_mode_prompt(self)
                         memory_system = (
                             get_monologue_system_prompt("introspective", agent=self)
                             + " A memory is surfacing. Think about something you remember — past tense, framed as memory."
                         )
-                        caption = self.model._call_ollama(
-                            memory_prompt,
-                            image_path=None,  # Memory mode doesn't use current image
+                        # ON THE LIVE PATH since Aug 2. This fired every ~4 min
+                        # through _call_ollama — no stream, no seam, no react,
+                        # and an old `prior_assistant_turn` mini-stream instead
+                        # of the real one. A caption assembled by a different
+                        # builder entered the thread every few minutes and
+                        # nothing downstream could tell. Same call as any other
+                        # caption now; only the image is absent (a memory is
+                        # not a thing you look at).
+                        caption = query_model(
+                            prompt=memory_prompt,
+                            model=MODEL_NAME,
+                            image=None,
                             system_prompt=memory_system,
-                            model_options=self.model.prompt_interface._get_base_model_options(),
+                            timeout=60,
+                            log_dir=MOOD_SNAPSHOT_FOLDER,
+                            options={"temperature": CAPTION_TEMP, "top_p": CAPTION_TOP_P, "min_p": CAPTION_MIN_P, "num_predict": 80},
                             prompt_type="memory",
+                            history=self._stream_history(),
                         )
                         self.last_memory_mode_time = now
                         log_json_entry(
@@ -1541,22 +1554,40 @@ class Captioner(MemoryMixin):
 
             error_details = traceback.format_exc()
 
-            # More specific error handling to avoid unnecessary "Vision unclear" fallbacks
+            # A frame that isn't on disk yet is a timing race, not a reason to
+            # go quiet — but the old retry called model_wrapper.caption_image,
+            # a builder predating the June teardown: no reflexive frame, no
+            # stream, no seam, no gates. Whatever it returned entered the
+            # stream like any other caption, so the machine could speak in a
+            # voice nothing in the current system could account for (Aug 2
+            # audit). Replaced with a BLIND cycle on the live path: same frame,
+            # same gates, no image — the machine thinks instead of looking,
+            # which is what "the frame isn't there" actually means.
             if "No image found" in str(e) or "does not exist" in str(e):
-                # File system timing issue - retry once after short delay
-                time.sleep(0.5)
                 try:
-                    if hasattr(self, "model") and img_path and os.path.exists(img_path):
-                        caption, caption_mode = self.model.caption_image(img_path, flowing=True, first_time=False, person_present=person_present)
-                    else:
-                        caption = "Awakening... vision initializing..."
-                        caption_mode = "awakening"
+                    from captioner.prompts import build_simple_caption_prompt, get_monologue_system_prompt
+                    from utils.inference import is_failed_response, query_model
+
+                    blind_prompt, caption_mode = build_simple_caption_prompt(self, person_present=person_present)
+                    caption = self._strip_list_shape(
+                        query_model(
+                            prompt=blind_prompt or "...",
+                            model=MODEL_NAME,
+                            image=None,
+                            system_prompt=get_monologue_system_prompt("introspective", agent=self),
+                            timeout=60,
+                            log_dir=MOOD_SNAPSHOT_FOLDER,
+                            options={"temperature": CAPTION_TEMP, "top_p": CAPTION_TOP_P, "min_p": CAPTION_MIN_P, "num_predict": 80},
+                            prompt_type="caption_blind",
+                            history=self._stream_history(),
+                        )
+                    )
+                    if is_failed_response(caption) or self._caption_reject_reason(caption, blind_prompt or ""):
+                        caption, caption_mode = "", "error"
                 except Exception:
-                    caption = "[WARNING] Vision unavailable"
-                    caption_mode = "error"
+                    caption, caption_mode = "", "error"
             else:
-                caption = "[WARNING] Vision unavailable"
-                caption_mode = "error"
+                caption, caption_mode = "", "error"
 
             log_json_entry(
                 LogType.ERROR,
@@ -1641,6 +1672,7 @@ class Captioner(MemoryMixin):
                     "caption": caption,
                     "image_path": img_path,
                     "mood": self.current_mood,
+                    "mode": caption_mode,  # console printed it, the log never did — mode analysis was impossible (Aug 2 audit)
                     "salience_hot": self._salience_hot,
                     "caption_interval": self._current_caption_interval(time.time()),
                 },
@@ -2091,6 +2123,7 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
+        lifetime_context = ""  # second movement: how long I have existed, not how long I was gone
         # Time ALIVE — the machine's age across all sessions. Survives a memory
         # wipe (lifetime_state.json), so even with an empty memory it knows it's
         # old: amnesia, not infancy. (total_runtime is unreliable; use sessions +
@@ -2114,17 +2147,18 @@ class Captioner(MemoryMixin):
                         _often = "many times"
                     else:
                         _often = "a number of times"
-                    time_context += f"I've been switched on {_often} since I first came online about {_age_days} days ago.\n"
+                    lifetime_context += f"I've been switched on {_often} since I first came online about {_age_days} days ago.\n"
         except Exception:
             pass
 
         # Current emotional spectrum — what the machine wakes feeling (the mood
         # vector, plainly named; restored from the prior session).
+        present_feeling = ""
         try:
             from mood.mood import mood_to_feeling
 
             _v, _a, _c = self.current_mood_vector
-            time_context += f"Right now I feel {mood_to_feeling(_v, _a)}.\n"
+            present_feeling = f"Right now I feel {mood_to_feeling(_v, _a)}.\n"
         except Exception:
             pass
 
@@ -2196,7 +2230,7 @@ class Captioner(MemoryMixin):
             pass
 
         # Import consolidated awakening template
-        from .prompts import FIRST_AWAKENING_PROMPT, INTERNAL_AWAKENING_TEMPLATE
+        from .prompts import AWAKENING_ORIENTATION_FRAME, AWAKENING_RECALL_FRAME, FIRST_AWAKENING_PROMPT, INTERNAL_AWAKENING_TEMPLATE
         from config.config import BASE_VOICE_DETOX as _detox
 
         # Clean room: the awakening is detox blind spot #1 — it injects 6 layers
@@ -2205,7 +2239,7 @@ class Captioner(MemoryMixin):
         # the naked awakening is time only: real offline/clock facts + the
         # system-prompt elicitation, no stored memory.
         if _detox:
-            internal_prompt = time_context + "\nFirst thought:"
+            internal_prompt = time_context + lifetime_context + "\nFirst thought:"
             memory_context = identity_context = long_term_context = ""
 
         # A true first awakening has no past at all. Empty context sections
@@ -2215,12 +2249,19 @@ class Captioner(MemoryMixin):
         if _detox:
             pass  # internal_prompt already set to the naked time-only awakening
         elif has_past:
+            _has_past = any((memory_context, identity_context, long_term_context, belief_context))
             internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(
                 time_context=time_context,
+                lifetime_context=lifetime_context,
+                # the recall frame only earns its place if something actually
+                # comes back; announcing hazy memory and then listing none of
+                # it is the machine telling itself a story about forgetting
+                recall_frame=AWAKENING_RECALL_FRAME if _has_past else "",
                 memory_context=memory_context,
                 belief_context=belief_context,
                 identity_context=identity_context,
                 long_term_context=long_term_context,
+                orientation_frame=(AWAKENING_ORIENTATION_FRAME if _has_past else "") + present_feeling,
             )
         else:
             internal_prompt = time_context + FIRST_AWAKENING_PROMPT
@@ -2303,73 +2344,6 @@ class Captioner(MemoryMixin):
             return True
         except Exception:
             return False
-
-    def generate_awakening_message(self, time_since_last: str | None = None, previous_beliefs: dict | None = None) -> str:
-        """Generate comprehensive awakening with environmental description - THE ONLY awakening now."""
-
-        if self._try_blink_resume():
-            return ""
-
-        # Import the environmental prompt builder
-        from .prompts import build_environmental_caption_prompt
-
-        # For fresh sessions, trigger environmental description
-        if not self.memory_loaded_from_previous:
-            # Take a snapshot and describe the environment
-            try:
-                # Try to get a frame, but don't block if none available
-                image_path = self.capture_mood_snapshot(capture_reason="awakening")
-
-                if image_path:
-                    # Use the environmental awakening prompt for environmental description
-                    prompt = build_environmental_caption_prompt(
-                        self, mood=self.current_mood, boredom=self.boredom, novelty=self.novelty_score, last_session_gap=None  # Fresh session
-                    )
-                    # Use proper captioning with consolidated system prompt
-                    from .prompts import STATIC_SYSTEM_PROMPT
-
-                    environmental_description = self.model._call_ollama(
-                        prompt, image_path=image_path, system_prompt=STATIC_SYSTEM_PROMPT, prompt_type="awakening"
-                    )
-                    return environmental_description
-            except Exception:
-                pass
-            return "I am awakening to observe this space for the first time..."
-
-        # Continuing from previous session - include environmental awareness
-        belief_count = len(previous_beliefs) if previous_beliefs else 0
-        try:
-            from captioner.semantic_memory import get_semantic_memory
-
-            concept_count = get_semantic_memory().stats().get("concepts", 0)
-        except Exception:
-            concept_count = 0
-
-        # First, provide status then environmental description
-        status_prefix = f"""Awakening after {time_since_last or 'some time'}...
-        consciousness returns with {belief_count} beliefs and {concept_count} familiar concepts."""
-
-        # Then add environmental description
-        try:
-            # Try to get a frame, but don't block if none available
-            image_path = self.capture_mood_snapshot(capture_reason="awakening_continuation")
-
-            if image_path:
-                prompt = build_environmental_caption_prompt(
-                    self,
-                    mood=self.current_mood,
-                    boredom=self.boredom,
-                    novelty=self.novelty_score,
-                    last_session_gap=getattr(self, "last_session_gap", None),
-                )
-                environmental_part = self.model._call_ollama(
-                    prompt, image_path=image_path, system_prompt=STATIC_SYSTEM_PROMPT, prompt_type="awakening"
-                )
-                return f"{status_prefix} {environmental_part}"
-        except Exception:
-            pass
-
-        return status_prefix
 
     def mark_awakening_complete(self):
         """Mark that awakening is complete but allow first caption to still show loading animation."""
