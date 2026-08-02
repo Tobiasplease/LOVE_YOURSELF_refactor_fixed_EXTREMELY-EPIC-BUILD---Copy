@@ -1103,6 +1103,12 @@ class Captioner(MemoryMixin):
                         from captioner.prompts import get_monologue_system_prompt
                         from utils.inference import query_model
 
+                        # Read the label locally under its own name: _process_frame
+                        # re-binds MODEL_NAME from config further down, which makes
+                        # the name local to the WHOLE function — so touching it up
+                        # here raises UnboundLocalError (found live, Aug 3).
+                        from config.config import MODEL_NAME as _model_label
+
                         memory_prompt, caption_mode = build_memory_mode_prompt(self)
                         memory_system = (
                             get_monologue_system_prompt("introspective", agent=self)
@@ -1116,9 +1122,18 @@ class Captioner(MemoryMixin):
                         # nothing downstream could tell. Same call as any other
                         # caption now; only the image is absent (a memory is
                         # not a thing you look at).
+                        # Stamp the ATTEMPT, not the success (Aug 3). This sat
+                        # after the call, so a failing memory cycle never reset
+                        # its own clock: is_memory_mode_time stayed true, every
+                        # following cycle re-entered memory mode and failed the
+                        # same way, and the machine emitted nothing but "Vision
+                        # settling..." every 12 seconds. One bad call became
+                        # total suppression — the rate limit has to bind on the
+                        # attempt or it isn't a rate limit.
+                        self.last_memory_mode_time = now
                         caption = query_model(
                             prompt=memory_prompt,
-                            model=MODEL_NAME,
+                            model=_model_label,
                             image=None,
                             system_prompt=memory_system,
                             timeout=60,
@@ -1127,7 +1142,6 @@ class Captioner(MemoryMixin):
                             prompt_type="memory",
                             history=self._stream_history(),
                         )
-                        self.last_memory_mode_time = now
                         log_json_entry(
                             LogType.DEBUG,
                             {"message": "Memory mode triggered", "action": "memory_mode", "time_since_last": time_since_memory},
@@ -1572,13 +1586,14 @@ class Captioner(MemoryMixin):
             if "No image found" in str(e) or "does not exist" in str(e):
                 try:
                     from captioner.prompts import build_simple_caption_prompt, get_monologue_system_prompt
+                    from config.config import MODEL_NAME as _model_label
                     from utils.inference import is_failed_response, query_model
 
                     blind_prompt, caption_mode = build_simple_caption_prompt(self, person_present=person_present)
                     caption = self._strip_list_shape(
                         query_model(
                             prompt=blind_prompt or "...",
-                            model=MODEL_NAME,
+                            model=_model_label,
                             image=None,
                             system_prompt=get_monologue_system_prompt("introspective", agent=self),
                             timeout=60,
