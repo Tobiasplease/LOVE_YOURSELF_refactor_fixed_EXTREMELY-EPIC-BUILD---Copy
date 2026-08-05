@@ -223,6 +223,40 @@ check("a set at or under the cap is untouched", _thin(3, 3) == [0, 1, 2] and _th
 check("cap of one keeps the newest", _thin(6, 1) == [5])
 check("thinning never grows the set", all(len(_thin(n, 3)) <= max(n, 0) for n in range(1, 8)))
 
+print("— inference gate (Aug 3) —")
+import threading as _th, time as _tm, utils.llama_server as _L
+
+_res = []
+
+
+def _hold(n, secs):
+    _L._acquire_inference(n, wait=True)
+    _tm.sleep(secs)
+    _L._release_inference()
+
+
+_t = _th.Thread(target=_hold, args=("reflection", 0.6))
+_t.start()
+_tm.sleep(0.1)
+_got, _waited = _L._acquire_inference("caption", wait=False)
+check("a caption SKIPS instead of queueing behind background work", not _got and _waited < 0.05)
+_t.join()
+_got2, _ = _L._acquire_inference("caption", wait=False)
+check("the slot is free again once background work finishes", _got2)
+_L._release_inference()
+check(
+    "realtime set is captions and memory only",
+    all(_L._is_realtime(k) for k in ("caption", "caption_blind", "memory"))
+    and not any(_L._is_realtime(k) for k in ("reflection", "compression", "journal", "drawing_intent")),
+)
+_L._acquire_inference("a", wait=True)
+_L._acquire_inference("a", wait=True)  # re-entrant, same thread
+_L._release_inference()
+_L._release_inference()
+_free, _ = _L._acquire_inference("b", wait=False)
+_L._release_inference()
+check("re-entrant acquire fully releases (video entry -> fallback path)", _free)
+
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)
 cap2._stream = deque(["My springs coil tight again from that moment when nothing moves but waits for something else to happen first."], maxlen=6)

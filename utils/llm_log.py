@@ -16,6 +16,7 @@ def truncate_for_print(text: str | None, max_length: int) -> str:
         return ""
     try:
         from config.config import LLM_PRINT_FULL_RESPONSE
+
         if LLM_PRINT_FULL_RESPONSE:
             return text
     except ImportError:
@@ -55,6 +56,8 @@ def log_llm_call(
     stream_mode: Optional[str] = None,
     num_frames: int = 0,
     prefill_tail: Optional[str] = None,
+    duration_s: Optional[float] = None,
+    queued_s: Optional[float] = None,
 ):
     """
     Log an LLM API call for monitoring and debugging.
@@ -111,6 +114,15 @@ def log_llm_call(
 
     type_emoji = _get_prompt_emoji(prompt_type)
     data["prompt_type"] = prompt_type
+    # HOW LONG IT TOOK, AND HOW MUCH OF THAT WAS QUEUEING (Aug 3). Nothing
+    # recorded call duration, so "why does it occasionally time out" could only
+    # be guessed at: one llama-server slot, three threads calling it, and a
+    # caption's 60s timeout counts while it waits behind a reflection. These two
+    # numbers separate a slow model from a busy one.
+    if duration_s is not None:
+        data["duration_s"] = round(duration_s, 2)
+    if queued_s is not None:
+        data["queued_s"] = round(queued_s, 2)
 
     call_details = [f"[🤖{type_emoji}] {prompt_type.title()} prompt -> {model}"]
 

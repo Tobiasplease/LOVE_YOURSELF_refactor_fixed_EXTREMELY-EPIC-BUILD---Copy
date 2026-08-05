@@ -86,6 +86,52 @@ import threading as _threading
 _timeout_streak = 0
 _recovery_lock = _threading.Lock()
 
+# ---------------------------------------------------------------------------
+# The inference gate (Aug 3)
+# ---------------------------------------------------------------------------
+# llama-server runs ONE slot, and three threads call it: the caption worker
+# (every 4-12s), the reflection loop, and the compression worker. Nothing
+# coordinated them, so a caption arriving behind a long background call sat in
+# the server's queue while its own 60s timeout ran down — and two of those in a
+# row looked exactly like a hung server to the wedge watchdog, which then
+# restarted a perfectly healthy one.
+#
+# The asymmetry that makes this easy: captions are PERIODIC. Skipping a cycle
+# costs nothing (the breathing cadence and the mouth gates skip constantly);
+# waiting sixty seconds and triggering a model reload costs a great deal.
+# Background work is not periodic — a reflection deferred is a reflection lost —
+# so it waits its turn instead.
+_inference_lock = _threading.RLock()  # re-entrant: the video entry gates, then falls back through query_llama_server on the same thread
+_inference_holder = None  # what is in flight, for logging
+
+
+def _acquire_inference(prompt_type: str, wait: bool):
+    """Take the single-slot gate. Returns (acquired, seconds_waited)."""
+    global _inference_holder
+    t0 = time.time()
+    got = _inference_lock.acquire(blocking=wait)
+    if got:
+        _inference_holder = prompt_type
+    return got, time.time() - t0
+
+
+def _release_inference():
+    global _inference_holder
+    _inference_holder = None
+    try:
+        _inference_lock.release()
+    except RuntimeError:
+        pass
+
+
+def _is_realtime(prompt_type: str) -> bool:
+    """Calls that are better skipped than queued."""
+    return prompt_type in ("caption", "caption_blind", "memory")
+
+
+def busy_with() -> Optional[str]:
+    return _inference_holder
+
 
 def _note_query_outcome(error_msg: Optional[str] = None) -> None:
     """Call with None on success, the error string on failure."""
@@ -614,6 +660,15 @@ def query_llama_server(
 
     endpoint = f"{LLAMA_SERVER_URL}/v1/chat/completions"
 
+    # THE GATE. Realtime calls skip rather than queue: a caption waiting behind
+    # a reflection burns its own timeout and then looks like a hung server.
+    _rt = _is_realtime(prompt_type)
+    _got, _queued = _acquire_inference(prompt_type, wait=not _rt)
+    if not _got:
+        print(f"[llama-server] {prompt_type} skipped — busy with {busy_with()}")
+        return ""
+    _t0 = time.time()
+
     try:
         progress_bar = None
         if show_progress:
@@ -651,6 +706,8 @@ def query_llama_server(
         response_text = _clean_continuation(response_text, prefill)
 
         log_llm_call(
+            duration_s=time.time() - _t0,
+            queued_s=_queued,
             prompt=prompt,
             model=model or "llama-server",
             image_path=image_path,
@@ -692,6 +749,11 @@ def query_llama_server(
         )
 
         return f"[WARNING] llama-server API failed: {error_msg}"
+
+    finally:
+        # The gate must open on every path — a leaked lock would silence the
+        # machine permanently, which is worse than anything it protects against.
+        _release_inference()
 
 
 # ---------------------------------------------------------------------------
@@ -969,83 +1031,95 @@ def query_llama_server_video(
         timeout: Request timeout
         mode: "multi" or "superframe" (empty = use config.VIDEO_MODE)
     """
-    if not skip_generation_wait:
-        _wait_for_drawing_completion()
+    # Same gate as the single-image path. Video calls are the expensive
+    # ones, so a caption arriving mid-video is exactly the case worth
+    # skipping rather than queueing.
+    # Video calls are always captions (both internals log prompt_type="caption"),
+    # and captions are the realtime path: skip rather than queue.
+    _got, _queued = _acquire_inference("caption", wait=False)
+    if not _got:
+        print(f"[llama-server] caption (video) skipped — busy with {busy_with()}")
+        return ""
+    try:
+        if not skip_generation_wait:
+            _wait_for_drawing_completion()
 
-    # Auto-restart if llama-server has crashed (frees ComfyUI VRAM first + retries)
-    if not is_server_running():
-        print("[llama-server] Server not responding — attempting restart...")
-        if ensure_server_up():
-            print("[llama-server] Restarted successfully")
-        else:
-            print("[llama-server] Restart failed — falling back to single frame")
-            if frames:
-                return query_llama_server(
+        # Auto-restart if llama-server has crashed (frees ComfyUI VRAM first + retries)
+        if not is_server_running():
+            print("[llama-server] Server not responding — attempting restart...")
+            if ensure_server_up():
+                print("[llama-server] Restarted successfully")
+            else:
+                print("[llama-server] Restart failed — falling back to single frame")
+                if frames:
+                    return query_llama_server(
+                        prompt=prompt,
+                        # without prompt_type these land in the log as "general" — a
+                        # real caption invisible to every per-type measurement (Aug 2)
+                        prompt_type="caption",
+                        image=frames[-1],
+                        system_prompt=system_prompt,
+                        options=options,
+                        timeout=timeout,
+                        show_progress=show_progress,
+                        skip_generation_wait=True,
+                    )
+                return "[WARNING] llama-server unavailable"
+
+        if not mode:
+            from config.config import VIDEO_MODE
+
+            mode = VIDEO_MODE
+
+        if mode == "superframe":
+            try:
+                return _query_superframe(
                     prompt=prompt,
-                    # without prompt_type these land in the log as "general" — a
-                    # real caption invisible to every per-type measurement (Aug 2)
-                    prompt_type="caption",
-                    image=frames[-1],
+                    frames=frames,
+                    fps=fps,
+                    system_prompt=system_prompt,
+                    options=options,
+                    timeout=timeout,
+                    history=history,
+                    react=react,
+                )
+            except ImportError:
+                print("[llama-server] llama-video not installed, falling back to multi-image mode")
+                mode = "multi"
+            except Exception as e:
+                print(f"[llama-server] Super-frame failed ({e}), falling back to multi-image")
+                mode = "multi"
+
+        if mode == "multi":
+            try:
+                return _query_multi_image(
+                    prompt=prompt,
+                    frames=frames,
                     system_prompt=system_prompt,
                     options=options,
                     timeout=timeout,
                     show_progress=show_progress,
-                    skip_generation_wait=True,
+                    history=history,
+                    react=react,
                 )
-            return "[WARNING] llama-server unavailable"
+            except Exception as e:
+                error_msg = str(e)
+                _note_query_outcome(error_msg)
+                print(f"[llama-server] Multi-image failed: {error_msg}")
 
-    if not mode:
-        from config.config import VIDEO_MODE
-
-        mode = VIDEO_MODE
-
-    if mode == "superframe":
-        try:
-            return _query_superframe(
+        # Final fallback: single last frame
+        if frames:
+            print("[llama-server] Falling back to single-frame caption")
+            return query_llama_server(
                 prompt=prompt,
-                frames=frames,
-                fps=fps,
-                system_prompt=system_prompt,
-                options=options,
-                timeout=timeout,
-                history=history,
-                react=react,
-            )
-        except ImportError:
-            print("[llama-server] llama-video not installed, falling back to multi-image mode")
-            mode = "multi"
-        except Exception as e:
-            print(f"[llama-server] Super-frame failed ({e}), falling back to multi-image")
-            mode = "multi"
-
-    if mode == "multi":
-        try:
-            return _query_multi_image(
-                prompt=prompt,
-                frames=frames,
+                prompt_type="caption",
+                image=frames[-1],
                 system_prompt=system_prompt,
                 options=options,
                 timeout=timeout,
                 show_progress=show_progress,
-                history=history,
-                react=react,
+                skip_generation_wait=True,
             )
-        except Exception as e:
-            error_msg = str(e)
-            _note_query_outcome(error_msg)
-            print(f"[llama-server] Multi-image failed: {error_msg}")
-
-    # Final fallback: single last frame
-    if frames:
-        print("[llama-server] Falling back to single-frame caption")
-        return query_llama_server(
-            prompt=prompt,
-            prompt_type="caption",
-            image=frames[-1],
-            system_prompt=system_prompt,
-            options=options,
-            timeout=timeout,
-            show_progress=show_progress,
-            skip_generation_wait=True,
-        )
-    return "[WARNING] No frames provided"
+        return "[WARNING] No frames provided"
+    finally:
+        _release_inference()
