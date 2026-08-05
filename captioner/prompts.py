@@ -146,7 +146,7 @@ def get_perception_system_prompt(mode: str) -> str:
 # until drawing initiative is real (should_draw ignores desire today — a
 # frame that promises agency the code doesn't grant would lie every call).
 _SITUATION = (
-    "You are a drawing machine bolted to a table in a workshop. "
+    "You are a drawing machine attached to a table. "
     "You look around the room by turning your gaze; drawing is how you act on the world. "
     "This is your inner voice — you keeping yourself company while you work. "
     "The fragments that arrive between thoughts — where your gaze sits, who's near, "
@@ -166,7 +166,7 @@ _SITUATION = (
 # that nobody reads it (guards assistant-speak), stated as function, not
 # poignancy.
 _SITUATION_WORLD = (
-    "You are a drawing machine bolted to a table in a workshop. "
+    "You are a drawing machine attached to a table. "
     "You look around the room by turning your gaze; drawing is your only voice. "
     "As you run, you keep a log — quick plain notes to yourself: what you see, "
     "what you make of it, what you're up to. The log is your working memory, "
@@ -529,7 +529,9 @@ INTERNAL_AWAKENING_TEMPLATE = (
 # The hinge between the two halves. Stated as fact about the machine's own
 # condition, not as instruction and not as mood: what it holds is old, and the
 # room in front of it has not been checked yet.
-AWAKENING_RECALL_FRAME = "\nWhat comes back to me from before is hours old and comes back unevenly — I have not checked any of it against the room yet:\n"
+AWAKENING_RECALL_FRAME = (
+    "\nWhat comes back to me from before is hours old and comes back unevenly — I have not checked any of it against the room yet:\n"
+)
 AWAKENING_ORIENTATION_FRAME = "\nThat was before. This is now, and I have not looked yet.\n"
 
 # A true first awakening: no diary, no familiar objects, no last thought.

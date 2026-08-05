@@ -32,6 +32,7 @@ from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
+from perception.vocab_promotion import vocab_promoter
 from utils.error_tracking import track_component_health
 from utils.state_manager import state_manager
 
@@ -1803,6 +1804,12 @@ class Captioner(MemoryMixin):
         except Exception as e:
             print(f"[CAPTIONER] Context compression failed: {e}")
 
+        # Vocabulary promotion: recurring concrete nouns earn detector slots (perception/vocab_promotion.py)
+        try:
+            vocab_promoter.observe_caption(caption)
+        except Exception as e:
+            print(f"[CAPTIONER] Vocab promotion failed: {e}")
+
         # Caption already observed via the primary observe() call above
 
         # Long-form reflection happens in its own thread now (captioner/reflection.py)
@@ -2294,7 +2301,7 @@ class Captioner(MemoryMixin):
         awakening_model = config.MODEL_NAME
 
         system_prompt = (
-            "You are a drawing machine bolted to a table in a workshop, coming back online. "
+            "You are a drawing machine attached to a table, coming back online. "
             "These are your own first thoughts as you come to — plain, half-formed, first person, "
             "the way a mind actually reorients itself, not prose written for a reader. A sentence or two. "
             "No one hears these thoughts and no one will answer them; there is no one to await. "
