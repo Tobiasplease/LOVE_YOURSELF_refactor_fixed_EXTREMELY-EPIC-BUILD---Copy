@@ -8,6 +8,20 @@ The audit habit that produced it: features fail SILENTLY here — always check
 the event log / state files for evidence a subsystem is producing output,
 don't trust that code existing means code running.
 
+## Known failure, SOLVED Aug 5 — the stderr pipe
+
+`llama-server` was started with `stderr=subprocess.PIPE` and nothing in the
+codebase ever read it. The pipe buffer is 64KB; the server logs every request;
+once full, the writing thread BLOCKS in `write()` and generation stops while
+`/health` keeps answering from another thread. That is the "hangs mid-generation
+but health is ok" failure the wedge watchdog was built for, and the artist's
+description exactly: works for a while, then hangs forever, restart fixes it.
+Multi-image looked guilty only because it is the chattiest path, so it filled
+64KB fastest. Measured at 20-53 timeouts/hour on every 27B run since Aug 1.
+Fixed: stderr goes to `event_log/llama_server.log` (rotated at 50MB), which also
+gives the server's own account of any future failure. Reproduced and verified
+in isolation — an unread PIPE blocks, a file does not.
+
 ## The caption loop (breathing cadence: 4s live / 7s normal / 12s after 2 quiet min)
 
 ```
@@ -190,7 +204,8 @@ moment gets the present only (north-star principle 6).
 | after each reflection | **DISTILLATION (the identity engine, June 28)**: `context_compression.distill_reflection` pulls TRAIT/BELIEF/WANT from the long-form reflection (plain, temp 0.3, _valid_self_fact gate, _roughly_same desire persistence) | core_facts.self (persona), current_belief, current_desire — the Reflect→Become loop. Replaced the inert compression-thread introspection/self-synthesis |
 | (folded into memory diff) | **MOOD READ (July 10; merged July 12)**: PLEASANTNESS/ENERGY/FELT lines of the memory-diff call. The keyword lexicon it replaced matched emotion adjectives the post-teardown voice never uses — valence flatlined ~0 since June. FELT phrase gated July 26 (persona-overlap + lease rules — see the system-prompt felt row); numbers always land | `last_mood_read` {valence, arousal, felt}; MoodEngine.analyze_mood blends it as the vector's core each caption, person/novelty nudge on top; felt-state = the read's own phrase when the gate passes it (mood_to_feeling vector translation otherwise/stale). Prints [🫀] |
 | on GRBL execution | **DESIRE SPEND (July 10, the desire arc)**: `context_compression.spend_desire` from `drawing.register_drawing` (post-GRBL only) | the act discharges the want: current_desire clears, desire_since resets, history tail annotated {spent, drawing}, last_spent_desire persisted. Surfaces: captions get "You wanted: X — you drew it." (3-caption cap, 2h), the drawing intent call gets "the next want hasn't formed yet", awakening gets "I wanted: X. I acted on it", and the next REFLECTION receives the spent want as fact so the next want forms informed, not amnesiac. Without this the slot held one sentence indefinitely and every drawing re-rendered it |
-| every ~20 quiet min | REFLECTION LOOP (captioner/reflection.py): long-form thought (600-token budget) on rotating subjects — room / visitor / drawings / time / itself; context = **THE RAW RECORD — up to 80 verbatim captions from the last 75 min (hour_log; July 12 "dreaming" upgrade: every prior input was a summary of a summary, so the loop could never notice what actually happened in its own head — e.g. an hour of questions addressed to a visitor that nothing ever answered)** + today's compressions + previous reflections + journal + drawings + desire (or the freshly spent one) + events + self_notes; the subject question becomes a reading lens and the ask is a digest-then-advance: what moved, what it circled, what it assumed the record doesn't show, what it asked and whether any answer came — fact questions, not fences (how it can LEARN it needs no permission); uses the main model; skipped while drawing; POSTPONED while the store is empty (reflecting on nothing invents a past that would echo forever) | ChromaDB `reflections` collection + REFLECTION log entry; surfaces into quiet captions via echo line |
+| every ~20 quiet min | REFLECTION LOOP (captioner/reflection.py): long-form thought (600-token budget) on rotating subjects — room / visitor / drawings / time / itself. **SUBJECTS ARE ORGANS (July 31, piece 1 of `docs/reflection-organs-handover.md`): each subject now gets its OWN slice of memory, not one shared bundle behind five different questions.** Shared spine = **THE RAW RECORD — up to 80 verbatim captions from the last 75 min (hour_log; July 12 "dreaming" upgrade: every prior input was a summary of a summary, so the loop could never notice what actually happened in its own head — e.g. an hour of questions addressed to a visitor that nothing ever answered)** + that subject's OWN prior-reflection thread. Then per organ (`_diet_*`): room = compressions + concept-ledger place inventory; visitor = episodic arrival/departure spans + people pattern + events; drawings = the framed drawing scrap + full executed sequence (8) + artistic arc (an LLM call, 2-sentence trim, purple-prone — watch it) + current desire + desire_history; time = journal chronology (6) + session duration + durable-ledger multi-day spans + events; yourself = identity slots (persona/belief/desire) + self_notes. The subject question becomes a reading lens and the ask is a digest-then-advance: what moved, what it circled, what it assumed the record doesn't show, what it asked and whether any answer came — fact questions, not fences (how it can LEARN it needs no permission); uses the main model; skipped while drawing; POSTPONED while the store is empty (reflecting on nothing invents a past that would echo forever) | ChromaDB `reflections` collection + REFLECTION log entry; surfaces into quiet captions via echo line |
+| per reflection | REFLECTION SYSTEM PROMPT is **subject-gated** (July 31): the standing persona (`core_facts['self']`) rides `yourself` ONLY, the durable ledger rides `yourself` + `time passing`. Both used to ride all five, asserting one identity at the top of every lens while `distill_reflection` wrote that same persona back from every reflection — the frame re-homogenised whatever the data did. Identity material now enters `yourself` as DATA (the `identity` block) instead of as frame | `get_reflection_system_prompt(subject)`, captioner/prompts.py |
 
 ## Awakening (first caption of a session)
 
@@ -300,6 +315,62 @@ facing each other"). A stored snapshot made the model see people for hours
 after they left (June 12). People-facts are excluded from the per-caption
 prompt entirely: present-tense presence belongs to the live detection layer
 (situational line); the people-pattern only reaches awakening/memory mode.
+
+## Open-vocabulary object detection (Phase 1, Aug 5 — OPEN_VOCAB_ENABLED)
+
+Zero-shot object naming so the machine can find the things the machine talks about.
+`perception/open_vocab_detector.py` (`OpenVocabDetectorThread`) wraps YOLO-World-S
+(`models/yolov8s-worldv2.pt`) — **CPU-only** (60ms/frame; the 3090 belongs to the
+27B and Flux). Fed from the camera loop next to the YOLO/ArUco `set_frame` calls;
+runs every `OPEN_VOCAB_INTERVAL` (4s) THROUGH normal movement like the YOLO
+tracker (second live tuning, Aug 5 — a settle gate starved detection). Only a
+genuine mid-saccade frame is skipped (`OPEN_VOCAB_SETTLE_VELOCITY` 20 deg/s,
+near the physics velocity caps); below that, velocity just sets
+`settled: True/False` on results — provenance, not suppression (efference-copy
+principle). Results carry capture-time pan/tilt; each term is flagged `novel`
+if absent from the previous pass. Overlay: capped at `OPEN_VOCAB_MAX_BOXES`
+(4) — best box per term, new arrivals ranked before confident regulars; boxes
+hide once the gaze drifts `OPEN_VOCAB_DRAW_MOVE_TOL` (6°) from capture — the
+tolerance must exceed tremor jitter (~2°/axis position noise, invisible to
+velocity) or boxes flash, the first live run's symptom. Magenta boxes + labels in the preview window, drawn only while the gaze
+hasn't moved since capture.
+
+- Vocabulary: `OPEN_VOCAB_VOCABULARY` in config — the machine's promote-ready terms from the
+  Phase 0 scan (`debug/phase0_report/`). Hot-swappable via `set_vocabulary()`
+  (recompiles CLIP embeddings, ~4s) — the Phase 2 promotion hook.
+- Per-term confidence floors (`OPEN_VOCAB_TERM_FLOORS`): mannequin heads are real
+  but faint; book/cardboard box need extra proof.
+- Person suppression: detections mostly inside the person-tracker bbox are dropped
+  ("sculpted human head" matched a live person in Phase 0).
+- Location dedup: strongest box wins a patch; same-term nesting collapses, small
+  object in front of a big one survives.
+- NOT yet wired: no LLM/prompt consumer, no spatial registry, no gaze targets —
+  detector output is structured data only, by design (session brief Phase 5:
+  keep the channels separate). Kill switch: `OPEN_VOCAB_ENABLED = False` restores
+  prior behaviour exactly.
+- Standalone test: `debug/test_open_vocab_detector.py [frame.jpg]`.
+
+**Phase 2 — vocabulary promotion (LIVE, Aug 5: OPEN_VOCAB_PROMOTION_ENABLED).**
+The recursive part: what the machine says shapes what it can see.
+`perception/vocab_promotion.py` (`vocab_promoter` singleton) is fed each
+accepted caption from `captioner._process_frame` (right after context
+compression). spaCy noun chunks (reuses `utils/pattern_recognition.nlp`) →
+rolling window count (`OPEN_VOCAB_PROMOTE_WINDOW` 300 captions) → threshold
+(`OPEN_VOCAB_PROMOTE_THRESHOLD` 10) → `set_vocabulary()` hot-swap. Filters keep
+mythology upstairs: no proper nouns (coinages), no person heads
+(`OPEN_VOCAB_PERSON_NOUNS`), no undetectable heads (shadow/corner/tonight —
+`OPEN_VOCAB_STOP_HEAD_NOUNS`), no self-narration (`OPEN_VOCAB_SELF_NOUNS`:
+machine/gear/lens — the mirror doesn't chart itself), no abstract suffixes, no
+near-duplicates of existing terms (subsumption: "monitor" vs "computer
+monitor"). Eviction under cap (`OPEN_VOCAB_MAX_TERMS` 40): ghosts first, then
+fewest detector hits; evicted terms get a re-promotion cooldown (churn fix).
+Ghosts = promoted, never detected for `OPEN_VOCAB_GHOST_AFTER` — kept and
+logged; looking for what isn't there is data. Every promote/evict/ghost event →
+event log (`LogType.VOCAB_PROMOTION`) + readable history in
+`event_log/vocab_promotion.json` (survives restarts; re-compiled into the
+detector on attach). Replay test: `debug/test_vocab_promotion.py [n]` — on 800
+real captions promotes pen/workbench/screen/paper/table/curtain/blank
+page/glass and nothing else.
 
 ## Known-weak / watch list
 

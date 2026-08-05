@@ -421,10 +421,30 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
         cmd.extend(extra)
 
     print(f"[llama-server] Starting: {' '.join(cmd)}")
+    # STDERR GOES TO A FILE, NEVER A PIPE (Aug 5). It was subprocess.PIPE and
+    # nothing in this codebase ever read it — a latent deadlock with a fuse:
+    # the pipe buffer is 64KB, llama-server logs every request, and once it
+    # fills, the writing thread BLOCKS in write(). Generation stops; /health
+    # keeps answering because that is a different thread. That is exactly the
+    # failure the wedge watchdog was written for ("hangs mid-generation while
+    # /health still answers ok"), and exactly the shape the artist described:
+    # works for a while, then hangs forever, restart fixes it. Time-to-wedge is
+    # however long it takes to emit 64KB of logs — which is why multi-image
+    # calls, being the chattiest, appeared to be the culprit.
+    # A file has no such limit, and it also gives us the server's own account
+    # of what happened, which we have wanted several times this week.
+    log_path = os.path.join(MOOD_SNAPSHOT_FOLDER, "llama_server.log")
+    try:
+        os.makedirs(MOOD_SNAPSHOT_FOLDER, exist_ok=True)
+        if os.path.exists(log_path) and os.path.getsize(log_path) > 50 * 1024 * 1024:
+            os.replace(log_path, log_path + ".1")  # one generation of rotation is plenty
+        _server_log = open(log_path, "ab", buffering=0)
+    except Exception:
+        _server_log = subprocess.DEVNULL  # never let logging stop the machine
     _server_process = subprocess.Popen(
         cmd,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        stderr=_server_log,
     )
 
     # Wait for the server to be ready. A big model on -ngl loads for many
