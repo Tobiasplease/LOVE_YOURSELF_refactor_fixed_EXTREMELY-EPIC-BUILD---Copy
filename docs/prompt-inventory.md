@@ -44,7 +44,7 @@ as ⚠ in the sidebar rather than waiting to be grepped for.
 | 10 | `journal` | every 30 min + shutdown | `_write_journal_entry` | `query_model` |
 | 11 | `reflection` | every ~20 quiet min | `reflection.py _reflect` | `query_model` |
 | 12 | `reflection_distill` | after each reflection | `context_compression.distill_reflection` | `query_model` |
-| 13 | `drawing_critique` | after a drawing completes | `drawing.py critique_drawing` | `query_model` (renamed Aug 2 — shared `reflection` with #11) |
+| 13 | `drawing_critique` | when the drawing image appears | `drawing.py critique_drawing` | `query_model` **with the image** — the ONLY critique (Aug 5) |
 | 14 | `drawing_intent` | drawing triggered | `prompts.stream_drawing_analysis` (call 1) | `query_model` |
 | 15 | `drawing_render` | drawing triggered | `prompts.stream_drawing_analysis` (call 2) | `query_model` |
 | 16 | `drawing_summary` | during drawing flow | `drawing.handle_drawing_flow` | `query_model` |
@@ -59,6 +59,7 @@ as ⚠ in the sidebar rather than waiting to be grepped for.
 |---|---|---|
 | `monologue` — `generate_monologue()` | **DEAD** — 0 callers | model_wrapper.py |
 | `perception` — `perceive()` | **DEAD** — 0 callers (only a docstring mention) | model_wrapper.py |
+| ~~second critique in `grbl_utils.execute_gcode_file`~~ | **REMOVED Aug 5** — critiqued the same drawing a second time, text-only, unlabelled (logged as `general`, invisible to this audit). The GRBL path now reuses `drawing.last_critique` and records the completion; the judgement happens once, the memory is written when the pen actually finishes | artist: "it should definitely only critique it once" |
 | `drawing_step1_environmental` … `drawing_step5_synthesis` | **DORMANT** — reachable only when `DRAWING_ANALYSIS_MODE="multi_step"`; live value is `"stream"` | the retired 5-step committee, kept for A/B |
 
 ## C. Findings — ALL RESOLVED August 2

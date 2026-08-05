@@ -1322,35 +1322,22 @@ How do you reflect on this creative act? What did you express through these line
 
 Respond with 2-3 sentences of honest self-reflection about your artwork."""
 
-                # Use the captioner system to generate reflection
+                # ONE CRITIQUE PER DRAWING (Aug 5). This used to run its own
+                # second self-critique of the same drawing — text-only, no
+                # image, unlabelled in the logs, and it was the one whose
+                # failure got stored as "Reflection: [WARNING]...". The
+                # critique that can actually SEE the drawing lives in
+                # drawing.critique_drawing; this path reads its result and
+                # records the completion, which is the right division: the
+                # judgement happens once, the memory is written when the pen
+                # has actually finished.
                 try:
-                    from captioner.captioner import Captioner
-                    from utils.inference import query_model
-                    from config import config
+                    self_critique = ""
+                    ctrl = getattr(getattr(state_manager, "captioner", None), "drawing", None)
+                    if ctrl is not None:
+                        self_critique = (getattr(ctrl, "last_critique", "") or "").strip()
 
-                    # Create critique using reflection system
-                    model_options = {"temperature": 0.8, "top_p": 0.9, "num_predict": 100}
-
-                    # Import consolidated system prompt
-                    from captioner.prompts import SELF_CRITIQUE_SYSTEM_PROMPT
-
-                    self_critique = query_model(
-                        critique_prompt,
-                        model=config.MODEL_NAME,
-                        system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
-                        options=model_options,
-                        timeout=30,
-                        # A SECOND self-critique, duplicating
-                        # drawing.critique_drawing. It was unlabelled, so it
-                        # logged as "general" and was invisible to the prompt
-                        # inventory — exactly the hole that audit documented.
-                        # Labelled now so it can be seen; whether the machine
-                        # should critique the same drawing twice is a
-                        # separate question for the artist.
-                        prompt_type="drawing_critique_grbl",
-                    )
-
-                    if self_critique and self_critique.strip():
+                    if self_critique:
                         log_json_entry(
                             LogType.REFLECTION,
                             {
@@ -1358,16 +1345,24 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
                                 "action": "drawing_self_critique",
                                 "drawing_intent": drawing_prompt,
                                 "drawing_description": compressed_desc,
-                                "self_critique": self_critique.strip(),
+                                "self_critique": self_critique,
                                 "completion_type": "post_drawing_reflection",
                             },
-                            print_message=f"[🎨💭] Drawing self-critique: {self_critique.strip()}",
+                            print_message=f"[🎨💭] Drawing self-critique: {self_critique}",
                         )
 
-                        # Store the completion memory for future reference
+                    # The completion is recorded WHETHER OR NOT a critique
+                    # exists. Having drawn is the fact; the reflection is
+                    # commentary on it. This used to sit inside the critique
+                    # branch, so a failed critique erased the machine's memory
+                    # of having drawn at all — and with the critique now living
+                    # in another module, absent is a normal state, not an error.
+                    if True:
                         try:
                             if hasattr(state_manager, "captioner") and hasattr(state_manager.captioner, "observe"):
-                                completion_text = f"Completed drawing {compressed_desc}. Reflection: {self_critique.strip()[:100]}"
+                                completion_text = f"Completed drawing {compressed_desc}." + (
+                                    f" Reflection: {self_critique[:100]}" if self_critique else ""
+                                )
                                 state_manager.captioner.observe(
                                     completion_text,
                                     state_manager.captioner.current_mood if hasattr(state_manager.captioner, "current_mood") else 0.5,

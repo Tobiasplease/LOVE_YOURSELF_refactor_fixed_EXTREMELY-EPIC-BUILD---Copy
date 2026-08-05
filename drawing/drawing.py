@@ -51,6 +51,11 @@ class DrawingController:
         self.last_prompt: Optional[str] = None
         self.last_drawing_prompt: str = ""
         self.last_reflection: Optional[str] = None
+        # The single self-critique of the latest drawing. Published here so the
+        # GRBL completion path can record it WITHOUT running a second critique
+        # of the same drawing (Aug 5, artist: "it should definitely only
+        # critique it once").
+        self.last_critique: Optional[str] = None
         self.quota_manager = None  # No quota system - use timer-based drawing
 
     # ------------------------------------------------------------------
@@ -292,6 +297,11 @@ class DrawingController:
             if is_failed_response(critique_response):
                 print(f"[🎯] Self-critique failed, skipping: {str(critique_response)[:70]}")
                 return
+
+            # Published for the GRBL completion path, which used to run its own
+            # SECOND critique of the same drawing (Aug 5). One critique now —
+            # this one, because it is the only one holding the image.
+            self.last_critique = critique_response.strip()
 
             log_json_entry(
                 LogType.REFLECTION,
