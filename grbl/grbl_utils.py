@@ -1335,7 +1335,19 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
                     from captioner.prompts import SELF_CRITIQUE_SYSTEM_PROMPT
 
                     self_critique = query_model(
-                        critique_prompt, model=config.MODEL_NAME, system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT, options=model_options, timeout=30
+                        critique_prompt,
+                        model=config.MODEL_NAME,
+                        system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
+                        options=model_options,
+                        timeout=30,
+                        # A SECOND self-critique, duplicating
+                        # drawing.critique_drawing. It was unlabelled, so it
+                        # logged as "general" and was invisible to the prompt
+                        # inventory — exactly the hole that audit documented.
+                        # Labelled now so it can be seen; whether the machine
+                        # should critique the same drawing twice is a
+                        # separate question for the artist.
+                        prompt_type="drawing_critique_grbl",
                     )
 
                     if self_critique and self_critique.strip():

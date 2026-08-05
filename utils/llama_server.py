@@ -94,40 +94,48 @@ _timeout_streak = 0
 _recovery_lock = _threading.Lock()
 
 # ---------------------------------------------------------------------------
-# The inference gate (Aug 3)
+# The inference gate (Aug 3, corrected Aug 5)
 # ---------------------------------------------------------------------------
-# llama-server runs ONE slot, and three threads call it: the caption worker
-# (every 4-12s), the reflection loop, and the compression worker. Nothing
-# coordinated them, so a caption arriving behind a long background call sat in
-# the server's queue while its own 60s timeout ran down — and two of those in a
-# row looked exactly like a hung server to the wedge watchdog, which then
-# restarted a perfectly healthy one.
+# Built on a wrong belief: that llama-server ran ONE slot, so a caption could
+# queue behind a reflection and burn its timeout. The server's own log says
+# otherwise — "n_slots = 4, n_ctx_slot = 16384, kv_unified" — four concurrent
+# requests, each with the full context. Queue waits measured 0.0s throughout;
+# the real cause of the wedges was a 64KB stderr pipe nobody drained.
 #
-# The asymmetry that makes this easy: captions are PERIODIC. Skipping a cycle
-# costs nothing (the breathing cadence and the mouth gates skip constantly);
-# waiting sixty seconds and triggering a model reload costs a great deal.
-# Background work is not periodic — a reflection deferred is a reflection lost —
-# so it waits its turn instead.
-_inference_lock = _threading.RLock()  # re-entrant: the video entry gates, then falls back through query_llama_server on the same thread
-_inference_holder = None  # what is in flight, for logging
+# An exclusive lock was therefore doing harm: after a drawing, the critique,
+# summary, arc and compression calls run back to back, and every caption in
+# that window was SKIPPED ("busy with drawing_critique") — the machine going
+# silent exactly when it had just drawn something to think about.
+#
+# Kept, but as a bounded semaphore rather than a mutex: up to
+# INFERENCE_CONCURRENCY in flight (one slot held in reserve), realtime calls
+# skip rather than wait if we somehow saturate, background work waits its turn.
+# This is now a guard against pathological concurrency, not a queue.
+INFERENCE_CONCURRENCY = int(os.getenv("INFERENCE_CONCURRENCY", "3"))
+_inference_sem = _threading.BoundedSemaphore(INFERENCE_CONCURRENCY)
+_inflight_lock = _threading.Lock()
+_inflight = []  # what is running, for logging
 
 
 def _acquire_inference(prompt_type: str, wait: bool):
-    """Take the single-slot gate. Returns (acquired, seconds_waited)."""
-    global _inference_holder
+    """Take a slot. Returns (acquired, seconds_waited)."""
     t0 = time.time()
-    got = _inference_lock.acquire(blocking=wait)
+    got = _inference_sem.acquire(blocking=wait, timeout=30 if wait else None) if wait else _inference_sem.acquire(blocking=False)
     if got:
-        _inference_holder = prompt_type
+        with _inflight_lock:
+            _inflight.append(prompt_type)
     return got, time.time() - t0
 
 
-def _release_inference():
-    global _inference_holder
-    _inference_holder = None
+def _release_inference(prompt_type: str = ""):
+    with _inflight_lock:
+        if prompt_type and prompt_type in _inflight:
+            _inflight.remove(prompt_type)
+        elif _inflight:
+            _inflight.pop()
     try:
-        _inference_lock.release()
-    except RuntimeError:
+        _inference_sem.release()
+    except ValueError:
         pass
 
 
@@ -137,7 +145,8 @@ def _is_realtime(prompt_type: str) -> bool:
 
 
 def busy_with() -> Optional[str]:
-    return _inference_holder
+    with _inflight_lock:
+        return ", ".join(_inflight) if _inflight else None
 
 
 def _note_query_outcome(error_msg: Optional[str] = None) -> None:
@@ -782,9 +791,9 @@ def query_llama_server(
         return f"[WARNING] llama-server API failed: {error_msg}"
 
     finally:
-        # The gate must open on every path — a leaked lock would silence the
+        # The gate must open on every path — a leaked slot would silence the
         # machine permanently, which is worse than anything it protects against.
-        _release_inference()
+        _release_inference(prompt_type)
 
 
 # ---------------------------------------------------------------------------
@@ -1173,4 +1182,4 @@ def query_llama_server_video(
             )
         return "[WARNING] No frames provided"
     finally:
-        _release_inference()
+        _release_inference("caption")

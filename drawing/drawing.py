@@ -22,6 +22,7 @@ from config.config import (
     COMFY_LATENT_WIDTH,
     COMFY_LORA_STRENGTH,
     COMFY_STEPS,
+    DRAWING_CALL_TIMEOUT,
     DRAWING_COOLDOWN,
     MOOD_SNAPSHOT_FOLDER,
     TRIGGER_PROMPT,
@@ -31,7 +32,7 @@ from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from grbl.idle_movement_manager import pause_for_drawing
-from utils.inference import query_model
+from utils.inference import is_failed_response, query_model
 from utils.llm_log import truncate_for_print
 from utils.state_manager import state_manager
 
@@ -89,11 +90,13 @@ class DrawingController:
         # gets cleaned when its source channels (drawings/desire/reflection) and
         # its system-prompts are reworked. See docs/memory-redesign-plan.md.
         from config.config import BASE_VOICE_DETOX
+
         if BASE_VOICE_DETOX:
             return False
         # Use state-motivated drawing logic when enabled, otherwise timer-based
         try:
             from config.config import DRAWING_USE_STATE_MOTIVATION
+
             if DRAWING_USE_STATE_MOTIVATION:
                 return self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
             else:
@@ -118,8 +121,12 @@ class DrawingController:
         """Sophisticated state-motivated drawing decision logic."""
         import random
         from config.config import (
-            DRAWING_MIN_INTERVAL, DRAWING_MAX_INTERVAL, DRAWING_BASE_THRESHOLD,
-            DRAWING_NOVELTY_WEIGHT, DRAWING_BOREDOM_WEIGHT, DRAWING_MOOD_WEIGHT
+            DRAWING_MIN_INTERVAL,
+            DRAWING_MAX_INTERVAL,
+            DRAWING_BASE_THRESHOLD,
+            DRAWING_NOVELTY_WEIGHT,
+            DRAWING_BOREDOM_WEIGHT,
+            DRAWING_MOOD_WEIGHT,
         )
 
         current_time = time.time()
@@ -141,14 +148,12 @@ class DrawingController:
         # Calculate state-based drawing motivation score
         # Normalize inputs to 0-1 range
         normalized_mood = max(0, min(1, (mood + 1) / 2))  # mood is -1 to 1, normalize to 0-1
-        normalized_novelty = max(0, min(1, novelty))      # novelty should be 0-1
-        normalized_boredom = max(0, min(1, boredom))       # boredom should be 0-1
+        normalized_novelty = max(0, min(1, novelty))  # novelty should be 0-1
+        normalized_boredom = max(0, min(1, boredom))  # boredom should be 0-1
 
         # Calculate weighted motivation score
         motivation_score = (
-            normalized_novelty * DRAWING_NOVELTY_WEIGHT +
-            normalized_boredom * DRAWING_BOREDOM_WEIGHT +
-            normalized_mood * DRAWING_MOOD_WEIGHT
+            normalized_novelty * DRAWING_NOVELTY_WEIGHT + normalized_boredom * DRAWING_BOREDOM_WEIGHT + normalized_mood * DRAWING_MOOD_WEIGHT
         )
 
         # Add time pressure - gradually increase motivation over time
@@ -206,10 +211,12 @@ class DrawingController:
         # drawing-memory entry to executed (the arc reads executed-only)
         try:
             from drawing.drawing_memory import DrawingMemory, get_drawing_memory
+
             get_drawing_memory().mark_last_completed()
             # Desire arc: the act discharges the want. Post-GRBL only — an
             # intent that never reached paper spends nothing.
             from captioner.context_compression import context_compressor
+
             context_compressor.spend_desire(drawing_summary=DrawingMemory._strip_comfy_preamble(prompt or ""))
         except Exception:
             pass
@@ -226,19 +233,23 @@ class DrawingController:
         # Surface a clean line in the live caption monitor + episodic log
         try:
             from utils.live_log import log_drawing_complete
+
             # Strip the standard ComfyUI preamble for readability
             desc = (prompt or "").strip()
-            for prefix in ("Black ink line drawing on white paper. ",
-                           "Black ink line drawing on white paper.",
-                           "black ink line drawing on white paper. "):
+            for prefix in (
+                "Black ink line drawing on white paper. ",
+                "Black ink line drawing on white paper.",
+                "black ink line drawing on white paper. ",
+            ):
                 if desc.lower().startswith(prefix.lower()):
-                    desc = desc[len(prefix):]
+                    desc = desc[len(prefix) :]
                     break
             if len(desc) > 200:
                 desc = desc[:200].rsplit(" ", 1)[0] + "..."
             log_drawing_complete(desc)
             try:
                 from utils.episodic_log import episodic_log
+
                 # Truncate further for episodic — just the subject
                 short = desc[:60].rsplit(" ", 1)[0] if len(desc) > 60 else desc
                 episodic_log.record("drew", f"finished a drawing of {short}")
@@ -268,7 +279,19 @@ class DrawingController:
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 system_prompt=SELF_CRITIQUE_SYSTEM_PROMPT,
                 prompt_type="drawing_critique",
+                timeout=DRAWING_CALL_TIMEOUT,
             )
+            # A failed call returns its error AS TEXT, and this one had no
+            # guard — so "[WARNING] llama-server API failed... Read timed out"
+            # was logged as the machine's reflection on its own drawing and
+            # stored in drawing memory ("Completed drawing a drawing.
+            # Reflection: [WARNING]...", observed live Aug 5). Same class as
+            # the drawing-intent bug fixed Aug 2, a different site. The
+            # drawing already happened; a missing critique is a gap, an error
+            # string is a false memory.
+            if is_failed_response(critique_response):
+                print(f"[🎯] Self-critique failed, skipping: {str(critique_response)[:70]}")
+                return
 
             log_json_entry(
                 LogType.REFLECTION,
@@ -325,8 +348,10 @@ class DrawingController:
             # === EARLY PAPER CHECK (before ComfyUI generation to save resources) ===
             try:
                 from config.config import ENABLE_EARLY_PAPER_CHECK, ENABLE_PAPER_DETECTION
+
                 if ENABLE_PAPER_DETECTION and ENABLE_EARLY_PAPER_CHECK:
                     from safety.paper_detection import check_paper_before_drawing
+
                     camera = state_manager.camera
                     servos = state_manager.servos
 
@@ -336,6 +361,7 @@ class DrawingController:
 
                         try:
                             from vision.gaze import set_drawing_mode
+
                             set_drawing_mode(active=False)
                         except Exception:
                             pass
@@ -355,14 +381,16 @@ class DrawingController:
                             state_manager.last_no_paper_skip_ts = time.time()
                             try:
                                 from drawing.drawing_memory import get_drawing_memory
+
                                 get_drawing_memory().record_failure(
                                     reason="no paper",
-                                    prompt=getattr(state_manager, 'current_drawing_prompt', None),
+                                    prompt=getattr(state_manager, "current_drawing_prompt", None),
                                 )
                             except Exception:
                                 pass
                             try:
                                 from utils.live_log import log_drawing_failed
+
                                 log_drawing_failed("no paper")
                             except Exception:
                                 pass
@@ -390,13 +418,14 @@ class DrawingController:
                             log_dir=MOOD_SNAPSHOT_FOLDER,
                             system_prompt="Describe the drawing's subject in one brief sentence. Be specific about what is shown, not abstract tags.",
                             prompt_type="drawing_summary",
-                            options={"temperature": 0.3, "num_predict": 40}
+                            options={"temperature": 0.3, "num_predict": 40},
                         ).strip()
                         print(f"[📝] Model-generated drawing summary: {drawing_summary}")
                         state_manager.current_drawing_prompt = drawing_summary
 
                         try:
                             from utils.caption_display import send_caption_to_display
+
                             send_caption_to_display(f"Drawing: {drawing_summary}")
                         except Exception:
                             pass
@@ -449,6 +478,7 @@ class DrawingController:
     def _unload_inference_model(self) -> None:
         """Unload llama-server from VRAM to free space for ComfyUI/Flux."""
         from utils.inference import unload_model
+
         try:
             unload_model()
             print("[VRAM] Inference model unloaded for ComfyUI")
@@ -493,6 +523,7 @@ class DrawingController:
             # We'll only pause when actual G-code execution starts
             try:
                 from grbl.idle_movement_manager import update_emotion
+
                 # Switch to "generating" pattern - continuous circular movements
                 update_emotion("generating")
             except Exception as e:

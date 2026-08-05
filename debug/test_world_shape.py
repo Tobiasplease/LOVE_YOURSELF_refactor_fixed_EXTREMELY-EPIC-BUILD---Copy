@@ -223,39 +223,41 @@ check("a set at or under the cap is untouched", _thin(3, 3) == [0, 1, 2] and _th
 check("cap of one keeps the newest", _thin(6, 1) == [5])
 check("thinning never grows the set", all(len(_thin(n, 3)) <= max(n, 0) for n in range(1, 8)))
 
-print("— inference gate (Aug 3) —")
+print("— inference gate, corrected (Aug 5) —")
 import threading as _th, time as _tm, utils.llama_server as _L
-
-_res = []
 
 
 def _hold(n, secs):
     _L._acquire_inference(n, wait=True)
     _tm.sleep(secs)
-    _L._release_inference()
+    _L._release_inference(n)
 
 
-_t = _th.Thread(target=_hold, args=("reflection", 0.6))
+# the bug this replaced: ONE background call must not silence captions
+_t = _th.Thread(target=_hold, args=("drawing_critique", 0.5))
 _t.start()
 _tm.sleep(0.1)
-_got, _waited = _L._acquire_inference("caption", wait=False)
-check("a caption SKIPS instead of queueing behind background work", not _got and _waited < 0.05)
+_g, _w = _L._acquire_inference("caption", wait=False)
+check("a caption RUNS alongside one background call (server has 4 slots)", _g)
+if _g:
+    _L._release_inference("caption")
 _t.join()
-_got2, _ = _L._acquire_inference("caption", wait=False)
-check("the slot is free again once background work finishes", _got2)
-_L._release_inference()
+# but pathological concurrency is still capped
+_ts = [_th.Thread(target=_hold, args=(f"bg{i}", 0.5)) for i in range(_L.INFERENCE_CONCURRENCY)]
+[t.start() for t in _ts]
+_tm.sleep(0.1)
+_g2, _ = _L._acquire_inference("caption", wait=False)
+check("saturation is still capped at INFERENCE_CONCURRENCY", not _g2)
+[t.join() for t in _ts]
+_g3, _ = _L._acquire_inference("caption", wait=False)
+check("slots free again once background work finishes", _g3)
+if _g3:
+    _L._release_inference("caption")
 check(
     "realtime set is captions and memory only",
     all(_L._is_realtime(k) for k in ("caption", "caption_blind", "memory"))
     and not any(_L._is_realtime(k) for k in ("reflection", "compression", "journal", "drawing_intent")),
 )
-_L._acquire_inference("a", wait=True)
-_L._acquire_inference("a", wait=True)  # re-entrant, same thread
-_L._release_inference()
-_L._release_inference()
-_free, _ = _L._acquire_inference("b", wait=False)
-_L._release_inference()
-check("re-entrant acquire fully releases (video entry -> fallback path)", _free)
 
 print("— refrain gate (July 27) —")
 cap2 = object.__new__(Captioner)
