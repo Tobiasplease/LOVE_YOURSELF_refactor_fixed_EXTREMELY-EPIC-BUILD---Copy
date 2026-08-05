@@ -80,9 +80,61 @@ LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 # (which fall back to defaults for unknown names — no key exists for either
 # qwen label, so overriding is behavior-neutral). Env-overridable July 28 so
 # the 27B experiment's logs say what actually ran (run_27b.sh sets it).
-MODEL_NAME = os.getenv("MODEL_NAME", "qwen3.5:9b")
+MODEL_NAME = os.getenv("MODEL_NAME", "qwen3.6:27b")
 
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log"))
+
+# === OPEN-VOCABULARY OBJECT DETECTION (Phase 1, Aug 5 2026) ===
+# Zero-shot object naming: YOLO-World finds named things in the room so the
+# registry (Phase 3) can give gaze real targets. CPU-only by design — 60ms/frame
+# warm, the 3090 stays with the 27B and Flux. Runs on a cadence through normal
+# movement (saccade guard below), never free-running. Vocabulary is the
+# machine's own promote-ready terms from the Phase 0 feasibility report
+# (debug/phase0_report/) — appearance language, not function language;
+# "electric fan" scored 0%, "fan" works. Additive: never touches the
+# person/face tracking path.
+OPEN_VOCAB_ENABLED = True
+OPEN_VOCAB_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "yolov8s-worldv2.pt")
+OPEN_VOCAB_INTERVAL = 4.0  # seconds between detection passes
+# Saccade guard only (Aug 5, second live tuning): detection runs THROUGH normal
+# movement like the YOLO person tracker — micro-adjustments, orbital wander, slow
+# tracking all pass. Only a genuine mid-saccade frame (velocity near the physics
+# caps: 12 idle / 25 tracking) is skipped, since it lands elsewhere anyway.
+# ~18px/deg at 20ms exposure: even 20 deg/s smears ~7px, tolerable for YOLO —
+# the VLM's blur problem is not the detector's. Velocity below the guard still
+# sets settled=True/False on results (provenance, not suppression).
+OPEN_VOCAB_SETTLE_VELOCITY = 20.0  # deg/s; |pan_vel|+|tilt_vel| above this = mid-saccade, skip the frame
+OPEN_VOCAB_MAX_WAIT = 30.0  # seconds; if the guard somehow blocks this long, force a pass
+OPEN_VOCAB_MAX_BOXES = 4  # overlay only — storage keeps everything; best-per-term, new arrivals first, then confidence
+OPEN_VOCAB_DRAW_MOVE_TOL = 6.0  # deg; hide drawn boxes once gaze drifts this far from capture — must exceed tremor jitter (~2°/axis) or boxes flash
+OPEN_VOCAB_CONF_FLOOR = 0.15  # global floor; per-term floors below win
+# Per-term floors from crop-verified Phase 0 numbers: mannequin heads are real
+# but faint (max 0.41); book/cardboard box fire sloppily so they need more proof.
+OPEN_VOCAB_TERM_FLOORS = {
+    "mannequin head": 0.10,
+    "computer monitor": 0.12,
+    "wire basket": 0.12,
+    "book": 0.30,
+    "cardboard box": 0.25,
+}
+OPEN_VOCAB_PERSON_OVERLAP_MAX = 0.5  # drop detections mostly inside a person bbox ("sculpted human head" matched a live person in Phase 0)
+OPEN_VOCAB_VOCABULARY = [
+    "mannequin head",
+    "pink shelf",
+    "red foam finger",
+    "wooden mannequin torso",
+    "wooden chair",
+    "office chair",
+    "desk lamp",
+    "coffee mug",
+    "laptop",
+    "computer monitor",
+    "wire basket",
+    "fan",
+    "book",
+    "cardboard box",
+    "keyboard",
+]
 
 # === COMFY STUFF ===
 
@@ -396,7 +448,7 @@ SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 # assistant turns so each caption continues a visible thought. 0 disables and
 # reverts to amnesiac single-turn captions.
 STREAM_WINDOW = int(
-    os.getenv("STREAM_WINDOW", 6)
+    os.getenv("STREAM_WINDOW", 24)
 )  # ENV-TUNABLE July 28 (window size is an information budget: the model repeats what it can't see it already said — six entries is ~40s of visible selfhood, a 9B-era relic per north-star P5; the 27B holds 20-30). # how many prior captions the model sees as its own turns. ON (June 28) now the base voice is healthy: chiefly to break the amnesiac REPETITION (the persistent "dust motes" tic — each call couldn't see it already said it). Admissibility-gated (_stream_admissible: no meta, no markdown/stage-directions) and breaks on >180s gaps. WATCH: the stream amplifies whatever register is in the window — if it breeds purple instead of varying, set back to 0.
 STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
 
@@ -425,7 +477,7 @@ STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restart
 # had momentum (aliveness); world had grounding but answered a static room
 # forty times an hour (flat) and its delta framing elicited fake-delta tropes
 # ("the light feels different now"). A/B directly against the world runs.
-STREAM_MODE = os.getenv("STREAM_MODE", "document")
+STREAM_MODE = os.getenv("STREAM_MODE", "hybrid")
 
 # HYBRID seam size (Aug 1): how many chars of the machine's latest thought are
 # handed back as the continuation prefill in STREAM_MODE="hybrid". Short on
@@ -438,10 +490,10 @@ HYBRID_PREFILL_CHARS = int(os.getenv("HYBRID_PREFILL_CHARS", 220))
 # to stop a 9B blooming purple — on a 27B it just pins output to the mode.
 # min_p (0 = off) is the better tail-cut for a larger model: proportional to
 # confidence, so temperature can rise without degenerating.
-CAPTION_TEMP = float(os.getenv("CAPTION_TEMP", 0.7))
-CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.6))
-CAPTION_TOP_P = float(os.getenv("CAPTION_TOP_P", 0.85))
-CAPTION_MIN_P = float(os.getenv("CAPTION_MIN_P", 0.0))
+CAPTION_TEMP = float(os.getenv("CAPTION_TEMP", 1.0))
+CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.9))
+CAPTION_TOP_P = float(os.getenv("CAPTION_TOP_P", 1.0))
+CAPTION_MIN_P = float(os.getenv("CAPTION_MIN_P", 0.05))
 
 # Drawing calls get a real timeout (Aug 2). query_model defaults to 30s — a
 # 9B-era number. The drawing INTENT prompt is the largest in the system (stream
@@ -498,7 +550,7 @@ DRAWING_WATCH_INTERVAL_S = int(os.getenv("DRAWING_WATCH_INTERVAL_S", 20))
 # accumulating run-ons — an over-long document is also what squeezes the
 # repetition penalties into word-salad collapses. 0 disables.
 STREAM_CONSOLIDATE_CHARS = int(
-    os.getenv("STREAM_CONSOLIDATE_CHARS", 800)
+    os.getenv("STREAM_CONSOLIDATE_CHARS", 12000)
 )  # scale with STREAM_WINDOW (~250 chars/entry) or consolidation eats the bigger window
 
 # A face occupying this fraction of the frame is a person AT CLOSE RANGE —

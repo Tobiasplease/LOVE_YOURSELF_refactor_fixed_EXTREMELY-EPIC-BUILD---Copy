@@ -42,10 +42,17 @@ from utils.progress_bar import ProgressBar
 
 # Server configuration
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
-LLAMA_SERVER_BIN = os.getenv("LLAMA_SERVER_BIN", os.path.expanduser("~/llama.cpp/build/bin/llama-server"))
-LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", os.path.expanduser("~/models/qwen3.5-9b/Qwen3.5-9B-Q5_K_M.gguf"))
-LLAMA_MMPROJ_PATH = os.getenv("LLAMA_MMPROJ_PATH", os.path.expanduser("~/models/qwen3.5-9b/mmproj-F16.gguf"))
-LLAMA_CTX_SIZE = int(os.getenv("LLAMA_CTX_SIZE", "65536"))
+# DEFAULTS ARE THE 27B HYBRID STACK (Aug 5) — the configuration we actually
+# landed on, so a bare `python machine.py` runs it. These used to point at the
+# 9B, and the live setup existed only inside run_27b.sh: which launcher you
+# reached for decided what you measured. NOTE the binary — the older
+# ~/llama.cpp build predates the MTP head and cannot load this model at all
+# ("missing tensor blk.64.ssm_conv1d.weight"). The 9B remains one env away
+# (see run_9b.sh) for A/B.
+LLAMA_SERVER_BIN = os.getenv("LLAMA_SERVER_BIN", os.path.expanduser("~/llama.cpp-27b/build/bin/llama-server"))
+LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", os.path.expanduser("~/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q4_K_M.gguf"))
+LLAMA_MMPROJ_PATH = os.getenv("LLAMA_MMPROJ_PATH", os.path.expanduser("~/models/qwen3.6-27b-mtp/mmproj-F16.gguf"))
+LLAMA_CTX_SIZE = int(os.getenv("LLAMA_CTX_SIZE", "16384"))
 LLAMA_GPU_LAYERS = int(os.getenv("LLAMA_GPU_LAYERS", "99"))
 
 SHOW_PROGRESS = os.getenv("LLAMA_SHOW_PROGRESS", "true").lower() == "true"
@@ -405,7 +412,11 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
     # Extra launch flags via env (July 28) — the Qwen3.6-27B experiment needs
     # MTP speculative decoding ("--spec-type draft-mtp --spec-draft-n-max 2
     # -fa on") without hardcoding model-specific flags here. See run_27b.sh.
-    extra = os.getenv("LLAMA_EXTRA_ARGS", "").split()
+    # -fa on by default with the 27B stack (run_27b.sh set it explicitly before
+    # the defaults moved). MTP speculative decoding stays OFF: it is a variable
+    # the 9B never had and the voice question is a distribution question —
+    # LLAMA_MTP=1 ./run_27b.sh re-enables it for the ~1.7x decode speed.
+    extra = os.getenv("LLAMA_EXTRA_ARGS", "-fa on").split()
     if extra:
         cmd.extend(extra)
 

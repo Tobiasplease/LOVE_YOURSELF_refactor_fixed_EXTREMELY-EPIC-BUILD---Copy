@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Qwen3.6-27B experiment launcher (July 28) — same machine, bigger mind.
+# Qwen3.6-27B launcher. NOTE (Aug 5): this is no longer required — the config
+# defaults ARE this stack, so `python machine.py` runs the 27B hybrid setup.
+# Kept as the explicit pin: it forces the 27B regardless of what the defaults
+# later become, which is what the tmux launchers want. run_9b.sh is the A/B arm.
 # Everything else is unchanged: STREAM_MODE=document, VIDEO_MODE=multi, all
 # gates live. Plain `python machine.py` still runs the 9B as before.
 #

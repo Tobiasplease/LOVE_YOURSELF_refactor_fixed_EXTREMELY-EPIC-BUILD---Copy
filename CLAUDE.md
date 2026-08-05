@@ -13,8 +13,12 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the main application
+# Run the main application (defaults = Qwen3.6-27B, hybrid stream shape)
 python machine.py
+
+# Explicit pins / A-B arms
+./run_27b.sh          # force the 27B hybrid stack
+./run_9b.sh           # the 9B arm, with the sampling it was tuned for
 
 # Run with configuration overrides
 python machine.py --config_override config/debug_config.json
