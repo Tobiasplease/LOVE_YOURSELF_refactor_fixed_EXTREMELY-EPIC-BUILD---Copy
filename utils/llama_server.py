@@ -816,6 +816,7 @@ def _query_multi_image(
             payload["repeat_penalty"] = options["repeat_penalty"]
         _forward_sampler_options(payload, options)
 
+    _vt0 = time.time()
     endpoint = f"{LLAMA_SERVER_URL}/v1/chat/completions"
 
     progress_bar = None
@@ -863,6 +864,7 @@ def _query_multi_image(
         stream_mode=(_stream_mode() + ("-react" if react else "")) if history else None,
         num_frames=len(frames),
         prefill_tail=prefill[-150:] if prefill else None,
+        duration_s=time.time() - _vt0,
     )
 
     _note_query_outcome(None)
@@ -959,6 +961,7 @@ def _query_superframe(
     else:
         payload["temperature"] = 0.9
 
+    _vt0 = time.time()
     endpoint = f"{LLAMA_SERVER_URL}/v1/chat/completions"
 
     print(f"[SUPERFRAME] {video_input.num_source_frames} frames, grid_thw={video_input.grid_thw}, {len(video_input.super_frames)} super-frames")
@@ -1008,6 +1011,7 @@ def _query_superframe(
         stream_mode=(_stream_mode() + ("-react" if react else "")) if history else None,
         num_frames=len(frames),
         prefill_tail=prefill[-150:] if prefill else None,
+        duration_s=time.time() - _vt0,
     )
 
     return response_text
@@ -1116,6 +1120,22 @@ def query_llama_server_video(
             except Exception as e:
                 error_msg = str(e)
                 _note_query_outcome(error_msg)
+                # Log it. This used to be swallowed — only the successful
+                # single-frame fallback reached the log, so multi-image showed a
+                # 100% success rate while the console wedged every few minutes.
+                # An invisible failure is one nobody can measure or fix.
+                log_llm_call(
+                    prompt=prompt,
+                    model="llama-server",
+                    response=None,
+                    success=False,
+                    error_message=error_msg,
+                    timeout=timeout,
+                    log_dir=MOOD_SNAPSHOT_FOLDER,
+                    system_prompt=system_prompt,
+                    prompt_type="caption_multiimage_failed",
+                    num_frames=len(frames),
+                )
                 print(f"[llama-server] Multi-image failed: {error_msg}")
 
         # Final fallback: single last frame
