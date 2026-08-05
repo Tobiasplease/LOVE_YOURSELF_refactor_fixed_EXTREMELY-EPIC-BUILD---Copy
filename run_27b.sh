@@ -51,9 +51,12 @@ export CAPTION_MIN_P="${CAPTION_MIN_P:-0.05}"
 export STREAM_WINDOW=24
 export STREAM_CONSOLIDATE_CHARS=12000
 
-# Next experiment when ready: the world shape on a model that can follow it —
-# uncomment for grounded + connected + naturally varied, or prefix at launch:
-#   STREAM_MODE=world ./run_27b.sh
-# export STREAM_MODE=world
+# THE SHAPE TRAVELS WITH THE SCRIPT (Aug 3). This used to rely on the caller
+# prefixing STREAM_MODE=hybrid, so a bare ./run_27b.sh quietly ran document
+# mode — the same "which invocation decides the config" trap that made a whole
+# day of experiments unattributable. Hybrid is the landed shape: world ordering
+# (perception last) plus a seam of the machine's own unfinished thought.
+# Still overridable for A/B:  STREAM_MODE=world ./run_27b.sh
+export STREAM_MODE="${STREAM_MODE:-hybrid}"
 
 exec python machine.py "$@"
