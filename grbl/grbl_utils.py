@@ -1322,20 +1322,12 @@ How do you reflect on this creative act? What did you express through these line
 
 Respond with 2-3 sentences of honest self-reflection about your artwork."""
 
-                # ONE CRITIQUE PER DRAWING (Aug 5). This used to run its own
-                # second self-critique of the same drawing — text-only, no
-                # image, unlabelled in the logs, and it was the one whose
-                # failure got stored as "Reflection: [WARNING]...". The
-                # critique that can actually SEE the drawing lives in
-                # drawing.critique_drawing; this path reads its result and
-                # records the completion, which is the right division: the
-                # judgement happens once, the memory is written when the pen
-                # has actually finished.
+                # The critique was REMOVED Aug 5 (artist: "not useful and
+                # underutilised", and it will be redesigned to judge the paper
+                # rather than the ComfyUI image). What survives is the fact:
+                # the pen finished, and the machine should remember drawing.
                 try:
                     self_critique = ""
-                    ctrl = getattr(getattr(state_manager, "captioner", None), "drawing", None)
-                    if ctrl is not None:
-                        self_critique = (getattr(ctrl, "last_critique", "") or "").strip()
 
                     if self_critique:
                         log_json_entry(

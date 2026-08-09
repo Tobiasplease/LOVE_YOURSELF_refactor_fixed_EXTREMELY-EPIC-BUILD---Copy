@@ -94,24 +94,28 @@ _timeout_streak = 0
 _recovery_lock = _threading.Lock()
 
 # ---------------------------------------------------------------------------
-# The inference gate (Aug 3, corrected Aug 5)
+# The inference gate — ONE REQUEST AT A TIME (Aug 3, twice corrected Aug 5)
 # ---------------------------------------------------------------------------
-# Built on a wrong belief: that llama-server ran ONE slot, so a caption could
-# queue behind a reflection and burn its timeout. The server's own log says
-# otherwise — "n_slots = 4, n_ctx_slot = 16384, kv_unified" — four concurrent
-# requests, each with the full context. Queue waits measured 0.0s throughout;
-# the real cause of the wedges was a 64KB stderr pipe nobody drained.
+# Two wrong turns are recorded here because both were plausible and neither
+# survived measurement.
 #
-# An exclusive lock was therefore doing harm: after a drawing, the critique,
-# summary, arc and compression calls run back to back, and every caption in
-# that window was SKIPPED ("busy with drawing_critique") — the machine going
-# silent exactly when it had just drawn something to think about.
+# First I assumed one server slot and built an exclusive lock, believing a
+# caption could queue behind a reflection and burn its timeout. Queue waits
+# measured 0.0s; the wedges were a 64KB stderr pipe nobody drained.
 #
-# Kept, but as a bounded semaphore rather than a mutex: up to
-# INFERENCE_CONCURRENCY in flight (one slot held in reserve), realtime calls
-# skip rather than wait if we somehow saturate, background work waits its turn.
-# This is now a guard against pathological concurrency, not a queue.
-INFERENCE_CONCURRENCY = int(os.getenv("INFERENCE_CONCURRENCY", "3"))
+# Then the server's own log said "n_slots = 4, n_ctx_slot = 16384" and I read
+# that as 4x capacity, so I opened it to three concurrent. Also wrong: slots
+# are concurrent SESSIONS, but a single GPU still serialises the compute. The
+# log settles it — a 272-token request took 27.9s while a 4810-token one took
+# 8.9s. The small one was not slow, it was starved by the requests beside it.
+#
+# So: one at a time. Every call then runs at its true speed (3-7s) and nothing
+# comes near the 60s timeout. Realtime calls (captions, memory) SKIP rather
+# than queue, which is free — they are periodic, and the cadence already skips
+# constantly. Background work waits its turn. The starvation this caused after
+# a drawing is fixed at the source instead: that burst is smaller now the
+# critique is gone.
+INFERENCE_CONCURRENCY = int(os.getenv("INFERENCE_CONCURRENCY", "1"))
 _inference_sem = _threading.BoundedSemaphore(INFERENCE_CONCURRENCY)
 _inflight_lock = _threading.Lock()
 _inflight = []  # what is running, for logging

@@ -44,7 +44,7 @@ as ⚠ in the sidebar rather than waiting to be grepped for.
 | 10 | `journal` | every 30 min + shutdown | `_write_journal_entry` | `query_model` |
 | 11 | `reflection` | every ~20 quiet min | `reflection.py _reflect` | `query_model` |
 | 12 | `reflection_distill` | after each reflection | `context_compression.distill_reflection` | `query_model` |
-| 13 | `drawing_critique` | when the drawing image appears | `drawing.py critique_drawing` | `query_model` **with the image** — the ONLY critique (Aug 5) |
+| 13 | ~~`drawing_critique`~~ | **REMOVED Aug 5** — artist: "not useful and underutilised... I'd like to redesign that system anyway". It was also the most tangled pass in the stack (two conflicting critiques, one invisible to this audit, and the one whose timeouts kept being stored as the machine's reflection). When it returns it should critique **the paper**, not the ComfyUI image — judge what the pen made, not what was intended | — |
 | 14 | `drawing_intent` | drawing triggered | `prompts.stream_drawing_analysis` (call 1) | `query_model` |
 | 15 | `drawing_render` | drawing triggered | `prompts.stream_drawing_analysis` (call 2) | `query_model` |
 | 16 | `drawing_summary` | during drawing flow | `drawing.handle_drawing_flow` | `query_model` |

@@ -223,8 +223,10 @@ check("a set at or under the cap is untouched", _thin(3, 3) == [0, 1, 2] and _th
 check("cap of one keeps the newest", _thin(6, 1) == [5])
 check("thinning never grows the set", all(len(_thin(n, 3)) <= max(n, 0) for n in range(1, 8)))
 
-print("— inference gate, corrected (Aug 5) —")
+print("— inference gate: serialised (Aug 5) —")
 import threading as _th, time as _tm, utils.llama_server as _L
+
+check("one request at a time (slots are sessions, not parallel compute)", _L.INFERENCE_CONCURRENCY == 1)
 
 
 def _hold(n, secs):
@@ -233,30 +235,20 @@ def _hold(n, secs):
     _L._release_inference(n)
 
 
-# the bug this replaced: ONE background call must not silence captions
-_t = _th.Thread(target=_hold, args=("drawing_critique", 0.5))
+_t = _th.Thread(target=_hold, args=("reflection", 0.4))
 _t.start()
 _tm.sleep(0.1)
 _g, _w = _L._acquire_inference("caption", wait=False)
-check("a caption RUNS alongside one background call (server has 4 slots)", _g)
-if _g:
-    _L._release_inference("caption")
+check("a caption SKIPS instantly rather than queueing", not _g and _w < 0.05)
 _t.join()
-# but pathological concurrency is still capped
-_ts = [_th.Thread(target=_hold, args=(f"bg{i}", 0.5)) for i in range(_L.INFERENCE_CONCURRENCY)]
-[t.start() for t in _ts]
-_tm.sleep(0.1)
 _g2, _ = _L._acquire_inference("caption", wait=False)
-check("saturation is still capped at INFERENCE_CONCURRENCY", not _g2)
-[t.join() for t in _ts]
-_g3, _ = _L._acquire_inference("caption", wait=False)
-check("slots free again once background work finishes", _g3)
-if _g3:
+check("slot frees the moment background work finishes", _g2)
+if _g2:
     _L._release_inference("caption")
 check(
     "realtime set is captions and memory only",
     all(_L._is_realtime(k) for k in ("caption", "caption_blind", "memory"))
-    and not any(_L._is_realtime(k) for k in ("reflection", "compression", "journal", "drawing_intent")),
+    and not any(_L._is_realtime(k) for k in ("reflection", "compression", "journal")),
 )
 
 print("— refrain gate (July 27) —")

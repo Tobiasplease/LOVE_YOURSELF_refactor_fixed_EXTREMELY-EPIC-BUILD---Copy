@@ -593,6 +593,22 @@ object_detector = ObjectDetectionThread()
 _global_object_detector = object_detector
 object_detector.start()
 
+from config.config import OPEN_VOCAB_ENABLED
+
+open_vocab_detector = None
+if OPEN_VOCAB_ENABLED:
+    from perception.open_vocab_detector import OpenVocabDetectorThread
+
+    open_vocab_detector = OpenVocabDetectorThread()
+    open_vocab_detector.start()
+    debug_print("Open-vocab detector started (CPU, settle-gated)", "INIT")
+    from perception.vocab_promotion import vocab_promoter
+
+    vocab_promoter.attach_detector(open_vocab_detector)
+    debug_print("Vocabulary promotion attached (caption nouns -> detector terms)", "INIT")
+else:
+    debug_print("Open-vocab detector disabled (OPEN_VOCAB_ENABLED=False)", "INIT")
+
 # Start real-time ArUco marker detection (for paper presence)
 aruco_detector = get_aruco_detector()
 debug_print("ArUco marker detection started", "INIT")
@@ -759,13 +775,14 @@ reactivity_engine = CameraReactivityEngine(sensitivity=0.2, smoothing_factor=0.9
 debug_print("Camera reactivity enabled - hand will respond to environmental changes", "INIT")
 
 
-# Set up image monitor with self-critique callback
-def on_drawing_complete(image_path: str):
-    """Handle drawing completion with self-critique only (uArm handled via GRBL hook)."""
-    captioner.drawing.critique_drawing(image_path)
-
-
-image_monitor.on_image_complete = on_drawing_complete
+# DRAWING CRITIQUE REMOVED (Aug 5, artist's call): "not useful and
+# underutilised... I'd like to redesign that system anyway". It was also the
+# most tangled pass in the pipeline — two conflicting critiques of the same
+# drawing, one of them invisible to the inventory, and the one whose timeouts
+# kept getting stored as the machine's reflection. The completion memory
+# survives it (grbl_utils records having drawn, with or without a reflection).
+# When it returns it should critique THE PAPER, not the ComfyUI image — judge
+# what the pen actually made, not what was intended.
 # Set dependencies for paper detection
 image_monitor.set_dependencies(cap, servos, captioner)
 
@@ -1276,6 +1293,8 @@ try:
 
         object_detector.set_frame(frame)  # YOLO person detection enabled
         aruco_detector.set_frame(frame)  # Real-time ArUco marker detection
+        if open_vocab_detector:
+            open_vocab_detector.set_frame(frame)  # zero-shot object naming (settle-gated, CPU)
 
         # Store full-resolution frame for LLM captioning
         full_res_frame = frame.copy()
@@ -1621,6 +1640,13 @@ try:
             cv2.polylines(frame, [pts], True, color, 2)
             cx, cy = int(pts[:, 0].mean()), int(pts[:, 1].mean())
             cv2.putText(frame, f"ID:{marker_id}", (cx - 20, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+        # === OPEN-VOCAB DETECTION VISUALIZATION ===
+        if open_vocab_detector:
+            for det in open_vocab_detector.get_detections_for_drawing():
+                dx1, dy1, dx2, dy2 = det["box"]
+                cv2.rectangle(frame, (dx1, dy1), (dx2, dy2), (255, 0, 255), 1)  # Magenta = open-vocab object
+                cv2.putText(frame, f"{det['term']} {det['conf']:.2f}", (dx1, max(12, dy1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 255), 1)
 
         # === DISPLAY OVERLAYS ===
         debug = f"Mood: {current_mood:.2f} | Lung: {lung_pos} | Pan/Tilt: {pan}/{tilt}"
