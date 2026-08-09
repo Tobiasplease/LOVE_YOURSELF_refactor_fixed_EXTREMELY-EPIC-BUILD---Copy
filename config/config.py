@@ -134,7 +134,157 @@ OPEN_VOCAB_VOCABULARY = [
     "book",
     "cardboard box",
     "keyboard",
+    "rooster figurine",  # Aug 5 live run: without its own word the rooster was claimed by "wooden mannequin torso" at 0.72 — closed-world effect; with the word it wins at 0.66 even blurred
 ]
+
+# --- Phase 2: vocabulary promotion (the recursive part, Aug 5 2026) ---
+# The monologue names things; recurring names earn a slot in the detector
+# vocabulary (perception/vocab_promotion.py, fed per accepted caption). The
+# list above is the protected seed; promoted terms join it up to the cap.
+# Filters keep the mythology upstairs: concrete noun phrases only — coinages
+# (proper nouns), abstractions, and person-words never compile. Ghosts —
+# promoted terms that never detect — are kept and logged (looking for what
+# isn't there is data), evicted first under cap pressure.
+OPEN_VOCAB_PROMOTION_ENABLED = True
+OPEN_VOCAB_PROMOTE_WINDOW = 300  # rolling window, in accepted captions
+OPEN_VOCAB_PROMOTE_THRESHOLD = 10  # captions in the window mentioning a term -> promote
+OPEN_VOCAB_MAX_TERMS = 40  # compiled vocabulary cap (seed + promoted); every term competes for pixels, so quality beats quantity
+OPEN_VOCAB_REPROMOTE_COOLDOWN = 3600.0  # seconds an evicted term must wait before promoting again (kills evict/re-promote churn)
+OPEN_VOCAB_GHOST_AFTER = 7200.0  # seconds; promoted term with zero detections this old = ghost (logged, kept)
+# Single-word barrier: these never promote alone but survive inside phrases
+# ("mannequin head" passes, bare "head" does not). Seeded from the machine's
+# own most-frequent abstractions plus body parts.
+OPEN_VOCAB_STOP_TERMS = {
+    "stillness",
+    "silence",
+    "permission",
+    "chaos",
+    "fear",
+    "weight",
+    "thought",
+    "time",
+    "air",
+    "sound",
+    "noise",
+    "darkness",
+    "void",
+    "presence",
+    "anticipation",
+    "paralysis",
+    "hesitation",
+    "creation",
+    "gaze",
+    "movement",
+    "processing",
+    "action",
+    "word",
+    "breath",
+    "glow",
+    "command",
+    "static",
+    "dust",
+    "light",
+    "line",
+    "thing",
+    "view",
+    "key",
+    "tool",
+    "head",
+    "hand",
+    "finger",
+    "eye",
+    "shoulder",
+    "arm",
+    "body",
+    "joint",
+}
+# Head-noun barriers: the phrase never promotes whatever the modifiers.
+# Person phrases ("quiet man") — people belong to the person tracker, not the
+# object map. Undetectable heads ("long shadow", "far corner", "cluttered
+# room") — times, room geometry, light and mass nouns aren't boxable objects.
+OPEN_VOCAB_PERSON_NOUNS = {"man", "woman", "person", "people", "figure", "visitor", "stranger", "human", "guy", "child", "boy", "girl", "face"}
+OPEN_VOCAB_STOP_HEAD_NOUNS = {
+    "shadow",
+    "corner",
+    "edge",
+    "wall",
+    "floor",
+    "ceiling",
+    "surface",
+    "side",
+    "middle",
+    "center",
+    "background",
+    "distance",
+    "clutter",
+    "mess",
+    "one",
+    "bit",
+    "part",
+    "kind",
+    "sort",
+    "way",
+    "glimpse",
+    "object",
+    "front",
+    "back",
+    "top",
+    "bottom",
+    "end",
+    "tonight",
+    "today",
+    "night",
+    "day",
+    "morning",
+    "evening",
+    "hour",
+    "moment",
+    "minute",
+    "room",
+    "workshop",
+    "space",
+    "area",
+    "world",
+    "place",
+    "scene",
+    "silhouette",
+    "moonlight",
+    "sunlight",
+    "glare",
+    "burst",
+    "ghost",
+    "hover",
+    "flicker",
+    "twitch",
+    "blink",
+    "pause",
+    "tick",
+    "buzz",
+    "whir",
+}
+# Self barrier: the machine narrating its own body ("my gears", "the hum", "the
+# lens") must not enter its object map — the mirror doesn't chart itself.
+OPEN_VOCAB_SELF_NOUNS = {"machine", "servo", "motor", "gear", "camera", "lens", "circuit", "sensor", "code", "hum", "vibration"}
+
+# --- Phase 3: spatial registry + registry glances (Aug 5 2026) ---
+# The world map: settled detections become per-term anchors in servo angles
+# (perception/spatial_registry.py, fed by the detector thread; persists in
+# event_log/spatial_registry.json). Idle gaze then aims at the map instead of
+# pure Perlin noise: every GAZE_GLANCE_INTERVAL the gaze commits to a target —
+# usually the known object gone longest unchecked, sometimes an under-visited
+# stretch of the room (explore = "look around for new things"). Arriving
+# triggers the existing stillness logic, stillness settles the gaze, the
+# detector fires on settle, the anchor sharpens: look -> arrive -> see is one
+# loop. Person tracking always outranks glances (untouched).
+SPATIAL_REGISTRY_ENABLED = True
+SPATIAL_REGISTRY_EMA = 0.35  # anchor update rate per sighting; higher = snappier, lower = steadier
+SPATIAL_REGISTRY_MAX_AGE = 604800.0  # seconds (7 days) unseen -> entry forgotten
+SPATIAL_REGISTRY_HFOV = 60.0  # deg; same convention as machine.py person_angle
+SPATIAL_REGISTRY_VFOV = 34.0  # deg; 60 * 720/1280
+GAZE_REGISTRY_GLANCES_ENABLED = True
+GAZE_GLANCE_INTERVAL = 45.0  # mean seconds between idle glances (jittered)
+GAZE_GLANCE_DWELL = 7.0  # mean seconds a glance holds its target (jittered)
+GAZE_GLANCE_EXPLORE_WEIGHT = 0.25  # fraction of glances that explore instead of revisit
 
 # === COMFY STUFF ===
 
@@ -279,6 +429,23 @@ KINETIC_HOMING_TUCK_S = 1.0  # entry ease into the choreography's first pose —
 # Max hold covers the ~12s organic search plus margin.
 KINETIC_PAPER_TUCK_S = 0.8
 KINETIC_PAPER_MAX_HOLD_S = 30.0
+# THE BODY'S SAMPLER (July 31). Measured: at 1x bins a 600-sample take
+# trained ~568 states with branching factor 1.00 — the "markov chain" was
+# the recording as a linked list, and the gaze CHOICE bias had nothing to
+# choose. Identity is now coarse (this scale on DEFAULT_BINS) while poses
+# stay exact, so states merge and the walk forks. 8x gives ~16% of states a
+# real choice; 16x gives ~48% but glues together moments further apart —
+# raise it for a wilder body, lower it toward faithful replay.
+KINETIC_STATE_BIN_SCALE = 8.0
+# Choice controls, same vocabulary as the model's sampler. Each is a base
+# value plus how far AROUSAL moves it (mood 0..1): a calm body replays what
+# it knows, an agitated one wanders and repeats itself less.
+KINETIC_MOVE_TEMP = 1.0  # <1 faithful, >1 adventurous
+KINETIC_MOVE_TEMP_AROUSAL = 0.8  # temp = TEMP + arousal * this
+KINETIC_MOVE_REPETITION = 1.4  # divide down states visited in the last window
+KINETIC_MOVE_REPETITION_AROUSAL = 0.6
+KINETIC_MOVE_MIN_P = 0.05  # drop candidates below this fraction of the best
+KINETIC_MOVE_WINDOW = 24  # how many recent states the repetition penalty remembers
 # False (July 28, artist's call): the homing dance and the gantry sweep run
 # SIMULTANEOUSLY — the choreography is recorded to stay clear of the
 # gantry, so $H does not wait for it. True restores clear-first: $H holds
@@ -573,7 +740,30 @@ SALIENCE_ARRIVAL_WINDOW = 10  # seconds an arrival keeps salience hot (~one live
 # (gaze looks away, occlusion, no servo encoders) and only concludes they left
 # after this long with no sighting. Generous on purpose — losing sight of
 # someone is not the same as them leaving. Only the OFF->ON edge is an arrival.
+# Aug 5 fix: the decay clock only runs while the gaze is actually pointed near
+# the last-seen spot — the machine's own wandering used to decay the belief and
+# manufacture a false "new presence" every time it looked back (the artist was
+# greeted as new dozens of times a day). Not-looking is not evidence of absence.
 PRESENCE_BELIEF_DECAY_SECONDS = 240
+PRESENCE_ABSENCE_LOOK_TOLERANCE = 30.0  # deg; gaze within this of last-seen pan AND tilt = "looking there", decay may tick
+
+# Session re-ID (Aug 5, layer 2 of the false-arrival fix): person crops are
+# embedded into a rolling session gallery; when the presence belief has lapsed
+# and someone is detected, a match against recent sightings means the same
+# person resumed — no arrival event. No names, no persistent biometrics: the
+# gallery dies with the process.
+# DISABLED pending a real re-ID embedding: debug/test_presence_reid.py showed
+# CLIP image embeddings measure SCENE similarity, not identity — the two
+# different people scored 0.87 while the artist-vs-artist pair scored 0.49.
+# The plumbing (perception/presence_identity.py) is live and flag-gated; swap
+# embed_crop to a person-reid model (e.g. OSNet, ~2MB, CPU) and re-run the
+# test before enabling. Layer 1 (gaze-aware decay) ships regardless and kills
+# most false arrivals on its own.
+PRESENCE_REID_ENABLED = False
+PRESENCE_REID_THRESHOLD = 0.80  # cosine similarity to count as the same person; tune against debug/test_presence_reid.py
+PRESENCE_REID_SAMPLE_INTERVAL = 30.0  # seconds between gallery samples while someone is visible
+PRESENCE_REID_GALLERY_SIZE = 24  # rolling embeddings kept (~12 min of presence at the sample interval)
+PRESENCE_REID_MAX_AGE = 21600.0  # seconds; gallery entries older than this (6h) are pruned — "same session" has an edge
 
 # Interiority rhythm: every Nth caption (when nothing salient is happening) the
 # machine THINKS WITHOUT LOOKING — the image is dropped so a vision model can't

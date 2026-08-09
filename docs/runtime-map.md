@@ -350,6 +350,28 @@ hasn't moved since capture.
   prior behaviour exactly.
 - Standalone test: `debug/test_open_vocab_detector.py [frame.jpg]`.
 
+**Phase 3 — spatial registry + registry glances (LIVE, Aug 5:
+SPATIAL_REGISTRY_ENABLED, GAZE_REGISTRY_GLANCES_ENABLED).** The world map:
+`perception/spatial_registry.py` (`spatial_registry` singleton) folds each
+settled detector pass into per-term anchors in servo angles (box center →
+absolute angle via the machine.py person_angle convention: HFOV 60°, VFOV 34°;
+image-y down = tilt down). EMA-smoothed (`SPATIAL_REGISTRY_EMA`), 7-day decay,
+persists in `event_log/spatial_registry.json`. Unsettled detections never move
+anchors. Idle gaze consumes it: `_update_registry_glance` in `vision/gaze.py`
+sits ABOVE the LLM-zone override in the idle target chain — every
+`GAZE_GLANCE_INTERVAL` (45s jittered) the gaze commits to a target for
+`GAZE_GLANCE_DWELL`: staleness-weighted revisit of a known object (recent
+discoveries boosted 3x) or, `GAZE_GLANCE_EXPLORE_WEIGHT` (25%) of the time, an
+under-visited pan bucket ("look around"). Arrival triggers the existing
+stillness logic → stillness settles the gaze → detector fires on settle → the
+anchor sharpens: look→arrive→see is one loop with no new choreography. Person
+tracking outranks everything, untouched. Console: `[👁️] Glance (revisit):
+pink shelf → ...`. Structured consumers: `get_current_glance()`,
+`get_self_motion()` (efference signal, surfaced as `info["self_motion"]` in
+`_assess_scene` — NO prompt consumer yet, deliberately; "I was turning"
+framing is a separate prompt-tree step). Test:
+`debug/test_spatial_registry.py` (angle math, EMA, policy split).
+
 **Phase 2 — vocabulary promotion (LIVE, Aug 5: OPEN_VOCAB_PROMOTION_ENABLED).**
 The recursive part: what the machine says shapes what it can see.
 `perception/vocab_promotion.py` (`vocab_promoter` singleton) is fed each
@@ -371,6 +393,30 @@ event log (`LogType.VOCAB_PROMOTION`) + readable history in
 detector on attach). Replay test: `debug/test_vocab_promotion.py [n]` — on 800
 real captions promotes pen/workbench/screen/paper/table/curtain/blank
 page/glass and nothing else.
+
+## Presence belief: gaze-aware decay + re-ID scaffold (Aug 5)
+
+The "genuine new presence" misfire (the artist greeted as new dozens of times a
+day) had two causes; one is fixed, one is scaffolded:
+
+**Fixed — gaze-aware decay** (`captioner._assess_scene`): the presence belief's
+240s decay clock now only ticks while the gaze is pointed within
+`PRESENCE_ABSENCE_LOOK_TOLERANCE` (30°) of the last-seen spot
+(`person_detection_state.is_looking_at_last_known_location`). Previously the
+machine's own wandering decayed the belief — absence-of-evidence read as
+evidence-of-absence — and every look-back fired a false OFF->ON arrival. Same
+bug class as the blur/efference issue. Departure now requires having actually
+looked and found nobody, accumulated (`_absence_watch_s`), not wall-clock.
+
+**Scaffolded, DISABLED — session re-ID** (`perception/presence_identity.py`,
+`PRESENCE_REID_ENABLED = False`): rolling gallery of person-crop embeddings;
+on an OFF->ON edge, a match against recent sightings suppresses the arrival
+(`presence_resumed` in scene info). Disabled because
+`debug/test_presence_reid.py` proved CLIP image embeddings rank scene
+similarity over identity (different people 0.87, same person 0.49 across
+scale change). Needs a real person-reid embedding (OSNet-class, ~2MB, CPU)
+dropped into `PresenceIdentity.embed_crop`, then re-run the test and enable.
+`DetectionMemory.get_person_crop()` added for the crop path.
 
 ## Known-weak / watch list
 
@@ -594,6 +640,26 @@ with their systems.
   reply (error:N / ALARM) deduplicated. Diagnosis on hardware:
   debug/test_gantry_live.py (machine.py stopped) homes and sends
   dataset coordinates echoing every GRBL reply.
+- THE CHAINS WEREN'T CHAINS (July 31, measured): keying identity at 1 degree
+  on all seven servo channels at once meant two moments had to agree on
+  every joint to merge — a 600-sample take trained ~568 states with
+  BRANCHING FACTOR 1.00. The markov walk was the recording as a linked
+  list, and the gaze CHOICE bias (which reweights candidates) had nothing
+  to choose between; only the lean offsets ever did anything. Fixed in
+  three parts: (1) IDENTITY IS COARSE, POSE IS FINE —
+  KINETIC_STATE_BIN_SCALE (8x) merges states while train() stores each
+  state's real averaged pose in `state_poses`, so the walk forks without
+  quantizing the movement; (2) a transition's dt is now the DWELL time
+  spent in the state, not one sample tick (without this, coarse states
+  replayed ~14x too fast); (3) THE BODY'S SAMPLER in _pick — temperature,
+  repetition penalty, min_p, same vocabulary as the model's, read live so
+  mood moves them mid-walk (KINETIC_MOVE_*; arousal from
+  mood_vector[1] via the bus's get_arousal). Second-order contexts are
+  ~99% single-exit (momentum lock), so _candidates lets temperature above
+  1.0 drop to first order — heat is what breaks the groove. Measured
+  after: 10-14% of states offer a real choice, two walks share 57% of
+  their steps instead of 100%, hot runs agree 34% vs cold 56%, tempo
+  preserved. Proof: debug/test_move_sampler.py.
 - PAPER-CHECK INTERRUPT + ORGANIC STARTLE (July 30): new bus state
   "paper" (session_paper_*.json) — when safety/paper_detection starts
   its ArUco search it fires hooks.on_paper_check_start → bus.paper_clear

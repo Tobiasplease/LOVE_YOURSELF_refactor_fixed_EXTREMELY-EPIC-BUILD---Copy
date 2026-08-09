@@ -73,6 +73,12 @@ from config.config import (
     KINETIC_GAZE_TEMPO_K,
     KINETIC_HOMING_MAX_HOLD_S,
     KINETIC_HOMING_TUCK_S,
+    KINETIC_MOVE_MIN_P,
+    KINETIC_MOVE_REPETITION,
+    KINETIC_MOVE_REPETITION_AROUSAL,
+    KINETIC_MOVE_TEMP,
+    KINETIC_MOVE_TEMP_AROUSAL,
+    KINETIC_MOVE_WINDOW,
     KINETIC_PAPER_MAX_HOLD_S,
     KINETIC_PAPER_TUCK_S,
     KINETIC_HOMING_WAIT_CLEAR,
@@ -280,9 +286,11 @@ class KineticBus:
         send_plan: Optional[Callable[[Dict[str, float], float], None]] = None,
         send_step: Optional[Callable[[Dict[str, float]], None]] = None,
         get_state: Optional[Callable[[], Dict[str, float]]] = None,
+        get_arousal: Optional[Callable[[], float]] = None,
         owned: Optional[set] = None,
         gantry=None,
     ):
+        self.get_arousal = get_arousal  # 0..1; drives the movement sampler
         self.device = device  # built lazily in enable() so tests can inject
         self.gantry = gantry  # runtime GantryLink: the right arm joins the temperament
         if owned is None and gantry is not None:
@@ -554,6 +562,12 @@ class KineticBus:
                 bias=self._gaze_bias,
                 bias_strength=KINETIC_GAZE_CHOICE_K,
                 tempo_strength=KINETIC_GAZE_TEMPO_K,
+                # read LIVE each choice: the mood moves the body's sampler
+                # while it walks, no restart needed
+                temperature=lambda: KINETIC_MOVE_TEMP + self._arousal() * KINETIC_MOVE_TEMP_AROUSAL,
+                repetition=lambda: KINETIC_MOVE_REPETITION + self._arousal() * KINETIC_MOVE_REPETITION_AROUSAL,
+                min_p=KINETIC_MOVE_MIN_P,
+                repetition_window=KINETIC_MOVE_WINDOW,
             )
             gen.start(seed)
             self._gens.append(gen)
@@ -566,6 +580,16 @@ class KineticBus:
     def _gaze_vector(self) -> Tuple[float, float]:
         gx, gy = self.get_gaze()
         return gx * self.gaze_strength, gy * self.gaze_strength
+
+    def _arousal(self) -> float:
+        """0..1 energy from the live mood vector (engine base ~0.35).
+        Injectable for tests/lab; falls back to neutral if unavailable."""
+        try:
+            if self.get_arousal is not None:
+                return max(0.0, min(1.0, float(self.get_arousal())))
+        except Exception:
+            pass
+        return 0.35
 
     def _gaze_bias(self) -> Dict[str, float]:
         """Direction preference per channel, read LIVE by every generator at

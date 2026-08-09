@@ -24,9 +24,17 @@ import json
 import math
 import os
 import random
+import sys
 import threading
 import time
 from typing import Callable, Dict, List, Optional, Tuple
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from config.config import KINETIC_STATE_BIN_SCALE
+except Exception:  # panel/tests can run without the full config
+    KINETIC_STATE_BIN_SCALE = 8.0
 
 DEFAULT_BINS = {
     "elbow": 1.0,
@@ -91,25 +99,55 @@ class Recorder:
 
 
 def train(samples: List[dict], channels: List[str], bins: Optional[Dict[str, float]] = None) -> dict:
-    """First + second-order transition chain over discretized joint states."""
-    bins = bins or {c: DEFAULT_BINS.get(c, 1.0) for c in channels}
+    """First + second-order transition chain over discretized joint states.
+
+    IDENTITY IS COARSE, POSE IS FINE (July 31). The state key exists only to
+    decide which moments count as "the same place"; the pose the body is
+    actually sent is the MEAN of the real samples that landed there. Before
+    this split, identity WAS the pose: every channel keyed at 1 degree meant
+    two moments had to agree on all seven joints at once to merge, so a
+    600-sample take trained ~568 states with exactly one successor each —
+    branching factor 1.00. The "chain" was a linked list of the recording,
+    and every modifier that reweights a CHOICE (the gaze bias) had nothing
+    to choose between. Coarsening alone would have quantized the poses to
+    the bin grid (blocky movement); storing the true pose keeps the walk
+    smooth while the identity is loose enough to actually fork."""
+    bins = bins or {c: DEFAULT_BINS.get(c, 1.0) * KINETIC_STATE_BIN_SCALE for c in channels}
     keys = [_key(s, channels, bins) for s in samples]
     dts = [max(0.02, s.get("dt", 1.0 / SAMPLE_RATE)) for s in samples]
 
+    sums: Dict[str, Dict[str, float]] = {}
+    counts: Dict[str, int] = {}
+    for k, s in zip(keys, samples):
+        acc = sums.setdefault(k, {c: 0.0 for c in channels})
+        for c in channels:
+            acc[c] += float(s[c])
+        counts[k] = counts.get(k, 0) + 1
+    poses = {k: {c: acc[c] / counts[k] for c in channels} for k, acc in sums.items()}
+
+    # A transition's dt is the time SPENT in the state before leaving it, not
+    # one sample tick. With coarse identity the body dwells many samples in
+    # one state; charging the move a single tick would replay the take many
+    # times too fast (8x bins: ~14 degrees of travel billed at 0.05s). Summing
+    # the dwell keeps total duration — and therefore tempo — identical to the
+    # performance, with fewer waypoints along the way.
     first: Dict[str, Dict[str, dict]] = {}
     second: Dict[str, Dict[str, dict]] = {}
+    prev_prev, prev_key, dwell = None, keys[0], 0.0
     for i in range(1, len(keys)):
-        a, b, dt = keys[i - 1], keys[i], dts[i]
-        if a == b:
+        dwell += dts[i]
+        b = keys[i]
+        if b == prev_key:
             continue
-        slot = first.setdefault(a, {}).setdefault(b, {"count": 0, "dts": []})
+        slot = first.setdefault(prev_key, {}).setdefault(b, {"count": 0, "dts": []})
         slot["count"] += 1
-        slot["dts"].append(dt)
-        if i >= 2:
-            so = f"{keys[i - 2]}|{a}"
+        slot["dts"].append(dwell)
+        if prev_prev is not None:
+            so = f"{prev_prev}|{prev_key}"
             slot2 = second.setdefault(so, {}).setdefault(b, {"count": 0, "dts": []})
             slot2["count"] += 1
-            slot2["dts"].append(dt)
+            slot2["dts"].append(dwell)
+        prev_prev, prev_key, dwell = prev_key, b, 0.0
 
     def finalize(table):
         out = {}
@@ -123,6 +161,7 @@ def train(samples: List[dict], channels: List[str], bins: Optional[Dict[str, flo
         "servo_second_order": finalize(second),
         "second_order_enabled": True,
         "discretization": bins,
+        "state_poses": poses,  # key -> the real averaged pose (identity is coarse, pose is fine)
         "channels": channels,
         "total_samples": len(samples),
         "unique_states": len(set(keys)),
@@ -164,13 +203,23 @@ class Generator:
         bias: Optional[Callable[[], Dict[str, float]]] = None,
         bias_strength: float = 1.5,
         tempo_strength: float = 0.0,
+        temperature=1.0,  # float or callable — read live, so mood can move it mid-walk
+        repetition=1.0,
+        min_p: float = 0.0,
+        repetition_window: int = 24,
     ):
         self.chain = chain
         self.channels = chain["channels"]
         self.bins = chain["discretization"]
+        self.poses = chain.get("state_poses", {})  # real poses; empty for chains trained before the split
         self.bias = bias  # -> {channel: -1..1 direction preference} (gaze etc.)
         self.bias_strength = bias_strength
         self.tempo_strength = tempo_strength  # aligned transitions eager, opposed reluctant
+        self.temperature = temperature
+        self.repetition = repetition
+        self.min_p = min_p
+        self.repetition_window = repetition_window
+        self._recent: List[str] = []
         self.ease_channels = [c for c in self.channels if c not in PLAN_CHANNELS and c not in STEP_CHANNELS]
         self.plan_channels = [c for c in self.channels if c in PLAN_CHANNELS]
         self.step_channels = [c for c in self.channels if c in STEP_CHANNELS]
@@ -204,7 +253,7 @@ class Generator:
         distance in bin units so channels with coarse bins don't dominate."""
         best, best_d = None, float("inf")
         for key in first:
-            state = _unkey(key, self.channels, self.bins)
+            state = self._state(key)  # real pose, so "nearest" means nearest in the body, not in the grid
             d = sum(((state[c] - current.get(c, state[c])) / self.bins[c]) ** 2 for c in self.channels)
             if d < best_d:
                 best, best_d = key, d
@@ -238,8 +287,7 @@ class Generator:
         queue: List[Tuple[str, float, Dict[str, float]]] = []
         while self._running:
             while len(queue) < 2 and self._running:
-                nxts = second.get(f"{walk_prev}|{walk_cur}") if walk_prev else None
-                nxts = nxts or first.get(walk_cur)
+                nxts = self._candidates(first, second, walk_prev, walk_cur)
                 if not nxts:
                     break
                 walk_state = self._state(walk_cur)
@@ -266,7 +314,9 @@ class Generator:
                 self.on_state(nxt)
 
     def _state(self, key: str) -> Dict[str, float]:
-        return _unkey(key, self.channels, self.bins)
+        """The REAL pose recorded at this state, not the bin centre."""
+        pose = self.poses.get(key)
+        return dict(pose) if pose else _unkey(key, self.channels, self.bins)
 
     def _alignment(self, frm: Dict[str, float], to: Dict[str, float], b: Dict[str, float]) -> float:
         """How well a transition's direction agrees with the bias vector,
@@ -279,26 +329,75 @@ class Generator:
         return a
 
     def _pick(self, nxts: Dict[str, dict], cur_state: Dict[str, float]) -> str:
-        """Transition choice, optionally biased by a movement vector: each
-        candidate's probability is reweighted by how well its DIRECTION
-        aligns with the bias (gaze, etc.) — exp(strength * alignment). The
-        body tends toward where it looks without ever being pushed: only
-        demonstrated states and transitions are reachable, poses are never
-        distorted, and there is nothing to clip at the range limits (the
-        failure modes of additive position offsets)."""
+        """Transition choice — the body's sampler, same vocabulary as the
+        model's (July 31).
+
+        Base weight is the demonstrated probability, then in order:
+          BIAS        exp(strength * direction alignment) — the gaze current;
+                      the body tends toward where it looks without being
+                      pushed (only demonstrated states stay reachable).
+          TEMPERATURE p ** (1/temp): <1 replays the strongest path faithfully,
+                      >1 flattens toward the roads less travelled.
+          REPETITION  recently visited states are divided down, so the walk
+                      stops falling into the same loop — the movement
+                      counterpart of the text-side repetition penalty.
+          MIN_P       drop candidates far below the strongest one, so
+                      wandering never becomes incoherent.
+        With one candidate every knob is a no-op, which is exactly what the
+        chain used to be everywhere (branching 1.00) — see train()."""
         b = self.bias() if self.bias else None
-        if not b or not any(abs(v) > 1e-3 for v in b.values()):
-            return _weighted(nxts)
         weights = {}
-        for dst in nxts:
-            weights[dst] = nxts[dst]["prob"] * math.exp(self.bias_strength * self._alignment(cur_state, self._state(dst), b))
-        r = random.random() * sum(weights.values())
+        for dst, info in nxts.items():
+            w = info["prob"]
+            if b and any(abs(v) > 1e-3 for v in b.values()):
+                w *= math.exp(self.bias_strength * self._alignment(cur_state, self._state(dst), b))
+            temp = self.temperature() if callable(self.temperature) else self.temperature
+            if temp and abs(temp - 1.0) > 1e-3:
+                w = w ** (1.0 / max(0.05, temp))
+            pen = self.repetition() if callable(self.repetition) else self.repetition
+            if pen and pen > 1.0 and dst in self._recent:
+                w /= pen
+            weights[dst] = w
+        if len(weights) > 1:
+            floor = self.min_p * max(weights.values())
+            kept = {d: w for d, w in weights.items() if w >= floor}
+            if kept:
+                weights = kept
+        total = sum(weights.values())
+        if total <= 0:
+            return _weighted(nxts)
+        r = random.random() * total
         acc = 0.0
         for dst, w in weights.items():
             acc += w
             if r <= acc:
-                return dst
-        return dst  # rounding fallthrough
+                return self._remember(dst)
+        return self._remember(dst)  # rounding fallthrough
+
+    def _candidates(self, first: dict, second: dict, walk_prev: Optional[str], walk_cur: str) -> Optional[Dict[str, dict]]:
+        """Which transition table to choose from — and whether to break the
+        groove. Second-order (where we came from, where we are) is what keeps
+        movement coherent instead of jittering, but on hand-performed takes
+        almost every second-order context has exactly ONE exit: the walk is
+        momentum-locked and no amount of temperature can loosen it. So when
+        the context forces a single exit while the state ITSELF offers real
+        choices, temperature above 1 decides how often to drop to first order
+        and take a different road. Heat is what makes the body break its own
+        habit — at temp 1.0 nothing changes."""
+        nxts = second.get(f"{walk_prev}|{walk_cur}") if walk_prev else None
+        alts = first.get(walk_cur)
+        if nxts and len(nxts) == 1 and alts and len(alts) > 1:
+            temp = self.temperature() if callable(self.temperature) else self.temperature
+            dropout = max(0.0, min(0.9, (float(temp or 1.0) - 1.0) * 0.5))
+            if dropout and random.random() < dropout:
+                return alts
+        return nxts or alts
+
+    def _remember(self, key: str) -> str:
+        self._recent.append(key)
+        if len(self._recent) > self.repetition_window:
+            self._recent.pop(0)
+        return key
 
     def _dispatch(self, frm: Dict[str, float], to: Dict[str, float], dt: float):
         """Plan + step leave at WALK time (ahead of the ease), in stream

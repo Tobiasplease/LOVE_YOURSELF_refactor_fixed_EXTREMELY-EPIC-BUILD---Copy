@@ -731,6 +731,9 @@ if KINETIC_BUS_ENABLED:
             # tick — the old push plumbing stays as redundancy, but the bus
             # never depends on it (the push path is years of accretion)
             get_emotion=mood_engine.get_emotion_for_hand_controller,
+            # arousal (mood vector's 2nd axis) drives the movement sampler —
+            # a calm body replays what it knows, an agitated one wanders
+            get_arousal=lambda: mood_engine.mood_vector[1],
             on_log=lambda m: debug_print(m, "KINETIC"),
             gantry=_gantry_link,
         )
