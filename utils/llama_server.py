@@ -57,6 +57,17 @@ LLAMA_GPU_LAYERS = int(os.getenv("LLAMA_GPU_LAYERS", "99"))
 
 SHOW_PROGRESS = os.getenv("LLAMA_SHOW_PROGRESS", "true").lower() == "true"
 
+# Captured at IMPORT, before any in-process library can mutate it (Aug 9).
+# ultralytics sets a process-global CUDA_VISIBLE_DEVICES="-1" to implement
+# device="cpu" and never restores it; the open-vocab detector calls that on a
+# 4s cadence. Any llama-server spawned afterwards — notably a watchdog restart
+# mid-run — inherited "-1", found no GPU, and loaded the 27B into system RAM at
+# ~2 tok/s. The detector now restores the variable itself; this is the backstop,
+# because a silent 15x slowdown is far too expensive to leave to one caller's
+# good manners. None means "was unset" — which must be passed on as unset, not
+# as an empty string (empty also means no devices to CUDA).
+_PRISTINE_CUDA_VISIBLE_DEVICES = os.environ.get("CUDA_VISIBLE_DEVICES")
+
 # Sampler keys forwarded verbatim to llama-server beyond the basic temp/top_p/
 # repeat_penalty. DRY (anti-repetition over SEQUENCES, not single tokens) is the
 # only thing that stops the model reproducing a whole prior caption from the
@@ -390,6 +401,25 @@ def _clean_continuation(text: str, prefill: str = "") -> str:
 # ---------------------------------------------------------------------------
 
 
+def _warn_if_running_on_cpu(log_path: str) -> bool:
+    """A CPU-loaded server answers /health perfectly and generates at ~2 tok/s,
+    so every downstream symptom is a timeout and nothing names the cause. Read
+    the server's own startup lines and say it out loud. Returns True if healthy."""
+    try:
+        with open(log_path, "rb") as f:
+            f.seek(max(0, os.path.getsize(log_path) - 200_000))
+            tail = f.read().decode("utf-8", errors="replace")
+    except Exception:
+        return True  # never let a diagnostic stop the machine
+    start = tail.rfind("build: ")  # each launch banner; look only at the newest
+    recent = tail[start:] if start != -1 else tail
+    if "failed to initialize CUDA" in recent or "no CUDA-capable device" in recent:
+        print("[llama-server] *** RUNNING ON CPU — no CUDA device visible. Generation will be ~15x slower and calls will time out. ***")
+        print(f"[llama-server] *** CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')!r}; see {log_path} ***")
+        return False
+    return True
+
+
 def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int = None) -> bool:
     """Start llama-server as a subprocess. Returns True if started successfully."""
     global _server_process
@@ -454,10 +484,20 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
         _server_log = open(log_path, "ab", buffering=0)
     except Exception:
         _server_log = subprocess.DEVNULL  # never let logging stop the machine
+    # Hand the child the GPU visibility this process started with, not whatever
+    # an imported library has since done to os.environ (see the constant).
+    env = os.environ.copy()
+    if _PRISTINE_CUDA_VISIBLE_DEVICES is None:
+        env.pop("CUDA_VISIBLE_DEVICES", None)
+    else:
+        env["CUDA_VISIBLE_DEVICES"] = _PRISTINE_CUDA_VISIBLE_DEVICES
+    if os.environ.get("CUDA_VISIBLE_DEVICES") != _PRISTINE_CUDA_VISIBLE_DEVICES:
+        print(f"[llama-server] restoring CUDA_VISIBLE_DEVICES for the child (process had it as {os.environ.get('CUDA_VISIBLE_DEVICES')!r})")
     _server_process = subprocess.Popen(
         cmd,
         stdout=subprocess.DEVNULL,
         stderr=_server_log,
+        env=env,
     )
 
     # Wait for the server to be ready. A big model on -ngl loads for many
@@ -469,6 +509,7 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
             resp = requests.get(f"{LLAMA_SERVER_URL}/health", timeout=2)
             if resp.ok:
                 print(f"[llama-server] Ready after {i + 1}s")
+                _warn_if_running_on_cpu(log_path)
                 return True
         except requests.ConnectionError:
             pass

@@ -8,6 +8,36 @@ The audit habit that produced it: features fail SILENTLY here — always check
 the event log / state files for evidence a subsystem is producing output,
 don't trust that code existing means code running.
 
+## Known failure, SOLVED Aug 9 — the 27B was running on the CPU
+
+Runs went off a CLIFF, not a slope: healthy for ~20 minutes, then EVERY call
+failed for the rest of the run, always starting just after a drawing cycle.
+The two calls per hour that got through took 34.8s and 58.8s against a 60s
+timeout — so nothing was hung, generation had simply collapsed to ~2 tok/s.
+
+`ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected`
+in `event_log/llama_server.log`, on every recent server start. llama-server was
+loading the whole 27B into system RAM (23.5GB RSS, 1300% CPU, 0 MB VRAM) while
+the GPU sat idle. Cause: **ultralytics implements `device="cpu"` by setting a
+PROCESS-GLOBAL `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"`** and never restoring
+it (`utils/torch_utils.py:185`). The open-vocab detector (Phase 1, Aug 5) calls
+that every 4s, so from its first pass onward every subprocess machine.py spawned
+inherited "-1". The cliff lands after a drawing because a slow call trips the
+wedge watchdog, the watchdog restarts llama-server, and the NEW server is the
+one that inherits the poisoned env — which is also why it never recovers and
+why "restart fixes it" only worked when the restart beat the first detection.
+
+Fixed in two layers: the detector restores the variable itself
+(`_cpu_without_hiding_the_gpu`), and `start_server` hands the child the
+`CUDA_VISIBLE_DEVICES` captured at import rather than whatever an imported
+library has since done to `os.environ`. `_warn_if_running_on_cpu` now reads the
+server's own startup lines and says so loudly — this presented as "healthy but
+slow" because a CPU-loaded server answers `/health` perfectly.
+
+NOTE the related weakness this exposed: `ensure_server_up()` returns True as
+soon as `/health` answers, so a crippled-but-responding server is declared fine
+by the recovery path. `/health` is a liveness check, not a health check.
+
 ## Known failure, SOLVED Aug 5 — the stderr pipe
 
 `llama-server` was started with `stderr=subprocess.PIPE` and nothing in the
