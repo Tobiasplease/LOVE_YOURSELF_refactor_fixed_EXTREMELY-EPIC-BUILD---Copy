@@ -37,7 +37,7 @@ as ⚠ in the sidebar rather than waiting to be grepped for.
 | 3 | `awakening` | first caption of a session | `generate_internal_awakening` | `query_model` |
 | 4 | ~~`awakening` (legacy)~~ | **DELETED Aug 2** — one awakening path now | — | — |
 | 5 | `drawing_watch` | every 20s while GRBL executes | `_watch_drawing` | `query_model` |
-| 6 | `drawing_thematic_consolidation` | at drawing start | `_generate_drawing_thematic_reflection_with_llm` | `query_model` |
+| 6 | ~~`drawing_thematic_consolidation`~~ | **REMOVED Aug 5** — a closed loop. Its output (theme_tags / emotional_tone / narrative_thread) was read only by `get_thematic_context`, whose consumers are the two dormant 5-step prompts, and by the next consolidation reading its own prior output. The live intent call referenced it **zero** times | — |
 | 7 | `stream_consolidation` | when joined stream > `STREAM_CONSOLIDATE_CHARS` | `_consolidate_stream_if_needed` | `query_model` |
 | 8 | `compression` | every 8 captions (the memory diff) | `context_compression._perform_compression` | `query_model` |
 | 9 | `concept_extraction` | per compression | `_extract_concepts_from_compression` | `query_model` |
@@ -93,6 +93,23 @@ the record of what was wrong and why the fix took the shape it did.
    in document/world/hybrid — so three of five change what *arrives* but not
    what is *asked*. Decide whether they earn their keep; the panel makes the
    answer visible either way.
+
+## D2. The drawing intent, and what feeds it (Aug 5)
+
+`stream_drawing_analysis` builds its intent from: the current frame · the
+stream tail · drawing-flavoured musings from this session · felt state ·
+desire/identity lines · **the executed body of work** · looped words ·
+matched reflections.
+
+The body of work comes from `get_executed_sequence`, and it used to prefer
+`comfy_prompt` — so the machine was shown its own history in image-generator
+prose ("A high-angle view looking down at a pile of rough, splintered wood
+scraps scattered...") and, asked what to draw next, continued in that
+register. It now prefers `compressed_summary`, which is the intent in the
+machine's own voice, stored for exactly this purpose in July and then bypassed
+here. The same list now reads: "I will draw that red foam finger, ripped from
+its high perch and lying flat against my..." Error sentinels are skipped
+defensively; `debug/scrub_drawing_memory.py` removes them from the ledger.
 
 ## D. The caption pass, slot by slot
 

@@ -178,9 +178,25 @@ class DrawingMemory:
         executed = [d for d in self._history if d.get("completed", False)][:max_count]
         lines = []
         for entry in reversed(executed):
-            desc = self._strip_comfy_preamble(entry.get("comfy_prompt", "")) or self._subject_phrase(entry)
+            # THE MACHINE'S OWN WORDS FIRST (Aug 5). This preferred
+            # comfy_prompt, so the "what you have actually drawn" list handed
+            # to the intent call was written in image-generator prose — "A
+            # high-angle view looking down at a pile of rough, splintered wood
+            # scraps scattered..." — and the machine, asked what it needs to
+            # draw next, continued in that register. compressed_summary is the
+            # intent in its OWN voice, stored for exactly this purpose in July
+            # and then bypassed here. Render prose is the fallback, not the
+            # first choice.
+            desc = (entry.get("compressed_summary") or "").strip()
+            if not desc:
+                desc = self._strip_comfy_preamble(entry.get("comfy_prompt", "")) or self._subject_phrase(entry)
             desc = (desc or "").strip()
             if not desc:
+                continue
+            # An error sentinel is not a drawing. One is already in the ledger
+            # from the Aug 2 timeout bug; this keeps it (and any sibling) out
+            # of the body of work regardless of what the file holds.
+            if desc.startswith("[WARNING]") or desc.startswith("[ERROR]"):
                 continue
             if len(desc) > 90:
                 desc = desc[:90].rsplit(" ", 1)[0] + "..."
