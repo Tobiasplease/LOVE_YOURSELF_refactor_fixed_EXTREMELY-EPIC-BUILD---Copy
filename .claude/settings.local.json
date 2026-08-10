@@ -82,9 +82,32 @@
       "WebFetch(domain:ollama.com)",
       "Bash(touch:*)",
       "Bash(gh api:*)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git commit:*)",
+      "Bash(cmake -B build -DGGML_CUDA=ON)",
+      "Read(//home/impostor/llama.cpp/**)",
+      "Bash(ls -la *.py)",
+      "Read(//home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy/**)",
+      "Bash(sort -t'|' -k2 -rn)",
+      "WebFetch(domain:mem0.ai)",
+      "WebFetch(domain:hermesos.cloud)",
+      "WebFetch(domain:venturebeat.com)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:www.letta.com)",
+      "WebFetch(domain:sureprompts.com)",
+      "Bash(python3 -c \":*)",
+      "Bash(cd /home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy *)",
+      "Bash(python3 -)",
+      "Bash(nohup /home/impostor/llama.cpp/build/bin/llama-server -m /home/impostor/models/qwen3.5-9b/Qwen3.5-9B-Q5_K_M.gguf --host 0.0.0.0 --port 8080 --ctx-size 65536 -ngl 99 --jinja --mmproj /home/impostor/models/qwen3.5-9b/mmproj-F16.gguf)",
+      "Bash(.venv/bin/python -)",
+      "Bash(cd /home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy; echo \"=== every prompt_type in the codebase \\(the call inventory\\) ===\"; grep -rn 'prompt_type=\"[^\"]*\"' --include=*.py captioner/ utils/ drawing/ mood/ perception/ vision/ machine.py 2>/dev/null | grep -v \"def \\\\|prompt_type: str\" | sed -E 's/.*\\(captioner|utils|drawing|mood|vision|perception\\)/\\\\1/' | sed -E 's/:\\( *\\)prompt_type=/ -> /' | sort -u | head -30)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "/home/impostor/llama.cpp/tools/mtmd",
+      "/home/impostor/llama.cpp/tools/server",
+      "/tmp"
+    ]
   }
 }

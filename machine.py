@@ -606,6 +606,14 @@ if OPEN_VOCAB_ENABLED:
 
     vocab_promoter.attach_detector(open_vocab_detector)
     debug_print("Vocabulary promotion attached (caption nouns -> detector terms)", "INIT")
+    from config.config import LABEL_AUDIT_ENABLED
+
+    if LABEL_AUDIT_ENABLED:
+        from perception.label_audit import LabelAuditThread
+
+        label_auditor = LabelAuditThread(open_vocab_detector)
+        label_auditor.start()
+        debug_print("Label audit started (VLM audits detector labels)", "INIT")
 else:
     debug_print("Open-vocab detector disabled (OPEN_VOCAB_ENABLED=False)", "INIT")
 
@@ -1419,7 +1427,20 @@ try:
         # Face detection = gaze tracking (following specific faces)
         # YOLO = general person presence awareness (triggers "aware" gaze state)
         labels = DetectionMemory.get_labels()
+        # Body-schema verdict (computed off-thread, cached — an embed here would
+        # hitch the servo physics): a faceless "person" matching the reach
+        # envelope + gallery is the machine's own arm, and must not enter the
+        # person state (gaze would track its own hand, smoothing would draw it).
+        person_is_self = False
         if "person" in labels:
+            try:
+                from perception.body_schema import body_schema
+
+                _verdict, _self_sim = body_schema.cached_person_verdict(max_age=30.0)
+                person_is_self = _verdict is True
+            except Exception:
+                person_is_self = False
+        if "person" in labels and not person_is_self:
             raw_bbox = DetectionMemory.get_person_bbox()
             person_detection.update_yolo_detection(True, DetectionMemory.get_person_confidence() or 0.8, bbox=raw_bbox)
         else:
@@ -1626,6 +1647,13 @@ try:
         if face_box:
             (x1, y1, x2, y2) = face_box
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green = face
+
+        # === SELF VISUALIZATION ===
+        if person_is_self:
+            _sb = DetectionMemory.get_person_bbox()
+            if _sb:
+                cv2.rectangle(frame, (_sb[0], _sb[1]), (_sb[2], _sb[3]), (160, 160, 160), 1)  # Gray = own body
+                cv2.putText(frame, "SELF", (_sb[0], max(12, _sb[1] - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (160, 160, 160), 1)
 
         # === YOLO PERSON BBOX VISUALIZATION ===
         if smoothed_bbox is not None:

@@ -740,6 +740,64 @@ def get_gaze_narrative() -> str:
         return f"Looking {direction}."
 
 
+_glance_active = False
+_glance_until = 0.0
+_glance_target = (90.0, 90.0)
+_glance_label = None
+_glance_last_end = 0.0
+
+
+def _update_registry_glance(now):
+    """Idle glances at the spatial registry (Phase 3): commit the gaze to a
+    remembered object or an under-visited zone, hold, release back to wander.
+    Returns (pan, tilt) while a glance is active, else None."""
+    global _glance_active, _glance_until, _glance_target, _glance_label, _glance_last_end
+    from config.config import GAZE_GLANCE_DWELL, GAZE_GLANCE_EXPLORE_WEIGHT, GAZE_GLANCE_INTERVAL, GAZE_REGISTRY_GLANCES_ENABLED
+
+    if not GAZE_REGISTRY_GLANCES_ENABLED:
+        return None
+    if _glance_active:
+        if now < _glance_until:
+            return _glance_target
+        _glance_active = False
+        _glance_last_end = now
+        return None
+    if now - _glance_last_end < GAZE_GLANCE_INTERVAL * random.uniform(0.6, 1.4):
+        return None
+    try:
+        from perception.spatial_registry import spatial_registry
+
+        pick = spatial_registry.pick_glance_target(explore_weight=GAZE_GLANCE_EXPLORE_WEIGHT)
+    except Exception:
+        pick = None
+    if not pick:
+        _glance_last_end = now  # empty map — retry after another interval
+        return None
+    _glance_active = True
+    _glance_until = now + GAZE_GLANCE_DWELL * random.uniform(0.7, 1.5)
+    _glance_target = (pick["pan"], pick["tilt"])
+    _glance_label = pick["term"] or "unexplored"
+    print(f"[👁️] Glance ({pick['kind']}): {_glance_label} → pan={pick['pan']:.0f}° tilt={pick['tilt']:.0f}°")
+    return _glance_target
+
+
+def get_current_glance():
+    """(label, kind-ish) of the active registry glance, or None. Structured
+    data for downstream consumers; never prose."""
+    return _glance_label if _glance_active else None
+
+
+def get_self_motion() -> dict:
+    """Efference copy, minimal form: is the gaze actively turning right now,
+    from its own motor state. Structured signal — prompt framing is a separate,
+    deliberate step."""
+    speed = abs(physics_state.pan_velocity) + abs(physics_state.tilt_velocity)
+    direction = None
+    if abs(physics_state.pan_velocity) > 2.0:
+        direction = "right" if physics_state.pan_velocity > 0 else "left"
+    return {"moving": speed > 3.0, "speed_dps": round(speed, 1), "direction": direction}
+
+
 def clamp(val, min_val, max_val):
     return max(min_val, min(max_val, val))
 
@@ -1199,8 +1257,11 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
 
                 update_organic_movement(now)
 
-                # Determine target position from Perlin noise or LLM zone
-                if llm_zone_active:
+                # Determine target position: registry glance > LLM zone > Perlin
+                glance_target = _update_registry_glance(now)
+                if glance_target:
+                    pan_scaled, tilt_scaled = glance_target  # aimed at a remembered object or unexplored zone
+                elif llm_zone_active:
                     pan_scaled = pan_micro_target
                     tilt_scaled = tilt_micro_target
                 else:

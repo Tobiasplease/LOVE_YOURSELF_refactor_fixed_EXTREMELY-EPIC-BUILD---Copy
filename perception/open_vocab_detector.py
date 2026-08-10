@@ -68,6 +68,7 @@ class OpenVocabDetectorThread(threading.Thread):
         self._last_pass_time = time.time()
         self._prev_pass_terms = set()
         self._term_hits = {}  # term -> {"count": int, "last": ts}; cumulative, feeds ghost detection (Phase 2)
+        self._term_crops = {}  # term -> {"jpg": bytes, "ts": ts, "conf": float}; latest settled crop, feeds the label audit
 
     def set_frame(self, frame):
         with self.lock:
@@ -88,6 +89,12 @@ class OpenVocabDetectorThread(threading.Thread):
     def get_term_hit_counts(self):
         with self.lock:
             return {t: dict(s) for t, s in self._term_hits.items()}
+
+    def get_term_crop(self, term):
+        """Latest settled crop of a term as {"jpg", "ts", "conf"}, or None."""
+        with self.lock:
+            c = self._term_crops.get(term)
+            return dict(c) if c else None
 
     def get_detections_for_drawing(self):
         """Boxes still valid on screen, capped at OPEN_VOCAB_MAX_BOXES: best box
@@ -164,6 +171,35 @@ class OpenVocabDetectorThread(threading.Thread):
         return kept
 
     @staticmethod
+    def _drop_self_patches(frame, detections, pan, tilt):
+        """The machine's own arms are not world: detections matching the body
+        schema (place + appearance) are dropped before storage, so they never
+        reach the overlay, the registry, or the audit. Top boxes only — one
+        CLIP embed each, bounded per pass."""
+        from config.config import BODY_SELF_FILTER_DETECTIONS
+
+        if not BODY_SELF_FILTER_DETECTIONS or not detections:
+            return detections
+        from perception.body_schema import body_schema
+
+        if body_schema.gallery_size() == 0:
+            return detections
+        h, w = frame.shape[0], frame.shape[1]
+        kept = []
+        checked = 0
+        for d in sorted(detections, key=lambda d: -d["conf"]):
+            if checked < 4:
+                checked += 1
+                x1, y1, x2, y2 = d["box"]
+                norm_box = (x1 / w, y1 / h, x2 / w, y2 / h)
+                is_self, sim = body_schema.is_self(frame[max(0, y1) : y2, max(0, x1) : x2], norm_box, pan, tilt)
+                if is_self:
+                    print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (sim {sim:.2f})")
+                    continue
+            kept.append(d)
+        return kept
+
+    @staticmethod
     def _overlap_fraction(box, person_box):
         x1, y1, x2, y2 = box
         px1, py1, px2, py2 = person_box
@@ -201,6 +237,7 @@ class OpenVocabDetectorThread(threading.Thread):
             self._last_pass_time = time.time()
             try:
                 detections = self.detect_once(frame)
+                detections = self._drop_self_patches(frame, detections, pan, tilt)
             except Exception as e:
                 print(f"[OpenVocab] Detection error: {e}")
                 time.sleep(OPEN_VOCAB_INTERVAL)
@@ -219,6 +256,16 @@ class OpenVocabDetectorThread(threading.Thread):
                     stats = self._term_hits.setdefault(t, {"count": 0, "last": None})
                     stats["count"] += 1
                     stats["last"] = now
+                if calm:
+                    import cv2
+
+                    for d in detections:
+                        x1, y1, x2, y2 = d["box"]
+                        crop = frame[max(0, y1) : y2, max(0, x1) : x2]
+                        if crop.size:
+                            ok, jpg = cv2.imencode(".jpg", crop)
+                            if ok:
+                                self._term_crops[d["term"]] = {"jpg": jpg.tobytes(), "ts": now, "conf": d["conf"]}
                 current = list(self._detections)
             try:
                 from perception.spatial_registry import spatial_registry
@@ -226,6 +273,15 @@ class OpenVocabDetectorThread(threading.Thread):
                 spatial_registry.update_from_detections(current, frame.shape)
             except Exception as e:
                 print(f"[OpenVocab] Registry update failed: {e}")
+            try:
+                # Keep the person-is-self verdict warm for the main loop (its
+                # cached read must never trigger an embed); 5s-cached inside.
+                if DetectionMemory.get_person_bbox() is not None:
+                    from perception.body_schema import body_schema
+
+                    body_schema.is_self_current_person()
+            except Exception:
+                pass
 
             while self.running and (time.time() - cycle_start) < OPEN_VOCAB_INTERVAL:
                 time.sleep(0.1)

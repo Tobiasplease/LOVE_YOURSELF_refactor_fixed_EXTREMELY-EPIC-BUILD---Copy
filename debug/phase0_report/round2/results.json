@@ -1,0 +1,293 @@
+{
+  "n_frames": 30,
+  "model": "yolov8s-worldv2.pt",
+  "rows": [
+    {
+      "term": "pedestal fan",
+      "detections": 1179,
+      "hit_rate_0.05": 0.9666666666666667,
+      "hit_rate_0.15": 0.8666666666666667,
+      "hit_rate_0.30": 0.7,
+      "max_conf": 0.8711551427841187,
+      "mean_conf": 0.14720060560650636,
+      "crops": [
+        "pedestal_fan_0.87_mood_1785938241.jpg",
+        "pedestal_fan_0.67_mood_1785708647.jpg",
+        "pedestal_fan_0.65_mood_1785709361.jpg"
+      ]
+    },
+    {
+      "term": "fan",
+      "detections": 48,
+      "hit_rate_0.05": 0.7,
+      "hit_rate_0.15": 0.5666666666666667,
+      "hit_rate_0.30": 0.5,
+      "max_conf": 0.7867465615272522,
+      "mean_conf": 0.3963107252838435,
+      "crops": [
+        "fan_0.79_mood_1785938533.jpg",
+        "fan_0.78_mood_1785938889.jpg",
+        "fan_0.77_mood_1785937938.jpg"
+      ]
+    },
+    {
+      "term": "articulated wooden figure",
+      "detections": 57,
+      "hit_rate_0.05": 0.43333333333333335,
+      "hit_rate_0.15": 0.23333333333333334,
+      "hit_rate_0.30": 0.06666666666666667,
+      "max_conf": 0.6658636927604675,
+      "mean_conf": 0.16466506694753966,
+      "crops": [
+        "articulated_wooden_figure_0.67_mood_1785928256.jpg",
+        "articulated_wooden_figure_0.44_mood_1785937938.jpg",
+        "articulated_wooden_figure_0.28_mood_1785938241.jpg"
+      ]
+    },
+    {
+      "term": "hand-shaped sign",
+      "detections": 25,
+      "hit_rate_0.05": 0.4666666666666667,
+      "hit_rate_0.15": 0.2,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.2940452992916107,
+      "mean_conf": 0.14455391519836017,
+      "crops": [
+        "hand-shaped_sign_0.29_mood_1785938533.jpg",
+        "hand-shaped_sign_0.21_mood_1785928256.jpg",
+        "hand-shaped_sign_0.20_mood_1785938660.jpg"
+      ]
+    },
+    {
+      "term": "plywood box",
+      "detections": 60,
+      "hit_rate_0.05": 0.4,
+      "hit_rate_0.15": 0.2,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.24690891802310944,
+      "mean_conf": 0.12586462153838232,
+      "crops": [
+        "plywood_box_0.25_mood_1785708920.jpg",
+        "plywood_box_0.21_mood_1785709361.jpg",
+        "plywood_box_0.17_mood_1785709214.jpg"
+      ]
+    },
+    {
+      "term": "sculpted human head",
+      "detections": 48,
+      "hit_rate_0.05": 0.3,
+      "hit_rate_0.15": 0.1,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.2583560347557068,
+      "mean_conf": 0.13463954598857805,
+      "crops": [
+        "sculpted_human_head_0.26_mood_1785929342.jpg",
+        "sculpted_human_head_0.22_mood_1785709472.jpg",
+        "sculpted_human_head_0.19_mood_1785938145.jpg"
+      ]
+    },
+    {
+      "term": "head sculpture",
+      "detections": 81,
+      "hit_rate_0.05": 0.6,
+      "hit_rate_0.15": 0.1,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.2393905073404312,
+      "mean_conf": 0.09138258985642876,
+      "crops": [
+        "head_sculpture_0.24_mood_1785929342.jpg",
+        "head_sculpture_0.24_mood_1785709566.jpg",
+        "head_sculpture_0.21_mood_1785708736.jpg"
+      ]
+    },
+    {
+      "term": "red power tool",
+      "detections": 14,
+      "hit_rate_0.05": 0.06666666666666667,
+      "hit_rate_0.15": 0.03333333333333333,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.17827394604682922,
+      "mean_conf": 0.14930003508925438,
+      "crops": [
+        "red_power_tool_0.18_mood_1785929191.jpg",
+        "red_power_tool_0.12_mood_1785708920.jpg",
+        "red_power_tool_0.04_mood_1785927965.jpg"
+      ]
+    },
+    {
+      "term": "extension cord",
+      "detections": 413,
+      "hit_rate_0.05": 0.5,
+      "hit_rate_0.15": 0.03333333333333333,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.2055974304676056,
+      "mean_conf": 0.06852535862061712,
+      "crops": [
+        "extension_cord_0.21_mood_1785928075.jpg",
+        "extension_cord_0.10_mood_1785928527.jpg",
+        "extension_cord_0.10_mood_1785927965.jpg"
+      ]
+    },
+    {
+      "term": "desk fan",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    },
+    {
+      "term": "curtain",
+      "detections": 21,
+      "hit_rate_0.05": 0.16666666666666666,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.07903744280338287,
+      "mean_conf": 0.06588323935866355,
+      "crops": [
+        "curtain_0.08_mood_1785938533.jpg",
+        "curtain_0.07_mood_1785938145.jpg",
+        "curtain_0.06_mood_1785928527.jpg"
+      ]
+    },
+    {
+      "term": "black fabric",
+      "detections": 4,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.031080743297934532,
+      "mean_conf": 0.0,
+      "crops": [
+        "black_fabric_0.03_mood_1785938773.jpg",
+        "black_fabric_0.02_mood_1785938145.jpg",
+        "black_fabric_0.01_mood_1785938241.jpg"
+      ]
+    },
+    {
+      "term": "neon sign",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    },
+    {
+      "term": "red neon sign",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    },
+    {
+      "term": "white styrofoam head",
+      "detections": 18,
+      "hit_rate_0.05": 0.06666666666666667,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.06544189155101776,
+      "mean_conf": 0.061923280358314514,
+      "crops": [
+        "white_styrofoam_head_0.07_mood_1785938241.jpg",
+        "white_styrofoam_head_0.06_mood_1785927965.jpg",
+        "white_styrofoam_head_0.03_mood_1785937839.jpg"
+      ]
+    },
+    {
+      "term": "robot arm",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    },
+    {
+      "term": "mechanical arm",
+      "detections": 19,
+      "hit_rate_0.05": 0.03333333333333333,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.13094720244407654,
+      "mean_conf": 0.13094720244407654,
+      "crops": [
+        "mechanical_arm_0.13_mood_1785938145.jpg",
+        "mechanical_arm_0.04_mood_1785709472.jpg",
+        "mechanical_arm_0.04_mood_1785938660.jpg"
+      ]
+    },
+    {
+      "term": "wooden box",
+      "detections": 29,
+      "hit_rate_0.05": 0.1,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.1441175639629364,
+      "mean_conf": 0.09221216787894566,
+      "crops": [
+        "wooden_box_0.14_mood_1785709472.jpg",
+        "wooden_box_0.08_mood_1785929342.jpg",
+        "wooden_box_0.05_mood_1785938241.jpg"
+      ]
+    },
+    {
+      "term": "drill",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    },
+    {
+      "term": "cables",
+      "detections": 2,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.02248973585665226,
+      "mean_conf": 0.0,
+      "crops": [
+        "cables_0.02_mood_1785709214.jpg",
+        "cables_0.01_mood_1785927965.jpg"
+      ]
+    },
+    {
+      "term": "hole in the ceiling",
+      "detections": 30,
+      "hit_rate_0.05": 0.03333333333333333,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.07494671642780304,
+      "mean_conf": 0.07494671642780304,
+      "crops": [
+        "hole_in_the_ceiling_0.07_mood_1785928256.jpg",
+        "hole_in_the_ceiling_0.04_mood_1785708818.jpg",
+        "hole_in_the_ceiling_0.03_mood_1785937839.jpg"
+      ]
+    },
+    {
+      "term": "crack in the wall",
+      "detections": 32,
+      "hit_rate_0.05": 0.06666666666666667,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.30": 0.0,
+      "max_conf": 0.06485895812511444,
+      "mean_conf": 0.05966573394834995,
+      "crops": [
+        "crack_in_the_wall_0.06_mood_1785937839.jpg",
+        "crack_in_the_wall_0.05_mood_1785938533.jpg",
+        "crack_in_the_wall_0.04_mood_1785938660.jpg"
+      ]
+    }
+  ]
+}

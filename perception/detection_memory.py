@@ -39,6 +39,16 @@ class DetectionMemory:
             return cls._person_bbox
 
     @classmethod
+    def get_person_crop(cls):
+        """Atomic (frame, bbox) snapshot cropped to the best person, or None."""
+        with cls._lock:
+            if cls._image is None or cls._person_bbox is None:
+                return None
+            x1, y1, x2, y2 = cls._person_bbox
+            crop = cls._image[max(0, y1) : y2, max(0, x1) : x2]
+            return crop.copy() if crop.size else None
+
+    @classmethod
     def get_person_confidence(cls) -> float:
         with cls._lock:
             return cls._person_confidence

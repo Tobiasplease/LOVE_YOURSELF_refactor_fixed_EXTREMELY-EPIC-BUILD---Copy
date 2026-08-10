@@ -402,6 +402,57 @@ pink shelf → ...`. Structured consumers: `get_current_glance()`,
 framing is a separate prompt-tree step). Test:
 `debug/test_spatial_registry.py` (angle math, EMA, policy split).
 
+**Body schema — visual self-recognition (LIVE, Aug 10: BODY_SCHEMA_ENABLED).**
+The arms were a hole in the world model: YOLO called the drawing hand a person
+(→ phantom presence while drawing), the object detector labelled an arm
+"rooster figurine". `perception/body_schema.py` (`body_schema` singleton,
+persistent `event_log/body_schema.json`): TWO-FACTOR self test, place +
+appearance — measured (Aug 10) that appearance alone fails here (arm mid-draw
+scores 0.75–0.83 vs its own last pose; the hanging wooden figure scores 0.87 —
+CLIP tracks pose, not identity, and the studio is full of sculpted limbs).
+Inside the harvested reach envelope (pan/tilt-conditioned image regions) the
+bar is `BODY_SELF_THRESHOLD` 0.72; outside it `BODY_SELF_STRICT` 0.92.
+References harvest by proprioception: CNC phase "executing" + gaze drawing
+lock + faceless person-box at the workspace = own arm (`maybe_harvest`, called
+each caption cycle; face in view blocks harvest so a visitor can't poison the
+gallery). Consumers: captioner presence — a faceless "person" matching the
+schema no longer counts as seen (face evidence always wins; veto never fires
+against an actual face), sets `info["own_arm_visible"]`; open-vocab detector —
+self-matching detections dropped pre-storage (never reach overlay/registry/
+audit). Person tracker itself untouched. Seeded from real frames; verified
+5/5 verdicts (arm re-seen = self; artist standing in the arm region = not;
+wooden figure = not, saved by the place gate). Test/seeding:
+`debug/test_body_schema.py [--seed]`.
+Consumption-edge gating (same day, second pass — the blue person box on the
+drawing hand persisted): machine.py now reads `cached_person_verdict()` (never
+computes — an embed in the main loop would hitch the servo physics; the
+detector thread keeps the cache warm each pass) and when the verdict is self,
+`update_yolo_detection(False)` — so gaze awareness/tracking, bbox smoothing
+and the person overlay all see no-person. The overlay draws a gray "SELF" box
+instead. The old `own_body_likely` tilt heuristic (machine.py, June) stays for
+person_angle only.
+
+**Label audit — the self-correction loop (LIVE, Aug 10: LABEL_AUDIT_ENABLED).**
+A wrong label looks healthy from the inside (hits accumulate either way; the
+artist: labels "don't correct themselves" — cable bundle stayed "wire basket",
+styrofoam head stayed "wooden mannequin torso"). `perception/label_audit.py`
+(`LabelAuditThread`, started in machine.py beside the detector): every
+`LABEL_AUDIT_INTERVAL` (10 min, skipped while a drawing generates) the
+well-detected registry term least recently audited has its latest settled crop
+(detector keeps per-term crops) shown to the 27B — "what is this? plain
+appearance names" (`prompt_type: label_audit`). Same name → confirmed.
+Different → CLIP head-to-head on the crop via a PRIVATE YOLO-World judge (live
+model's compiled vocab untouched); challenger beating the incumbent by
+`LABEL_AUDIT_MARGIN` is promoted (origin "audit", bypasses recurrence
+threshold) — the rooster pattern, automated. Incumbent never removed: it keeps
+its true referent, loses only the stolen patch in future contests. Verdicts
+(confirmed/relabelled/held/no_candidates) land on the registry entry and in the
+event log as `vocab_promotion {event: audit}`. Verified on the real cases:
+styrofoam-head crop → incumbent scores 0.00 on its own crop (its wins were
+context), "white styrofoam head" 0.25 → relabel fires; cable-tangle-on-face-
+cast crop → all names ~0 → held (honest: that patch is YOLOE visual-prompt
+territory). Test: `debug/test_label_audit.py`.
+
 **Phase 2 — vocabulary promotion (LIVE, Aug 5: OPEN_VOCAB_PROMOTION_ENABLED).**
 The recursive part: what the machine says shapes what it can see.
 `perception/vocab_promotion.py` (`vocab_promoter` singleton) is fed each

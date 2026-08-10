@@ -3,9 +3,9 @@
 **Branch:** `rebuild/north-star` (current head `6cbd1d1`, all pushed)
 **Read first:** `docs/north-star.md` (spec), `docs/memory-runtime-review-2026-07-30.md`
 (where this was flagged), then this doc.
-**Nothing here is implemented yet** — this is the design the artist approved on
-July 31. One-variable-per-run rule applies; land the pieces in order and bank a
-baseline between them.
+**Status: piece 1 is landed (Aug 1) — pieces 2 and 3 are not.** One-variable-per-run
+rule applies; bank a baseline on piece 1 before starting 2+3. See "Piece 1 as
+built" below for what shipped and what it did NOT fix.
 
 ## The problem (diagnosed live, July 31)
 
@@ -98,6 +98,70 @@ hour log stays — it's "the dream," the machine's actual thoughts,
 
 Verify: the five subjects should stop producing near-identical text. Watch
 ChromaDB reflection openings diverge.
+
+### Piece 1 as built (Aug 1)
+
+Landed in `captioner/reflection.py`, `captioner/prompts.py`,
+`captioner/semantic_memory.py`. Inspect any time with
+`python debug/test_reflection_organs.py` (`--full` for whole prompts, `--arc`
+to include the real artistic-arc LLM call) — it builds all five bundles
+without querying the model, so divergence is checkable in seconds instead of
+the ~100 minutes a live rotation takes.
+
+Three changes, not one — because the data was only ONE of three homogenisers,
+and fixing it alone would have produced a false negative:
+
+1. **Per-subject diets.** `_gather_context(subject, spine)` dispatches to
+   `_diet_room` / `_diet_visitor` / `_diet_drawings` / `_diet_time` /
+   `_diet_self`, roughly as specced above. Shared spine is the hour log only.
+2. **The system prompt was a second gravity source.** `get_reflection_system_prompt`
+   took no subject and appended `core_facts['self']` + the durable ledger to
+   ALL FIVE — so every organ opened with the counting identity asserted as
+   established fact, and `distill_reflection` wrote that persona back from
+   every reflection. Now subject-gated: persona → `yourself` only, durable
+   ledger → `yourself` + `time passing`. The identity slots enter `yourself`
+   as DATA (an `identity` block) instead of as frame.
+3. **The prior-reflection thread was a third.** It quoted the last three
+   reflections of ANY subject; three counting-themed ones in a row were
+   pasted into the top of the fourth whatever its subject.
+   `get_recent_reflections(limit, subject=...)` now gives each organ its own
+   thread.
+
+Two things found in the code that changed the plan:
+
+- `core_facts['place']` prose is **retired from surfacing** (see
+  `get_core_facts_string`) — the room organ uses the concepts-ledger
+  `get_place_inventory` instead. Don't re-add the prose.
+- "the react-shape history" for the visitor organ doesn't exist as a queryable
+  store; the recorded event types are only `person_arrived` / `person_left` /
+  `drew`. The visitor organ uses `get_pairs_in_window` presence spans instead.
+
+Also: the events ledger initially landed in four of five diets, which just
+re-created the shared-block problem at smaller scale. It's now in `the visitor`
+and `time passing` only — the room has compressions + inventory, `yourself` has
+self_notes as its own event ledger.
+
+Measured on the July 31 store, prompt-block overlap between any two subjects
+dropped to 4–7% (a single generic instruction line), except visitor↔time at
+25% (they share the events ledger, deliberately).
+
+**What piece 1 did NOT fix, and don't expect it to:** the store is currently
+saturated with counting-themed reflections, so each organ's own thread still
+quotes three counting reflections back at it. Structural divergence is in
+place; thematic divergence needs the store to turn over. This is exactly the
+"monotony is also a forgetting problem" caution below — if the theme still
+dominates after a full day, the demote path is the lever, not more data.
+
+Two things to watch on the first live day:
+
+- The drawings organ now makes an **extra LLM call** (`get_artistic_arc`) each
+  time it comes around (~every 100 min). It's trimmed to two sentences and
+  framed as a past look, but it is a known purple channel — if the register
+  drifts, drop `data["arc"]` from `_diet_drawings` first.
+- `ledger_spans` (time passing) is **empty until durable facts get promoted**
+  to stable/permanent, which needs 3 confirmations across 2 days. On the July
+  31 store all 18 facts were still `evolving`, so that block renders nothing.
+  Not a bug — but that organ is thinner than it looks until promotion happens.
 
 ### Piece 2 — a persistent drawings-kernel slot
 

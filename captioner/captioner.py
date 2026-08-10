@@ -474,6 +474,22 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
         seen_now = bool(info["person_present_in_window"] or info["eye_contact"] or gaze_engaged or info.get("face_close"))
+        # Body schema: a "person" with no face in view that matches the own-arm
+        # gallery is the machine's own body, not company. Face evidence always
+        # wins — the veto never fires against an actual face.
+        info["own_arm_visible"] = False
+        try:
+            from perception.body_schema import body_schema
+
+            body_schema.maybe_harvest()
+            if seen_now and not (info["eye_contact"] or info.get("face_close")):
+                is_self, _sim = body_schema.is_self_current_person()
+                if is_self:
+                    seen_now = False
+                    info["own_arm_visible"] = True
+            info["own_arm_visible"] = info["own_arm_visible"] or body_schema.recently_self_visible()
+        except Exception:
+            pass
 
         arrival = False
         if seen_now:

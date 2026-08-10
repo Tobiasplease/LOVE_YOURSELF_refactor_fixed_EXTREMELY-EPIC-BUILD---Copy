@@ -1,0 +1,340 @@
+{
+  "n_frames": 30,
+  "model": "yolov8s-worldv2.pt",
+  "rows": [
+    {
+      "term": "wooden mannequin torso",
+      "detections": 1087,
+      "hit_rate_0.05": 1.0,
+      "hit_rate_0.15": 0.9333333333333333,
+      "hit_rate_0.3": 0.8666666666666667,
+      "max_conf": 0.9829223155975342,
+      "mean_conf": 0.24301539048401996,
+      "crops": [
+        "wooden_mannequin_torso_0.98_mood_1785928256.jpg",
+        "wooden_mannequin_torso_0.96_mood_1785938572.jpg",
+        "wooden_mannequin_torso_0.94_mood_1785929472.jpg"
+      ]
+    },
+    {
+      "term": "pink shelf",
+      "detections": 146,
+      "hit_rate_0.05": 0.9333333333333333,
+      "hit_rate_0.15": 0.8666666666666667,
+      "hit_rate_0.3": 0.6333333333333333,
+      "max_conf": 0.8559531569480896,
+      "mean_conf": 0.2862754025880028,
+      "crops": [
+        "pink_shelf_0.86_mood_1785708647.jpg",
+        "pink_shelf_0.81_mood_1785937929.jpg",
+        "pink_shelf_0.77_mood_1785938572.jpg"
+      ]
+    },
+    {
+      "term": "desk lamp",
+      "detections": 312,
+      "hit_rate_0.05": 0.8333333333333334,
+      "hit_rate_0.15": 0.7666666666666667,
+      "hit_rate_0.3": 0.5333333333333333,
+      "max_conf": 0.7554259896278381,
+      "mean_conf": 0.23138394627051476,
+      "crops": [
+        "desk_lamp_0.76_mood_1785929342.jpg",
+        "desk_lamp_0.75_mood_1785938684.jpg",
+        "desk_lamp_0.73_mood_1785937929.jpg"
+      ]
+    },
+    {
+      "term": "coffee mug",
+      "detections": 251,
+      "hit_rate_0.05": 0.9666666666666667,
+      "hit_rate_0.15": 0.7666666666666667,
+      "hit_rate_0.3": 0.7,
+      "max_conf": 0.8047524094581604,
+      "mean_conf": 0.26688263937830925,
+      "crops": [
+        "coffee_mug_0.80_mood_1785708647.jpg",
+        "coffee_mug_0.78_mood_1785938783.jpg",
+        "coffee_mug_0.76_mood_1785938119.jpg"
+      ]
+    },
+    {
+      "term": "mannequin head",
+      "detections": 157,
+      "hit_rate_0.05": 0.8666666666666667,
+      "hit_rate_0.15": 0.7333333333333333,
+      "hit_rate_0.3": 0.23333333333333334,
+      "max_conf": 0.4056423306465149,
+      "mean_conf": 0.17467603436671197,
+      "crops": [
+        "mannequin_head_0.41_mood_1785938010.jpg",
+        "mannequin_head_0.40_mood_1785928877.jpg",
+        "mannequin_head_0.39_mood_1785929472.jpg"
+      ]
+    },
+    {
+      "term": "red foam finger",
+      "detections": 28,
+      "hit_rate_0.05": 0.8,
+      "hit_rate_0.15": 0.7333333333333333,
+      "hit_rate_0.3": 0.5333333333333333,
+      "max_conf": 0.7265667915344238,
+      "mean_conf": 0.3946639370794098,
+      "crops": [
+        "red_foam_finger_0.73_mood_1785929191.jpg",
+        "red_foam_finger_0.66_mood_1785938291.jpg",
+        "red_foam_finger_0.63_mood_1785709566.jpg"
+      ]
+    },
+    {
+      "term": "wooden chair",
+      "detections": 92,
+      "hit_rate_0.05": 0.8,
+      "hit_rate_0.15": 0.7,
+      "hit_rate_0.3": 0.6666666666666666,
+      "max_conf": 0.9670538306236267,
+      "mean_conf": 0.37017182097064727,
+      "crops": [
+        "wooden_chair_0.97_mood_1785709214.jpg",
+        "wooden_chair_0.86_mood_1785938783.jpg",
+        "wooden_chair_0.84_mood_1785928527.jpg"
+      ]
+    },
+    {
+      "term": "computer monitor",
+      "detections": 66,
+      "hit_rate_0.05": 0.7,
+      "hit_rate_0.15": 0.5666666666666667,
+      "hit_rate_0.3": 0.3,
+      "max_conf": 0.4485185444355011,
+      "mean_conf": 0.18105172951306617,
+      "crops": [
+        "computer_monitor_0.45_mood_1785928256.jpg",
+        "computer_monitor_0.41_mood_1785708736.jpg",
+        "computer_monitor_0.36_mood_1785928075.jpg"
+      ]
+    },
+    {
+      "term": "laptop",
+      "detections": 95,
+      "hit_rate_0.05": 0.8,
+      "hit_rate_0.15": 0.5666666666666667,
+      "hit_rate_0.3": 0.36666666666666664,
+      "max_conf": 0.9049286246299744,
+      "mean_conf": 0.23294800792525455,
+      "crops": [
+        "laptop_0.90_mood_1785928075.jpg",
+        "laptop_0.79_mood_1785927965.jpg",
+        "laptop_0.53_mood_1785708920.jpg"
+      ]
+    },
+    {
+      "term": "office chair",
+      "detections": 114,
+      "hit_rate_0.05": 0.7666666666666667,
+      "hit_rate_0.15": 0.5333333333333333,
+      "hit_rate_0.3": 0.13333333333333333,
+      "max_conf": 0.504815936088562,
+      "mean_conf": 0.17893597601275696,
+      "crops": [
+        "office_chair_0.50_mood_1785708647.jpg",
+        "office_chair_0.38_mood_1785938119.jpg",
+        "office_chair_0.34_mood_1785928724.jpg"
+      ]
+    },
+    {
+      "term": "cardboard box",
+      "detections": 448,
+      "hit_rate_0.05": 0.8666666666666667,
+      "hit_rate_0.15": 0.4,
+      "hit_rate_0.3": 0.03333333333333333,
+      "max_conf": 0.46838831901550293,
+      "mean_conf": 0.11893424396462078,
+      "crops": [
+        "cardboard_box_0.47_mood_1785709472.jpg",
+        "cardboard_box_0.29_mood_1785709214.jpg",
+        "cardboard_box_0.28_mood_1785928256.jpg"
+      ]
+    },
+    {
+      "term": "keyboard",
+      "detections": 144,
+      "hit_rate_0.05": 0.6333333333333333,
+      "hit_rate_0.15": 0.4,
+      "hit_rate_0.3": 0.06666666666666667,
+      "max_conf": 0.4638289511203766,
+      "mean_conf": 0.14283949825102868,
+      "crops": [
+        "keyboard_0.46_mood_1785708920.jpg",
+        "keyboard_0.43_mood_1785938291.jpg",
+        "keyboard_0.29_mood_1785709214.jpg"
+      ]
+    },
+    {
+      "term": "wire basket",
+      "detections": 95,
+      "hit_rate_0.05": 0.6333333333333333,
+      "hit_rate_0.15": 0.3333333333333333,
+      "hit_rate_0.3": 0.16666666666666666,
+      "max_conf": 0.6572173237800598,
+      "mean_conf": 0.18761085940059274,
+      "crops": [
+        "wire_basket_0.66_mood_1785709361.jpg",
+        "wire_basket_0.56_mood_1785708920.jpg",
+        "wire_basket_0.47_mood_1785928527.jpg"
+      ]
+    },
+    {
+      "term": "book",
+      "detections": 217,
+      "hit_rate_0.05": 0.5333333333333333,
+      "hit_rate_0.15": 0.16666666666666666,
+      "hit_rate_0.3": 0.03333333333333333,
+      "max_conf": 0.576052725315094,
+      "mean_conf": 0.12156558601606277,
+      "crops": [
+        "book_0.58_mood_1785938010.jpg",
+        "book_0.29_mood_1785929342.jpg",
+        "book_0.25_mood_1785709566.jpg"
+      ]
+    },
+    {
+      "term": "black curtain",
+      "detections": 36,
+      "hit_rate_0.05": 0.26666666666666666,
+      "hit_rate_0.15": 0.03333333333333333,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.1651449203491211,
+      "mean_conf": 0.10519673069939017,
+      "crops": [
+        "black_curtain_0.17_mood_1785928527.jpg",
+        "black_curtain_0.14_mood_1785709214.jpg",
+        "black_curtain_0.14_mood_1785929191.jpg"
+      ]
+    },
+    {
+      "term": "electric fan",
+      "detections": 16,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.04944996535778046,
+      "mean_conf": 0.0,
+      "crops": [
+        "electric_fan_0.05_mood_1785938291.jpg",
+        "electric_fan_0.04_mood_1785938119.jpg",
+        "electric_fan_0.04_mood_1785938572.jpg"
+      ]
+    },
+    {
+      "term": "wooden crate",
+      "detections": 3,
+      "hit_rate_0.05": 0.03333333333333333,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.12934182584285736,
+      "mean_conf": 0.12934182584285736,
+      "crops": [
+        "wooden_crate_0.13_mood_1785709472.jpg",
+        "wooden_crate_0.03_mood_1785928527.jpg",
+        "wooden_crate_0.02_mood_1785708647.jpg"
+      ]
+    },
+    {
+      "term": "robotic arm",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    },
+    {
+      "term": "human face mask",
+      "detections": 5,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.030198566615581512,
+      "mean_conf": 0.0,
+      "crops": [
+        "human_face_mask_0.03_mood_1785927965.jpg",
+        "human_face_mask_0.03_mood_1785709566.jpg",
+        "human_face_mask_0.02_mood_1785938010.jpg"
+      ]
+    },
+    {
+      "term": "tangle of cables",
+      "detections": 17,
+      "hit_rate_0.05": 0.03333333333333333,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.05110183358192444,
+      "mean_conf": 0.05110183358192444,
+      "crops": [
+        "tangle_of_cables_0.05_mood_1785709214.jpg",
+        "tangle_of_cables_0.04_mood_1785928724.jpg",
+        "tangle_of_cables_0.03_mood_1785928075.jpg"
+      ]
+    },
+    {
+      "term": "power drill",
+      "detections": 105,
+      "hit_rate_0.05": 0.1,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.1319112330675125,
+      "mean_conf": 0.10224120443065961,
+      "crops": [
+        "power_drill_0.13_mood_1785709472.jpg",
+        "power_drill_0.11_mood_1785708920.jpg",
+        "power_drill_0.06_mood_1785928877.jpg"
+      ]
+    },
+    {
+      "term": "LED sign",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    },
+    {
+      "term": "strange wooden structure",
+      "detections": 17,
+      "hit_rate_0.05": 0.06666666666666667,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.07196471840143204,
+      "mean_conf": 0.07036430761218071,
+      "crops": [
+        "strange_wooden_structure_0.07_mood_1785709025.jpg",
+        "strange_wooden_structure_0.07_mood_1785708818.jpg",
+        "strange_wooden_structure_0.04_mood_1785928877.jpg"
+      ]
+    },
+    {
+      "term": "the hole",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    },
+    {
+      "term": "the wound",
+      "detections": 0,
+      "hit_rate_0.05": 0.0,
+      "hit_rate_0.15": 0.0,
+      "hit_rate_0.3": 0.0,
+      "max_conf": 0.0,
+      "mean_conf": 0.0,
+      "crops": []
+    }
+  ]
+}

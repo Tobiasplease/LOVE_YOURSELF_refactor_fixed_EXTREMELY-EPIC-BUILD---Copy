@@ -16,6 +16,7 @@ class LogType(Enum):
     MOOD = "mood_update"
     CAPTION = "caption"
     REFLECTION = "reflection"
+    VOCAB_PROMOTION = "vocab_promotion"
     INTROSPECTION = "introspection"
     # SENTIMENT = "sentiment_analysis"
     COMPRESSION = "compression"

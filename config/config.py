@@ -266,6 +266,52 @@ OPEN_VOCAB_STOP_HEAD_NOUNS = {
 # lens") must not enter its object map — the mirror doesn't chart itself.
 OPEN_VOCAB_SELF_NOUNS = {"machine", "servo", "motor", "gear", "camera", "lens", "circuit", "sensor", "code", "hum", "vibration"}
 
+# --- Body schema: visual self-recognition (Aug 10 2026) ---
+# The machine's arms are a hole in the world model: YOLO called the drawing
+# hand a person, the object detector called an arm "rooster figurine", and the
+# monologue likely narrates its own limbs as someone else's. Fix: proprioception
+# teaches vision. While the CNC executes and the gaze is parked on the paper, a
+# "person" at the workspace IS the machine's arm — those crops are harvested
+# (only with NO face in view: arms don't have faces, visitors do) into a
+# persistent CLIP gallery (event_log/body_schema.json). Matches against the
+# gallery then mean SELF: person-evidence is discounted (presence belief),
+# object labels are dropped before they enter the map, audits skip them. Person
+# tracking itself is untouched — its consumers get more discerning.
+# Two-factor (Aug 10, measured): appearance alone CANNOT separate self here —
+# the arm mid-draw scores 0.75-0.83 against its own last pose while the hanging
+# wooden figure scores 0.87 (the studio is full of sculpted limbs; CLIP tracks
+# pose, not identity). But the body enters the frame from a fixed mount, so at
+# a given pan/tilt it can only occupy certain regions. Place gates appearance:
+# inside the harvested envelope the loose threshold applies; outside it, the
+# strict one. Verified on real crops: person-in-envelope 0.68 -> rejected by
+# appearance; wooden figure 0.87 outside envelope -> rejected by place; arm
+# re-seen 0.78 in envelope -> self.
+BODY_SCHEMA_ENABLED = True
+BODY_SELF_THRESHOLD = 0.72  # similarity bar INSIDE the reach envelope
+BODY_SELF_STRICT = 0.92  # similarity bar with no place evidence
+BODY_POSE_TOLERANCE = 15.0  # deg; envelope records apply within this pan AND tilt distance
+BODY_REGION_OVERLAP = 0.3  # min overlap (over smaller box) with an envelope record
+BODY_HARVEST_INTERVAL = 20.0  # seconds between self-reference harvests while drawing
+BODY_GALLERY_SIZE = 60  # references kept (persistent; the body is stable across sessions)
+BODY_SELF_FILTER_DETECTIONS = True  # drop open-vocab detections matching the schema (max a few embeds per pass)
+
+# --- Label audit: the self-correction loop (Aug 10 2026) ---
+# A wrong label looks healthy from the inside — "wire basket" firing on the
+# cable bundle racks up hits and never ghosts; nothing doubts an established
+# label (the artist: labels "don't correct themselves"). Fix: the machine's
+# richer eye audits its faster one. Every LABEL_AUDIT_INTERVAL a well-detected
+# registry entry has its latest crop shown to the VLM ("what is this? plain
+# appearance names"); if the VLM disagrees, old term and candidates fight a
+# CLIP head-to-head on the actual crop, and a winning candidate is promoted
+# (origin "audit", bypasses the recurrence threshold — the rooster pattern,
+# automated). The old term is NEVER removed: it keeps its true referent and
+# merely loses the stolen patch to a better competitor on future passes.
+LABEL_AUDIT_ENABLED = True
+LABEL_AUDIT_INTERVAL = 600.0  # seconds between audits (one VLM call each; skipped while a drawing is generating)
+LABEL_AUDIT_MIN_HITS = 5  # only audit labels the detector actually believes in
+LABEL_AUDIT_REAUDIT_HOURS = 24.0  # a term is left alone this long after an audit
+LABEL_AUDIT_MARGIN = 0.08  # candidate must beat the incumbent by this much confidence on the crop
+
 # --- Phase 3: spatial registry + registry glances (Aug 5 2026) ---
 # The world map: settled detections become per-term anchors in servo angles
 # (perception/spatial_registry.py, fed by the detector thread; persists in
