@@ -130,7 +130,7 @@ class PromptInterface:
         # Return prompt, options, formatted system prompt, and prompt mode
         return prompt, model_options, system_prompt, prompt_mode
 
-    def build_drawing_prompt_with_options(self, memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: list = None):
+    def build_drawing_prompt_with_options(self, memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None):
         """Build drawing prompt and prepare options with visual grounding support."""
         if not memory_ref:
             return None, None, None
@@ -138,9 +138,9 @@ class PromptInterface:
         from config.config import DRAWING_ANALYSIS_MODE
         if DRAWING_ANALYSIS_MODE == "stream":
             from captioner.prompts import stream_drawing_analysis
-            prompt = stream_drawing_analysis(memory_ref, extra=extra, image_path=image_path, drawing_intentions=drawing_intentions)
+            prompt = stream_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
         else:
-            prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path, drawing_intentions=drawing_intentions)
+            prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
 
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)

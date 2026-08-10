@@ -265,10 +265,10 @@ class MultimodalModel:
         self.prompt_interface = PromptInterface(self.model_name)
 
 
-    def generate_drawing_prompt(self, *, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: list = None) -> str:
+    def generate_drawing_prompt(self, *, extra: Optional[str] = None, image_path: Optional[str] = None) -> str:
         """Generate drawing prompt using centralized prompt interface with VISUAL GROUNDING."""
         prompt, model_options, system_prompt = self.prompt_interface.build_drawing_prompt_with_options(
-            self.memory_ref, extra=extra, image_path=image_path, drawing_intentions=drawing_intentions
+            self.memory_ref, extra=extra, image_path=image_path
         )
 
         if prompt is None:

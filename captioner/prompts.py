@@ -1795,9 +1795,7 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
     return prompt
 
 
-def stream_drawing_analysis(
-    memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: Optional[List[str]] = None
-) -> str:
+def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None) -> str:
     """Two-call drawing pipeline (July 10) — DRAWING_ANALYSIS_MODE="stream".
 
     Replaces the 5-step committee (context_rich_multi_step_drawing_analysis,
@@ -1848,10 +1846,6 @@ def stream_drawing_analysis(
             materials.append("What you've been thinking, just now:\n" + "\n".join(f"- {t[:400]}" for t in stream_tail))
     except Exception:
         pass
-
-    # Drawing-flavored musings the stream produced earlier this session.
-    if drawing_intentions:
-        materials.append("Drawing thoughts that have crossed your mind this session:\n" + "\n".join(f"- {t[:300]}" for t in drawing_intentions[-3:]))
 
     try:
         from captioner.context_compression import context_compressor
@@ -2040,7 +2034,7 @@ def stream_drawing_analysis(
 
 
 def context_rich_multi_step_drawing_analysis(
-    memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None, drawing_intentions: Optional[List[str]] = None
+    memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None
 ) -> str:
     """
     5-step drawing analysis with full accumulated identity integration.
@@ -2105,14 +2099,14 @@ def context_rich_multi_step_drawing_analysis(
     )
     _say(f"[🎨] Step 2 result: {step2_result[:200]}")
 
-    # === STEP 3: COMMUNICATION INTENT (arc + intentions + long-term reflections) ===
-    _say("[🎨] Step 3: Communication Intent (with identity, artistic arc & drawing ideas)")
+    # === STEP 3: COMMUNICATION INTENT (arc + long-term reflections) ===
+    _say("[🎨] Step 3: Communication Intent (with identity & artistic arc)")
     artistic_context = ""
     try:
         from drawing.drawing_memory import get_drawing_memory
 
         dm = get_drawing_memory()
-        artistic_context = dm.get_artistic_arc_context(drawing_intentions=drawing_intentions or [])
+        artistic_context = dm.get_artistic_arc_context()
         if artistic_context:
             _say(f"[🎨] Artistic context injected: {artistic_context[:80]}...")
     except Exception as e:

@@ -168,7 +168,6 @@ class Captioner(MemoryMixin):
         # Deduplication system to prevent duplicate prints
         self.recent_captions: List[Tuple[str, float]] = []  # (caption, timestamp)
         self._last_perception: str = ""  # Last perception (kept for recent_captions tuples + early-session fallback)
-        self._drawing_intentions: List[str] = []  # Accumulated drawing-related musings
 
         self.last_caption_time: float = 0.0
         self.last_drawing_check_time: float = 0.0  # Allow immediate first check
@@ -1759,57 +1758,6 @@ class Captioner(MemoryMixin):
             if len(self.recent_captions) > 20:  # Keep last 20
                 self.recent_captions = self.recent_captions[-20:]
 
-        # Detect and store drawing-relevant thoughts from monologue output.
-        # These feed into Step 3 (communication intent) when drawing triggers.
-        # Captures both explicit drawing talk AND strong inner-life statements
-        # (desires, envies, frustrations, imagery) — the real artistic fuel.
-        if caption and caption.strip():
-            cap_lower = caption.lower()
-            # Explicit drawing references
-            drawing_keywords = [
-                "draw",
-                "sketch",
-                "capture",
-                "next piece",
-                "should paint",
-                "want to draw",
-                "would look good",
-                "inspire",
-                "my next",
-                "on paper",
-                "with my arm",
-                "lines and",
-                "bold strokes",
-                "trace",
-                "ink",
-                "charcoal",
-                "canvas",
-            ]
-            # Strong experiential statements that inform artistic intent
-            experiential_keywords = [
-                "i envy",
-                "i crave",
-                "i yearn",
-                "i long for",
-                "i imagine",
-                "i wish i could",
-                "trapped",
-                "if only",
-                "i feel an urge",
-                "reminds me of",
-                "like a",
-                "as if",
-                "void",
-                "emptiness",
-            ]
-            if any(kw in cap_lower for kw in drawing_keywords + experiential_keywords):
-                if not hasattr(self, "_drawing_intentions"):
-                    self._drawing_intentions = []
-                self._drawing_intentions.append(caption.strip()[:150])
-                if len(self._drawing_intentions) > 10:
-                    self._drawing_intentions = self._drawing_intentions[-10:]
-                print(f"[🎨 INTENT] Stored drawing intention: {caption.strip()[:80]}")
-
         # Now update the timestamp since we have a new caption
         self.last_caption_time = now
 
@@ -1931,11 +1879,6 @@ class Captioner(MemoryMixin):
             print(f"[DEBUG] Step 4: Drawing system ready, building context...")
         memory_context = self.get_recent_memory()
         reflection_context = self.get_last_reflection()
-        # Drawing intentions passed directly to Step 3 (communication intent) via pipeline
-        drawing_intentions_list = []
-        if hasattr(self, "_drawing_intentions") and self._drawing_intentions:
-            drawing_intentions_list = self._drawing_intentions[-5:]
-            print(f"[🎨] {len(drawing_intentions_list)} drawing intentions available for Step 3")
         extra_context = f"{self.last_caption}\n\n{memory_context}\n\n{reflection_context}"
         if not CLEAN_LLM_OUTPUT:
             print(f"[DEBUG] Step 7: Context built, starting drawing generation...")
@@ -1947,7 +1890,7 @@ class Captioner(MemoryMixin):
         try:
             if not CLEAN_LLM_OUTPUT:
                 print(f"[DEBUG] Step 8: About to call generate_drawing_prompt...")
-            prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path, drawing_intentions=drawing_intentions_list)
+            prompt = self.model.generate_drawing_prompt(extra=extra_context, image_path=img_path)
             if not CLEAN_LLM_OUTPUT:
                 print(f"[DEBUG] Step 9: Drawing prompt generated successfully")
             log_json_entry(

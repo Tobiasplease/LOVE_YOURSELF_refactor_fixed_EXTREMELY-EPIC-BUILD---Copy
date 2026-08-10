@@ -37,12 +37,7 @@ memory_ref = SimpleNamespace(
 )
 
 image_path = sys.argv[1] if len(sys.argv) > 1 else None
-stream_drawing_analysis(
-    memory_ref,
-    extra=None,
-    image_path=image_path,
-    drawing_intentions=["Maybe the chair, drawn only by its shadow, would say more than the chair itself."],
-)
+stream_drawing_analysis(memory_ref, extra=None, image_path=image_path)
 
 for call in captured:
     print("=" * 70)

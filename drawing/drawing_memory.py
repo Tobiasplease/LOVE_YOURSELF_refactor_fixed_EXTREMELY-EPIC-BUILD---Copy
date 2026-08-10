@@ -339,23 +339,10 @@ Write as "I" — this is your own artistic development."""
 
         return ""
 
-    def get_artistic_arc_context(self, drawing_intentions: List[str] = None) -> str:
-        """Build unified artistic context: arc + accumulated drawing musings.
-
-        Args:
-            drawing_intentions: spontaneous drawing-related thoughts from caption stream
-        """
-        parts = []
-
+    def get_artistic_arc_context(self) -> str:
+        """The artistic arc, as prompt material."""
         arc = self.get_artistic_arc()
-        if arc:
-            parts.append(f"Your artistic arc so far: {arc}")
-
-        if drawing_intentions:
-            recent = drawing_intentions[-5:]
-            parts.append("Drawing ideas you've been thinking about:\n" + "\n".join(f"  - {i[:120]}" for i in recent))
-
-        return "\n\n".join(parts)
+        return f"Your artistic arc so far: {arc}" if arc else ""
 
     @staticmethod
     def _strip_comfy_preamble(desc: str) -> str:
