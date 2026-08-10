@@ -402,6 +402,32 @@ pink shelf → ...`. Structured consumers: `get_current_glance()`,
 framing is a separate prompt-tree step). Test:
 `debug/test_spatial_registry.py` (angle math, EMA, policy split).
 
+**Presence identity — the "106th man" fix (Aug 10).** The machine read the one
+regular man as endless strangers. Causes: the presence line said "Someone's
+come in." on every ON-edge (an anonymous stranger each return — the model
+confabulated a count), and core_facts.people was empty. MEASURED dead end:
+CLIP cross-outfit similarity (0.70) is BELOW cross-person (0.76) — appearance
+embeddings cannot say "same man, new jacket"; do not retry. (Face embeddings
+are the real cross-day tool — future, new dependency.) The fix is the
+single-occupant PRIOR: the presence line is now the definite singular —
+"He's come in." (person_count 1) / "People have come in." (count > 1) /
+"He's back." (session re-ID resumed, only when PRESENCE_REID_ENABLED — OFF
+since ~Aug 6 by the artist's hand; all re-ID calls no-op while off).
+Relational "Someone is here" → "He's here." Gaze-aware belief decay
+(re-applied — the Aug 5 version was lost to another session's
+`git checkout -- captioner/captioner.py`, see transcripts): absence only
+accumulates while the gaze points near last-seen
+(PRESENCE_ABSENCE_LOOK_TOLERANCE); not-looking is not evidence of absence.
+The singular register is a CONCLUSION, not a hardcoded fact (artist's call):
+the arrival ledger (`presence_identity.record_arrival` →
+`event_log/presence_arrivals.json`) tracks {ts, person_count} per genuine
+arrival; `singular_regime()` (7-day window, ≥80% single-person) picks "He's
+come in." vs "Someone's come in." — an exhibition's crowds flip the register
+back within hours, no config change. Re-ID re-measured Aug 10: CLIP is dead
+at every scope (same-outfit-same-session 0.70-0.74 vs cross-person
+0.67-0.76); PRESENCE_REID_ENABLED stays False until an OSNet/face-embedding
+backend replaces embed_crop.
+
 **Body schema — visual self-recognition (LIVE, Aug 10: BODY_SCHEMA_ENABLED).**
 The arms were a hole in the world model: YOLO called the drawing hand a person
 (→ phantom presence while drawing), the object detector labelled an arm
@@ -721,6 +747,29 @@ with their systems.
   reply (error:N / ALARM) deduplicated. Diagnosis on hardware:
   debug/test_gantry_live.py (machine.py stopped) homes and sends
   dataset coordinates echoing every GRBL reply.
+- EMPIRICAL COLLISION SAFETY (Aug 1, KINETIC_SAFE_*): the camera/IK
+  calibration idea was dropped — the machine never needs to know where its
+  hands ARE, only which motor COMBINATIONS are safe, and the recordings
+  are thousands of those. Both arms train as ONE chain group (x, y, elbow,
+  shoulder, wrist, fingers), so a normal walk is demonstrated by
+  construction; the danger is the glue. Measured: 8400 pooled
+  combinations, neighbours ~1.2-2.0 units apart, but straight-line
+  crossfade midpoints land 6.9 (worst 12.1) from anything performed and a
+  full gaze lean 11.0 — continuously. motor_panel/safe_envelope.py is a
+  cKDTree over the pooled recordings; kinetic_bus._guard runs every send
+  (~0.02ms) against the MERGED both-arm pose, since sends arrive split.
+  Three details paid for by measurement: the pull target is the average of
+  8 neighbours (a single nearest one flips and snaps, 3.6 units), with the
+  true nearest as fallback when that average sits off the curved cloud;
+  only the channels IN this send may move (a correction written elsewhere
+  is discarded, leaving the combination stray); and the correction is
+  eased AND slew-capped (KINETIC_SAFE_SLEW), because a raw projection jump
+  is exactly the snapping recorded movement exists to avoid. A/B on the
+  live bus (crossfades + full lean + startle): median stray 7.5 -> 3.9,
+  worst 14.2 -> 10.1; isolated crossfade/lean cases land exactly on the
+  3.0 threshold. Inactive (everything passes) without scipy or
+  recordings — the guard must never be why the body stops. Proof:
+  debug/test_safe_envelope.py.
 - THE CHAINS WEREN'T CHAINS (July 31, measured): keying identity at 1 degree
   on all seven servo channels at once meant two moments had to agree on
   every joint to merge — a 600-sample take trained ~568 states with

@@ -87,6 +87,10 @@ from config.config import (
     KINETIC_REACH_STRENGTH,
     KINETIC_REACH_TAU,
     KINETIC_ROTATE_S,
+    KINETIC_SAFE_ENVELOPE,
+    KINETIC_SAFE_MAX_DIST,
+    KINETIC_SAFE_SLEW,
+    KINETIC_SAFE_SMOOTH,
     KINETIC_STARTLE_COOLDOWN_S,
     KINETIC_STARTLE_DELTAS,
     KINETIC_STARTLE_ENABLED,
@@ -291,6 +295,10 @@ class KineticBus:
         gantry=None,
     ):
         self.get_arousal = get_arousal  # 0..1; drives the movement sampler
+        self._commanded: Dict[str, float] = {}  # last value sent per channel — the guard needs the WHOLE body
+        self._guard_pulls = 0
+        self._corr: Dict[str, float] = {}  # eased pull-back per channel
+        self.envelope = None  # built in enable(); tests may inject one
         self.device = device  # built lazily in enable() so tests can inject
         self.gantry = gantry  # runtime GantryLink: the right arm joins the temperament
         if owned is None and gantry is not None:
@@ -376,6 +384,8 @@ class KineticBus:
             "rotate_in": rotate_in,
             "reach": round(self._reach_amount, 2),
             "gantry": bool(self.gantry is not None and self.gantry.alive),
+            "guard_pulls": self._guard_pulls,
+            "stray": round(self.envelope.distance(self._commanded), 1) if self.envelope is not None and self.envelope.active else None,
         }
 
     # --- lifecycle ------------------------------------------------------------
@@ -387,6 +397,14 @@ class KineticBus:
                 self.device = build_devices()[1]  # lefthand
             msg = self.device.connect()
             self.log(f"lefthand: {msg}")
+        try:
+            self._commanded.update(self._live_state())  # guard is blind until every channel is known
+        except Exception:
+            pass
+        if self.envelope is None and KINETIC_SAFE_ENVELOPE:
+            from motor_panel.safe_envelope import SafeEnvelope
+
+            self.envelope = SafeEnvelope(sessions_dir=self.library.sessions_dir, on_log=self.log)
         self._running = True
         self._bundle_since = 0.0  # re-enable picks a bundle immediately
         if await_homing:
@@ -423,8 +441,43 @@ class KineticBus:
                 pass
 
     # --- actuation ------------------------------------------------------------
+    def _guard(self, d: Dict[str, float]) -> Dict[str, float]:
+        """Keep the body inside combinations it has actually performed.
+
+        Sends arrive split — servos through _send_ease, the gantry through
+        _send_plan — but a collision is a property of the WHOLE body, so
+        the guard evaluates this send merged into the last commanded pose
+        of every other channel, then returns only the channels it was
+        given. Undemonstrated combinations (crossfade straight lines, lean
+        offsets, relative startle) get pulled back to proven ground; a
+        normal chain walk is demonstrated by construction and passes
+        untouched. See motor_panel/safe_envelope.py for the measurements."""
+        self._commanded.update(d)
+        if self.envelope is None or not self.envelope.active:
+            return d
+        merged = dict(self._commanded)
+        fixed = self.envelope.project(merged, KINETIC_SAFE_MAX_DIST, movable=set(d))
+        if fixed is merged and not any(abs(v) > 1e-6 for v in self._corr.values()):
+            return d
+        # EASE the correction rather than applying it raw: the projection
+        # jumps where the nearest demonstrated neighbours swap, and a
+        # snapped command is exactly what recorded movement exists to avoid.
+        out = {}
+        for c, v in d.items():
+            want = fixed.get(c, v) - v
+            cur = self._corr.get(c, 0.0)
+            step = (want - cur) * KINETIC_SAFE_SMOOTH
+            cur += max(-KINETIC_SAFE_SLEW, min(KINETIC_SAFE_SLEW, step))
+            self._corr[c] = 0.0 if abs(cur) < 1e-4 else cur
+            out[c] = v + cur
+        self._commanded.update(out)
+        if fixed is not merged:
+            self._guard_pulls += 1
+        return out
+
     def _send_ease(self, d: Dict[str, float]):
         d = {c: v + self._offsets.get(c, 0.0) for c, v in d.items()}
+        d = self._guard(d)
         if self._ext_ease is not None:
             self._ext_ease(d)  # panel routing clamps per channel
         else:
@@ -438,6 +491,7 @@ class KineticBus:
         if self.is_drawing():
             return
         d = {c: v + self._offsets.get(c, 0.0) for c, v in d.items()}  # the lean current reaches the gantry too
+        d = self._guard(d)
         if self._ext_plan is not None:
             self._ext_plan(d, dt)
         elif self.gantry is not None and self.gantry.alive:
@@ -843,7 +897,10 @@ class KineticBus:
         return end
 
     def _send_ease_raw(self, d: Dict[str, float]):
-        """Ease without the gaze lean — safety movements are absolute."""
+        """Ease without the gaze lean — safety movements are absolute, but
+        still guarded: a relative startle offsets a recorded gesture from
+        an arbitrary live pose, which is exactly an undemonstrated combo."""
+        d = self._guard(d)
         if self._ext_ease is not None:
             self._ext_ease(d)
         else:
@@ -895,6 +952,7 @@ class KineticBus:
         """Plan without the gaze lean — safety and flinch moves are absolute."""
         if self.is_drawing():
             return
+        d = self._guard(d)
         if self._ext_plan is not None:
             self._ext_plan(d, dt)
         elif self.gantry is not None and self.gantry.alive:

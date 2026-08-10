@@ -261,6 +261,14 @@ OPEN_VOCAB_STOP_HEAD_NOUNS = {
     "tick",
     "buzz",
     "whir",
+    "excuse",
+    "project",
+    "sight",
+    "shape",
+    "idea",
+    "plan",
+    "task",
+    "step",
 }
 # Self barrier: the machine narrating its own body ("my gears", "the hum", "the
 # lens") must not enter its object map — the mirror doesn't chart itself.
@@ -492,6 +500,27 @@ KINETIC_MOVE_REPETITION = 1.4  # divide down states visited in the last window
 KINETIC_MOVE_REPETITION_AROUSAL = 0.6
 KINETIC_MOVE_MIN_P = 0.05  # drop candidates below this fraction of the best
 KINETIC_MOVE_WINDOW = 24  # how many recent states the repetition penalty remembers
+# EMPIRICAL COLLISION SAFETY (Aug 1). Both arms are recorded together, so a
+# normal chain walk only visits combinations that were performed safely.
+# The danger is the glue: measured on the real recordings, straight-line
+# crossfade midpoints sit 6.9 units (worst 12.1) from ANY demonstrated
+# combination and a full gaze lean sits 11.0 away, while demonstrated
+# neighbours are only 1.2 apart. The guard asks every outgoing command how
+# far it is from the nearest thing ever performed and pulls back the
+# strays. No geometry, no IK, no camera — see motor_panel/safe_envelope.py.
+KINETIC_SAFE_ENVELOPE = True
+KINETIC_SAFE_MAX_DIST = 3.0  # units of slack beyond demonstrated ground (local spacing is ~1.2)
+KINETIC_SAFE_SMOOTH = 0.25  # how fast the pull-back eases in per send (~0.5s to full). Projection onto a
+# point cloud is inherently discontinuous where the nearest neighbours swap, and applying that raw would
+# snap the body — the very thing recorded movement exists to avoid. Easing the CORRECTION keeps commands
+# continuous; the brief lag is bounded by the slack above.
+KINETIC_SAFE_SLEW = 0.5  # hard cap on how much the correction may CHANGE in one send. Easing alone still
+# passes a fraction of a jump straight through (a 13-unit swap x 0.25 = 3.3 units of snap); capping the
+# change makes the pull-back strictly gradual. A 12-unit correction converges in ~1s at send rate.
+KINETIC_SAFE_NEIGHBOURS = 8  # pull toward the average of this many demonstrated points, not the single
+# nearest — a lone neighbour flips as the body crosses between them and the correction snaps (3.6 units,
+# measured); an average moves smoothly. The correction is applied in full: a steady offset like the lean
+# pushes out on EVERY send, so a rate-limited pull-back would just lose a tug of war forever.
 # False (July 28, artist's call): the homing dance and the gantry sweep run
 # SIMULTANEOUSLY — the choreography is recorded to stay clear of the
 # gantry, so $H does not wait for it. True restores clear-first: $H holds
@@ -578,17 +607,17 @@ GRBL_ENABLE_SEGMENTED_EXECUTION = os.getenv("GRBL_ENABLE_SEGMENTED_EXECUTION", "
 GRBL_MAX_SEGMENT_SIZE = int(os.getenv("GRBL_MAX_SEGMENT_SIZE", 150))  # Lines per segment
 GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAUSE", "false").lower() in ("1", "true", "yes")
 
-# === FEED RATE OPTIMIZATION ===
-# Drawing speed scaling — detail preservation is the priority.
-# Small/detailed moves get slow speeds; large strokes and traversals get fast speeds.
-# Traversals (pen up) always use max regardless of distance.
-GRBL_FEED_RATE_MIN = int(os.getenv("GRBL_FEED_RATE_MIN", 300))  # Slowest speed for micro-detail clusters (mm/min)
-GRBL_FEED_RATE_MAX = int(os.getenv("GRBL_FEED_RATE_MAX", 2000))  # Fastest speed for long strokes and traversals (mm/min)
-GRBL_BASE_FEED_RATE = int(os.getenv("GRBL_BASE_FEED_RATE", 700))  # Default/medium drawing speed (mm/min)
-
-# Distance thresholds for feed rate calculation (in mm)
-GRBL_SMALL_MOVE_THRESHOLD = float(os.getenv("GRBL_SMALL_MOVE_THRESHOLD", 1.0))  # Below this: detail speeds (slow)
-GRBL_LARGE_MOVE_THRESHOLD = float(os.getenv("GRBL_LARGE_MOVE_THRESHOLD", 8.0))  # Above this: max drawing speed
+# === FEED RATES (Aug 10 2026: flat ink speed, dynamic scaling retired) ===
+# The distance-scaled system (300/700/2000 over 1-8mm thresholds) was tuned on
+# vpype's ultra-dense output (median segment 0.03mm), where every move fell
+# below the micro threshold and the whole drawing ran at the 420 crawl — the
+# February field-test sheets were drawn that way. Centerliner v2's simplified
+# paths (median 0.43mm) pushed the same formula to ~700-2000 on the ink and
+# the marks got faint and sloppy. Drawings are a few hundred mm of ink total;
+# speed buys seconds and costs fidelity, so pen-down is now one deliberate
+# rate. Expressive pace, if ever wanted, belongs in the choreography layer.
+GRBL_DRAW_FEED_RATE = int(os.getenv("GRBL_DRAW_FEED_RATE", 450))  # Every pen-down move (mm/min)
+GRBL_TRAVERSAL_FEED_RATE = int(os.getenv("GRBL_TRAVERSAL_FEED_RATE", 2000))  # Pen-up moves — no fidelity cost (mm/min)
 
 # === PEN LIFT OPTIMIZATION ===
 # Servo values for different pen operations - lower S = more lift (pen higher)
@@ -805,6 +834,13 @@ PRESENCE_ABSENCE_LOOK_TOLERANCE = 30.0  # deg; gaze within this of last-seen pan
 # embed_crop to a person-reid model (e.g. OSNet, ~2MB, CPU) and re-run the
 # test before enabling. Layer 1 (gaze-aware decay) ships regardless and kills
 # most false arrivals on its own.
+# CONFIRMED Aug 10 (independent re-measurement): same outfit, same session,
+# different poses = 0.70-0.74; vs a different person = 0.67-0.76. No usable
+# threshold exists. Identity continuity ships via the ARRIVAL LEDGER instead
+# (presence_identity.record_arrival/singular_regime): recent arrivals mostly
+# single-person -> the presence line uses the definite singular ("He's come
+# in.") — a conclusion from the machine's own history, not a hardcoded fact;
+# an exhibition's crowds flip the register back within hours.
 PRESENCE_REID_ENABLED = False
 PRESENCE_REID_THRESHOLD = 0.80  # cosine similarity to count as the same person; tune against debug/test_presence_reid.py
 PRESENCE_REID_SAMPLE_INTERVAL = 30.0  # seconds between gallery samples while someone is visible
