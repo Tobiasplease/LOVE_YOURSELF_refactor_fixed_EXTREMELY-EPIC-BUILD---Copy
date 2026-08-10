@@ -1005,6 +1005,17 @@ def ensure_pen_up_critical_safety(ser, context="general", use_repeats=True):
     )
 
 
+def _release_drawing_state():
+    """Clear the 'currently drawing' flag. Called on every path out of
+    execute_gcode_file, not just the successful one."""
+    try:
+        from utils.drawing_state import DrawingState
+
+        DrawingState.end_drawing()
+    except Exception as e:
+        print(f"[⚠️] Could not clear drawing state: {e}")
+
+
 def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     """Execute G-code file line by line with proper waiting"""
     print(f"🎨 [DEBUG] GRBL EXECUTION STARTING: {gcode_file}")
@@ -1196,6 +1207,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             lightbulb_fluctuation.stop_fluctuation()
         except Exception:
             pass
+        _release_drawing_state()
 
         raise
 
@@ -1212,6 +1224,10 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             lightbulb_fluctuation.stop_fluctuation()
         except Exception:
             pass
+        # The gaze and the lightbulb were already released here; the drawing
+        # state was not, so a single timed-out g-code line left the machine
+        # believing it was still drawing until the process restarted.
+        _release_drawing_state()
         raise gcode_error
 
     log_json_entry(

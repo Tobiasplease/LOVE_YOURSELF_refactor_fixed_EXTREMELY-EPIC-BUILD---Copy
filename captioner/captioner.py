@@ -1798,7 +1798,7 @@ class Captioner(MemoryMixin):
 
         # Check if drawing system is ready (this handles cooldown logic)
         if not self.drawing.ready_to_draw():
-            print(f"[🎨 CHECK] Blocked: cooldown ({cooldown_remaining:.0f}s remaining)")
+            print(f"[🎨 CHECK] Blocked: {getattr(self.drawing, 'last_block_reason', None) or f'cooldown ({cooldown_remaining:.0f}s remaining)'}")
             return
 
         # Pipeline check before state evaluation

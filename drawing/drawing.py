@@ -49,6 +49,10 @@ class DrawingController:
         self.last_drawing_time: float = time.time() - DRAWING_COOLDOWN - 10  # Allow immediate first drawing
         self.cooldown: float = DRAWING_COOLDOWN  # seconds between drawings
         self.last_prompt: Optional[str] = None
+        # Why ready_to_draw() last said no. The caller used to print "cooldown"
+        # for every refusal, so a stuck GRBL flag read as a cooldown that had
+        # already expired ("Blocked: cooldown (0s remaining)").
+        self.last_block_reason: str = ""
         self.last_drawing_prompt: str = ""
         self.last_reflection: Optional[str] = None
         # The single self-critique of the latest drawing. Published here so the
@@ -74,10 +78,12 @@ class DrawingController:
             currently_generating = getattr(state_manager, "is_generating_drawing", False)
 
             if currently_generating:
+                self.last_block_reason = "ComfyUI generation in progress"
                 if not CLEAN_LLM_OUTPUT:
                     print(f"[🎨] Drawing blocked: ComfyUI generation currently in progress")
                 return False
             if currently_executing:
+                self.last_block_reason = "GRBL execution in progress"
                 if not CLEAN_LLM_OUTPUT:
                     print(f"[🎨] Drawing blocked: GRBL execution currently in progress")
                 return False
@@ -85,6 +91,8 @@ class DrawingController:
             if not CLEAN_LLM_OUTPUT:
                 print(f"[⚠️] Could not check drawing state: {e}")
 
+        if not cooldown_ready:
+            self.last_block_reason = f"cooldown ({self.cooldown - (time.time() - self.last_drawing_time):.0f}s remaining)"
         return cooldown_ready
 
     def should_draw(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:

@@ -12,6 +12,15 @@ class DrawingState:
     
     _lock = threading.Lock()
     _is_drawing = False
+    # A latched flag disables drawing for the whole session (Aug 10): a
+    # TimeoutError on ONE g-code line ("M3 S38 ; PEN UP") raised past
+    # end_drawing(), and every drawing check for the next half hour reported
+    # "GRBL execution currently in progress" with the machine sitting idle.
+    # The raise paths are fixed, but this is the backstop that makes ANY future
+    # leak self-healing: no drawing runs for half an hour (observed: ~4 min).
+    # Safe against a genuinely long job, since state_manager.is_executing_cnc —
+    # which the caller clears reliably — independently gates the same decision.
+    _MAX_DRAWING_SECONDS = 1800
     _drawing_start_time: Optional[float] = None
     _drawing_intent: Optional[str] = None
     _drawing_file: Optional[str] = None
@@ -44,9 +53,22 @@ class DrawingState:
     
     @classmethod
     def is_drawing(cls) -> bool:
-        """Check if currently drawing"""
+        """Check if currently drawing. A flag older than _MAX_DRAWING_SECONDS is
+        treated as leaked and cleared — see the note on the constant."""
         with cls._lock:
-            return cls._is_drawing
+            if not cls._is_drawing:
+                return False
+            started = cls._drawing_start_time or 0
+            if started and time.time() - started > cls._MAX_DRAWING_SECONDS:
+                stale_for = time.time() - started
+                cls._is_drawing = False
+                cls._drawing_start_time = None
+                cls._drawing_intent = None
+                cls._drawing_file = None
+                cls._drawing_description = None
+                print(f"[⚠️] Drawing state was stuck for {stale_for / 60:.0f} min with no completion — clearing it (a drawing run raised past end_drawing)")
+                return False
+            return True
 
     # ------------------------------------------------------------------
     # Vision offline (July 30): ComfyUI unplugged means no drawing can be
