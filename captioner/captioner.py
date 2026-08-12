@@ -1837,13 +1837,12 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
-        # Never step away to conceive a drawing mid-moment: the 5-step
-        # analysis monopolizes the inference server for minutes (caption
-        # stalls of 20-83s observed June 12) — exactly when reactivity
-        # matters most. Quiet stretches are when drawings get conceived.
-        if self._salience_hot:
-            print("[🎨 CHECK] Deferred: something is happening — staying with the room")
-            return
+        # The salience deferral ("staying with the room") was REMOVED Aug 12
+        # by artist ruling: drawing while something is happening — a visitor
+        # watching — is legitimate, often the most interesting time. The June
+        # rationale was inference contention (conception stalls captions);
+        # that cost is accepted, and captions black out during ComfyUI
+        # generation anyway. Salience still shapes prompts, not this gate.
 
         # STATE-MOTIVATED EVALUATION
         # Get current system state for decision

@@ -41,8 +41,11 @@ says can currently cause a drawing — the WANT slot only decorates the intent p
 
 1. **Never ask "do you want to draw?"** — compliance bias makes yes ~free; we'd get
    manufactured justifications (same failure class as the 5-step's manufactured
-   drama). The model *can* decline when the frame isn't a question: the salience
-   gate defers regularly; the WANT prompt's "(if any)" produces honest absence.
+   drama). The model *can* decline when the frame isn't a question: the WANT
+   prompt's "(if any)" produces honest absence. (The salience deferral on the
+   trigger — "staying with the room" — was REMOVED Aug 12 by artist ruling:
+   drawing with a visitor present is legitimate, often the best time. Salience
+   still shapes prompts; it no longer gates drawing.)
 2. **The no is structural**: absence of a formed, persisted drawing-directed want.
    Desire forms elsewhere, for other reasons; the trigger only reads it.
 3. **Persistence is the sincerity test** — a want surviving distills means it, same
