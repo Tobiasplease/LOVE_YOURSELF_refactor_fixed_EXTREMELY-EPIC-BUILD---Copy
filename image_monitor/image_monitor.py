@@ -264,18 +264,30 @@ class ImageMonitor:
                     print_message=f"[🔄] Converting PNG to centerline SVG: {base_name}",
                 )
 
+                # Re-arm the generation window for the vectorize phase: the
+                # 5-minute timeout from queue time was expiring mid-centerline
+                # (ComfyUI ~3min + DSV fallback ~3min), force-clearing the flag
+                # and letting llama-server reload the 27B WHILE DSV needed the
+                # GPU (Aug 12). llama must never run alongside the vectorizer;
+                # a fresh window keeps the flag held until finish below.
+                try:
+                    state_manager.start_drawing_generation(
+                        getattr(state_manager, "current_drawing_prompt", None) or "vectorizing")
+                except Exception:
+                    pass
+
                 raster_to_centerline_svg(
                     input_path=png_path,
                     output_path=centerline_svg_path,
                 )
 
-                # NOW end generation phase right before starting CNC execution
-                # This ensures no gap where both flags are False
+                # Generation phase is NOT released here anymore (Aug 12): the
+                # flag now drops inside process_svg_to_grbl, immediately after
+                # the servo g-code is written — so llama-server stays down
+                # through vectorize + gcode conversion and reloads alongside
+                # GRBL execution, per the artist's rule.
                 try:
-                    if getattr(state_manager, 'is_generating_drawing', False):
-                        state_manager.finish_drawing_generation()
-                        state_manager.clear_expected_output_prefix()
-                        print("[🔄] Generation phase complete, starting CNC execution...")
+                    state_manager.clear_expected_output_prefix()
                 except Exception:
                     pass
 

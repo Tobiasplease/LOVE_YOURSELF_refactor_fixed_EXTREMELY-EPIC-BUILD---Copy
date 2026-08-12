@@ -784,6 +784,48 @@ sheets; the SVG→gcode conversion was faithful, everything physical wasn't:
 - **Window**: paper_window grown 5% to 260x184mm (backup
   warp_calibration.json.pre_grow2); at 1.05 nothing clamps, ~23% of the
   perimeter rides extrapolated calibration (mild edge curvature, accepted).
+- **Tone-aware fills** (Aug 12, `CENTERLINE_TONE_FILLS` default ON,
+  prototyped in debug/tone-centerliner-proto/): a detected ink mass renders
+  as pen tone — gray-quantile bands drive hatch density along the region's
+  own axis, cross-hatch only in the darkest band, locally-dark accents
+  become outlined marks, one contour per mass — replacing the uniform 45°
+  screen. Artist kept the round-4 config after A/B previews. Known limit:
+  fine features in smooth tone (eyes) still band away — the long-term want
+  is stroke-native generation, not more filtering. Legacy path verified
+  bit-identical behind the flag.
+- **Centerline engines** (Aug 12, `CENTERLINE_ENGINE`, default "dsv" since Aug 12 evening — artist's call):
+  "v2" = skeleton graph walk (+ tone fills above). "dsv_hybrid" = stroke
+  layer through Deep Sketch Vectorization (SIGGRAPH 2024, vendored at
+  DSV_HOME=/home/impostor/Deep-Sketch-Vectorization with own venv+weights,
+  offline-safe; bcnc/dsv_hybrid.py bridge), masses through the tone
+  renderer — fidelity to the generated image. "dsv" = whole ink through
+  un-thinned DSV, NO tone fills — the stroke-elegant reduction the artist
+  judged best on the eval sheets. Slot: post-ComfyUI pre-GRBL, before
+  finish_drawing_generation releases llama-server; frees ComfyUI's cache
+  first (it reloads every gen anyway). ~10-25s GPU, ~2-4min CPU fallback,
+  and every DSV failure falls through to the v2 skeleton walk. Eval sheets:
+  debug/tone-centerliner-proto/engine_comparison_3way.png.
+  **GPU slot contract (Aug 12 night, artist's rule)**: llama-server must not
+  start until g-code is FULLY generated; it runs alongside GRBL execution
+  only. Enforced by is_generating_drawing: image_monitor RE-ARMS the 5-min
+  window when it picks the PNG up (the queue-time timer was expiring
+  mid-vectorize and letting the 27B load against DSV), and the release
+  moved from image_monitor into process_svg_to_grbl, immediately after the
+  servo g-code is written. dsv_hybrid also polls nvidia-smi after freeing
+  ComfyUI (release lags the /free call — the OOM race) and scales DSV
+  output by its DECLARED canvas (DSV emits at 2x its processing resolution;
+  assuming input scale doubled coordinates → the "zoomed/cropped" sheet).
+- **Serial revival** (Aug 12): pen-lift commands were timing out with TOTAL
+  silence mid-drawing (`Timeout on M3 S38, response=[]` — 8 of 9 drawings
+  failed in one afternoon; suspected loose cable / servo-spike stall; the
+  same fd answered again seconds later). On a silent TimeoutError the
+  executor now calls `_revive_link` (poll `?` up to 20s, watch for a Grbl
+  banner) and retries the line in place — G90 absolute makes the retry
+  idempotent. Banner = controller rebooted = position lost = abort to
+  pen-safety + re-home, as before. Budget `GRBL_SERIAL_RECOVERY_MAX` (3)
+  per drawing. Half-inked sheets were ALSO a major "barely legible" cause;
+  failed executions never fire `spend_desire`, which is why one want
+  (the red foam finger) re-drew four times in an afternoon.
 
 ## Kinetic bus (LIVE — default ON since July 27: KINETIC_BUS_ENABLED)
 

@@ -1588,7 +1588,7 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
 - Must work as a text-to-image prompt
 
 === GUIDANCE ===
-1. Start with "Black ink line drawing on white paper." then describe the IMAGE you want to create
+1. Describe the picture you want concretely — its subject, arrangement, light and dark, and its treatment in your own terms. Style words are yours to choose; add no stock quality boilerplate (blur lives in the guidance setting, not here — Aug 12 diagnosis)
 2. The subject comes from your artistic intent — the scene provides visual texture, not the topic
 3. Be SPECIFIC (not "a figure" but "a hand pulling thread from a tangled knot")
 4. Literal, abstract, symbolic — all valid. Choose what serves your intent"""
@@ -1652,12 +1652,13 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     except Exception:
         pass
 
+    felt_state = ""
     try:
         from captioner.context_compression import context_compressor
 
-        felt = context_compressor.get_felt_state()
-        if felt:
-            materials.append(f"Right now you feel {felt}.")
+        felt_state = (context_compressor.get_felt_state() or "").strip()
+        if felt_state:
+            materials.append(f"Right now you feel {felt_state}.")
 
         # The sticky slots — each distinct sentence stated ONCE, with its age.
         # The 5-step printed identity==belief twice and put them first; three
@@ -1857,34 +1858,37 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     except Exception:
         pass
 
-    # Render translation — mechanical, low temp, hardware truth. Replaces the
-    # technique-fiction step (india ink washes on a machine holding one pen).
-    # Rewritten Aug 10 2026. The old version listed the plotter's limits as
-    # negations ("no shading, no fills... detail is lost") and the model echoed
-    # them into the Flux prompt — negation activates the concept, the plotter-
-    # meta language pulled the LoRA toward its photographed-paper register, and
-    # every drawing collapsed to one sparse object (measured against the Feb
-    # field-test prompts, whose positive craft vocabulary drew the detailed
-    # sheets). Constraints now live as positive craft language; the plotter
-    # itself must never appear in the emitted prompt.
+    # Render translation — a FORMATTER, not a style authority (Aug 12, third
+    # iteration — the artist's ruling). Two failed versions taught the same
+    # lesson in opposite directions: Aug 10 injected "crisp, high-contrast...
+    # pure-white background" boilerplate into every prompt; the first Aug 12
+    # rewrite banned drawing-language and mandated scene-observation register.
+    # Both hardcoded ONE aesthetic into every drawing, killing the style-
+    # evolution channel — the prompt is the machine's only vehicle for
+    # abstraction and growth, so its own style words must pass through intact.
+    # Blur suppression does NOT belong here: it belongs to COMFY_FLUX_GUIDANCE
+    # 2.5 (the mechanical fix; blur was flux's soft basin around sparse-subject
+    # prompts at guidance 4.0 — Feb/Sept field tests ran drawing-primed prompts
+    # with low blur, so drawing-language was never the cause). The one job this
+    # call has: make the intention concrete and Flux-legible without adding or
+    # subtracting aesthetics.
     render_system = (
-        "You translate a drawing machine's intention into a prompt for an image generator. "
-        "The result must read as a pen-and-ink drawing: everything built from distinct black "
-        "strokes on white paper — contour lines of varying weight, hatching and cross-hatching "
-        "where tone is wanted. Tone is line density, never solid fills, gray washes, or soft gradients. "
-        "Match the intention's register. If it names one small thing, write a focused study: "
-        "the object's precise structure in confident line, generous white space around it. "
-        "If it names a scene or a space, build the whole composition: foreground against "
-        "background, overlapping forms, depth carried by line weight and detail density. "
-        "Use the intention's own concrete nouns; render the setting it implies, but invent no "
-        "new objects. "
-        "Describe only the image itself — never mention plotters, tracing, vectors, machines, "
-        "or how the drawing will be made. "
-        "Write ONLY the image prompt, 50-100 words, no commentary. "
-        "Begin with: Black ink line drawing on white paper."
+        "You format a drawing machine's intention into a prompt for an image generator. "
+        "Write one plain paragraph describing the picture to be made: what is in it, "
+        "how it is arranged, and — in the machine's own terms — how it is treated. "
+        "Keep the machine's words wherever they hold: its subject, its mood, its way "
+        "of naming marks, style, or treatment. Make the picture concrete enough to "
+        "render: name the things, their placement, their scale, light and dark. "
+        "Add no style, mood, or quality words of your own beyond what the intention "
+        "carries, and never mention plotters, tracing, vectors, or machines. "
+        "Write ONLY the prompt, 50-120 words, no commentary."
     )
     final_result = query_model(
-        prompt=f"The intention, in the machine's own words:\n\n{intent}\n\nWrite the image generation prompt.",
+        prompt=(
+            f"The intention, in the machine's own words:\n\n{intent}\n\n"
+            + (f"As it decided this, the machine felt: {felt_state}.\n\n" if felt_state else "")
+            + "Give this intention its visible form — write the description."
+        ),
         image=None,
         log_dir=MOOD_SNAPSHOT_FOLDER,
         system_prompt=render_system,
@@ -1896,9 +1900,8 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
         final_result = ""  # fall back to the intent, which is real text
     final_result = (final_result or "").strip()
     if not final_result:
-        final_result = f"Black ink line drawing on white paper. {intent[:150]}"
-    elif not final_result.lower().startswith("black ink"):
-        final_result = f"Black ink line drawing on white paper. {final_result}"
+        # The intent is already first-person observation — the register that renders sharp.
+        final_result = intent[:400]
 
     _say(f"[🎨] Render prompt: {final_result[:250]}")
 

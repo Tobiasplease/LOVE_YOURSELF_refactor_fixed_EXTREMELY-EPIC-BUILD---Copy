@@ -245,8 +245,16 @@ def hatch_fills(fill_mask: np.ndarray, w_half: float, angle_deg: float = 45.0,
         approx = cv2.approxPolyDP(c, 1.2, True).reshape(-1, 2).astype(np.float64)
         if len(approx) >= 3:
             polylines.append(np.vstack([approx, approx[:1]]))
+    polylines += _serpentine(fill_mask, max(4, int(round(spacing_factor * w_half))), angle_deg)
+    return polylines
 
-    spacing = max(4, int(round(spacing_factor * w_half)))
+
+def _serpentine(fill_mask: np.ndarray, spacing: int, angle_deg: float) -> list:
+    """The serpentine hatch core, shared by the legacy uniform fill and the
+    tone-aware fill: rows at `spacing` along `angle_deg`, linked into zigzags."""
+    polylines = []
+    mask8 = fill_mask.astype(np.uint8)
+    spacing = max(3, int(spacing))
     h, w = fill_mask.shape
     diag = int(np.ceil(np.hypot(h, w)))
     M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), angle_deg, 1.0)
@@ -296,6 +304,78 @@ def hatch_fills(fill_mask: np.ndarray, w_half: float, angle_deg: float = 45.0,
     return polylines
 
 
+def _principal_angle(mask: np.ndarray) -> float:
+    m = cv2.moments(mask.astype(np.uint8), binaryImage=True)
+    if m["mu20"] + m["mu02"] < 1e-3:
+        return 45.0
+    return float(np.degrees(0.5 * np.arctan2(2 * m["mu11"], m["mu20"] - m["mu02"])))
+
+
+def tone_fill_polylines(img: np.ndarray, region: np.ndarray, w_half: float) -> list:
+    """Tone-aware fill rendering (Aug 12 2026, prototyped in
+    debug/tone-centerliner-proto/). The uniform 45° screen flattened every
+    mass into wallpaper; this renders a fill the way a pen builds tone:
+
+      - ACCENTS: small features darker than their local surround (eyes,
+        knots) leave the tone system and become outlined, densely-filled
+        marks; the hatch yields around them.
+      - BANDS: quantiles of the source gray under the region (adaptive per
+        image); one hatch direction whose DENSITY carries the tone —
+        collinear layers deepen the mids, cross-hatch only in the darkest
+        band. Angles follow the region's own principal axis.
+      - One contour pass around each mass — the pen edge a hand would give it.
+
+    Known limit (kept knowingly): fine features inside smooth tone (a face's
+    eyes) still band away more than a hand would allow — the artist's verdict;
+    long-term this wants a stroke-native approach, not more filtering."""
+    polylines = []
+    imgf = img.astype(np.float32)
+    k_loc = max(3, int(8 * w_half) | 1)
+    local_mean = cv2.boxFilter(imgf, -1, (k_loc, k_loc))
+    accents = ((local_mean - imgf) > 25) & (imgf < 170) & region
+    na, laba, sta, _ = cv2.connectedComponentsWithStats(accents.astype(np.uint8))
+    acc_keep = np.zeros_like(accents)
+    for i in range(1, na):
+        if (1.5 * w_half) ** 2 <= sta[i, cv2.CC_STAT_AREA] <= (8 * w_half) ** 2:
+            acc_keep |= laba == i
+    accents = acc_keep
+    acc_contours, _ = cv2.findContours(accents.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    for c in acc_contours:
+        approx = cv2.approxPolyDP(c, 1.0, True).reshape(-1, 2).astype(np.float64)
+        if len(approx) >= 3:
+            polylines.append(np.vstack([approx, approx[:1]]))
+    if accents.any():
+        polylines += _serpentine(accents, int(round(1.6 * w_half)), _principal_angle(accents))
+
+    g = cv2.GaussianBlur(img, (0, 0), max(1.5, w_half / 3.0))
+    grow = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(2 * w_half) | 1, int(2 * w_half) | 1))
+    tone_region = region & ~(cv2.dilate(accents.astype(np.uint8), grow) > 0)
+    if not tone_region.any():
+        return polylines
+    vals = g[tone_region]
+    q_dark, q_mid = np.percentile(vals, [40, 75])
+    dark = tone_region & (g <= q_dark)
+    midplus = tone_region & (g <= q_mid)
+
+    contours, _ = cv2.findContours(tone_region.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    for c in contours:
+        if cv2.arcLength(c, True) < 12 * w_half:
+            continue
+        approx = cv2.approxPolyDP(c, 1.5, True).reshape(-1, 2).astype(np.float64)
+        if len(approx) >= 3:
+            polylines.append(np.vstack([approx, approx[:1]]))
+
+    base_angle = _principal_angle(tone_region)
+    for mask, spacing, ang in (
+        (tone_region, 5.0 * w_half, base_angle),
+        (midplus, 2.4 * w_half, base_angle),
+        (dark, 3.0 * w_half, base_angle + 90.0),
+    ):
+        if mask.any():
+            polylines += _serpentine(mask, int(round(spacing)), ang)
+    return polylines
+
+
 def _chaikin(pts: np.ndarray, iterations: int = 1) -> np.ndarray:
     for _ in range(iterations):
         if len(pts) < 3:
@@ -332,8 +412,26 @@ def raster_to_centerline_svg(input_path: str, output_path: str,
                              smooth_iterations: int = 1,
                              min_path_px: int = 5,
                              scale: float = 1.0,
-                             save_steps: bool = False):
-    """v1-compatible entry point: PNG in, polyline-SVG out."""
+                             save_steps: bool = False,
+                             tone_fills: bool = None,
+                             engine: str = None):
+    """v1-compatible entry point: PNG in, polyline-SVG out.
+
+    tone_fills: None reads CENTERLINE_TONE_FILLS from config (default True);
+    False forces the legacy uniform 45° hatch.
+    engine: None reads CENTERLINE_ENGINE from config — "v2" (skeleton walk)
+    or "dsv_hybrid" (stroke layer through Deep Sketch Vectorization, masses
+    through the tone renderer; any DSV failure falls back to v2)."""
+    if tone_fills is None:
+        try:
+            from config.config import CENTERLINE_TONE_FILLS as tone_fills
+        except ImportError:
+            tone_fills = True
+    if engine is None:
+        try:
+            from config.config import CENTERLINE_ENGINE as engine
+        except ImportError:
+            engine = "v2"
     img = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise ValueError(f"Failed to load image from {input_path}")
@@ -346,20 +444,54 @@ def raster_to_centerline_svg(input_path: str, output_path: str,
     width_map = cv2.distanceTransform(binary.astype(np.uint8), cv2.DIST_L2, 3)
     strokes, fills, w_half = split_fills(binary, width_map)
 
-    skel = skeletonize(strokes)
-    if save_steps:
-        cv2.imwrite(f"{base}_v2_step2_skeleton.png", skel.astype(np.uint8) * 255)
-        cv2.imwrite(f"{base}_v2_step2_fills.png", fills.astype(np.uint8) * 255)
+    # Engines: "dsv_hybrid" = masses -> tone renderer, stroke layer -> DSV
+    # (fidelity to the generated image). "dsv" = the WHOLE ink through DSV,
+    # no tone fills — DSV's own stroke-elegant reduction, which simply drops
+    # tone the way it did in the Aug 12 eval the artist responded to. Both
+    # fall back to the v2 skeleton walk on any failure.
+    polylines = None
+    dsv_pure = False
+    if engine in ("dsv_hybrid", "dsv"):
+        try:
+            from .dsv_hybrid import dsv_available, dsv_stroke_polylines
+        except ImportError:
+            from dsv_hybrid import dsv_available, dsv_stroke_polylines
+        # Pure engine feeds DSV the RAW grayscale (no binarize — that layer
+        # thickens and crushes; the Aug 12 eval verdict was earned on raw
+        # gray). The hybrid's stroke layer is necessarily a binary mask.
+        dsv_input = img if engine == "dsv" else strokes
+        has_ink = binary.any() if engine == "dsv" else strokes.any()
+        if dsv_available() and has_ink:
+            try:
+                polylines = dsv_stroke_polylines(dsv_input, thin=(engine == "dsv_hybrid"))
+                dsv_pure = engine == "dsv"
+                print(f"[v2] DSV ({engine}): {len(polylines)} strokes from Deep Sketch Vectorization")
+            except Exception as e:
+                print(f"[v2] DSV ({engine}) failed ({e}) — falling back to skeleton walk")
+                polylines = None
+        elif not dsv_available():
+            print(f"[v2] {engine} requested but DSV_HOME not available — skeleton walk")
 
-    paths, nodes, deg = skeleton_paths(skel)
-    paths = prune_spurs(paths, nodes, deg, width_map, spur_factor)
-    paths = merge_through_junctions(paths, merge_angle_deg)
-    polylines = [simplify(p, simplify_epsilon, smooth_iterations)
-                 for p in paths if len(p) >= min_path_px]
-    if fills.any():
-        polylines += hatch_fills(fills, w_half, hatch_angle_deg, hatch_spacing_factor)
+    if polylines is None:
+        skel = skeletonize(strokes)
+        if save_steps:
+            cv2.imwrite(f"{base}_v2_step2_skeleton.png", skel.astype(np.uint8) * 255)
+            cv2.imwrite(f"{base}_v2_step2_fills.png", fills.astype(np.uint8) * 255)
 
-    h, w = skel.shape
+        paths, nodes, deg = skeleton_paths(skel)
+        paths = prune_spurs(paths, nodes, deg, width_map, spur_factor)
+        paths = merge_through_junctions(paths, merge_angle_deg)
+        polylines = [simplify(p, simplify_epsilon, smooth_iterations)
+                     for p in paths if len(p) >= min_path_px]
+    if fills.any() and not dsv_pure:
+        # Pure DSV IS the whole rendering — its reduction drops tone by
+        # design; adding fills back would recreate the hybrid.
+        if tone_fills:
+            polylines += tone_fill_polylines(img, fills, w_half)
+        else:
+            polylines += hatch_fills(fills, w_half, hatch_angle_deg, hatch_spacing_factor)
+
+    h, w = binary.shape
     dwg = svgwrite.Drawing(output_path, size=(f"{w * scale}px", f"{h * scale}px"))
     for pl in polylines:
         pts = [(float(x) * scale, float(y) * scale) for x, y in pl]

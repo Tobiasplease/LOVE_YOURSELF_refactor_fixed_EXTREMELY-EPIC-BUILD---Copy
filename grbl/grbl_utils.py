@@ -15,9 +15,9 @@ from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 
 try:
-    from .warp_transform import warp_transform_line, find_max_xy_from_lines
+    from .warp_transform import warp_transform_line, find_xy_bounds_from_lines
 except ImportError:
-    from warp_transform import warp_transform_line, find_max_xy_from_lines
+    from warp_transform import warp_transform_line, find_xy_bounds_from_lines
 
 # Import pen servo configuration
 try:
@@ -300,6 +300,43 @@ def get_status(ser):
     ser.write(b"?")
     ser.flush()
     return ser.readline().decode(errors="ignore").strip()
+
+
+def _revive_link(ser, grace=20.0):
+    """After a silent line timeout (response=[]): poll the SAME fd until GRBL
+    answers a status query. The Aug 12 pen-up dropouts showed the link going
+    quiet for 15s+ mid-drawing and then answering again seconds later — a
+    transient stall, not a dead port (pen safety and homing succeeded on the
+    same fd right after). Returns:
+      "alive" — status answered, no reset banner: position intact, safe to
+                retry the failed line (G90 absolute makes the retry idempotent)
+      "reset" — a Grbl banner appeared: the controller rebooted, position is
+                LOST, the drawing must abort so pen-safety + homing run
+      "dead"  — nothing within grace, or the fd itself errors
+    """
+    deadline = time.time() + grace
+    saw_banner = False
+    while time.time() < deadline:
+        try:
+            ser.reset_input_buffer()
+            ser.write(b"?")
+            ser.flush()
+        except Exception:
+            return "dead"
+        window = time.time() + 1.0
+        while time.time() < window:
+            try:
+                raw = ser.readline().decode(errors="ignore").strip()
+            except Exception:
+                return "dead"
+            if not raw:
+                break
+            if "Grbl" in raw:
+                saw_banner = True
+            if raw.startswith("<"):
+                return "reset" if saw_banner else "alive"
+        time.sleep(0.5)
+    return "dead"
 
 
 def parse_state(status_line):
@@ -1127,8 +1164,9 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
 
             total_lines = len(lines)
             executed_lines = 0
+            serial_recoveries = 0
             lines = lines[3:]  # Skip first three lines (G20, G17, G90), from vpype inject somehow
-            max_x, max_y = find_max_xy_from_lines(lines)
+            min_x, min_y, max_x, max_y = find_xy_bounds_from_lines(lines)
 
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
@@ -1141,7 +1179,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                     # Determine timeout and transform based on command type
                     if line.startswith(("G0", "G1", "G00", "G01")):
                         if GRBL_WARP_TRANSFORM:
-                            line = warp_transform_line(line, max_x, max_y)  # warp transform line coords
+                            line = warp_transform_line(line, max_x, max_y, min_x=min_x, min_y=min_y)  # warp transform line coords
                         timeout = move_timeout
                     else:
                         timeout = DEFAULT_CMD_TIMEOUT
@@ -1162,6 +1200,71 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                             print_message=f"[📋] Progress: {executed_lines}/{total_lines} lines executed",
                         )
 
+                except TimeoutError as e:
+                    # Serial dropout mid-drawing (the Aug 12 pen-up signature:
+                    # 15s of silence, then the link answers again). Try to save
+                    # the drawing in place instead of aborting a half-inked
+                    # sheet: revive the link, then retry this one line — G90
+                    # absolute coords make the retry idempotent even if the
+                    # original command actually executed and only its ok died.
+                    from config.config import GRBL_SERIAL_RECOVERY_MAX
+
+                    serial_recoveries += 1
+                    if serial_recoveries <= GRBL_SERIAL_RECOVERY_MAX:
+                        log_json_entry(
+                            LogType.GRBL,
+                            {
+                                "message": "Silent line timeout — attempting serial link revival",
+                                "action": "serial_revival_attempt",
+                                "line_number": line_num,
+                                "command": line,
+                                "attempt": serial_recoveries,
+                            },
+                            print_message=f"[🔌] Line {line_num} timed out silently — reviving link (attempt {serial_recoveries})",
+                        )
+                        verdict = _revive_link(ser)
+                        if verdict == "alive":
+                            try:
+                                ser.reset_input_buffer()
+                                send_cmd(ser, line, timeout=timeout)
+                                executed_lines += 1
+                                log_json_entry(
+                                    LogType.GRBL,
+                                    {
+                                        "message": "Serial link revived — drawing continues",
+                                        "action": "serial_revival_success",
+                                        "line_number": line_num,
+                                    },
+                                    print_message=f"[🔌] Link revived at line {line_num} — drawing continues",
+                                )
+                                continue
+                            except Exception as e2:
+                                e = e2  # fall through to the abort log below
+                        elif verdict == "reset":
+                            log_json_entry(
+                                LogType.ERROR,
+                                {
+                                    "message": "GRBL controller REBOOTED mid-drawing (banner seen) — position lost, aborting",
+                                    "component": "grbl",
+                                    "action": "serial_revival_reset",
+                                    "line_number": line_num,
+                                },
+                                print_message=f"[🔌] Controller rebooted at line {line_num} — position lost, aborting for re-home",
+                            )
+                    log_json_entry(
+                        LogType.ERROR,
+                        {
+                            "message": "Failed to execute G-code line",
+                            "component": "grbl",
+                            "line_number": line_num,
+                            "command": line,
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "serial_recoveries_used": serial_recoveries,
+                        },
+                        print_message=f"[❌] Failed to execute line {line_num}: {line} - Error: {e}",
+                    )
+                    raise
                 except Exception as e:
                     log_json_entry(
                         LogType.ERROR,
@@ -1593,6 +1696,20 @@ def process_svg_to_grbl(
 
         if os.path.exists(output_file_vpype):
             os.remove(output_file_vpype)
+
+        # G-code is fully generated — NOW release the generation phase so
+        # llama-server may reload. The artist's rule (Aug 12): llama runs
+        # DURING GRBL execution (watching itself draw needs it) but must not
+        # start while the vectorizer/gcode chain still owns the GPU. The old
+        # release point (image_monitor, pre-conversion) let the 27B load
+        # alongside DSV; this seam is the earliest safe moment.
+        try:
+            from utils.state_manager import state_manager as _sm
+
+            if getattr(_sm, "is_generating_drawing", False):
+                _sm.finish_drawing_generation()
+        except Exception:
+            pass
 
         # Execute on GRBL if requested
         if execute_grbl:

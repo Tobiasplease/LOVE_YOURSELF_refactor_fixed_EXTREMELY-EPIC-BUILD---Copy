@@ -67,6 +67,29 @@ PRE_CLAMP_TO_DOMAIN = False
 # If drawings appear rotated to the left, increase this value
 PRE_ROTATION_DEG = 13.0  # Reduced from 20° — was overcorrecting, causing visible clockwise tilt
 
+def find_xy_bounds_from_lines(lines):
+    """(min_x, min_y, max_x, max_y) over all X/Y words, or Nones if absent.
+    The streaming path bounds-normalizes with this so the drawing's INK spans
+    the calibrated window instead of inheriting the vpype page margin (see
+    WarpCalibration.apply_to_line, Aug 12 2026)."""
+    min_x = min_y = float("inf")
+    max_x = max_y = float("-inf")
+    for line in lines:
+        for part in line.strip().split():
+            try:
+                if part.startswith("X"):
+                    v = float(part[1:])
+                    min_x, max_x = min(min_x, v), max(max_x, v)
+                elif part.startswith("Y"):
+                    v = float(part[1:])
+                    min_y, max_y = min(min_y, v), max(max_y, v)
+            except ValueError:
+                pass
+    if max_x == float("-inf") or max_y == float("-inf"):
+        return None, None, None, None
+    return min_x, min_y, max_x, max_y
+
+
 def find_max_xy_from_lines(lines):
     max_x = float('-inf')
     max_y = float('-inf')
@@ -135,11 +158,13 @@ def map_to_quad(x, y, x_max=40, y_max=40):
 
 
 
-def warp_transform_line(gcode_line, max_x, max_y):
-    """Apply inverse warp transform to G-code coordinates"""
+def warp_transform_line(gcode_line, max_x, max_y, min_x=0.0, min_y=0.0):
+    """Apply inverse warp transform to G-code coordinates. min_x/min_y enable
+    bounds-normalization on the measured-calibration path (legacy quad below
+    keeps max-only normalization; it is not live while the JSON exists)."""
     cal = _get_measured_calibration()
     if cal is not None:
-        return cal.apply_to_line(gcode_line, max_x, max_y)
+        return cal.apply_to_line(gcode_line, max_x, max_y, min_x=min_x, min_y=min_y)
     # Post-transform scale — increase for larger drawings on paper
     SCALE_FACTOR = 1.15  # Increase output size (was 1.08, bumped for more paper coverage)
 

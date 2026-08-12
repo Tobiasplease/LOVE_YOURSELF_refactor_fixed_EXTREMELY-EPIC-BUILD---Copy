@@ -463,15 +463,23 @@ class WarpCalibration:
         July 21 lessons baked into the projection + hysteresis shell."""
         return clamp_to_reach(x, y)
 
-    def apply_to_line(self, gcode_line: str, max_x: float, max_y: float) -> str:
-        """Drop-in for warp_transform_line: ideal gcode -> command gcode."""
+    def apply_to_line(self, gcode_line: str, max_x: float, max_y: float, min_x: float = 0.0, min_y: float = 0.0) -> str:
+        """Drop-in for warp_transform_line: ideal gcode -> command gcode.
+
+        min_x/min_y (Aug 12 2026): normalizing by max ALONE left the vpype page
+        margin inside the mapping — a drawing spanning 16-34 of a 0-34 domain
+        occupied u 0.47-1.0, printing at half scale against the window's edge
+        (the extrapolated calibration strip). Bounds-normalizing makes the ink
+        itself fill the window, centered. Defaults preserve the old behavior."""
         xm = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
         ym = re.search(r"Y([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)
         if not (xm and ym):
             return gcode_line
-        u = float(xm.group(1)) / max(1e-9, max_x)
-        v = float(ym.group(1)) / max(1e-9, max_y)
-        px, py = self.paper_target(min(1, max(0, u)), min(1, max(0, v)), aspect=max_x / max(1e-9, max_y))
+        span_x = max(1e-9, max_x - min_x)
+        span_y = max(1e-9, max_y - min_y)
+        u = (float(xm.group(1)) - min_x) / span_x
+        v = (float(ym.group(1)) - min_y) / span_y
+        px, py = self.paper_target(min(1, max(0, u)), min(1, max(0, v)), aspect=span_x / span_y)
         cx, cy = self.to_command(px, py)
         line = re.sub(r"X[-+]?\d*\.?\d+", f"X{cx:.3f}", gcode_line, count=1, flags=re.IGNORECASE)
         line = re.sub(r"Y[-+]?\d*\.?\d+", f"Y{cy:.3f}", line, count=1, flags=re.IGNORECASE)

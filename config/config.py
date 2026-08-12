@@ -350,7 +350,10 @@ CONTROLNET_NET_PATH = os.getenv("CONTROLNET_NET_PATH", "flux-dev-controlnet-unio
 COMFY_TEMPLATE_FILE = os.getenv("COMFY_TEMPLATE_FILE", "impostor-template-impostor-bot-svg.json")
 COMFY_LORA_PATH = os.getenv("COMFY_LORA_PATH", "impostor-32-balanced-16k.safetensors")
 # "sketch" pulled Flux toward the LoRA's photographed-graphite mode (soft gray blur); "ink" keeps it in pen territory
-TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black ink line art, sharp clean lines, high contrast, stark white background ")
+# "sharp clean lines... stark white background" (Jul 27) measurably CAUSED blur: drawing-spec
+# register pulls Flux into its soft digital-graphic mode (62% of outputs gaussian-blurred).
+# The Aug 12 A/B matrix proved this exact prefix sharp in every cell. See memory: comfy-blur-diagnosis.
+TRIGGER_PROMPT = os.getenv("TRIGGER_PROMPT", "impostor black and white sketch line art ")
 # Force single-image generation for stability (do not override via env)
 BATCH_SIZE = 1
 
@@ -362,7 +365,9 @@ COMFY_CNET_STRENGTH = float(os.getenv("COMFY_CNET_STRENGTH", 0.3))
 # Detail forms in the final denoise steps; releasing the depth anchor there lets the
 # LoRA's photographed-drawing defocus mode drift in. Held to 1.0 — the 686-sample era.
 COMFY_CNET_END_PERCENT = float(os.getenv("COMFY_CNET_END_PERCENT", 1.0))
-COMFY_FLUX_GUIDANCE = float(os.getenv("COMFY_FLUX_GUIDANCE", 4.0))
+# 2.5 since Aug 12 blur diagnosis: at 4.0, single-object-on-empty-ground prompts (the register
+# the machine favors) render soft on most seeds; 2.5 rendered every tested case crisp.
+COMFY_FLUX_GUIDANCE = float(os.getenv("COMFY_FLUX_GUIDANCE", 2.5))
 COMFY_LATENT_WIDTH = int(os.getenv("COMFY_LATENT_WIDTH", 1024))
 COMFY_LATENT_HEIGHT = int(os.getenv("COMFY_LATENT_HEIGHT", 1024))
 COMFY_STEPS = int(os.getenv("COMFY_STEPS", 25))
@@ -372,6 +377,30 @@ DRAWING_TIMEOUT = float(
 )  # if drawing generation takes longer than this, it will be auto-finished, something is wrong...
 
 # === SVG TO G-CODE SETTINGS ===
+# Tone-aware fills (Aug 12 2026, prototyped in debug/tone-centerliner-proto/):
+# a detected ink mass is rendered as pen tone — hatch density from the source
+# gray's quantiles, cross-hatch only in the darkest band, locally-dark accents
+# pulled out as marks — instead of the legacy uniform 45° screen ("wallpaper").
+# The artist's verdict on the A/B previews: keep. Known limit: fine features
+# in smooth tone (eyes) still band away; the long-term answer is stroke-native
+# generation, not more filtering.
+CENTERLINE_TONE_FILLS = os.getenv("CENTERLINE_TONE_FILLS", "true").lower() in ("1", "true", "yes")
+
+# Centerline engine (Aug 12 2026): "v2" = skeleton graph walk. "dsv_hybrid"
+# routes the STROKE layer through Deep Sketch Vectorization (SIGGRAPH 2024,
+# vendored at DSV_HOME with its own venv+weights, offline-safe), masses still
+# through the tone renderer — fidelity to the generated image. "dsv" = the
+# WHOLE ink through un-thinned DSV, no tone fills — DSV's stroke-elegant
+# reduction that simply drops tone; the artist's Aug 12 verdict on the eval
+# sheets: "by far the best result we've seen". Any DSV failure falls back to
+# the skeleton walk. Runs in the post-ComfyUI slot (frees ComfyUI's cache
+# first — it reloads every generation anyway): ~24s GPU, ~7min CPU fallback.
+# DEFAULT "dsv" since Aug 12 evening (artist's call, from the eval sheets;
+# paper verdict pending). Known trades accepted: thick outlines can arrive
+# as fragmented dashes, tonal images print sparse, clean contours sometimes
+# double. Revert to "v2" to restore the skeleton walk.
+CENTERLINE_ENGINE = os.getenv("CENTERLINE_ENGINE", "dsv")
+
 # If True, run svg_centerliner on PNGs to create centerline SVGs, then convert to G-code
 # If False, convert the latest SVG in output folder to G-code
 CENTER_LINE_SVG = True
@@ -601,7 +630,13 @@ GRBL_IDLE_UPDATE_INTERVAL = 3.0  # Seconds between movement updates - longer pau
 
 # Master optimization toggles
 GRBL_ENABLE_FEED_OPTIMIZATION = os.getenv("GRBL_ENABLE_FEED_OPTIMIZATION", "true").lower() in ("1", "true", "yes")
-GRBL_ENABLE_PEN_OPTIMIZATION = os.getenv("GRBL_ENABLE_PEN_OPTIMIZATION", "true").lower() in ("1", "true", "yes")
+# Pen-lift clustering OFF by default (Aug 12 2026): on a small dense drawing
+# every pen-down lands within the 5mm cluster threshold, so the ENTIRE sheet
+# ran on the shallow fast lift (S38 — 3 servo units above the documented
+# grazing point on an unflat surface). One high region and every traversal
+# drags ink through the figure. 77 deep lifts cost seconds; a grazed sheet
+# costs the drawing. Same doctrine as the flat feed rate.
+GRBL_ENABLE_PEN_OPTIMIZATION = os.getenv("GRBL_ENABLE_PEN_OPTIMIZATION", "false").lower() in ("1", "true", "yes")
 GRBL_ENABLE_STROKE_FILTERING = os.getenv("GRBL_ENABLE_STROKE_FILTERING", "false").lower() in ("1", "true", "yes")
 
 # === GRBL SEGMENTED EXECUTION ===
@@ -635,6 +670,14 @@ GRBL_NORMAL_PEN_UP = int(os.getenv("GRBL_NORMAL_PEN_UP", GRBL_PEN_UP_S))
 GRBL_NORMAL_PEN_DOWN = int(os.getenv("GRBL_NORMAL_PEN_DOWN", GRBL_PEN_DOWN_S))
 GRBL_FAST_PEN_UP = int(os.getenv("GRBL_FAST_PEN_UP", 38))  # dense clusters: shallower, still ~3 above the grazing 41
 GRBL_FAST_PEN_DOWN = int(os.getenv("GRBL_FAST_PEN_DOWN", GRBL_PEN_DOWN_S))  # was +5: pressing HARDER in clusters was backwards
+
+# Serial link revival (Aug 12 2026): pen-lift commands were timing out with
+# TOTAL silence mid-drawing (loose cable / transient stall — the same fd
+# answered again seconds later), killing 8 of 9 drawings in an afternoon and
+# leaving half-inked sheets. On a silent timeout the executor now polls the
+# link back to life and retries the line in place (G90 makes it idempotent);
+# a Grbl reset banner still aborts — position is lost and re-homing must run.
+GRBL_SERIAL_RECOVERY_MAX = int(os.getenv("GRBL_SERIAL_RECOVERY_MAX", 3))  # revival attempts per drawing
 
 # Cluster detection parameters
 GRBL_CLUSTER_DISTANCE_THRESHOLD = float(os.getenv("GRBL_CLUSTER_DISTANCE_THRESHOLD", 5.0))  # Max distance between clustered pen lifts (mm)
