@@ -104,7 +104,6 @@ class LogViewer:
         # Show event type breakdown
         main_types = [
             "caption",
-            "mood",
             "reflection",
             "drawing_decision",
             "error",
@@ -157,12 +156,6 @@ class LogViewer:
             caption = event.get("caption", "") or data.get("caption", "")
             if caption:
                 print(f"  {caption}")
-        elif event_type == "mood":
-            print(f"[{time_str}] [MOOD] MOOD")
-            if "mood" in data:
-                print(f"  Mood: {data['mood']:.2f}")
-            if "emotion" in data:
-                print(f"  Emotion: {data['emotion']}")
         elif event_type == "reflection":
             print(f"[{time_str}] [REF] REFLECTION")
             if "reflection" in data:
@@ -221,8 +214,6 @@ class LogViewer:
         total_reflections = 0
         total_drawings = 0
         total_errors = 0
-        all_emotions = []
-        all_moods = []
 
         for events in self.logs.values():
             total_events += len(events)
@@ -238,11 +229,6 @@ class LogViewer:
                     total_drawings += 1
                 elif event_type == "error":
                     total_errors += 1
-                elif event_type == "mood":
-                    if "emotion" in data:
-                        all_emotions.append(data["emotion"])
-                    if "mood" in data:
-                        all_moods.append(data["mood"])
 
         print(f"Total runs: {len(self.logs)}")
         print(f"Total events: {total_events:,}")
@@ -250,18 +236,6 @@ class LogViewer:
         print(f"Total reflections: {total_reflections:,}")
         print(f"Total drawings initiated: {total_drawings}")
         print(f"Total errors logged: {total_errors}")
-
-        if all_moods:
-            avg_mood = sum(all_moods) / len(all_moods)
-            print(f"\nAverage mood: {avg_mood:.2f}")
-
-        if all_emotions:
-            from collections import Counter
-
-            emotion_counts = Counter(all_emotions)
-            print(f"\nTop emotions:")
-            for emotion, count in emotion_counts.most_common(5):
-                print(f"  {emotion}: {count} times")
 
 
 def main():

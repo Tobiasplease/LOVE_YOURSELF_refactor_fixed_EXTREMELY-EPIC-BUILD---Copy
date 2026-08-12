@@ -11,8 +11,11 @@ drawing system prompt (felt_line, omitted when none), step2's feeling line,
 drawing_memory emotional_tone. mood_to_feeling deleted (zero callers);
 set_felt_state single-writer (source param gone). Multi_step A/B branch KEPT
 (only its frozen call patched) — retiring it fully is a separate decision.
-Remaining: tier 5 (log_mood sink, mood-tick snapshots, state_manager
-mood block) and the phase C redesign surface.
+TIER 5 EXECUTED same day: log_mood + LogType.MOOD gone (mood swings still
+print [😊] to console), the per-10s mood_{ts}.jpg snapshot write gone, the
+state_manager mood_engine save/restore block + write-only novelty/boredom
+fields gone (required_keys updated — old state files still validate).
+Remaining: the phase C redesign surface only.
 
 ## The headline: two disconnected mood systems
 

@@ -91,8 +91,6 @@ class StateManager:
                 "captioner": {
                     "current_mood": captioner.current_mood,
                     "last_caption": captioner.last_caption,
-                    "boredom": captioner.boredom,
-                    "novelty_score": captioner.novelty_score,
                     # Memory system (motif tracking removed — now handled by ChromaDB)
                     # Temporal spine (GPT-5's additions)
                     "boot_ts": getattr(captioner, "boot_ts", time.time()),
@@ -107,12 +105,6 @@ class StateManager:
                     # Organic emotional evolution
                     # Recent memory (last 50 entries for richer context)
                     "recent_memory": list(captioner.memory_queue)[-50:] if captioner.memory_queue else [],
-                },
-                # Mood engine state
-                "mood_engine": {
-                    "current_mood": mood_engine.current_mood,
-                    "last_caption": mood_engine.last_caption,
-                    "last_person_detected": mood_engine.last_person_detected,
                 },
                 # Timekeeper state (if available)
                 "timekeeper": self._get_timekeeper_state(timekeeper) if timekeeper else {},
@@ -183,7 +175,6 @@ class StateManager:
             # Restore mood and state
             captioner.current_mood = cap_state.get("current_mood", 0.5)
             captioner.last_caption = cap_state.get("last_caption", "")
-            # Skip boredom and novelty_score - they're now properties that access memory system
 
             # Motif/belief restore removed — now handled by ChromaDB semantic memory
             from collections import deque
@@ -262,22 +253,6 @@ class StateManager:
             print(f"[ERROR] Failed to apply captioner state: {e}")
             return False
 
-    def apply_state_to_mood_engine(self, state: Dict[str, Any], mood_engine) -> bool:
-        """Apply loaded state to mood engine."""
-        try:
-            mood_state = state["mood_engine"]
-
-            mood_engine.current_mood = mood_state.get("current_mood", 0.5)
-            mood_engine.last_caption = mood_state.get("last_caption", "")
-            mood_engine.last_person_detected = mood_state.get("last_person_detected", False)
-
-            print(f"[SUCCESS] Restored mood engine state: mood={mood_engine.current_mood:.2f}")
-            return True
-
-        except Exception as e:
-            print(f"[ERROR] Failed to apply mood engine state: {e}")
-            return False
-
     def get_lifetime_stats(self) -> Dict[str, Any]:
         """Get lifetime statistics across all sessions."""
         if not os.path.exists(self.lifetime_state_file):
@@ -302,7 +277,9 @@ class StateManager:
 
     def _validate_state(self, state: Dict[str, Any]) -> bool:
         """Validate that state has required structure."""
-        required_keys = ["metadata", "captioner", "mood_engine"]
+        # "mood_engine" dropped Aug 12 — the block was cosmetic (overwritten
+        # within one mood tick); old files carrying it still validate
+        required_keys = ["metadata", "captioner"]
         return all(key in state for key in required_keys)
 
     def _update_lifetime_stats(self, current_state: Dict[str, Any]):

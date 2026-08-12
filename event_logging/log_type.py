@@ -13,7 +13,6 @@ class LogType(Enum):
     RUN_METADATA = "run_metadata"
 
     # AI/ML processing events
-    MOOD = "mood_update"
     CAPTION = "caption"
     REFLECTION = "reflection"
     VOCAB_PROMOTION = "vocab_promotion"

@@ -921,7 +921,6 @@ previous_state = state_manager.load_session_state()
 if previous_state:
     # Apply state to components
     state_manager.apply_state_to_captioner(previous_state, captioner)
-    state_manager.apply_state_to_mood_engine(previous_state, mood_engine)
 
     # Send immediate mood update to hand controller with restored state
     debug_print("Sending restored mood to hand controller", "INIT")
@@ -994,19 +993,9 @@ def mood_update_thread(mood_frame, timestamp):
         debug_print("Mood update thread started", "MOOD")
         thread_now = time.time()
         if thread_now - last_snapshot_time >= 10:
-            # Don't record a frame the camera never filled (Aug 2). ~7% of these
-            # snapshots were uniform legal-black (mean 16, stddev 0.0) — an
-            # unfilled buffer, not a dark room. They never reached the model
-            # (that path writes its own frame), but they polluted the image
-            # record and fed the mood engine a picture of nothing. Zero
-            # deviation is unambiguous: no real scene has it.
-            if float(mood_frame.std()) < 1.0:
-                debug_print("Snapshot skipped: blank frame (camera buffer not filled)", "MOOD")
-            else:
-                snapshot_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{int(thread_now)}.jpg")
-                cv2.imwrite(snapshot_path, mood_frame)
-                debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
-
+            # (The per-tick mood_{ts}.jpg snapshot write was removed Aug 12 —
+            # it existed only so the retired mood log could record a path
+            # nothing read. Caption images are written elsewhere.)
             try:
                 # Process caption and update physical systems
                 if captioner.last_caption:
@@ -1014,11 +1003,7 @@ def mood_update_thread(mood_frame, timestamp):
                     if clean_caption.lower().startswith("caption:"):
                         clean_caption = clean_caption[len("caption:") :].strip()
 
-                    mood_engine.analyze_mood(
-                        clean_caption,
-                        saw_person=best_box is not None,
-                        image_path=snapshot_path if "snapshot_path" in locals() else None,
-                    )
+                    mood_engine.analyze_mood(clean_caption, saw_person=best_box is not None)
                     debug_print(f"Processed caption through mood analysis: {clean_caption[:100]}...", "MOOD")
 
                     # Sampled AFTER analyze_mood — the push used to run one

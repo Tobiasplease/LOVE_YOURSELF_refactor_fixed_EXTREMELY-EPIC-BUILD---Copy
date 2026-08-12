@@ -1,15 +1,9 @@
 # mood/mood.py
 from __future__ import annotations
 
-import os
 import time
-from typing import Optional
 
 import numpy as np  # type: ignore
-
-from config.config import MOOD_SNAPSHOT_FOLDER
-from event_logging.event_logger import log_json_entry
-from event_logging.log_type import LogType
 
 
 # ---------------------------------------------------------------------------#
@@ -29,7 +23,6 @@ class MoodEngine:
         self,
         caption: str,
         saw_person: bool = False,
-        image_path: str | None = None,
     ) -> float:
         """Analyze mood: LLM mood read as the core signal + real-event nudges.
 
@@ -76,7 +69,9 @@ class MoodEngine:
         previous_scalar = self.current_mood
         self.current_mood = float(np.clip(0.5 + 0.5 * self.mood_vector[0], 0.0, 1.0))
 
-        log_mood(caption, self.current_mood, self.current_mood - previous_scalar, image_path=image_path)
+        change = self.current_mood - previous_scalar
+        if abs(change) > 0.05:
+            print(f"[😊] Mood {'↗' if change > 0 else '↘'} {self.current_mood:.2f} (Δ{change:+.2f})")
         self.last_caption = caption
         self.last_person_detected = saw_person
         return self.current_mood
@@ -133,25 +128,3 @@ class MoodEngine:
     # Keyword sentiment (analyze_caption_sentiment) + compute_mood_change
     # retired July 10 — the lexicon matched emotion adjectives the voice never
     # uses; the core signal is now the LLM mood read (context_compression).
-
-def log_mood(caption, mood, mood_change, image_path: Optional[str] = None):
-    """
-    Log mood data in JSON format with timestamp, caption, mood value, and image path.
-    Only print to console when mood change is meaningful (>0.05).
-    """
-    data = {
-        "caption": caption,
-        "mood": mood,
-        "mood_change": mood_change,
-        "image_path": image_path if image_path and os.path.exists(image_path) else None,
-    }
-
-    # Only print mood updates for meaningful changes (>0.05) to reduce noise
-    print_message = None
-    if abs(mood_change) > 0.05:
-        change_indicator = "↗" if mood_change > 0 else "↘"
-        print_message = f"[😊] Mood {change_indicator} {mood:.2f} (Δ{mood_change:+.2f})"
-
-    log_json_entry(LogType.MOOD, data, MOOD_SNAPSHOT_FOLDER, print_message=print_message)
-
-
