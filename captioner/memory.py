@@ -67,11 +67,6 @@ class MemoryMixin:
         self._activation_network = get_activation_network()
         self._contextual_memory = get_contextual_memory()
 
-        # Organic emotional evolution
-        self.emotional_expressions = getattr(self, "emotional_expressions", [])
-        self.personal_emotional_vocabulary = getattr(self, "personal_emotional_vocabulary", {})
-        self.emotional_patterns = getattr(self, "emotional_patterns", {})
-
         # Novelty/Boredom
         self._novelty_score: float = 1.0
         self._boredom: float = 0.0
@@ -87,8 +82,6 @@ class MemoryMixin:
         memory_type: str = "observation",
         derived_from: list[str] | None = None,
         reactivity_data: Optional[Dict] = None,
-        mood_vector: Optional[Tuple[float, float, float]] = None,
-        emotion_state: Optional[str] = None,
         gaze_zone: str = "ahead",
         matched_concepts: Optional[List[Dict]] = None,
     ):
@@ -97,8 +90,6 @@ class MemoryMixin:
             "timestamp": ts,
             "text": text.strip(),
             "mood": mood,
-            "mood_vector": mood_vector or (0.0, 0.0, 0.5),
-            "emotion_state": emotion_state or "calm_observant",
             "image": file,
             "type": memory_type,
         }

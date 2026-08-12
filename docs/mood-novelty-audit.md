@@ -4,9 +4,15 @@ Aug 12 2026, ahead of the mood revamp (phase C of docs/drawing-trigger-desire-pl
 Two exhaustive traces, verified against the LIVE run 387e699a. Rule for the teardown:
 work the tiers in order; each tier is safe once the one above is gone.
 
-**STATUS: tiers 0–3 EXECUTED Aug 12** (same day, artist-approved), plus the
-stale-push ordering fix. Tiers 4–5 (the frozen captioner island — VOICE
-changes) and the redesign surface remain, pending artist decisions.
+**STATUS: tiers 0–4 EXECUTED Aug 12** (same day, artist-approved), plus the
+stale-push ordering fix. Tier 4 voice replacements: everywhere the frozen
+island fed a constant, the LIVE felt-state speaks instead — awakening line,
+drawing system prompt (felt_line, omitted when none), step2's feeling line,
+drawing_memory emotional_tone. mood_to_feeling deleted (zero callers);
+set_felt_state single-writer (source param gone). Multi_step A/B branch KEPT
+(only its frozen call patched) — retiring it fully is a separate decision.
+Remaining: tier 5 (log_mood sink, mood-tick snapshots, state_manager
+mood block) and the phase C redesign surface.
 
 ## The headline: two disconnected mood systems
 

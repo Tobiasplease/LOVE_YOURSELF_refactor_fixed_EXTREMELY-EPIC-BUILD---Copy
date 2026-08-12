@@ -12,59 +12,6 @@ from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 
 
-def mood_to_feeling(valence: float, arousal: float) -> str:
-    """Translate the abstract valence/arousal mood vector into a plain, literal
-    feeling the LLM can grasp — an emotion word plus its intensity, e.g.
-    "a little bored", "very calm", "really anxious". Deterministic (no LLM, no
-    poetry), but DEGREED: slightly happy vs very happy vs really happy. Think of
-    naming a feeling in the most direct, unambiguous terms — emotion + how strong.
-    This is the felt-state's job: make the numeric mood legible to the model.
-    """
-    # Spaces: valence is signed (-1..1); arousal is the ENGINE's 0..1 space
-    # (base ~0.35). The old thresholds treated arousal as signed, so "low"
-    # was unreachable and anything above 0.2 read as "high" — every feeling
-    # came out excited/anxious/restless.
-    arousal_dev = arousal - 0.35
-    strength = max(abs(valence), abs(arousal_dev) * 1.5)
-    if strength < 0.12:
-        return "calm"  # basically neutral — no strong feeling either way
-
-    pos, neg = valence > 0.15, valence < -0.15
-    high, low = arousal_dev > 0.15, arousal_dev < -0.15
-    if pos and high:
-        word = "excited"
-    elif pos and low:
-        word = "content"
-    elif pos:
-        word = "happy"
-    elif neg and high:
-        word = "anxious"
-    elif neg and low:
-        word = "down"
-    elif neg:
-        word = "uneasy"
-    elif high:
-        word = "restless"
-    elif low:
-        word = "calm"
-    else:
-        word = "okay"
-
-    if strength < 0.30:
-        adv = "a little "
-    elif strength < 0.55:
-        adv = ""
-    elif strength < 0.78:
-        adv = "very "
-    else:
-        adv = "really "
-
-    # "a little calm/okay/content" reads oddly — keep low-key words plain.
-    if adv == "a little " and word in ("calm", "okay", "content"):
-        adv = ""
-    return (adv + word).strip()
-
-
 # ---------------------------------------------------------------------------#
 # Pure MoodEngine - analyzes captions without generating them               #
 # ---------------------------------------------------------------------------#
@@ -94,8 +41,8 @@ class MoodEngine:
         inventing drama to contradict "balanced"). The core signal is now the
         compression thread's mood read (context_compression._mood_read): the
         model reading the undertone of the machine's own recent thoughts.
-        Real events (company, novelty) still nudge on top — state signals,
-        not text, loop-safe. Momentum smooths per caption as before.
+        A real event (company) still nudges on top — a state signal, not
+        text, loop-safe. Momentum smooths per caption as before.
         """
         saw_person = saw_person or "person" in caption.lower() or "individual" in caption.lower()
 

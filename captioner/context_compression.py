@@ -1245,7 +1245,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         }
         if felt:
             self._last_accepted_felt = {"words": self._content_words(felt), "timestamp": time.time()}
-            self.set_felt_state(felt, source="read")
+            self.set_felt_state(felt)
         print(
             f"[🫀] Mood read: v={self.last_mood_read['valence']:+.1f} a={self.last_mood_read['arousal']:.1f}"
             + (f" — {felt}" if felt else "")
@@ -1334,7 +1334,7 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
     def _felt_phrase_held_reason(self, felt: str) -> str:
         """Why a mood read's phrase may not become the standing felt-state
         (empty string = it may). The numbers are always kept; only the phrase
-        is held, so the vector translation speaks plainly in its place."""
+        is held — the standing felt-state simply ages out instead."""
         fw = self._content_words(felt)
         if not fw:
             return ""
@@ -1360,21 +1360,15 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
             return self.baseline_context.strip()
         return ""
 
-    def set_felt_state(self, text: str, source: str = "vector") -> None:
-        """Set the felt-state phrase. Two writers, explicit priority:
-        source="read" — the mood read's own words for the feeling (primary);
-        source="vector" — mood_to_feeling's degreed translation of the numeric
-        vector (fallback; the captioner writes this every mood update and must
-        NOT clobber a fresh read — that was how "calm" overwrote everything).
+    def set_felt_state(self, text: str) -> None:
+        """Set the felt-state phrase — the mood read's own words for the
+        feeling (sole writer since Aug 12; the old "vector" fallback writer
+        was unreachable and its priority guard dead defensive code).
         Mirrors the previous→current transition so get_felt_state_delta works.
         """
         text = (text or "").strip()
         if not text:
             return
-        if source == "vector":
-            read = getattr(self, "last_mood_read", None)
-            if read and (time.time() - read.get("timestamp", 0)) < 900 and read.get("felt"):
-                return  # the machine's own phrase wins while fresh
         if getattr(self, "last_sentiment_analysis", None):
             prev = self.last_sentiment_analysis.get("sentiment_text", "")
             if prev and prev.strip().lower() != text.lower():

@@ -30,7 +30,6 @@ def main():
 
     # Manually set some state to simulate ongoing session
     captioner.true_session_start = time.time() - 300  # 5 minutes ago
-    captioner.current_emotion_state = "calm_observant"
 
     # Set up a sequence of thoughts to test continuation
     test_thoughts = [

@@ -105,9 +105,6 @@ class StateManager:
                     # Self-understanding and environmental model
                     "self_model": getattr(captioner, "self_model", {}),
                     # Organic emotional evolution
-                    "emotional_expressions": getattr(captioner, "emotional_expressions", []),
-                    "personal_emotional_vocabulary": getattr(captioner, "personal_emotional_vocabulary", {}),
-                    "emotional_patterns": getattr(captioner, "emotional_patterns", {}),
                     # Recent memory (last 50 entries for richer context)
                     "recent_memory": list(captioner.memory_queue)[-50:] if captioner.memory_queue else [],
                 },
@@ -212,9 +209,6 @@ class StateManager:
             )
 
             # Restore organic emotional evolution
-            captioner.emotional_expressions = cap_state.get("emotional_expressions", [])
-            captioner.personal_emotional_vocabulary = cap_state.get("personal_emotional_vocabulary", {})
-            captioner.emotional_patterns = cap_state.get("emotional_patterns", {})
 
             # Restore recent memory
             recent_memory = cap_state.get("recent_memory", [])

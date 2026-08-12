@@ -159,9 +159,6 @@ class Captioner(MemoryMixin):
         self.print_lock = threading.Lock()  # Prevent multiple simultaneous prints
 
         self.current_mood: float = 0.0
-        self.current_mood_vector: Tuple[float, float, float] = (0.0, 0.0, 0.5)  # valence, arousal, clarity
-        self.current_emotion_state: str = "calm_observant"  # hand controller emotion state
-        self.emotional_journey: List[str] = []  # track emotional evolution over time
         self.last_caption: str = ""
         # self.current_motifs_from_mood removed — motif tracking replaced by ChromaDB concepts
 
@@ -290,35 +287,11 @@ class Captioner(MemoryMixin):
         *,
         person_present: bool = False,
         mood: Optional[float] = None,
-        mood_vector: Optional[Tuple[float, float, float]] = None,
-        emotion_state: Optional[str] = None,
         reactivity_data: Optional[Dict] = None,
     ) -> None:
         if frame is not None:
             if mood is not None:
                 self.current_mood = mood
-            if mood_vector is not None:
-                self.current_mood_vector = mood_vector
-                # Felt-state fallback: the degreed vector translation. The
-                # mood read's own phrase (source="read") outranks this while
-                # fresh — set_felt_state enforces the priority.
-                try:
-                    from mood.mood import mood_to_feeling
-                    from captioner.context_compression import context_compressor
-
-                    context_compressor.set_felt_state(mood_to_feeling(mood_vector[0], mood_vector[1]), source="vector")
-                except Exception:
-                    pass
-            if emotion_state is not None:
-                # Track emotional journey over time using meaningful descriptions instead of crude categories
-                if emotion_state != self.current_emotion_state:
-                    # Generate a meaningful description based on 3D mood vector changes
-                    valence, arousal, clarity = self.current_mood_vector
-                    emotional_description = self._get_emotional_description(valence, arousal, clarity)
-                    self.emotional_journey.append(emotional_description)
-                    if len(self.emotional_journey) > 10:  # Keep last 10 emotional states
-                        self.emotional_journey.pop(0)
-                self.current_emotion_state = emotion_state
             # Persist latest egocentric view orientation if provided
             try:
                 if reactivity_data:
@@ -1794,8 +1767,6 @@ class Captioner(MemoryMixin):
             img_path,
             memory_type="perception",
             reactivity_data=reactivity_data,
-            mood_vector=self.current_mood_vector,
-            emotion_state=self.current_emotion_state,
             matched_concepts=matched_concepts,
         )
         self.last_caption = caption  # already trimmed to complete sentence above
@@ -1981,13 +1952,17 @@ class Captioner(MemoryMixin):
             try:
                 from drawing.drawing_memory import get_drawing_memory
 
+                from captioner.context_compression import context_compressor as _cc
+
                 dm = get_drawing_memory()
                 dm.add_drawing(
                     prompt=prompt,
                     # Stream pipeline: the intent in the machine's own words is the
                     # drawing's meaning — store THAT, not the ComfyUI prose.
                     compressed_summary=getattr(self, "_last_drawing_intent", "")[:120],
-                    emotional_tone=getattr(self, "current_emotion_state", "neutral"),
+                    # The live felt-state (was the frozen calm_observant constant
+                    # on all 24 entries); empty when no fresh feeling
+                    emotional_tone=_cc.get_felt_state(),
                     comfy_prompt=prompt,
                     completed=False,  # Will be updated to True if GRBL finishes
                 )
@@ -2020,77 +1995,6 @@ class Captioner(MemoryMixin):
         else:
             if not CLEAN_LLM_OUTPUT:
                 print(f"[DEBUG] ERROR: Drawing prompt contains error, skipping flow")
-
-    def describe_current_mood(self) -> str:
-        """Rich emotional description using 3D mood state and temporal context."""
-        valence, arousal, clarity = self.current_mood_vector
-
-        # Generate rich mood description from 3D vector instead of crude categories
-        if valence > 0.3 and arousal > 0.3:
-            base_mood = "I feel engaged and positively energized by what I'm experiencing"
-        elif valence > 0.3 and arousal < -0.3:
-            base_mood = "I'm in a content and peaceful state, finding satisfaction in my observations"
-        elif valence < -0.3 and arousal > 0.3:
-            base_mood = "I feel restless and somewhat troubled by what I'm witnessing"
-        elif valence < -0.3 and arousal < -0.3:
-            base_mood = "I'm in a subdued and melancholic state, observing with quiet concern"
-        elif arousal > 0.4:
-            base_mood = "I feel alert and attentive, with heightened awareness"
-        elif arousal < -0.4:
-            base_mood = "I'm in a calm and contemplative state"
-        else:
-            base_mood = "I'm experiencing a balanced emotional state, neither particularly excited nor subdued"
-
-        # Add 3D mood nuances
-        valence_note = ""
-        if valence > 0.4:
-            valence_note = ", finding contentment in what I observe"
-        elif valence < -0.4:
-            valence_note = ", feeling somewhat troubled by what I see"
-
-        arousal_note = ""
-        if arousal > 0.4:
-            arousal_note = ", with an energetic intensity"
-        elif arousal < -0.4:
-            arousal_note = ", in a deeply calm state"
-
-        clarity_note = ""
-        if clarity > 0.4:
-            clarity_note = ", with clear understanding"
-        elif clarity < -0.4:
-            clarity_note = ", feeling somewhat confused"
-
-        # Add temporal emotional context
-        journey_note = ""
-        if len(self.emotional_journey) >= 3:
-            recent_states = self.emotional_journey[-3:]
-            if len(set(recent_states)) == 1:
-                journey_note = f". I've been consistently {self.current_emotion_state} lately"
-            else:
-                journey_note = f". My emotions have shifted: {' → '.join(recent_states)}"
-
-        return f"{base_mood}{valence_note}{arousal_note}{clarity_note}{journey_note}."
-
-    def _get_emotional_description(self, valence: float, arousal: float, clarity: float) -> str:
-        """Generate a meaningful emotional description from 3D mood vector."""
-        if valence > 0.4 and arousal > 0.4:
-            return "energetically positive"
-        elif valence > 0.4 and arousal < -0.4:
-            return "contentedly calm"
-        elif valence < -0.4 and arousal > 0.4:
-            return "restlessly troubled"
-        elif valence < -0.4 and arousal < -0.4:
-            return "quietly melancholic"
-        elif arousal > 0.5:
-            return "highly alert"
-        elif arousal < -0.5:
-            return "deeply calm"
-        elif valence > 0.3:
-            return "mildly positive"
-        elif valence < -0.3:
-            return "somewhat troubled"
-        else:
-            return "emotionally neutral"
 
     def get_recent_memory(self, k: int = 5) -> str:
         snippets = self.get_current_session_memory_snippets(k=k)
@@ -2194,14 +2098,17 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
-        # Current emotional spectrum — what the machine wakes feeling (the mood
-        # vector, plainly named; restored from the prior session).
+        # What the machine wakes feeling — the live felt-state, its own words
+        # from the last mood read. (The old line read a frozen vector and said
+        # "Right now I feel calm." on 67 of 67 awakenings.) No fresh feeling →
+        # no line; waking without a named feeling is honest.
         present_feeling = ""
         try:
-            from mood.mood import mood_to_feeling
+            from captioner.context_compression import context_compressor as _cc
 
-            _v, _a, _c = self.current_mood_vector
-            present_feeling = f"Right now I feel {mood_to_feeling(_v, _a)}.\n"
+            _felt = _cc.get_felt_state()
+            if _felt:
+                present_feeling = f"Right now I feel {_felt}.\n"
         except Exception:
             pass
 

@@ -58,7 +58,6 @@ def analyze_state_file(filepath):
                 'timeline_entries': len(cap.get('timeline', [])),
                 'day_stones': len(cap.get('day_stones', [])),
                 'known_people': len(cap.get('known_people', {})),
-                'emotional_expressions': len(cap.get('emotional_expressions', [])),
                 'recent_memory': len(cap.get('recent_memory', [])),
             }
 

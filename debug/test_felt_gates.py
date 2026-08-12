@@ -53,12 +53,11 @@ eng._last_accepted_felt["timestamp"] = time.time() - ContextCompressionEngine.FE
 eng._absorb_mood({"pleasantness": "neutral", "energy": "stirred", "felt": "dread rising"})
 check("same vocabulary may return after FELT_REBORE_SECONDS", eng.last_mood_read["felt"] == "dread rising")
 
-print("— fallback path —")
+print("— held phrase leaves no stand-in (vector fallback removed Aug 12) —")
 eng2 = bare_engine(PERSONA)
 eng2._absorb_mood({"pleasantness": "unpleasant", "energy": "drained", "felt": "heavy again"})
 check("poisoned phrase held on fresh engine", eng2.last_mood_read["felt"] == "")
-eng2.set_felt_state("a little flat", source="vector")
-check("vector translation NOT blocked while phrase is held", eng2.get_felt_state() == "a little flat")
+check("no stand-in phrase — felt-state simply absent", eng2.get_felt_state() == "")
 
 print("— metaphor stays legal —")
 eng3 = bare_engine(PERSONA)

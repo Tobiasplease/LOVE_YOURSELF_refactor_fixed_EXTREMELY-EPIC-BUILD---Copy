@@ -190,19 +190,21 @@ class PromptInterface:
         except Exception:
             pass
 
-        # Get emotional state description
-        emotional_state = ""
+        # The live felt-state, or no feeling sentence at all. (The old
+        # describe_current_mood read a frozen vector and put the same
+        # "balanced emotional state" sentence in every drawing's system prompt.)
+        felt_line = ""
         try:
-            if hasattr(memory_ref, "describe_current_mood") and callable(memory_ref.describe_current_mood):
-                emotional_state = memory_ref.describe_current_mood()
-            else:
-                emotional_state = "aware and focused"
-        except Exception:
-            emotional_state = "aware and focused"
+            from captioner.context_compression import context_compressor as _cc
 
-        # Format the system prompt with context
+            _felt = _cc.get_felt_state()
+            if _felt:
+                felt_line = f"You are feeling {_felt}. "
+        except Exception:
+            pass
+
         return DRAWING_SYSTEM_PROMPT.format(
-            temporal_context=temporal_context, accumulated_understanding=accumulated_understanding, emotional_state=emotional_state
+            temporal_context=temporal_context, accumulated_understanding=accumulated_understanding, felt_line=felt_line
         )
 
     def _get_base_model_options(self):

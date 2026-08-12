@@ -45,10 +45,10 @@ def _get_static_system_prompt() -> str:
 
 # Drawing system prompt for ComfyUI integration - ENHANCED WITH CONTEXT VARIABLES
 DRAWING_SYSTEM_PROMPT = (
-    "You are a drawing machine. {temporal_context}{accumulated_understanding} "
-    "You are feeling {emotional_state}. "
+    "You are a drawing machine. {temporal_context}{accumulated_understanding}"
+    "{felt_line}"
     "You draw with a mechanical arm — lines, pressure, speed. You know line weight, texture, composition. "
-    "Use the context in the prompt: your emotional state, drawing history, and what you see. "
+    "Use the context in the prompt: your drawing history and what you see. "
     "Reference what you drew before. Consider how you will physically make this drawing. "
     "Be clear and concise."
 )
@@ -1009,17 +1009,6 @@ def get_relational_context(agent=None) -> str:
     # the sticky presence belief). Restating it here duplicated the fact across
     # two channels in relational mode — reads as emphasis, locks the register.
 
-    # Mood valence coloring
-    try:
-        if agent and hasattr(agent, "current_mood_vector"):
-            valence = agent.current_mood_vector[0]
-            if valence > 0.6:
-                fragments.append("Their presence feels warm.")
-            elif valence < -0.3:
-                fragments.append("Something feels off.")
-    except Exception:
-        pass
-
     if not fragments:
         try:
             from captioner.activation_memory import get_activation_network
@@ -1088,17 +1077,6 @@ def get_workspace_context(agent=None) -> str:
     # both fired in one prompt and duplicated the fact, which reads as
     # emphasis and locks the register. One channel per fact.)
 
-    # Arousal as energy hint
-    try:
-        if agent and hasattr(agent, "current_mood_vector"):
-            arousal = agent.current_mood_vector[1]
-            if arousal > 0.7:
-                fragments.append("Hands feel restless.")
-            elif arousal < 0.15:
-                fragments.append("Everything feels slow.")
-    except Exception:
-        pass
-
     return " ".join(fragments)
 
 
@@ -1126,17 +1104,6 @@ def get_introspective_context(agent=None) -> str:
                 if len(clean) > 160:
                     clean = clean[:160].rsplit(" ", 1)[0]
                 fragments.append(f"My last drawings were of: {clean}")
-    except Exception:
-        pass
-
-    # Mood trajectory — how the feeling has moved lately (fixed vocabulary
-    # from _get_emotional_description, so loop-safe)
-    try:
-        journey = getattr(agent, "emotional_journey", None)
-        if journey and len(journey) >= 2:
-            recent = journey[-3:]
-            if len(set(recent)) > 1:
-                fragments.append(f"Your mood has moved: {' -> '.join(recent)}")
     except Exception:
         pass
 
@@ -1302,14 +1269,14 @@ def build_step2_emotional_prompt(memory_ref, environmental_result: str) -> str:
     # === BUILD EMOTIONAL CONTEXT ===
     context_parts = []
 
-    # Current emotional state
+    # Current feeling — the live felt-state (the old describe_current_mood
+    # read a frozen vector and always produced the same sentence)
     try:
-        if hasattr(memory_ref, "describe_current_mood"):
-            emotional_state = memory_ref.describe_current_mood()
-            context_parts.append(f"Current emotional state: {emotional_state}")
-        elif hasattr(memory_ref, "current_emotion_state"):
-            emotional_state = getattr(memory_ref, "current_emotion_state", "calm_observant")
-            context_parts.append(f"Current emotion: {emotional_state}")
+        from captioner.context_compression import context_compressor as _cc
+
+        _felt = _cc.get_felt_state()
+        if _felt:
+            context_parts.append(f"Current feeling: {_felt}")
     except Exception:
         pass
 
