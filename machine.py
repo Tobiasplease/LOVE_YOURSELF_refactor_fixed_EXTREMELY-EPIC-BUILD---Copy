@@ -12,6 +12,14 @@ import threading
 import time
 
 
+# Before ANY project import can write a timestamp: if the RTC booted us into
+# the future, let NTP step the clock BEFORE the run exists, and watch for
+# steps after that (a mid-run step froze run 980f6e82 for what would have
+# been 51 days). utils/clock_guard is stdlib-only, safe this early.
+from utils.clock_guard import guard_clock
+
+guard_clock()
+
 import cv2
 
 try:

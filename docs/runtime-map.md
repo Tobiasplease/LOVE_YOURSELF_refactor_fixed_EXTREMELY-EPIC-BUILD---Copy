@@ -52,6 +52,22 @@ Fixed: stderr goes to `event_log/llama_server.log` (rotated at 50MB), which also
 gives the server's own account of any future failure. Reproduced and verified
 in isolation — an unread PIPE blocks, a file does not.
 
+## Known failure, SOLVED Aug 12 — the clock step (RTC ~53 days fast)
+
+Run 980f6e82 booted while the clock still read October (dying RTC battery),
+NTP stepped it back ~51 days two minutes in, and every `now - last_X`
+interval gate froze — the machine would have sat silent until October.
+Guard: `utils/clock_guard.py`, called first thing in machine.py BEFORE any
+project import can write a timestamp. (1) Boot: if NTP is active, unsynced,
+AND a network route exists, wait up to `CLOCK_SYNC_MAX_WAIT_S` (45s, env) for
+the step to land before the run starts; offline exhibitions have no route and
+start instantly on the local clock (a stable wrong clock is internally
+consistent). (2) Runtime: wall-vs-monotonic jump watch (`CLOCK_JUMP_ALERT_S`
+30s, env) — a step prints a banner + ERROR event naming the remedy (restart,
+then `debug/sanitize_future_timestamps.py`) and nags once a minute until
+restarted. NTP slewing never trips it. Proof: `debug/test_clock_guard.py`.
+Real fix remains a new RTC battery.
+
 ## The caption loop (breathing cadence: 4s live / 7s normal / 12s after 2 quiet min)
 
 ```
