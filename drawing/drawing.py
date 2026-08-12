@@ -10,6 +10,7 @@ and passes the prompt directly to ComfyUI.
 
 import base64
 import os
+import re
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
@@ -95,6 +96,65 @@ class DrawingController:
             self.last_block_reason = f"cooldown ({self.cooldown - (time.time() - self.last_drawing_time):.0f}s remaining)"
         return cooldown_ready
 
+    # Word boundaries are the whole point — the retired _drawing_intentions
+    # matcher died on "ink" in "think", "void" in "avoid".
+    _DESIRE_DRAW_WORDS = re.compile(
+        r"\b(draw|draws|drew|drawn|drawing|sketch|sketching|ink|pen|pencil|paper|page|line|lines|mark|marks|trace|tracing|shape|figure)\b",
+        re.IGNORECASE,
+    )
+    # Persistence threshold: a want must survive at least a few distill cycles
+    # (one distill ≈ 8 captions) before the shadow trigger counts it as meant.
+    DESIRE_SHADOW_MIN_AGE_S = 600
+
+    def desire_shadow_verdict(self) -> dict:
+        """North-star step 5, phase A: would the desire slot draw right now?
+
+        Observability only — logged beside the formula's verdict, never acted
+        on. The "no" is structural: no drawing-directed want, or one too young
+        to have proven itself across distills.
+        """
+        want, since = "", 0.0
+        try:
+            from captioner.context_compression import context_compressor
+
+            want = (context_compressor.get_current_desire() or "").strip()
+            since = float(context_compressor.introspective_state.get("desire_since", 0.0) or 0.0)
+        except Exception:
+            pass
+        age_s = time.time() - since if since > 0 else 0.0
+        drawing_directed = bool(want) and bool(self._DESIRE_DRAW_WORDS.search(want))
+        return {
+            "desire": want[:200],
+            "desire_age_s": round(age_s),
+            "drawing_directed": drawing_directed,
+            "would_draw": drawing_directed and age_s >= self.DESIRE_SHADOW_MIN_AGE_S,
+        }
+
+    def _log_desire_shadow(self, *, formula_verdict: bool, mood: float, novelty: float, boredom: float) -> None:
+        try:
+            shadow = self.desire_shadow_verdict()
+            log_json_entry(
+                LogType.DECISION,
+                {
+                    "decision": "desire_shadow",
+                    "formula_would_draw": formula_verdict,
+                    "shadow_would_draw": shadow["would_draw"],
+                    "desire": shadow["desire"],
+                    "desire_age_s": shadow["desire_age_s"],
+                    "drawing_directed": shadow["drawing_directed"],
+                    "mood": mood,
+                    "novelty": novelty,
+                    "boredom": boredom,
+                },
+                print_message=(
+                    f"[🎨 SHADOW] desire={'∅' if not shadow['desire'] else shadow['desire'][:60]!r} "
+                    f"→ {'DRAW' if shadow['would_draw'] else 'wait'} (formula: {'DRAW' if formula_verdict else 'wait'})"
+                ),
+            )
+        except Exception as e:
+            if not CLEAN_LLM_OUTPUT:
+                print(f"[⚠️] Desire shadow logging failed: {e}")
+
     def should_draw(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
         # Clean room: the 5-step drawing pipeline is detox blind spot #3 — it
         # injects ~23 layers of stored prose AND its step system-prompts push
@@ -108,14 +168,20 @@ class DrawingController:
             return False
         # Use state-motivated drawing logic when enabled, otherwise timer-based
         try:
-            from config.config import DRAWING_USE_STATE_MOTIVATION
+            from config.config import DRAWING_MIN_INTERVAL, DRAWING_USE_STATE_MOTIVATION
 
             if DRAWING_USE_STATE_MOTIVATION:
-                return self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+                verdict = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
             else:
-                return self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+                verdict = self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
         except ImportError:
             return self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+
+        # Shadow only real evaluations, not the 720-900s window where the
+        # min-interval short-circuit re-runs every caption cycle.
+        if time.time() - self.last_drawing_time >= DRAWING_MIN_INTERVAL:
+            self._log_desire_shadow(formula_verdict=verdict, mood=mood, novelty=novelty, boredom=boredom)
+        return verdict
 
     def _should_draw_original(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
         """Pure timer-based drawing decision logic for debugging."""
