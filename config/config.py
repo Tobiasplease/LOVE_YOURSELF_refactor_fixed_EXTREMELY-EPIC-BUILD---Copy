@@ -357,8 +357,11 @@ BATCH_SIZE = 1
 # === COMFY CONTROLLER SETTINGS ===
 COMFY_LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", 1.0))
 COMFY_CNET_STRENGTH = float(os.getenv("COMFY_CNET_STRENGTH", 0.3))
-# Release the depth ControlNet before the final denoise steps — holding it to 1.0 forced photographic tonality
-COMFY_CNET_END_PERCENT = float(os.getenv("COMFY_CNET_END_PERCENT", 0.6))
+# Aug 10 2026, measured over 731 generations: the July "release at 0.6" DOUBLED the
+# blur rate (26% -> 58% of outputs defocused; median edge sharpness 135 -> 70).
+# Detail forms in the final denoise steps; releasing the depth anchor there lets the
+# LoRA's photographed-drawing defocus mode drift in. Held to 1.0 — the 686-sample era.
+COMFY_CNET_END_PERCENT = float(os.getenv("COMFY_CNET_END_PERCENT", 1.0))
 COMFY_FLUX_GUIDANCE = float(os.getenv("COMFY_FLUX_GUIDANCE", 4.0))
 COMFY_LATENT_WIDTH = int(os.getenv("COMFY_LATENT_WIDTH", 1024))
 COMFY_LATENT_HEIGHT = int(os.getenv("COMFY_LATENT_HEIGHT", 1024))
@@ -902,6 +905,13 @@ DRAWING_SCALE_TARGET = "50x50mm"
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.55  # Raised to 0.55 to avoid detecting hands/arms as person
+# Aware-churn fixes (Aug 10): the gaze flickered aware/idle every few seconds
+# on marginal person hits ("person detected but no tracking target"), and each
+# 90s-spaced flicker minted an episodic "someone arrived". Three levers, in
+# preference order over raising confidence (which worsens the known
+# seated-still-person misses):
+YOLO_PERSON_MIN_AREA_FRAC = 0.008  # min person bbox area as fraction of frame (~60x120px at 720p); phantom persons are small, real ones aren't
+AWARE_ENTRY_CONFIRM_S = 2.0  # person must be continuously detected this long before idle->aware (2 idle-cadence YOLO passes; one-frame phantoms can't trigger)
 # yolov8m (July 10 eval, debug/compare_yolo_models.py): rejects the desk
 # mannequin head that nano fired on constantly, and finds still/seated people
 # nano missed for whole stretches. Known remaining false positive: the
@@ -938,6 +948,11 @@ LLM_SHOW_PROGRESS = False  # Show animated progress bar during LLM calls
 # Control creativity and expressiveness in different types of responses
 CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 0.85))  # Regular observations (0.85 for Qwen)
 DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.0))  # Drawing prompts (lowered from 1.2 for Qwen's higher base entropy)
+# Stocktake beat (Aug 10 2026): before the intent call, the machine reads its
+# whole executed ledger + retrieved reflections and writes a short first-person
+# note on where the work is going; the note is stored (memory type
+# "drawing_direction") and read back next time. One extra LLM call per drawing.
+DRAWING_REVIEW_ENABLED = os.getenv("DRAWING_REVIEW_ENABLED", "true").lower() in ("1", "true", "yes")
 REFLECTION_TEMPERATURE = float(
     os.getenv("REFLECTION_TEMPERATURE", 0.75)
 )  # Long-form reflection loop — stored output, keep it grounded (Qwen drifts ornate at higher temps)

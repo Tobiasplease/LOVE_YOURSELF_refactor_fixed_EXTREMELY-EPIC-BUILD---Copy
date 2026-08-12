@@ -27,6 +27,8 @@ class PresenceIdentity:
         self._preprocess = None
         self._gallery = deque(maxlen=PRESENCE_REID_GALLERY_SIZE)  # (ts, unit embedding)
         self._last_sample = 0.0
+        self._arrivals = None  # lazy-loaded arrival ledger [{ts, count}]
+        self._arrivals_path = None
 
     def note_sighting(self):
         """Add the current person crop to the gallery. Rate-limited; call freely."""
@@ -61,6 +63,58 @@ class PresenceIdentity:
         matched = best >= PRESENCE_REID_THRESHOLD
         print(f"[PresenceID] Re-ID check: best similarity {best:.3f} -> {'same person' if matched else 'unfamiliar'}")
         return matched
+
+    def record_arrival(self, person_count):
+        """Arrival ledger, independent of re-ID: {ts, count} per genuine
+        arrival, persisted. This is what makes the singular register a
+        CONCLUSION instead of a hardcoded fact — the regime is read off the
+        machine's own recent history and flips itself at an exhibition."""
+        self._load_arrivals()
+        now = time.time()
+        with self.lock:
+            self._arrivals.append({"ts": now, "count": int(person_count)})
+            self._arrivals = self._arrivals[-200:]
+            arrivals = list(self._arrivals)
+        try:
+            import json
+
+            with open(self._arrivals_path, "w") as f:
+                json.dump({"arrivals": arrivals}, f)
+        except Exception as e:
+            print(f"[PresenceID] Could not save arrival ledger: {e}")
+
+    def singular_regime(self, window_days=7.0, min_arrivals=8, ratio=0.8):
+        """True when recent history says arrivals are overwhelmingly one
+        person — the studio regime. Crowded days (an exhibition) break the
+        ratio within hours and the register falls back to the indefinite.
+        Cold start (too little history) defaults True: this machine lives
+        with one person far more of its life than it lives with crowds."""
+        self._load_arrivals()
+        cutoff = time.time() - window_days * 86400.0
+        with self.lock:
+            recent = [a for a in self._arrivals if a["ts"] > cutoff]
+        if len(recent) < min_arrivals:
+            return True
+        singles = sum(1 for a in recent if a["count"] <= 1)
+        return singles / len(recent) >= ratio
+
+    def _load_arrivals(self):
+        if self._arrivals is not None:
+            return
+        import json
+        import os
+
+        from config.config import MOOD_SNAPSHOT_FOLDER
+
+        self._arrivals_path = os.path.join(MOOD_SNAPSHOT_FOLDER, "presence_arrivals.json")
+        try:
+            if os.path.exists(self._arrivals_path):
+                with open(self._arrivals_path) as f:
+                    self._arrivals = json.load(f).get("arrivals", [])
+            else:
+                self._arrivals = []
+        except Exception:
+            self._arrivals = []
 
     def _embed_current_person(self):
         crop = DetectionMemory.get_person_crop()

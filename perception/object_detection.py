@@ -7,7 +7,7 @@ import warnings
 import cv2
 from ultralytics import YOLO
 
-from config.config import YOLO_CONFIDENCE_THRESHOLD, YOLO_INTERVAL_IDLE, YOLO_INTERVAL_TRACKING, YOLO_MODEL_PATH
+from config.config import YOLO_CONFIDENCE_THRESHOLD, YOLO_INTERVAL_IDLE, YOLO_INTERVAL_TRACKING, YOLO_MODEL_PATH, YOLO_PERSON_MIN_AREA_FRAC
 from perception.detection_memory import DetectionMemory
 
 # Suppress ultralytics config warnings
@@ -88,12 +88,18 @@ class ObjectDetectionThread(threading.Thread):
                 if conf < YOLO_CONFIDENCE_THRESHOLD:
                     continue
 
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                # Tiny "persons" are phantoms (a real person in this room is
+                # never this small); filtering by size beats raising the conf
+                # threshold, which worsens the seated-still-person misses.
+                if (x2 - x1) * (y2 - y1) < YOLO_PERSON_MIN_AREA_FRAC * frame.shape[0] * frame.shape[1]:
+                    continue
+
                 # Get persistent tracking ID from ByteTrack
                 track_id = int(box.id[0]) if box.id is not None else None
 
                 detected.add(label)
                 person_count += 1
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
 
                 id_label = f"#{track_id}" if track_id is not None else "?"
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)

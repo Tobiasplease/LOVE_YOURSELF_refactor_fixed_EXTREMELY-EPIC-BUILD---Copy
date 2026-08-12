@@ -402,6 +402,18 @@ pink shelf → ...`. Structured consumers: `get_current_glance()`,
 framing is a separate prompt-tree step). Test:
 `debug/test_spatial_registry.py` (angle math, EMA, policy split).
 
+**Aware-churn fix (Aug 10 evening).** The gaze flickered idle↔aware every few
+seconds on marginal YOLO hits ("person detected but no tracking target" →
+5s timeout → look away → re-trigger), and each 90s-spaced flicker minted an
+episodic "someone arrived" (vision/gaze.py ~1160 — a THIRD arrival system,
+feeding identity events). Fixes: (1) `YOLO_PERSON_MIN_AREA_FRAC` in
+object_detection.py — tiny "persons" are phantoms; size filter beats raising
+YOLO_CONFIDENCE_THRESHOLD (which worsens the known seated-still misses);
+(2) idle→aware entry debounced (`AWARE_ENTRY_CONFIRM_S`, 2s ≈ two idle-cadence
+passes) AND requires an actual bbox to aim at — no more aware-with-no-target.
+Face DNN sensitivity knob remains `CONFIDENCE_THRESHOLD` (0.72, raised June 28
+for mannequin faces) — untouched, not implicated in this churn.
+
 **Presence identity — the "106th man" fix (Aug 10).** The machine read the one
 regular man as endless strangers. Causes: the presence line said "Someone's
 come in." on every ON-edge (an anonymous stranger each return — the model
@@ -646,10 +658,21 @@ fires only after GRBL physically executed. **The artistic arc and drawing
 summaries read executed-only** — a ComfyUI generation that never reached
 paper is an intention, not part of the oeuvre. Window: 24 entries.
 
-## Drawing prompt generation (July 10: DRAWING_ANALYSIS_MODE="stream")
+## Drawing prompt generation (July 10: DRAWING_ANALYSIS_MODE="stream"; Aug 10: stocktake beat + register freedom)
 
-TWO calls (prompts.stream_drawing_analysis), replacing the 5-step committee:
+Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step committee:
 
+0. **Stocktake** (Aug 10, `DRAWING_REVIEW_ENABLED`, logged as
+   `prompt_type: drawing_review`) — before choosing, the machine reads the
+   SAME materials the intent will get (whole executed ledger — now all 24
+   entries, was 8 — plus reflections retrieved by TWO keys: the stream tail
+   for the moment, the body-of-work text for the work itself) and writes a
+   2-4 sentence first-person note on where the work has been going and what
+   it's missing. The note joins the intent materials AND is stored
+   (memory type `drawing_direction`); the PREVIOUS note is read back with
+   its age — successive drawings answer a remembered direction instead of
+   starting from amnesia. Not the 5-step returning: it reads only real
+   material (ledger, own reflections) and speaks in first person.
 1. **Intent** — one call in the machine's own voice (_SITUATION system
    prompt + "it's time to draw"). **Sighted since July 27**: the current
    camera frame rides on the call (it arrived as image_path and was DROPPED
@@ -678,13 +701,22 @@ TWO calls (prompts.stream_drawing_analysis), replacing the 5-step committee:
    the memory/present-conflation rule. The intent is stored as the memory
    entry's compressed_summary (the machine's own words, not ComfyUI prose)
    and logged as `prompt_type: drawing_intent`.
-2. **Render** — mechanical translation to a ComfyUI prompt under hardware
-   truth: one black pen, lines only, no shading/fills/texture (the 5-step's
-   technique stage planned india-ink washes the plotter cannot do), and
-   since July 27 pinned to the intention's own concrete nouns — it invented
-   scenery ("industrial chassis viewed from above" from an atmospheric
-   intent). Temp 0.5, logged as `prompt_type: drawing_render`. Fallback:
-   prefix + intent. Inspect offline: `debug/test_drawing_intent_prompt.py`
+2. **Render** — translation to a ComfyUI prompt. **REWRITTEN Aug 10**: the
+   old negation wall ("no shading, no fills… detail is lost") was echoed
+   verbatim into the Flux prompt, and the plotter-meta language correlated
+   with the LoRA's photographed-defocus mode while every drawing collapsed
+   to one sparse object. Constraints are now positive pen-and-ink craft
+   language (contour lines of varying weight, hatching/cross-hatching for
+   tone, tone = line density never washes), the render matches the
+   intention's REGISTER (small thing → focused study with white space;
+   scene → full composition with foreground/background depth), stays pinned
+   to the intention's own concrete nouns (may render the implied setting,
+   invents no new objects), and MUST NOT mention plotters/tracing/vectors/
+   machines in the emitted prompt. Temp 0.5, logged as
+   `prompt_type: drawing_render`. Fallback: prefix + intent. The intent
+   system prompt likewise frees register (close study or built-up scene)
+   and frames the materials as the sketchbook the decision comes from.
+   Inspect offline: `debug/test_drawing_intent_prompt.py`
    assembles the real intent prompt from disk state, no model needed.
 
 LEGACY (kept for A/B: DRAWING_ANALYSIS_MODE="multi_step"): the 5-step

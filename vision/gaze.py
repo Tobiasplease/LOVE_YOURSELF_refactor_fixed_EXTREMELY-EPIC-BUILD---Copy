@@ -68,6 +68,7 @@ drawing_transition_active = False  # Flag for smooth transition to/from drawing 
 
 # === ORGANIC MOVEMENT DECOUPLING ===
 # Independent timing and curves for pan/tilt
+_person_seen_since = None  # aware-entry debounce: when continuous YOLO person detection began
 pan_offset_time = random.uniform(0, 2.0)  # Random phase offset for pan
 tilt_offset_time = random.uniform(0, 2.0)  # Random phase offset for tilt
 pan_micro_target = 90  # Intermediate target for curved movement
@@ -1133,8 +1134,23 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         # Check if we're in a break from aware state (looking away intentionally)
         in_aware_break = aware_break_until > now
 
+        # Debounce (Aug 10): one marginal YOLO frame used to flip aware
+        # instantly, find nothing to track, time out, and re-trigger — churn.
+        # Entry now needs the person continuously detected for
+        # AWARE_ENTRY_CONFIRM_S AND an actual bbox to aim at.
+        global _person_seen_since
+        if not yolo_person_detected:
+            _person_seen_since = None
+        elif _person_seen_since is None:
+            _person_seen_since = now
+        from config.config import AWARE_ENTRY_CONFIRM_S
+
+        person_confirmed = (
+            yolo_person_detected and person_bbox is not None and _person_seen_since is not None and now - _person_seen_since >= AWARE_ENTRY_CONFIRM_S
+        )
+
         # Check if YOLO detected someone - transition to aware (unless in break)
-        if yolo_person_detected and not in_aware_break and not drawing_sequence_active:
+        if person_confirmed and not in_aware_break and not drawing_sequence_active:
             # (drawing-locked gaze: a YOLO "person" is the machine's own arm
             # on the paper — never a visitor; don't leave the drawing view)
             last_state_change = now

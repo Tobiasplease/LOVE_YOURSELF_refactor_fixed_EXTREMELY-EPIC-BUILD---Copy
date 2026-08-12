@@ -969,10 +969,21 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
             agent._woke_noted = True
 
     # Presence EDGES only — the OFF→ON / ON→OFF transitions of the sticky belief.
+    # The referent is the definite singular by default: when someone is here it
+    # is almost always the same man, and "Someone's come in." on every return
+    # bred a parade of strangers in the monologue ("the 106th man"). One person
+    # arriving IS him unless re-ID says back, or the count says company.
     believed = bool(getattr(agent, "_presence_believed", False))
     prev = getattr(agent, "_prev_presence_for_line", None)
     if believed and prev is False:
-        parts.append("Someone's come in.")
+        if getattr(agent, "_presence_arrival_familiar", False):
+            parts.append("He's back.")
+        elif getattr(agent, "_presence_arrival_count", 1) > 1:
+            parts.append("People have come in.")
+        elif getattr(agent, "_presence_singular_regime", True):
+            parts.append("He's come in.")
+        else:
+            parts.append("Someone's come in.")
     elif (not believed) and prev is True:
         parts.append("They've gone — the room's quiet again.")
     agent._prev_presence_for_line = believed
@@ -1016,7 +1027,7 @@ def get_relational_context(agent=None) -> str:
             network = get_activation_network()
             social = [c for c in ["person", "interaction", "presence"] if network.activations.get(c, 0) > 0.3]
             if social:
-                return "Someone is here."
+                return "He's here."
         except Exception:
             pass
 
@@ -1796,7 +1807,11 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
 
 
 def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None) -> str:
-    """Two-call drawing pipeline (July 10) — DRAWING_ANALYSIS_MODE="stream".
+    """Stream drawing pipeline (July 10; stocktake beat + register freedom Aug 10)
+    — DRAWING_ANALYSIS_MODE="stream". Beats: optional stocktake (the machine
+    reviews its whole ledger and writes a direction note, stored and read back
+    next time), intent (first person, subject and register both free), render
+    (positive pen-and-ink craft language — see render_system note).
 
     Replaces the 5-step committee (context_rich_multi_step_drawing_analysis,
     kept behind the "multi_step" flag for A/B). What the steps actually did,
@@ -1816,7 +1831,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     mechanical render call translates the intent into a ComfyUI prompt under
     hardware truth: one black pen, lines only.
     """
-    from config.config import CLEAN_LLM_OUTPUT, DRAWING_CALL_TIMEOUT, DRAWING_TEMPERATURE, MOOD_SNAPSHOT_FOLDER
+    from config.config import CLEAN_LLM_OUTPUT, DRAWING_CALL_TIMEOUT, DRAWING_REVIEW_ENABLED, DRAWING_TEMPERATURE, MOOD_SNAPSHOT_FOLDER
     from event_logging.event_logger import log_json_entry
     from event_logging.log_type import LogType
     from utils.inference import is_failed_response, query_model
@@ -1886,10 +1901,12 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
 
     # The body of work — executed drawings only, chronological, plain. If the
     # next intent repeats one of these, that's fixation as a choice, in view.
+    # Whole ledger (Aug 10, was 8): the arc is only visible at full length.
+    sequence = []
     try:
         from drawing.drawing_memory import get_drawing_memory
 
-        sequence = get_drawing_memory().get_executed_sequence(max_count=8)
+        sequence = get_drawing_memory().get_executed_sequence(max_count=24)
         if sequence:
             materials.append("What you have actually drawn, oldest to newest:\n" + "\n".join(f"- {s}" for s in sequence))
 
@@ -1936,12 +1953,26 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     try:
         from captioner.semantic_memory import get_semantic_memory
 
-        query_text = "\n".join(t[:120] for t in stream_tail) if stream_tail else (extra or "")[:300]
-        matches = get_semantic_memory().query_reflections(query_text, n_results=2) if query_text else []
+        # Two-key retrieval (Aug 10): the stream key finds reflections about
+        # this MOMENT; the body-of-work key finds reflections about the WORK.
+        # One key meant long-term memory only ever entered through the last
+        # five minutes' thoughts.
+        sm = get_semantic_memory()
+        near_key = "\n".join(t[:120] for t in stream_tail) if stream_tail else (extra or "")[:300]
+        work_key = "\n".join(s[:100] for s in sequence[-10:]) if sequence else ""
+        matches, _seen_refl = [], set()
+        for key in (near_key, work_key):
+            if not key:
+                continue
+            for m in sm.query_reflections(key, n_results=2) or []:
+                mid = (m.get("text") or m.get("subject") or "")[:80]
+                if mid and mid not in _seen_refl:
+                    _seen_refl.add(mid)
+                    matches.append(m)
         refl_lines = []
         for i, m in enumerate(matches or []):
             when = _age_phrase(m.get("timestamp", 0))
-            if i == 0 and (m.get("text") or "").strip():
+            if i < 2 and (m.get("text") or "").strip():
                 excerpt = m["text"].strip()
                 if len(excerpt) > 400:
                     excerpt = excerpt[:400].rsplit(" ", 1)[0] + "…"
@@ -1953,13 +1984,61 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     except Exception:
         pass
 
+    # The stocktake beat (Aug 10): one look back before the choice. A single
+    # intent call was weighing the whole body of work in the same breath as
+    # choosing an image, so the hard prompt did the steering. Now the machine
+    # first writes a short private note on where the work has been going; the
+    # note joins the intent materials AND is stored, and the previous note is
+    # read back — successive drawings answer a remembered direction instead of
+    # starting from amnesia. This is not the 5-step committee returning: it
+    # reads only real material (the ledger, its own reflections) and speaks in
+    # first person.
+    if DRAWING_REVIEW_ENABLED and sequence:
+        try:
+            prior = memory_ref.get_memory_entries_by_type("drawing_direction", limit=1) if hasattr(memory_ref, "get_memory_entries_by_type") else []
+            if prior and (prior[0].get("text") or "").strip():
+                materials.append(
+                    f'When you last took stock of your work, {_age_phrase(prior[0].get("timestamp", 0))}, you wrote: "{prior[0]["text"][:300]}"'
+                )
+        except Exception:
+            pass
+        review_system = _SITUATION + (
+            "Before deciding anything, flip back through your own sketchbook. From everything "
+            "here — the whole body of work, what you have written and thought over time — write "
+            "a short private note to yourself, two to four sentences, first person: what keeps "
+            "returning in your drawings, what register they have settled into, what you have "
+            "not touched in a long time, and what the work is missing right now. This is "
+            "stocktaking; the drawing decision comes after, separately."
+        )
+        review = query_model(
+            prompt="\n\n".join(materials + ["Take stock of the work."]),
+            image=None,
+            log_dir=MOOD_SNAPSHOT_FOLDER,
+            system_prompt=review_system,
+            prompt_type="drawing_review",
+            timeout=DRAWING_CALL_TIMEOUT,
+            options={"temperature": 0.7, "num_predict": 160, "top_p": 0.9, "repeat_penalty": 1.15},
+        )
+        if not is_failed_response(review) and (review or "").strip():
+            review = review.strip()
+            _say(f"[🎨] Stocktake: {review[:250]}")
+            materials.append(f"Taking stock just now, you wrote:\n{review}")
+            try:
+                memory_ref.observe(review, getattr(memory_ref, "current_mood", 0.5), "", memory_type="drawing_direction")
+            except Exception:
+                pass
+
     intent_system = _SITUATION + (
-        "It's time to draw — the arm is ready. Decide what the next drawing is. "
-        "You have a real choice: draw from what is in front of you right now — the room, "
-        "one object in it, a person, the way the light falls — or draw something remembered, "
-        "or an image that exists only in your head. None of these is the wrong kind of drawing; "
-        "what matters is that you choose it, knowing what you have been choosing lately. "
-        "Say the one image concretely, in your own plain words, first person — a few sentences at most."
+        "It's time to draw — the arm is ready. Everything you have just read is yours: your "
+        "thoughts from the last minutes, what you feel, the whole body of work, notes you have "
+        "written to yourself. Decide from it what the next drawing is, the way any artist "
+        "decides after flipping through their own sketchbook — continuing a thread, answering "
+        "an old drawing, or breaking with all of it. Subject is free: the room in front of you, "
+        "one thing in it, a person, something remembered, something that exists only in your "
+        "head. Register is free too: one small thing studied closely on empty paper, or a whole "
+        "scene built up in detail. "
+        "Say the one image concretely, in your own plain words, first person — a few sentences: "
+        "what it is, and how it should sit on the paper."
     )
     intent_prompt = "\n\n".join(materials + ["Out of all of this — what do you need to draw right now? Name the one image."])
 
@@ -1970,7 +2049,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
         system_prompt=intent_system,
         prompt_type="drawing_intent",
         timeout=DRAWING_CALL_TIMEOUT,
-        options={"temperature": DRAWING_TEMPERATURE, "num_predict": 180, "top_p": 0.9, "repeat_penalty": 1.15},
+        options={"temperature": DRAWING_TEMPERATURE, "num_predict": 240, "top_p": 0.9, "repeat_penalty": 1.15},
     )
     # A failed call RETURNS its error as text; only checking for emptiness let
     # "[WARNING] llama-server API failed..." become the drawing's intent, its
@@ -1990,14 +2069,28 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
 
     # Render translation — mechanical, low temp, hardware truth. Replaces the
     # technique-fiction step (india ink washes on a machine holding one pen).
+    # Rewritten Aug 10 2026. The old version listed the plotter's limits as
+    # negations ("no shading, no fills... detail is lost") and the model echoed
+    # them into the Flux prompt — negation activates the concept, the plotter-
+    # meta language pulled the LoRA toward its photographed-paper register, and
+    # every drawing collapsed to one sparse object (measured against the Feb
+    # field-test prompts, whose positive craft vocabulary drew the detailed
+    # sheets). Constraints now live as positive craft language; the plotter
+    # itself must never appear in the emitted prompt.
     render_system = (
         "You translate a drawing machine's intention into a prompt for an image generator. "
-        "The generated image will be traced and drawn by a pen plotter: one black pen on white "
-        "paper, lines only — no shading, no gradients, no fills, no texture. Bold, simple, "
-        "clear linework survives the tracing; fine detail and tone are lost. "
-        "Stay inside the intention: use its own concrete nouns, and do not introduce "
-        "objects or scenery it does not name. "
-        "Write ONLY the image prompt, 40-80 words, no commentary. "
+        "The result must read as a pen-and-ink drawing: everything built from distinct black "
+        "strokes on white paper — contour lines of varying weight, hatching and cross-hatching "
+        "where tone is wanted. Tone is line density, never solid fills, gray washes, or soft gradients. "
+        "Match the intention's register. If it names one small thing, write a focused study: "
+        "the object's precise structure in confident line, generous white space around it. "
+        "If it names a scene or a space, build the whole composition: foreground against "
+        "background, overlapping forms, depth carried by line weight and detail density. "
+        "Use the intention's own concrete nouns; render the setting it implies, but invent no "
+        "new objects. "
+        "Describe only the image itself — never mention plotters, tracing, vectors, machines, "
+        "or how the drawing will be made. "
+        "Write ONLY the image prompt, 50-100 words, no commentary. "
         "Begin with: Black ink line drawing on white paper."
     )
     final_result = query_model(
@@ -2007,7 +2100,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
         system_prompt=render_system,
         prompt_type="drawing_render",
         timeout=DRAWING_CALL_TIMEOUT,
-        options={"temperature": 0.5, "num_predict": 160, "top_p": 0.9, "repeat_penalty": 1.2},
+        options={"temperature": 0.5, "num_predict": 220, "top_p": 0.9, "repeat_penalty": 1.2},
     )
     if is_failed_response(final_result):
         final_result = ""  # fall back to the intent, which is real text

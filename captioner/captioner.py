@@ -190,6 +190,8 @@ class Captioner(MemoryMixin):
         self._presence_believed: bool = False
         self._presence_since: float = 0.0
         self._presence_last_seen: float = 0.0
+        self._absence_watch_s: float = 0.0  # seconds spent looking at the last-seen spot and finding nobody
+        self._last_presence_check: float = 0.0
         self._presence_seen_now: bool = False
 
         # The stream (CoT-style continuity): recent captions ride as the
@@ -460,7 +462,7 @@ class Captioner(MemoryMixin):
         # active gaze lock. The belief persists through gaps so a glance away
         # doesn't read as a departure, and a re-detection doesn't read as a new
         # arrival. Only the OFF->ON edge is a genuine arrival.
-        from config.config import SALIENCE_MOTION_RESIDUAL, PRESENCE_BELIEF_DECAY_SECONDS
+        from config.config import SALIENCE_MOTION_RESIDUAL, PRESENCE_ABSENCE_LOOK_TOLERANCE, PRESENCE_BELIEF_DECAY_SECONDS
 
         now = time.time()
         gaze_engaged = False
@@ -491,17 +493,71 @@ class Captioner(MemoryMixin):
             pass
 
         arrival = False
+        resumed = False
         if seen_now:
             self._presence_last_seen = now
+            self._absence_watch_s = 0.0
             if not self._presence_believed:
+                # Re-ID (no-op while PRESENCE_REID_ENABLED is False): a match
+                # against recent sightings means the same person resumed — no
+                # arrival event, and the presence line says "He's back."
+                try:
+                    from perception.presence_identity import presence_identity
+
+                    resumed = presence_identity.matches_recent() is True
+                except Exception:
+                    resumed = False
                 self._presence_believed = True
                 self._presence_since = now
-                arrival = True  # OFF->ON edge — the only genuine arrival
-        elif self._presence_believed and (now - self._presence_last_seen) > PRESENCE_BELIEF_DECAY_SECONDS:
-            self._presence_believed = False  # sustained absence — they really left
+                arrival = not resumed  # OFF->ON edge — the only genuine arrival
+                # For the presence line: the single-occupant prior. Measured
+                # Aug 10: CLIP cross-outfit similarity sits BELOW cross-person,
+                # so appearance cannot say "same man, new jacket" — but when
+                # someone is here it is almost always him, and the definite
+                # singular keeps the referent continuous ("106th man" fix).
+                self._presence_arrival_familiar = resumed
+                try:
+                    self._presence_arrival_count = max(1, DetectionMemory.get_person_count())
+                except Exception:
+                    self._presence_arrival_count = 1
+                # The singular register is a conclusion, not a hardcoded fact:
+                # the arrival ledger decides whether recent life is one-man
+                # (studio) or crowds (exhibition), and the line follows.
+                try:
+                    from perception.presence_identity import presence_identity
+
+                    presence_identity.record_arrival(self._presence_arrival_count)
+                    self._presence_singular_regime = presence_identity.singular_regime()
+                except Exception:
+                    self._presence_singular_regime = True
+            try:
+                from perception.presence_identity import presence_identity
+
+                presence_identity.note_sighting()  # rate-limited; no-op while re-ID is off
+            except Exception:
+                pass
+        elif self._presence_believed:
+            # Absence-of-evidence only counts as evidence-of-absence while the
+            # machine is actually looking at where the person was last seen —
+            # its own wandering gaze must not manufacture departures (and the
+            # false re-arrivals that follow).
+            dt = min(now - self._last_presence_check, 30.0) if self._last_presence_check else 0.0
+            try:
+                from perception.person_detection_state import get_person_detection_state
+
+                looking = get_person_detection_state().is_looking_at_last_known_location(tolerance=PRESENCE_ABSENCE_LOOK_TOLERANCE)
+            except Exception:
+                looking = True  # fail open: degrade to the old wall-clock decay
+            if looking:
+                self._absence_watch_s += dt
+            if self._absence_watch_s > PRESENCE_BELIEF_DECAY_SECONDS:
+                self._presence_believed = False  # looked, repeatedly, nobody there — they really left
+                self._absence_watch_s = 0.0
+        self._last_presence_check = now
         self._presence_seen_now = seen_now
         info["presence_believed"] = self._presence_believed
         info["presence_seen_now"] = seen_now
+        info["presence_resumed"] = resumed
 
         # Eye contact is salient at its onset — someone holding your gaze for
         # ten minutes is presence, not an event. The sustained state still
