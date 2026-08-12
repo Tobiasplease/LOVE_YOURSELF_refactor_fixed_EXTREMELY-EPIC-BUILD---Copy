@@ -32,7 +32,6 @@ from captioner.prompts import SELF_CRITIQUE_PROMPT, SELF_CRITIQUE_SYSTEM_PROMPT
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
-from grbl.idle_movement_manager import pause_for_drawing
 from utils.inference import is_failed_response, query_model
 from utils.llm_log import truncate_for_print
 from utils.state_manager import state_manager
@@ -535,16 +534,6 @@ class DrawingController:
 
             # Unload the inference model from VRAM so ComfyUI/Flux can allocate
             self._unload_inference_model()
-
-            # Don't pause idle movements yet - let them continue with "generating" pattern
-            # We'll only pause when actual G-code execution starts
-            try:
-                from grbl.idle_movement_manager import update_emotion
-
-                # Switch to "generating" pattern - continuous circular movements
-                update_emotion("generating")
-            except Exception as e:
-                print(f"[⚠️] Could not switch to generating pattern: {e}")
 
             if os.path.exists(latest_image):
                 image_path = latest_image

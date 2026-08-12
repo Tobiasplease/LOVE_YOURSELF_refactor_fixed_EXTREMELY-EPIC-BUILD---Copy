@@ -555,9 +555,11 @@ dropped into `PresenceIdentity.embed_crop`, then re-run the test and enable.
 
 ## Known-weak / watch list
 
-- **Mood engine** (mood/mood.py): keyword sentiment over a register that no
-  longer uses emotion words. Patched with event inputs; proper fix is an
-  event-driven mood model.
+- **Mood engine** (mood/mood.py): core signal is the LLM mood read (every 8
+  captions via context_compression._absorb_mood) + person nudge; the keyword
+  lexicon was retired July 10 and the pattern-engine novelty nudge Aug 12.
+  Remaining weakness: the 5-label ladder crushes the continuous vector
+  (continuous-mood redesign = phase C, docs/mood-novelty-audit.md).
 - **Concept near-duplicates**: "still desk" / "desk lamp" / "white table" etc.
   accumulate; matching works but the store sprawls. Candidate: periodic merge.
 - **Observations**: storage was dead until June 12 (empty perception arg).
@@ -568,6 +570,18 @@ dropped into `PresenceIdentity.embed_crop`, then re-run the test and enable.
 
 ## Dead / deprecated (do not revive without checking docs/memory-redesign-plan.md)
 
+- **Aug 12 mood/novelty teardown** (docs/mood-novelty-audit.md tiers 0–3):
+  utils/pattern_recognition.py (motif engine + saturated novelty; spaCy
+  singleton moved to utils/nlp.py for vocab promotion), hand_control/ app
+  (only hand_expression.py survives for servo calibration),
+  grbl/idle_movements.py + run_idle_movements.py (wanderer subprocess),
+  config/word_lists.py, build_environmental_caption_prompt,
+  should_include_context's pressure/curiosity/relational/mood branches and
+  the "restless" literals, set_novelty_score (activation network is now
+  novelty_score's ONLY writer), get_pattern_data, get_temporal_feeling,
+  get_breathing_modifiers, LogType.MOTIF/MOTIF_SCORE, top-level
+  movement_recordings/*.json. Frozen captioner mood island (Pipeline B)
+  still standing — that's audit tier 4, artist decisions pending.
 - utils/ollama.py — REMOVED July 9 (with mistral-nemo and the whole Ollama backend; llama-server is the sole backend, logging moved to utils/llm_log.py)
 - get_session_greeting, after_perception, build_monologue_prompt etc. —
   removed June 2026 dead-code purge
@@ -739,6 +753,32 @@ LEGACY (kept for A/B: DRAWING_ANALYSIS_MODE="multi_step"): the 5-step
 context_rich_multi_step_drawing_analysis — env essay / emotion manufacture
 (from the flatlined mood, converging on invented stasis drama every time) /
 intent / technique fiction / synthesis.
+
+## Physical execution fidelity (Aug 10-12 2026)
+
+Traced stage-by-stage (SVG → gcode → warp → paper) after "barely legible"
+sheets; the SVG→gcode conversion was faithful, everything physical wasn't:
+
+- **Feed**: distance-scaled speeds RETIRED — pen-down runs one flat
+  `GRBL_DRAW_FEED_RATE` (450), pen-up `GRBL_TRAVERSAL_FEED_RATE` (2000).
+  February's good sheets were an accidental flat-420 (vpype's 0.03mm segments
+  all classed "micro"); centerliner v2's 0.43mm segments pushed the same
+  formula to 700-2000 on ink.
+- **Pen lifts**: `GRBL_ENABLE_PEN_OPTIMIZATION` now defaults FALSE — on a
+  small dense drawing every pen-down fell within the 5mm cluster threshold,
+  so ENTIRE sheets ran on the shallow S38 fast lift (3 servo units above the
+  documented grazing point, unflat surface): traversals dragged ink through
+  the figure. All lifts now deep (S34) + settle dwell.
+- **Scale/position**: the warp stream path bounds-normalizes
+  (`find_xy_bounds_from_lines` → `warp_transform_line(min_x, min_y, …)` →
+  `WarpCalibration.apply_to_line`). Max-only normalization had kept the vpype
+  page margin inside the mapping: ink spanning 16-34 of a 0-34 domain printed
+  at u 0.47-1.0 — half scale, pressed into the window's right edge (the
+  extrapolated calibration strip). Ink now fills the window centered
+  (verified: 83x138mm right-edge → 111x184mm centered on a real drawing).
+- **Window**: paper_window grown 5% to 260x184mm (backup
+  warp_calibration.json.pre_grow2); at 1.05 nothing clamps, ~23% of the
+  perimeter rides extrapolated calibration (mild edge curvature, accepted).
 
 ## Kinetic bus (LIVE — default ON since July 27: KINETIC_BUS_ENABLED)
 
@@ -931,8 +971,10 @@ with their systems.
   is doubly safe (owned=lefthand: gantry channels never even train there);
   the gate future-proofs any widened ownership and makes the panel lab's
   drawing checkbox faithful.
-- Emotion arrives by push: machine.py calls `kinetic_bus.set_emotion(...)`
-  at the same two sites as `change_to_emotion(...)`.
+- Emotion arrives by PULL (the injected `get_emotion=` wins every 2s
+  supervisor slow-lane); the machine.py `set_emotion(...)` push sites are
+  redundant-by-design backups. Since Aug 12 the push samples AFTER
+  analyze_mood, so it is no longer a tick stale.
 - Transitions are seamless: new generators seed from live servo positions
   and ease into the NEAREST demonstrated state (KINETIC_CROSSFADE_S).
 - Modifiers (July 27 redesign — directional logic, everything blends):

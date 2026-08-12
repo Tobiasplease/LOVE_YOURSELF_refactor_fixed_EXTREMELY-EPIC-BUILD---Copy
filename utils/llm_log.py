@@ -32,7 +32,6 @@ def _get_prompt_emoji(prompt_type: str) -> str:
         "awakening": "🌅",
         "compression": "🧠",
         "sentiment": "😊",
-        "motif_scoring": "📊",
         "vision": "👁️",
         "caption": "📸",
         "general": "💭",

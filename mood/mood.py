@@ -3,15 +3,13 @@ from __future__ import annotations
 
 import os
 import time
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import numpy as np  # type: ignore
 
 from config.config import MOOD_SNAPSHOT_FOLDER
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
-from utils.inference import query_model
-from utils.pattern_recognition import PatternRecognitionEngine
 
 
 def mood_to_feeling(valence: float, arousal: float) -> str:
@@ -74,18 +72,10 @@ class MoodEngine:
     def __init__(self) -> None:
         self.current_mood = 0.5  # Backward compatibility scalar
         self.mood_vector = (0.0, 0.0, 0.0)  # Initial: truly neutral valence, arousal, clarity
-        self.previous_mood_vector = (0.0, 0.0, 0.0)  # For emotional momentum tracking
         self.emotional_momentum = 0.2  # How much previous mood influences new mood (0.0-1.0) - lower for more responsive emotional evolution
         self.last_caption = ""
         self.last_person_detected = False
-        self.memory = []
-        self.session_start = time.time()  # Track session duration for decay
-
-        # GPT-5's suggestion: Long-term mood bias for tone evolution over weeks
-        self.long_bias = getattr(self, "long_bias", (0.0, 0.0, 0.0))  # val, aro, clr drift
-
-        # Initialize unified pattern recognition engine
-        self.pattern_engine = PatternRecognitionEngine()
+        self.session_start = time.time()  # Oscillator phase in get_emotion_for_hand_controller
 
     # -------------------------------------------------------------- main hook
     def analyze_mood(
@@ -93,8 +83,6 @@ class MoodEngine:
         caption: str,
         saw_person: bool = False,
         image_path: str | None = None,
-        memory_context: Optional[any] = None,  # type: ignore
-        temporal_feeling: Optional[str] = None,
     ) -> float:
         """Analyze mood: LLM mood read as the core signal + real-event nudges.
 
@@ -111,11 +99,6 @@ class MoodEngine:
         """
         saw_person = saw_person or "person" in caption.lower() or "individual" in caption.lower()
 
-        # Apply unified pattern analysis (motifs + novelty)
-        pattern_data = self.pattern_engine.analyze_caption(caption)
-        novelty = pattern_data["novelty"]
-        self._last_novelty = novelty  # Store for external access
-
         # Core affect from the mood read (fresh within 15 min); neutral until
         # the first read of the session lands.
         read_valence, read_arousal = 0.0, 0.35
@@ -129,7 +112,7 @@ class MoodEngine:
             pass
 
         valence = np.clip(read_valence + (0.08 if saw_person else 0.0), -1.0, 1.0)
-        arousal = np.clip(read_arousal + (0.12 if saw_person else 0.0) + 0.15 * novelty, 0.0, 1.0)
+        arousal = np.clip(read_arousal + (0.12 if saw_person else 0.0), 0.0, 1.0)
         clarity = np.clip((len(caption.split()) - 10) / 20, -1.0, 1.0)  # Caption length suggests clarity
 
         # Apply emotional momentum to smooth transitions
@@ -199,14 +182,6 @@ class MoodEngine:
         # 6. Default for everything else
         else:
             return "alert_curious"  # Default curious state
-
-    def get_pattern_data(self) -> dict:
-        """Get current pattern recognition data for external access."""
-        return {
-            "recent_motifs": list(self.pattern_engine.current_motifs),
-            "motif_summary": self.pattern_engine.get_motif_summary(),
-            "novelty_score": getattr(self, "_last_novelty", 0.0),
-        }
 
     # Keyword sentiment (analyze_caption_sentiment) + compute_mood_change
     # retired July 10 — the lexicon matched emotion adjectives the voice never

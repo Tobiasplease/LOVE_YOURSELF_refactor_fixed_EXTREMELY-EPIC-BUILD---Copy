@@ -1008,29 +1008,24 @@ def mood_update_thread(mood_frame, timestamp):
                 debug_print(f"Snapshot saved: {snapshot_path}", "MOOD")
 
             try:
-                # Use existing MoodEngine for emotional state - single source of truth
-                thread_emotion = mood_engine.get_emotion_for_hand_controller()
-                thread_mood = mood_engine.get_current_mood()
-
-                debug_print(f"Current emotion: {thread_emotion}, mood: {thread_mood:.2f}", "EMOTION")
-
-                # Captioner is now updated in main loop - mood system just reads captions
-                debug_print("Captioner updated successfully", "CAPTIONER")
-
-                # Second: Process caption and update physical systems
+                # Process caption and update physical systems
                 if captioner.last_caption:
                     clean_caption = captioner.last_caption
                     if clean_caption.lower().startswith("caption:"):
                         clean_caption = clean_caption[len("caption:") :].strip()
 
-                    # CRITICAL: Process caption through mood analysis (was missing!)
                     mood_engine.analyze_mood(
                         clean_caption,
                         saw_person=best_box is not None,
                         image_path=snapshot_path if "snapshot_path" in locals() else None,
-                        memory_context=captioner.memory_manager if hasattr(captioner, "memory_manager") else None,
                     )
                     debug_print(f"Processed caption through mood analysis: {clean_caption[:100]}...", "MOOD")
+
+                    # Sampled AFTER analyze_mood — the push used to run one
+                    # 10s tick stale (harmless only because the bus pull wins)
+                    thread_emotion = mood_engine.get_emotion_for_hand_controller()
+                    thread_mood = mood_engine.get_current_mood()
+                    debug_print(f"Current emotion: {thread_emotion}, mood: {thread_mood:.2f}", "EMOTION")
 
                     # Lightbulb flash on caption print
                     if USE_LIGHTBULB_PWM and lightbulb:
@@ -1060,12 +1055,10 @@ def mood_update_thread(mood_frame, timestamp):
                         kinetic_bus.set_emotion(thread_emotion)
                         debug_print(f"Updated kinetic bus emotion: {thread_emotion}", "HAND")
 
-                    # Third: Update captioner's mood state and pattern data for next cycle
+                    # Update captioner's mood scalar for the next cycle.
+                    # (The pattern-engine novelty write is gone — the activation
+                    # network is now novelty_score's only writer.)
                     captioner.current_mood = thread_mood
-                    pattern_data = mood_engine.get_pattern_data()
-                    captioner.set_novelty_score(pattern_data["novelty_score"])
-                    # Pass recent motifs to captioner for memory integration
-                    captioner.current_motifs_from_mood = pattern_data["recent_motifs"]
 
             except Exception as e:
                 debug_print(f"Captioner update failed: {e}", "ERROR")

@@ -190,13 +190,6 @@ class IdleMovementManager:
                 self.process.wait()
             print("[🛑] Idle movements stopped")
 
-    def update_emotion(self, emotion: str):
-        """Update emotion by restarting with new emotion"""
-        self.emotion = emotion
-        if self.process and self.process.poll() is None:
-            self.pause_for_drawing()
-            time.sleep(0.5)
-            self.resume_after_drawing()
 
 
 # Global instance
@@ -244,10 +237,3 @@ def resume_after_drawing() -> bool:
 def stop_idle_movements():
     """Stop idle movements"""
     get_manager().stop()
-
-
-def update_emotion(emotion: str):
-    """Update emotion for idle movements"""
-    # Skip emotion updates to avoid disruptive homing/restart cycles
-    # Idle movements are organic and varied even with static emotion state
-    pass

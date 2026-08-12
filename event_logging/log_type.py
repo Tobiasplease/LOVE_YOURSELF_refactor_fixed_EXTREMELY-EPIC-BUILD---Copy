@@ -28,8 +28,3 @@ class LogType(Enum):
     NEW_DRAWING = "new_drawing"
     GRBL = "grbl"
 
-    # Motif analysis and scoring events
-    # MOTIF_EXTRACTION = "motif_extraction"
-    MOTIF_SCORE = "motif_score"
-    # MOTIF_ANALYSIS = "motif_analysis"
-    MOTIF = "motif"

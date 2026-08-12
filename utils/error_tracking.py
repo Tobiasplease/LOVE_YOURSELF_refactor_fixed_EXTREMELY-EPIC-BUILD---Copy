@@ -20,9 +20,7 @@ class SilentFailureTracker:
         self.component_errors: Dict[str, int] = {}
         self.expected_intervals: Dict[str, float] = {
             "captioner": 30.0,  # Should caption every 30s
-            "mood_engine": 5.0,  # Should update mood every 5s
             "drawing_controller": 60.0,  # Should check drawing every 60s
-            "hand_controller": 1.0,  # Should send data every 1s
             "object_detection": 1.0,  # Should detect every 1s
         }
 

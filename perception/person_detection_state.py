@@ -310,41 +310,6 @@ class PersonDetectionState:
         with self._lock:
             return self._last_raw_detection_time
 
-    def get_breathing_modifiers(self, emotion_state: str) -> Tuple[float, float]:
-        """Get breathing speed and pause modifiers based on person presence."""
-        state = self.get_person_state()
-
-        if not state["is_present"]:
-            return 1.0, 1.0  # No modifiers when alone
-
-        # Base response to person presence
-        breath_modifier = 1.1  # Slightly slower when observed
-        pause_modifier = 1.2   # Longer pauses when person present
-
-        # Adjust based on how long person has been present
-        presence_duration = state["presence_duration"]
-        if presence_duration < 5.0:
-            # Initial reaction - more pronounced
-            breath_modifier *= 1.15
-            pause_modifier *= 1.4
-        elif presence_duration > 30.0:
-            # Comfortable with presence
-            breath_modifier *= 0.95
-            pause_modifier *= 0.9
-
-        # Emotion-specific responses
-        if emotion_state == "alert_curious":
-            breath_modifier *= 0.85  # More alert breathing
-            pause_modifier *= 0.7    # Shorter pauses when curious
-        elif emotion_state == "withdrawn_distant":
-            breath_modifier *= 1.3   # Much slower when withdrawn
-            pause_modifier *= 1.8    # Long pauses when shy
-        elif emotion_state == "energized_engaged":
-            breath_modifier *= 0.9   # Slight excitement
-            pause_modifier *= 0.8    # Quick responses when social
-
-        return breath_modifier, pause_modifier
-
     def get_consciousness_context(self) -> str:
         """Get person presence context for consciousness prompts with spatial awareness."""
         state = self.get_person_state()

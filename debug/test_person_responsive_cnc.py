@@ -191,11 +191,6 @@ def test_person_detection_states():
         print(f"   Expected to pause: {scenario['expected_pause']}")
         print(f"   Would actually pause: {state['is_present']}")
 
-        # Test breathing response
-        from breathing.breathing import update_lung_position
-
-        breath_mod, pause_mod = person_detection.get_breathing_modifiers("alert_curious")
-        print(f"   Breathing modifiers: speed={breath_mod:.2f}, pause={pause_mod:.2f}")
 
 
 if __name__ == "__main__":

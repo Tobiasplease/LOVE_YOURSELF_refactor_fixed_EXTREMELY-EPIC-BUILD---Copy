@@ -79,7 +79,7 @@ python machine.py --config_override config/production_config.json
 3. **Configuration-Driven**: All settings centralized in config/config.py
 4. **External API Integration**: Uses Ollama for AI processing (llava model for vision) and ComfyUI for image generation
 5. **Event-Driven Logging**: Comprehensive JSON logging of all system events
-6. **Drawing Controller**: Intelligent decision-making for when to generate images based on mood, novelty, and boredom metrics
+6. **Drawing Controller**: timer-gated drawing trigger (desire-arc rework in progress — docs/drawing-trigger-desire-plan.md)
 
 ### External Dependencies
 

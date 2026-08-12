@@ -82,7 +82,7 @@ class VocabularyPromoter:
             return list(self.history)
 
     def _extract_candidates(self, caption):
-        from utils.pattern_recognition import nlp  # module-level singleton, already loaded by the mood engine
+        from utils.nlp import nlp  # module-level spaCy singleton
 
         terms = set()
         for chunk in nlp(caption).noun_chunks:

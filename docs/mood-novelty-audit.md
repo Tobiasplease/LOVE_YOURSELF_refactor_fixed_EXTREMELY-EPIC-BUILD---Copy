@@ -4,6 +4,10 @@ Aug 12 2026, ahead of the mood revamp (phase C of docs/drawing-trigger-desire-pl
 Two exhaustive traces, verified against the LIVE run 387e699a. Rule for the teardown:
 work the tiers in order; each tier is safe once the one above is gone.
 
+**STATUS: tiers 0–3 EXECUTED Aug 12** (same day, artist-approved), plus the
+stale-push ordering fix. Tiers 4–5 (the frozen captioner island — VOICE
+changes) and the redesign surface remain, pending artist decisions.
+
 ## The headline: two disconnected mood systems
 
 **Pipeline A — LIVE and working.** LLM mood read (memory-diff call, every 8 captions,
@@ -120,8 +124,11 @@ min(1.0, x*1.2)), (3) whichever of the two last wrote Captioner._novelty_score
 26. mood.py:14,88 PatternRecognitionEngine import/instantiation;
     utils/pattern_recognition.py whole file (kills the leak + LogType.MOTIF's
     only producer → then retire LogType.MOTIF + log_viewer motif branch)
-27. requirements/pyproject + CLAUDE.md: spaCy + en_core_web_sm can go —
-    pattern_recognition is the last runtime spaCy consumer (verify grep first)
+27. ~~spaCy can go~~ EXECUTION CORRECTION (Aug 12): spaCy STAYS —
+    perception/vocab_promotion.py needs the singleton (the audit missed this
+    importer); it moved to utils/nlp.py. Also kept: hand_control/
+    hand_expression.py + quiet_print.py (debug/test_left_arm_servos.py
+    calibration tool imports them).
 
 ### Tier 4 — the frozen captioner island (delete as ONE unit; prompt text changes)
 ⚠ items marked VOICE change what the model reads — artist should sign off.

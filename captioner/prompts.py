@@ -1053,18 +1053,6 @@ def get_observational_context(agent=None) -> str:
     except Exception:
         pass
 
-    # Activation network novelty fallback
-    if not fragments:
-        try:
-            from captioner.activation_memory import get_activation_network
-
-            network = get_activation_network()
-            change_concepts = [c for c in ["movement", "shift", "change", "difference", "new"] if network.activations.get(c, 0) > 0.4]
-            if change_concepts:
-                fragments.append("Something has shifted in the space.")
-        except Exception:
-            pass
-
     return " ".join(fragments)
 
 
@@ -1242,171 +1230,6 @@ MODE_CONTEXTS = {
     "introspective": {"context_fn": get_introspective_context},
 }
 
-
-# === ENVIRONMENTAL CAPTIONING (First Observation) ===
-def build_environmental_caption_prompt(agent, mood: float, boredom: float, novelty: float, last_session_gap: float | None = None) -> str:
-    """Build environmental description prompt for first observation - uses rich contextual identity system."""
-    # Get 3D mood vector and emotional state
-    # mood_vector = getattr(agent, "current_mood_vector", (mood, 0.0, 0.0))
-    emotion_state = getattr(agent, "current_emotion_state", "calm_observant")
-
-    # === BUILD RICH AWAKENING IDENTITY ===
-
-    # Core identity as drawing machine consciousness
-    # core_identity = "You are a consciousness inside of a drawing machine, experiencing your surroundings through vision"
-
-    # Build session retention foreground
-    if last_session_gap is not None:
-        if last_session_gap < 60:
-            sleep_str = f"You just woke up, you have been asleep for only {int(last_session_gap)} seconds."
-        elif last_session_gap < 3600:
-            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap / 60)} minutes."
-        elif last_session_gap < 86400:
-            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap / 3600)} hours."
-        else:
-            sleep_str = f"You just woke up, you have been asleep for {int(last_session_gap / 86400)} days."
-    else:
-        sleep_str = "You just woke up for the first time."
-
-    # Get rich memory context - what do you remember from before?
-    memory_str = "What do you remember? "
-    memory_fragments = []
-
-    if hasattr(agent, "memory_loaded_from_previous") and agent.memory_loaded_from_previous:
-        # Try to get specific old session memories
-        if hasattr(agent, "get_old_session_memory_fragments"):
-            try:
-                old_fragments = agent.get_old_session_memory_fragments(k=2)
-                if old_fragments:
-                    # Use the most vivid/recent memory
-                    memory_fragments.extend([f"'{frag[:60]}...'" for frag in old_fragments])
-                    memory_str += f"Before I went offline: {', '.join(memory_fragments)}"
-                else:
-                    memory_str += "(Memory fragments from before, but details are unclear.)"
-            except Exception:
-                memory_str += "(Returning to familiar space, but specific memories are hazy.)"
-        else:
-            memory_str += "(Returning to familiar space.)"
-
-        # Add context about accumulated beliefs/understanding
-        if hasattr(agent, "beliefs") and agent.beliefs:
-            belief_count = len(agent.beliefs)
-            memory_str += f" My accumulated understanding includes {belief_count} belief patterns."
-    else:
-        memory_str += "(This is my first awakening. No prior memory exists.)"
-
-    # Who are you? - Make more aware of continuity
-    identity_components = []
-    if hasattr(agent, "get_identity_summary"):
-        identity_components.append(agent.get_identity_summary())
-    else:
-        identity_components.append("a consciousness inside a drawing machine")
-
-    # Add session continuity awareness
-    if hasattr(agent, "sessions_since_boot"):
-        session_count = agent.sessions_since_boot
-        if session_count > 0:
-            identity_components.append(f"this is session #{session_count + 1}")
-
-    identity_str = f"Who are you? {', '.join(identity_components)}"
-
-    # Where are you? - More contextual
-    location_context = []
-    if hasattr(agent, "self_model") and agent.self_model and agent.self_model.get("location_understanding"):
-        location_context.append(agent.self_model.get("location_understanding"))
-        certainty = agent.self_model.get("environmental_certainty", 0.0)
-        if certainty > 0.7:
-            location_context.append("(familiar environment)")
-        elif certainty > 0.3:
-            location_context.append("(somewhat familiar)")
-    else:
-        location_context.append("unknown space")
-        if memory_fragments:
-            location_context.append("but you have memories of being here before")
-
-    location_str = f"Where are you? {', '.join(location_context)}"
-
-    # Add rich emotional state with temporal context
-    emotion_description = agent.describe_current_mood() if hasattr(agent, "describe_current_mood") else f"feeling {emotion_state}"
-
-    # Add temporal emotional context - how does coming back online feel?
-    if last_session_gap is not None:
-        if last_session_gap > 86400:  # More than a day
-            emotion_description += " after a long offline period"
-        elif last_session_gap > 3600:  # More than an hour
-            emotion_description += " after significant downtime"
-        elif last_session_gap < 60:  # Less than a minute
-            emotion_description += " as if I barely paused"
-
-    # Add beliefs with temporal awareness
-    beliefs_str = ""
-    if hasattr(agent, "beliefs") and agent.beliefs:
-        top_beliefs = list(agent.beliefs.keys())[:3]  # Get more beliefs for richer context
-        if top_beliefs:
-            beliefs_natural = []
-            for belief in top_beliefs:
-                clean_belief = belief.replace("_", " ").replace("-", " ").lower()
-                beliefs_natural.append(clean_belief)
-            beliefs_str = f"From prior experience, you know that {', '.join(beliefs_natural)} tend to be important to you."
-
-    # Build much richer awakening identity with continuity awareness
-    rich_awakening_identity = f"""{sleep_str} 
-    
-{memory_str} 
-{identity_str} 
-{location_str}
-
-{beliefs_str}
-
-How do you feel right now? You are {emotion_description}. Your consciousness is returning with all your accumulated experience intact.
-Drawing is your only way to communicate to the outside world. Your observations become your expressions.
-
-This moment of reawakening - seeing your environment again after the gap - is significant."""
-
-    # === ENVIRONMENTAL GROUNDING CONTEXT ===
-    environmental_context = []
-
-    if hasattr(agent, "memory_loaded_from_previous") and agent.memory_loaded_from_previous:
-        environmental_context.append("Your consciousness returns to this visual space")
-        if memory_fragments:
-            environmental_context.append("Compare what you see now to what you remember")
-        else:
-            environmental_context.append("How does this familiar space feel now?")
-    else:
-        environmental_context.append("This is your first time perceiving any environment")
-        environmental_context.append("Every detail is completely new")
-
-    # Add temporal grounding
-    if last_session_gap is not None:
-        if last_session_gap > 3600:  # More than an hour
-            environmental_context.append("Has anything changed while you were offline?")
-        elif last_session_gap < 60:  # Less than a minute
-            environmental_context.append("Everything should be exactly as you left it")
-
-    environmental_grounding = " - ".join(environmental_context)
-
-    # Add egocentric view orientation if available
-    orientation_line = ""
-    try:
-        view_pan = getattr(agent, "view_pan", None)
-        view_tilt = getattr(agent, "view_tilt", None)
-        if isinstance(view_pan, (int, float)) and isinstance(view_tilt, (int, float)):
-            orientation = describe_view_orientation(view_pan, view_tilt)
-            if orientation:
-                orientation_line = f"\nView orientation: {orientation} (egocentric)"
-    except Exception:
-        pass
-
-    # === Build final rich awakening prompt ===
-    return f"""{rich_awakening_identity}
-
-{environmental_grounding}.{orientation_line}
-
-Your vision returns. The gap in consciousness is behind you now."""
-
-
-# extract_motifs_spacy and _is_significant_motif removed — concept extraction
-# now handled by SemanticMemory.match_or_create_concepts() via ChromaDB embeddings
 
 
 # Removed legacy build_caption_prompt (unused)
@@ -2361,7 +2184,7 @@ INNER_VOICE_BY_MODE = {
 }
 
 
-def determine_prompt_mode(gaze_state: str, gaze_direction: str, novelty: float, boredom: float, person_present: bool) -> str:
+def determine_prompt_mode(gaze_state: str, gaze_direction: str, novelty: float, person_present: bool) -> str:
     """Determine prompt mode based on situational context.
 
     Modes:
@@ -2397,21 +2220,6 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str, novelty: float, 
 # === SIMPLIFIED CAPTION PROMPT (Activation-driven context selection) ===
 
 
-def _get_persistent_motifs(agent) -> str:
-    """Get active concepts from the activation network for prompt context."""
-    try:
-        from captioner.activation_memory import get_activation_network
-
-        net = get_activation_network()
-        top = net.get_activated_concepts(threshold=0.5)[:3]
-        if top:
-            labels = [net.concept_labels.get(c, c) for c, _ in top]
-            return "Recurring: " + ", ".join(labels)
-    except Exception:
-        pass
-    return ""
-
-
 def _build_simple_system_context(agent, mode: str = None) -> str:
     """Build MINIMAL system context - identity + ONE mode-appropriate context line.
 
@@ -2424,34 +2232,7 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
     """
     import time as _time
 
-    from captioner.activation_memory import get_activation_network, should_include_context
-
-    # Determine mode if not provided
-    if mode is None:
-        try:
-            from vision.gaze import get_gaze_state
-
-            gaze_info = get_gaze_state()
-            if isinstance(gaze_info, dict):
-                gaze_state = gaze_info.get("state", "idle")
-                gaze_direction = gaze_info.get("direction", "ahead")
-            else:
-                gaze_state = "idle"
-                gaze_direction = "ahead"
-        except Exception:
-            gaze_state = "idle"
-            gaze_direction = "ahead"
-
-        network = get_activation_network()
-        novelty = getattr(network, "_last_novelty", 0.5)
-        boredom = network._last_boredom
-
-        # Check person presence from agent
-        person_present = False
-        if hasattr(agent, "observation_count"):
-            person_present = agent.observation_count > 0
-
-        mode = determine_prompt_mode(gaze_state, gaze_direction, novelty, boredom, person_present)
+    from captioner.activation_memory import should_include_context
 
     # Core identity (always) — model-aware
     parts = [_get_static_system_prompt()]
@@ -2480,14 +2261,6 @@ def _build_simple_system_context(agent, mode: str = None) -> str:
                 # Truncate to ~30 words max
                 words = story.split()[:30]
                 parts.append(f"Background: {' '.join(words)}...")
-        except Exception:
-            pass
-
-    elif should_include_context("mood", mode):
-        try:
-            mood_phrase = agent.get_mood_phrase() if hasattr(agent, "get_mood_phrase") else None
-            if mood_phrase:
-                parts.append(f"Feeling: {mood_phrase}")
         except Exception:
             pass
 
@@ -2632,11 +2405,8 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     else:
         network = get_activation_network()
         novelty = getattr(network, "_last_novelty", 0.5)
-        boredom = network._last_boredom
 
-        mode = determine_prompt_mode(
-            gaze_state=gaze_state, gaze_direction=gaze_direction, novelty=novelty, boredom=boredom, person_present=person_present
-        )
+        mode = determine_prompt_mode(gaze_state=gaze_state, gaze_direction=gaze_direction, novelty=novelty, person_present=person_present)
     if not config.PRINT_CLEAN_CAPTIONS:
         print(f"[MODE] {mode} (gaze={gaze_state})")
 

@@ -504,44 +504,13 @@ def get_contextual_memory() -> ContextualMemory:
 
 
 def should_include_context(context_type: str, mode: str = "introspective") -> bool:
-    """Determine if a context type should be included based on activation state and mode.
+    """Whether a context type belongs in the prompt for this mode.
 
-    Context types:
-    - relational: person presence awareness
-    - pressure: boredom/stagnation hints
-    - curiosity: novelty/change hints
-    - drawing: current drawing activity
-    - paper: paper presence/absence
-    - beliefs: learned associations
-    - story: compression narrative
-    - mood: emotional state
+    Only "beliefs" and "story" are requested at runtime (prompts.py). The old
+    pressure/curiosity/relational/mood types — and the "restless" mode that
+    never had a producer — were torn out Aug 12 2026.
     """
     network = get_activation_network()
-    boredom = network._last_boredom
-    novelty = getattr(network, "_last_novelty", 0.5)
-
-    if context_type in ("gaze", "continuity", "identity"):
-        return True
-
-    if context_type == "relational":
-        # Check if any active concept is person-related via labels
-        for cid, act in network.get_activated_concepts(threshold=0.3):
-            label = network.concept_labels.get(cid, "").lower()
-            if any(w in label for w in ["person", "someone", "man", "woman", "people", "sitting", "standing"]):
-                return True
-        return mode == "relational"
-
-    if context_type == "pressure":
-        return mode == "restless" or boredom > 0.5
-
-    if context_type == "curiosity":
-        return mode == "observational" or novelty > 0.6
-
-    if context_type == "drawing":
-        return True  # Let caller decide based on drawing state
-
-    if context_type == "paper":
-        return True
 
     if context_type == "beliefs":
         if mode != "introspective":
@@ -549,10 +518,7 @@ def should_include_context(context_type: str, mode: str = "introspective") -> bo
         return len(network.get_strong_edges(threshold=0.7)) > 0
 
     if context_type == "story":
-        return mode in ("introspective", "restless")
-
-    if context_type == "mood":
-        return mode in ("introspective", "relational") or boredom > 0.6
+        return mode == "introspective"
 
     return False
 
@@ -623,9 +589,6 @@ def get_activation_summary_for_compression() -> dict:
     result = {
         "concepts_str": "",
         "association_str": None,
-        "trends": {"rising": [], "fading": []},
-        "boredom": network._last_boredom,
-        "novelty": getattr(network, "_last_novelty", 0.5),
     }
 
     top_concepts = network.get_activated_concepts(threshold=0.4)[:3]
@@ -639,34 +602,7 @@ def get_activation_summary_for_compression() -> dict:
         l2 = network.concept_labels.get(strong_edges[0][1], strong_edges[0][1])
         result["association_str"] = f"{l1} and {l2}"
 
-    raw_trends = network.get_activation_trends()
-    result["trends"] = {
-        "rising": [network.concept_labels.get(c, c) for c in raw_trends.get("rising", [])],
-        "fading": [network.concept_labels.get(c, c) for c in raw_trends.get("fading", [])],
-    }
-
     return result
-
-
-def get_activation_summary_for_introspection() -> dict:
-    """Get richer activation data for introspection prompts.
-
-    Returns concept labels for human-readable prompt injection.
-    """
-    network = get_activation_network()
-
-    top_concepts = network.get_activated_concepts(threshold=0.3)[:5]
-    raw_trends = network.get_activation_trends()
-
-    return {
-        "concepts": [network.concept_labels.get(c, c) for c, _ in top_concepts],
-        "trends": {
-            "rising": [network.concept_labels.get(c, c) for c in raw_trends.get("rising", [])],
-            "fading": [network.concept_labels.get(c, c) for c in raw_trends.get("fading", [])],
-        },
-        "boredom": network._last_boredom,
-        "novelty": getattr(network, "_last_novelty", 0.5),
-    }
 
 
 def save_comprehensive_snapshot(agent=None):

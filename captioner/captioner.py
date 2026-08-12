@@ -2407,16 +2407,12 @@ class Captioner(MemoryMixin):
 
     @property
     def novelty_score(self) -> float:
-        """Get current novelty score from memory system."""
+        """Activation-network novelty, written in MemoryMixin.observe().
+        (Sole writer since Aug 12 — the mood engine's saturated motif novelty
+        used to race it through set_novelty_score.)"""
         if hasattr(self, "_novelty_score"):
             return self._novelty_score
         return 0.0
-
-    def set_novelty_score(self, score: float) -> None:
-        """Set the novelty score from mood engine pattern data."""
-        self._novelty_score = score
-        # Note: boredom is now calculated by activation memory (semantic-aware)
-        # and stored in MemoryMixin._boredom during observe()
 
     @property
     def boredom(self) -> float:

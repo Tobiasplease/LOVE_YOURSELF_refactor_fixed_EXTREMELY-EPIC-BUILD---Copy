@@ -18,7 +18,6 @@ A sophisticated AI-driven interactive system that combines computer vision, mood
   - **Memory System**: Maintains contextual awareness and interaction history
   - **Breathing Simulation**: Simulates natural breathing patterns for life-like behavior
   - **Speech Recognition**: Whisper-based local speech processing (optional)
-  - **Pattern Recognition**: Advanced motif and thematic analysis
   - **Spatial Memory**: Object tracking and spatial awareness
 - **Event Logging**: Comprehensive JSON-based logging of all system events with run management
 
@@ -184,7 +183,7 @@ LOVE_YOURSELF/
 ├── breathing/             # Breathing simulation for life-like behavior
 ├── drawing/               # ComfyUI integration for image generation
 ├── servo_control/         # Arduino servo motor control
-├── hand_control/          # Emotional hand movement control
+├── hand_control/          # Legacy remnant (servo calibration helper only)
 ├── grbl/                  # GRBL CNC machine integration
 ├── bcnc/                  # bCNC G-code processing utilities
 ├── event_logging/         # JSON event logging and run management

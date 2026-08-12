@@ -55,7 +55,6 @@ def analyze_state_file(filepath):
             cap = data['captioner']
             info['captioner'] = {
                 'beliefs': len(cap.get('beliefs', {})),
-                'motifs': len(cap.get('motif_counter', {})),
                 'timeline_entries': len(cap.get('timeline', [])),
                 'day_stones': len(cap.get('day_stones', [])),
                 'known_people': len(cap.get('known_people', {})),

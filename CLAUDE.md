@@ -77,7 +77,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 - **breathing/**: Breathing simulation for servo life-like behavior
 - **drawing/**: ComfyUI integration with workflow templates
 - **servo_control/**: Arduino servo motor control with PWM lightbulb
-- **hand_control/**: Emotional hand movement mapping and Arduino integration
+- **hand_control/**: legacy remnant — only `hand_expression.py` survives (servo calibration tooling); runtime hand movement is `motor_panel/kinetic_bus.py`
 - **grbl/**: GRBL CNC machine integration for precise drawing
 - **bcnc/**: bCNC G-code processing
 - **safety/**: ArUco marker detection and paper presence detection for CNC safety
@@ -91,7 +91,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
   - `continuity.py`: Time-gap description helpers
   - `drawing_state.py`: Drawing state helpers
   - `caption_display.py`: Display formatting for captions
-  - `pattern_recognition.py`: NLP pattern extraction (spaCy-based, used in memory pipeline)
+  - `nlp.py`: spaCy singleton (consumed by perception/vocab_promotion)
   - `view_orientation.py`: Camera orientation helpers
   - `progress_bar.py`, `error_tracking.py`: Dev utilities
 - **labs/warp-fix-lab/**: Experimental drawing warp correction scripts (not integrated)
@@ -99,9 +99,9 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 ### Key Architecture Patterns
 
 1. **Threaded Processing**: Camera, caption, and compression each run in separate threads
-2. **Activation Memory System**: Concepts extracted from captions feed an activation network; activation levels drive boredom detection and prompt mode selection
+2. **Activation Memory System**: Concepts extracted from captions feed an activation network; novelty drives prompt-mode selection, boredom drives caption sampling (temperature/length)
 3. **Context Compression**: Every N captions, a background thread compresses recent observations into a rolling `baseline_context` string, injected into system prompts
-4. **Prompt Mode Routing**: `build_simple_caption_prompt` selects a mode (relational/observational/restless/workspace/introspective/awakening) based on activation state; mode determines prompt content
+4. **Prompt Mode Routing**: `build_simple_caption_prompt` selects a mode (relational/observational/workspace/introspective/awakening) based on activation state; mode determines prompt content
 5. **Multi-Step Drawing Analysis**: `context_rich_multi_step_drawing_analysis` runs a 5-step pipeline to generate drawing prompts from current memory state
 6. **Configuration-Driven**: All tuning parameters in `config/config.py` with JSON override support
 7. **CNC Safety Gate**: ArUco marker + paper detection (safety/) gate all physical drawing; no paper = no draw
@@ -112,7 +112,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 - **ComfyUI (Optional)**: AI image generation at http://localhost:8188
 - **OpenCV DNN Models**: `models/deploy.prototxt` + `models/res10_300x300_ssd_iter_140000.caffemodel`
 - **YOLO Models**: `models/yolov8n.pt` default (`yolov8m.pt` at repo root also available)
-- **spaCy**: `en_core_web_sm` model for NLP in activation memory
+- **spaCy**: `en_core_web_sm` model for noun-chunk extraction in vocab promotion (utils/nlp.py singleton)
 - **Physical Hardware (Optional)**: Arduino (servo/hand), GRBL CNC controller, uArm Swift Pro
 - The system must run fully offline during exhibitions — all models and dependencies local
 

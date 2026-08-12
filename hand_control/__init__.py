@@ -1,11 +1,3 @@
-"""
-Hand Control Module
-==================
-
-Direct integration of hand controller into the main codebase.
-Replaces the complex bridge system with direct function calls.
-"""
-
-from .hand_control_interface import CleanCursorInterface
-
-__all__ = ["CleanCursorInterface"]
+"""What remains of the pre-kinetic-bus hand controller (torn down Aug 12 2026):
+HandExpressionController survives for debug/test_left_arm_servos.py calibration.
+Runtime hand movement is motor_panel/kinetic_bus.py."""

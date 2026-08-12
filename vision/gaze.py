@@ -116,7 +116,6 @@ class GazePhysicsState:
         self.orbital_phase = 0.0
         self.orbital_strength = 0.2
         self.last_update_time = time.time()
-        self.current_emotion = "calm_observant"
         self.param_blend_factor = 0.0
 
     def blend_params(self, target_params: dict, blend_rate: float = 0.05):
