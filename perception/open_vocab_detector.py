@@ -117,6 +117,19 @@ class OpenVocabDetectorThread(threading.Thread):
         ranked = sorted(best_per_term.values(), key=lambda d: (not d.get("novel", False), -d["conf"]))
         return ranked[:OPEN_VOCAB_MAX_BOXES]
 
+    def _effective_floors(self):
+        """Static per-term floors merged with audit discipline (a term that
+        lost its VLM audit must clear a higher bar until re-confirmed)."""
+        floors = dict(OPEN_VOCAB_TERM_FLOORS)
+        try:
+            from perception.spatial_registry import spatial_registry
+
+            for t, f in spatial_registry.get_audit_floors().items():
+                floors[t] = max(floors.get(t, OPEN_VOCAB_CONF_FLOOR), f)
+        except Exception:
+            pass
+        return floors
+
     def detect_once(self, frame):
         """One pass on one frame; person-overlapping boxes suppressed. Public so
         debug scripts can run it without the thread."""
@@ -128,6 +141,7 @@ class OpenVocabDetectorThread(threading.Thread):
                 self.model.set_classes(self._vocabulary)  # CLIP text pass also routes through select_device
             print(f"[OpenVocab] Model loaded, vocabulary compiled ({len(self._vocabulary)} terms)")
 
+        floors = self._effective_floors()
         predict_floor = min([OPEN_VOCAB_CONF_FLOOR, *OPEN_VOCAB_TERM_FLOORS.values()])
         with _cpu_without_hiding_the_gpu():
             results = self.model.predict(frame, conf=predict_floor, iou=0.5, device="cpu", verbose=False)[0]
@@ -136,7 +150,7 @@ class OpenVocabDetectorThread(threading.Thread):
         for box in results.boxes:
             term = self._vocabulary[int(box.cls)]
             conf = float(box.conf)
-            if conf < OPEN_VOCAB_TERM_FLOORS.get(term, OPEN_VOCAB_CONF_FLOOR):
+            if conf < floors.get(term, OPEN_VOCAB_CONF_FLOOR):
                 continue
             xyxy = tuple(int(v) for v in box.xyxy[0])
             if person_bbox and self._overlap_fraction(xyxy, person_bbox) > OPEN_VOCAB_PERSON_OVERLAP_MAX:

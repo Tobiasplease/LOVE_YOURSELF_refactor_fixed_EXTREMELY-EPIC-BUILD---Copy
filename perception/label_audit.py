@@ -8,6 +8,8 @@ import numpy as np
 
 from config.config import (
     LABEL_AUDIT_ENABLED,
+    LABEL_AUDIT_FLOOR_CAP,
+    LABEL_AUDIT_FLOOR_NUDGE,
     LABEL_AUDIT_INTERVAL,
     LABEL_AUDIT_MARGIN,
     LABEL_AUDIT_MIN_HITS,
@@ -110,6 +112,7 @@ class LabelAuditThread(threading.Thread):
 
         if any(self._same_name(c, term) for c in candidates):
             spatial_registry.mark_audit(term, "confirmed")
+            spatial_registry.clear_audit_floor(term)  # discipline lifts when the richer eye agrees again
             log_json_entry(LogType.VOCAB_PROMOTION, {"event": "audit", "term": term, "verdict": "confirmed"})
             return
 
@@ -123,6 +126,15 @@ class LabelAuditThread(threading.Thread):
             promoted = vocab_promoter.promote_term(challenger, origin="audit", note=f"beat '{term}' on its own crop ({detail})")
             verdict = "relabelled" if promoted else "challenger_already_known"
             spatial_registry.mark_audit(term, verdict, f"-> {challenger} ({detail})")
+            # The lost audit disciplines the incumbent either way (the rooster
+            # gap: a known challenger used to change nothing). Its detections
+            # must now clear its own junk-inflated live average + nudge —
+            # the real referent fires well above that; the patch-stealers die.
+            entry = spatial_registry.get_entries().get(term)
+            if entry:
+                floor = min(LABEL_AUDIT_FLOOR_CAP, entry["conf"] + LABEL_AUDIT_FLOOR_NUDGE)
+                spatial_registry.set_audit_floor(term, floor)
+                print(f"[LabelAudit] '{term}' under discipline: floor {floor:.2f} until a later audit confirms it")
             log_json_entry(
                 LogType.VOCAB_PROMOTION,
                 {"event": "audit", "term": term, "verdict": verdict, "challenger": challenger, "scores": detail},

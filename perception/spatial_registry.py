@@ -99,6 +99,28 @@ class SpatialRegistry:
                     e["audit_detail"] = detail
         self._save()
 
+    def set_audit_floor(self, term, floor):
+        """A lost audit disciplines the term: its detections must clear this
+        bar (consumed by the detector's effective floors) until a later audit
+        confirms the label again."""
+        with self.lock:
+            e = self.entries.get(term)
+            if e is not None:
+                e["audit_floor"] = round(float(floor), 3)
+        self._save()
+
+    def clear_audit_floor(self, term):
+        with self.lock:
+            e = self.entries.get(term)
+            if e is not None and "audit_floor" in e:
+                del e["audit_floor"]
+        self._save()
+
+    def get_audit_floors(self):
+        """{term: floor} for every entry currently under audit discipline."""
+        with self.lock:
+            return {t: e["audit_floor"] for t, e in self.entries.items() if "audit_floor" in e}
+
     def pick_glance_target(self, explore_weight=0.25):
         """A place worth looking: usually the known object gone longest
         unchecked (staleness-weighted, recent discoveries boosted, and a term

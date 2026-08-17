@@ -325,6 +325,12 @@ LABEL_AUDIT_INTERVAL = 600.0  # seconds between audits (one VLM call each; skipp
 LABEL_AUDIT_MIN_HITS = 5  # only audit labels the detector actually believes in
 LABEL_AUDIT_REAUDIT_HOURS = 24.0  # a term is left alone this long after an audit
 LABEL_AUDIT_MARGIN = 0.08  # candidate must beat the incumbent by this much confidence on the crop
+# A lost audit now has consequences even when the challenger is already known
+# (the rooster gap): the losing term gets a dynamic floor at its live EMA conf
+# + NUDGE (it must fire above its own junk-inflated average to claim patches),
+# persisted on the registry entry, cleared when a later audit confirms it.
+LABEL_AUDIT_FLOOR_NUDGE = 0.08
+LABEL_AUDIT_FLOOR_CAP = 0.5  # a real, strong sighting must always be able to clear the bar
 
 # --- Phase 3: spatial registry + registry glances (Aug 5 2026) ---
 # The world map: settled detections become per-term anchors in servo angles
