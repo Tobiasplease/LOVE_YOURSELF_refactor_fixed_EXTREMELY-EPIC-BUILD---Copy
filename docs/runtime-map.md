@@ -557,6 +557,16 @@ styrofoam-head crop → incumbent scores 0.00 on its own crop (its wins were
 context), "white styrofoam head" 0.25 → relabel fires; cable-tangle-on-face-
 cast crop → all names ~0 → held (honest: that patch is YOLOE visual-prompt
 territory). Test: `debug/test_label_audit.py`.
+Audit discipline (Aug 17 — the rooster gap): `challenger_already_known` was
+a no-op (promotion, the audit's only lever, had nothing to promote when the
+better term already existed — the rooster kept every stolen patch). Now ANY
+lost head-to-head puts the incumbent under discipline: a dynamic floor at
+its live EMA conf + `LABEL_AUDIT_FLOOR_NUDGE` (0.08), capped
+`LABEL_AUDIT_FLOOR_CAP` (0.5), persisted as `audit_floor` on the registry
+entry; the detector merges these with the static term floors (max wins) per
+pass, so the term must fire above its own junk-inflated average to claim a
+patch. A later confirming audit lifts the floor. Console: `[LabelAudit]
+'…' under discipline: floor 0.40 …`.
 
 **Phase 2 — vocabulary promotion (LIVE, Aug 5: OPEN_VOCAB_PROMOTION_ENABLED).**
 The recursive part: what the machine says shapes what it can see.
