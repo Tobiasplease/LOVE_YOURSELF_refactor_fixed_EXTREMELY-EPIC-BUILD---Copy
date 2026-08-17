@@ -290,6 +290,26 @@ class OpenVocabDetectorThread(threading.Thread):
             except Exception as e:
                 print(f"[OpenVocab] Registry update failed: {e}")
             try:
+                # Discernment: if this settled pass happened while the gaze was
+                # deliberately parked on a remembered object, the pass IS the
+                # verification — seen refreshes the memory, not-seen decays it
+                # (2nd consecutive miss becomes an absence event for the mind,
+                # 4th forgets the anchor). Only judged when the camera is
+                # actually pointed near the anchor — a clamped or drifting
+                # glance must not count as evidence of absence.
+                from config.config import SPATIAL_REGISTRY_HFOV, SPATIAL_REGISTRY_VFOV
+                from vision.gaze import get_glance_info
+
+                gi = get_glance_info()
+                if calm and gi and gi["kind"] == "revisit":
+                    anchor = spatial_registry.get_anchor(gi["label"])
+                    if anchor and abs(pan - anchor[0]) < SPATIAL_REGISTRY_HFOV / 3 and abs(tilt - anchor[1]) < SPATIAL_REGISTRY_VFOV / 3:
+                        outcome = spatial_registry.note_glance_result(gi["label"], gi["label"] in terms_now)
+                        if outcome and outcome != "seen":
+                            print(f"[OpenVocab] Glance check '{gi['label']}': {outcome}")
+            except Exception:
+                pass
+            try:
                 # Keep the person-is-self verdict warm for the main loop (its
                 # cached read must never trigger an embed); 5s-cached inside.
                 if DetectionMemory.get_person_bbox() is not None:

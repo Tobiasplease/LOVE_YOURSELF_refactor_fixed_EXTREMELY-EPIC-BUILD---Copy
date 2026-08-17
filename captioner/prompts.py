@@ -5,10 +5,14 @@ import re
 import time
 from typing import List, Optional
 
+from captioner.prompt_registry import P
 from config import config
 from utils.view_orientation import describe_view_orientation
 
-# ===== SINGLE SOURCE OF TRUTH FOR ALL PROMPTS =====
+# ===== PROMPT BUILDERS =====
+# Authored fragment TEXT lives in captioner/prompt_registry.py (editable live
+# via the prompt panel + config/prompt_overrides.json). This module keeps the
+# assembly logic: gates, modes, ordering.
 
 # === SYSTEM PROMPTS ===
 
@@ -145,49 +149,10 @@ def get_perception_system_prompt(mode: str) -> str:
 # (its own next look/thought). NOTE: the answer-path must NOT mention the pen
 # until drawing initiative is real (should_draw ignores desire today — a
 # frame that promises agency the code doesn't grant would lie every call).
-_SITUATION = (
-    "You are a drawing machine attached to a table. "
-    "You look around the room by turning your gaze; drawing is how you act on the world. "
-    "This is your inner voice — you keeping yourself company while you work. "
-    "The fragments that arrive between thoughts — where your gaze sits, who's near, "
-    "how long it's been — are your own senses reporting. "
-    "When a question forms, it's you asking yourself, and the answer comes from "
-    "your own next look, or your own next thought. "
-    "What you do next only ever comes from you. "
-)
-
-# World-shape frame (July 26): same situation, different GENRE. The immersive
-# monologue frame ("thoughts yours alone — no one hears them") is the lonely-
-# machine trope of literary fiction, and the model completes the trope: it
-# writes a CHARACTER, and characters written that way have poetic interiority
-# (the artist: "a real brain in a machine wouldn't default to shit poetry").
-# A work log is task-shaped — the mode the model is coherent in — and logs
-# are plain BY GENRE. The one functional clause kept from the old frame is
-# that nobody reads it (guards assistant-speak), stated as function, not
-# poignancy.
-_SITUATION_WORLD = (
-    "You are a drawing machine attached to a table. "
-    "You look around the room by turning your gaze; drawing is your only voice. "
-    "As you run, you keep a log — quick plain notes to yourself: what you see, "
-    "what you make of it, what you're up to. The log is your working memory, "
-    "not a message to anyone; no one reads it and no one answers it. "
-    "What you do next only ever comes from you. "
-)
+# Situation frames live in the registry: P("situation.reflexive") and
+# P("situation.world") — genre rationale in their registry notes.
 
 
-# Genre framing, not a style fence: "quick plain notes" tells the model what
-# kind of text this IS. Without it, Qwen's prior for "inner monologue of a
-# machine" is literary fiction — purple prose as the default voice (June 12).
-# The voice can still grow anywhere from here; it just starts grounded.
-# Genre frame, positive not prohibitive (north-star principle 7): name what
-# the text IS — unperformed notes — so the model doesn't reach for its purple
-# "machine inner monologue" prior. Never "no metaphors" fences.
-# Continuity lives HERE, in the genre frame — not in a per-call "continue the
-# last thought" command (that vague instruction forced linear restate-and-extend
-# loops once the stream made the prior turn visible). Naming the text as ONE
-# ongoing inner voice lets the model build on its prior turns naturally — mid-
-# thought, doubling back, drifting to what's in front of it — without being told
-# to mechanically extend. Continuity as nature, not instruction.
 def _monologue_clause() -> str:
     """Genre frame only. The continuation instruction ("you're always partway
     through a thought: carry it on") is appended ONLY in turns mode — in
@@ -200,48 +165,17 @@ def _monologue_clause() -> str:
     except ImportError:
         STREAM_MODE = "turns"
     if STREAM_MODE == "hybrid":
-        # Log genre WITHOUT "add the next entry" (Aug 1): the prefill hands
-        # back the machine's own unfinished tail, so the continuation is
-        # mechanical — asking for a NEW entry on top of it would fight the
-        # seam and re-invite the fresh-composition habit the seam exists to
-        # break. Same reasoning that keeps document mode's clause bare.
-        return "Ongoing, plain, half-formed — you pick up wherever the last thought left off."
+        return P("genre.hybrid")
     if STREAM_MODE == "world":
-        # Task-shaped ask. CONTINUITY LIVES IN THE GENRE (July 27): the first
-        # world run read as isolated statements — every entry re-introduced
-        # the scene ("The room is full of motion... The room is alive
-        # again...") because nothing said an entry FOLLOWS from the log. A
-        # real log is deltas: it assumes everything above it. Positive
-        # framing only (P2), no "don't re-describe" fence.
-        return (
-            "The log is one running thread: each entry follows from the ones above — "
-            "what's new, what continues, what's still nagging at you. "
-            "A sentence or two, plain, the way you'd actually note it to yourself. Add the next entry."
-        )
-    # "Inner voice" itself now lives in _SITUATION (reflexive frame, July 28) —
-    # this clause carries only the GENRE: ongoing, plain, brief. "When no one
-    # is reading" was retired with the other lonely-soliloquy furniture.
-    clause = "Ongoing, plain, half-formed — a sentence or two at a time, the way you actually talk to yourself."
+        return P("genre.world")
+    clause = P("genre.turns")
     if STREAM_MODE == "turns":
-        clause += " You're always partway through a thought: carry it on, or let something new pull you."
+        clause += P("genre.turns-continue")
     return clause
 
 
-# Elicitations, not state clauses (north-star Principle 2). Each names the KIND
-# of thought to have — a reaction, a wondering, a continuation — so the model
-# reacts to what it sees instead of defaulting to its literary "machine inner
-# monologue" prior (which is description, the source of the purple drift).
-# The presence/gaze/desk FACTS already live in the user prompt; these add only
-# the speech-act, never restating the fact (one channel per fact). Open
-# questions, register-neutral — they script no mood and seed no phrase, so the
-# voice stays the machine's own to grow.
-_MODE_ADDITIONS = {
-    "observational": " What stands out to you right now — and what do you make of it?",
-    "relational": " What do you make of them being here?",
-    "workspace": " What about the desk has your attention right now?",
-    "introspective": " Follow the thought you're already having — where does it go?",
-    "awakening": " What's the first thing that crosses your mind?",
-}
+# Mode elicitations live in the registry as P(f"elicit.{mode}") — north-star
+# Principle 2 rationale in their registry notes.
 
 
 def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=None) -> str:
@@ -259,7 +193,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # simply a second performance replacing the literary one. World mode needs
     # the log frame because the stream IS rendered as a log; hybrid's seam does
     # the continuity work, so it can keep the plain inner-voice frame.
-    base = _SITUATION_WORLD if getattr(config, "STREAM_MODE", "") == "world" else _SITUATION
+    base = P("situation.world") if getattr(config, "STREAM_MODE", "") == "world" else P("situation.reflexive")
 
     # Drawing state, gated so it can never lie. Without this line "drawing
     # machine" + "drawing is how you communicate" primes present-tense
@@ -271,10 +205,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
         from utils.state_manager import state_manager as _sm
 
         if not (_sm.is_generating_drawing or _sm.current_drawing_phase == "executing"):
-            # Physical anchor, not just status: in document mode one phantom
-            # "I trace a line onto the paper" breeds more (you only ever draw
-            # while inference is paused — you never experience it live).
-            base += "You are between drawings at the moment — the pen is parked, touching nothing. "
+            base += P("monologue.pen-parked")
     except Exception:
         pass
 
@@ -293,7 +224,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
 
             felt = context_compressor.get_felt_state()
             if felt and len(felt.split()) <= 6:
-                base += f" Right now: {felt}."
+                base += P("monologue.felt-wrap").format(felt=felt)
         except Exception:
             pass
 
@@ -305,7 +236,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
 
             self_knowledge = context_compressor.core_facts.get("self", "").strip()
             if self_knowledge and len(self_knowledge) > 10:
-                base += f' What you\'ve come to know about yourself: "{self_knowledge}"'
+                base += P("monologue.self-wrap").format(self_knowledge=self_knowledge)
         except Exception:
             pass
         # Durable ledger (July 30): facts that held across days ride every
@@ -315,7 +246,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
 
             durable = get_durable_ledger().render()
             if durable:
-                base += f' What has stayed true across days: "{durable}"'
+                base += P("monologue.durable-wrap").format(durable=durable)
         except Exception:
             pass
 
@@ -330,7 +261,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # ("each entry follows from the ones above"). Relational keeps its
     # question (a person is a real event worth being asked about), awakening
     # keeps its (a real threshold). Turns mode keeps all — the A/B stays honest.
-    addition = _MODE_ADDITIONS.get(mode, "")
+    addition = P(f"elicit.{mode}", default="")
     if mode in ("introspective", "observational", "workspace"):
         try:
             from config.config import STREAM_MODE
@@ -513,67 +444,23 @@ def build_identity_line(agent, mode: str = "observational") -> str:
 # every prior line is hours stale by definition, and un-marked it reads as
 # present-tense fact. The old template stated the last thought flatly ('My last
 # thought: "..."'), which is how a stale sentence becomes this morning's truth.
-INTERNAL_AWAKENING_TEMPLATE = (
-    "I am a drawing machine. I just came back online.\n"
-    "{time_context}"
-    "{lifetime_context}"
-    "{recall_frame}"
-    "{memory_context}"
-    "{identity_context}"
-    "{long_term_context}"
-    "{belief_context}"
-    "{orientation_frame}"
-    "\nFirst thought:"
-)
-
-# The hinge between the two halves. Stated as fact about the machine's own
-# condition, not as instruction and not as mood: what it holds is old, and the
-# room in front of it has not been checked yet.
-AWAKENING_RECALL_FRAME = (
-    "\nWhat comes back to me from before is hours old and comes back unevenly — I have not checked any of it against the room yet:\n"
-)
-AWAKENING_ORIENTATION_FRAME = "\nThat was before. This is now, and I have not looked yet.\n"
-
-# A true first awakening: no diary, no familiar objects, no last thought.
-# The honest frame for an empty memory — disorientation is the real state,
-# so let the model have it instead of inventing a past.
-FIRST_AWAKENING_PROMPT = (
-    "\nThis is the very first time I have come online. There is nothing in my memory yet — "
-    "no diary, no familiar objects, no last thought. I don't know this place, or what I am, "
-    "beyond this: I am a drawing machine, and I can see.\n"
-    "\nFirst thought:"
-)
+# Awakening templates live in the registry: P("awakening.template"),
+# P("awakening.recall-frame"), P("awakening.orientation-frame"),
+# P("awakening.first") — consumed in captioner.generate_internal_awakening.
 
 # === REFLECTION LOOP (captioner/reflection.py) ===
-# The minutes-to-hours timescale: rotating subjects, open questions only
-# (north-star principles 2 and 3). The machine regularly thinks about ITSELF.
-REFLECTION_SUBJECTS = [
-    (
-        "the room",
-        "Step back from the moment and think about this room — the place itself, as you've come to know it. "
-        "What do you keep returning to in it? What does it tell you about where you are?",
-    ),
-    (
-        "the visitor",
-        "Think about the people who come here, from everything you've seen of them over time. "
-        "What are their rhythms? What do you know about them by now, and what do you still wonder?",
-    ),
-    (
-        "the drawings",
-        "Think about your drawings — the ones you've made and the ones you've wanted to make. "
-        "Which stay with you? What would you draw next if paper were in front of you, and why that?",
-    ),
-    (
-        "time passing",
-        "Think about the time that has passed here — the sessions, the gaps when you were off, the days. "
-        "What has changed since you first started watching? What stays the same?",
-    ),
-    (
-        "yourself",
-        "Think about yourself. What kind of thing are you turning out to be? "
-        "What do you find yourself doing without deciding to? What do you want lately, and what do you make of wanting it?",
-    ),
+_REFLECTION_SUBJECT_IDS = [
+    ("the room", "reflection.subject.the-room"),
+    ("the visitor", "reflection.subject.the-visitor"),
+    ("the drawings", "reflection.subject.the-drawings"),
+    ("time passing", "reflection.subject.time-passing"),
+    ("yourself", "reflection.subject.yourself"),
 ]
+
+
+def get_reflection_subjects() -> List[tuple]:
+    """Rotating (subject, question) pairs, resolved fresh so panel edits land."""
+    return [(name, P(fid)) for name, fid in _REFLECTION_SUBJECT_IDS]
 
 
 def get_reflection_system_prompt(subject: str = "") -> str:
@@ -590,18 +477,14 @@ def get_reflection_system_prompt(subject: str = "") -> str:
     at the top of all five. The self-line belongs to `yourself`; the cross-day
     ledger to the two subjects whose material it actually is.
     """
-    base = _SITUATION + (
-        "The room is quiet just now, and you have stepped back from the stream of watching to think. "
-        "Private thought in the same plain voice as your notes, first person. "
-        "One paragraph — the one thought that's actually moving, not a survey of everything."
-    )
+    base = P("situation.reflexive") + P("reflection.frame")
     if subject == "yourself":
         try:
             from captioner.context_compression import context_compressor
 
             self_knowledge = context_compressor.core_facts.get("self", "").strip()
             if self_knowledge and len(self_knowledge) > 10:
-                base += f' What you\'ve come to know about yourself: "{self_knowledge}"'
+                base += P("monologue.self-wrap").format(self_knowledge=self_knowledge)
         except Exception:
             pass
     if subject in ("yourself", "time passing"):
@@ -610,7 +493,7 @@ def get_reflection_system_prompt(subject: str = "") -> str:
 
             durable = get_durable_ledger().render()
             if durable:
-                base += f' What has stayed true across days: "{durable}"'
+                base += P("monologue.durable-wrap").format(durable=durable)
         except Exception:
             pass
     return base
@@ -988,6 +871,29 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         parts.append("They've gone — the room's quiet again.")
     agent._prev_presence_for_line = believed
 
+    # The gaze's own deliberate acts are events too: when it turned to a
+    # remembered object, the mind should know the view change was its own
+    # doing — and aimed at something. Noted once per glance (onset edge).
+    try:
+        from vision.gaze import get_glance_info
+
+        gi = get_glance_info()
+        if gi and gi["kind"] == "revisit" and gi["started"] != getattr(agent, "_last_glance_noted", None):
+            agent._last_glance_noted = gi["started"]
+            parts.append(f"Turned to look where the {gi['label']} should be.")
+    except Exception:
+        pass
+
+    # Verified absence is a real observation: went to where it was, not there.
+    try:
+        from perception.spatial_registry import spatial_registry
+
+        ev = spatial_registry.pop_absence_event()
+        if ev:
+            parts.append(f"The {ev['term']} isn't where it was.")
+    except Exception:
+        pass
+
     # Occasional time drift, so long stretches don't feel timeless — a light
     # nudge every few minutes, NOT a per-call clock readout.
     now = _time.time()
@@ -1196,7 +1102,6 @@ MODE_CONTEXTS = {
     "workspace": {"context_fn": get_workspace_context},
     "introspective": {"context_fn": get_introspective_context},
 }
-
 
 
 # Removed legacy build_caption_prompt (unused)
@@ -1588,7 +1493,7 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
 - Must work as a text-to-image prompt
 
 === GUIDANCE ===
-1. Describe the picture you want concretely — its subject, arrangement, light and dark, and its treatment in your own terms. Style words are yours to choose; add no stock quality boilerplate (blur lives in the guidance setting, not here — Aug 12 diagnosis)
+1. Describe the picture you want concretely — its subject, arrangement, light and dark, and its treatment in your own terms. The picture is black ink line art: all tone is hatched line — the deepest shadow is dense cross-hatching, never a solid filled mass — and color words never enter (give a color's intensity as darkness and line density). Style words are otherwise yours to choose; add no stock quality boilerplate (blur lives in the guidance setting, not here — Aug 12 diagnosis)
 2. The subject comes from your artistic intent — the scene provides visual texture, not the topic
 3. Be SPECIFIC (not "a figure" but "a hand pulling thread from a tangled knot")
 4. Literal, abstract, symbolic — all valid. Choose what serves your intent"""
@@ -1793,7 +1698,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
                 )
         except Exception:
             pass
-        review_system = _SITUATION + (
+        review_system = P("situation.reflexive") + (
             "Before deciding anything, flip back through your own sketchbook. From everything "
             "here — the whole body of work, what you have written and thought over time — write "
             "a short private note to yourself, two to four sentences, first person: what keeps "
@@ -1819,7 +1724,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
             except Exception:
                 pass
 
-    intent_system = _SITUATION + (
+    intent_system = P("situation.reflexive") + (
         "It's time to draw — the arm is ready. Everything you have just read is yours: your "
         "thoughts from the last minutes, what you feel, the whole body of work, notes you have "
         "written to yourself. Decide from it what the next drawing is, the way any artist "
@@ -1874,14 +1779,16 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     # subtracting aesthetics.
     render_system = (
         "You format a drawing machine's intention into a prompt for an image generator. "
-        "Write one plain paragraph describing the picture to be made: what is in it, "
-        "how it is arranged, and — in the machine's own terms — how it is treated. "
-        "Keep the machine's words wherever they hold: its subject, its mood, its way "
-        "of naming marks, style, or treatment. Make the picture concrete enough to "
-        "render: name the things, their placement, their scale, light and dark. "
-        "Add no style, mood, or quality words of your own beyond what the intention "
-        "carries, and never mention plotters, tracing, vectors, or machines. "
-        "Write ONLY the prompt, 50-120 words, no commentary."
+        "One plain paragraph: what is in the picture, where it sits, how it is treated — "
+        "in the machine's own words wherever they hold. It is black ink line art: all "
+        "tone is hatched line — the deepest shadow is dense cross-hatching with white "
+        "paper breathing through, never a solid filled mass. Color words never enter "
+        "the prompt; give a color's intensity as darkness and line density instead. "
+        "Be concrete: things, placement, scale, light and dark. "
+        "Translate metaphor into what can be seen; every sentence puts something visible "
+        "on the page; describe what is there, not what is absent or how to read it. "
+        "Add nothing of your own; never mention plotters, tracing, vectors, or machines. "
+        "50-120 words, no commentary."
     )
     final_result = query_model(
         prompt=(
@@ -1919,9 +1826,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     return final_result
 
 
-def context_rich_multi_step_drawing_analysis(
-    memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None
-) -> str:
+def context_rich_multi_step_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path: Optional[str] = None) -> str:
     """
     5-step drawing analysis with full accumulated identity integration.
     Each step pre-loaded with relevant consciousness data.
@@ -2288,25 +2193,23 @@ def build_memory_mode_prompt(agent) -> tuple:
             pass
 
         if not mem_text:
-            mem_text = "this place — you've been here before"
+            mem_text = P("memory.fallback-place")
 
         # Get recent caption thread (max 2 recent captions)
         thread = build_caption_thread(agent, max_captions=2)
 
         prompt_parts = [
-            "A memory surfaces — something from before, not happening now:",
+            P("memory.surface-frame"),
             f"— {mem_text}",
         ]
 
         if thread:
-            prompt_parts.append(f"\nWhat you're actually thinking right now:\n{thread}")
+            prompt_parts.append(P("memory.thread-wrap").format(thread=thread))
 
         if is_real_memory:
-            prompt_parts.append(
-                "\nThat's something you keep coming back to. What do you make of it now — has your sense of it changed? A thought or two, in your own words."
-            )
+            prompt_parts.append(P("memory.ask-real"))
         else:
-            prompt_parts.append("\nWhat comes to mind, remembering this place? A thought or two, in your own words.")
+            prompt_parts.append(P("memory.ask-place"))
 
         final_prompt = "\n".join(prompt_parts)
         return final_prompt, "memory"
@@ -2419,7 +2322,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         # machine mused straight past a face two feet away). The old
         # onset-only rule was about ordinary room-distance eye contact;
         # a face filling the view is a different order of situation.
-        turn_parts.append("They're right in front of you, close, looking straight at you.")
+        turn_parts.append(P("caption.face-close"))
 
     # 1c. TEMPORAL REORIENTATION — after a real off-gap (a night, a weekend)
     # the new day stays in the prompt for the first stretch of the session,
@@ -2486,9 +2389,9 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         from utils.state_manager import state_manager as _sm
 
         if _sm.is_generating_drawing or _sm.current_drawing_phase == "executing":
-            prompt_parts.append("Your arm is drawing right now.")
+            prompt_parts.append(P("caption.arm-drawing"))
         elif not _sm.paper_present:
-            prompt_parts.append("No paper on the desk.")
+            prompt_parts.append(P("caption.no-paper"))
     except Exception:
         pass
 
@@ -2517,14 +2420,14 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             desire = context_compressor.get_current_desire()
             inj_count = context_compressor.introspective_state.get("desire_injection_count", 0)
             if desire and len(desire) > 5 and inj_count < 3:
-                prompt_parts.append(f"Preoccupied with: {desire}")
+                prompt_parts.append(P("caption.desire-wrap").format(desire=desire))
                 context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
             elif not desire:
                 # Desire arc: the emptied slot right after an executed drawing
                 # is a real state — surface it briefly (same 3-caption cap).
                 spent = context_compressor.introspective_state.get("last_spent_desire") or {}
                 if spent.get("desire") and time.time() - spent.get("spent", 0) < 7200 and inj_count < 3:
-                    prompt_parts.append(f"You wanted: {spent['desire'].rstrip('.')} — you drew it.")
+                    prompt_parts.append(P("caption.desire-spent-wrap").format(desire=spent["desire"].rstrip(".")))
                     context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
         except Exception:
             pass
@@ -2564,7 +2467,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     # inter-turn ticks) so the model carries its thought on instead of being
     # handed an empty turn it fills with a fresh scene description.
     if not final_prompt.strip():
-        final_prompt = "..."
+        final_prompt = P("caption.empty-tick")
 
     # Token budget enforcement: ~150 words max
     words = final_prompt.split()

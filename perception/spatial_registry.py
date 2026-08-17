@@ -11,6 +11,7 @@ from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     PAN_MAX,
     PAN_MIN,
+    SPATIAL_MENTION_BOOST_S,
     SPATIAL_REGISTRY_EMA,
     SPATIAL_REGISTRY_ENABLED,
     SPATIAL_REGISTRY_HFOV,
@@ -31,7 +32,8 @@ class SpatialRegistry:
     def __init__(self, state_path=None):
         self.state_path = state_path or os.path.join(MOOD_SNAPSHOT_FOLDER, "spatial_registry.json")
         self.lock = threading.Lock()
-        self.entries = {}  # term -> {pan, tilt, conf, hits, first_seen, last_seen}
+        self.entries = {}  # term -> {pan, tilt, conf, hits, first_seen, last_seen, mention_ts?, misses?}
+        self._absence_events = []  # {term, ts} — verified-gone moments, drained by the caption loop
         self._last_save = 0.0
         self._load()
 
@@ -55,8 +57,12 @@ class SpatialRegistry:
                 e = self.entries.get(det["term"])
                 if e is None:
                     self.entries[det["term"]] = {
-                        "pan": pan, "tilt": tilt, "conf": det["conf"], "hits": 1,
-                        "first_seen": now, "last_seen": now,
+                        "pan": pan,
+                        "tilt": tilt,
+                        "conf": det["conf"],
+                        "hits": 1,
+                        "first_seen": now,
+                        "last_seen": now,
                     }
                 else:
                     a = SPATIAL_REGISTRY_EMA
@@ -65,6 +71,7 @@ class SpatialRegistry:
                     e["conf"] += (det["conf"] - e["conf"]) * a
                     e["hits"] += 1
                     e["last_seen"] = now
+                    e["misses"] = 0  # re-seen anywhere = the memory holds
             stale = [t for t, e in self.entries.items() if now - e["last_seen"] > SPATIAL_REGISTRY_MAX_AGE]
             for t in stale:
                 del self.entries[t]  # forgetting as garbage collection
@@ -94,8 +101,9 @@ class SpatialRegistry:
 
     def pick_glance_target(self, explore_weight=0.25):
         """A place worth looking: usually the known object gone longest
-        unchecked (staleness-weighted, recent discoveries boosted), sometimes
-        an under-visited stretch of the room (explore). Returns
+        unchecked (staleness-weighted, recent discoveries boosted, and a term
+        the monologue just spoke of pulls hardest — thought leads gaze),
+        sometimes an under-visited stretch of the room (explore). Returns
         {pan, tilt, term|None, kind} or None if the map is empty."""
         now = time.time()
         with self.lock:
@@ -106,9 +114,52 @@ class SpatialRegistry:
         for t, e in entries:
             staleness = min(now - e["last_seen"], 3600.0) + 30.0
             novelty = 3.0 if now - e["first_seen"] < 600.0 else 1.0
-            weights.append(staleness * novelty)
+            mentioned = 4.0 if now - e.get("mention_ts", 0.0) < SPATIAL_MENTION_BOOST_S else 1.0
+            weights.append(staleness * novelty * mentioned)
         term, e = random.choices(entries, weights=weights)[0]
         return {"pan": self._clamp_pan(e["pan"]), "tilt": self._clamp_tilt(e["tilt"]), "term": term, "kind": "revisit"}
+
+    def note_mentions(self, text):
+        """The monologue spoke — terms it named get a temporary pull on the
+        next glances (the mind's eye leads the physical one)."""
+        if not text:
+            return
+        low = text.lower()
+        now = time.time()
+        with self.lock:
+            for t, e in self.entries.items():
+                if t.lower() in low:
+                    e["mention_ts"] = now
+
+    def note_glance_result(self, term, found):
+        """Discernment: the gaze went to where a thing should be and the
+        detector reported. Seen -> the memory holds. Not seen -> confidence
+        decays; the 2nd consecutive miss becomes an absence EVENT for the
+        mind ("it isn't where it was"); the 4th forgets the entry — the map
+        stores where things ARE, not where they once were. Returns
+        "seen" | "missed" | "gone" | None."""
+        now = time.time()
+        with self.lock:
+            e = self.entries.get(term)
+            if e is None:
+                return None
+            if found:
+                e["misses"] = 0
+                return "seen"
+            e["misses"] = e.get("misses", 0) + 1
+            e["conf"] *= 0.7
+            if e["misses"] == 2:
+                self._absence_events.append({"term": term, "ts": now})
+                self._absence_events = self._absence_events[-6:]
+            if e["misses"] >= 4:
+                del self.entries[term]
+                return "gone"
+            return "missed"
+
+    def pop_absence_event(self):
+        """One verified absence for the caption loop, oldest first, or None."""
+        with self.lock:
+            return self._absence_events.pop(0) if self._absence_events else None
 
     def _explore_target(self, entries):
         n_buckets = 6

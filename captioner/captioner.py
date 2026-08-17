@@ -1580,6 +1580,15 @@ class Captioner(MemoryMixin):
                         except Exception:
                             pass
 
+                        # Thought leads gaze: registry terms the monologue just
+                        # named pull the next idle glances toward their anchors
+                        try:
+                            from perception.spatial_registry import spatial_registry
+
+                            spatial_registry.note_mentions(caption or "")
+                        except Exception:
+                            pass
+
                         # Store in semantic memory
                         try:
                             from captioner.semantic_memory import get_semantic_memory
@@ -2178,8 +2187,8 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
-        # Import consolidated awakening template
-        from .prompts import AWAKENING_ORIENTATION_FRAME, AWAKENING_RECALL_FRAME, FIRST_AWAKENING_PROMPT, INTERNAL_AWAKENING_TEMPLATE
+        # Awakening templates come from the prompt registry (panel-editable)
+        from captioner.prompt_registry import P
         from config.config import BASE_VOICE_DETOX as _detox
 
         # Clean room: the awakening is detox blind spot #1 — it injects 6 layers
@@ -2199,21 +2208,21 @@ class Captioner(MemoryMixin):
             pass  # internal_prompt already set to the naked time-only awakening
         elif has_past:
             _has_past = any((memory_context, identity_context, long_term_context, belief_context))
-            internal_prompt = INTERNAL_AWAKENING_TEMPLATE.format(
+            internal_prompt = P("awakening.template").format(
                 time_context=time_context,
                 lifetime_context=lifetime_context,
                 # the recall frame only earns its place if something actually
                 # comes back; announcing hazy memory and then listing none of
                 # it is the machine telling itself a story about forgetting
-                recall_frame=AWAKENING_RECALL_FRAME if _has_past else "",
+                recall_frame=P("awakening.recall-frame") if _has_past else "",
                 memory_context=memory_context,
                 belief_context=belief_context,
                 identity_context=identity_context,
                 long_term_context=long_term_context,
-                orientation_frame=(AWAKENING_ORIENTATION_FRAME if _has_past else "") + present_feeling,
+                orientation_frame=(P("awakening.orientation-frame") if _has_past else "") + present_feeling,
             )
         else:
-            internal_prompt = time_context + FIRST_AWAKENING_PROMPT
+            internal_prompt = time_context + P("awakening.first")
 
         # Main model for awakening. This seed becomes the first caption and
         # the thought-thread continues from it — when the narrative side

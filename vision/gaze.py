@@ -28,12 +28,12 @@ from config.config import (
 
 # === VELOCITY LIMITING CONSTANTS ===
 # Face tracking - fast response for immediate tracking
-FACE_PAN_VELOCITY = 15.0   # Maximum degrees per update during face tracking
+FACE_PAN_VELOCITY = 15.0  # Maximum degrees per update during face tracking
 FACE_TILT_VELOCITY = 12.0  # Maximum degrees per update during face tracking
 FACE_VELOCITY_SMOOTHING = 0.0  # No velocity smoothing for face tracking (immediate response)
 
 # General movement - higher limits for responsive tracking
-MAX_PAN_VELOCITY = 15.0   # Maximum degrees per update for pan servo
+MAX_PAN_VELOCITY = 15.0  # Maximum degrees per update for pan servo
 MAX_TILT_VELOCITY = 12.0  # Maximum degrees per update for tilt servo
 VELOCITY_SMOOTHING = 0.3  # Less smoothing = faster response (0.0 = instant, 1.0 = never change)
 
@@ -134,46 +134,46 @@ PHYSICS_PATTERNS = {
     # mass/spring/damping create the emotional feel: snappy vs languid
     # tremor/orbital scaled down for calmer states = less overall movement when idle
     "energized_engaged": {
-        "mass": 0.3,           # Light - quick acceleration
+        "mass": 0.3,  # Light - quick acceleration
         "spring_constant": 18.0,  # Strong pull - responsive
-        "damping": 1.8,        # Low damping - bouncy, alive
+        "damping": 1.8,  # Low damping - bouncy, alive
         "tremor_amplitude": 1.4,  # High tremor - jittery life
         "orbital_strength": 1.3,  # Full wandering force
     },
     "alert_curious": {
-        "mass": 0.45,          # Light-medium
+        "mass": 0.45,  # Light-medium
         "spring_constant": 14.0,  # Good responsiveness
-        "damping": 2.5,        # Some damping
+        "damping": 2.5,  # Some damping
         "tremor_amplitude": 1.1,  # Good tremor
         "orbital_strength": 1.2,  # Slightly less wandering
     },
     "calm_observant": {
-        "mass": 0.6,           # Medium-light - responsive movement
+        "mass": 0.6,  # Medium-light - responsive movement
         "spring_constant": 11.0,  # Moderate-strong pull
-        "damping": 3.5,        # Less damping — more drift and life
+        "damping": 3.5,  # Less damping — more drift and life
         "tremor_amplitude": 0.9,  # Noticeable tremor — alive
         "orbital_strength": 1.3,  # Full wandering force
     },
     "quiet_detached": {
-        "mass": 0.8,           # Medium - still moves
-        "spring_constant": 7.0,   # Moderate pull
-        "damping": 4.0,        # Moderate damping
+        "mass": 0.8,  # Medium - still moves
+        "spring_constant": 7.0,  # Moderate pull
+        "damping": 4.0,  # Moderate damping
         "tremor_amplitude": 0.6,  # Visible tremor
         "orbital_strength": 1.0,  # Still wanders
     },
     "withdrawn_distant": {
-        "mass": 1.2,           # Heavy but not dead
-        "spring_constant": 5.0,   # Weak-moderate pull
-        "damping": 5.0,        # Damped but not frozen
+        "mass": 1.2,  # Heavy but not dead
+        "spring_constant": 5.0,  # Weak-moderate pull
+        "damping": 5.0,  # Damped but not frozen
         "tremor_amplitude": 0.4,  # Subtle tremor
         "orbital_strength": 0.7,  # Reduced but present wandering
     },
 }
 
 TRACKING_PHYSICS = {
-    "mass": 0.1,             # Very light for immediate response
+    "mass": 0.1,  # Very light for immediate response
     "spring_constant": 45.0,  # Strong pull toward face target
-    "damping": 4.5,          # ~critical (2·√(k·m)≈4.24) — at 2.5 every correction overshot and bounced, feeding the close-range bobbing
+    "damping": 4.5,  # ~critical (2·√(k·m)≈4.24) — at 2.5 every correction overshot and bounced, feeding the close-range bobbing
     "tremor_amplitude": 0.0,
     "orbital_strength": 0.0,
 }
@@ -286,15 +286,15 @@ searching_goal_dwell_time = 2.0  # How long to dwell at each search point
 # The LLM decides which zone to look at, organic movement happens within that zone
 
 GAZE_ZONES_PAN = {
-    "left": (105, PAN_MAX),      # 105-135° (left side - servo inverted)
-    "ahead": (75, 105),          # 75-105° (center)
-    "right": (PAN_MIN, 75),      # 45-75° (right side - servo inverted)
+    "left": (105, PAN_MAX),  # 105-135° (left side - servo inverted)
+    "ahead": (75, 105),  # 75-105° (center)
+    "right": (PAN_MIN, 75),  # 45-75° (right side - servo inverted)
 }
 
 GAZE_ZONES_TILT = {
-    "up": (125, TILT_MAX),       # 125-150° (looking up - servo inverted)
-    "level": (95, 125),          # 95-125° (level/center)
-    "down": (TILT_MIN, 95),      # 65-95° (looking down - servo inverted)
+    "up": (125, TILT_MAX),  # 125-150° (looking up - servo inverted)
+    "level": (95, 125),  # 95-125° (level/center)
+    "down": (TILT_MIN, 95),  # 65-95° (looking down - servo inverted)
 }
 
 # Current LLM-directed zone
@@ -445,6 +445,7 @@ def nudge_toward_concept(pan_zone: str = None, tilt_zone: str = None):
 
 # === SEARCHING STATE FUNCTIONS ===
 
+
 def activate_search_mode(last_seen_pan: float = None, last_seen_tilt: float = None, zones_visited: set = None):
     """
     Activate searching state when person is "remembered" but not visible.
@@ -515,9 +516,7 @@ def get_search_target() -> tuple:
     now = time.time()
 
     # Clean expired interest points
-    searching_interest_points = [
-        p for p in searching_interest_points if p[3] > now
-    ]
+    searching_interest_points = [p for p in searching_interest_points if p[3] > now]
 
     # Priority 1: High-priority interest points (>0.7)
     high_priority = [p for p in searching_interest_points if p[2] > 0.7]
@@ -744,6 +743,8 @@ _glance_active = False
 _glance_until = 0.0
 _glance_target = (90.0, 90.0)
 _glance_label = None
+_glance_kind = None
+_glance_started = 0.0
 _glance_last_end = 0.0
 
 
@@ -751,7 +752,7 @@ def _update_registry_glance(now):
     """Idle glances at the spatial registry (Phase 3): commit the gaze to a
     remembered object or an under-visited zone, hold, release back to wander.
     Returns (pan, tilt) while a glance is active, else None."""
-    global _glance_active, _glance_until, _glance_target, _glance_label, _glance_last_end
+    global _glance_active, _glance_until, _glance_target, _glance_label, _glance_kind, _glance_started, _glance_last_end
     from config.config import GAZE_GLANCE_DWELL, GAZE_GLANCE_EXPLORE_WEIGHT, GAZE_GLANCE_INTERVAL, GAZE_REGISTRY_GLANCES_ENABLED
 
     if not GAZE_REGISTRY_GLANCES_ENABLED:
@@ -777,6 +778,8 @@ def _update_registry_glance(now):
     _glance_until = now + GAZE_GLANCE_DWELL * random.uniform(0.7, 1.5)
     _glance_target = (pick["pan"], pick["tilt"])
     _glance_label = pick["term"] or "unexplored"
+    _glance_kind = pick["kind"]
+    _glance_started = now
     print(f"[👁️] Glance ({pick['kind']}): {_glance_label} → pan={pick['pan']:.0f}° tilt={pick['tilt']:.0f}°")
     return _glance_target
 
@@ -785,6 +788,14 @@ def get_current_glance():
     """(label, kind-ish) of the active registry glance, or None. Structured
     data for downstream consumers; never prose."""
     return _glance_label if _glance_active else None
+
+
+def get_glance_info():
+    """Full structured view of the active glance for downstream consumers
+    (caption loop, glance verification): {label, kind, started} or None."""
+    if not _glance_active:
+        return None
+    return {"label": _glance_label, "kind": _glance_kind, "started": _glance_started}
 
 
 def get_self_motion() -> dict:
@@ -868,8 +879,6 @@ def update_organic_movement(now):
     # Create organic easing variance
     pan_easing_variance = 0.8 + 0.4 * perlin_noise_1d(pan_noise_time * 0.5)
     tilt_easing_variance = 0.7 + 0.3 * perlin_noise_1d(tilt_noise_time * 0.3)
-
-
 
 
 def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_person_detected=False, person_direction=None, person_bbox=None):
@@ -1110,9 +1119,9 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             aware_params = PHYSICS_PATTERNS.get(current_emotion_state, PHYSICS_PATTERNS["calm_observant"]).copy()
             if person_bbox is not None:
                 # Tracking person bbox — responsive, follows body movement
-                aware_params["mass"] *= 0.7           # Lighter — quicker to respond
+                aware_params["mass"] *= 0.7  # Lighter — quicker to respond
                 aware_params["spring_constant"] *= 1.2  # Stronger pull toward target
-                aware_params["damping"] *= 1.1        # Light damping — smooth but not sluggish
+                aware_params["damping"] *= 1.1  # Light damping — smooth but not sluggish
                 aware_params["tremor_amplitude"] *= 0.15  # Minimal tremor while tracking
                 aware_params["orbital_strength"] *= 0.1  # Almost no wandering while tracking
             else:
@@ -1161,6 +1170,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             # (not just a brief tracking gap from camera movement or occlusion)
             try:
                 from utils.episodic_log import episodic_log
+
                 last_arrival = episodic_log.get_last_event("person_arrived")
                 last_departure = episodic_log.get_last_event("person_left")
                 genuine_new_arrival = True
@@ -1381,8 +1391,7 @@ _paper_search_range_tilt = 10.0
 _paper_search_start_time = 0.0
 
 
-def set_paper_search_mode(active: bool, center_pan: float = 90.0, center_tilt: float = 75.0,
-                          range_pan: float = 20.0, range_tilt: float = 10.0):
+def set_paper_search_mode(active: bool, center_pan: float = 90.0, center_tilt: float = 75.0, range_pan: float = 20.0, range_tilt: float = 10.0):
     """
     Activate paper search mode for ArUco detection with organic movement.
 
@@ -1448,15 +1457,15 @@ def update_paper_search_target():
 
     # Calculate organic offsets using layered sine waves
     pan_offset = (
-        0.65 * math.sin(elapsed * primary_freq_pan * 2 * math.pi) +
-        0.25 * math.sin(elapsed * secondary_freq_pan * 2 * math.pi + 0.7) +
-        0.10 * math.sin(elapsed * 0.28 * 2 * math.pi + 1.3)
+        0.65 * math.sin(elapsed * primary_freq_pan * 2 * math.pi)
+        + 0.25 * math.sin(elapsed * secondary_freq_pan * 2 * math.pi + 0.7)
+        + 0.10 * math.sin(elapsed * 0.28 * 2 * math.pi + 1.3)
     )
 
     tilt_offset = (
-        0.65 * math.sin(elapsed * primary_freq_tilt * 2 * math.pi + math.pi / 3) +
-        0.25 * math.sin(elapsed * secondary_freq_tilt * 2 * math.pi + 0.9) +
-        0.10 * math.sin(elapsed * 0.22 * 2 * math.pi + 2.1)
+        0.65 * math.sin(elapsed * primary_freq_tilt * 2 * math.pi + math.pi / 3)
+        + 0.25 * math.sin(elapsed * secondary_freq_tilt * 2 * math.pi + 0.9)
+        + 0.10 * math.sin(elapsed * 0.22 * 2 * math.pi + 2.1)
     )
 
     # Apply offset within search range

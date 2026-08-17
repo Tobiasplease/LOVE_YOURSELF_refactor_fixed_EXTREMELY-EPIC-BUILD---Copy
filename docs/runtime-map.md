@@ -440,6 +440,26 @@ pink shelf → ...`. Structured consumers: `get_current_glance()`,
 framing is a separate prompt-tree step). Test:
 `debug/test_spatial_registry.py` (angle math, EMA, policy split).
 
+**Phase 4 — cognizant glances (Aug 17): thought↔gaze closed both ways, plus
+discernment.** Three couplings on top of Phase 3:
+(1) THOUGHT LEADS GAZE — after each stored caption the captioner calls
+`spatial_registry.note_mentions(caption)`; a registry term the monologue just
+named pulls the next glances 4× for `SPATIAL_MENTION_BOOST_S` (180s).
+(2) GAZE INFORMS THOUGHT — `build_situational_line` notes the glance ONSET
+once per glance ("Turned to look where the rooster figurine should be.", via
+`gaze.get_glance_info()` — revisit glances only, explores stay silent), so
+the view change is the machine's own act, not an unexplained cut.
+(3) DISCERNMENT — the registry is often wrong, so glances verify: when a
+settled detector pass coincides with an active revisit glance AND the camera
+actually points near the anchor (within HFOV/3 — a clamped glance is not
+evidence), the pass is the verdict (`note_glance_result` in the open-vocab
+thread). Seen → memory holds (misses reset; any re-sighting elsewhere also
+resets). Not seen → conf ×0.7 per miss; the 2nd consecutive miss queues an
+absence EVENT the situational line delivers once ("The rooster figurine
+isn't where it was." — absence as real observation); the 4th forgets the
+anchor — the map stores where things ARE. Test:
+`debug/test_glance_cognition.py` (mention boost, miss ladder, line events).
+
 **Aware-churn fix (Aug 10 evening).** The gaze flickered idle↔aware every few
 seconds on marginal YOLO hits ("person detected but no tracking target" →
 5s timeout → look away → re-trigger), and each 90s-spaced flicker minted an

@@ -337,6 +337,7 @@ SPATIAL_REGISTRY_EMA = 0.35  # anchor update rate per sighting; higher = snappie
 SPATIAL_REGISTRY_MAX_AGE = 604800.0  # seconds (7 days) unseen -> entry forgotten
 SPATIAL_REGISTRY_HFOV = 60.0  # deg; same convention as machine.py person_angle
 SPATIAL_REGISTRY_VFOV = 34.0  # deg; 60 * 720/1280
+SPATIAL_MENTION_BOOST_S = 180.0  # a term the monologue just mentioned pulls the next glance for this long (thought leads gaze)
 GAZE_REGISTRY_GLANCES_ENABLED = True
 GAZE_GLANCE_INTERVAL = 45.0  # mean seconds between idle glances (jittered)
 GAZE_GLANCE_DWELL = 7.0  # mean seconds a glance holds its target (jittered)
