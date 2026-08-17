@@ -70,11 +70,21 @@ formula still rules. Run at least a day; read the log:
 - shadow would-fire rate ~100% → framing is leaky, fix before it ever controls the arm
 - want formed → persisted → would-fire → spent → the arc working end to end
 
-**Phase B — cutover.** After shadow validates: `should_draw` = guardrails +
-desire verdict; retire novelty/boredom weights, double-normalization, startup
-bonus, the `reflection` param, `DRAWING_PERSON_*`. Config flag for A/B
-(`DRAWING_TRIGGER_MODE = "desire" | "formula"`). Decide max-interval semantics
-with the artist (forced hunger vs allowed silence). Update runtime-map.
+**Phase B — cutover. EXECUTED Aug 17.** Shadow validated over 5 days: the
+formula drew 26/26 (clockwork, as the artist observed); the shadow would have
+drawn 7/26 with every refusal explainable (empty slot, too-young want,
+non-drawing want, "To trust blank space" honored as restraint). Artist
+decisions: cut over now; startup drawing KEPT for testing (first drawing of a
+session rides the timer); max-interval → SOFT HUNGER at DRAWING_HUNGER_S
+(env, default 7200s) — long silences allowed, but hunger eventually draws,
+and the monologue ALWAYS carries time-since-last-drawing
+(prompts.get_last_drawing_age_line, executed-only ledger, even under detox).
+`DRAWING_TRIGGER_MODE` env: "desire" (default) | "formula" (full revert).
+The formula runs silently as the comparison shadow; every evaluation logs
+DECISION "trigger_decision" {mode, will_draw, reason: startup|hunger|desire|
+"no formed want", both verdicts, desire + age}. Formula internals
+(double-normalization etc.) retire fully in phase C once desire mode has a
+validated run. debug/test_desire_shadow.py covers all four reasons.
 
 **Phase C — mood revamp step 3 (separate arc, motor-panel plan).** Continuous
 (v,a,c) coordinates, proximity-weighted temperament pooling, retire the 5-label

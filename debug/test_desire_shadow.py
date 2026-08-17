@@ -41,6 +41,45 @@ try:
     expected = {"desire", "desire_age_s", "drawing_directed", "would_draw"}
     if verdict_keys != expected:
         failures.append(f"verdict keys {verdict_keys}")
+
+    # --- Phase B: the desire-mode trigger itself (Aug 17) ---
+    print("\n— desire-mode trigger —")
+    d2 = DrawingController()
+    d2.TRIGGER_MODE = "desire"
+    d2._log_trigger_decision = lambda **k: None
+    args = dict(mood=0.5, novelty=0.5, boredom=0.5)
+
+    def set_want(desire, age_s):
+        context_compressor.introspective_state["current_desire"] = desire
+        context_compressor.introspective_state["desire_since"] = (time.time() - age_s) if desire else 0.0
+
+    def check_t(name, expect):
+        got = d2.should_draw(**args)
+        ok = got == expect
+        print(f"{'✓' if ok else '✗'} {name}: {'DRAW' if got else 'wait'}")
+        if not ok:
+            failures.append(name)
+
+    set_want("", 0)
+    d2.last_drawing_time = time.time() - 100
+    check_t("floor blocks everything", False)
+
+    d2.last_drawing_time = time.time() - 1000
+    check_t("startup drawing rides the timer once", True)
+    if not d2._startup_drawing_done:
+        failures.append("startup flag not set")
+
+    d2.last_drawing_time = time.time() - 1000
+    check_t("after startup, no want = wait", False)
+
+    set_want("I want to draw the chair", 900)
+    check_t("persisted drawing want fires", True)
+
+    set_want("I want the door to open", 9000)
+    check_t("non-drawing want waits", False)
+
+    d2.last_drawing_time = time.time() - 8000
+    check_t("hunger fires past 2h regardless of want", True)
 finally:
     context_compressor.introspective_state.update(saved)
 

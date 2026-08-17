@@ -61,6 +61,9 @@ class DrawingController:
         # critique it once").
         self.last_critique: Optional[str] = None
         self.quota_manager = None  # No quota system - use timer-based drawing
+        # First drawing of a session rides the timer regardless of the want
+        # (artist, Aug 17: keep the startup drawing for now, for testing)
+        self._startup_drawing_done = False
 
     # ------------------------------------------------------------------
     # decision helpers
@@ -102,8 +105,16 @@ class DrawingController:
         re.IGNORECASE,
     )
     # Persistence threshold: a want must survive at least a few distill cycles
-    # (one distill ≈ 8 captions) before the shadow trigger counts it as meant.
+    # (one distill ≈ 8 captions) before the trigger counts it as meant.
     DESIRE_SHADOW_MIN_AGE_S = 600
+    # Phase B (Aug 17, artist-approved after 5 shadow days: formula drew 26/26
+    # like clockwork, desire would have drawn 7/26 with every refusal
+    # explainable): the want decides. "formula" reverts to the timer.
+    TRIGGER_MODE = os.getenv("DRAWING_TRIGGER_MODE", "desire")
+    # Soft hunger (artist: compromise between forced output and allowed
+    # silence): with no formed want, drawing-hunger fires after this long.
+    # The monologue always carries the time since the pen last touched paper.
+    HUNGER_S = float(os.getenv("DRAWING_HUNGER_S", 7200))
 
     def desire_shadow_verdict(self) -> dict:
         """North-star step 5, phase A: would the desire slot draw right now?
@@ -129,30 +140,35 @@ class DrawingController:
             "would_draw": drawing_directed and age_s >= self.DESIRE_SHADOW_MIN_AGE_S,
         }
 
-    def _log_desire_shadow(self, *, formula_verdict: bool, mood: float, novelty: float, boredom: float) -> None:
+    def _log_trigger_decision(
+        self, *, mode: str, verdict: bool, reason: str, shadow: dict, formula_verdict: bool, mood: float, novelty: float, boredom: float, time_since: float
+    ) -> None:
         try:
-            shadow = self.desire_shadow_verdict()
             log_json_entry(
                 LogType.DECISION,
                 {
-                    "decision": "desire_shadow",
+                    "decision": "trigger_decision",
+                    "mode": mode,
+                    "will_draw": verdict,
+                    "reason": reason,
                     "formula_would_draw": formula_verdict,
                     "shadow_would_draw": shadow["would_draw"],
                     "desire": shadow["desire"],
                     "desire_age_s": shadow["desire_age_s"],
                     "drawing_directed": shadow["drawing_directed"],
+                    "minutes_since_last": round(time_since / 60),
                     "mood": mood,
                     "novelty": novelty,
                     "boredom": boredom,
                 },
                 print_message=(
-                    f"[🎨 SHADOW] desire={'∅' if not shadow['desire'] else shadow['desire'][:60]!r} "
-                    f"→ {'DRAW' if shadow['would_draw'] else 'wait'} (formula: {'DRAW' if formula_verdict else 'wait'})"
+                    f"[🎨 TRIGGER] {mode}: {'DRAW' if verdict else 'wait'} ({reason}) — "
+                    f"desire={'∅' if not shadow['desire'] else shadow['desire'][:60]!r}"
                 ),
             )
         except Exception as e:
             if not CLEAN_LLM_OUTPUT:
-                print(f"[⚠️] Desire shadow logging failed: {e}")
+                print(f"[⚠️] Trigger decision logging failed: {e}")
 
     def should_draw(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
         # Clean room: the 5-step drawing pipeline is detox blind spot #3 — it
@@ -165,21 +181,50 @@ class DrawingController:
 
         if BASE_VOICE_DETOX:
             return False
-        # Use state-motivated drawing logic when enabled, otherwise timer-based
         try:
             from config.config import DRAWING_MIN_INTERVAL, DRAWING_USE_STATE_MOTIVATION
-
-            if DRAWING_USE_STATE_MOTIVATION:
-                verdict = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
-            else:
-                verdict = self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
         except ImportError:
             return self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
 
-        # Shadow only real evaluations, not the 720-900s window where the
+        time_since = time.time() - self.last_drawing_time
+
+        if self.TRIGGER_MODE == "desire":
+            # Phase B: the want decides. The floor stays as a hard guardrail;
+            # startup and hunger are the two timer exceptions the artist kept.
+            if time_since < DRAWING_MIN_INTERVAL:
+                return False
+            shadow = self.desire_shadow_verdict()
+            # The retired formula still runs silently as the comparison shadow
+            formula = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+            if not self._startup_drawing_done:
+                verdict, reason = True, "startup"
+            elif time_since >= self.HUNGER_S:
+                verdict, reason = True, "hunger"
+            elif shadow["would_draw"]:
+                verdict, reason = True, "desire"
+            else:
+                verdict, reason = False, "no formed want"
+            self._log_trigger_decision(
+                mode="desire", verdict=verdict, reason=reason, shadow=shadow, formula_verdict=formula,
+                mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
+            )
+            if verdict:
+                self._startup_drawing_done = True
+            return verdict
+
+        # Legacy formula mode (DRAWING_TRIGGER_MODE="formula" reverts to this)
+        if DRAWING_USE_STATE_MOTIVATION:
+            verdict = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+        else:
+            verdict = self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+
+        # Log only real evaluations, not the 720-900s window where the
         # min-interval short-circuit re-runs every caption cycle.
-        if time.time() - self.last_drawing_time >= DRAWING_MIN_INTERVAL:
-            self._log_desire_shadow(formula_verdict=verdict, mood=mood, novelty=novelty, boredom=boredom)
+        if time_since >= DRAWING_MIN_INTERVAL:
+            self._log_trigger_decision(
+                mode="formula", verdict=verdict, reason="formula", shadow=self.desire_shadow_verdict(), formula_verdict=verdict,
+                mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
+            )
         return verdict
 
     def _should_draw_original(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
@@ -418,41 +463,32 @@ class DrawingController:
             except Exception as e:
                 print(f"[📄] Early paper check error (proceeding anyway): {e}")
 
-            # Record a concise drawing intent into memory for future reference
+            # Display, shared state, and the drawing_intent memory all carry the
+            # intent the machine actually formed (stream pipeline's
+            # _last_drawing_intent). The old LLM summary call here is retired
+            # (Aug 17): it re-described the RENDER prompt and stored the
+            # paraphrase as a second "drawing_intent" memory, so every drawing
+            # was remembered twice in two voices. The memory write itself stays —
+            # the live drawing-introspection captions read this type — but now
+            # in the machine's own words. One drawing, one memory, one voice.
             try:
                 from config.config import INCLUDE_DRAWING_HISTORY
 
+                intent_text = (getattr(agent, "_last_drawing_intent", "") or "").strip() or drawing_prompt
+                display_line = intent_text.strip().split("\n")[0]
+                if len(display_line) > 200:
+                    display_line = display_line[:200].rsplit(" ", 1)[0] + "..."
+                state_manager.current_drawing_prompt = display_line
+                try:
+                    from utils.caption_display import send_caption_to_display
+
+                    send_caption_to_display(f"Drawing: {display_line}")
+                except Exception:
+                    pass
                 if INCLUDE_DRAWING_HISTORY and hasattr(agent, "observe"):
-                    drawing_summary = "drawing based on current observations"
-                    try:
-                        from utils.inference import query_model
-                        from config.config import MOOD_SNAPSHOT_FOLDER
-
-                        summary_prompt = f"Describe what this drawing depicts in one short sentence:\n\n{drawing_prompt}\n\nDescription:"
-                        drawing_summary = query_model(
-                            prompt=summary_prompt,
-                            log_dir=MOOD_SNAPSHOT_FOLDER,
-                            system_prompt="Describe the drawing's subject in one brief sentence. Be specific about what is shown, not abstract tags.",
-                            prompt_type="drawing_summary",
-                            options={"temperature": 0.3, "num_predict": 40},
-                        ).strip()
-                        print(f"[📝] Model-generated drawing summary: {drawing_summary}")
-                        state_manager.current_drawing_prompt = drawing_summary
-
-                        try:
-                            from utils.caption_display import send_caption_to_display
-
-                            send_caption_to_display(f"Drawing: {drawing_summary}")
-                        except Exception:
-                            pass
-
-                    except Exception as e:
-                        print(f"[⚠️] Summary generation failed: {e}")
-                        drawing_summary = "drawing based on current observations"
-
-                    agent.observe(f"Drawing intent: {drawing_summary}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
+                    agent.observe(f"Drawing intent: {intent_text}", agent.current_mood, latest_image or "", memory_type="drawing_intent")
             except Exception as e:
-                print(f"[❌] Failed to store drawing intent: {e}")
+                print(f"[❌] Failed to surface drawing intent: {e}")
 
             log_json_entry(
                 LogType.DECISION,

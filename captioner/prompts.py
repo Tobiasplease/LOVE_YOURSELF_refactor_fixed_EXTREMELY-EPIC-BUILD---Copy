@@ -228,6 +228,11 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
         except Exception:
             pass
 
+    # Time since the pen last touched paper — always present, even under
+    # detox (it's event provenance, not model-generated text). This is how
+    # drawing-hunger stays legible to the monologue under the desire trigger.
+    base += get_last_drawing_age_line()
+
     # The machine's accumulated self-description, in its own first-person
     # words inside quotes — the frame stays second person around it
     if not detox:
@@ -680,6 +685,26 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     if reflections:
         parts.append("You've thought about this before — don't re-describe what you already wrote. What's moved since then?")
     return "\n\n".join(parts)
+
+
+def get_last_drawing_age_line() -> str:
+    """Always-on: how long since the pen last touched paper (executed-only
+    ledger). Artist ruling Aug 17, with the desire trigger: the hunger must be
+    legible in the monologue — the machine always knows this, plainly.
+    (Registry-migration candidate: texts inline until the drawing chain moves.)
+    """
+    try:
+        from drawing.drawing_memory import get_drawing_memory
+
+        stamps = [e.get("timestamp", 0) for e in get_drawing_memory()._history if e.get("completed")]
+        if not stamps:
+            return " Nothing you've drawn has reached the paper yet."
+        phrase = casual_time_string((time.time() - max(stamps)) / 60)
+        if phrase == "just now":
+            return " Your last drawing reached the paper just now."
+        return f" Your last drawing reached the paper {phrase} ago."
+    except Exception:
+        return ""
 
 
 # Tight lexicon on purpose: "line"/"mark"/"trace" are this machine's everyday

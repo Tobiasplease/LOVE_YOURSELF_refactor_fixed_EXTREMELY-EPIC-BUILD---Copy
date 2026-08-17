@@ -753,6 +753,24 @@ fires only after GRBL physically executed. **The artistic arc and drawing
 summaries read executed-only** — a ComfyUI generation that never reached
 paper is an intention, not part of the oeuvre. Window: 24 entries.
 
+## Drawing trigger (Aug 17: DESIRE MODE — north-star step 5 live)
+
+The want decides (docs/drawing-trigger-desire-plan.md). Each caption cycle
+past the gates (DRAWING_INTERVAL check cadence, startup delay, cooldown,
+not-generating/executing — the salience deferral was removed Aug 12), and
+past the hard DRAWING_MIN_INTERVAL floor (900s), `should_draw` in desire
+mode fires on the FIRST of: startup (first drawing of a session rides the
+timer — testing-era rule), hunger (DRAWING_HUNGER_S, default 2h since last
+drawing), or a persisted drawing-directed want (desire slot, word-boundary
+lexicon, ≥600s old). No formed want → no drawing; the no is structural,
+never asked. The retired formula still runs silently for comparison; every
+evaluation logs DECISION `trigger_decision` (mode/will_draw/reason/both
+verdicts/desire+age). `DRAWING_TRIGGER_MODE=formula` reverts wholesale.
+The monologue always carries time-since-last-drawing (system prompt,
+`get_last_drawing_age_line`, executed-only, survives detox) — hunger is
+legible to the machine. Cutover evidence: 5 shadow days, formula 26/26
+drew, shadow 7/26 with every refusal explainable.
+
 ## Drawing prompt generation (July 10: DRAWING_ANALYSIS_MODE="stream"; Aug 10: stocktake beat + register freedom)
 
 Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step committee:
