@@ -254,3 +254,4 @@ debug_*.txt
 # Performance profiling
 *.prof
 *.profile
+config/prompt_overrides.json

@@ -18,7 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from captioner.prompts import REFLECTION_SUBJECTS, build_reflection_loop_prompt, get_reflection_system_prompt  # noqa: E402
+from captioner.prompts import build_reflection_loop_prompt, get_reflection_subjects, get_reflection_system_prompt  # noqa: E402
 from captioner.reflection import ReflectionLoop  # noqa: E402
 
 
@@ -57,7 +57,7 @@ def main() -> int:
         return 1
 
     bundles = {}
-    for subject, question in REFLECTION_SUBJECTS:
+    for subject, question in get_reflection_subjects():
         loop._drawings_cache = None
         data = loop._gather_context(subject, spine)
         prompt = build_reflection_loop_prompt(question, data)

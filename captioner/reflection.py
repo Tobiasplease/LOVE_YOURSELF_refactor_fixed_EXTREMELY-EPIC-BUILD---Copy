@@ -45,12 +45,12 @@ class ReflectionLoop:
         # on every restart made "the room" dominate (6 of 11 reflections on a
         # restart-heavy day)
         try:
-            from captioner.prompts import REFLECTION_SUBJECTS
+            from captioner.prompts import get_reflection_subjects
             from captioner.semantic_memory import get_semantic_memory
 
             last = get_semantic_memory().get_recent_reflections(limit=1)
             if last:
-                names = [s for s, _ in REFLECTION_SUBJECTS]
+                names = [s for s, _ in get_reflection_subjects()]
                 subj = (last[0].get("subject") or "").strip()
                 if subj in names:
                     self._subject_idx = (names.index(subj) + 1) % len(names)
@@ -105,17 +105,18 @@ class ReflectionLoop:
 
     def _next_subject(self) -> tuple:
         """Rotate through subjects, skipping ones with no material behind them."""
-        from captioner.prompts import REFLECTION_SUBJECTS
+        from captioner.prompts import get_reflection_subjects
 
-        for _ in range(len(REFLECTION_SUBJECTS)):
-            subject, question = REFLECTION_SUBJECTS[self._subject_idx]
-            self._subject_idx = (self._subject_idx + 1) % len(REFLECTION_SUBJECTS)
+        subjects = get_reflection_subjects()
+        for _ in range(len(subjects)):
+            subject, question = subjects[self._subject_idx]
+            self._subject_idx = (self._subject_idx + 1) % len(subjects)
             if subject == "the visitor" and not self._has_visitor_material():
                 continue
             if subject == "the drawings" and not self._gather_drawings():
                 continue
             return subject, question
-        return REFLECTION_SUBJECTS[0]
+        return subjects[0]
 
     def _has_visitor_material(self) -> bool:
         try:

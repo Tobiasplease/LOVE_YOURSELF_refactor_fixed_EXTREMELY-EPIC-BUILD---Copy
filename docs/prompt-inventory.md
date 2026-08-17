@@ -1,5 +1,12 @@
 # Prompt Inventory — every LLM pass in the system (August 2, 2026)
 
+> **Aug 17 update:** the caption-loop passes' authored text was extracted into
+> `captioner/prompt_registry.py` (named fragments, live-editable through the
+> prompt panel via `config/prompt_overrides.json`). The registry's `PASSES`
+> manifests now carry the per-pass inventory for migrated passes; this doc
+> remains the method + the historical audit. Drawing-chain passes are not yet
+> migrated.
+
 **Purpose.** The complete, verified list of every place this codebase talks to a
 model. This is the foundation for the prompt panel (`docs/prompt-panel-plan.md`)
 and the answer to "are we sure we've got all of them?" — a question that has

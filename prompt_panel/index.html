@@ -5,14 +5,15 @@
 <title>Prompt Panel</title>
 <style>
   :root{
-    --bg:#17151c; --panel:#1e1b24; --line:#2e2a37;
+    --bg:#17151c; --panel:#1e1b24; --panel2:#242030; --line:#2e2a37;
     --ink:#e8e4ee; --dim:#9d95ad; --faint:#6d6579;
-    --sys:#7fb2ff; --usr:#7fe0b0; --out:#ffc98a; --warn:#ff8b8b;
+    --frag:#7fb2ff; --slot:#c79bff; --out:#ffc98a; --warn:#ff8b8b;
+    --edit:#ffd76e; --ok:#7fe0b0;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
        font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  header{display:flex;align-items:baseline;gap:18px;padding:14px 22px;border-bottom:1px solid var(--line)}
+  header{display:flex;align-items:baseline;gap:18px;padding:12px 22px;border-bottom:1px solid var(--line)}
   header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.2px}
   header .stat{color:var(--dim);font-size:13px}
   header .stat b{color:var(--ink);font-weight:600}
@@ -20,45 +21,93 @@
   nav button{background:none;border:1px solid var(--line);color:var(--dim);
              padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px}
   nav button.on{background:var(--panel);color:var(--ink);border-color:var(--faint)}
+  nav button .n{color:var(--edit)}
 
-  .wrap{display:grid;grid-template-columns:290px 1fr;height:calc(100vh - 53px)}
+  .wrap{display:grid;grid-template-columns:290px 1fr;height:calc(100vh - 51px)}
   aside{border-right:1px solid var(--line);overflow-y:auto;padding:10px 0}
-  .item{padding:9px 20px;cursor:pointer;border-left:3px solid transparent}
+  main{overflow-y:auto;padding:22px 26px 80px}
+  h2{font-size:19px;margin:0 0 4px}
+  .blurb{color:var(--dim);margin:0 0 14px;font-size:14px;max-width:75ch}
+
+  .item{padding:8px 20px;cursor:pointer;border-left:3px solid transparent}
   .item:hover{background:#221f29}
-  .item.on{background:var(--panel);border-left-color:var(--sys)}
+  .item.on{background:var(--panel);border-left-color:var(--frag)}
   .item .t{font-size:14px}
-  .item .m{font-size:12px;color:var(--faint);display:flex;gap:8px;margin-top:1px}
+  .item .m{font-size:12px;color:var(--faint);margin-top:1px}
   .item.idle .t{color:var(--faint)}
   .item.undoc .t::after{content:" ⚠";color:var(--warn)}
+  .item.unmig .t::after{content:" ·raw";color:var(--faint);font-size:11px}
+  .item .ov{color:var(--edit)}
+  .sep{padding:10px 20px 4px;font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:var(--faint)}
 
-  main{overflow-y:auto;padding:22px 26px 60px}
-  h2{font-size:19px;margin:0 0 4px}
-  .blurb{color:var(--dim);margin:0 0 16px;font-size:14px;max-width:70ch}
   .meta{display:flex;gap:14px;flex-wrap:wrap;color:var(--faint);font-size:12px;
-        border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:20px}
-  .block{margin-bottom:22px}
-  .label{font-size:11px;letter-spacing:.9px;text-transform:uppercase;
-         color:var(--faint);margin-bottom:6px;display:flex;align-items:center;gap:8px}
-  .label i{width:8px;height:8px;border-radius:2px;display:inline-block;font-style:normal}
-  .label.sys i{background:var(--sys)} .label.usr i{background:var(--usr)}
-  .label.out i{background:var(--out)} .label.pre i{background:var(--faint)}
-  pre{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;
-      padding:14px 16px;white-space:pre-wrap;word-break:break-word;
-      font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;max-width:100ch}
-  pre.out{border-color:#4a3f2d}
+        border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:16px}
+  .secthead{font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:var(--faint);
+            margin:22px 0 8px;display:flex;align-items:center;gap:8px}
+
+  .block{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;max-width:110ch;overflow:hidden}
+  .block .head{display:flex;align-items:baseline;gap:10px;padding:7px 12px;cursor:pointer;background:var(--panel)}
+  .block .head:hover{background:var(--panel2)}
+  .block.frag .head{border-left:3px solid var(--frag)}
+  .block.slot .head{border-left:3px solid var(--slot);cursor:default}
+  .block.slot .head.link{cursor:pointer}
+  .block .kind{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);min-width:62px}
+  .block.frag .kind{color:var(--frag)} .block.slot .kind{color:var(--slot)}
+  .block .name{font-size:13.5px;font-weight:600}
+  .block .gate{font-size:12px;color:var(--faint);margin-left:auto;text-align:right;max-width:40ch}
+  .block .ovtag{color:var(--edit);font-size:11px;border:1px solid var(--edit);border-radius:10px;padding:0 7px}
+  .block .body{padding:10px 14px;border-top:1px solid var(--line)}
+  .block .body .note{color:var(--dim);font-size:13px;margin:0 0 10px;max-width:80ch}
+  pre.text{margin:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;
+      padding:10px 12px;white-space:pre-wrap;word-break:break-word;
+      font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre.text .ph{color:var(--slot);font-weight:600}
+  pre.assent{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+      padding:12px 14px;white-space:pre-wrap;word-break:break-word;max-width:110ch;
+      font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre.assent.outp{border-color:#4a3f2d}
+  textarea{width:100%;min-height:110px;background:var(--bg);color:var(--ink);
+      border:1px solid var(--edit);border-radius:6px;padding:10px 12px;
+      font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
+  .btnrow{display:flex;gap:8px;margin-top:8px;align-items:center}
+  .btnrow button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+      padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px}
+  .btnrow button.save{border-color:var(--edit);color:var(--edit)}
+  .btnrow button.revert{border-color:var(--warn);color:var(--warn)}
+  .btnrow .msg{font-size:12.5px;color:var(--warn)}
+  .btnrow .msg.ok{color:var(--ok)}
+  .canon{margin-top:10px}
+  .canon .k{font-size:11px;color:var(--faint);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:20px;
+        padding:2px 11px;font-size:12px;color:var(--dim);cursor:pointer}
+  .chip:hover{color:var(--ink);border-color:var(--faint)}
+  .chip.store{border-color:#4a3a63;color:var(--slot)}
+
+  .storecard{border:1px solid var(--line);border-radius:10px;background:var(--panel);
+        padding:14px 16px;margin-bottom:12px;max-width:100ch}
+  .storecard .t{font-weight:600;font-size:15px;color:var(--slot)}
+  .storecard .d{color:var(--dim);font-size:13.5px;margin:4px 0 10px;max-width:80ch}
+  .storecard .flow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px}
+  .storecard .arrow{color:var(--faint)}
+  .storecard .cur{margin-top:10px;font-size:13px;color:var(--ink);background:var(--bg);
+        border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+  .storecard .cur .k{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.8px}
+
+  .search{padding:8px 20px}
+  .search input{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+        border-radius:6px;padding:6px 10px;font-size:13px}
   .empty{color:var(--faint);font-style:italic}
+  .slot-desc{font-size:13px;color:var(--dim);max-width:80ch}
+  .truncnote{color:var(--warn);font-size:12px;margin:4px 0 0}
   .ledger{max-width:80ch}
-  .slot{background:var(--panel);border:1px solid var(--line);border-radius:8px;
-        padding:14px 16px;margin-bottom:14px}
-  .slot .k{font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:var(--faint)}
-  .slot .v{font-size:15px;margin-top:4px}
+  .slotcard{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin-bottom:12px}
+  .slotcard .k{font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:var(--faint)}
+  .slotcard .v{font-size:15px;margin-top:4px}
   ol.hist{margin:6px 0 0;padding-left:22px;color:var(--dim);font-size:13.5px}
   ol.hist li{margin:3px 0}
   ol.hist li:last-child{color:var(--ink)}
-  .gates{display:flex;flex-wrap:wrap;gap:8px}
-  .gate{background:var(--panel);border:1px solid var(--line);border-radius:20px;
-        padding:4px 12px;font-size:12.5px;color:var(--dim)}
-  .gate b{color:var(--ink)}
 </style>
 </head>
 <body>
@@ -67,6 +116,8 @@
   <span class="stat" id="stats">reading…</span>
   <nav>
     <button id="tab-passes" class="on">Passes</button>
+    <button id="tab-frags">Fragments <span class="n" id="ovcount"></span></button>
+    <button id="tab-loops">Loops</button>
     <button id="tab-identity">Identity</button>
   </nav>
 </header>
@@ -77,67 +128,235 @@
 </div>
 
 <script>
-const esc = s => (s||"").replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-let DATA = null, sel = "caption", tab = "passes";
+const esc = s => (s??"").toString().replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let REG=null, RUN=null, tab="passes", selPass="caption", selFrag=null, openBlocks={}, fragFilter="";
+let editing=null; // fragment id currently in an editor
 
-function block(cls, label, text, cls2){
-  if(!text) return "";
-  return `<div class="block"><div class="label ${cls}"><i></i>${label}</div>`+
-         `<pre class="${cls2||''}">${esc(text)}</pre></div>`;
+const fragById = id => REG.fragments.find(f=>f.id===id);
+const fragText = f => f.override ?? f.text;
+
+function markPh(text, phs){
+  let h = esc(text);
+  (phs||[]).forEach(p=>{ h = h.split("{"+p+"}").join('<span class="ph">{'+p+'}</span>'); });
+  return h;
 }
 
+// ---------- editor (shared by pass blocks + fragment library) ----------
+function editorHtml(f){
+  return `<div class="canon">
+    <textarea id="ed-${f.id}" spellcheck="false">${esc(fragText(f))}</textarea>
+    <div class="btnrow">
+      <button class="save" onclick="saveFrag('${f.id}')">save → next cycle</button>
+      ${f.override!=null?`<button class="revert" onclick="revertFrag('${f.id}')">revert to canonical</button>`:""}
+      <span class="msg" id="msg-${f.id}"></span>
+    </div>
+    ${f.override!=null?`<div class="canon"><div class="k">canonical (git)</div>
+      <pre class="text">${markPh(f.text,f.placeholders)}</pre></div>`:""}
+    ${(f.placeholders||[]).length?`<div class="btnrow"><span style="font-size:12px;color:var(--faint)">
+      placeholders this text must keep to: ${f.placeholders.map(p=>"<span class='ph'>{"+p+"}</span>").join(" ")}</span></div>`:""}
+  </div>`;
+}
+
+async function saveFrag(id){
+  const ta = document.getElementById("ed-"+id), msg = document.getElementById("msg-"+id);
+  const r = await fetch("/api/override",{method:"POST",body:JSON.stringify({id, text:ta.value})});
+  const j = await r.json();
+  if(j.error){ msg.className="msg"; msg.textContent = j.error; return; }
+  msg.className="msg ok"; msg.textContent = "saved — live on the machine's next cycle";
+  editing=null; await loadReg(); render();
+}
+async function revertFrag(id){
+  await fetch("/api/revert",{method:"POST",body:JSON.stringify({id})});
+  editing=null; await loadReg(); render();
+}
+
+// ---------- sidebar ----------
 function renderList(){
   const el = document.getElementById("list");
-  if(tab === "identity"){ el.innerHTML = ""; return; }
-  el.innerHTML = DATA.passes.map(p => {
-    const on = p.key === sel ? " on" : "";
-    const idle = p.count === 0 ? " idle" : "";
-    const und = p.documented ? "" : " undoc";
-    const right = p.count ? `${p.count}× · ${p.last_ago}` : "not this run";
-    return `<div class="item${on}${idle}${und}" data-k="${p.key}">
-              <div class="t">${esc(p.title)}</div>
-              <div class="m"><span>${right}</span></div>
-            </div>`;
-  }).join("");
-  el.querySelectorAll(".item").forEach(n =>
-    n.onclick = () => { sel = n.dataset.k; render(); });
-}
-
-function renderPass(){
-  const p = DATA.passes.find(x => x.key === sel) || DATA.passes[0];
-  const v = document.getElementById("view");
-  if(!p){ v.innerHTML = "<p class='empty'>Nothing yet.</p>"; return; }
-  let h = `<h2>${esc(p.title)}</h2><p class="blurb">${esc(p.blurb)}</p>`;
-  if(!p.call){
-    v.innerHTML = h + `<p class="empty">This pass hasn't run in the current session.</p>`;
+  if(tab==="identity"||tab==="loops"){ el.innerHTML=""; return; }
+  if(tab==="frags"){
+    const groups = {};
+    REG.fragments.filter(f=>{
+      const q=fragFilter.toLowerCase();
+      return !q || f.id.includes(q) || f.title.toLowerCase().includes(q) || fragText(f).toLowerCase().includes(q);
+    }).forEach(f=>{ const g=f.id.split(".")[0]; (groups[g]=groups[g]||[]).push(f); });
+    let h = `<div class="search"><input placeholder="filter fragments…" value="${esc(fragFilter)}"
+              oninput="fragFilter=this.value;renderList()"></div>`;
+    for(const g of Object.keys(groups)){
+      h += `<div class="sep">${esc(g)}</div>`;
+      h += groups[g].map(f=>`<div class="item${f.id===selFrag?" on":""}" onclick="selFrag='${f.id}';render()">
+          <div class="t">${esc(f.title)}${f.override!=null?' <span class="ov">●</span>':''}</div>
+          <div class="m">${esc(f.id)}</div></div>`).join("");
+    }
+    el.innerHTML = h;
     return;
   }
-  const c = p.call;
-  const bits = [`<code>${esc(p.key)}</code>`, c.when, c.model].filter(Boolean);
-  if(c.stream_mode) bits.push(`shape: ${esc(c.stream_mode)}`);
-  if(c.history_len != null) bits.push(`${c.history_len} prior thoughts`);
-  if(c.frames) bits.push(`${c.frames} frames`);
-  if(!c.ok) bits.push(`<span style="color:var(--warn)">call failed</span>`);
+  // passes
+  const act = RUN?.activity || {};
+  const keys = Object.keys(REG.passes);
+  let h = "";
+  const row = (k,p,a) => `<div class="item${k===selPass?" on":""}${a?"":" idle"}${p.migrated===false?" unmig":""}" onclick="selPass='${k}';render()">
+      <div class="t">${esc(p.title)}${passHasOverride(k)?' <span class="ov">●</span>':''}</div>
+      <div class="m">${a?`${a.count}× · ${a.last_ago}`:"not this run"}</div></div>`;
+  h += keys.filter(k=>REG.passes[k].migrated!==false).map(k=>row(k,REG.passes[k],act[k])).join("");
+  h += `<div class="sep">not yet in registry</div>`;
+  h += keys.filter(k=>REG.passes[k].migrated===false).map(k=>row(k,REG.passes[k],act[k])).join("");
+  const undoc = Object.keys(act).filter(k=>!REG.passes[k]);
+  if(undoc.length){
+    h += `<div class="sep">undocumented</div>`;
+    h += undoc.map(k=>`<div class="item undoc${k===selPass?" on":""}" onclick="selPass='${k}';render()">
+        <div class="t">${esc(k)}</div><div class="m">${act[k].count}× · ${act[k].last_ago}</div></div>`).join("");
+  }
+  el.innerHTML = h;
+}
+
+function resolveBlocks(side, key){
+  if(typeof side==="string") side = REG.passes[side]?.[key];
+  return Array.isArray(side)?side:[];
+}
+function passHasOverride(k){
+  const p = REG.passes[k]; if(!p||p.migrated===false) return false;
+  const blocks = [...resolveBlocks(p.system,"system"), ...resolveBlocks(p.user,"user")];
+  return blocks.some(b=>{ const f=(b.frag&&fragById(b.frag))||(b.via&&fragById(b.via)); return f&&f.override!=null; });
+}
+
+// ---------- pass view ----------
+function blockHtml(b, pk, sideKey, idx){
+  const key = pk+sideKey+idx;
+  const open = !!openBlocks[key];
+  if(b.frag){
+    const f = fragById(b.frag);
+    if(!f) return "";
+    const isEd = editing===key;
+    return `<div class="block frag">
+      <div class="head" onclick="toggleBlock('${key}')">
+        <span class="kind">fragment</span>
+        <span class="name">${esc(f.title)}</span>
+        ${f.override!=null?'<span class="ovtag">edited</span>':''}
+        <span class="gate">${esc(b.gate||"")}</span>
+      </div>
+      ${open?`<div class="body">
+        ${f.note?`<p class="note">${esc(f.note)}</p>`:""}
+        ${isEd?editorHtml(f):`<pre class="text">${markPh(fragText(f),f.placeholders)}</pre>
+          <div class="btnrow"><button onclick="event.stopPropagation();editing='${key}';selFrag='${f.id}';render()">edit</button>
+          <span style="font-size:12px;color:var(--faint)">${esc(f.id)}</span></div>`}
+      </div>`:""}
+    </div>`;
+  }
+  // slot
+  const store = b.store && REG.stores[b.store];
+  const via = b.via && fragById(b.via);
+  return `<div class="block slot">
+    <div class="head${store?" link":""}" ${store?`onclick="tab='loops';render();location.hash='#store-${b.store}'"`:""}>
+      <span class="kind">slot</span>
+      <span class="name">${esc(b.slot)}</span>
+      ${store?`<span class="chip store">⟲ ${esc(store.title)} — written by ${store.written_by.join(", ")}</span>`:""}
+      <span class="gate">${esc(b.gate||"")}</span>
+    </div>
+    ${(b.desc||via)?`<div class="body">
+      ${b.desc?`<div class="slot-desc">${esc(b.desc)}</div>`:""}
+      ${via?`<div class="canon"><div class="k">wrapper: ${esc(via.title)}${via.override!=null?" (edited)":""}</div>
+        <pre class="text">${markPh(fragText(via),via.placeholders)}</pre>
+        <div class="btnrow"><button onclick="selFrag='${via.id}';tab='frags';editing='lib';render()">edit wrapper</button></div></div>`:""}
+    </div>`:""}
+  </div>`;
+}
+function toggleBlock(k){ if(editing&&editing!==k) editing=null; openBlocks[k]=!openBlocks[k]; render(); }
+
+function renderPass(){
+  const v = document.getElementById("view");
+  const p = REG.passes[selPass];
+  const a = RUN?.activity?.[selPass];
+  if(!p){ // undocumented
+    let h = `<h2>${esc(selPass)}</h2>
+      <p class="blurb">Not in the registry — this pass talked to the model without being written down. Add it to captioner/prompt_registry.py.</p>`;
+    if(a?.call) h += assentHtml(a.call);
+    v.innerHTML = h; return;
+  }
+  let h = `<h2>${esc(p.title)}</h2><p class="blurb">${esc(p.blurb)}</p>`;
+  const bits = [`<code>${esc(selPass)}</code>`];
+  if(a) bits.push(`${a.count}× this run`, `last ${a.last_ago}`);
+  if(p.source) bits.push(esc(p.source));
   h += `<div class="meta">${bits.map(b=>`<span>${b}</span>`).join("")}</div>`;
-  h += block("sys","What it was told it is", c.system);
-  h += block("usr","What the world said", c.user);
-  h += block("pre","Its own unfinished thought (the seam)", c.prefill);
-  h += block("out","What it said", c.output, "out");
+  if(p.migrated===false){
+    h += `<p class="blurb">Text not yet migrated to the registry — still hardcoded at the source above, read-only here.</p>`;
+    if(a?.call) h += assentHtml(a.call);
+    v.innerHTML = h; return;
+  }
+  if(p.loop_note) h += `<p class="blurb">${esc(p.loop_note)}</p>`;
+  const sys = resolveBlocks(p.system,"system");
+  const usr = resolveBlocks(p.user,"user");
+  if(typeof p.system==="string") h += `<p class="blurb">System prompt: same assembly as <b>${esc(p.system)}</b>.</p>`;
+  h += `<div class="secthead">system prompt — assembled top to bottom</div>`;
+  h += sys.map((b,i)=>blockHtml(b,selPass,"s",i)).join("");
+  h += `<div class="secthead">user prompt — assembled top to bottom</div>`;
+  h += usr.map((b,i)=>blockHtml(b,selPass,"u",i)).join("");
+  if(a?.call) h += assentHtml(a.call);
   v.innerHTML = h;
 }
 
+function assentHtml(c){
+  let h = `<div class="secthead" style="margin-top:30px">last call as sent — ${esc(c.when||"")} ${c.ok?"":'<span style="color:var(--warn)">(failed)</span>'}</div>`;
+  if(c.system){ h += `<pre class="assent">${esc(c.system)}</pre>`;
+    if(c.system_truncated) h += `<p class="truncnote">⚠ truncated at the logging layer (utils/llm_log.py caps system prompts at 500 chars) — not what the model saw in full.</p>`; }
+  if(c.user) h += `<div class="secthead">user</div><pre class="assent">${esc(c.user)}</pre>`;
+  if(c.prefill) h += `<div class="secthead">prefill seam</div><pre class="assent">${esc(c.prefill)}</pre>`;
+  if(c.output) h += `<div class="secthead">output</div><pre class="assent outp">${esc(c.output)}</pre>`;
+  return h;
+}
+
+// ---------- fragment library ----------
+function renderFrags(){
+  const v = document.getElementById("view");
+  const f = selFrag && fragById(selFrag);
+  if(!f){ v.innerHTML = "<p class='empty'>Pick a fragment on the left. ● marks live edits.</p>"; return; }
+  let h = `<h2>${esc(f.title)}</h2>
+    <div class="meta"><span><code>${esc(f.id)}</code></span>
+      ${f.override!=null?'<span style="color:var(--edit)">live-edited, not committed</span>':'<span>canonical</span>'}</div>`;
+  if(f.note) h += `<p class="blurb">${esc(f.note)}</p>`;
+  h += `<div class="secthead">used by</div><div class="chips">${
+    f.used_by.map(u=>`<span class="chip" onclick="tab='passes';selPass='${u}';render()">${esc(u)}</span>`).join("")||"—"}</div>`;
+  h += `<div class="secthead">text${f.override!=null?" (current override)":""}</div>`;
+  h += editorHtml(f);
+  v.innerHTML = h;
+}
+
+// ---------- loop map ----------
+function renderLoops(){
+  const v = document.getElementById("view");
+  const id = RUN?.identity;
+  const current = {self_trait:id?.persona, desire:id?.desire, belief:id?.belief};
+  let h = `<h2>Loops</h2>
+    <p class="blurb">The stores the machine writes and then reads back into its own prompts. Every card is a
+    feedback circuit: the passes on the left produce it, the passes on the right consume it. This is the
+    text that has caused every spiral — the panel exists so you can see it move.</p>`;
+  for(const [k,s] of Object.entries(REG.stores)){
+    h += `<div class="storecard" id="store-${k}">
+      <div class="t">${esc(s.title)}</div>
+      <div class="d">${esc(s.desc)}</div>
+      <div class="flow">
+        <span class="chips">${s.written_by.map(p=>`<span class="chip" onclick="tab='passes';selPass='${p}';render()">${esc(p)}</span>`).join("")}</span>
+        <span class="arrow">— writes → <b style="color:var(--slot)">${esc(s.title)}</b> → read by —</span>
+        <span class="chips">${s.read_by.map(p=>`<span class="chip" onclick="tab='passes';selPass='${p}';render()">${esc(p)}</span>`).join("")}</span>
+      </div>
+      ${current[k]?`<div class="cur"><span class="k">current</span> ${esc(current[k])}</div>`:""}
+    </div>`;
+  }
+  v.innerHTML = h;
+}
+
+// ---------- identity ----------
 function renderIdentity(){
-  const id = DATA.identity, v = document.getElementById("view");
+  const id = RUN?.identity, v = document.getElementById("view");
   if(!id){ v.innerHTML = "<p class='empty'>No identity file yet.</p>"; return; }
-  const slot = (k,val) => `<div class="slot"><div class="k">${k}</div>
+  const slot = (k,val) => `<div class="slotcard"><div class="k">${k}</div>
       <div class="v">${val ? esc(val) : "<span class='empty'>empty</span>"}</div></div>`;
   const hist = (k,arr) => !arr.length ? "" :
-    `<div class="slot"><div class="k">${k} — oldest to newest</div>
+    `<div class="slotcard"><div class="k">${k} — oldest to newest</div>
       <ol class="hist">${arr.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>`;
   v.innerHTML = `<h2>Identity</h2>
-    <p class="blurb">What the machine currently believes about itself. These lines
-    are written by the reflection loop and read back into every prompt — the class
-    of text that has caused every spiral, so it is worth watching them move.</p>
+    <p class="blurb">What the machine currently believes about itself — written by the reflection loop,
+    read back into every prompt (see Loops for the circuits).</p>
     <div class="ledger">
       ${slot("Persona — in every call", id.persona)}
       ${slot("Wants", id.desire)}
@@ -149,29 +368,35 @@ function renderIdentity(){
     </div>`;
 }
 
+// ---------- shell ----------
 function render(){
-  document.getElementById("tab-passes").className = tab==="passes" ? "on":"";
-  document.getElementById("tab-identity").className = tab==="identity" ? "on":"";
-  document.querySelector(".wrap").style.gridTemplateColumns = tab==="identity" ? "0 1fr" : "290px 1fr";
-  const t = DATA.totals;
-  document.getElementById("stats").innerHTML =
-    `run <b>${esc(DATA.run||"—")}</b> · <b>${t.calls}</b> calls · <b>${t.captions}</b> thoughts kept `+
-    `· <b>${t.pass_rate}%</b> survived the gates`;
+  ["passes","frags","loops","identity"].forEach(t=>
+    document.getElementById("tab-"+t).classList.toggle("on", tab===t));
+  document.querySelector(".wrap").style.gridTemplateColumns =
+    (tab==="loops"||tab==="identity") ? "0 1fr" : "290px 1fr";
+  const t = RUN?.totals;
+  document.getElementById("stats").innerHTML = t ?
+    `run <b>${esc(RUN.run||"—")}</b> · <b>${t.calls}</b> calls · <b>${t.captions}</b> thoughts kept · <b>${t.pass_rate}%</b> survived the gates` : "no run data";
+  document.getElementById("ovcount").textContent = REG.override_count ? `●${REG.override_count}` : "";
   renderList();
-  tab === "identity" ? renderIdentity() : renderPass();
+  if(tab==="passes") renderPass();
+  else if(tab==="frags") renderFrags();
+  else if(tab==="loops") renderLoops();
+  else renderIdentity();
 }
 
-async function load(){
-  const r = await fetch("/api/data");
-  DATA = await r.json();
-  if(DATA.error){ document.getElementById("view").innerHTML =
-      `<pre style="color:var(--warn)">${esc(DATA.error)}</pre>`; return; }
-  render();
-}
-document.getElementById("tab-passes").onclick = () => { tab="passes"; render(); };
-document.getElementById("tab-identity").onclick = () => { tab="identity"; render(); };
-load();
-setInterval(load, 5000);
+async function loadReg(){ REG = await (await fetch("/api/registry")).json(); }
+async function loadRun(){ try{ RUN = await (await fetch("/api/run")).json(); }catch(e){} }
+
+document.getElementById("tab-passes").onclick = ()=>{ tab="passes"; editing=null; render(); };
+document.getElementById("tab-frags").onclick = ()=>{ tab="frags"; editing=null; render(); };
+document.getElementById("tab-loops").onclick = ()=>{ tab="loops"; editing=null; render(); };
+document.getElementById("tab-identity").onclick = ()=>{ tab="identity"; editing=null; render(); };
+
+document.addEventListener("focusin", e=>{ if(e.target.tagName==="TEXTAREA") editing = editing || e.target.id; });
+
+(async ()=>{ await Promise.all([loadReg(), loadRun()]); render(); })();
+setInterval(async ()=>{ if(editing) return; await loadRun(); if(!editing) render(); }, 10000);
 </script>
 </body>
 </html>

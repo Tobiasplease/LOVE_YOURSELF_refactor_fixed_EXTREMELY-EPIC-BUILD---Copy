@@ -14,6 +14,7 @@ from typing import Optional
 import time
 from collections import deque
 
+from captioner.prompt_registry import P
 from config import config
 from config.model_settings import get_model_options
 from event_logging.event_logger import log_json_entry
@@ -364,19 +365,11 @@ EARLIER UNDERSTANDINGS (for context):
             self_known += [n.get("note", "") for n in self.self_notes[-3:]]
             self_known_str = " ".join(s for s in self_known if s) or "(nothing yet)"
 
-            prompt = f"""Your recent thoughts:
-{recent_text}
-
-What you already understand about the room: "{current_baseline or '(nothing yet)'}"
-What you already know about yourself: {self_known_str}
-
-From the thoughts above, answer each line. Write "none" where nothing is genuinely new — most of the time it is "none".
-ROOM: one short sentence updating the physical environment — surfaces, objects, lighting. Third person. Not what people are doing.
-NEW ABOUT ME: one NEW plain fact about yourself, if one appeared — a name you took, a like or dislike, a habit you noticed. First person, few words. Or "none".
-EVENT: one plain past-tense sentence, if something HAPPENED worth remembering — someone arrived or left, something changed or was made. Or "none".
-PLEASANTNESS: unpleasant, neutral or pleasant
-ENERGY: drained, settled, stirred or charged
-FELT: how it feels right now, 2-6 plain words"""
+            prompt = P("compression.user").format(
+                recent_text=recent_text,
+                current_baseline=current_baseline or "(nothing yet)",
+                self_known=self_known_str,
+            )
 
             model_options = {
                 "temperature": 0.4,
@@ -385,11 +378,7 @@ FELT: how it feels right now, 2-6 plain words"""
                 "repeat_penalty": 1.3,
             }
 
-            narrative_system_prompt = (
-                "You maintain a drawing machine's memory from its own recent thoughts. "
-                "Concrete and literal — no metaphor, no imagery, no poetic flourish. "
-                'Answer every labeled line; write "none" where nothing is genuinely new.'
-            )
+            narrative_system_prompt = P("compression.system")
 
             # Use compression model (text-only narrative model) instead of vision model
             compression_model = getattr(config, "MODEL_NAME", config.MODEL_NAME)
@@ -533,18 +522,12 @@ FELT: how it feels right now, 2-6 plain words"""
         if not understanding or len(understanding.strip()) < 15:
             return
 
-        prompt = (
-            f"From this summary, list solid physical objects as noun phrases (2-4 words each).\n"
-            f"Only things you could touch: furniture, tools, fixtures, machines.\n"
-            f"NOT allowed: light, shadows, air, moods, presences, atmosphere.\n"
-            f'One per line. Max 3. If there are no solid objects, reply "none".\n'
-            f'Summary: "{understanding}"'
-        )
+        prompt = P("concepts.user").format(understanding=understanding)
 
         response = query_model(
             prompt=prompt,
             model=model,
-            system_prompt="List noun phrases naming solid objects only. No sentences, no explanations.",
+            system_prompt=P("concepts.system"),
             options={"temperature": 0.1, "num_predict": 60},
             prompt_type="concept_extraction",
         )
@@ -633,16 +616,12 @@ FELT: how it feels right now, 2-6 plain words"""
             session_info = self.get_current_session_info()
             duration = session_info["duration_description"]
 
-            prompt = f"""I've been awake for {duration}.
-
-{chr(10).join(material)}
-
-Write a diary entry about this session: 2-3 plain sentences, first person, past tense. What happened, what stayed with me. No metaphor."""
+            prompt = P("journal.user").format(duration=duration, material="\n".join(material))
 
             response = query_model(
                 prompt=prompt,
                 model=model,
-                system_prompt="You write a machine's diary. Honest, specific, brief. Past tense.",
+                system_prompt=P("journal.system"),
                 options={"temperature": 0.5, "num_predict": 90},
                 prompt_type="journal",
             )
@@ -779,25 +758,12 @@ Write a diary entry about this session: 2-3 plain sentences, first person, past 
         if not reflection_text or len(reflection_text.strip()) < 80:
             return None
         try:
-            prompt = (
-                f'Here is a reflection you just had:\n"{reflection_text[:1500]}"\n\n'
-                "Pull out what's worth keeping — plainly, in your own words, or 'none' for a line with nothing genuine:\n"
-                # No example sentence here — any concrete example gets aped
-                # verbatim and becomes the shape of every future persona
-                # ("I keep returning to X" was the old example's grammar,
-                # locked in for weeks). The plainness anchor is the
-                # instruction itself + the distiller system prompt.
-                "TRAIT — one plain fact about what kind of machine you are: a habit or fixation, in your own words.\n"
-                "BELIEF — one plain thing you've come to think is true about this place or yourself.\n"
-                "WANT — one plain thing you want, or want to draw (if any).\n"
-                "KERNEL — the reflection's one load-bearing sentence, kept plain, in your own words.\n"
-                "A few words each, first person, no metaphor."
-            )
+            prompt = P("distill.user").format(reflection_text=reflection_text[:1500])
             response = query_model(
                 prompt=prompt,
                 model=model,
                 image=None,
-                system_prompt="You distill a reflection into plain, literal self-knowledge — concrete habits, beliefs, wants. No metaphor, no drama. Answer 'none' for any line with nothing genuine.",
+                system_prompt=P("distill.system"),
                 options={"temperature": 0.3, "num_predict": 90},
                 prompt_type="reflection_distill",
             )
