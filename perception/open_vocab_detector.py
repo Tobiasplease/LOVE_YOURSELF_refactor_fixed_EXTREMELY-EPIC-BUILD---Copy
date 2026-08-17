@@ -196,7 +196,14 @@ class OpenVocabDetectorThread(threading.Thread):
         overlapping a place confirmed self in the last BODY_SELF_REGION_TTL s
         at this pose drops with NO embed (arms don't teleport); (2) the embed
         budget is spent envelope-first — boxes in places the body can occupy
-        at this pose are exactly the ones worth checking — then by confidence."""
+        at this pose are exactly the ones worth checking — then by confidence.
+
+        Proprioceptive drop (same day, the 0.74 rooster-on-the-hand): while
+        the CNC is EXECUTING, the arm is certainly over the paper — the same
+        evidence the harvest trusts. Any box in the body envelope at this pose
+        drops on PLACE ALONE, no appearance vote: a confident wrong label
+        (hand+pencil reads as beak to CLIP) beats every floor, and appearance
+        is exactly the witness being fooled."""
         from config.config import BODY_SELF_CHECK_BUDGET, BODY_SELF_FILTER_DETECTIONS
 
         if not BODY_SELF_FILTER_DETECTIONS or not detections:
@@ -205,6 +212,13 @@ class OpenVocabDetectorThread(threading.Thread):
 
         if body_schema.gallery_size() == 0:
             return detections
+        drawing_now = False
+        try:
+            from utils.state_manager import state_manager
+
+            drawing_now = getattr(state_manager, "current_drawing_phase", None) == "executing"
+        except Exception:
+            pass
         h, w = frame.shape[0], frame.shape[1]
 
         def norm_box(d):
@@ -216,6 +230,10 @@ class OpenVocabDetectorThread(threading.Thread):
         ordered = sorted(detections, key=lambda d: (not body_schema.in_pose_envelope(norm_box(d), pan, tilt), -d["conf"]))
         for d in ordered:
             nb = norm_box(d)
+            if drawing_now and body_schema.in_pose_envelope(nb, pan, tilt):
+                body_schema.note_self_region(nb, pan, tilt)
+                print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (drawing, body envelope)")
+                continue
             if body_schema.in_recent_self_region(nb, pan, tilt):
                 print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (recent self region)")
                 continue
