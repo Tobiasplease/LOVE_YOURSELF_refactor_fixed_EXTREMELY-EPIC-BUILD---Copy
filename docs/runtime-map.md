@@ -528,6 +528,14 @@ self drop records a sticky self-region: for `BODY_SELF_REGION_TTL` 20s,
 any box overlapping that place at the same pose drops with NO embed
 ("recent self region" in the log). Arms don't teleport; the filter no
 longer flickers with the budget.
+Proprioceptive drop (same day — the 0.74 rooster on the drawing hand): a
+confident wrong label beats every floor, and the CLIP appearance vote is
+exactly the witness being fooled (hand+pencil reads as beak). While
+`current_drawing_phase == "executing"` the arm is certainly over the
+paper — the harvest's own evidence — so any box in the body envelope at
+this pose drops on PLACE ALONE ("drawing, body envelope" in the log),
+recording a sticky region that covers the 20s after the pen lifts too.
+Outside drawing, the two-factor test is unchanged.
 Consumption-edge gating (same day, second pass — the blue person box on the
 drawing hand persisted): machine.py now reads `cached_person_verdict()` (never
 computes — an embed in the main loop would hitch the servo physics; the
@@ -893,9 +901,15 @@ sheets; the SVG→gcode conversion was faithful, everything physical wasn't:
   un-thinned DSV, NO tone fills — the stroke-elegant reduction the artist
   judged best on the eval sheets. Slot: post-ComfyUI pre-GRBL, before
   finish_drawing_generation releases llama-server; frees ComfyUI's cache
-  first (it reloads every gen anyway). ~10-25s GPU, ~2-4min CPU fallback,
+  first (it reloads every gen anyway). ~10-35s GPU, ~2-4min CPU fallback,
   and every DSV failure falls through to the v2 skeleton walk. Eval sheets:
   debug/tone-centerliner-proto/engine_comparison_3way.png.
+  **Processing resolution (Aug 17)**: predict_s1's default 512 quartered the
+  1024 render's pixel area and silently dropped faint strokes/hatching
+  (missing-lines complaint: ink coverage 84.5%, broken contours on the
+  pointing-hand sheet). Now DSV_RESIZE_TO=768 (coverage 97.2%, 300→612
+  strokes, ~31s) with a VRAM ladder: 768 → 512 → CPU; 1024 does not fit
+  the 3090 (~23GB). A/B artifacts: scratchpad dsv_ab/ (session 6f7ab315).
   **GPU slot contract (Aug 12 night, artist's rule)**: llama-server must not
   start until g-code is FULLY generated; it runs alongside GRBL execution
   only. Enforced by is_generating_drawing: image_monitor RE-ARMS the 5-min
