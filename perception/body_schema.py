@@ -8,11 +8,15 @@ import time
 import numpy as np
 
 from config.config import (
+    BODY_ENRICH_MAX_FRAC,
+    BODY_ENRICH_MIN_SIM,
     BODY_GALLERY_SIZE,
     BODY_HARVEST_INTERVAL,
     BODY_POSE_TOLERANCE,
+    BODY_REGION_CONTAINMENT,
     BODY_REGION_OVERLAP,
     BODY_SCHEMA_ENABLED,
+    BODY_SELF_REGION_MAX_FRAC,
     BODY_SELF_REGION_TTL,
     BODY_SELF_STRICT,
     BODY_SELF_THRESHOLD,
@@ -89,29 +93,35 @@ class BodySchema:
         self._save()
 
     def in_pose_envelope(self, norm_box, pan, tilt):
-        """PLACE test alone, no embed: could the body occupy this image region
-        at this camera pose, judged by the harvested gallery?"""
+        """PLACE test alone, no embed: does this box lie WHERE the body is at
+        this camera pose? Containment-directed (Aug 17 flood fix): the
+        detection must sit mostly inside a reference — overlap-over-smaller
+        let a huge floor box 'contain' a small arm ref and claim the frame."""
         if norm_box is None or pan is None:
             return False
         with self.lock:
             refs = list(self._refs)
         for r in refs:
             if abs(r["pan"] - pan) < BODY_POSE_TOLERANCE and abs(r["tilt"] - tilt) < BODY_POSE_TOLERANCE:
-                if self._overlap(norm_box, r["box"]) > BODY_REGION_OVERLAP:
+                if self._containment(norm_box, r["box"]) > BODY_REGION_CONTAINMENT:
                     return True
         return False
 
     def note_self_region(self, norm_box, pan, tilt):
         """A patch just confirmed as self keeps its place self for a while —
-        the arms don't teleport. Session-only, feeds in_recent_self_region."""
+        the arms don't teleport. Session-only, feeds in_recent_self_region.
+        Oversized regions are refused: a 'self' bigger than a quarter of the
+        frame is a misfire, and storing it blankets the world."""
+        if (norm_box[2] - norm_box[0]) * (norm_box[3] - norm_box[1]) > BODY_SELF_REGION_MAX_FRAC:
+            return
         with self.lock:
             self._self_regions.append({"ts": time.time(), "box": list(norm_box), "pan": pan, "tilt": tilt})
             self._self_regions = self._self_regions[-24:]
 
     def in_recent_self_region(self, norm_box, pan, tilt):
-        """No-embed drop: overlaps a place confirmed self within the TTL at
-        (about) the same camera pose. This is what makes the self-filter
-        CONSISTENT instead of flickering with the per-pass embed budget."""
+        """No-embed drop: the box lies mostly inside a place confirmed self
+        within the TTL at (about) the same camera pose. This is what makes
+        the self-filter CONSISTENT instead of flickering with the budget."""
         now = time.time()
         with self.lock:
             regions = [r for r in self._self_regions if now - r["ts"] < BODY_SELF_REGION_TTL]
@@ -119,13 +129,17 @@ class BodySchema:
         for r in regions:
             if pan is not None and not (abs(r["pan"] - pan) < BODY_POSE_TOLERANCE and abs(r["tilt"] - tilt) < BODY_POSE_TOLERANCE):
                 continue
-            if self._overlap(norm_box, r["box"]) > BODY_REGION_OVERLAP:
+            if self._containment(norm_box, r["box"]) > BODY_REGION_CONTAINMENT:
                 return True
         return False
 
-    def is_self(self, bgr_crop, norm_box=None, pan=None, tilt=None):
+    def is_self(self, bgr_crop, norm_box=None, pan=None, tilt=None, enrich=False):
         """(is_self, similarity). Place+appearance when pose/box are given;
-        appearance-only falls back to the strict bar."""
+        appearance-only falls back to the strict bar. With enrich=True (the
+        detection filter during drawing), a high-similarity in-envelope
+        confirmation enrolls its own embedding as a new reference — the
+        gallery grows to cover the hand's actual places, under the strictest
+        conditions only (place-supported + proprioception + sim >= 0.80)."""
         if not BODY_SCHEMA_ENABLED:
             return None, 0.0
         with self.lock:
@@ -143,6 +157,23 @@ class BodySchema:
                 self._last_self_seen = time.time()
             if norm_box is not None:
                 self.note_self_region(norm_box, pan, tilt)
+            if enrich and in_envelope and best >= BODY_ENRICH_MIN_SIM and norm_box is not None:
+                area = (norm_box[2] - norm_box[0]) * (norm_box[3] - norm_box[1])
+                drawing = False
+                try:
+                    from utils.state_manager import state_manager
+
+                    drawing = getattr(state_manager, "current_drawing_phase", None) == "executing"
+                except Exception:
+                    pass
+                if drawing and area <= BODY_ENRICH_MAX_FRAC:
+                    with self.lock:
+                        if not any(float(emb @ r["emb"]) > 0.97 and self._overlap(list(norm_box), r["box"]) > 0.8 for r in self._refs):
+                            self._refs.append({"ts": time.time(), "emb": emb, "pan": pan, "tilt": tilt, "box": list(norm_box)})
+                            if len(self._refs) > BODY_GALLERY_SIZE:
+                                self._refs.pop(0)
+                            print(f"[BodySchema] Gallery enriched from confirmed self-drop ({len(self._refs)} refs)")
+                    self._save()
         return verdict, best
 
     def is_self_current_person(self):
@@ -205,6 +236,15 @@ class BodySchema:
         area_a = max(1e-6, (a[2] - a[0]) * (a[3] - a[1]))
         area_b = max(1e-6, (b[2] - b[0]) * (b[3] - b[1]))
         return (ix * iy) / min(area_a, area_b)
+
+    @staticmethod
+    def _containment(det, ref):
+        """Fraction of the DETECTION box inside the reference — directional,
+        so a big box containing a small ref scores near zero, not one."""
+        ix = max(0.0, min(det[2], ref[2]) - max(det[0], ref[0]))
+        iy = max(0.0, min(det[3], ref[3]) - max(det[1], ref[1]))
+        det_area = max(1e-6, (det[2] - det[0]) * (det[3] - det[1]))
+        return (ix * iy) / det_area
 
     @staticmethod
     def _current_frame_shape():

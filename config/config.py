@@ -308,6 +308,13 @@ BODY_GALLERY_SIZE = 60  # references kept (persistent; the body is stable across
 BODY_SELF_FILTER_DETECTIONS = True  # drop open-vocab detections matching the schema (max a few embeds per pass)
 BODY_SELF_CHECK_BUDGET = 6  # CLIP embeds per pass; envelope (place-match) boxes are checked first, then by confidence
 BODY_SELF_REGION_TTL = 20.0  # s; a patch dropped as self keeps its place self for this long (same pose) — no re-embed, no flicker
+# Aug 17 flood fix: overlap-over-smaller-box let a huge floor/table detection "contain" a small
+# arm ref and count as in-envelope — one wrong big box then blanketed the frame via sticky
+# regions. Envelope/sticky claims now require the DETECTION to lie mostly inside the reference.
+BODY_REGION_CONTAINMENT = 0.6  # min fraction of the detection box inside a ref/self-region to count as claimed
+BODY_SELF_REGION_MAX_FRAC = 0.25  # never store a sticky self-region bigger than this fraction of the frame
+BODY_ENRICH_MIN_SIM = 0.80  # gallery self-growth: only crops this similar enroll as new references
+BODY_ENRICH_MAX_FRAC = 0.15  # ...and only if smaller than this fraction of the frame (arms, not scenes)
 
 # --- Label audit: the self-correction loop (Aug 10 2026) ---
 # A wrong label looks healthy from the inside — "wire basket" firing on the

@@ -231,7 +231,9 @@ class OpenVocabDetectorThread(threading.Thread):
         for d in ordered:
             nb = norm_box(d)
             if drawing_now and body_schema.in_pose_envelope(nb, pan, tilt):
-                body_schema.note_self_region(nb, pan, tilt)
+                # place alone suffices while the arm is certainly out; no
+                # sticky note — proprioceptive drops are free every pass, and
+                # seeding regions from them once blanketed the frame
                 print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (drawing, body envelope)")
                 continue
             if body_schema.in_recent_self_region(nb, pan, tilt):
@@ -240,7 +242,7 @@ class OpenVocabDetectorThread(threading.Thread):
             if budget > 0:
                 budget -= 1
                 x1, y1, x2, y2 = d["box"]
-                is_self, sim = body_schema.is_self(frame[max(0, y1) : y2, max(0, x1) : x2], nb, pan, tilt)
+                is_self, sim = body_schema.is_self(frame[max(0, y1) : y2, max(0, x1) : x2], nb, pan, tilt, enrich=True)
                 if is_self:
                     print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (sim {sim:.2f})")
                     continue
