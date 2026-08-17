@@ -667,6 +667,13 @@ class Captioner(MemoryMixin):
     # A second figure appears" MID-entry, and one stored stamp breeds). The
     # dash requirement keeps honest time talk ("it's past 19:00 now") intact.
     _LOG_STAMP_ANY_RE = re.compile(r"\s*\b\d{1,2}:\d{2}\s*[—–-]\s*")
+    # Bare leading stamp (Aug 17, first 3.8 run): the 27B held the log genre
+    # loosely; 3.8 continues it faithfully and opens with the clock sans dash
+    # ("18:09 man in green shirt…"), which the dash-requiring strip missed —
+    # the gate then number_chain'd half the run's captions. Leading position
+    # is the disambiguator: a caption that OPENS with HH:MM is the render
+    # layer's job done by the mouth; mid-sentence time talk stays untouched.
+    _LOG_STAMP_LEAD_RE = re.compile(r"^\s*\d{1,2}:\d{2}\s+(?=\S)")
 
     # "Log entry:" label creep (July 31): the model dramatized the log genre
     # into a literal label, one stored instance bred through the stream, and
@@ -696,6 +703,7 @@ class Captioner(MemoryMixin):
         t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
         t = cls._COUNTDOWN_PREFIX_RE.sub("", t)
         t = cls._LOG_STAMP_ANY_RE.sub(" ", t)
+        t = cls._LOG_STAMP_LEAD_RE.sub("", t)
         t = cls._LOG_LABEL_RE.sub(" ", t)
         t = cls._STATUS_FIELD_RE.sub("", t.lstrip())
         return cls._HASHTAG_TAIL_RE.sub("", t).strip()
