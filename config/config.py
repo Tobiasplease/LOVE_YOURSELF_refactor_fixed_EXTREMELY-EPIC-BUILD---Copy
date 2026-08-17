@@ -116,6 +116,10 @@ OPEN_VOCAB_TERM_FLOORS = {
     "wire basket": 0.12,
     "book": 0.30,
     "cardboard box": 0.25,
+    # Worst offender (Aug 17): 2395 hits at EMA conf 0.32 while the real rooster wins
+    # at 0.66 even blurred — most firings are junk claiming arms/red blobs at the 0.15
+    # global floor. VLM audit agreed the patch wasn't a rooster (challenger_already_known).
+    "rooster figurine": 0.35,
 }
 OPEN_VOCAB_PERSON_OVERLAP_MAX = 0.5  # drop detections mostly inside a person bbox ("sculpted human head" matched a live person in Phase 0)
 OPEN_VOCAB_VOCABULARY = [
