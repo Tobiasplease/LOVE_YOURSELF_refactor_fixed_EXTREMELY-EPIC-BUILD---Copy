@@ -13,6 +13,7 @@ from config.config import (
     BODY_POSE_TOLERANCE,
     BODY_REGION_OVERLAP,
     BODY_SCHEMA_ENABLED,
+    BODY_SELF_REGION_TTL,
     BODY_SELF_STRICT,
     BODY_SELF_THRESHOLD,
     MOOD_SNAPSHOT_FOLDER,
@@ -36,6 +37,7 @@ class BodySchema:
         self._refs = []  # {ts, emb, pan, tilt, box} box normalized (x1,y1,x2,y2)/(w,h)
         self._last_harvest = 0.0
         self._last_self_seen = 0.0
+        self._self_regions = []  # {ts, box, pan, tilt} — recent confirmed-self places, session-only
         self._load()
 
     def gallery_size(self):
@@ -86,6 +88,41 @@ class BodySchema:
         print(f"[BodySchema] Harvested own-arm reference during drawing ({n} refs)")
         self._save()
 
+    def in_pose_envelope(self, norm_box, pan, tilt):
+        """PLACE test alone, no embed: could the body occupy this image region
+        at this camera pose, judged by the harvested gallery?"""
+        if norm_box is None or pan is None:
+            return False
+        with self.lock:
+            refs = list(self._refs)
+        for r in refs:
+            if abs(r["pan"] - pan) < BODY_POSE_TOLERANCE and abs(r["tilt"] - tilt) < BODY_POSE_TOLERANCE:
+                if self._overlap(norm_box, r["box"]) > BODY_REGION_OVERLAP:
+                    return True
+        return False
+
+    def note_self_region(self, norm_box, pan, tilt):
+        """A patch just confirmed as self keeps its place self for a while —
+        the arms don't teleport. Session-only, feeds in_recent_self_region."""
+        with self.lock:
+            self._self_regions.append({"ts": time.time(), "box": list(norm_box), "pan": pan, "tilt": tilt})
+            self._self_regions = self._self_regions[-24:]
+
+    def in_recent_self_region(self, norm_box, pan, tilt):
+        """No-embed drop: overlaps a place confirmed self within the TTL at
+        (about) the same camera pose. This is what makes the self-filter
+        CONSISTENT instead of flickering with the per-pass embed budget."""
+        now = time.time()
+        with self.lock:
+            regions = [r for r in self._self_regions if now - r["ts"] < BODY_SELF_REGION_TTL]
+            self._self_regions = regions[-24:]
+        for r in regions:
+            if pan is not None and not (abs(r["pan"] - pan) < BODY_POSE_TOLERANCE and abs(r["tilt"] - tilt) < BODY_POSE_TOLERANCE):
+                continue
+            if self._overlap(norm_box, r["box"]) > BODY_REGION_OVERLAP:
+                return True
+        return False
+
     def is_self(self, bgr_crop, norm_box=None, pan=None, tilt=None):
         """(is_self, similarity). Place+appearance when pose/box are given;
         appearance-only falls back to the strict bar."""
@@ -98,18 +135,14 @@ class BodySchema:
         emb = self._embed(bgr_crop)
         if emb is None:
             return None, 0.0
-        in_envelope = False
-        if norm_box is not None and pan is not None:
-            for r in refs:
-                if abs(r["pan"] - pan) < BODY_POSE_TOLERANCE and abs(r["tilt"] - tilt) < BODY_POSE_TOLERANCE:
-                    if self._overlap(norm_box, r["box"]) > BODY_REGION_OVERLAP:
-                        in_envelope = True
-                        break
+        in_envelope = self.in_pose_envelope(norm_box, pan, tilt)
         best = max(float(emb @ r["emb"]) for r in refs)
         verdict = best >= (BODY_SELF_THRESHOLD if in_envelope else BODY_SELF_STRICT)
         if verdict:
             with self.lock:
                 self._last_self_seen = time.time()
+            if norm_box is not None:
+                self.note_self_region(norm_box, pan, tilt)
         return verdict, best
 
     def is_self_current_person(self):

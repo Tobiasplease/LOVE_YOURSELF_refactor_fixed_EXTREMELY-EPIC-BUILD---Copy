@@ -179,6 +179,27 @@ Measure continuity with `debug/caption_metrics.py` — baseline (turns mode,
 run 7b951565): 12.4% opening repetition, 7.4% near-dups, 0.5% anaphoric
 openings.
 
+## Prompt registry + panel (Aug 17) — where the authored text now lives
+
+All hardcoded prompt TEXT for the caption loop (caption/memory/awakening
+system+user lines, reflection frame+subjects, compression/concepts/journal/
+distill prompts) lives in **`captioner/prompt_registry.py`** as named
+fragments; builders fetch it via `P("fragment.id")` at call time. Assembly
+logic (gates, modes, ordering) stays in the builders. The registry also
+declares the STORES (felt state, persona, desire, durable ledger, …) with
+their writer/reader passes — the feedback-loop map — and per-pass assembly
+manifests.
+
+**Live editing:** `prompt_panel/server.py` (port 8770) serves a browser UI —
+Passes (assembled template, block by block, editable), Fragments (the whole
+library), Loops (store → readers circuits), Identity. Edits are validated
+(placeholder-safe) and written to `config/prompt_overrides.json`
+(gitignored); `P()` mtime-checks it, so an edit lands on the machine's NEXT
+cycle without a restart. Canonical text in the registry is the git baseline;
+the panel marks overridden fragments and can revert. Drawing-chain passes
+(`stream_drawing_analysis` etc.) are NOT yet migrated — the panel lists them
+read-only with source pointers.
+
 ## Every line of the SYSTEM prompt and its source
 
 Torn down June 12 (north-star principles 1+2): situation only, no style
@@ -203,12 +224,12 @@ rules, no registers, no mood clause. Voice comes from content.
 
 | Line | Source | Health |
 |------|--------|--------|
-| situation — **REFLEXIVE FRAME July 28**: "drawing machine bolted… This is your inner voice — you keeping yourself company… The fragments that arrive between thoughts are your own senses reporting… When a question forms, it's you asking yourself" | static `_SITUATION` + monologue clause (genre only now: "Ongoing, plain, half-formed — a sentence or two…"), prompts.py | REWRITTEN July 28: the old five-negation solitude clause ("no one hears/answers/instructs/assists") invoked assistant vocabulary while denying it, and nothing told the model what the per-cycle user turns ARE — it inferred a speaker and bred "What do you think?" into full assistant mode. Now the incoming channel is named honestly (its own senses) and questions get an answer-path (own next look/thought — the PEN deliberately absent until drawing initiative is real; a frame must not promise agency the code doesn't grant). Outward hooks also admission-gated (`_OUTWARD_HOOKS` — storage, not mouth: say it once, never re-seed). Genre framing stays positive; NO "camera" language anywhere — it primes cinematography |
+| situation — **REFLEXIVE FRAME July 28**: "drawing machine bolted… This is your inner voice — you keeping yourself company… The fragments that arrive between thoughts are your own senses reporting… When a question forms, it's you asking yourself" | registry `situation.reflexive` (+ `situation.world` in world mode) + genre clause `genre.*` per STREAM_MODE — prompt_registry.py, assembled in prompts.py | REWRITTEN July 28: the old five-negation solitude clause ("no one hears/answers/instructs/assists") invoked assistant vocabulary while denying it, and nothing told the model what the per-cycle user turns ARE — it inferred a speaker and bred "What do you think?" into full assistant mode. Now the incoming channel is named honestly (its own senses) and questions get an answer-path (own next look/thought — the PEN deliberately absent until drawing initiative is real; a frame must not promise agency the code doesn't grant). Outward hooks also admission-gated (`_OUTWARD_HOOKS` — storage, not mouth: say it once, never re-seed). Genre framing stays positive; NO "camera" language anywhere — it primes cinematography |
 | persona storage gate | `_valid_self_fact` in context_compression.py — BOTH persona writers (self-synthesis AND core-facts SELF line) require first person, bar "the person"/reality-register | NEW June 12 — the core-facts path had no gate and stored "The person sits... holding an unpressed pen" (its own arm) as identity |
 | "You are between drawings at the moment." | state_manager drawing status (gated, never lies; absent while drawing) | NEW June 12 — without it the model narrated drawings that weren't happening. States the fact only; deliberately does NOT say what the machine is doing instead |
 | "Right now: {felt}." | the mood read's own phrase (July 10; the mood_to_feeling vector fallback was unreachable and was REMOVED Aug 12 — a held/stale phrase now means NO felt line, honest absence), sanitized ≤6 words. **GATED July 26** (`_felt_phrase_held_reason`): the phrase is held back — numbers kept — if it shares a content word (4-char stem) with the persona (one channel per fact) or re-reads the standing phrase's vocabulary inside `FELT_REBORE_SECONDS`=1800 (no self-renewing lease). The rooster run (b15516be) had felt "heavy, hesitant" + persona "…silence gets too heavy" put "heavy" in 41/41 system prompts, twice — the May/June verbatim-affect spiral rebuilt. Metaphor itself stays legal (artist's call). Verify: `[🫀] … (phrase held back: …)` lines | LIVE — was stuck on "calm" while the keyword mood engine flatlined; then the spiral fuel (July 26) |
 | persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | June 28: the WHOLE identity-feedback blob (self + current/historic desire + belief + discoveries) was reset to empty — it had saturated with one purple theme ("grid/silhouette/shadows") and `_synthesize_self_model` rebuilds self FROM the histories, so a partial clear re-grows it in ~10 min. place/people/drawings facts + journal preserved (backup: machine_identity.json.purple-bak). Will re-form from the now-elicited base voice — judge what it re-grows. NOTE: `_valid_self_fact` gate bars surveillance/reality words but NOT metaphor — "grid" walked through; metaphor gate is a Phase-2 item |
-| mode addition — now an ELICITATION ("What do you make of them being here?" / "Follow the thought you're already having…" / per mode incl. awakening) | mode selection, `_MODE_ADDITIONS` prompts.py | NEW June 28 — was a bare state clause ("You're aware of someone near you"). Per north-star Principle 2: names the KIND of thought (react/wonder/continue) so the model stops defaulting to literary description. Open question, no scripted mood/phrase, never restates the presence/desk fact (that's the user prompt). The base lever against purple drift |
+| mode addition — now an ELICITATION ("What do you make of them being here?" / "Follow the thought you're already having…" / per mode incl. awakening) | mode selection in prompts.py, text = registry `elicit.<mode>` | NEW June 28 — was a bare state clause ("You're aware of someone near you"). Per north-star Principle 2: names the KIND of thought (react/wonder/continue) so the model stops defaulting to literary description. Open question, no scripted mood/phrase, never restates the presence/desk fact (that's the user prompt). The base lever against purple drift |
 
 Mood engine note: the numeric mood vector no longer reaches the system
 prompt (mood clause deleted). The engine still runs and feeds servo/hand;
@@ -478,6 +499,15 @@ audit). Person tracker itself untouched. Seeded from real frames; verified
 5/5 verdicts (arm re-seen = self; artist standing in the arm region = not;
 wooden figure = not, saved by the place gate). Test/seeding:
 `debug/test_body_schema.py [--seed]`.
+Consistency rework (Aug 17 — rooster flickered over the arms all night):
+the old self-filter checked only the top-4 boxes by CONFIDENCE, so in a
+busy pass the arm's patch ranked 5th and sailed through unchecked. Now the
+embed budget (`BODY_SELF_CHECK_BUDGET` 6) is spent envelope-first (place-
+matching boxes are exactly the ones worth checking), and every confirmed
+self drop records a sticky self-region: for `BODY_SELF_REGION_TTL` 20s,
+any box overlapping that place at the same pose drops with NO embed
+("recent self region" in the log). Arms don't teleport; the filter no
+longer flickers with the budget.
 Consumption-edge gating (same day, second pass — the blue person box on the
 drawing hand persisted): machine.py now reads `cached_person_verdict()` (never
 computes — an embed in the main loop would hitch the servo physics; the
@@ -736,23 +766,36 @@ Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step commit
    the memory/present-conflation rule. The intent is stored as the memory
    entry's compressed_summary (the machine's own words, not ComfyUI prose)
    and logged as `prompt_type: drawing_intent`.
-2. **Render** — translation to a ComfyUI prompt. **REWRITTEN Aug 10**: the
-   old negation wall ("no shading, no fills… detail is lost") was echoed
-   verbatim into the Flux prompt, and the plotter-meta language correlated
-   with the LoRA's photographed-defocus mode while every drawing collapsed
-   to one sparse object. Constraints are now positive pen-and-ink craft
-   language (contour lines of varying weight, hatching/cross-hatching for
-   tone, tone = line density never washes), the render matches the
-   intention's REGISTER (small thing → focused study with white space;
-   scene → full composition with foreground/background depth), stays pinned
-   to the intention's own concrete nouns (may render the implied setting,
-   invents no new objects), and MUST NOT mention plotters/tracing/vectors/
-   machines in the emitted prompt. Temp 0.5, logged as
-   `prompt_type: drawing_render`. Fallback: prefix + intent. The intent
-   system prompt likewise frees register (close study or built-up scene)
-   and frames the materials as the sketchbook the decision comes from.
-   Inspect offline: `debug/test_drawing_intent_prompt.py`
-   assembles the real intent prompt from disk state, no model needed.
+2. **Render** — a FORMATTER, not a style authority. **REWRITTEN Aug 12-17
+   (blur diagnosis, memory: comfy-blur-diagnosis)**: the Aug 10 version
+   injected "crisp, high-contrast… pure-white background" boilerplate into
+   every prompt; the blur it fought turned out to be flux-dev's soft basin
+   around sparse subjects at guidance 4.0 (seed-decided), fixed by
+   COMFY_FLUX_GUIDANCE=2.5 — blur suppression is guidance's job, never the
+   prompt's. The formatter is now one short paragraph: the machine's own
+   words wherever they hold (its style/treatment words pass through — that
+   channel IS artistic growth), b/w line-art anchor, metaphor translated
+   into visibles ("feeling arrives as image, not explanation"), presence
+   not absence, adds nothing of its own, never mentions plotters/tracing/
+   vectors/machines. Medium truth lives UPSTREAM in _SITUATION ("You hold
+   one black ink pen: everything you make is line on white paper" — both
+   frames), so no stage ever imagines color (Aug 15: a finger rendered RED
+   because intent had never been told; body color-words beat the prefix).
+   TRIGGER_PROMPT reverted to the 2025 "impostor black and white sketch
+   line art " (the Jul 27 "sharp clean lines…stark white background"
+   prefix measurably worsened the blur era). Temp 0.5, logged as
+   `prompt_type: drawing_render`. Fallback: raw intent (observer register,
+   safe per 2025 evidence). Inspect offline:
+   `debug/test_drawing_intent_prompt.py` assembles the real intent prompt
+   from disk state, no model needed.
+3. **Post-queue echo (Aug 17: LLM summary call RETIRED)** — the old
+   `drawing_summary` call re-described the RENDER prompt and stored the
+   paraphrase as a second `drawing_intent` memory (every drawing remembered
+   twice, two voices). Now display line, `state_manager.current_drawing_prompt`,
+   and the `drawing_intent` memory entry all carry the REAL intent verbatim
+   (no LLM call). The memory write stays because the live
+   drawing-introspection caption mode reads that type ("Your recent
+   artistic expressions").
 
 LEGACY (kept for A/B: DRAWING_ANALYSIS_MODE="multi_step"): the 5-step
 context_rich_multi_step_drawing_analysis — env essay / emotion manufacture

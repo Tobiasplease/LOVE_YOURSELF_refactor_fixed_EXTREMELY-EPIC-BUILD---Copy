@@ -174,9 +174,16 @@ class OpenVocabDetectorThread(threading.Thread):
     def _drop_self_patches(frame, detections, pan, tilt):
         """The machine's own arms are not world: detections matching the body
         schema (place + appearance) are dropped before storage, so they never
-        reach the overlay, the registry, or the audit. Top boxes only — one
-        CLIP embed each, bounded per pass."""
-        from config.config import BODY_SELF_FILTER_DETECTIONS
+        reach the overlay, the registry, or the audit.
+
+        Consistency rework (Aug 17): the old top-4-by-confidence budget let the
+        arm slip through whenever its patch ranked 5th in a busy pass — the
+        rooster label flickered over the arms all night. Now (1) a box
+        overlapping a place confirmed self in the last BODY_SELF_REGION_TTL s
+        at this pose drops with NO embed (arms don't teleport); (2) the embed
+        budget is spent envelope-first — boxes in places the body can occupy
+        at this pose are exactly the ones worth checking — then by confidence."""
+        from config.config import BODY_SELF_CHECK_BUDGET, BODY_SELF_FILTER_DETECTIONS
 
         if not BODY_SELF_FILTER_DETECTIONS or not detections:
             return detections
@@ -185,14 +192,23 @@ class OpenVocabDetectorThread(threading.Thread):
         if body_schema.gallery_size() == 0:
             return detections
         h, w = frame.shape[0], frame.shape[1]
+
+        def norm_box(d):
+            x1, y1, x2, y2 = d["box"]
+            return (x1 / w, y1 / h, x2 / w, y2 / h)
+
         kept = []
-        checked = 0
-        for d in sorted(detections, key=lambda d: -d["conf"]):
-            if checked < 4:
-                checked += 1
+        budget = BODY_SELF_CHECK_BUDGET
+        ordered = sorted(detections, key=lambda d: (not body_schema.in_pose_envelope(norm_box(d), pan, tilt), -d["conf"]))
+        for d in ordered:
+            nb = norm_box(d)
+            if body_schema.in_recent_self_region(nb, pan, tilt):
+                print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (recent self region)")
+                continue
+            if budget > 0:
+                budget -= 1
                 x1, y1, x2, y2 = d["box"]
-                norm_box = (x1 / w, y1 / h, x2 / w, y2 / h)
-                is_self, sim = body_schema.is_self(frame[max(0, y1) : y2, max(0, x1) : x2], norm_box, pan, tilt)
+                is_self, sim = body_schema.is_self(frame[max(0, y1) : y2, max(0, x1) : x2], nb, pan, tilt)
                 if is_self:
                     print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (sim {sim:.2f})")
                     continue

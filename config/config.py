@@ -302,6 +302,8 @@ BODY_REGION_OVERLAP = 0.3  # min overlap (over smaller box) with an envelope rec
 BODY_HARVEST_INTERVAL = 20.0  # seconds between self-reference harvests while drawing
 BODY_GALLERY_SIZE = 60  # references kept (persistent; the body is stable across sessions)
 BODY_SELF_FILTER_DETECTIONS = True  # drop open-vocab detections matching the schema (max a few embeds per pass)
+BODY_SELF_CHECK_BUDGET = 6  # CLIP embeds per pass; envelope (place-match) boxes are checked first, then by confidence
+BODY_SELF_REGION_TTL = 20.0  # s; a patch dropped as self keeps its place self for this long (same pose) — no re-embed, no flicker
 
 # --- Label audit: the self-correction loop (Aug 10 2026) ---
 # A wrong label looks healthy from the inside — "wire basket" firing on the
