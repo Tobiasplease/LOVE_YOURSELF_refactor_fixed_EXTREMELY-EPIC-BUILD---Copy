@@ -25,6 +25,12 @@ import numpy as np
 
 DSV_HOME = os.getenv("DSV_HOME", "/home/impostor/Deep-Sketch-Vectorization")
 DSV_PYTHON = os.path.join(DSV_HOME, ".venv", "bin", "python")
+# Processing resolution (Aug 17 A/B on the pointing-hand sheet): predict_s1's
+# default 512 quarters the pixel area of a 1024 render — ink coverage 84.5%,
+# broken contours, dropped hatching. 768 doubles the area back: coverage
+# 97.2%, 300→612 strokes, 11s→31s. 1024 does NOT fit the 3090 (needs ~23GB).
+# Ladder below falls back to 512 when VRAM is tight, then to CPU.
+DSV_RESIZE_TO = int(os.getenv("DSV_RESIZE_TO", 768))
 DSV_GPU_TIMEOUT_S = 180
 DSV_CPU_TIMEOUT_S = 240  # downscaled-512 CPU pass measures ~2min; beyond this the skeleton walk is the better outcome
 
@@ -73,6 +79,9 @@ def _subprocess_env() -> dict:
             env["CUDA_VISIBLE_DEVICES"] = pristine
     except Exception:
         env.pop("CUDA_VISIBLE_DEVICES", None)
+    # Fragmentation headroom for the 768 rung (measured Aug 17: reserved-but-
+    # unallocated blocks were most of the 1024 OOM's shortfall).
+    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     return env
 
 
@@ -136,22 +145,25 @@ def dsv_stroke_polylines(stroke_input: np.ndarray, free_gpu: bool = True, thin: 
             _free_comfyui()
         orig_long = max(stroke_input.shape[:2])
         # The artist's preference (Aug 12): wait longer for the REAL engine
-        # rather than fall back — two cuda attempts, each behind a fresh
-        # VRAM wait, before cpu is even considered. Every first-night
-        # fallback traced to a fixable conflict, not to DSV itself.
+        # rather than fall back — cuda attempts, each behind a fresh VRAM
+        # wait, before cpu is even considered. Aug 17: attempts now walk a
+        # resolution ladder (DSV_RESIZE_TO, then 512) — 768 needs more VRAM
+        # than 512's ~3.5GB, and a tight card should cost resolution, not
+        # send the drawing to the 7-minute CPU path.
         cuda_ok = False
-        for attempt in (1, 2):
-            _wait_for_vram()
+        rungs = [DSV_RESIZE_TO] + ([512] if DSV_RESIZE_TO > 512 else [])
+        for attempt, res in enumerate(rungs, start=1):
+            _wait_for_vram(min_free_mb=9000 if res > 512 else 4500)
             try:
-                subprocess.run(base_cmd + ["-d", "cuda"], cwd=DSV_HOME, timeout=DSV_GPU_TIMEOUT_S,
-                               check=True, capture_output=True, env=env)
+                subprocess.run(base_cmd + ["-d", "cuda", "--resize_to", str(res)], cwd=DSV_HOME,
+                               timeout=DSV_GPU_TIMEOUT_S, check=True, capture_output=True, env=env)
                 cuda_ok = True
                 break
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
                 err_tail = ""
                 if isinstance(e, subprocess.CalledProcessError) and e.stderr:
                     err_tail = e.stderr.decode(errors="ignore")[-400:]
-                print(f"[dsv] cuda attempt {attempt} failed ({type(e).__name__}); stderr tail: {err_tail!r}")
+                print(f"[dsv] cuda attempt {attempt} (resize_to={res}) failed ({type(e).__name__}); stderr tail: {err_tail!r}")
                 shutil.rmtree(os.path.join(tmp, "svg_full"), ignore_errors=True)
         if not cuda_ok:
             # CPU fallback. predict_s1 ignores its own resize on cpu (full-res

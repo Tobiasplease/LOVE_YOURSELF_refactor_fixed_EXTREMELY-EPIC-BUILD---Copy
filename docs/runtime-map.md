@@ -910,6 +910,17 @@ sheets; the SVG→gcode conversion was faithful, everything physical wasn't:
   pointing-hand sheet). Now DSV_RESIZE_TO=768 (coverage 97.2%, 300→612
   strokes, ~31s) with a VRAM ladder: 768 → 512 → CPU; 1024 does not fit
   the 3090 (~23GB). A/B artifacts: scratchpad dsv_ab/ (session 6f7ab315).
+  **Physical detail chain (Aug 17, pointing-hand forensics)**: execution was
+  clean (revive-link holding; only the chronic post-completion G54 homing
+  timeout) and feed is fine — the physical losses were the 512 vectorization
+  (above) + sub-mm hatching ticks not landing. GRBL_PEN_SETTLE_DWELL_S
+  0.12→0.2 (~+30s/drawing). WARP_INK_SCALE=0.85 (config): ink shrinks about
+  the window center — artist wants slightly smaller sheets; also keeps ink
+  off the extrapolated TPS edge strips. Thick-marker renders worm-maze DSV
+  (--thin can't split fused fat strokes) → generation now biased fine-tipped:
+  "fine-tipped black ink pen / thin line" in both situation frames + formatter
+  anchor. vpype tolerances (0.1/0.05mm at ~5x warp upscale) noted as the next
+  cleanup lever, not yet changed.
   **GPU slot contract (Aug 12 night, artist's rule)**: llama-server must not
   start until g-code is FULLY generated; it runs alongside GRBL execution
   only. Enforced by is_generating_drawing: image_monitor RE-ARMS the 5-min

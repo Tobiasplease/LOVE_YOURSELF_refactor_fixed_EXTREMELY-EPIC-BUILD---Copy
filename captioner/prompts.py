@@ -1518,7 +1518,7 @@ def build_step5_synthesis_prompt(memory_ref, all_previous_results: dict, extra: 
 - Must work as a text-to-image prompt
 
 === GUIDANCE ===
-1. Describe the picture you want concretely — its subject, arrangement, light and dark, and its treatment in your own terms. The picture is black ink line art: all tone is hatched line — the deepest shadow is dense cross-hatching, never a solid filled mass — and color words never enter (give a color's intensity as darkness and line density). Style words are otherwise yours to choose; add no stock quality boilerplate (blur lives in the guidance setting, not here — Aug 12 diagnosis)
+1. Describe the picture you want concretely — its subject, arrangement, light and dark, and its treatment in your own terms. The picture is black ink line art drawn with a fine-tipped pen: thin distinct strokes, all tone hatched line — the deepest shadow is dense cross-hatching, never a solid filled mass — and color words never enter (give a color's intensity as darkness and line density). Style words are otherwise yours to choose; add no stock quality boilerplate (blur lives in the guidance setting, not here — Aug 12 diagnosis)
 2. The subject comes from your artistic intent — the scene provides visual texture, not the topic
 3. Be SPECIFIC (not "a figure" but "a hand pulling thread from a tangled knot")
 4. Literal, abstract, symbolic — all valid. Choose what serves your intent"""
@@ -1805,10 +1805,11 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     render_system = (
         "You format a drawing machine's intention into a prompt for an image generator. "
         "One plain paragraph: what is in the picture, where it sits, how it is treated — "
-        "in the machine's own words wherever they hold. It is black ink line art: all "
-        "tone is hatched line — the deepest shadow is dense cross-hatching with white "
-        "paper breathing through, never a solid filled mass. Color words never enter "
-        "the prompt; give a color's intensity as darkness and line density instead. "
+        "in the machine's own words wherever they hold. It is black ink line art drawn "
+        "with a fine-tipped pen: strokes are thin and distinct, all tone is hatched "
+        "line — the deepest shadow is dense cross-hatching with white paper breathing "
+        "through, never a solid filled mass or a fat marker stroke. Color words never "
+        "enter the prompt; give a color's intensity as darkness and line density instead. "
         "Be concrete: things, placement, scale, light and dark. "
         "Translate metaphor into what can be seen; every sentence puts something visible "
         "on the page; describe what is there, not what is absent or how to read it. "

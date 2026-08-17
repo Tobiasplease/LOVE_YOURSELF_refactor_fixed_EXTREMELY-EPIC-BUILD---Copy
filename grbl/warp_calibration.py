@@ -479,6 +479,16 @@ class WarpCalibration:
         span_y = max(1e-9, max_y - min_y)
         u = (float(xm.group(1)) - min_x) / span_x
         v = (float(ym.group(1)) - min_y) / span_y
+        # WARP_INK_SCALE (Aug 17): shrink the drawing about the window center —
+        # artist wants slightly smaller sheets, and ink stays off the
+        # extrapolated calibration strips at the perimeter.
+        try:
+            from config.config import WARP_INK_SCALE as _ink_scale
+        except Exception:
+            _ink_scale = 1.0
+        if _ink_scale != 1.0:
+            u = 0.5 + (u - 0.5) * _ink_scale
+            v = 0.5 + (v - 0.5) * _ink_scale
         px, py = self.paper_target(min(1, max(0, u)), min(1, max(0, v)), aspect=span_x / span_y)
         cx, cy = self.to_command(px, py)
         line = re.sub(r"X[-+]?\d*\.?\d+", f"X{cx:.3f}", gcode_line, count=1, flags=re.IGNORECASE)
