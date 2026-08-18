@@ -17,7 +17,9 @@ import time
 # steps after that (a mid-run step froze run 980f6e82 for what would have
 # been 51 days). utils/clock_guard is stdlib-only, safe this early.
 from utils.clock_guard import guard_clock
+from utils.single_instance import refuse_second_machine
 
+refuse_second_machine()
 guard_clock()
 
 import cv2

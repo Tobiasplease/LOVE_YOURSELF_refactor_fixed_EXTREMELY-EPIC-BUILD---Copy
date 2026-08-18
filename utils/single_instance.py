@@ -1,33 +1,39 @@
-"""One machine per body.
+"""Refuse to start a second machine. Twice now (July's swallowed SIGINT, and
+Aug 18: a restart while the old process still held camera+serial) two
+machines have raced — the new one starves silently after two log entries
+while the old one keeps the body. Pidfile + /proc liveness check; a stale
+pidfile (dead pid, or reused by something else) never blocks."""
 
-Two machine.py processes writing the same serial ports interleave bytes and
-the servos glitch (July 28: a forgotten login autostart ran a hidden copy in
-tmux for months). flock on a pidfile: the second instance exits with a clear
-message instead of fighting for the hardware. The kernel releases the lock
-when the process dies, so crash-restart loops keep working.
-"""
-
-import fcntl
 import os
 import sys
 
-LOCK_PATH = os.getenv("MACHINE_LOCK_PATH", "/tmp/love_yourself_machine.lock")  # env override: tests run beside a live machine
-_lock_file = None  # held for the life of the process
+PIDFILE = "/tmp/love_yourself_machine.pid"
 
 
-def claim_machine_or_exit():
-    global _lock_file
-    _lock_file = open(LOCK_PATH, "a+")
+def refuse_second_machine():
     try:
-        fcntl.flock(_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        _lock_file.seek(0)
-        holder = _lock_file.read().strip() or "unknown pid"
-        print(f"[LOCK] machine.py is already running ({holder}) — exiting.")
-        print("[LOCK] Two machines on one body garble the serial ports.")
-        print("[LOCK] Find the other: tmux ls; ps aux | grep machine.py")
-        sys.exit(1)
-    _lock_file.seek(0)
-    _lock_file.truncate()
-    _lock_file.write(f"pid {os.getpid()}")
-    _lock_file.flush()
+        if os.path.exists(PIDFILE):
+            try:
+                pid = int(open(PIDFILE).read().strip())
+            except Exception:
+                pid = 0
+            if pid and pid != os.getpid():
+                try:
+                    with open(f"/proc/{pid}/cmdline", "rb") as f:
+                        cmd = f.read().replace(b"\x00", b" ").decode(errors="replace")
+                except FileNotFoundError:
+                    cmd = ""
+                if "machine.py" in cmd:
+                    print("\n" + "!" * 70)
+                    print(f"[MACHINE] ⚠ Another machine.py is ALREADY RUNNING (pid {pid}).")
+                    print("[MACHINE] Two machines race for the camera and serial ports — the")
+                    print("[MACHINE] new one starves silently. Stop the old one first:")
+                    print(f"[MACHINE]   kill {pid}   # then verify: pgrep -f machine.py")
+                    print("!" * 70 + "\n")
+                    sys.exit(1)
+        with open(PIDFILE, "w") as f:
+            f.write(str(os.getpid()))
+    except SystemExit:
+        raise
+    except Exception:
+        pass  # the guard must never block a legitimate start
