@@ -315,6 +315,25 @@ BODY_REGION_CONTAINMENT = 0.6  # min fraction of the detection box inside a ref/
 BODY_SELF_REGION_MAX_FRAC = 0.25  # never store a sticky self-region bigger than this fraction of the frame
 BODY_ENRICH_MIN_SIM = 0.80  # gallery self-growth: only crops this similar enroll as new references
 BODY_ENRICH_MAX_FRAC = 0.15  # ...and only if smaller than this fraction of the frame (arms, not scenes)
+# The promoted self-zone (Aug 17): while the CNC EXECUTES the arms own this normalized
+# frame region (x1,y1,x2,y2) — an object-sized box mostly inside it is the body, no
+# gallery or CLIP needed. Explicit proprioception: the learned refs couldn't cover the
+# raised hand and the appearance vote is what gets fooled. Size-capped so big background
+# boxes (floor, table, curtain) can never qualify.
+BODY_DRAWING_SELF_ZONE = (0.05, 0.45, 1.0, 1.0)
+BODY_DRAWING_ZONE_MAX_FRAC = 0.2  # only boxes smaller than this fraction of the frame drop via the zone
+
+# --- Effigy memory (Aug 17): still, faceless person-shapes are not people ---
+# The legless floor robot fires the YOLO person tracker constantly ("child" in
+# captions). Discriminator: TIME — a real person cannot hold a pixel-identical
+# pose for EFFIGY_STILL_S. Enrolled effigies veto the person state at their
+# place; a face there evicts instantly (face evidence always wins). NOTE: if
+# the effigy itself moves (servos), stillness never accumulates — that case
+# needs appearance enrollment instead (debug seeding, not built yet).
+EFFIGY_ENABLED = True
+EFFIGY_STILL_S = 600.0  # s a faceless person-box must hold still to enroll
+EFFIGY_MATCH_IOU = 0.6  # box IoU to count as "the same place"
+EFFIGY_TTL_S = 7200.0  # s unseen before an effigy is forgotten (things get moved)
 
 # --- Label audit: the self-correction loop (Aug 10 2026) ---
 # A wrong label looks healthy from the inside — "wire basket" firing on the

@@ -1426,7 +1426,21 @@ try:
                 person_is_self = _verdict is True
             except Exception:
                 person_is_self = False
+        # Effigy veto: a faceless person-shape that has held perfectly still
+        # for minutes (the legless floor robot, the sweater doll) is not a
+        # person — real people can't do that. A face at its place evicts it.
+        person_is_effigy = False
         if "person" in labels and not person_is_self:
+            try:
+                from perception.effigy_memory import effigy_memory
+
+                _eb = DetectionMemory.get_person_bbox()
+                if _eb:
+                    _nb = (_eb[0] / w, _eb[1] / h, _eb[2] / w, _eb[3] / h)
+                    person_is_effigy = effigy_memory.observe(_nb, face_present=best_box is not None)
+            except Exception:
+                person_is_effigy = False
+        if "person" in labels and not person_is_self and not person_is_effigy:
             raw_bbox = DetectionMemory.get_person_bbox()
             person_detection.update_yolo_detection(True, DetectionMemory.get_person_confidence() or 0.8, bbox=raw_bbox)
         else:
@@ -1473,8 +1487,8 @@ try:
             detection={
                 "face": best_box is not None,
                 "face_frac": _face_frac,
-                "person": ("person" in labels) and not own_body_likely,
-                "person_count": 0 if own_body_likely else DetectionMemory.get_person_count(),
+                "person": ("person" in labels) and not own_body_likely and not person_is_effigy,
+                "person_count": 0 if (own_body_likely or person_is_effigy) else DetectionMemory.get_person_count(),
                 "track_id": DetectionMemory.get_best_track_id(),
                 "pan": _cam_pan,
                 "tilt": _cam_tilt,

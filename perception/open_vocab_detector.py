@@ -228,12 +228,24 @@ class OpenVocabDetectorThread(threading.Thread):
         kept = []
         budget = BODY_SELF_CHECK_BUDGET
         ordered = sorted(detections, key=lambda d: (not body_schema.in_pose_envelope(norm_box(d), pan, tilt), -d["conf"]))
+        zone_drop = None
+        if drawing_now:
+            from config.config import BODY_DRAWING_SELF_ZONE, BODY_DRAWING_ZONE_MAX_FRAC
+            from perception.body_schema import BodySchema
+
+            def zone_drop(nb):
+                if (nb[2] - nb[0]) * (nb[3] - nb[1]) > BODY_DRAWING_ZONE_MAX_FRAC:
+                    return False
+                return BodySchema._containment(nb, BODY_DRAWING_SELF_ZONE) > 0.6
+
         for d in ordered:
             nb = norm_box(d)
+            if zone_drop is not None and zone_drop(nb):
+                # the promoted desk zone: while executing, an object-sized box
+                # over the desk IS the body — no gallery, no CLIP, no cache
+                print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (drawing, desk zone)")
+                continue
             if drawing_now and body_schema.in_pose_envelope(nb, pan, tilt):
-                # place alone suffices while the arm is certainly out; no
-                # sticky note — proprioceptive drops are free every pass, and
-                # seeding regions from them once blanketed the frame
                 print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (drawing, body envelope)")
                 continue
             if body_schema.in_recent_self_region(nb, pan, tilt):
