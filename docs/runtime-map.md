@@ -533,9 +533,33 @@ confident wrong label beats every floor, and the CLIP appearance vote is
 exactly the witness being fooled (hand+pencil reads as beak). While
 `current_drawing_phase == "executing"` the arm is certainly over the
 paper — the harvest's own evidence — so any box in the body envelope at
-this pose drops on PLACE ALONE ("drawing, body envelope" in the log),
-recording a sticky region that covers the 20s after the pen lifts too.
+this pose drops on PLACE ALONE ("drawing, body envelope" in the log).
 Outside drawing, the two-factor test is unchanged.
+Flood fix + promoted desk zone (same day, two rounds): overlap-over-
+smaller-box let a huge floor detection "contain" a small arm ref, count
+as in-envelope, and blanket the frame via sticky regions — envelope and
+sticky claims are now containment-directed (detection ≥60% inside the
+ref, `BODY_REGION_CONTAINMENT`), sticky regions >25% frame are refused,
+and proprioceptive drops never seed them. Then the reverse failure: the
+3 bottom-strip refs can't contain the raised mid-frame hand, so nothing
+dropped at all. Answer (artist's call — promote self explicitly):
+`BODY_DRAWING_SELF_ZONE` — while EXECUTING an object-sized box (≤20%
+frame, `BODY_DRAWING_ZONE_MAX_FRAC`) mostly inside the desk region IS
+the body, no gallery/CLIP needed ("drawing, desk zone" in the log);
+background can never qualify (size cap + containment). The gallery also
+self-enriches from CLIP-confirmed drops (sim ≥0.80, in-envelope, while
+executing, ≤15% frame) so the envelope learns the hand's places.
+
+**Effigy memory (Aug 17: EFFIGY_ENABLED, `perception/effigy_memory.py`).**
+The legless floor robot fires the YOLO person tracker constantly ("child"
+in captions). Discriminator is TIME: a faceless person-box that holds
+pixel-still for `EFFIGY_STILL_S` (10 min) is not a person — real people
+can't. Enrolled effigies (persisted `event_log/effigy_memory.json`) veto
+the person state AND the frame-buffer presence flag at their place
+(machine.py, beside the body-schema veto); a face there evicts instantly
+(face evidence always wins); 2h unseen expires. Known limit (config
+comment): an effigy that itself moves never accumulates stillness — that
+case needs appearance seeding, not built yet.
 Consumption-edge gating (same day, second pass — the blue person box on the
 drawing hand persisted): machine.py now reads `cached_person_verdict()` (never
 computes — an embed in the main loop would hitch the servo physics; the
