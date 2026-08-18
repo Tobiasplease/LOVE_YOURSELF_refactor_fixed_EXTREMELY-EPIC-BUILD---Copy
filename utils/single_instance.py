@@ -37,3 +37,9 @@ def refuse_second_machine():
         raise
     except Exception:
         pass  # the guard must never block a legitimate start
+
+
+# Two sessions built this guard concurrently on Aug 18 under two names, and
+# one commit clobbered the other's file — every boot then died on the line-95
+# ImportError. Both names stay valid; calling twice is harmless (own pid).
+claim_machine_or_exit = refuse_second_machine
