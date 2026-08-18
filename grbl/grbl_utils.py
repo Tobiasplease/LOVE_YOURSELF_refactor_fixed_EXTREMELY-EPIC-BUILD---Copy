@@ -1543,6 +1543,21 @@ Respond with 2-3 sentences of honest self-reflection about your artwork."""
         )
         hook_completed_successfully = True  # Continue anyway
 
+    # Step 4.6 (Aug 18 race fix): register the completion BEFORE the executing
+    # flag clears. The trigger used to evaluate in the ~10s gap (port probing)
+    # between Step 5 and the caller's registration and fire on a want that was
+    # seconds from being spent — a back-to-back drawing with a stale reason.
+    # register_drawing has a 60s reentry guard, so the caller's late call
+    # stays as belt-and-braces.
+    try:
+        from utils.state_manager import state_manager as _sm
+
+        _cap = getattr(_sm, "captioner", None)
+        if _cap is not None and hasattr(_cap, "drawing"):
+            _cap.drawing.register_drawing(_sm.current_drawing_prompt or getattr(_sm, "last_completed_drawing_prompt", None) or "Unknown drawing")
+    except Exception as _e:
+        print(f"[⚠️] Early drawing registration failed: {_e}")
+
     # Step 5: Clear CNC execution state AFTER hook completes to allow proper coordination
     if hook_completed_successfully:
         try:

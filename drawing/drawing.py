@@ -352,6 +352,14 @@ class DrawingController:
     def register_drawing(self, prompt: str) -> None:
         from config.config import DRAWING_MAX_INTERVAL
 
+        # Called from TWO sites since Aug 18: before the executing flag clears
+        # (race fix — the trigger once fired in the 10s gap between flag-clear
+        # and registration, on a want seconds from being spent) and the legacy
+        # post-ritual site. Collapse the double.
+        if time.time() - getattr(self, "_last_registered_at", 0.0) < 60:
+            return
+        self._last_registered_at = time.time()
+
         self.last_drawing_time = time.time()
         self.last_prompt = prompt
         self.last_drawing_prompt = prompt
