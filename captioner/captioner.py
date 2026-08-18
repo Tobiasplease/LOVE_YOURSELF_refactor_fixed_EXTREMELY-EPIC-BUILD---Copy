@@ -1861,6 +1861,14 @@ class Captioner(MemoryMixin):
         # that cost is accepted, and captions black out during ComfyUI
         # generation anyway. Salience still shapes prompts, not this gate.
 
+        # Stamp the check time on EVERY evaluation, pass or wait. Under the
+        # formula (which always fired) this only ever stamped on a pass; under
+        # desire mode waits are normal, and the old placement re-evaluated
+        # every caption cycle — 51 evaluations in one evening run (Aug 17),
+        # each printing the formula shadow and writing a log entry. One
+        # evaluation per DRAWING_INTERVAL is the intended cadence.
+        self.last_drawing_check_time = now
+
         # STATE-MOTIVATED EVALUATION
         # Get current system state for decision
         if not CLEAN_LLM_OUTPUT:
@@ -1875,14 +1883,8 @@ class Captioner(MemoryMixin):
         )
 
         if not should_draw:
-            print(
-                f"[🎨 CHECK] State evaluation: NOT motivated (mood={self.current_mood:.2f}, novelty={self.novelty_score:.2f}, boredom={self.boredom:.2f})"
-            )
-            return
+            return  # the trigger_decision log already carries the wait + reason
 
-        # Update check time ONLY after state motivation passes
-        # This allows retry on next cycle if not motivated yet
-        self.last_drawing_check_time = now
         if not CLEAN_LLM_OUTPUT:
             print(f"[🎨] ✨ State-motivated drawing decision: DRAW!")
 
