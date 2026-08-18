@@ -803,6 +803,19 @@ The monologue always carries time-since-last-drawing (system prompt,
 legible to the machine. Cutover evidence: 5 shadow days, formula 26/26
 drew, shadow 7/26 with every refusal explainable.
 
+**THE DRIVE (Aug 18, shadow phase — docs/drawing-drive-plan.md).** Desire
+mode proved honest but clockwork-with-extra-steps (the ecology regrows a
+drawing-want within minutes of every spend, so fires land at the floor).
+Artist directive: no timers at all — an energy. `drawing/drive.py`:
+continuous level charged per-hour by arousal (mood_vector[1], injected in
+machine.py — never the 5-label ladder) + a standing drawing-want, discharged
+to zero by physical completion, monotonic-clock only, persisted in
+event_log/drawing_drive.json, boot-seeded 0.9 (testing era). Currently
+SHADOW: every trigger_decision logs `drive_level`; tune DRIVE_*_PER_H env
+knobs against real days, then `DRAWING_TRIGGER_MODE=drive` makes it the
+decider (no floor/ceiling/age gate — only the hardware gates remain).
+Proof: debug/test_drawing_drive.py.
+
 ## Drawing prompt generation (July 10: DRAWING_ANALYSIS_MODE="stream"; Aug 10: stocktake beat + register freedom)
 
 Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step committee:

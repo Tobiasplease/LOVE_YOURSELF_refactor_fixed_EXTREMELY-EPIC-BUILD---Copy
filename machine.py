@@ -698,6 +698,9 @@ else:
 debug_print("Initializing captioner", "INIT")
 captioner = Captioner()
 captioner.load_prior_session_caption()  # Load last thought from prior session for awakening
+# The drawing drive charges from the continuous mood vector (arousal), same
+# injection pattern as the kinetic bus — never the 5-label ladder
+captioner.drawing.drive.get_arousal = lambda: mood_engine.mood_vector[1]
 _global_captioner = captioner
 _global_state_manager = state_manager
 

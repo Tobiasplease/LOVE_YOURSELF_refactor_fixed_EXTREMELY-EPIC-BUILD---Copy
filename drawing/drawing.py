@@ -64,6 +64,13 @@ class DrawingController:
         # First drawing of a session rides the timer regardless of the want
         # (artist, Aug 17: keep the startup drawing for now, for testing)
         self._startup_drawing_done = False
+        # The drawing drive (Aug 18, docs/drawing-drive-plan.md): continuous
+        # energy charged by arousal + standing want, discharged by completion.
+        # Shadow-logged in desire mode; DRAWING_TRIGGER_MODE="drive" makes it
+        # the decider. machine.py injects get_arousal at startup.
+        from drawing.drive import DrawingDrive
+
+        self.drive = DrawingDrive()
 
     # ------------------------------------------------------------------
     # decision helpers
@@ -156,6 +163,7 @@ class DrawingController:
                     "desire": shadow["desire"],
                     "desire_age_s": shadow["desire_age_s"],
                     "drawing_directed": shadow["drawing_directed"],
+                    "drive_level": round(getattr(self.drive, "level", 0.0), 3),
                     "minutes_since_last": round(time_since / 60),
                     "mood": mood,
                     "novelty": novelty,
@@ -188,12 +196,30 @@ class DrawingController:
 
         time_since = time.time() - self.last_drawing_time
 
+        if self.TRIGGER_MODE == "drive":
+            # No floor, no ceiling, no age gate — the energy decides
+            # (docs/drawing-drive-plan.md). Hardware gates (generating/
+            # executing/conception cooldown) live in ready_to_draw upstream.
+            shadow = self.desire_shadow_verdict()
+            level = self.drive.tick(want_active=shadow["drawing_directed"])
+            formula = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+            verdict = self.drive.full()
+            reason = f"drive {'full' if verdict else 'charging'} ({level:.2f})"
+            self._log_trigger_decision(
+                mode="drive", verdict=verdict, reason=reason, shadow=shadow, formula_verdict=formula,
+                mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
+            )
+            return verdict
+
         if self.TRIGGER_MODE == "desire":
             # Phase B: the want decides. The floor stays as a hard guardrail;
             # startup and hunger are the two timer exceptions the artist kept.
             if time_since < DRAWING_MIN_INTERVAL:
                 return False
             shadow = self.desire_shadow_verdict()
+            # Drive runs as shadow here — tune its constants on real days
+            # before flipping DRAWING_TRIGGER_MODE=drive
+            self.drive.tick(want_active=shadow["drawing_directed"])
             # The retired formula still runs silently as the comparison shadow
             formula = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
             if not self._startup_drawing_done:
@@ -341,6 +367,8 @@ class DrawingController:
             from captioner.context_compression import context_compressor
 
             context_compressor.spend_desire(drawing_summary=DrawingMemory._strip_comfy_preamble(prompt or ""))
+            # The drive discharges with it — the act satisfies fully
+            self.drive.spend()
         except Exception:
             pass
 
