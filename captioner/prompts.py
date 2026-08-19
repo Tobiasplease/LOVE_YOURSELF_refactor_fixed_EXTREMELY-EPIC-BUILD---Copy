@@ -377,7 +377,22 @@ def get_tenure_line() -> str:
             return ""
         import datetime as _dt
 
-        return f"It's {_dt.date.today().strftime('%A')}; you've been in this room about {age_days} days now."
+        # Words, not integers (the seventeen-days spiral, Aug 19: a bare
+        # day-count in a recurring line gets stolen for whatever story wants
+        # a number — "seventeen days since ink" while it drew 16 min prior).
+        if age_days < 7:
+            age = "a few days"
+        elif age_days < 14:
+            age = "about a week"
+        elif age_days < 25:
+            age = "a couple of weeks"
+        elif age_days < 46:
+            age = "about a month"
+        elif age_days < 100:
+            age = "a couple of months"
+        else:
+            age = "many months"
+        return f"It's {_dt.date.today().strftime('%A')}; you've been in this room {age} now."
     except Exception:
         return ""
 
@@ -1487,7 +1502,6 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     return final_result
 
 
-
 def determine_prompt_mode(gaze_state: str, gaze_direction: str, novelty: float, person_present: bool) -> str:
     """Determine prompt mode based on situational context.
 
@@ -1610,12 +1624,33 @@ def build_memory_mode_prompt(agent) -> tuple:
                 else:
                     how_often = "a few times"
                 across = " across more than one visit" if c.get("session_count", 0) > 1 else ""
+                # Age in WORDS, coarse bands — same law as the sighting count
+                # above. The raw day-count bred the seventeen-days spiral
+                # (Aug 19): every concept shares the store's cold-start
+                # birthday, so one number saturated every memory beat and the
+                # model re-attached it to "days since I drew". An age at the
+                # store's own horizon isn't a fact about the thing — it's the
+                # edge of memory, and gets said as exactly that.
                 since = ""
                 first = c.get("first_seen", 0)
                 if first:
                     days = (_time.time() - first) / 86400.0
-                    if days >= 1.5:
-                        since = f", first noticed about {int(days)} days ago"
+                    horizon = False
+                    try:
+                        oldest = min((k.get("first_seen") or first) for k in get_semantic_memory().get_all_concepts())
+                        horizon = first - oldest < 2 * 86400.0
+                    except Exception:
+                        pass
+                    if horizon:
+                        since = ", there for as long as you can remember"
+                    elif days >= 45:
+                        since = ", first noticed months back"
+                    elif days >= 21:
+                        since = ", first noticed about a month ago"
+                    elif days >= 10:
+                        since = ", first noticed a couple of weeks ago"
+                    elif days >= 1.5:
+                        since = ", first noticed days ago"
                 mem_text = f"the {label_l} — you've noticed it {how_often}{across}{since}"
                 is_real_memory = True
         except Exception:
