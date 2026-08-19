@@ -49,9 +49,13 @@ LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 # ~/llama.cpp build predates the MTP head and cannot load this model at all
 # ("missing tensor blk.64.ssm_conv1d.weight"). The 9B remains one env away
 # (see run_9b.sh) for A/B.
-LLAMA_SERVER_BIN = os.getenv("LLAMA_SERVER_BIN", os.path.expanduser("~/llama.cpp-27b/build/bin/llama-server"))
-LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", os.path.expanduser("~/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q4_K_M.gguf"))
-LLAMA_MMPROJ_PATH = os.getenv("LLAMA_MMPROJ_PATH", os.path.expanduser("~/models/qwen3.6-27b-mtp/mmproj-F16.gguf"))
+# Defaults = Qwen3.8-27B, the primary since Aug 19 (bare `python machine.py`
+# boots it; run_27b.sh re-pins the parked 3.6 arm). 3.8 REQUIRES the
+# llama.cpp-38 build — older CUDA builds run it without error but emit
+# garbage (DeltaNet CUDA path fixed ~build 10450).
+LLAMA_SERVER_BIN = os.getenv("LLAMA_SERVER_BIN", os.path.expanduser("~/llama.cpp-38/build/bin/llama-server"))
+LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", os.path.expanduser("~/models/qwen3.8-27b/Qwen3.8-27B-Q4_K_M.gguf"))
+LLAMA_MMPROJ_PATH = os.getenv("LLAMA_MMPROJ_PATH", os.path.expanduser("~/models/qwen3.8-27b/mmproj-F16.gguf"))
 LLAMA_CTX_SIZE = int(os.getenv("LLAMA_CTX_SIZE", "16384"))
 LLAMA_GPU_LAYERS = int(os.getenv("LLAMA_GPU_LAYERS", "99"))
 
@@ -459,7 +463,10 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
     # the defaults moved). MTP speculative decoding stays OFF: it is a variable
     # the 9B never had and the voice question is a distribution question —
     # LLAMA_MTP=1 ./run_27b.sh re-enables it for the ~1.7x decode speed.
-    extra = os.getenv("LLAMA_EXTRA_ARGS", "-fa on").split()
+    # --image-min-tokens 1024: Qwen-VL needs >=1024 image tokens for spatial
+    # grounding; our frames encoded at ~600 and room awareness starved at the
+    # eye (Aug 17). Costs ~1.6s extra prompt eval per multi-image call.
+    extra = os.getenv("LLAMA_EXTRA_ARGS", "-fa on --image-min-tokens 1024").split()
     if extra:
         cmd.extend(extra)
 

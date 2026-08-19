@@ -80,7 +80,7 @@ LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 # (which fall back to defaults for unknown names — no key exists for either
 # qwen label, so overriding is behavior-neutral). Env-overridable July 28 so
 # the 27B experiment's logs say what actually ran (run_27b.sh sets it).
-MODEL_NAME = os.getenv("MODEL_NAME", "qwen3.6:27b")
+MODEL_NAME = os.getenv("MODEL_NAME", "qwen3.8:27b")
 
 MOOD_SNAPSHOT_FOLDER = os.getenv("MOOD_SNAPSHOT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log"))
 

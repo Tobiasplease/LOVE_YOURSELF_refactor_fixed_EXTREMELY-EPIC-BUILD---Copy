@@ -162,6 +162,16 @@ ARDUINO_DEVICES = {
 }
 
 # === INIT ===
+# ComfyUI rides along (Aug 19): spawned detached if its port is silent, so a
+# bare boot outside tmux needs no separate launch. It outlives machine.py
+# restarts; the drawing path's reachability probe stays the draw-time authority.
+try:
+    from utils.comfy_launcher import ensure_comfyui_up
+
+    debug_print(f"ComfyUI: {ensure_comfyui_up()}", "INIT")
+except Exception as _e:
+    debug_print(f"ComfyUI auto-start failed: {_e}", "WARN")
+
 debug_print("Using fixed udev Arduino device paths", "INIT")
 for device_name, device_path in ARDUINO_DEVICES.items():
     if os.path.exists(device_path):

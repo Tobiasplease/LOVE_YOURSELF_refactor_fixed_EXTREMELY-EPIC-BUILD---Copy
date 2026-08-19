@@ -13,13 +13,14 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# PRIMARY (since Aug 19 2026): Qwen3.8-27B — iterate prompts/gates for THIS model
-./run_38.sh
+# PRIMARY (since Aug 19 2026): Qwen3.8-27B — bare boot and run_38.sh are the
+# same stack (3.8 is the code default); ComfyUI auto-launches if its port is
+# silent (utils/comfy_launcher.py, COMFYUI_AUTO_START=false to disable)
+python machine.py     # or ./run_38.sh (explicit pin, same result)
 
-# Parked A-B arms (do not tune against these; 3.6 was the tuning target until Aug 19)
+# Parked A-B arms (do not tune against these)
 ./run_27b.sh          # the 3.6-27B hybrid stack
 ./run_9b.sh           # the 9B arm, with the sampling it was tuned for
-python machine.py     # bare default (3.6 env) — prefer run_38.sh
 
 # Run with configuration overrides
 python machine.py --config_override config/debug_config.json
@@ -103,7 +104,7 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
 2. **Activation Memory System**: Concepts extracted from captions feed an activation network; novelty drives prompt-mode selection, boredom drives caption sampling (temperature/length)
 3. **Context Compression**: Every N captions, a background thread compresses recent observations into a rolling `baseline_context` string, injected into system prompts
 4. **Prompt Mode Routing**: `build_simple_caption_prompt` selects a mode (relational/observational/workspace/introspective/awakening) based on activation state; mode determines prompt content
-5. **Multi-Step Drawing Analysis**: `context_rich_multi_step_drawing_analysis` runs a 5-step pipeline to generate drawing prompts from current memory state
+5. **Stream Drawing Pipeline**: `stream_drawing_analysis` (sole pipeline since Aug 19) — stocktake → sighted intent in the machine's voice → mechanical render; triggered by the desire/drive system in `drawing/drawing.py`
 6. **Configuration-Driven**: All tuning parameters in `config/config.py` with JSON override support
 7. **CNC Safety Gate**: ArUco marker + paper detection (safety/) gate all physical drawing; no paper = no draw
 

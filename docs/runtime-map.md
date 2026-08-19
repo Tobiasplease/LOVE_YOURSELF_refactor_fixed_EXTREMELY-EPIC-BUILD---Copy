@@ -1,6 +1,10 @@
 # Runtime Map — what is actually live
 
-**PRIMARY MODEL (Aug 19 2026, artist ruling): Qwen3.8-27B via `run_38.sh`** —
+**PRIMARY MODEL (Aug 19 2026, artist ruling): Qwen3.8-27B — the CODE DEFAULT
+(bare `python machine.py` boots it; utils/llama_server.py pins, run_38.sh =
+same stack explicit). ComfyUI auto-launches at boot if port 8188 is silent
+(utils/comfy_launcher.py — detached, survives restarts, log
+event_log/comfyui.log).** —
 "no point iterating for an outdated model." All prompt/gate tuning targets
 3.8 from here; 3.6 (`run_27b.sh`) is a parked arm. Known 3.8 deltas: stronger
 document-follower (trips format-shaped gates more — audit what gates discard

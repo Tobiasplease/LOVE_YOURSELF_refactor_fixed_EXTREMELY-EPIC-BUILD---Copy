@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Qwen3.8-27B launcher (Aug 17) — the new arm. run_27b.sh (3.6) stays the
-# incumbent; this pin exists so the two can be A/B'd without touching it.
+# Qwen3.8-27B launcher (Aug 17). Since Aug 19 these pins are also the CODE
+# DEFAULTS (utils/llama_server.py, config MODEL_NAME) — bare `python
+# machine.py` boots the same 3.8 stack; this script remains the explicit,
+# self-documenting pin. run_27b.sh re-pins the parked 3.6 arm.
 #
 # 3.8 is a NEW ARCHITECTURE (hybrid Gated DeltaNet + gated attention), not a
 # 3.6 retrain. It needs the llama.cpp-38 build — older CUDA builds (including
