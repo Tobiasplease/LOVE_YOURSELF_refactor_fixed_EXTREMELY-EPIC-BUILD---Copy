@@ -452,6 +452,28 @@ class ImageMonitor:
         except Exception:
             pass
 
+        # Provenance gate (Aug 19): only draw what THIS session queued. The
+        # mtime gate below misses generations a PREVIOUS session queued that
+        # finish rendering after boot (17:27 queue → quit → reboot 17:30 →
+        # file lands 17:31, 20s into the new run — the DSV CUDA pipeline
+        # collided with llama-server's boot allocation burst). Also closes
+        # the July 21 hazard where a manually queued test gen got physically
+        # drawn: no expected prefix, no pen.
+        try:
+            expected = state_manager.get_expected_output_prefix()
+        except Exception:
+            expected = None
+        if not expected or not filename.startswith(expected):
+            log_json_entry(
+                LogType.INFO,
+                {"message": f"Skipping image this session did not queue: {filename}", "expected_prefix": expected},
+                print_message=f"[⏭️] Skipping unqueued image: {filename}",
+            )
+            # Dismiss permanently (False alone means "retry every poll" —
+            # that's for the busy case; an unqueued file stays unqueued)
+            self.monitored_images.add(image_path)
+            return False
+
         # Only process images created after this session started
         try:
             file_creation_time = os.path.getmtime(image_path)
