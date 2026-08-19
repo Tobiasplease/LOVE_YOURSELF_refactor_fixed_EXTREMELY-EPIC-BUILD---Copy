@@ -840,9 +840,16 @@ Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step commit
    remembered, or something imagined; nothing is the wrong kind of drawing
    (the old "Not a report of the room" prohibition structurally excluded
    figuration and is gone). Materials, in this order: "the attached image
-   is what you see right now", live stream tail (5 entries × 400 chars —
-   was 200), drawing musings from the session (300 chars — was 120,
-   mid-word), felt state, the sticky slots each stated ONCE with age
+   is what you see right now", **the raw record (Aug 18)** — up to 30
+   verbatim hour_log entries from the last 45 min, oldest to newest
+   ("Your own record of the last N minutes — everything you saw and
+   thought"), replacing the 5×400-char stream tail that left intents
+   detached from lived experience (same summary-of-summary disease the
+   reflection loop had before its July 12 raw-record cure; stream tail
+   remains the fallback when hour_log is empty and still feeds the
+   reflection-retrieval near-key), drawing musings from the session
+   (300 chars — was 120, mid-word), felt state, the sticky slots each
+   stated ONCE with age
    ("Since earlier today, you've wanted: ..." — the 5-step printed
    identity==belief twice and led with them, so every drawing became a
    portrait of the same sentence: hovering-pencil ×3 on July 10), the

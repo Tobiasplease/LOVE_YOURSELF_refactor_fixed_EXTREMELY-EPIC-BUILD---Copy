@@ -1573,14 +1573,35 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     if intent_image:
         materials.append("The attached image is what you are looking at right now, this exact moment.")
 
-    # The live thought leads — the drawing is born FROM the monologue.
+    # The live record leads — the drawing is born FROM the lived stream. Aug 18
+    # (artist: intents feel detached from what the machine just experienced):
+    # 5 fragments were a summary-of-a-summary of the last minutes; same disease
+    # the reflection loop had before the July 12 raw-record upgrade, same cure —
+    # the hour_log verbatim, up to 30 entries / 45 min, oldest to newest, so
+    # the decision sits on what it actually saw and thought, not on residue.
     stream_tail = []
     try:
         stream_tail = [t for t in list(getattr(memory_ref, "_stream", []))[-5:] if t]
-        if stream_tail:
-            materials.append("What you've been thinking, just now:\n" + "\n".join(f"- {t[:400]}" for t in stream_tail))
     except Exception:
         pass
+    record_lines, record_span_min = [], 0
+    try:
+        from captioner.context_compression import context_compressor as _cc
+
+        cutoff = time.time() - 45 * 60
+        recent = [e for e in _cc.hour_log if e.get("timestamp", 0) > cutoff and (e.get("text") or "").strip()][-30:]
+        if recent:
+            record_lines = [e["text"].strip()[:220] for e in recent]
+            record_span_min = max(1, round((time.time() - recent[0]["timestamp"]) / 60))
+    except Exception:
+        pass
+    if record_lines:
+        materials.append(
+            f"Your own record of the last {record_span_min} minutes — everything you saw and thought, "
+            "in your own words, oldest to newest:\n" + "\n".join(f"- {t}" for t in record_lines)
+        )
+    elif stream_tail:
+        materials.append("What you've been thinking, just now:\n" + "\n".join(f"- {t[:400]}" for t in stream_tail))
 
     felt_state = ""
     try:
@@ -1656,10 +1677,18 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
                 "stark",
                 "heavy",
                 "toward",
+                # Ledger scaffolding, not motifs (Aug 18: the mirror flagged
+                # "about/hours/subject" — age suffixes and the "The subject
+                # is..." opener of stored render-era summaries).
+                "subject",
+                "about",
+                "hours",
+                "minutes",
             }
             word_counts = {}
             for s in recent:
-                for w in set(re.findall(r"[a-z]{5,}", s.lower())):
+                s_clean = re.sub(r"\([^)]*ago\)\s*$", "", s)
+                for w in set(re.findall(r"[a-z]{5,}", s_clean.lower())):
                     if w not in _stop:
                         word_counts[w] = word_counts.get(w, 0) + 1
             looped = sorted(w for w, c in word_counts.items() if c >= 3)
