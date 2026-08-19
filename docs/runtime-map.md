@@ -571,6 +571,36 @@ background can never qualify (size cap + containment). The gallery also
 self-enriches from CLIP-confirmed drops (sim ≥0.80, in-envelope, while
 executing, ≤15% frame) so the envelope learns the hand's places.
 
+**Adjudicated presence, phase 1 (Aug 18: PRESENCE_ADJUDICATION_ENABLED,
+`perception/presence_adjudicator.py`).** The arrival system was structurally
+broken (16 false "genuine arrivals" in one studio day; re-ID disabled because
+CLIP can't do cross-outfit identity): arrivals were edge-triggered on YOLO's
+person binary in a room full of humanoid sculptures. Now a FACELESS
+person-candidate does not commit the presence belief — the machine's own eye
+looks once. The question carries no content priors (the artist's law: "I
+cannot tell it what or how to think, only provide the structural
+perspective"): "Look closely. What is this? One short line, plain words."
+The ONTOLOGY of its free reply decides — person-reference commits presence
+(arrival fires then), artificial/thing-reference records the machine's own
+description in the entity ledger (`event_log/entity_ledger.json`), whose
+place vetoes candidates for 6h (`ENTITY_VETO_TTL_S`) before re-asking;
+ambiguous replies ("a seated figure") yield NO verdict and the belief holds
+until one lands. Face evidence bypasses entirely — faces commit directly,
+the veto can never fire against one. Rate-limited
+(`PRESENCE_ADJUDICATE_MIN_INTERVAL_S` 25s), yields to drawing generation,
+verdicts logged as `decision {event: presence_adjudication}` and
+`prompt_type: presence_adjudication`. Gate wired in captioner._assess_scene
+(before the belief flip); adjudicator thread started in machine.py beside
+the label auditor. The parser's lexicons are generic English (person-words /
+artificial-markers / ambiguous body-shape words), extending
+OPEN_VOCAB_PERSON_NOUNS — code contributes ontology-reading only, never
+candidate categories. Test: `debug/test_presence_adjudication.py`.
+Phases 2-3 (entity ledger anchored in the spatial registry + identity as
+continuity of the machine's own dated descriptions) designed, not built.
+NOTE: effigy stillness-enrollment below is now redundant in the mind's path
+(the adjudicator gates presence long before 10-min stillness) and is slated
+for demotion to a when-to-ask hint after a judging run.
+
 **Effigy memory (Aug 17: EFFIGY_ENABLED, `perception/effigy_memory.py`).**
 The legless floor robot fires the YOLO person tracker constantly ("child"
 in captions). Discriminator is TIME: a faceless person-box that holds

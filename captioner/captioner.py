@@ -448,6 +448,11 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
         seen_now = bool(info["person_present_in_window"] or info["eye_contact"] or gaze_engaged or info.get("face_close"))
+        try:
+            face_in_window = any(f.get("detection", {}).get("face") for f in recent_meta)
+        except Exception:
+            face_in_window = False
+        face_evidence = bool(info["eye_contact"] or info.get("face_close") or face_in_window)
         # Body schema: a "person" with no face in view that matches the own-arm
         # gallery is the machine's own body, not company. Face evidence always
         # wins — the veto never fires against an actual face.
@@ -456,7 +461,7 @@ class Captioner(MemoryMixin):
             from perception.body_schema import body_schema
 
             body_schema.maybe_harvest()
-            if seen_now and not (info["eye_contact"] or info.get("face_close")):
+            if seen_now and not face_evidence:
                 is_self, _sim = body_schema.is_self_current_person()
                 if is_self:
                     seen_now = False
@@ -464,6 +469,23 @@ class Captioner(MemoryMixin):
             info["own_arm_visible"] = info["own_arm_visible"] or body_schema.recently_self_visible()
         except Exception:
             pass
+
+        # Adjudicated presence (Aug 18): a faceless person-candidate does not
+        # commit the belief on YOLO's word — the machine's own eye looks first
+        # (perception/presence_adjudicator.py). "person" commits, "thing"
+        # records an entity and vetoes, None holds until the verdict lands.
+        # Face evidence bypasses entirely — faces are already persons.
+        info["presence_adjudication"] = None
+        if seen_now and not self._presence_believed and not face_evidence:
+            try:
+                from perception.presence_adjudicator import presence_adjudicator
+
+                verdict = presence_adjudicator.gate()
+                info["presence_adjudication"] = verdict or "pending"
+                if verdict != "person":
+                    seen_now = False  # thing, or not yet judged — no belief, no arrival
+            except Exception:
+                pass
 
         arrival = False
         resumed = False
@@ -526,6 +548,12 @@ class Captioner(MemoryMixin):
             if self._absence_watch_s > PRESENCE_BELIEF_DECAY_SECONDS:
                 self._presence_believed = False  # looked, repeatedly, nobody there — they really left
                 self._absence_watch_s = 0.0
+                try:
+                    from perception.presence_adjudicator import presence_adjudicator
+
+                    presence_adjudicator.notify_presence_dropped()
+                except Exception:
+                    pass
         self._last_presence_check = now
         self._presence_seen_now = seen_now
         info["presence_believed"] = self._presence_believed

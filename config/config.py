@@ -323,6 +323,18 @@ BODY_ENRICH_MAX_FRAC = 0.15  # ...and only if smaller than this fraction of the 
 BODY_DRAWING_SELF_ZONE = (0.05, 0.45, 1.0, 1.0)
 BODY_DRAWING_ZONE_MAX_FRAC = 0.2  # only boxes smaller than this fraction of the frame drop via the zone
 
+# --- Adjudicated presence, phase 1 (Aug 18) ---
+# A faceless YOLO person-candidate no longer commits the presence belief; the
+# machine's own eye looks once (open question, no candidate categories — see
+# the no-content-priors law) and the ONTOLOGY of its free reply decides:
+# person-reference commits presence, thing-reference records an entity whose
+# place vetoes candidates without re-asking. Faces never come here — face
+# evidence commits directly and the veto cannot fire against one.
+PRESENCE_ADJUDICATION_ENABLED = True
+PRESENCE_ADJUDICATE_MIN_INTERVAL_S = 25.0  # min seconds between adjudication calls
+ADJUDICATED_PERSON_TTL_S = 120.0  # a person verdict keeps committing presence this long (refreshed by re-adjudication)
+ENTITY_VETO_TTL_S = 21600.0  # 6h: a thing-verdict vetoes person-candidates at its place this long, then re-ask
+
 # --- Effigy memory (Aug 17): still, faceless person-shapes are not people ---
 # The legless floor robot fires the YOLO person tracker constantly ("child" in
 # captions). Discriminator: TIME — a real person cannot hold a pixel-identical

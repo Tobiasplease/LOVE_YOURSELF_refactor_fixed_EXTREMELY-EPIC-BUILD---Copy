@@ -637,6 +637,14 @@ if OPEN_VOCAB_ENABLED:
 else:
     debug_print("Open-vocab detector disabled (OPEN_VOCAB_ENABLED=False)", "INIT")
 
+from config.config import PRESENCE_ADJUDICATION_ENABLED
+
+if PRESENCE_ADJUDICATION_ENABLED:
+    from perception.presence_adjudicator import presence_adjudicator
+
+    presence_adjudicator.start()
+    debug_print("Presence adjudication started (faceless person-candidates judged by the machine's own eye)", "INIT")
+
 # Start real-time ArUco marker detection (for paper presence)
 aruco_detector = get_aruco_detector()
 debug_print("ArUco marker detection started", "INIT")
