@@ -13,12 +13,13 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the main application (defaults = Qwen3.6-27B, hybrid stream shape)
-python machine.py
+# PRIMARY (since Aug 19 2026): Qwen3.8-27B — iterate prompts/gates for THIS model
+./run_38.sh
 
-# Explicit pins / A-B arms
-./run_27b.sh          # force the 27B hybrid stack
+# Parked A-B arms (do not tune against these; 3.6 was the tuning target until Aug 19)
+./run_27b.sh          # the 3.6-27B hybrid stack
 ./run_9b.sh           # the 9B arm, with the sampling it was tuned for
+python machine.py     # bare default (3.6 env) — prefer run_38.sh
 
 # Run with configuration overrides
 python machine.py --config_override config/debug_config.json

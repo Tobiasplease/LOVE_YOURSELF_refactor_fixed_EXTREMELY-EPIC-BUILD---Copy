@@ -1,5 +1,12 @@
 # Runtime Map — what is actually live
 
+**PRIMARY MODEL (Aug 19 2026, artist ruling): Qwen3.8-27B via `run_38.sh`** —
+"no point iterating for an outdated model." All prompt/gate tuning targets
+3.8 from here; 3.6 (`run_27b.sh`) is a parked arm. Known 3.8 deltas: stronger
+document-follower (trips format-shaped gates more — audit what gates discard
+before judging it), bare-clock-stamp admission fix already in, verbosity
+retuning (STREAM_CONSOLIDATE_CHARS) still open.
+
 Last verified: June 12, 2026 (branch: rebuild/north-star); dead-code entries
 updated July 7, 2026 (handoff cleanup pass).
 This is the maintenance view: every line the model sees, where it comes from,
@@ -795,9 +802,10 @@ mode fires on the FIRST of: startup (first drawing of a session rides the
 timer — testing-era rule), hunger (DRAWING_HUNGER_S, default 2h since last
 drawing), or a persisted drawing-directed want (desire slot, word-boundary
 lexicon, ≥600s old). No formed want → no drawing; the no is structural,
-never asked. The retired formula still runs silently for comparison; every
-evaluation logs DECISION `trigger_decision` (mode/will_draw/reason/both
-verdicts/desire+age). `DRAWING_TRIGGER_MODE=formula` reverts wholesale.
+never asked. The old scoring formula was DELETED in the Aug 19 consolidation
+(proven a pure timer, 26/26; git history keeps it — no formula mode flag
+remains). Every evaluation logs DECISION `trigger_decision`
+(mode/will_draw/reason/desire+age/drive_level).
 The monologue always carries time-since-last-drawing (system prompt,
 `get_last_drawing_age_line`, executed-only, survives detox) — hunger is
 legible to the machine. Cutover evidence: 5 shadow days, formula 26/26
@@ -897,10 +905,10 @@ Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step commit
    drawing-introspection caption mode reads that type ("Your recent
    artistic expressions").
 
-LEGACY (kept for A/B: DRAWING_ANALYSIS_MODE="multi_step"): the 5-step
-context_rich_multi_step_drawing_analysis — env essay / emotion manufacture
-(from the flatlined mood, converging on invented stasis drama every time) /
-intent / technique fiction / synthesis.
+The 5-step committee (context_rich_multi_step_drawing_analysis — env essay /
+emotion manufacture / intent / technique fiction / synthesis) was DELETED in
+the Aug 19 consolidation: kept "for A/B" since July 10 and never A/B'd.
+Stream is the only pipeline; DRAWING_ANALYSIS_MODE flag removed.
 
 ## Physical execution fidelity (Aug 10-12 2026)
 

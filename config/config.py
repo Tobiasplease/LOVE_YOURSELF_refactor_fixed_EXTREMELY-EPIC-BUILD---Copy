@@ -971,22 +971,14 @@ CAPTION_QUIET_AFTER = 120  # seconds without salience before the cadence stretch
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet
 REFLECTION_NUM_PREDICT = 320  # was 600 (padded to the brim, purple survey), then 220; raised for the dream (July 12) — the reflection now digests the raw hour of thought, which earns more room than a summary-of-summaries did. Brevity pressure IS register pressure; watch for padding at 320.
 
-# Drawing system intervals
-DEBUG_FAST_DRAWING = False  # Set to True for rapid drawing testing (1 minute intervals)
-DRAWING_INTERVAL = 60 if DEBUG_FAST_DRAWING else 300  # 1 minute debug vs 5 minutes normal (check frequency)
-DRAWING_COOLDOWN = 120 if DEBUG_FAST_DRAWING else 720  # 2 minutes debug vs 12 minutes normal
+# Drawing trigger guardrails (the DECISION is the desire/drive system in
+# drawing/drawing.py — DRAWING_TRIGGER_MODE + DRAWING_HUNGER_S + DRIVE_* are
+# env knobs there. The old scoring formula and its weights were deleted in
+# the Aug 19 consolidation; git history keeps them.)
+DRAWING_INTERVAL = 300  # seconds between trigger evaluations
+DRAWING_COOLDOWN = 720  # conception cooldown (prompt-stacking protection)
 DRAWING_STARTUP_DELAY = 180  # Minimum seconds to wait after startup before first drawing (3 min for full init)
-
-# State-motivated drawing system (when DEBUG_FAST_DRAWING is False)
-DRAWING_USE_STATE_MOTIVATION = not DEBUG_FAST_DRAWING  # Enable sophisticated triggering
-DRAWING_MIN_INTERVAL = 120 if DEBUG_FAST_DRAWING else 900  # 2 min debug vs 15 min production (max 4/hour)
-DRAWING_MAX_INTERVAL = 180 if DEBUG_FAST_DRAWING else 1800  # 3 min debug vs 30 min production (min 2/hour)
-DRAWING_BASE_THRESHOLD = 0.72 if DEBUG_FAST_DRAWING else 0.45  # Lowered to allow triggering with modest state values
-DRAWING_NOVELTY_WEIGHT = 0.3  # How much novelty influences decision
-DRAWING_BOREDOM_WEIGHT = 0.4  # How much boredom influences decision
-DRAWING_MOOD_WEIGHT = 0.3  # How much mood influences decision
-DRAWING_PERSON_WEIGHT = 0.4  # How much person presence influences decision
-DRAWING_PERSON_BONUS = 0.2  # Additional motivation boost when person detected
+DRAWING_MIN_INTERVAL = 900  # hard floor between drawings (desire mode; drive mode has none)
 
 # Drawing scale target — vpype layout dimensions for the centerline SVG.
 # The warp transform maps this to the physical quad (~70x38mm).
@@ -1073,19 +1065,9 @@ REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 INCLUDE_DRAWING_HISTORY = True
 DRAWING_HISTORY_LIMIT = 3  # how many recent drawing entries to surface in prompts
 
-# === DRAWING ANALYSIS MODE ===
-# "stream"     - two calls (July 10): intent born from the live monologue +
-#                sticky slots (aged, deduped) + executed body of work, then a
-#                mechanical render translation under hardware truth (one pen,
-#                lines only). See prompts.stream_drawing_analysis.
-# "multi_step" - LEGACY 5-step committee, kept for A/B: env essay / emotion
-#                manufacture / intent / technique fiction / synthesis
-# "natsumura"  - Natsumura-driven, identity-aware drawing decisions (experimental, needs debugging)
-# "single"     - Original single-prompt approach
-DRAWING_ANALYSIS_MODE = "stream"
-
-# Legacy toggle (for backwards compatibility)
-USE_MULTI_STEP_DRAWING_ANALYSIS = DRAWING_ANALYSIS_MODE in ("multi_step",)
+# Drawing prompt pipeline: stream only (stocktake → intent → render; see
+# prompts.stream_drawing_analysis). The 5-step committee, kept "for A/B"
+# since July 10 and never A/B'd, was deleted in the Aug 19 consolidation.
 
 # === PAPER DETECTION SAFETY SYSTEM ===
 # Prevent drawing on bare surfaces by checking for paper before execution

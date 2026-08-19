@@ -14,7 +14,6 @@ from .prompts import (
     DRAWING_SYSTEM_PROMPT,
     STATIC_SYSTEM_PROMPT,
     build_focused_caption_prompt,
-    context_rich_multi_step_drawing_analysis,
 )
 
 class PromptInterface:
@@ -135,12 +134,12 @@ class PromptInterface:
         if not memory_ref:
             return None, None, None
 
-        from config.config import DRAWING_ANALYSIS_MODE
-        if DRAWING_ANALYSIS_MODE == "stream":
-            from captioner.prompts import stream_drawing_analysis
-            prompt = stream_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
-        else:
-            prompt = context_rich_multi_step_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
+        # Stream is the only pipeline since the Aug 19 consolidation (the
+        # 5-step committee, kept "for A/B" since July 10 and never A/B'd, is
+        # deleted — git history keeps it)
+        from captioner.prompts import stream_drawing_analysis
+
+        prompt = stream_drawing_analysis(memory_ref, extra=extra, image_path=image_path)
 
         model_options = self._get_base_model_options()
         model_options["seed"] = random.randint(1, 1000000)

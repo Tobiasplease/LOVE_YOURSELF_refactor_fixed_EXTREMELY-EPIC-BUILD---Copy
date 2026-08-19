@@ -114,9 +114,9 @@ class DrawingController:
     # Persistence threshold: a want must survive at least a few distill cycles
     # (one distill ≈ 8 captions) before the trigger counts it as meant.
     DESIRE_SHADOW_MIN_AGE_S = 600
-    # Phase B (Aug 17, artist-approved after 5 shadow days: formula drew 26/26
-    # like clockwork, desire would have drawn 7/26 with every refusal
-    # explainable): the want decides. "formula" reverts to the timer.
+    # Phase B (Aug 17): the want decides. "drive" hands it to the energy
+    # (docs/drawing-drive-plan.md). The old formula mode was deleted in the
+    # Aug 19 consolidation — revert lives in git, not in a flag.
     TRIGGER_MODE = os.getenv("DRAWING_TRIGGER_MODE", "desire")
     # Soft hunger (artist: compromise between forced output and allowed
     # silence): with no formed want, drawing-hunger fires after this long.
@@ -148,7 +148,7 @@ class DrawingController:
         }
 
     def _log_trigger_decision(
-        self, *, mode: str, verdict: bool, reason: str, shadow: dict, formula_verdict: bool, mood: float, novelty: float, boredom: float, time_since: float
+        self, *, mode: str, verdict: bool, reason: str, shadow: dict, mood: float, novelty: float, boredom: float, time_since: float
     ) -> None:
         try:
             log_json_entry(
@@ -158,7 +158,6 @@ class DrawingController:
                     "mode": mode,
                     "will_draw": verdict,
                     "reason": reason,
-                    "formula_would_draw": formula_verdict,
                     "shadow_would_draw": shadow["would_draw"],
                     "desire": shadow["desire"],
                     "desire_age_s": shadow["desire_age_s"],
@@ -189,10 +188,7 @@ class DrawingController:
 
         if BASE_VOICE_DETOX:
             return False
-        try:
-            from config.config import DRAWING_MIN_INTERVAL, DRAWING_USE_STATE_MOTIVATION
-        except ImportError:
-            return self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+        from config.config import DRAWING_MIN_INTERVAL
 
         time_since = time.time() - self.last_drawing_time
 
@@ -202,156 +198,42 @@ class DrawingController:
             # executing/conception cooldown) live in ready_to_draw upstream.
             shadow = self.desire_shadow_verdict()
             level = self.drive.tick(want_active=shadow["drawing_directed"])
-            formula = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
             verdict = self.drive.full()
             reason = f"drive {'full' if verdict else 'charging'} ({level:.2f})"
             self._log_trigger_decision(
-                mode="drive", verdict=verdict, reason=reason, shadow=shadow, formula_verdict=formula,
+                mode="drive", verdict=verdict, reason=reason, shadow=shadow,
                 mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
             )
             return verdict
 
-        if self.TRIGGER_MODE == "desire":
-            # Phase B: the want decides. The floor stays as a hard guardrail;
-            # startup and hunger are the two timer exceptions the artist kept.
-            if time_since < DRAWING_MIN_INTERVAL:
-                return False
-            shadow = self.desire_shadow_verdict()
-            # Drive runs as shadow here — tune its constants on real days
-            # before flipping DRAWING_TRIGGER_MODE=drive
-            self.drive.tick(want_active=shadow["drawing_directed"])
-            # The retired formula still runs silently as the comparison shadow
-            formula = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
-            if not self._startup_drawing_done:
-                verdict, reason = True, "startup"
-            elif time_since >= self.HUNGER_S:
-                verdict, reason = True, "hunger"
-            elif shadow["would_draw"]:
-                verdict, reason = True, "desire"
-            else:
-                verdict, reason = False, "no formed want"
-            self._log_trigger_decision(
-                mode="desire", verdict=verdict, reason=reason, shadow=shadow, formula_verdict=formula,
-                mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
-            )
-            if verdict:
-                self._startup_drawing_done = True
-            return verdict
-
-        # Legacy formula mode (DRAWING_TRIGGER_MODE="formula" reverts to this)
-        if DRAWING_USE_STATE_MOTIVATION:
-            verdict = self._should_draw_state_motivated(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
+        # Desire mode (the default). The want decides; the floor stays as a
+        # hard guardrail; startup and hunger are the two timer exceptions the
+        # artist kept for the testing era. The old scoring formula was deleted
+        # in the Aug 19 consolidation — it was proven a pure timer (26/26) and
+        # git history keeps it if archaeology ever needs it.
+        if time_since < DRAWING_MIN_INTERVAL:
+            return False
+        shadow = self.desire_shadow_verdict()
+        # Drive runs as shadow here — tune its constants on real days
+        # before flipping DRAWING_TRIGGER_MODE=drive
+        self.drive.tick(want_active=shadow["drawing_directed"])
+        if not self._startup_drawing_done:
+            verdict, reason = True, "startup"
+        elif time_since >= self.HUNGER_S:
+            verdict, reason = True, "hunger"
+        elif shadow["would_draw"]:
+            verdict, reason = True, "desire"
         else:
-            verdict = self._should_draw_original(mood=mood, novelty=novelty, boredom=boredom, reflection=reflection)
-
-        # Log only real evaluations, not the 720-900s window where the
-        # min-interval short-circuit re-runs every caption cycle.
-        if time_since >= DRAWING_MIN_INTERVAL:
-            self._log_trigger_decision(
-                mode="formula", verdict=verdict, reason="formula", shadow=self.desire_shadow_verdict(), formula_verdict=verdict,
-                mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
-            )
+            verdict, reason = False, "no formed want"
+        self._log_trigger_decision(
+            mode="desire", verdict=verdict, reason=reason, shadow=shadow,
+            mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
+        )
+        if verdict:
+            self._startup_drawing_done = True
         return verdict
 
-    def _should_draw_original(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
-        """Pure timer-based drawing decision logic for debugging."""
-        if not self.ready_to_draw():
-            cooldown_remaining = max(0, self.cooldown - (time.time() - self.last_drawing_time))
-            if not CLEAN_LLM_OUTPUT:
-                print(f"[🎨] Timer drawing check: BLOCKED by cooldown ({cooldown_remaining:.0f}s remaining)")
-            return False
-
-        # Pure timer-based: if cooldown passed, always draw
-        if not CLEAN_LLM_OUTPUT:
-            print(f"[🎨] ✨ TIMER DRAWING TRIGGERED (debug mode - ignoring mood/novelty/boredom)")
-        return True
-
-    def _should_draw_state_motivated(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
-        """Sophisticated state-motivated drawing decision logic."""
-        import random
-        from config.config import (
-            DRAWING_MIN_INTERVAL,
-            DRAWING_MAX_INTERVAL,
-            DRAWING_BASE_THRESHOLD,
-            DRAWING_NOVELTY_WEIGHT,
-            DRAWING_BOREDOM_WEIGHT,
-            DRAWING_MOOD_WEIGHT,
-        )
-
-        current_time = time.time()
-        time_since_last = current_time - self.last_drawing_time
-
-        # Absolute minimum interval - safety check
-        if time_since_last < DRAWING_MIN_INTERVAL:
-            remaining = DRAWING_MIN_INTERVAL - time_since_last
-            if not CLEAN_LLM_OUTPUT:
-                print(f"[🎨] State drawing check: BLOCKED by minimum interval ({remaining:.0f}s remaining)")
-            return False
-
-        # Force drawing if maximum interval exceeded (ensure some activity)
-        if time_since_last >= DRAWING_MAX_INTERVAL:
-            if not CLEAN_LLM_OUTPUT:
-                print(f"[🎨] ✨ STATE DRAWING TRIGGERED: Maximum interval exceeded ({time_since_last:.0f}s)")
-            return True
-
-        # Calculate state-based drawing motivation score
-        # Normalize inputs to 0-1 range
-        normalized_mood = max(0, min(1, (mood + 1) / 2))  # mood is -1 to 1, normalize to 0-1
-        normalized_novelty = max(0, min(1, novelty))  # novelty should be 0-1
-        normalized_boredom = max(0, min(1, boredom))  # boredom should be 0-1
-
-        # Calculate weighted motivation score
-        motivation_score = (
-            normalized_novelty * DRAWING_NOVELTY_WEIGHT + normalized_boredom * DRAWING_BOREDOM_WEIGHT + normalized_mood * DRAWING_MOOD_WEIGHT
-        )
-
-        # Add time pressure - gradually increase motivation over time
-        time_factor = min(1.0, time_since_last / DRAWING_MAX_INTERVAL)
-        time_pressure = time_factor * 0.2  # Up to 0.2 additional motivation
-
-        total_motivation = motivation_score + time_pressure
-
-        # Startup bonus - ensure first drawing happens within 5 minutes
-        startup_bonus = 0.0
-        STARTUP_DRAWING_WINDOW = 300  # 5 minutes
-        if time_since_last > STARTUP_DRAWING_WINDOW:
-            # This is likely the first drawing (time since last is huge)
-            # Add bonus to ensure it triggers soon after startup delay
-            startup_bonus = 0.3
-            print(f"[🎨] First drawing bonus: +{startup_bonus}")
-
-        total_motivation = total_motivation + startup_bonus
-
-        # Add small random factor for unpredictability (±0.1)
-        randomness = (random.random() - 0.5) * 0.2
-        final_score = total_motivation + randomness
-
-        # Decision threshold
-        will_draw = final_score >= DRAWING_BASE_THRESHOLD
-
-        # Calculate cooldown remaining for display
-        cooldown_remaining = max(0, DRAWING_MIN_INTERVAL - time_since_last)
-        cooldown_minutes = cooldown_remaining / 60
-        cooldown_percent = (time_since_last / DRAWING_MIN_INTERVAL) * 100
-
-        if not CLEAN_LLM_OUTPUT:
-            print(f"[🎨] State drawing evaluation:")
-            print(f"  ⏱️  Cooldown: {cooldown_remaining:.0f}s remaining ({cooldown_minutes:.1f} min) - {cooldown_percent:.0f}% elapsed")
-            print(f"  Time since last: {time_since_last:.0f}s (min: {DRAWING_MIN_INTERVAL}s, max: {DRAWING_MAX_INTERVAL}s)")
-            print(f"  Mood: {normalized_mood:.3f}, Novelty: {normalized_novelty:.3f}, Boredom: {normalized_boredom:.3f}")
-            bonus_str = f", Startup: +{startup_bonus:.3f}" if startup_bonus > 0 else ""
-            print(f"  Base motivation: {motivation_score:.3f}, Time pressure: {time_pressure:.3f}{bonus_str}")
-            print(f"  Final score: {final_score:.3f} (threshold: {DRAWING_BASE_THRESHOLD})")
-            print(f"  Decision: {'DRAW' if will_draw else 'WAIT'}")
-
-        if will_draw and not CLEAN_LLM_OUTPUT:
-            print(f"[🎨] ✨ STATE DRAWING TRIGGERED: Internal motivation reached threshold")
-
-        return will_draw
-
     def register_drawing(self, prompt: str) -> None:
-        from config.config import DRAWING_MAX_INTERVAL
-
         # Called from TWO sites since Aug 18: before the executing flag clears
         # (race fix — the trigger once fired in the 10s gap between flag-clear
         # and registration, on a want seconds from being spent) and the legacy
@@ -386,7 +268,6 @@ class DrawingController:
             print(f"{'='*60}")
             print(f"Physical drawing completed. Cooldown timer started.")
             print(f"Next drawing possible in: {self.cooldown}s ({self.cooldown/60:.1f} minutes)")
-            print(f"Forced drawing at: {DRAWING_MAX_INTERVAL}s ({DRAWING_MAX_INTERVAL/60:.1f} minutes)")
             print(f"{'='*60}\n")
 
         # Surface a clean line in the live caption monitor + episodic log

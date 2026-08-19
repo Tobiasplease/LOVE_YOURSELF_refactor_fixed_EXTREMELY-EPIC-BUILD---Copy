@@ -292,18 +292,9 @@ class MultimodalModel:
         except Exception:
             pass
 
-        # If using stream/natsumura/multi-step analysis, the prompt IS the final result, don't call LLM again
-        try:
-            from config.config import DRAWING_ANALYSIS_MODE
-
-            if DRAWING_ANALYSIS_MODE in ("stream", "natsumura", "multi_step"):
-                return prompt  # These modes already return the final drawing prompt
-        except ImportError:
-            pass
-
-        # Unreachable: every DRAWING_ANALYSIS_MODE returns above. Kept as an
-        # explicit failure rather than a silent fall-through to a retired path.
-        raise RuntimeError(f"unknown DRAWING_ANALYSIS_MODE — no builder produced a prompt")
+        # The stream pipeline already returned the final drawing prompt
+        # (sole pipeline since the Aug 19 consolidation)
+        return prompt
 
 
 
