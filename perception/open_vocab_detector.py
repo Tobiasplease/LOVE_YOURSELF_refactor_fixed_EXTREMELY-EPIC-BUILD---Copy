@@ -238,12 +238,19 @@ class OpenVocabDetectorThread(threading.Thread):
                     return False
                 return BodySchema._containment(nb, BODY_DRAWING_SELF_ZONE) > 0.6
 
+        if not drawing_now:
+            OpenVocabDetectorThread._zone_logged = set()
         for d in ordered:
             nb = norm_box(d)
             if zone_drop is not None and zone_drop(nb):
                 # the promoted desk zone: while executing, an object-sized box
-                # over the desk IS the body — no gallery, no CLIP, no cache
-                print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (drawing, desk zone)")
+                # over the desk IS the body — no gallery, no CLIP, no cache.
+                # Logged once per term per drawing; the drop itself repeats.
+                logged = getattr(OpenVocabDetectorThread, "_zone_logged", set())
+                if d["term"] not in logged:
+                    logged.add(d["term"])
+                    OpenVocabDetectorThread._zone_logged = logged
+                    print(f"[OpenVocab] Desk zone (this drawing): suppressing '{d['term']}' while the arm works")
                 continue
             if drawing_now and body_schema.in_pose_envelope(nb, pan, tilt):
                 print(f"[OpenVocab] Dropped self-patch labelled '{d['term']}' (drawing, body envelope)")
