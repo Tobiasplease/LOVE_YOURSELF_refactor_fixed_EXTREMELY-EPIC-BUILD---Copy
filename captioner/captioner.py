@@ -1132,6 +1132,13 @@ class Captioner(MemoryMixin):
                     caption = "Vision settling..."
                     caption_mode = "awakening"
                 self.session_awakening_done = True
+                # Beat 2 pending: the NEXT inference is the sighted arrival
+                # look, not an ordinary caption
+                self._arrival_look_pending = True
+            elif getattr(self, "_arrival_look_pending", False):
+                self._arrival_look_pending = False
+                caption = self._generate_arrival_look(img_path)
+                caption_mode = "awakening"
             else:
                 log_json_entry(
                     LogType.DEBUG,
@@ -2197,6 +2204,17 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
+        # Saved for awakening beat 2 (the sighted arrival look): the same
+        # remembered material, so the reassessment checks THIS against the room
+        self._awakening_recall = (memory_context + identity_context + long_term_context).strip()
+        try:
+            gap_s = self.last_session_gap or 0
+            from captioner.prompts import casual_time_string
+
+            self._awakening_gap_phrase = casual_time_string(gap_s / 60.0) if gap_s >= 60 else "a moment"
+        except Exception:
+            self._awakening_gap_phrase = "a while"
+
         # Awakening templates come from the prompt registry (panel-editable)
         from captioner.prompt_registry import P
         from config.config import BASE_VOICE_DETOX as _detox
@@ -2279,6 +2297,45 @@ class Captioner(MemoryMixin):
                 else:
                     return cleaned
         return "Coming back online... the room is still here."
+
+    def _generate_arrival_look(self, img_path: str) -> str:
+        """Awakening beat 2 (Aug 19): the first SIGHTED inference is a
+        dedicated reassessment, not an ordinary caption. Beat 1 wakes blind
+        and ends on "I have not looked yet" — this is the look: the gap
+        named, memory checked against the actual room, before the ordinary
+        flow resumes. (Artist: the single-beat awakening "jumps in quite
+        jarringly into the prior flow".)"""
+        from config import config
+        from captioner.prompt_registry import P
+        from utils.inference import query_model
+
+        gap = getattr(self, "_awakening_gap_phrase", "") or "a while"
+        recall = getattr(self, "_awakening_recall", "")
+        seed = (getattr(self, "last_caption", "") or "").strip()[:220]
+        system_prompt = P("awakening.arrival-system").format(gap=gap)
+        ask = P("awakening.arrival-ask").format(seed=seed, recall=(recall + "\n") if recall else "")
+        response = query_model(
+            prompt=ask,
+            image=img_path,
+            timeout=90,
+            log_dir=config.MOOD_SNAPSHOT_FOLDER,
+            system_prompt=system_prompt,
+            options={"temperature": 0.6, "top_p": 0.85, "num_predict": 140, "stop": ["\n\n"]},
+            prompt_type="arrival_look",
+        )
+        if response and len(response.strip()) > 10:
+            cleaned = response.strip().strip('"').strip()
+            if cleaned and not cleaned.startswith(("[", "{")) and "[WARNING]" not in cleaned:
+                if len(cleaned) > 420:
+                    cut = max(cleaned[:420].rfind("."), cleaned[:420].rfind("?"), cleaned[:420].rfind("!"))
+                    cleaned = cleaned[: cut + 1] if cut > 20 else cleaned[:420].rsplit(" ", 1)[0] + "..."
+                # Same mouth gate as the seed — the arrival enters the stream
+                # and seeds the day's register just as much
+                if self._caption_reject_reason(self._strip_list_shape(cleaned), system_prompt):
+                    print("[🌅] Arrival look rejected by the mouth gate — plain line instead")
+                else:
+                    return cleaned
+        return "Taking the room back in."
 
     def _try_blink_resume(self) -> bool:
         """A blink is not a night (July 9): after a short restart gap, skip the

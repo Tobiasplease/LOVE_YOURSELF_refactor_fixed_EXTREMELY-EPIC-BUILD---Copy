@@ -285,7 +285,17 @@ moment gets the present only (north-star principle 6).
 | every ~20 quiet min | REFLECTION LOOP (captioner/reflection.py): long-form thought (600-token budget) on rotating subjects — room / visitor / drawings / time / itself. **SUBJECTS ARE ORGANS (July 31, piece 1 of `docs/reflection-organs-handover.md`): each subject now gets its OWN slice of memory, not one shared bundle behind five different questions.** Shared spine = **THE RAW RECORD — up to 80 verbatim captions from the last 75 min (hour_log; July 12 "dreaming" upgrade: every prior input was a summary of a summary, so the loop could never notice what actually happened in its own head — e.g. an hour of questions addressed to a visitor that nothing ever answered)** + that subject's OWN prior-reflection thread. Then per organ (`_diet_*`): room = compressions + concept-ledger place inventory; visitor = episodic arrival/departure spans + people pattern + events; drawings = the framed drawing scrap + full executed sequence (8) + artistic arc (an LLM call, 2-sentence trim, purple-prone — watch it) + current desire + desire_history; time = journal chronology (6) + session duration + durable-ledger multi-day spans + events; yourself = identity slots (persona/belief/desire) + self_notes. The subject question becomes a reading lens and the ask is a digest-then-advance: what moved, what it circled, what it assumed the record doesn't show, what it asked and whether any answer came — fact questions, not fences (how it can LEARN it needs no permission); uses the main model; skipped while drawing; POSTPONED while the store is empty (reflecting on nothing invents a past that would echo forever) | ChromaDB `reflections` collection + REFLECTION log entry; surfaces into quiet captions via echo line |
 | per reflection | REFLECTION SYSTEM PROMPT is **subject-gated** (July 31): the standing persona (`core_facts['self']`) rides `yourself` ONLY, the durable ledger rides `yourself` + `time passing`. Both used to ride all five, asserting one identity at the top of every lens while `distill_reflection` wrote that same persona back from every reflection — the frame re-homogenised whatever the data did. Identity material now enters `yourself` as DATA (the `identity` block) instead of as frame | `get_reflection_system_prompt(subject)`, captioner/prompts.py |
 
-## Awakening (first caption of a session)
+## Awakening (first caption of a session — TWO BEATS since Aug 19)
+
+**Beat 1 is blind, beat 2 looks.** The seed (below) wakes without an image and
+ends on "I have not looked yet"; the machine used to step from that sentence
+straight into ordinary log-flow (artist: "jumps in quite jarringly"). Now the
+NEXT inference is a dedicated sighted ARRIVAL LOOK (`_generate_arrival_look`,
+prompt_type `arrival_look`, registry `awakening.arrival-system`/`-ask`): the
+current frame + the seed + the same remembered material the seed saw, asked
+to take the room in whole — what matches memory, what moved, who's here —
+before the ordinary flow resumes. Same mouth gate as the seed. Blink resumes
+skip both beats. Both beats enter the stream as its first two entries.
 
 generate_internal_awakening() builds: offline duration (casual words — "about
 18 hours", never "18.7"; decimals read as telemetry and got skipped over) +
