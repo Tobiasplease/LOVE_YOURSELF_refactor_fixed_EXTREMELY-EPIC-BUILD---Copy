@@ -253,8 +253,26 @@ class Captioner(MemoryMixin):
             pass
 
     def _stream_push(self, text: str) -> None:
-        """All stream writes go through here so the timestamp deque stays in sync."""
-        self._stream.append(text)
+        """All stream writes go through here so the timestamp deque stays in
+        sync.
+
+        Entries are trimmed to their last complete sentence (Aug 20): a
+        token-capped generation ends mid-sentence, and a document that ends
+        mid-sentence makes the next continuation START mid-sentence — the
+        window fills with boundary-less entries and the register locks into
+        an unpunctuated run-on attractor (the "manic" spiral, runs
+        e9a24f3a→afa36ae1: the tail degraded, the blink carried it, every
+        later caption continued the slice). Display and logs keep the full
+        text; only the stream — the genre carrier — is cut at the boundary.
+        A text with no boundary at all is pushed raw (the blink register
+        gate covers the restart case)."""
+        t = (text or "").strip()
+        idx = max(t.rfind("."), t.rfind("!"), t.rfind("?"))
+        # >=10: don't trim down to a stub like "3." — a real short sentence
+        # ("The man moved.") is kept, a numeric fragment is not
+        if idx >= 10 and idx < len(t) - 1:
+            t = t[: idx + 1]
+        self._stream.append(t)
         self._stream_ts.append(time.time())
 
     def _stream_clear(self) -> None:
