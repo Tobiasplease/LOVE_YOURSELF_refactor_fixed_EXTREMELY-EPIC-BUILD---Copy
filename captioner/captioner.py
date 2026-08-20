@@ -2414,8 +2414,16 @@ class Captioner(MemoryMixin):
             # degraded session's last caption carried salad ACROSS
             # restarts (July 9) — a poisoned thought doesn't deserve
             # continuity; better to wake with an empty stream.
-            if prior and prior not in self._stream and self._stream_admissible(prior) and not self._caption_reject_reason(prior, ""):
+            # Register gate (Aug 20): the same doctrine for FORM — a
+            # punctuation-less run-on passed the content gate and re-seeded a
+            # manic register across a restart (the phantom-drawing spiral;
+            # document mode amplifies whatever register sits in the window).
+            # No sentence structure anywhere in the thought → wake fresh.
+            _structured = bool(re.search(r"[.!?]", prior))
+            if prior and _structured and prior not in self._stream and self._stream_admissible(prior) and not self._caption_reject_reason(prior, ""):
                 self._stream_push(prior)
+            elif prior and not _structured:
+                print("[🌅] Prior thought has no sentence structure — blinking awake with an empty stream")
             print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
             self._blink_resumed = True
             return True
