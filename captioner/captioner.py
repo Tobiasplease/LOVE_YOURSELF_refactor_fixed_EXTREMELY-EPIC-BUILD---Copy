@@ -1920,6 +1920,30 @@ class Captioner(MemoryMixin):
         if not should_draw:
             return  # the trigger_decision log already carries the wait + reason
 
+        # Paper BEFORE conception (Aug 20). The check used to run inside
+        # handle_drawing_flow — after the intent was already formed and stored
+        # — so a paperless board left a committed first-person drawing plan in
+        # the stream with no drawing behind it, and document-mode continued
+        # the stroke narrative of a drawing that never began (the "confused
+        # whether it's drawing" captions). No paper → no conception; the want
+        # persists and the trigger re-looks next evaluation. The in-flow check
+        # stays as backstop for paper vanishing mid-pipeline.
+        try:
+            from config.config import ENABLE_EARLY_PAPER_CHECK, ENABLE_PAPER_DETECTION
+
+            if ENABLE_PAPER_DETECTION and ENABLE_EARLY_PAPER_CHECK and state_manager.camera is not None:
+                from safety.paper_detection import check_paper_before_drawing
+
+                if not check_paper_before_drawing(state_manager.camera, state_manager.servos, None):
+                    log_json_entry(
+                        LogType.DECISION,
+                        {"decision": "skip_drawing", "reason": "no_paper_before_conception"},
+                        print_message="[🎨] No paper on the board — the want keeps, nothing is conceived",
+                    )
+                    return
+        except Exception as e:
+            print(f"[📄] Pre-conception paper check errored (proceeding): {e}")
+
         if not CLEAN_LLM_OUTPUT:
             print(f"[🎨] ✨ State-motivated drawing decision: DRAW!")
 
