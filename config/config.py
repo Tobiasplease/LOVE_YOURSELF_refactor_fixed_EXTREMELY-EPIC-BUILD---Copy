@@ -642,20 +642,25 @@ GRBL_PEN_UP_S = int(os.getenv("GRBL_PEN_UP_S", 34))
 # during drawing were fine; taps need more plunge to deposit ink.
 GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 56))
 
-# Settle dwell after every pen transition during drawing (G4). GRBL treats a
+# Settle dwells after pen transitions during drawing (G4). GRBL treats a
 # spindle-PWM change as instantaneous — it never waits for the physical
-# servo — so without this, a dot/short dash is over before the pen lands
-# (the dotted-line dropouts). 0.12 -> 0.2 (Aug 17): on the pointing-hand
-# sheet, half the commanded strokes were sub-mm hatching ticks and landed
-# faint/absent — and the DSV 768 fix roughly doubles how many short strokes
-# reach the pen. Costs ~30s per drawing at ~400 transitions.
-GRBL_PEN_SETTLE_DWELL_S = float(os.getenv("GRBL_PEN_SETTLE_DWELL_S", 0.2))
+# servo — so without a dwell, a dot/short dash is over before the pen lands
+# (the dotted-line dropouts). History: 0.12 (July 9) -> 0.2 (Aug 17, faint
+# hatching ticks) -> SPLIT Aug 18 (artist: drawings still "dotted" — short
+# strokes render as dots because motion starts before the S34->S56 landing
+# finishes). DOWN needs the full landing + bounce; UP only needs to clear
+# the paper before the rapid. Legacy GRBL_PEN_SETTLE_DWELL_S env still
+# honored as the fallback for both.
+_LEGACY_SETTLE = os.getenv("GRBL_PEN_SETTLE_DWELL_S", "")
+GRBL_PEN_DOWN_SETTLE_S = float(os.getenv("GRBL_PEN_DOWN_SETTLE_S", _LEGACY_SETTLE or 0.35))
+GRBL_PEN_UP_SETTLE_S = float(os.getenv("GRBL_PEN_UP_SETTLE_S", _LEGACY_SETTLE or 0.2))
 
-# Ink scale inside the calibrated paper window (Aug 17, artist: "slightly
-# smaller"). 1.0 = ink fills the window (bounds-normalized); 0.85 shrinks the
-# drawing about the window center. Side benefit: ink pulls away from the
-# extrapolated edge strips of the TPS calibration (less edge curvature).
-WARP_INK_SCALE = float(os.getenv("WARP_INK_SCALE", 0.85))
+# Ink scale inside the calibrated paper window. 1.0 = ink fills the window
+# (bounds-normalized); <1 shrinks about the window center. Tried 0.85 Aug 17
+# ("slightly smaller"); reverted to 1.0 Aug 18 — the shrink compounded the
+# dotted feel of short strokes (artist: "a bit small right now which also
+# adds to the dotted feel").
+WARP_INK_SCALE = float(os.getenv("WARP_INK_SCALE", 1.0))
 
 # Extra safety to ensure pen is fully UP before any homing ($H)
 GRBL_PEN_UP_REPEATS = int(os.getenv("GRBL_PEN_UP_REPEATS", 5))  # How many times to assert M3 S{UP} before homing

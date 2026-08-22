@@ -1068,10 +1068,12 @@ sheets; the SVG→gcode conversion was faithful, everything physical wasn't:
   **Physical detail chain (Aug 17, pointing-hand forensics)**: execution was
   clean (revive-link holding; only the chronic post-completion G54 homing
   timeout) and feed is fine — the physical losses were the 512 vectorization
-  (above) + sub-mm hatching ticks not landing. GRBL_PEN_SETTLE_DWELL_S
-  0.12→0.2 (~+30s/drawing). WARP_INK_SCALE=0.85 (config): ink shrinks about
-  the window center — artist wants slightly smaller sheets; also keeps ink
-  off the extrapolated TPS edge strips. Thick-marker renders worm-maze DSV
+  (above) + sub-mm hatching ticks not landing. Dwell history: 0.12→0.2
+  (Aug 17)→SPLIT Aug 18 (sheets still "dotted": motion outran the S34→S56
+  landing) into GRBL_PEN_DOWN_SETTLE_S=0.35 / GRBL_PEN_UP_SETTLE_S=0.2
+  (legacy GRBL_PEN_SETTLE_DWELL_S env honored as fallback for both; ~7min
+  dwell total on a 767-stroke sheet). WARP_INK_SCALE tried 0.85 Aug 17,
+  REVERTED to 1.0 Aug 18 — the shrink compounded the dotted feel. Thick-marker renders worm-maze DSV
   (--thin can't split fused fat strokes) → generation now biased fine-tipped:
   "fine-tipped black ink pen / thin line" in both situation frames + formatter
   anchor. vpype tolerances (0.1/0.05mm at ~5x warp upscale) noted as the next
