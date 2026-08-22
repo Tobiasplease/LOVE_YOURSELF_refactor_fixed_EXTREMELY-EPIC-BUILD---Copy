@@ -853,8 +853,14 @@ HYBRID_PREFILL_CHARS = int(os.getenv("HYBRID_PREFILL_CHARS", 220))
 # to stop a 9B blooming purple — on a 27B it just pins output to the mode.
 # min_p (0 = off) is the better tail-cut for a larger model: proportional to
 # confidence, so temperature can rise without degenerating.
-CAPTION_TEMP = float(os.getenv("CAPTION_TEMP", 1.0))
-CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.9))
+# 1.0 -> 0.9 (Aug 22, artist: run-on clause-chains — at 1.0 the period, a
+# "decisive" token, competes badly against the many ways to extend a clause).
+# Both directions have measured failure modes: 0.6-0.7+top_p0.85 pinned the
+# 27B to flat semicolon declaratives (July); 1.0 bloomed caption-ese run-ons.
+# The rhythm itself (fragments, emphasis, questions) is genre-framed in
+# genre.hybrid, not bought with temperature.
+CAPTION_TEMP = float(os.getenv("CAPTION_TEMP", 0.9))
+CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.85))
 CAPTION_TOP_P = float(os.getenv("CAPTION_TOP_P", 1.0))
 CAPTION_MIN_P = float(os.getenv("CAPTION_MIN_P", 0.05))
 

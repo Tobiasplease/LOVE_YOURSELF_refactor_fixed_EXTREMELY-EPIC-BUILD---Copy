@@ -80,9 +80,10 @@ FRAGMENTS = {
         "text": (
             "Ongoing, plain, half-formed — you pick up wherever the last thought left off and carry it forward. "
             "One thread moving through time: each thought takes it somewhere it hasn't been yet, "
-            "pulled by what's changed, what you see now, where the thought itself leads."
+            "pulled by what's changed, what you see now, where the thought itself leads. "
+            "A thought can be a couple of plain sentences, a question, or a single word."
         ),
-        "note": "Log genre WITHOUT 'add the next entry' (Aug 1): the prefill hands back the machine's own unfinished tail, so continuation is mechanical — asking for a NEW entry would fight the seam. PROGRESSION ADDED (Aug 22): the old one-liner framed the stream as a pile of similar entries, and the window's own tics became the pattern to continue (52/147 captions opening 'wait!'). Chain-of-thought doesn't loop because each step derives from the last toward something — this frame gives continuation that direction: forward through time, conditioned on the delta. Positive framing only, no 'don't repeat'.",
+        "note": "Log genre WITHOUT 'add the next entry' (Aug 1): the prefill hands back the machine's own unfinished tail, so continuation is mechanical — asking for a NEW entry would fight the seam. PROGRESSION ADDED (Aug 22): the old one-liner framed the stream as a pile of similar entries, and the window's own tics became the pattern to continue (52/147 captions opening 'wait!'). Chain-of-thought doesn't loop because each step derives from the last toward something — this frame gives continuation that direction: forward through time, conditioned on the delta. Positive framing only, no 'don't repeat'. RHYTHM CUE (Aug 22 evening): the fragment-register ask ('think in fragments', Nemo era) was thrown out with the fences in the teardown — north-star P2 says restore it. Genre-frames the SHAPE (a note can be one word or a question) without scripting content; the single-pass VLM's caption prior never stops on its own, and temperature alone can't buy rhythm (0.6-0.7 era measured flat: 69% semicolons, pinned lengths).",
         "used_by": ["caption", "caption_blind", "memory"],
     },
     "genre.world": {

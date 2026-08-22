@@ -45,8 +45,8 @@ export MODEL_NAME="qwen3.8:27b"
 # the presence penalty hints the model repeats more than 3.6 at low temp.
 # Try it as an arm once the baseline is heard:
 #   CAPTION_TEMP=0.7 CAPTION_TOP_P=0.8 CAPTION_MIN_P=0 ./run_38.sh
-export CAPTION_TEMP="${CAPTION_TEMP:-1.0}"
-export CAPTION_TEMP_BORED="${CAPTION_TEMP_BORED:-0.9}"
+export CAPTION_TEMP="${CAPTION_TEMP:-0.9}"
+export CAPTION_TEMP_BORED="${CAPTION_TEMP_BORED:-0.85}"
 export CAPTION_TOP_P="${CAPTION_TOP_P:-1.0}"
 export CAPTION_MIN_P="${CAPTION_MIN_P:-0.05}"
 
