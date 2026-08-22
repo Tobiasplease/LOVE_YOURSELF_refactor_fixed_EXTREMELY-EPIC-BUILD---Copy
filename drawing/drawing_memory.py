@@ -167,6 +167,19 @@ class DrawingMemory:
                     phrases.append(", ".join(tags[:3]))
         return "; ".join(phrases)
 
+    @staticmethod
+    def _casual_age(elapsed_s: float) -> str:
+        """Age in coarse words, never raw integers (the seventeen-days law,
+        extended Aug 20): this ledger said "about 32 minutes ago" while the
+        system prompt said "half an hour ago" — the same fact in two
+        vocabularies in one call, and the machine argued with the number
+        ("31 feels wrong"). A ticking integer in a recurring line gets
+        stolen for whatever story wants a number."""
+        from captioner.prompts import casual_time_string
+
+        phrase = casual_time_string(elapsed_s / 60)
+        return phrase if phrase == "just now" else f"{phrase} ago"
+
     def get_executed_sequence(self, max_count: int = 8) -> List[str]:
         """Chronological plain lines of the executed body of work, oldest to
         newest — "a suspended pencil dripping ink (about 2 hours ago)". Feeds
@@ -201,13 +214,7 @@ class DrawingMemory:
             if len(desc) > 90:
                 desc = desc[:90].rsplit(" ", 1)[0] + "..."
             elapsed = time.time() - entry.get("timestamp", time.time())
-            if elapsed < 3600:
-                when = f"{max(1, int(elapsed / 60))} minutes ago"
-            elif elapsed < 86400:
-                when = f"about {max(1, int(elapsed / 3600))} hours ago"
-            else:
-                when = f"{int(elapsed / 86400)} days ago"
-            lines.append(f"{desc} ({when})")
+            lines.append(f"{desc} ({self._casual_age(elapsed)})")
         return lines
 
     def get_last_drawing_description(self, executed_only: bool = False) -> str:
@@ -230,14 +237,7 @@ class DrawingMemory:
         entry = candidates[0]
 
         elapsed = time.time() - entry.get("timestamp", time.time())
-        if elapsed < 120:
-            when = "just now"
-        elif elapsed < 3600:
-            when = f"about {int(elapsed / 60)} minutes ago"
-        elif elapsed < 7200:
-            when = "about an hour ago"
-        else:
-            when = f"about {int(elapsed / 3600)} hours ago"
+        when = self._casual_age(elapsed)
 
         tags = [(t or "").strip().lower() for t in entry.get("theme_tags", []) if (t or "").strip()][:2]
         outcome = "" if entry.get("completed", True) else " — it didn't finish"
@@ -291,17 +291,13 @@ class DrawingMemory:
             thread = entry.get("narrative_thread", "")
 
             elapsed = time.time() - entry.get("timestamp", time.time())
-            if elapsed < 3600:
-                age = f"{int(elapsed / 60)}m ago"
-            else:
-                age = f"{int(elapsed / 3600)}h ago"
 
             line = f"{i}. {desc}"
             if tone:
                 line += f" ({tone})"
             if thread:
                 line += f" — {thread}"
-            line += f" [{age}]"
+            line += f" [{self._casual_age(elapsed)}]"
             lines.append(line)
 
         try:

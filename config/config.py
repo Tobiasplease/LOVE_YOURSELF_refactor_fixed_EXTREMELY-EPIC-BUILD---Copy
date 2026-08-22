@@ -796,8 +796,19 @@ SCENE_MOTION_MIN_FRAMES = 2  # frames in the 10s window that must exceed it
 # reverts to amnesiac single-turn captions.
 STREAM_WINDOW = int(
     os.getenv("STREAM_WINDOW", 24)
-)  # ENV-TUNABLE July 28 (window size is an information budget: the model repeats what it can't see it already said — six entries is ~40s of visible selfhood, a 9B-era relic per north-star P5; the 27B holds 20-30). # how many prior captions the model sees as its own turns. ON (June 28) now the base voice is healthy: chiefly to break the amnesiac REPETITION (the persistent "dust motes" tic — each call couldn't see it already said it). Admissibility-gated (_stream_admissible: no meta, no markdown/stage-directions) and breaks on >180s gaps. WATCH: the stream amplifies whatever register is in the window — if it breeds purple instead of varying, set back to 0.
-STREAM_BREAK_SECONDS = 180  # a gap this long breaks the thought; stream restarts
+)  # ENV-TUNABLE July 28 (window size is an information budget: the model repeats what it can't see it already said — six entries is ~40s of visible selfhood, a 9B-era relic per north-star P5; the 27B holds 20-30). # how many prior captions the model sees as its own turns. ON (June 28) now the base voice is healthy: chiefly to break the amnesiac REPETITION (the persistent "dust motes" tic — each call couldn't see it already said it). Admissibility-gated (_stream_admissible: no meta, no markdown/stage-directions); gaps render as "(… later)" lines (STREAM_GAP_MARK_SECONDS), only ≥STREAM_BREAK_SECONDS restarts it. WATCH: the stream amplifies whatever register is in the window — if it breeds purple instead of varying, set back to 0.
+# Gaps in the stream (Aug 20, the felt-time fix): a silence used to WIPE the
+# stream at 180s — amnesia presented as continuity (the machine resumed with
+# less context and nothing said time had passed; the 3min–2h range was a dead
+# zone below the reorientation threshold). Now a gap ≥ STREAM_GAP_MARK_SECONDS
+# renders as an unstamped line in the log — "(about 20 minutes later)", words
+# not integers per the seventeen-days law — because the model does not do
+# clock arithmetic on adjacent HH:MM stamps; duration must be said to be felt.
+# Only a gap ≥ STREAM_BREAK_SECONDS still clears the stream (the thought
+# genuinely died; matches REORIENT_MIN_GAP_S so the reorientation line takes
+# over exactly where the stream gives up).
+STREAM_GAP_MARK_SECONDS = 180
+STREAM_BREAK_SECONDS = 7200
 
 # How the stream reaches the model (July 2026, docs/continuity-plan.md):
 # "world" — THE INVERSION (July 26): the stream rides as a TIMESTAMPED LOG

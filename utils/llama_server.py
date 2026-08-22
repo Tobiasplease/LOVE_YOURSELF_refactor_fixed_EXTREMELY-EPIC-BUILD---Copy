@@ -218,6 +218,11 @@ def _stream_mode() -> str:
 # Hybrid seam: the log lines arrive stamped ("14:02 — ..."); the prefill must
 # be raw voice, or the model continues a timestamp instead of a thought.
 _LOG_STAMP_RE = re.compile(r"^\s*\d{1,2}:\d{2}\s*[—–-]\s*")
+# Unstamped gap lines the captioner renders into the log ("(about 20 minutes
+# later)", captioner._stream_history Aug 20). A trailing one means the newest
+# REAL entry sits on the far side of a silence — it must not become the hybrid
+# seam (continuing a pre-gap thought mid-clause would lie about continuity).
+_GAP_LINE_RE = re.compile(r"^\(.+ later\)$")
 
 
 def _hybrid_prefill_chars() -> int:
@@ -331,7 +336,7 @@ def _append_stream_and_user(messages: list, history: Optional[List[str]], user_m
     if _stream_mode() == "hybrid":
         lines = [p for p in ((h or "").strip() for h in history or []) if p]
         prefill = ""
-        if lines and not react:
+        if lines and not react and not _GAP_LINE_RE.match(lines[-1]):
             tail = _LOG_STAMP_RE.sub("", lines.pop())  # newest entry leaves the log, becomes the seam
             seam = _seam_of(tail, _hybrid_prefill_chars())
             if seam:

@@ -283,16 +283,38 @@ class Captioner(MemoryMixin):
         """The stream as the model sees it. World shape: timestamped log lines
         ("14:02 — the lamp's still on") — the log rendering is genre framing
         (north-star P7: a log is the text-shape of a working mind, and logs
-        are plain by genre). Other shapes: raw text, unchanged."""
+        are plain by genre). Other shapes: raw text, unchanged.
+
+        Gaps are said, not implied (Aug 20): the model does no clock
+        arithmetic on adjacent HH:MM stamps, so a 20-minute lull between two
+        visually adjacent lines read as one continuous moment. A gap ≥
+        STREAM_GAP_MARK_SECONDS now renders as an unstamped "(about 20
+        minutes later)" line — including a trailing one between the last
+        entry and NOW, so the first caption after a silence knows time
+        passed before it speaks. Words not integers (the seventeen-days
+        law). Render-time only: markers never enter _stream, so the
+        anti-echo/consolidation machinery never sees them; llama_server
+        recognises a trailing marker and skips the hybrid seam (a thought
+        from before a silence is answered fresh, not continued mid-clause)."""
         entries = list(self._stream)
-        from config.config import STREAM_MODE
+        from config.config import STREAM_GAP_MARK_SECONDS, STREAM_MODE
 
         if STREAM_MODE not in ("world", "hybrid") or not entries:
             return entries
         ts = list(self._stream_ts)
         while len(ts) < len(entries):  # defensive: consolidation/restore drift
             ts.insert(0, ts[0] if ts else time.time())
-        return [f"{time.strftime('%H:%M', time.localtime(t))} — {text}" for t, text in zip(ts[-len(entries) :], entries)]
+        ts = ts[-len(entries) :]
+        from captioner.prompts import casual_time_string
+
+        lines = []
+        for i, (t, text) in enumerate(zip(ts, entries)):
+            if i and t - ts[i - 1] >= STREAM_GAP_MARK_SECONDS:
+                lines.append(f"({casual_time_string((t - ts[i - 1]) / 60.0)} later)")
+            lines.append(f"{time.strftime('%H:%M', time.localtime(t))} — {text}")
+        if time.time() - ts[-1] >= STREAM_GAP_MARK_SECONDS:
+            lines.append(f"({casual_time_string((time.time() - ts[-1]) / 60.0)} later)")
+        return lines
 
     @property
     def is_processing(self) -> bool:
@@ -721,6 +743,15 @@ class Captioner(MemoryMixin):
     # layer's job done by the mouth; mid-sentence time talk stays untouched.
     _LOG_STAMP_LEAD_RE = re.compile(r"^\s*\d{1,2}:\d{2}\s+(?=\S)")
 
+    # The gap renderer's line — "(about 8 minutes later)" — is render-layer
+    # time, same law as the clock stamp: the captioner owns the clock, and a
+    # self-written passage-of-time claim is invented time. Proven within 4
+    # minutes of the first marker ever rendered (Aug 20 23:51, the mouth
+    # echoed the shape with a fabricated duration; only the sentence-trim's
+    # luck kept it out of the stream). Parens + "later" is the disambiguator:
+    # honest prose time talk ("a moment later he shifts") stays untouched.
+    _GAP_MARK_ECHO_RE = re.compile(r"\s*\([^)]{0,40}\blater\s*\)\s*", re.IGNORECASE)
+
     # "Log entry:" label creep (July 31): the model dramatized the log genre
     # into a literal label, one stored instance bred through the stream, and
     # 76/84 entries opened identically within an hour. The label carries no
@@ -750,6 +781,7 @@ class Captioner(MemoryMixin):
         t = cls._COUNTDOWN_PREFIX_RE.sub("", t)
         t = cls._LOG_STAMP_ANY_RE.sub(" ", t)
         t = cls._LOG_STAMP_LEAD_RE.sub("", t)
+        t = cls._GAP_MARK_ECHO_RE.sub(" ", t)
         t = cls._LOG_LABEL_RE.sub(" ", t)
         t = cls._STATUS_FIELD_RE.sub("", t.lstrip())
         return cls._HASHTAG_TAIL_RE.sub("", t).strip()
@@ -1110,8 +1142,14 @@ class Captioner(MemoryMixin):
         # July 8; the earlier fix only covered the inner concept-match path)
         matched_concepts = []
 
-        # A long silence breaks the thought — the stream restarts rather than
-        # pretending continuity across a gap (would-it-lie applies to time too)
+        # A silence is SAID, not erased (Aug 20): gaps above
+        # STREAM_GAP_MARK_SECONDS render as "(… later)" lines inside
+        # _stream_history, so the thought survives the lull and the lull is
+        # named. Only a gap long enough that the thought genuinely died
+        # (≥2h, the reorientation threshold) still restarts the stream —
+        # would-it-lie applies to time in both directions: pretending
+        # continuity across a night lies, but so did wiping 20 minutes of
+        # selfhood and resuming as if no time had passed.
         from config.config import STREAM_BREAK_SECONDS
 
         if self.last_caption_time and now - self.last_caption_time > STREAM_BREAK_SECONDS:
@@ -1344,8 +1382,8 @@ class Captioner(MemoryMixin):
                         # turns — invisible in SYSTEM/USER above. Show it so continuity
                         # is verifiable: each line is a prior caption the model sees.
                         if self._stream:
-                            print("PRIOR THOUGHTS (stream, oldest→newest):")
-                            for _i, _t in enumerate(self._stream, 1):
+                            print("PRIOR THOUGHTS (stream as rendered, oldest→newest):")
+                            for _i, _t in enumerate(self._stream_history(), 1):
                                 print(f"  {_i}. {_t[:90]}")
                             print()
                         else:
@@ -2440,6 +2478,10 @@ class Captioner(MemoryMixin):
             _structured = bool(re.search(r"[.!?]", prior))
             if prior and _structured and prior not in self._stream and self._stream_admissible(prior) and not self._caption_reject_reason(prior, ""):
                 self._stream_push(prior)
+                # Backdate the seed's stamp to when it was actually thought:
+                # a fresh stamp on a pre-gap thought hides the blink from the
+                # gap renderer (3–10 min restarts would go unmarked).
+                self._stream_ts[-1] = time.time() - gap
             elif prior and not _structured:
                 print("[🌅] Prior thought has no sentence structure — blinking awake with an empty stream")
             print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
