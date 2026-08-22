@@ -868,6 +868,65 @@ knobs against real days, then `DRAWING_TRIGGER_MODE=drive` makes it the
 decider (no floor/ceiling/age gate — only the hardware gates remain).
 Proof: debug/test_drawing_drive.py.
 
+## Paper check (Aug 20: PAPER_CHECK_METHOD="vlm" — the machine's eye judges the sheet)
+
+The gate before any physical drawing. Three call sites, all through
+`safety.paper_detection.check_paper_before_drawing`: early (drawing/drawing.py,
+before ComfyUI gen), post-home (grbl/grbl_utils.py), and image_monitor before
+CNC execution. The kinetic get-clear (arms tuck + hold) wraps every check.
+
+- **"vlm" (default)**: `PaperDetector._check_vlm` parks gaze on the table
+  (same search plumbing, tight range), grabs PAPER_VLM_FRAMES frames (2) from
+  the aruco thread's shared frame, and asks the loaded model per frame
+  (PAPER_CHECK_PROMPT in captioner/prompts.py — structural PAPER/MARKS lines
+  anchored to "the wooden surface nearest to you, at the bottom of your view"
+  because the studio has several tables and the first live fire judged the
+  workbench; PAPER: UNSEEN allowed, parses to unclear). Gaze settle before
+  frame 1 is PAPER_VLM_SETTLE_S (4s — the live gaze EASES; 1.5s shot a frame
+  mid-travel). Verdict states: blank_paper / drawn_paper / no_paper /
+  unclear. **Only all-frames-blank_paper allows.** Consensus never claims
+  more than every frame agrees on: any drawn sighting → drawn_paper, ALL
+  frames no → no_paper, anything mixed/failed → unclear (blocks, but the
+  monologue stays silent — no false "no paper" while a sheet is in view).
+  KNOWN LIMITS: at 1280x720 (16:9, cropped vertical FOV) with tilt already
+  at TILT_MIN, the drawing table sits at the frame's bottom edge; marks
+  hidden under the hands/objects on the sheet can read as blank — the
+  kinetic get-clear pose matters for MARKS accuracy. A drawn-on
+  sheet, bare table, clutter, unparseable answer, or model failure all BLOCK —
+  the vlm path fails CLOSED at every layer (paper_detection outer except,
+  check_paper_before_drawing, and both call-site fallbacks are method-aware).
+  Check frames + responses land in event_log/paper_checks/. ~8s per check.
+- **"aruco" (legacy fallback)**: 12s organic marker search, marker visible =
+  no paper. Blind spot: ANY occlusion reads as paper (Aug 20 bench test:
+  false-allowed on a bare table); errors fail OPEN. Kept intact as the
+  toggle-back.
+
+**The machine knows it refused (Aug 20, same day).** check_paper_before_drawing
+publishes the verdict to state_manager (paper_state + last_paper_check_ts;
+errors publish "unclear", never a fabricated "no_paper"). The caption builder's
+DRAWING/PAPER STATE block reads it TTL-gated (PAPER_STATE_TTL_S, 30 min —
+past that the claim would be memory posing as present-tense truth):
+no_paper → caption.no-paper ("no paper on the desk — you can't draw…"),
+drawn_paper → caption.paper-drawn ("the sheet already carries a drawing…"),
+blank/unclear → nothing. Both fragments live in the registry (panel-editable).
+This REVIVED dead wiring: caption.no-paper existed but paper_present was
+never set anywhere; image_monitor's 5s last_paper_check_ts dedupe window is
+also live now. Second channel: the early-check skip records the state-aware
+failure reason in drawing_memory ("already a drawing on the paper" vs "no
+paper"), which the workspace context speaks for 10 min ("you wanted to draw
+but the sheet on the desk already carries a drawing").
+
+Why: the aruco system was built for a model that couldn't judge a surface;
+the 3.8 arm can (6/6 on bench + correct drawn_paper block on first runtime
+test). First live fire (17:04, run e9a24f3a): frame 1 read blank, frame 2
+caught the sketch — the 2-frame unanimous rule blocked where single-frame
+would have false-allowed. Future clause parked: drawn_paper could someday
+mean continue-on-same-sheet via ControlNet + executed-stroke provenance
+instead of refusing.
+Proof: debug/test_paper_check_runtime.py (end-to-end),
+debug/test_paper_vlm_check.py (quick A/B), debug/test_paper_vlm_matrix.py
+(labeled scenario matrix, accumulates results.csv).
+
 ## Drawing prompt generation (July 10: DRAWING_ANALYSIS_MODE="stream"; Aug 10: stocktake beat + register freedom)
 
 Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step committee:
@@ -1139,7 +1198,7 @@ with their systems.
   preserved. Proof: debug/test_move_sampler.py.
 - PAPER-CHECK INTERRUPT + ORGANIC STARTLE (July 30): new bus state
   "paper" (session_paper_*.json) — when safety/paper_detection starts
-  its ArUco search it fires hooks.on_paper_check_start → bus.paper_clear
+  its check (vlm look or ArUco search) it fires hooks.on_paper_check_start → bus.paper_clear
   plays the recorded get-clear move (BOTH arms, gantry included via raw
   plan sends), waits the returned clearing time, searches, then
   on_paper_check_done → paper_release blends the SAME dataset back.

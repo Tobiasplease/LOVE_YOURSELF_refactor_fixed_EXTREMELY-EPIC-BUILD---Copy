@@ -255,3 +255,6 @@ debug_*.txt
 *.prof
 *.profile
 config/prompt_overrides.json
+
+# paper-check bench evidence (trial frames + model responses)
+debug/paper_vlm_frames/

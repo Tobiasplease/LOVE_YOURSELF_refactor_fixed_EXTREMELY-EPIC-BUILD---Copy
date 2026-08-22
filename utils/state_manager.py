@@ -35,8 +35,11 @@ class StateManager:
         self.current_drawing_phase = None  # "executing" when active
         # Expected output from ComfyUI for current job (filename prefix)
         self.expected_output_prefix: Optional[str] = None
-        # Paper detection state
+        # Paper detection state — set centrally by safety.paper_detection.
+        # paper_state: last check verdict (blank_paper/drawn_paper/no_paper/unclear);
+        # "" until a check has run. Monologue injection reads it with a TTL.
         self.paper_present: bool = True
+        self.paper_state: str = ""
         self.last_paper_check_ts: float = 0.0
         self.last_paper_check_reason: str = ""
         self.last_no_paper_skip_ts: float = 0.0

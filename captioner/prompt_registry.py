@@ -170,7 +170,14 @@ FRAGMENTS = {
     },
     "caption.no-paper": {
         "title": "No paper",
-        "text": "No paper on the desk.",
+        "text": "There is no paper on the desk — you can't draw until a sheet is put down.",
+        "note": "Dead wiring until Aug 20: paper_present was never set. Now fed by the central paper check (state_manager.paper_state), TTL-gated by PAPER_STATE_TTL_S.",
+        "used_by": ["caption", "caption_blind"],
+    },
+    "caption.paper-drawn": {
+        "title": "Paper already drawn on",
+        "text": "The sheet on the desk already carries a drawing — you can't draw until a blank one replaces it.",
+        "note": "Three-state paper check (Aug 20): the vlm check distinguishes a drawn-on sheet from a blank one; only blank allows drawing.",
         "used_by": ["caption", "caption_blind"],
     },
     "caption.desire-wrap": {
@@ -559,7 +566,8 @@ PASSES = {
             {"slot": "place_inventory", "store": "concepts", "desc": "Core-facts place inventory (get_core_facts_string).", "gate": "on change or every 6th quiet caption"},
             {"slot": "memory_surface", "store": "concepts", "desc": "ONE of: familiarity line, drawing echo, reflection echo.", "gate": "quiet + not detox; max one per caption"},
             {"frag": "caption.arm-drawing", "gate": "while drawing"},
-            {"frag": "caption.no-paper", "gate": "when paper absent"},
+            {"frag": "caption.no-paper", "gate": "last paper check saw a bare desk, within PAPER_STATE_TTL_S"},
+            {"frag": "caption.paper-drawn", "gate": "last paper check saw a drawn-on sheet, within PAPER_STATE_TTL_S"},
             {"slot": "felt_delta", "store": "felt_state", "desc": "'{prev}, then {curr}.' or '{curr}.'", "gate": "not in detox"},
             {"frag": "caption.desire-wrap", "gate": "first 3 captions after desire changes; quiet only"},
             {"frag": "caption.desire-spent-wrap", "gate": "emptied desire slot, <2h after an executed drawing"},

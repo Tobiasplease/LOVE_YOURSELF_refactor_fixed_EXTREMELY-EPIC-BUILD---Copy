@@ -1776,8 +1776,8 @@ def process_svg_to_grbl(
                     PAPER_DETECTION_GAZE_TILT = TILT_MIN + 2
 
                 def _paper_check_after_homing() -> bool:
-                    """Simple ArUco-only paper detection - no legacy heuristics"""
-                    print("[📄] Running ArUco-only paper check...")
+                    """Delegates to the centralized paper check (vlm or aruco per PAPER_CHECK_METHOD)."""
+                    print("[📄] Running centralized paper check...")
                     try:
                         # Get camera and servos from state manager
                         from utils.state_manager import state_manager as _sm
@@ -1789,20 +1789,22 @@ def process_svg_to_grbl(
                             print("[📄] No camera - defaulting to ALLOW drawing")
                             return True
 
-                        # Call centralized ArUco detection
                         from safety.paper_detection import check_paper_before_drawing
 
                         paper_present = check_paper_before_drawing(camera_obj, servos_obj, None)
 
-                        print(f"[📄] ArUco check result: {'PAPER PRESENT' if paper_present else 'NO PAPER'}")
+                        print(f"[📄] Paper check result: {'PAPER PRESENT' if paper_present else 'NO PAPER'}")
                         return paper_present
 
                     except Exception as e:
-                        print(f"[📄] Paper check error: {e} - defaulting to ALLOW drawing")
                         import traceback
 
                         traceback.print_exc()
-                        return True
+                        from config import config as _c
+
+                        fail_open = str(getattr(_c, "PAPER_CHECK_METHOD", "aruco")).lower() != "vlm"
+                        print(f"[📄] Paper check error: {e} - {'defaulting to ALLOW drawing' if fail_open else 'failing CLOSED (no draw)'}")
+                        return fail_open
 
                 # Run paper check with hard fail-safes (never blocks silently)
                 if ENABLE_PAPER_DETECTION and ENABLE_POST_HOME_PAPER_CHECK:

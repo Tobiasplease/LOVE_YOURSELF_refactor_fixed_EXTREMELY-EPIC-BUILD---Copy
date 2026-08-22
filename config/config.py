@@ -1088,6 +1088,21 @@ PAPER_DETECTION_GAZE_PAN = 80  # Pan angle for looking down at drawing area (adj
 PAPER_DETECTION_GAZE_TILT = 65  # Tilt angle for looking down at drawing area (low enough to see ArUco marker)
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
 
+# Which eye judges the paper (Aug 20). "vlm": the loaded model looks at the
+# table and only a seemingly BLANK sheet allows drawing — bare surface,
+# clutter, or an already-drawn-on sheet all block, and any model failure
+# fails CLOSED (no draw). "aruco": legacy marker search — marker occluded
+# by ANYTHING reads as paper, and errors fail OPEN (bench test Aug 20:
+# aruco false-allowed on a bare table the model called correctly 3/3).
+PAPER_CHECK_METHOD = "vlm"
+PAPER_VLM_FRAMES = 2  # frames per check; every frame must read as a blank sheet to allow
+PAPER_VLM_SETTLE_S = 4.0  # gaze travel time before the first frame (live gaze eases; 1.5s shot frame 1 mid-travel)
+# How long a check verdict may keep speaking in the monologue ("no paper on
+# the desk" / "the sheet already carries a drawing"). The table can change
+# without the machine looking; past this the claim would be memory posing as
+# present-tense truth.
+PAPER_STATE_TTL_S = 1800
+
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
 # ArUco detection is fast and reliable - safe to enable for post-home check
 ENABLE_POST_HOME_PAPER_CHECK = True

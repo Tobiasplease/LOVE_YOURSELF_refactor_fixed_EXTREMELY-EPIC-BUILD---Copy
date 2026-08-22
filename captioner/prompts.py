@@ -431,8 +431,10 @@ def build_identity_line(agent, mode: str = "observational") -> str:
 
                     failure_age = _time.time() - failure.get("timestamp", 0)
                     if failure_age < 600:
-                        reason = failure.get("reason", "unknown")
-                        if "paper" in reason.lower():
+                        reason = failure.get("reason", "unknown").lower()
+                        if "already a drawing" in reason:
+                            parts.append("you wanted to draw but the sheet on the desk already carries a drawing")
+                        elif "paper" in reason:
                             parts.append("you wanted to draw but there's no paper")
                         else:
                             parts.append("you tried to draw but couldn't")
@@ -1854,8 +1856,14 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
         if _sm.is_generating_drawing or _sm.current_drawing_phase == "executing":
             prompt_parts.append(P("caption.arm-drawing"))
-        elif not _sm.paper_present:
-            prompt_parts.append(P("caption.no-paper"))
+        else:
+            from config.config import PAPER_STATE_TTL_S
+
+            if _sm.last_paper_check_ts and (time.time() - _sm.last_paper_check_ts) < PAPER_STATE_TTL_S:
+                if _sm.paper_state == "no_paper":
+                    prompt_parts.append(P("caption.no-paper"))
+                elif _sm.paper_state == "drawn_paper":
+                    prompt_parts.append(P("caption.paper-drawn"))
     except Exception:
         pass
 
@@ -1953,6 +1961,21 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         print(f"[PROMPT] ~{token_estimate} words, mode={mode}")
 
     return final_prompt, mode
+
+
+# === PAPER CHECK (safety/paper_detection.py, PAPER_CHECK_METHOD="vlm") ===
+# Structural answer lines are parsed by safety.paper_detection._parse_paper_state;
+# only PAPER: YES + MARKS: NO allows a drawing to execute.
+PAPER_CHECK_PROMPT = (
+    "You are looking down at your drawing table: the wooden surface nearest to you, "
+    "at the bottom of your view. Judge only that surface — ignore every other table or shelf in the room.\n"
+    "Answer the following, each on its own line.\n"
+    "Line 1 — is there a white sheet of paper lying on your drawing table? Write 'PAPER: YES' or 'PAPER: NO'. "
+    "If your drawing table is not visible at all, write 'PAPER: UNSEEN'.\n"
+    "Line 2 — if there is a sheet, does it already have drawing or writing on it? "
+    "Write 'MARKS: YES', 'MARKS: NO', or 'MARKS: N/A' if there is no sheet.\n"
+    "Line 3 — one sentence describing what is on your drawing table."
+)
 
 
 # === CAPTION PROMPT ENTRY POINT ===

@@ -208,12 +208,15 @@ class ImageMonitor:
                         print_message=f"[📄] Delegated to centralized detection: {'YES' if paper_present else 'NO'}"
                     )
                 except Exception as e:
+                    from config import config as _c
+
+                    fail_open = str(getattr(_c, "PAPER_CHECK_METHOD", "aruco")).lower() != "vlm"
                     log_json_entry(
                         LogType.ERROR,
-                        {"action": "paper_check_fallback", "error": str(e)},
-                        print_message=f"[📄] Centralized detection failed ({e}) — defaulting to PROCEED"
+                        {"action": "paper_check_fallback", "error": str(e), "fail_open": fail_open},
+                        print_message=f"[📄] Centralized detection failed ({e}) — {'defaulting to PROCEED' if fail_open else 'failing CLOSED (no draw)'}"
                     )
-                    paper_present = True
+                    paper_present = fail_open
                     reason = f"centralized_error_fallback({str(e)})"
 
                 log_json_entry(

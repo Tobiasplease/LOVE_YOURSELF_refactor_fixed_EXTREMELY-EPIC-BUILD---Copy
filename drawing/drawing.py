@@ -354,14 +354,17 @@ class DrawingController:
                                     "novelty": novelty,
                                     "boredom": boredom,
                                 },
-                                print_message="[📄] Early paper check: NO PAPER - skipping ComfyUI generation",
+                                print_message=f"[📄] Early paper check: {getattr(state_manager, 'paper_state', '') or 'NO PAPER'} - skipping ComfyUI generation",
                             )
                             state_manager.last_no_paper_skip_ts = time.time()
+                            _fail_reason = (
+                                "already a drawing on the paper" if getattr(state_manager, "paper_state", "") == "drawn_paper" else "no paper"
+                            )
                             try:
                                 from drawing.drawing_memory import get_drawing_memory
 
                                 get_drawing_memory().record_failure(
-                                    reason="no paper",
+                                    reason=_fail_reason,
                                     prompt=getattr(state_manager, "current_drawing_prompt", None),
                                 )
                             except Exception:
@@ -369,7 +372,7 @@ class DrawingController:
                             try:
                                 from utils.live_log import log_drawing_failed
 
-                                log_drawing_failed("no paper")
+                                log_drawing_failed(_fail_reason)
                             except Exception:
                                 pass
                             return
