@@ -817,15 +817,12 @@ def get_reflection_echo_line(agent) -> str:
     current thought (north-star principle 5: the past surfaces when the
     present rhymes with it).
 
-    Guards mirror get_familiarity_line: at most every 4th caption, never the
-    same reflection twice in a row, always temporally framed and quoted as
-    the machine's own past words.
+    Guards: never the same reflection twice in a row, always temporally
+    framed and quoted as the machine's own past words. The old internal
+    every-4th counter is GONE (Aug 22): the memory-surface slot already
+    rations invocations (one surface per caption, rotated), and stacking a
+    second counter on top starved reflections to zero — the double gate.
     """
-    counter = getattr(agent, "_reflection_echo_counter", 0) + 1
-    agent._reflection_echo_counter = counter
-    if counter % 4 != 0:
-        return ""
-
     seed = (getattr(agent, "last_caption", "") or "").strip()
     if len(seed) < 10:
         return ""
@@ -1869,21 +1866,30 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # 3c. FAMILIARITY (recognition of known concepts — occasional, max 1 line)
-    # or a drawing fact when the thought is about drawing, or a past
-    # reflection surfacing by relevance — at most ONE memory surface per caption
+    # 3c. ONE memory surface per caption — familiarity, a drawing fact, or a
+    # past reflection. ROTATION (Aug 22): the old strict priority starved
+    # reflections to literal zero (122 in the store, 0/53 surfaced on the
+    # first 3.8 run — the reflection getter was only reached when both others
+    # were empty, and then its own every-4th counter blanked 3 of 4 of those
+    # rare invocations). First pick now rotates each time the slot fires;
+    # each source keeps its own internal pacing.
     if not detox and not live:
-        fam_line = get_familiarity_line(agent)
-        if fam_line:
-            prompt_parts.append(fam_line)
-        else:
-            d_line = get_drawing_echo_line(agent)
-            if d_line:
-                prompt_parts.append(d_line)
-            else:
-                echo_line = get_reflection_echo_line(agent)
-                if echo_line:
-                    prompt_parts.append(echo_line)
+        sources = [
+            ("familiarity", get_familiarity_line),
+            ("drawing_echo", get_drawing_echo_line),
+            ("reflection_echo", get_reflection_echo_line),
+        ]
+        rr = int(getattr(agent, "_memory_surface_rr", 0) or 0)
+        for name, fn in sources[rr % 3 :] + sources[: rr % 3]:
+            try:
+                line = fn(agent)
+            except Exception:
+                line = ""
+            if line:
+                agent._memory_surface_rr = rr + 1
+                print(f"[🧠] memory surface ({name}): {line[:70]}")
+                prompt_parts.append(line)
+                break
 
     # 4. DRAWING/PAPER STATE
     try:
@@ -1916,17 +1922,23 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         except Exception:
             pass
 
-    # 5b. DESIRE (gated — only first 3 captions after a desire changes, never
-    # during live moments). Unconditional injection caused the May 2026
-    # yearning echo loop: monologue yearning → compressed into desire →
-    # re-injected → more yearning.
+    # 5b. DESIRE — a burst of 3 after a change (unconditional injection caused
+    # the May 2026 yearning echo loop: monologue yearning → compressed into
+    # desire → re-injected → more yearning), plus a LOW STANDING DOSE while
+    # the want persists unresolved (Aug 22, P4: desire is an arc — the first
+    # 3.8 evening the machine's desire drove two draw attempts while its
+    # monologue saw the want in 2 of 53 captions). Offset from the identity
+    # dose (%6==0) so the interior lines don't stack on one call.
     if not detox and not live:
         try:
             from captioner.context_compression import context_compressor
+            from config.config import DESIRE_REDOSE_EVERY_N
 
             desire = context_compressor.get_current_desire()
             inj_count = context_compressor.introspective_state.get("desire_injection_count", 0)
-            if desire and len(desire) > 5 and inj_count < 3:
+            _cc = int(getattr(agent, "_caption_count", 0) or 0)
+            _redose = DESIRE_REDOSE_EVERY_N > 0 and _cc > 0 and _cc % DESIRE_REDOSE_EVERY_N == 3
+            if desire and len(desire) > 5 and (inj_count < 3 or _redose):
                 prompt_parts.append(P("caption.desire-wrap").format(desire=desire))
                 context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
             elif not desire:

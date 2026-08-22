@@ -989,6 +989,12 @@ INTROSPECT_INTERVAL = 4
 # sees it every Nth caption. 0 = every call (the old behavior).
 IDENTITY_EVERY_N_CAPTIONS = int(os.getenv("IDENTITY_EVERY_N_CAPTIONS", 6))
 
+# Standing desire dose (Aug 22, P4): while a desire persists unresolved, it
+# re-surfaces in the monologue every Nth quiet caption (offset +3 from the
+# identity dose so interior lines don't stack). The 3-injection burst after a
+# desire change is unchanged. 0 = burst only (the pre-Aug-22 behavior).
+DESIRE_REDOSE_EVERY_N = int(os.getenv("DESIRE_REDOSE_EVERY_N", 8))
+
 # BASE-VOICE CLEAN ROOM (June 28). When True, the caption prompt carries NO
 # stored/compressed material — no persona, drawings, baseline, reflections,
 # concepts, familiarity, felt-state, or desire. Only the irreducible prompt
