@@ -709,6 +709,14 @@ class Captioner(MemoryMixin):
         r"|(?:ink|line|graphite|pen) (?:spills?|bleeds?|flows?|glides?)"
         r"|spill(?:s|ing)? onto the paper"
         r"|(?:pen|nib|pencil) (?:touches|presses|moves|drags|scratches)"
+        # Stroke-by-stroke narration while parked (first live 3.8 run, 20:01:
+        # "I begin drawing with first stroke anyway" → "second stroke follows
+        # curve from ear toward shoulder" → "third stroke arcs outward" — a
+        # whole imaginary session narrated as enacted). Present-tense verb
+        # after an ordinal stroke = a claimed act; planning talk ("the first
+        # stroke should follow") carries a modal and stays free.
+        r"|i begin (?:drawing|to draw)\b"
+        r"|\b(?:first|second|third|fourth|fifth|next|another) stroke (?:follows|arcs|lands|curves|cuts|traces|glides|moves|begins|sweeps)"
         r")\b",
         re.IGNORECASE,
     )
