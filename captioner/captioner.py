@@ -264,14 +264,26 @@ class Captioner(MemoryMixin):
         e9a24f3a→afa36ae1: the tail degraded, the blink carried it, every
         later caption continued the slice). Display and logs keep the full
         text; only the stream — the genre carrier — is cut at the boundary.
-        A text with no boundary at all is pushed raw (the blink register
-        gate covers the restart case)."""
+        A SHORT text with no boundary is pushed raw — fragments are a legal
+        register shape ("Rain", "still nothing") and the rhythm cue invites
+        them. A LONG boundary-less text is a run-on by definition and is not
+        stored at all (Aug 22, run 4dafb002: raw-push let 40-word
+        unpunctuated chains into the window, the register locked, and the
+        echo/erosion machinery churned — 89 spoken-not-stored + 58 erosions
+        in 31 min fighting what storage had admitted)."""
         t = (text or "").strip()
         idx = max(t.rfind("."), t.rfind("!"), t.rfind("?"))
         # >=10: don't trim down to a stub like "3." — a real short sentence
         # ("The man moved.") is kept, a numeric fragment is not
         if idx >= 10 and idx < len(t) - 1:
             t = t[: idx + 1]
+        elif idx < 10 and len(t.split()) > 24:
+            log_json_entry(
+                LogType.DEBUG,
+                {"message": "Boundary-less run-on not stored", "action": "runon_not_stored", "caption_preview": t[:60]},
+                print_message=f"[🔂] run-on without a single sentence boundary — spoken, not stored: {t[:60]}...",
+            )
+            return
         self._stream.append(t)
         self._stream_ts.append(time.time())
 
