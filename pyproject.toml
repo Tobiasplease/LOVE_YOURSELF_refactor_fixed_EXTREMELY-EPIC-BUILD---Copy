@@ -16,12 +16,15 @@ extend-exclude = '''
   | buck-out
   | build
   | dist
+  # vendored third-party SDK (git submodule) — leave upstream formatting alone
+  | sdk_uarm
 )/
 '''
 
 [tool.isort]
 profile = "black"
 line_length = 150
+skip_glob = ["sdk_uarm/*"]
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0
