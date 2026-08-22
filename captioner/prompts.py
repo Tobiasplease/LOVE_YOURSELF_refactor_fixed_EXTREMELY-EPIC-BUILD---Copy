@@ -346,7 +346,8 @@ def casual_time_string(minutes: float) -> str:
     elif minutes < 2160:
         return "about a day"
     else:
-        return f"about {int(minutes / 1440)} days"
+        days = round(minutes / 1440)
+        return "about a day" if days <= 1 else f"about {days} days"
 
 
 def part_of_day_string(hour: int) -> str:
@@ -1074,23 +1075,18 @@ def get_introspective_context(agent=None) -> str:
 
     fragments = []
 
-    # What have I drawn recently?
+    # The body of work as one compact arc account (Aug 22, artist's ask):
+    # "My last drawings: X — drawn twice in a row, the latest about an hour
+    # ago. Before that: Y." Facts only — subjects, repetition, order, age;
+    # any wondering about the pattern is the machine's to have, not ours to
+    # script. Replaces the old "My last drawings were of: <90-char intent
+    # truncations>" list, which spoke scaffolding with the subjects cut away.
     try:
         from drawing.drawing_memory import get_drawing_memory
 
-        dm = get_drawing_memory()
-        summary = _sanitize_context(dm.get_recent_drawings_summary(max_count=2))
-        if summary and len(summary.strip()) > 5:
-            clean = summary.strip()
-            if clean.lower().startswith("recent drawings:"):
-                clean = clean[len("recent drawings:") :].strip()
-            import re as _re
-
-            clean = _re.sub(r"\s*\([^)]*\)\s*$", "", clean)
-            if clean:
-                if len(clean) > 160:
-                    clean = clean[:160].rsplit(" ", 1)[0]
-                fragments.append(f"My last drawings were of: {clean}")
+        arc = _sanitize_context(get_drawing_memory().get_arc_line(max_count=5))
+        if arc and len(arc.strip()) > 5:
+            fragments.append(arc.strip())
     except Exception:
         pass
 

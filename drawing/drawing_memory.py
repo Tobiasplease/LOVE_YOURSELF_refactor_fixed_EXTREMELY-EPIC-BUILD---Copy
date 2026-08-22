@@ -73,7 +73,7 @@ class DrawingMemory:
 
         entry = {
             "timestamp": time.time(),
-            "compressed_summary": compressed_summary[:120],
+            "compressed_summary": self._condense_subject(compressed_summary),
             "theme_tags": (theme_tags or [])[:3],
             "emotional_tone": (emotional_tone or "")[:30],
             "narrative_thread": (narrative_thread or "")[:50],
@@ -86,6 +86,47 @@ class DrawingMemory:
         self._save_memory()
 
         print(f"[📚] Stored drawing memory: {compressed_summary}")
+
+    def _condense_subject(self, intent: str) -> str:
+        """The ledger keeps the drawing's SUBJECT, not the intent's wind-up.
+
+        Store-time was `intent[:120]` (found Aug 22): stream intents open with
+        decision-speak or rhetoric ("The subject is not the light bulb or its
+        glare—that is too loud. It…") and the actual subject lives past the
+        cut, so every read-back surface spoke scaffolding with the reveal
+        truncated away. One extractive call at store time (once per drawing,
+        same pattern as stream consolidation) names the subject in the
+        intent's own words; on any failure the old truncation stands."""
+        text = (intent or "").strip()
+        if len(text) <= 90:
+            return text
+        try:
+            from config.config import MODEL_NAME, MOOD_SNAPSHOT_FOLDER
+            from utils.inference import is_failed_response, query_model
+
+            phrase = query_model(
+                prompt=(
+                    "A drawing was made from this intent:\n"
+                    f"{text}\n\n"
+                    "Name what the drawing shows in one short phrase (under 15 words), "
+                    "reusing the intent's own words. Answer with the phrase only."
+                ),
+                model=MODEL_NAME,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                skip_generation_wait=True,
+                system_prompt="You name the subject of a drawing from its maker's intent, in the maker's own words.",
+                options={"temperature": 0.2, "num_predict": 30},
+                prompt_type="drawing_subject",
+                timeout=45,
+            )
+            import re
+
+            phrase = re.sub(r"\*+", "", (phrase or "").strip().strip('"')).strip()
+            if phrase and not is_failed_response(phrase) and 3 <= len(phrase) <= 120 and "\n" not in phrase:
+                return phrase
+        except Exception:
+            pass
+        return text[:120]
 
     def update_last_drawing(self, **fields) -> None:
         """Enrich the newest entry in place (thematic reflection at drawing
@@ -180,6 +221,58 @@ class DrawingMemory:
         phrase = casual_time_string(elapsed_s / 60)
         return phrase if phrase == "just now" else f"{phrase} ago"
 
+    @staticmethod
+    def _same_motif(a: str, b: str) -> bool:
+        """Two subject phrases describing the same motif — content-word
+        overlap, structural (no theme list). 'the heavy black curtain in the
+        doorway' vs 'that black curtain, hanging' → same."""
+        import re
+
+        stop = frozenset(
+            "the a an of in on at with and or that this it its is was to from by one two only just near under over".split()
+        )
+        wa = {w for w in re.sub(r"[^a-z0-9 ]", " ", (a or "").lower()).split() if w not in stop}
+        wb = {w for w in re.sub(r"[^a-z0-9 ]", " ", (b or "").lower()).split() if w not in stop}
+        if not wa or not wb:
+            return False
+        return len(wa & wb) / min(len(wa), len(wb)) >= 0.5
+
+    def get_arc_line(self, max_count: int = 5) -> str:
+        """The executed body of work as ONE compact first-person account
+        (artist's ask, Aug 22): newest subject with its age, consecutive
+        repeats folded into words ("drawn twice in a row"), older subjects
+        trailing in order. FACTS ONLY — what, how many, in what order, how
+        long ago. What the machine makes of the pattern is elicited, never
+        scripted (no content priors)."""
+        import time as _t
+
+        executed = [d for d in self._history if d.get("completed", False)][:max_count]
+        subjects, stamps = [], []
+        for e in executed:  # newest first
+            s = self._subject_phrase(e)
+            if not s or s.startswith("[WARNING]") or s.startswith("[ERROR]"):
+                continue
+            if len(s) > 60:
+                s = s[:60].rsplit(" ", 1)[0] + "…"
+            subjects.append(s.rstrip("."))
+            stamps.append(e.get("timestamp", _t.time()))
+        if not subjects:
+            return ""
+
+        run = 1
+        while run < len(subjects) and self._same_motif(subjects[0], subjects[run]):
+            run += 1
+        age = self._casual_age(_t.time() - stamps[0])
+        counts = {2: "twice", 3: "three times", 4: "four times", 5: "five times"}
+        if run >= 2:
+            head = f"My last drawings: {subjects[0]} — drawn {counts.get(run, 'again and again')} in a row, the latest {age}."
+        else:
+            head = f"My last drawing: {subjects[0]} ({age})."
+        older = subjects[run : run + 2]
+        if older:
+            head += " Before that: " + ("; earlier, ".join(older)) + "."
+        return head
+
     def get_executed_sequence(self, max_count: int = 8) -> List[str]:
         """Chronological plain lines of the executed body of work, oldest to
         newest — "a suspended pencil dripping ink (about 2 hours ago)". Feeds
@@ -200,9 +293,9 @@ class DrawingMemory:
             # intent in its OWN voice, stored for exactly this purpose in July
             # and then bypassed here. Render prose is the fallback, not the
             # first choice.
-            desc = (entry.get("compressed_summary") or "").strip()
+            desc = self._subject_phrase(entry) or (entry.get("compressed_summary") or "").strip()
             if not desc:
-                desc = self._strip_comfy_preamble(entry.get("comfy_prompt", "")) or self._subject_phrase(entry)
+                desc = self._strip_comfy_preamble(entry.get("comfy_prompt", ""))
             desc = (desc or "").strip()
             if not desc:
                 continue
@@ -372,11 +465,21 @@ Write as "I" — this is your own artistic development."""
             t,
             flags=re.IGNORECASE,
         ).strip()
+        # Subject-by-negation rhetoric, legacy entries (store-cut before the
+        # Aug 22 distill): "The subject is not the light bulb — that is too
+        # loud. It…" — drop the scaffold; if only the negation wind-up
+        # survived the cut, the concrete comfy depiction reads better.
+        t = re.sub(r"^the\s+subject\s+(?:of\s+this\s+drawing\s+)?is\s*[:,]?\s*", "", t, flags=re.IGNORECASE).strip()
+        if re.match(r"^not\b", t, flags=re.IGNORECASE):
+            m = re.search(r"[.!?]\s+(?=\S)", t)
+            rest = t[m.end() :].strip() if m else ""
+            t = rest if len(rest) > 15 else ""
+        t = re.sub(r"^it\s+is\s+|^it's\s+", "", t, flags=re.IGNORECASE).strip()
         if not t or t.lower().startswith("i "):
             depiction = DrawingMemory._strip_comfy_preamble((entry.get("comfy_prompt") or "").strip())
             if depiction:
                 t = depiction
-        return t.strip()
+        return t.strip().rstrip(",;: ").strip()
 
 
 # Global singleton

@@ -2111,8 +2111,10 @@ class Captioner(MemoryMixin):
                 dm.add_drawing(
                     prompt=prompt,
                     # Stream pipeline: the intent in the machine's own words is the
-                    # drawing's meaning — store THAT, not the ComfyUI prose.
-                    compressed_summary=getattr(self, "_last_drawing_intent", "")[:120],
+                    # drawing's meaning — store THAT, not the ComfyUI prose. Passed
+                    # UNCUT: add_drawing distills the subject from the whole intent
+                    # (the old [:120] cut kept the wind-up and lost the reveal).
+                    compressed_summary=getattr(self, "_last_drawing_intent", ""),
                     # The live felt-state (was the frozen calm_observant constant
                     # on all 24 entries); empty when no fresh feeling
                     emotional_tone=_cc.get_felt_state(),
