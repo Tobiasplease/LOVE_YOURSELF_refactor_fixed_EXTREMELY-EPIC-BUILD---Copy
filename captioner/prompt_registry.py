@@ -77,8 +77,12 @@ FRAGMENTS = {
     # --- Genre clauses ----------------------------------------------------
     "genre.hybrid": {
         "title": "Genre clause — hybrid",
-        "text": "Ongoing, plain, half-formed — you pick up wherever the last thought left off.",
-        "note": "Log genre WITHOUT 'add the next entry' (Aug 1): the prefill hands back the machine's own unfinished tail, so continuation is mechanical — asking for a NEW entry would fight the seam.",
+        "text": (
+            "Ongoing, plain, half-formed — you pick up wherever the last thought left off and carry it forward. "
+            "One thread moving through time: each thought takes it somewhere it hasn't been yet, "
+            "pulled by what's changed, what you see now, where the thought itself leads."
+        ),
+        "note": "Log genre WITHOUT 'add the next entry' (Aug 1): the prefill hands back the machine's own unfinished tail, so continuation is mechanical — asking for a NEW entry would fight the seam. PROGRESSION ADDED (Aug 22): the old one-liner framed the stream as a pile of similar entries, and the window's own tics became the pattern to continue (52/147 captions opening 'wait!'). Chain-of-thought doesn't loop because each step derives from the last toward something — this frame gives continuation that direction: forward through time, conditioned on the delta. Positive framing only, no 'don't repeat'.",
         "used_by": ["caption", "caption_blind", "memory"],
     },
     "genre.world": {
@@ -104,13 +108,6 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind"],
     },
     # --- Monologue system-prompt slot wrappers ---------------------------
-    "monologue.felt-wrap": {
-        "title": "Felt-state wrapper (system)",
-        "text": " Right now: {felt}.",
-        "note": "Short adjective phrase only (≤6 words), appended grammatically safely. The raw compression output once produced 'You are a Confused fear that... drawing machine'.",
-        "used_by": ["caption", "caption_blind", "memory"],
-        "placeholders": ["felt"],
-    },
     "monologue.self-wrap": {
         "title": "Self-knowledge wrapper",
         "text": ' What you\'ve come to know about yourself: "{self_knowledge}"',
@@ -129,7 +126,7 @@ FRAGMENTS = {
     "elicit.observational": {
         "title": "Elicitation — observational",
         "text": " What stands out to you right now — and what do you make of it?",
-        "note": "Elicitations name the KIND of thought to have, never restating facts (one channel per fact). Suppressed in document/world/hybrid: a fresh question every call produced a fresh answer every call.",
+        "note": "Elicitations name the KIND of thought to have, never restating facts (one channel per fact). Suppressed in document/world (July 27: a fresh question every call produced a fresh answer every call — isolated scene reports). HYBRID IS SEAM-CONDITIONAL (Aug 22): when the seam hands the model a mid-thought prefill, the seam is the door and the question stays out; when the seam is absent (empty stream, react cycle, post-gap) the model used to face the frame with nothing to do — north-star P2's 'required and currently missing' — so exactly then the elicitation returns.",
         "used_by": ["caption", "caption_blind"],
     },
     "elicit.relational": {
@@ -547,13 +544,12 @@ PASSES = {
             {"frag": "genre.world", "gate": "STREAM_MODE == world"},
             {"frag": "genre.turns", "gate": "other modes"},
             {"frag": "genre.turns-continue", "gate": "STREAM_MODE == turns only"},
-            {"slot": "felt", "store": "felt_state", "via": "monologue.felt-wrap", "gate": "≤6 words, skipped in detox"},
-            {"slot": "self_knowledge", "store": "self_trait", "via": "monologue.self-wrap", "gate": "skipped in detox"},
-            {"slot": "durable", "store": "durable_ledger", "via": "monologue.durable-wrap", "gate": "skipped in detox; empty until earned"},
-            {"frag": "elicit.observational", "gate": "mode-matched; quiet modes suppressed in document/world/hybrid"},
+            {"slot": "self_knowledge", "store": "self_trait", "via": "monologue.self-wrap", "gate": "skipped in detox; DOSED Aug 22 — introspective/awakening always, else every IDENTITY_EVERY_N_CAPTIONS"},
+            {"slot": "durable", "store": "durable_ledger", "via": "monologue.durable-wrap", "gate": "skipped in detox; empty until earned; same Aug 22 dosing as self_knowledge"},
+            {"frag": "elicit.observational", "gate": "mode-matched; suppressed in document/world; in hybrid, PRESENT exactly when the seam is absent (empty stream / react / post-gap)"},
             {"frag": "elicit.relational", "gate": "mode == relational (kept in all stream modes)"},
-            {"frag": "elicit.workspace", "gate": "mode == workspace; suppressed in document/world/hybrid"},
-            {"frag": "elicit.introspective", "gate": "mode == introspective; suppressed in document/world/hybrid"},
+            {"frag": "elicit.workspace", "gate": "mode == workspace; document/world suppressed; hybrid seam-conditional (see elicit.observational)"},
+            {"frag": "elicit.introspective", "gate": "mode == introspective; document/world suppressed; hybrid seam-conditional (see elicit.observational)"},
             {"frag": "elicit.awakening", "gate": "mode == awakening (kept in all stream modes)"},
         ],
         "user": [

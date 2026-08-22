@@ -1034,6 +1034,50 @@ class Captioner(MemoryMixin):
                     return "prompt_parrot"
         return None
 
+    # Echo-class rejections (Aug 22): a real thought in a borrowed shape —
+    # fine to SPEAK (display, logs, observe), poisonous to STORE. The window
+    # is in-context evidence: every stored tic teaches the model that this
+    # document's entries open that way, which no mouth-side instruction can
+    # outweigh (Aug 22 run: 52/147 stored captions opened "wait!" and the
+    # mouth gate burned 72 cycles fighting the consequence of its own
+    # storage). Shape-class rejections (meta, parroting, salad, CJK) stay
+    # unspeakable — they'd break the fiction if displayed.
+    _ECHO_REASONS = frozenset({"template_echo", "refrain_echo", "tail_echo", "number_chain"})
+
+    def _note_unstored_cycle(self, reason: str, preview: str) -> None:
+        """A cycle ended without the stream growing (echo spoken-not-stored,
+        or a shape-skip). Streak bookkeeping + EROSION, not amnesia (Aug 1).
+
+        History of the escape hatch: v1 wiped the whole stream after 3
+        rejected cycles (built for the 9B's word-salad deadlock — five-second
+        amnesia, 12 wipes in 10 minutes); v2 dropped just the newest entry;
+        live 27B data killed both — rejections are the model RE-TYPING its
+        one-entry visible document from the top, and ANY subtraction resets
+        depth, so the stream oscillated at 1-2 entries forever. v3 kept the
+        stream forever and logged a note — which made a poisoned stream
+        permanent (prefill deterministically reproduced the same output: 459
+        calls, 10 distinct outputs, 3% pass). Now the thread erodes from the
+        FRONT, one entry per stuck cycle: the oldest entry is the likeliest
+        poison, recency survives, and in the worst case the window empties
+        gradually instead of vanishing at a stroke."""
+        self._skip_streak = getattr(self, "_skip_streak", 0) + 1
+        if self._skip_streak >= 3 and len(self._stream) > 1:
+            dropped = self._stream.popleft()
+            if self._stream_ts:
+                self._stream_ts.popleft()
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "Seam stuck — eroding the oldest stream entry",
+                    "action": "stream_erosion",
+                    "streak": self._skip_streak,
+                    "reason": reason,
+                    "dropped": dropped[:60],
+                    "remaining": len(self._stream),
+                },
+                print_message=f"[🪨] Stuck {self._skip_streak} cycles — dropped the oldest thought ({len(self._stream)} left)",
+            )
+
     def _consolidate_stream_if_needed(self) -> None:
         """The document must move FORWARD (artist, July 9): when the joined
         stream gets long (run-ons accumulate), compress the oldest 3 entries
@@ -1568,13 +1612,27 @@ class Captioner(MemoryMixin):
 
                         caption = self._strip_list_shape(_generate(gen_options))
 
-                        # Mouth gate: template echo / assistant-speak / prompt
-                        # parroting are conversation-shapes, not continuations.
-                        # One retry, hotter; if the shape persists, skip the
-                        # cycle — silence over restatement (docs/continuity-plan.md).
+                        # Gate split (Aug 22): echo-class rejections are spoken
+                        # but never stored (the fix lives at storage, north-star
+                        # P1); shape-class rejections stay mouth-gated — one
+                        # retry, else silence (docs/continuity-plan.md).
                         _gate_ctx = f"{system_prompt or ''}\n{user_prompt or ''}"
+                        self._stream_store_ok = True
                         reason = self._caption_reject_reason(caption, _gate_ctx)
-                        if reason:
+                        if reason in self._ECHO_REASONS:
+                            self._stream_store_ok = False
+                            self._note_unstored_cycle(reason, caption[:60])
+                            log_json_entry(
+                                LogType.DEBUG,
+                                {
+                                    "message": f"Echo caption spoken, not stored ({reason})",
+                                    "action": "echo_spoken_not_stored",
+                                    "reason": reason,
+                                    "caption_preview": caption[:60],
+                                },
+                                print_message=f"[🔂] {reason} — spoken, but kept out of the stream (streak {self._skip_streak})",
+                            )
+                        elif reason:
                             from config.config import ANTI_ECHO_RETRY_TEMP_BUMP
 
                             hot_opts = dict(gen_options or {})
@@ -1595,51 +1653,9 @@ class Captioner(MemoryMixin):
                             if retry and not retry_reason:
                                 caption = retry
                             else:
-                                # Escape hatch, v3 (July 30). v1 wiped the whole
-                                # stream after 3 rejected cycles (built for the
-                                # 9B's word-salad 'forevermore' deadlock); v2
-                                # dropped just the newest entry. Live 27B data
-                                # killed both: these rejections are the model
-                                # RE-TYPING its one-entry visible document from
-                                # the top — a too-short document has no momentum
-                                # to continue — and ANY subtraction resets depth,
-                                # so the stream oscillated at 1-2 entries forever
-                                # (8 drops vs 9 stores in 6 min). The cure is
-                                # depth, not amputation: never mutate the stream
-                                # on echo streaks. Silence is the designed
-                                # outcome; the streak is logged for observability
-                                # and the thread stays whole so it can grow past
-                                # the re-typing regime.
-                                self._skip_streak = getattr(self, "_skip_streak", 0) + 1
-                                # EROSION, not amnesia (Aug 1). Two prior designs
-                                # both failed: v1 wiped the whole stream after 3
-                                # rejections (five-second amnesia, 12 wipes in 10
-                                # minutes), v3 kept it forever and logged a note —
-                                # which made a poisoned stream permanent, because
-                                # the prefill deterministically reproduces the same
-                                # output no matter what the scene does (Aug 1: 459
-                                # calls, 10 distinct outputs, 3% pass, one run
-                                # silent for hours). Now the thread erodes from the
-                                # FRONT, one entry per stuck cycle: the oldest entry
-                                # is the likeliest poison (it arrived first and has
-                                # blocked everything since), recency survives, and
-                                # in the worst case the window empties gradually
-                                # instead of vanishing at a stroke.
-                                if self._skip_streak >= 3 and len(self._stream) > 1:
-                                    dropped = self._stream.popleft()
-                                    if self._stream_ts:
-                                        self._stream_ts.popleft()
-                                    log_json_entry(
-                                        LogType.DEBUG,
-                                        {
-                                            "message": "Seam stuck — eroding the oldest stream entry",
-                                            "action": "stream_erosion",
-                                            "streak": self._skip_streak,
-                                            "dropped": dropped[:60],
-                                            "remaining": len(self._stream),
-                                        },
-                                        print_message=f"[🪨] Stuck {self._skip_streak} cycles — dropped the oldest thought ({len(self._stream)} left)",
-                                    )
+                                # Streak + erosion bookkeeping — full v1/v2/v3
+                                # history in _note_unstored_cycle's docstring.
+                                self._note_unstored_cycle(retry_reason or reason, (retry or caption)[:60])
                                 log_json_entry(
                                     LogType.DEBUG,
                                     {
@@ -1653,7 +1669,8 @@ class Captioner(MemoryMixin):
                                 self.last_caption_time = now
                                 return None
 
-                        self._skip_streak = 0  # a caption made it through — the thought is moving again
+                        # (streak resets at the stream push — a spoken echo
+                        # doesn't mean the thread is moving again)
 
                         # Match output against ChromaDB concepts (replaces perception-based matching)
                         matched_concepts = []
@@ -1743,6 +1760,7 @@ class Captioner(MemoryMixin):
                     from utils.inference import is_failed_response, query_model
 
                     blind_prompt, caption_mode = build_simple_caption_prompt(self, person_present=person_present)
+                    self._stream_store_ok = True  # fresh cycle — clear any stale echo verdict
                     caption = self._strip_list_shape(
                         query_model(
                             prompt=blind_prompt or "...",
@@ -1880,9 +1898,11 @@ class Captioner(MemoryMixin):
         self.last_caption = caption  # already trimmed to complete sentence above
 
         # Admit into the stream window (the model's own visible turns) —
-        # meta/markdown slips are displayed and logged but never propagate
-        if caption and self._stream_admissible(caption):
+        # meta/markdown slips and echo-class captions (_stream_store_ok False)
+        # are displayed and logged but never propagate
+        if caption and getattr(self, "_stream_store_ok", True) and self._stream_admissible(caption):
             self._stream_push(caption.strip())
+            self._skip_streak = 0  # the thread grew — the thought is moving again
             self._consolidate_stream_if_needed()
 
         # Track recent captions for continuity thread (used by flowing thread)

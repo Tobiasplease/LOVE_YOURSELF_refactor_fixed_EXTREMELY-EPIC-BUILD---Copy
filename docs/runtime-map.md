@@ -175,13 +175,30 @@ The reaction is stored into the stream, so the interruption becomes part
 of the document when quiet returns. React calls log as
 `stream_mode: document-react`.
 
-Mouth gate (captioner._caption_reject_reason): rejects `template_echo`
-(opens with the same `ANTI_ECHO_WORDS` words as a recent stream entry),
-`assistant_speak` (chat-closer register, the `_STREAM_META_MARKERS` list),
-and `prompt_parrot` (short caption fuzzy-matching a prompt line — the model
-answering the elicitation instead of thinking). One hotter retry, else the
-cycle is SKIPPED (logged `anti_echo_skip` with the reason). List-shaped
-output ("4) …") is stripped at the mouth and inadmissible to the stream.
+Gate split (Aug 22 — the echo fight moved to STORAGE, north-star P1).
+`captioner._caption_reject_reason` still names the reasons, but they now
+fall in two classes:
+
+- **Echo-class** (`template_echo`, `refrain_echo`, `tail_echo`,
+  `number_chain`) — a real thought in a borrowed shape: SPOKEN (display,
+  logs, observe, semantic memory) but **never stored in the stream**
+  (`_stream_store_ok`, logged `echo_spoken_not_stored`). Rationale: the
+  window is in-context evidence — every stored tic teaches the model that
+  this document's entries open that way, which no mouth-side instruction
+  outweighs. The old handling (retry hotter, else silence) burned 72 cycles
+  in 70 min on the Aug 22 3.6-arm run while 52/147 stored captions still
+  opened "wait!" — the gate was fighting the consequence of its own storage.
+  No retry for echo-class: the cycle's caption is simply not re-taught.
+- **Shape-class** (`assistant_speak`, `outward_address`, `prompt_parrot`,
+  `word_salad`, `cjk_drift`, `numeric_fragment`, `phantom_drawing`) — would
+  break the fiction if displayed: one hotter retry, else the cycle is
+  SKIPPED (logged `anti_echo_skip`).
+
+Both unstored outcomes share streak bookkeeping (`_note_unstored_cycle`:
+3 stuck cycles → erode the oldest entry; v1/v2/v3 history in its
+docstring); the streak resets only when the stream actually grows.
+List-shaped output ("4) …") is stripped at the mouth and inadmissible to
+the stream. Test: debug/test_voice_loop_fixes.py.
 
 Observability: every llama-server call now logs the real `api_endpoint`,
 `history_len`, `stream_mode`, `num_frames`, `prefill_tail` (video calls were
@@ -235,12 +252,13 @@ rules, no registers, no mood clause. Voice comes from content.
 
 | Line | Source | Health |
 |------|--------|--------|
-| situation — **REFLEXIVE FRAME July 28**: "drawing machine bolted… This is your inner voice — you keeping yourself company… The fragments that arrive between thoughts are your own senses reporting… When a question forms, it's you asking yourself" | registry `situation.reflexive` (+ `situation.world` in world mode) + genre clause `genre.*` per STREAM_MODE — prompt_registry.py, assembled in prompts.py | REWRITTEN July 28: the old five-negation solitude clause ("no one hears/answers/instructs/assists") invoked assistant vocabulary while denying it, and nothing told the model what the per-cycle user turns ARE — it inferred a speaker and bred "What do you think?" into full assistant mode. Now the incoming channel is named honestly (its own senses) and questions get an answer-path (own next look/thought — the PEN deliberately absent until drawing initiative is real; a frame must not promise agency the code doesn't grant). Outward hooks also admission-gated (`_OUTWARD_HOOKS` — storage, not mouth: say it once, never re-seed). Genre framing stays positive; NO "camera" language anywhere — it primes cinematography |
+| situation — **REFLEXIVE FRAME July 28**: "drawing machine bolted… This is your inner voice — you keeping yourself company… The fragments that arrive between thoughts are your own senses reporting… When a question forms, it's you asking yourself" | registry `situation.reflexive` (+ `situation.world` in world mode) + genre clause `genre.*` per STREAM_MODE — prompt_registry.py, assembled in prompts.py | REWRITTEN July 28: the old five-negation solitude clause ("no one hears/answers/instructs/assists") invoked assistant vocabulary while denying it, and nothing told the model what the per-cycle user turns ARE — it inferred a speaker and bred "What do you think?" into full assistant mode. Now the incoming channel is named honestly (its own senses) and questions get an answer-path (own next look/thought — the PEN deliberately absent until drawing initiative is real; a frame must not promise agency the code doesn't grant). Outward hooks also admission-gated (`_OUTWARD_HOOKS` — storage, not mouth: say it once, never re-seed). Genre framing stays positive; NO "camera" language anywhere — it primes cinematography. **PROGRESSION FRAME Aug 22** (`genre.hybrid`): the hybrid clause now frames the stream as ONE thread moving forward through time ("each thought takes it somewhere it hasn't been yet, pulled by what's changed") — the old one-liner framed it as a pile of similar entries, so the window's own tics became the pattern to continue; chain-of-thought doesn't loop because each step derives from the last toward something, and the frame now gives continuation that direction |
 | persona storage gate | `_valid_self_fact` in context_compression.py — BOTH persona writers (self-synthesis AND core-facts SELF line) require first person, bar "the person"/reality-register | NEW June 12 — the core-facts path had no gate and stored "The person sits... holding an unpressed pen" (its own arm) as identity |
 | "You are between drawings at the moment." | state_manager drawing status (gated, never lies; absent while drawing) | NEW June 12 — without it the model narrated drawings that weren't happening. States the fact only; deliberately does NOT say what the machine is doing instead |
-| "Right now: {felt}." | the mood read's own phrase (July 10; the mood_to_feeling vector fallback was unreachable and was REMOVED Aug 12 — a held/stale phrase now means NO felt line, honest absence), sanitized ≤6 words. **GATED July 26** (`_felt_phrase_held_reason`): the phrase is held back — numbers kept — if it shares a content word (4-char stem) with the persona (one channel per fact) or re-reads the standing phrase's vocabulary inside `FELT_REBORE_SECONDS`=1800 (no self-renewing lease). The rooster run (b15516be) had felt "heavy, hesitant" + persona "…silence gets too heavy" put "heavy" in 41/41 system prompts, twice — the May/June verbatim-affect spiral rebuilt. Metaphor itself stays legal (artist's call). Verify: `[🫀] … (phrase held back: …)` lines | LIVE — was stuck on "calm" while the keyword mood engine flatlined; then the spiral fuel (July 26) |
+| ~~"Right now: {felt}."~~ **RETIRED Aug 22** | was the mood read's own phrase in the SYSTEM prompt — but the same fact already rides the user turn as the felt-state delta, so every call carried the machine's own metaphor twice (P2: one channel per fact; "heavy ink threatens to spill" rode both channels and colonized six consecutive stream entries on the Aug 22 run). The user-turn felt_delta is now the single channel; `monologue.felt-wrap` removed from the registry. The July 26 `_felt_phrase_held_reason` gate still guards the delta's source phrase | retired — watch that felt still reaches the voice via the delta |
 | persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | June 28: the WHOLE identity-feedback blob (self + current/historic desire + belief + discoveries) was reset to empty — it had saturated with one purple theme ("grid/silhouette/shadows") and `_synthesize_self_model` rebuilds self FROM the histories, so a partial clear re-grows it in ~10 min. place/people/drawings facts + journal preserved (backup: machine_identity.json.purple-bak). Will re-form from the now-elicited base voice — judge what it re-grows. NOTE: `_valid_self_fact` gate bars surveillance/reality words but NOT metaphor — "grid" walked through; metaphor gate is a Phase-2 item |
-| mode addition — now an ELICITATION ("What do you make of them being here?" / "Follow the thought you're already having…" / per mode incl. awakening) | mode selection in prompts.py, text = registry `elicit.<mode>` | NEW June 28 — was a bare state clause ("You're aware of someone near you"). Per north-star Principle 2: names the KIND of thought (react/wonder/continue) so the model stops defaulting to literary description. Open question, no scripted mood/phrase, never restates the presence/desk fact (that's the user prompt). The base lever against purple drift |
+| mode addition — now an ELICITATION ("What do you make of them being here?" / "Follow the thought you're already having…" / per mode incl. awakening) | mode selection in prompts.py, text = registry `elicit.<mode>` | NEW June 28 — was a bare state clause ("You're aware of someone near you"). Per north-star Principle 2: names the KIND of thought (react/wonder/continue) so the model stops defaulting to literary description. **SEAM-CONDITIONAL IN HYBRID (Aug 22)**: July 27 suppressed quiet-mode elicitations in document/world/hybrid (a fresh question every call fragmented the thread) — but that left the model with NOTHING to do whenever the seam was also absent, and it defaulted to literary fiction (the detached 3.6-arm run). Now `_hybrid_seam_expected` mirrors llama_server's seam condition: seam present → no question (the seam is the door); seam absent (empty stream / react / post-gap) → the elicitation returns. Relational/awakening keep theirs always |
+| identity injections (self-wrap + durable-wrap) | core_facts.self + durable_ledger.render(), **DOSED Aug 22** (`_identity_due`): introspective/awakening always, other modes every `IDENTITY_EVERY_N_CAPTIONS`=6 | Riding EVERY frame turned identity into a standing instruction — "I invent imaginary critics to justify my hesitation" read ~180×/night elicited invented observers (the boy in the corner, Aug 22 run), which the distiller then re-confirmed off the machine's own echo (8 confirmations). Dosing breaks the resonance structurally. NEXT (not yet built): the distiller should discount confirmations from captions generated while the fact was in-prompt |
 
 Mood engine note: the numeric mood vector no longer reaches the system
 prompt (mood clause deleted). The engine still runs and feeds servo/hand;
@@ -761,8 +779,10 @@ and concept labels re-inject indefinitely. Anything transient (a visitor, a
 happening) must not become standing identity — the sticky slots play by
 stricter rules, and every entry below was earned from a real poisoning.
 
-**Mouth gate** (captioner._caption_reject_reason — retry once hotter, else
-silent skip; 3 consecutive skips clear the stream): template_echo (same
+**Reject reasons** (captioner._caption_reject_reason — since Aug 22 split
+into ECHO-CLASS, spoken but never stored, and SHAPE-CLASS, retry once
+hotter else silent skip; 3 consecutive unstored cycles erode the oldest
+stream entry — see "Gate split (Aug 22)" above): template_echo (same
 5-word opening as a stream entry, punctuation-blind) · assistant_speak
 (_STREAM_META_MARKERS: "as an ai", "language model", service closers
 "would you like/let me know/feel free to", "the user", token leaks

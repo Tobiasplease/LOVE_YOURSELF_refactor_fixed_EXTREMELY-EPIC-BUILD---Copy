@@ -217,16 +217,11 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # elicitation stays; it carries no stored content.
     detox = bool(getattr(config, "BASE_VOICE_DETOX", False))
 
-    # Felt-state: short adjective phrase only, appended grammatically safely
-    if not detox:
-        try:
-            from captioner.context_compression import context_compressor
-
-            felt = context_compressor.get_felt_state()
-            if felt and len(felt.split()) <= 6:
-                base += P("monologue.felt-wrap").format(felt=felt)
-        except Exception:
-            pass
+    # Felt-state rides ONLY in the user turn (felt_delta) since Aug 22 — it
+    # appeared here too ("Right now: {felt}.") and the same model-written
+    # phrase twice per call read as emphasis (P2: one channel per fact) and
+    # anchored metaphor loops ("heavy ink threatens to spill" colonized six
+    # consecutive stream entries).
 
     # Time since the pen last touched paper — always present, even under
     # detox (it's event provenance, not model-generated text). This is how
@@ -234,8 +229,13 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     base += get_last_drawing_age_line()
 
     # The machine's accumulated self-description, in its own first-person
-    # words inside quotes — the frame stays second person around it
-    if not detox:
+    # words inside quotes — the frame stays second person around it.
+    # DOSED (Aug 22): riding every frame turned identity into a standing
+    # instruction — "I invent imaginary critics" read 180 times a night
+    # elicits invented critics, which the distiller then re-confirms off the
+    # machine's own echo. Introspective/awakening beats always carry it;
+    # other modes see it every IDENTITY_EVERY_N_CAPTIONS.
+    if not detox and _identity_due(agent, mode):
         try:
             from captioner.context_compression import context_compressor
 
@@ -244,8 +244,8 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
                 base += P("monologue.self-wrap").format(self_knowledge=self_knowledge)
         except Exception:
             pass
-        # Durable ledger (July 30): facts that held across days ride every
-        # frame — the permanence spine's read-back surface. Empty until earned.
+        # Durable ledger (July 30): facts that held across days — the
+        # permanence spine's read-back surface. Empty until earned.
         try:
             from captioner.durable_ledger import get_durable_ledger
 
@@ -262,21 +262,60 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # samplers squeeze it. WORLD mode suppresses them too (July 27): a fresh
     # question every call produced a fresh answer every call — the first
     # world run read as isolated scene reports because "What stands out to
-    # you right now?" asks for one. The thread ask lives in the genre frame
-    # ("each entry follows from the ones above"). Relational keeps its
-    # question (a person is a real event worth being asked about), awakening
-    # keeps its (a real threshold). Turns mode keeps all — the A/B stays honest.
+    # you right now?" asks for one. HYBRID is seam-conditional (Aug 22): when
+    # the seam hands back a mid-thought prefill, the seam is the door and a
+    # question would fork the thread — but when the seam is absent (empty
+    # stream, react cycle, post-gap fresh start) the model used to face the
+    # frame with nothing to *do* and defaulted to literary description
+    # (north-star P2: elicitation "required, and currently missing").
+    # Relational keeps its question (a person is a real event worth being
+    # asked about), awakening keeps its (a real threshold). Turns keeps all.
     addition = P(f"elicit.{mode}", default="")
     if mode in ("introspective", "observational", "workspace"):
         try:
             from config.config import STREAM_MODE
 
-            if STREAM_MODE in ("document", "world", "hybrid"):
+            if STREAM_MODE in ("document", "world"):
+                addition = ""
+            elif STREAM_MODE == "hybrid" and _hybrid_seam_expected(agent):
                 addition = ""
         except ImportError:
             pass
     base += addition
     return base
+
+
+def _identity_due(agent, mode: str) -> bool:
+    """Dosing gate for self-knowledge + durable-ledger injection (Aug 22)."""
+    if mode in ("introspective", "awakening"):
+        return True
+    n = int(getattr(config, "IDENTITY_EVERY_N_CAPTIONS", 6))
+    if n <= 0:
+        return True
+    count = int(getattr(agent, "_caption_count", 0) or 0)
+    return count > 0 and count % n == 0
+
+
+def _hybrid_seam_expected(agent) -> bool:
+    """True when this call will hand the model a mid-thought prefill (the
+    hybrid seam — mirror of llama_server._append_stream_and_user's condition):
+    stream non-empty, not a react cycle, and the newest entry not on the far
+    side of a gap marker. When False the model starts fresh — exactly the
+    moment the mode elicitation is the open door."""
+    try:
+        if not list(getattr(agent, "_stream", []) or []):
+            return False
+        if getattr(agent, "_salience_hot", False):
+            return False
+        ts = list(getattr(agent, "_stream_ts", []) or [])
+        if ts:
+            from config.config import STREAM_GAP_MARK_SECONDS
+
+            if time.time() - ts[-1] >= STREAM_GAP_MARK_SECONDS:
+                return False
+        return True
+    except Exception:
+        return True
 
 
 def casual_time_string(minutes: float) -> str:

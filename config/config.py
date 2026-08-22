@@ -975,6 +975,14 @@ PRESENCE_REID_MAX_AGE = 21600.0  # seconds; gallery entries older than this (6h)
 # observation stream was "completely external"; this weaves in depth. 0 = off.
 INTROSPECT_INTERVAL = 4
 
+# Identity dosing (Aug 22): the self-description + durable ledger used to ride
+# EVERY caption, which turned identity into a script — "I invent imaginary
+# critics" read 180 times a night elicits invented critics, which the distiller
+# then re-confirms off the machine's own echo. Identity is memory, not standing
+# instruction: introspective/awakening beats always carry it; every other mode
+# sees it every Nth caption. 0 = every call (the old behavior).
+IDENTITY_EVERY_N_CAPTIONS = int(os.getenv("IDENTITY_EVERY_N_CAPTIONS", 6))
+
 # BASE-VOICE CLEAN ROOM (June 28). When True, the caption prompt carries NO
 # stored/compressed material — no persona, drawings, baseline, reflections,
 # concepts, familiarity, felt-state, or desire. Only the irreducible prompt
