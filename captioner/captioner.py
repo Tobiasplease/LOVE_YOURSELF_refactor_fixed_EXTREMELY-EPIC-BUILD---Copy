@@ -1509,6 +1509,16 @@ class Captioner(MemoryMixin):
                             "seed": _random.randint(1, 1000000),
                         }
 
+                        # Frozen-input breaker (Aug 22, run e66279fd): 2+ cycles
+                        # without the stream growing means the model is re-typing
+                        # an UNCHANGED window+seam — spoken-not-stored kept the
+                        # input identical and the mouth produced 5 verbatim
+                        # repeats in 52s. A stuck cycle runs seam-less (react in
+                        # hybrid keeps the full log, drops only the prefill) and
+                        # the seam-conditional elicitation opens the door — a
+                        # fresh question instead of a frozen continuation.
+                        _fresh_start = bool(self._salience_hot) or getattr(self, "_skip_streak", 0) >= 2
+
                         # Video decision from the salience assessment: pixel diff only
                         # decides whether sending video frames is worthwhile (scene
                         # motion itself is person-angle based, computed in _assess_scene)
@@ -1601,7 +1611,7 @@ class Captioner(MemoryMixin):
                                     options=_opts,
                                     timeout=60,
                                     history=self._stream_history(),
-                                    react=bool(self._salience_hot),
+                                    react=_fresh_start,
                                 )
 
                         else:
@@ -1627,7 +1637,7 @@ class Captioner(MemoryMixin):
                                     options=_opts,
                                     prompt_type="caption",
                                     history=self._stream_history(),
-                                    react=bool(self._salience_hot),
+                                    react=_fresh_start,
                                 )
 
                         caption = self._strip_list_shape(_generate(gen_options))
@@ -1640,6 +1650,26 @@ class Captioner(MemoryMixin):
                         self._stream_store_ok = True
                         reason = self._caption_reject_reason(caption, _gate_ctx)
                         if reason in self._ECHO_REASONS:
+                            # Verbatim repeat of the caption just SPOKEN (not
+                            # just the window) — a broken record, not emphasis:
+                            # silence it entirely. Saying the same sentence to
+                            # the room twice running reads as a fault, and the
+                            # frozen-input breaker needs the quiet cycle to arm.
+                            _prev_w = self._norm_words(self.last_caption or "")
+                            _cur_w = self._norm_words(caption)
+                            if _cur_w and (_cur_w == _prev_w or (len(_cur_w) >= 12 and _cur_w[:12] == _prev_w[:12])):
+                                self._note_unstored_cycle("echo_repeat", caption[:60])
+                                log_json_entry(
+                                    LogType.DEBUG,
+                                    {
+                                        "message": "Verbatim repeat of the previous spoken caption — silenced",
+                                        "action": "echo_repeat_silenced",
+                                        "caption_preview": caption[:60],
+                                    },
+                                    print_message=f"[🔇] verbatim repeat — staying quiet (streak {self._skip_streak})",
+                                )
+                                self.last_caption_time = now
+                                return None
                             self._stream_store_ok = False
                             self._note_unstored_cycle(reason, caption[:60])
                             log_json_entry(

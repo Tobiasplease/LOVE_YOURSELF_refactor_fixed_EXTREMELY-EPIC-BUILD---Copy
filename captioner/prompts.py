@@ -307,6 +307,10 @@ def _hybrid_seam_expected(agent) -> bool:
             return False
         if getattr(agent, "_salience_hot", False):
             return False
+        # Frozen-input breaker (mirror of the captioner's _fresh_start): a
+        # stuck streak runs seam-less, so the door opens exactly then.
+        if int(getattr(agent, "_skip_streak", 0) or 0) >= 2:
+            return False
         ts = list(getattr(agent, "_stream_ts", []) or [])
         if ts:
             from config.config import STREAM_GAP_MARK_SECONDS
