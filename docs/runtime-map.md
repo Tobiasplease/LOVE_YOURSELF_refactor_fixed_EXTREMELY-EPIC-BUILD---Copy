@@ -85,9 +85,12 @@ Real fix remains a new RTC battery.
 camera frame (~30fps)
   ├─ YOLO + ByteTrack (person bbox, track id, count)     [perception/object_detection.py]
   │    cadence 0.1s person-present / 1.5s idle (config); bbox = sticky track id, not per-frame argmax
-  │    model yolov8m since July 10 — nano hallucinated the desk mannequin head as person and
-  │    missed still/seated people (the cause of the 180s departure-timeout workaround). Known
-  │    hard case both models fail: the life-size sweater doll reads as person (~0.8 conf)
+  │    model yolo11m-pose since Aug 25 (yolov8m July 10 before it) — a person-verdict now
+  │    needs a COHERENT SKELETON (≥5 confident keypoints over ≥2 of head/torso/limbs,
+  │    YOLO_SKELETON_*): mannequin heads, the face cast, hanging legs, and the machine's own
+  │    arms produce no candidates at all (verified debug/test_pose_gate.py). Known hard case
+  │    that geometry cannot refute: the life-size sweater doll — full humanoid skeleton
+  │    (12 kps, 3 regions) — that one belongs to the adjudicator + effigy stillness
   ├─ Face DNN (face bbox)                                 [machine.py]
   │    tracking dead zone scales with face size (config FACE_TRACK_*) — close faces used to
   │    drive servo hunting ("bobbing") that blurred captures; tracking physics now ~critically damped
