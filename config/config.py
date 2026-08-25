@@ -1047,10 +1047,21 @@ AWARE_ENTRY_CONFIRM_S = 2.0  # person must be continuously detected this long be
 # nano missed for whole stretches. Known remaining false positive: the
 # life-size sweater doll — human enough to fool anything short of the LLM.
 # Inference ~12ms, so the 0.1s tracking cadence is unaffected.
+# Aug 25: yolo11m-pose — same family, same track() API, plus 17 COCO
+# keypoints per person. A person-verdict now needs a COHERENT SKELETON
+# (see the gate below): a mannequin head is head-keypoints only and fails;
+# the box+keypoints flow is otherwise identical. Set YOLO_MODEL_PATH to
+# yolov8m.pt to fall back (the gate passes everything without keypoints).
 YOLO_MODEL_PATH = os.getenv(
     "YOLO_MODEL_PATH",
-    os.path.join(MODEL_PATH, "yolov8m.pt"),
+    os.path.join(MODEL_PATH, "yolo11m-pose.pt"),
 )
+# Skeleton coherence gate: person iff >= MIN_KEYPOINTS confident keypoints
+# spread over >= MIN_REGIONS of the three body regions (head / torso / limbs).
+# Structural evidence, not appearance: a head alone is not a body.
+YOLO_SKELETON_KP_CONF = 0.5  # per-keypoint confidence to count as present
+YOLO_SKELETON_MIN_KEYPOINTS = 5
+YOLO_SKELETON_MIN_REGIONS = 2
 YOLO_INTERVAL_IDLE = 1.5  # detection cadence with nobody around — fast enough to catch arrivals
 YOLO_INTERVAL_TRACKING = 0.1  # cadence while a person is present — keeps bbox fresh under camera motion
 

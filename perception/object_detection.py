@@ -5,10 +5,23 @@ import time
 import warnings
 
 import cv2
+import numpy as np
 from ultralytics import YOLO
 
-from config.config import YOLO_CONFIDENCE_THRESHOLD, YOLO_INTERVAL_IDLE, YOLO_INTERVAL_TRACKING, YOLO_MODEL_PATH, YOLO_PERSON_MIN_AREA_FRAC
+from config.config import (
+    YOLO_CONFIDENCE_THRESHOLD,
+    YOLO_INTERVAL_IDLE,
+    YOLO_INTERVAL_TRACKING,
+    YOLO_MODEL_PATH,
+    YOLO_PERSON_MIN_AREA_FRAC,
+    YOLO_SKELETON_KP_CONF,
+    YOLO_SKELETON_MIN_KEYPOINTS,
+    YOLO_SKELETON_MIN_REGIONS,
+)
 from perception.detection_memory import DetectionMemory
+
+# COCO keypoint regions: a person is a head AND a body, not a head-like blob.
+_KP_REGIONS = ((0, 1, 2, 3, 4), (5, 6, 11, 12), (7, 8, 9, 10, 13, 14, 15, 16))  # head / torso / limbs
 
 # Suppress ultralytics config warnings
 warnings.filterwarnings("ignore", message=".*attempted relative import.*")
@@ -25,6 +38,16 @@ class ObjectDetectionThread(threading.Thread):
         self.force_cpu = False  # fallback to CPU on CUDA OOM
         self._tracking_mode = False  # When True, use fast interval
         self._target_track_id = None  # sticky gaze target across detection cycles
+
+    @staticmethod
+    def _skeleton_coherent(conf_row):
+        """(ok, n_confident, n_regions) — the structural person test: enough
+        confident keypoints, spread over enough distinct body regions."""
+        c = conf_row.cpu().numpy() if hasattr(conf_row, "cpu") else np.asarray(conf_row)
+        strong = c > YOLO_SKELETON_KP_CONF
+        total = int(strong.sum())
+        regions = sum(1 for idxs in _KP_REGIONS if sum(bool(strong[j]) for j in idxs) >= 2)
+        return total >= YOLO_SKELETON_MIN_KEYPOINTS and regions >= YOLO_SKELETON_MIN_REGIONS, total, regions
 
     def set_frame(self, frame):
         with self.lock:
@@ -76,8 +99,9 @@ class ObjectDetectionThread(threading.Thread):
             person_tracks = {}  # {track_id: (bbox, confidence)}
             untracked_bbox = None
             untracked_conf = 0.0
+            kps = getattr(results, "keypoints", None)  # pose models only; None on plain detectors
 
-            for box in results.boxes:
+            for i, box in enumerate(results.boxes):
                 cls_id = int(box.cls[0])
                 label = self.model.names[cls_id]
                 conf = float(box.conf[0])
@@ -94,6 +118,20 @@ class ObjectDetectionThread(threading.Thread):
                 # threshold, which worsens the seated-still-person misses.
                 if (x2 - x1) * (y2 - y1) < YOLO_PERSON_MIN_AREA_FRAC * frame.shape[0] * frame.shape[1]:
                     continue
+
+                # Skeleton coherence gate (Aug 25): a person is a head AND a
+                # body. A mannequin head yields head-keypoints only and fails;
+                # appearance can lie about person-ness, geometry mostly can't.
+                if kps is not None and kps.conf is not None and i < len(kps.conf):
+                    ok, n_kp, n_reg = self._skeleton_coherent(kps.conf[i])
+                    if not ok:
+                        now_t = time.time()
+                        if now_t - getattr(self, "_last_gate_log", 0.0) > 5.0:
+                            self._last_gate_log = now_t
+                            print(f"[YOLOv8] person-shape rejected by skeleton gate ({n_kp} keypoints, {n_reg} body regions)")
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (128, 128, 128), 1)
+                        cv2.putText(frame, "no skeleton", (x1, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 128, 128), 1)
+                        continue
 
                 # Get persistent tracking ID from ByteTrack
                 track_id = int(box.id[0]) if box.id is not None else None
@@ -121,8 +159,11 @@ class ObjectDetectionThread(threading.Thread):
                 best_person_bbox, best_person_conf = untracked_bbox, untracked_conf
 
             DetectionMemory.update(
-                list(detected), time.time(), clean_frame,
-                best_person_bbox, best_person_conf,
+                list(detected),
+                time.time(),
+                clean_frame,
+                best_person_bbox,
+                best_person_conf,
                 person_count=person_count,
                 best_track_id=self._target_track_id,
                 person_tracks=person_tracks,
