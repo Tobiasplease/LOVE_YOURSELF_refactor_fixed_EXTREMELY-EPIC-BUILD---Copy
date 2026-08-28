@@ -17,7 +17,11 @@ from config.config import (
     CAPTION_INTERVAL_LIVE,
     CAPTION_INTERVAL_QUIET,
     CAPTION_MIN_P,
+    CAPTION_DRY_LAST_N,
     CAPTION_QUIET_AFTER,
+    CAPTION_REPEAT_PENALTY,
+    CAPTION_SHORT_BEAT_P,
+    CAPTION_SHORT_BEAT_TOKENS,
     CAPTION_TEMP,
     CAPTION_TEMP_BORED,
     CAPTION_TOP_P,
@@ -806,6 +810,24 @@ class Captioner(MemoryMixin):
         t = cls._STATUS_FIELD_RE.sub("", t.lstrip())
         return cls._HASHTAG_TAIL_RE.sub("", t).strip()
 
+    @staticmethod
+    def _trim_to_boundary(text: str) -> str:
+        """Land the SPOKEN thought on a sentence boundary (Aug 28). The model
+        almost never stops inside the token budget (70% of run 640cb96e's
+        caption responses ended at the cap), so the raw output usually ends
+        mid-clause — an amputation the artist hears as frantic. The stream
+        already trimmed its stored copy (_stream_push, Aug 20); the display
+        spoke the raw cut. One rule now, applied at the mouth: everything
+        downstream (display, log, stream) gets a thought that ends where a
+        thought ends. Same shape as the _stream_push rule: a short text with
+        no boundary passes raw (fragments are a legal register shape); the
+        full raw response stays visible in the llm log."""
+        t = (text or "").strip()
+        idx = max(t.rfind("."), t.rfind("!"), t.rfind("?"))
+        if idx >= 10 and idx < len(t) - 1:
+            return t[: idx + 1]
+        return t
+
     # Outward-addressed engagement hooks (July 28): "What do you think?" bred
     # into full assistant mode across one document run — one hook admitted to
     # the window and the document faithfully continued the register. ADMISSION
@@ -1010,7 +1032,14 @@ class Captioner(MemoryMixin):
             return "cjk_drift"
         # Numeric fragments ("12...", "5... 4... 3...", "24/7...") slip under
         # the stream's length gate, freeze the window, and recite forever.
-        if sum(1 for ch in caption if ch.isalpha()) < 8:
+        # WORDS ARE LEGAL (Aug 28, artist's call): the old flat 8-letter floor
+        # also killed every real one-word thought ("Rain.", "Still.", "No.") —
+        # the genre frame promised "a single word" while this line vetoed it,
+        # so the window never held a short entry to imitate and the register
+        # homogenized long. Only actual number-garbage and bare symbols die:
+        # any digit-bearing stub, or fewer than two letters total.
+        alpha = sum(1 for ch in caption if ch.isalpha())
+        if alpha < 2 or (alpha < 8 and any(ch.isdigit() for ch in caption)):
             return "numeric_fragment"
         if self._is_word_salad(caption):
             return "word_salad"
@@ -1196,6 +1225,78 @@ class Captioner(MemoryMixin):
         except Exception:
             return None
 
+    def _maybe_close_look(self):
+        """The close look (Aug 28): when the gaze has just deliberately
+        revisited a remembered object AND the detector caught it there (a
+        settled pass during the glance stored a crop), the next caption sees
+        the CROP — the object at detail scale, as a consequence of the
+        machine's own attention. The zoomed pixels are the whole invitation:
+        no analysis instruction, no content prior. Returns
+        {"term", "jpg", "ts"} or None.
+
+        Guards: rhythm (CLOSE_LOOK_MIN_INTERVAL_S — a beat, not a mode),
+        freshness (glance and crop within CLOSE_LOOK_MAX_AGE_S; a stale crop
+        is memory, not sight), crop captured DURING this glance (the same
+        coincidence the discernment verdict trusts), and never over a live
+        event or a face (salience/eye contact own those cycles)."""
+        try:
+            from config.config import CLOSE_LOOK_ENABLED, CLOSE_LOOK_MAX_AGE_S, CLOSE_LOOK_MIN_INTERVAL_S, CLOSE_LOOK_MIN_SESSION_S
+
+            if not CLOSE_LOOK_ENABLED or self._salience_hot:
+                return None
+            if getattr(self, "_eye_contact_now", False) or getattr(self, "_face_close_now", False):
+                return None
+            now = time.time()
+            # The awakening owns the first minutes (run 3f59eae6: the FIRST
+            # caption of the session saw a laptop crop instead of the room —
+            # a boot-churn glance during startup playback satisfied every
+            # freshness gate). Waking up looking through a keyhole is wrong
+            # by design: close looks are chosen attention, and nothing is
+            # chosen yet.
+            if now - float(getattr(self, "true_session_start", 0) or 0) < CLOSE_LOOK_MIN_SESSION_S:
+                return None
+            if now - getattr(self, "_last_close_look_ts", 0.0) < CLOSE_LOOK_MIN_INTERVAL_S:
+                return None
+            from vision.gaze import get_last_glance
+
+            g = get_last_glance()
+            if not g or g["kind"] != "revisit" or now - g["started"] > CLOSE_LOOK_MAX_AGE_S:
+                return None
+            from perception.open_vocab_detector import get_detector
+
+            det = get_detector()
+            crop = det.get_term_crop(g["label"]) if det else None
+            if not crop or crop["ts"] < g["started"] or now - crop["ts"] > CLOSE_LOOK_MAX_AGE_S:
+                return None
+            self._last_close_look_ts = now
+            # One channel per fact: the close-look line owns this glance, so
+            # the situational line's onset note ("Turned to look where...")
+            # must not ride the same prompt.
+            self._last_glance_noted = g["started"]
+            return {"term": g["label"], "jpg": crop["jpg"], "ts": crop["ts"]}
+        except Exception:
+            return None
+
+    @staticmethod
+    def _write_close_look_crop(close_look, img_path: str) -> Optional[str]:
+        """Save the close-look crop beside the full frame (provenance: the
+        event log's image is what the machine actually saw) and upscale small
+        crops so the model gets readable resolution, same law as the face
+        crop."""
+        try:
+            arr = np.frombuffer(close_look["jpg"], dtype=np.uint8)
+            crop = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if crop is None or crop.size == 0:
+                return None
+            if min(crop.shape[0], crop.shape[1]) < 448:
+                scale = 448 / min(crop.shape[0], crop.shape[1])
+                crop = cv2.resize(crop, (int(crop.shape[1] * scale), int(crop.shape[0] * scale)))
+            crop_path = img_path.replace(".jpg", "_closelook.jpg")
+            cv2.imwrite(crop_path, crop)
+            return crop_path
+        except Exception:
+            return None
+
     def _process_frame(self, frame: np.ndarray, reactivity_data: Optional[Dict] = None, person_present: bool = False) -> None:
         now = time.time()
         if now - self.last_caption_time < self._current_caption_interval(now):
@@ -1253,6 +1354,7 @@ class Captioner(MemoryMixin):
         try:
             caption = None  # Initialize caption variable
             caption_mode = "observational"  # Default mode
+            close_look = None  # set by the single-pass branch when a close-look cycle fires
 
             needs_awakening = not self.first_caption_done or not self.session_awakening_done
             if needs_awakening and self._try_blink_resume():
@@ -1387,6 +1489,22 @@ class Captioner(MemoryMixin):
                             and self._caption_count % INTROSPECT_INTERVAL == 0
                         )
 
+                        # THE CLOSE LOOK (Aug 28): the gaze just revisited a
+                        # remembered object and the detector confirmed it there
+                        # — this cycle sees the CROP instead of the room. The
+                        # crop file is written NOW so the prompt line is only
+                        # added when the zoomed image will really be sent (a
+                        # close-look line over a full frame would lie). Inward
+                        # wins the cycle when both fire.
+                        close_look = None if inward else self._maybe_close_look()
+                        if close_look:
+                            _cl_path = self._write_close_look_crop(close_look, img_path)
+                            if _cl_path:
+                                close_look["path"] = _cl_path
+                                print(f"[👁️] Close look — sending crop of '{close_look['term']}'")
+                            else:
+                                close_look = None
+
                         if inward:
                             # THE IMAGE DROPS, NOTHING IS ANNOUNCED (Aug 2).
                             # This used to REPLACE the whole user prompt with
@@ -1406,7 +1524,17 @@ class Captioner(MemoryMixin):
                             # intact, and no picture competing with it. The
                             # machine is not told it isn't looking; it simply
                             # isn't given anything to look at.
-                            user_prompt, _ = build_simple_caption_prompt(self, person_present=person_present)
+                            # FORCED THROUGH THE BUILDER (Aug 25): the beat
+                            # used to force "introspective" only into the
+                            # system prompt while the user prompt still routed
+                            # relationally whenever someone was in the room —
+                            # so the inward beat continued the outward stream,
+                            # just blind (measured 25-08: inward captions still
+                            # describing the room from memory). The whole
+                            # prompt now takes the introspective path: drawing
+                            # arc context in, person-mode context out; the
+                            # situational line still reports presence honestly.
+                            user_prompt, _ = build_simple_caption_prompt(self, force_mode="introspective")
                             caption_mode = "introspective"
                             self._inward_count = getattr(self, "_inward_count", 0) + 1
                             # One true temporal anchor, rotated — kept because a
@@ -1432,12 +1560,16 @@ class Captioner(MemoryMixin):
                                     user_prompt = f"{user_prompt}\n{anchor}".strip()
                             except Exception:
                                 pass
-                            system_prompt = get_monologue_system_prompt("introspective", agent=self)
+                            system_prompt = get_monologue_system_prompt("introspective", agent=self, inward=True)
                         else:
                             user_prompt, caption_mode = build_simple_caption_prompt(
                                 self,
                                 person_present=person_present,
                             )
+                            if close_look:
+                                from captioner.prompt_registry import P as _P
+
+                                user_prompt = f"{user_prompt}\n" + _P("caption.close-look").format(label=close_look["term"])
                             system_prompt = get_monologue_system_prompt(caption_mode, agent=self)
 
                         print(f"\n{'='*80}\n[LLAMA] {MODEL_NAME} ({caption_mode})\n{'='*80}")
@@ -1475,11 +1607,40 @@ class Captioner(MemoryMixin):
                         # temperature buys variety where the distribution is flat
                         # without buying gibberish where it is sharp.
                         _is_bored = self.boredom > 0.7
+
+                        # LENGTH RHYTHM (Aug 28): the model almost never stops
+                        # on its own (70% of 640cb96e's caption responses ended
+                        # at the cap), so the cap IS the length — and one
+                        # constant cap made every thought the same size. A
+                        # short beat on a fraction of ordinary cycles is the
+                        # honest way to get short thoughts out of a prior that
+                        # never volunteers one; _trim_to_boundary lands the
+                        # small budget on a sentence end, so it reads as a
+                        # small complete thought, not an amputation. Inward
+                        # and close-look beats keep their fixed room.
+                        if inward:
+                            _num_predict = 150
+                        elif close_look:
+                            _num_predict = 120
+                        elif _random.random() < CAPTION_SHORT_BEAT_P:
+                            _num_predict = CAPTION_SHORT_BEAT_TOKENS
+                        elif _is_bored:
+                            _num_predict = 110
+                        else:
+                            _num_predict = 80
+
                         gen_options = {
                             "temperature": (CAPTION_TEMP_BORED if _is_bored else CAPTION_TEMP),
                             "top_p": CAPTION_TOP_P,
                             "min_p": CAPTION_MIN_P,
-                            "repeat_penalty": 1.15,
+                            # 1.0 since Aug 28 (CAPTION_REPEAT_PENALTY): the
+                            # blanket repeat tax's main victim was punctuation
+                            # — the period is the most-repeated token in prose,
+                            # and by sentence three it was suppressed enough to
+                            # tip the flow into comma-less run-on. Loop
+                            # suppression is DRY's job (below) + the storage
+                            # gates'; see config note.
+                            "repeat_penalty": CAPTION_REPEAT_PENALTY,
                             # DRY bounded to the LOCAL tail (July 9). It used to span
                             # the whole context (dry_penalty_last_n=-1) — turns-era
                             # reasoning, pre-storage-gates. In document mode that
@@ -1497,14 +1658,20 @@ class Captioner(MemoryMixin):
                             "dry_multiplier": 0.85,
                             "dry_base": 1.75,
                             "dry_allowed_length": 3,
-                            "dry_penalty_last_n": 128,
+                            # 384 since Aug 28 evening (CAPTION_DRY_LAST_N):
+                            # 128 saw only the current caption, so a line
+                            # chanted ACROSS captions ("i am just sitting" x6,
+                            # run 3f59eae6) was invisible to DRY. ~3 entries
+                            # of reach; the July 9 whole-context lesson was
+                            # about -1, not this.
+                            "dry_penalty_last_n": CAPTION_DRY_LAST_N,
                             # Quiet time is THINKING time (July 9: "prior it
                             # felt like it was really thinking more"): the old
                             # bored-clamp (40) truncated thought hardest exactly
                             # when the machine should go deepest. The bloom/loop
                             # risk 80+ used to carry is now owned by the gates
                             # (salad, echo, near-dup, consolidation).
-                            "num_predict": 110 if _is_bored else 80,
+                            "num_predict": _num_predict,
                             "num_ctx": 4096,
                             "seed": _random.randint(1, 1000000),
                         }
@@ -1526,7 +1693,12 @@ class Captioner(MemoryMixin):
                         scene_motion = scene["scene_motion"]
                         person_present_in_window = scene["person_present_in_window"]
                         ego_count = scene["ego_count"]
-                        use_video = not inward and VIDEO_MODE_ENABLED and bool(recent_meta) and scene["max_diff"] > MOTION_THRESHOLD
+                        # A close-look cycle sends the crop, never video: the
+                        # glance means the gaze is parked on a still object,
+                        # and any diff over threshold is mostly the saccade
+                        # that got it there (real events are excluded upstream
+                        # — salience hot blocks the close look entirely).
+                        use_video = not inward and not close_look and VIDEO_MODE_ENABLED and bool(recent_meta) and scene["max_diff"] > MOTION_THRESHOLD
 
                         if use_video:
                             # Ego-motion frames inside a superframe pair encode the
@@ -1615,11 +1787,14 @@ class Captioner(MemoryMixin):
                                 )
 
                         else:
-                            # Inward beat → no image (think, don't look). Otherwise
+                            # Inward beat → no image (think, don't look). Close
+                            # look → the object's crop (look closely). Otherwise
                             # send the frame; on eye contact send the face crop, not a
                             # wide shot where it's a hundred-pixel smudge.
                             send_path = None if inward else img_path
-                            if send_path and getattr(self, "_eye_contact_now", False) and reactivity_data:
+                            if send_path and close_look:
+                                send_path = close_look["path"]
+                            elif send_path and getattr(self, "_eye_contact_now", False) and reactivity_data:
                                 face_box = reactivity_data.get("face_box")
                                 if face_box is not None:
                                     crop_path = self._write_face_context_crop(frame, face_box, img_path)
@@ -1640,7 +1815,7 @@ class Captioner(MemoryMixin):
                                     react=_fresh_start,
                                 )
 
-                        caption = self._strip_list_shape(_generate(gen_options))
+                        caption = self._trim_to_boundary(self._strip_list_shape(_generate(gen_options)))
 
                         # Gate split (Aug 22): echo-class rejections are spoken
                         # but never stored (the fix lives at storage, north-star
@@ -1698,7 +1873,7 @@ class Captioner(MemoryMixin):
                                 },
                                 print_message=f"[🔁] Rejected ({reason}), retrying: {caption[:60]}...",
                             )
-                            retry = self._strip_list_shape(_generate(hot_opts))
+                            retry = self._trim_to_boundary(self._strip_list_shape(_generate(hot_opts)))
                             retry_reason = self._caption_reject_reason(retry, _gate_ctx)
                             if retry and not retry_reason:
                                 caption = retry
@@ -1809,19 +1984,26 @@ class Captioner(MemoryMixin):
                     from config.config import MODEL_NAME as _model_label
                     from utils.inference import is_failed_response, query_model
 
-                    blind_prompt, caption_mode = build_simple_caption_prompt(self, person_present=person_present)
+                    # force_mode keeps user and system prompts on the same
+                    # introspective path (Aug 25) — this blind cycle had the
+                    # same mismatch the inward beat had: system said inward,
+                    # user prompt still routed relationally.
+                    close_look = None  # this cycle sees nothing — a pending crop must not mislabel the log
+                    blind_prompt, caption_mode = build_simple_caption_prompt(self, force_mode="introspective")
                     self._stream_store_ok = True  # fresh cycle — clear any stale echo verdict
-                    caption = self._strip_list_shape(
-                        query_model(
-                            prompt=blind_prompt or "...",
-                            model=_model_label,
-                            image=None,
-                            system_prompt=get_monologue_system_prompt("introspective", agent=self),
-                            timeout=60,
-                            log_dir=MOOD_SNAPSHOT_FOLDER,
-                            options={"temperature": CAPTION_TEMP, "top_p": CAPTION_TOP_P, "min_p": CAPTION_MIN_P, "num_predict": 80},
-                            prompt_type="caption_blind",
-                            history=self._stream_history(),
+                    caption = self._trim_to_boundary(
+                        self._strip_list_shape(
+                            query_model(
+                                prompt=blind_prompt or "...",
+                                model=_model_label,
+                                image=None,
+                                system_prompt=get_monologue_system_prompt("introspective", agent=self),
+                                timeout=60,
+                                log_dir=MOOD_SNAPSHOT_FOLDER,
+                                options={"temperature": CAPTION_TEMP, "top_p": CAPTION_TOP_P, "min_p": CAPTION_MIN_P, "num_predict": 80},
+                                prompt_type="caption_blind",
+                                history=self._stream_history(),
+                            )
                         )
                     )
                     if is_failed_response(caption) or self._caption_reject_reason(caption, blind_prompt or ""):
@@ -1912,10 +2094,11 @@ class Captioner(MemoryMixin):
                 LogType.CAPTION,
                 {
                     "caption": caption,
-                    "image_path": img_path,
+                    "image_path": (close_look or {}).get("path") or img_path,  # the image the machine actually saw
                     "mood": self.current_mood,
                     "mode": caption_mode,  # console printed it, the log never did — mode analysis was impossible (Aug 2 audit)
                     "salience_hot": self._salience_hot,
+                    "close_look": (close_look or {}).get("term"),  # term when this cycle saw a crop, else None
                     "caption_interval": self._current_caption_interval(time.time()),
                 },
                 print_message=print_msg,

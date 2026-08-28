@@ -391,6 +391,26 @@ GAZE_GLANCE_INTERVAL = 45.0  # mean seconds between idle glances (jittered)
 GAZE_GLANCE_DWELL = 7.0  # mean seconds a glance holds its target (jittered)
 GAZE_GLANCE_EXPLORE_WEIGHT = 0.25  # fraction of glances that explore instead of revisit
 
+# Absence discipline (Aug 28): "X isn't where it was" fired 105 times in one
+# evening (run 640cb96e) — one every ~4 min, and the monologue's obsession
+# with emptiness/ghosts fed on it. Absence must be RARE AND REAL: only a
+# well-established anchor can be announced missing, each term at most once
+# per cooldown, and the room as a whole at most one absence per gap. Weak or
+# junk terms still decay and get forgotten — just silently.
+ABSENCE_MIN_HITS = 5  # anchor must have this many sightings before its absence is worth a word
+ABSENCE_TERM_COOLDOWN_S = 21600.0  # per-term: at most one absence event per 6h
+ABSENCE_GLOBAL_GAP_S = 900.0  # room-wide: at most one absence event per 15 min
+
+# The close look (Aug 28): when the gaze has just deliberately revisited a
+# remembered object AND the detector confirmed it there (settled pass during
+# the glance), the next caption call sees the CROP — the object at detail
+# scale, as a consequence of the machine's own attention. The zoomed pixels
+# are the whole invitation: no analysis instruction, no content prior.
+CLOSE_LOOK_ENABLED = True
+CLOSE_LOOK_MIN_INTERVAL_S = 300.0  # at most one close look per 5 min — a beat, not a mode
+CLOSE_LOOK_MAX_AGE_S = 45.0  # glance + crop must be this fresh; stale crops are memory, not sight
+CLOSE_LOOK_MIN_SESSION_S = 120.0  # no close looks in a session's first minutes: the awakening owns them (run 3f59eae6: the FIRST caption saw a laptop crop instead of the room), and boot-churn glances during startup playback aren't chosen attention
+
 # === COMFY STUFF ===
 
 COMFY_OUTPUT_FOLDER = os.getenv("COMFY_OUTPUT_FOLDER", os.path.join(os.path.dirname(os.path.dirname(__file__)), "/home/impostor/ComfyUI/output"))
@@ -864,6 +884,43 @@ CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.85))
 CAPTION_TOP_P = float(os.getenv("CAPTION_TOP_P", 1.0))
 CAPTION_MIN_P = float(os.getenv("CAPTION_MIN_P", 0.05))
 
+# Punctuation-safe penalties (Aug 28). repeat_penalty taxes every repeated
+# token — and the most-repeated tokens in prose are the period and the comma.
+# At 1.15 the third sentence's period was measurably suppressed and the flow
+# tipped into comma-less run-on (median 6.8 sentence marks per 100 words,
+# 52 fully unpunctuated captions in run 640cb96e — the "manic" register the
+# storage trims were fighting after the fact). Loop suppression is DRY's job
+# (dry_multiplier 0.85, local tail) and the storage gates'.
+# 1.05 NOT 1.0 (Aug 28 evening, run 3f59eae6): fully off, the voice flipped
+# to the opposite attractor — declarative chanting ("i am just sitting" x6,
+# 18 spoken-not-stored echoes in 7 minutes). The tax was quietly the only
+# cross-sentence resistance to repeating a short line verbatim. 1.05
+# compounds ~3x slower than 1.15; punctuation survival is now MEASURED
+# (sentence marks per 100 words), so if 1.05 re-kills it, the stats say so.
+CAPTION_REPEAT_PENALTY = float(os.getenv("CAPTION_REPEAT_PENALTY", 1.05))
+
+# DRY horizon (Aug 28 evening). 128 tokens saw only the current caption —
+# chanted lines recur ACROSS captions, invisible to it. 384 reaches ~3
+# entries back, so a re-typed sentence is penalized as a sequence. The July 9
+# lesson (DRY over the whole context exhausted the honest vocabulary into
+# synonym salad) was about -1/unbounded; 384 is the middle ground.
+CAPTION_DRY_LAST_N = int(os.getenv("CAPTION_DRY_LAST_N", 384))
+
+# Length rhythm (Aug 28). The model almost never stops on its own — 70% of
+# run 640cb96e's caption responses ended at the token cap, so the cap IS the
+# length and a constant cap makes every thought the same size (median 67
+# words; the north-star register is "the lamp's still on"). A short beat
+# rolled on a fraction of ordinary cycles is the honest way to get short
+# thoughts out of a prior that never volunteers one: the mouth trims to a
+# sentence boundary, so a small budget reads as a small complete thought.
+# Short entries then enter the stream window, and self-imitation starts
+# working FOR rhythm instead of against it. 0.2 not 0.3 (Aug 28 evening):
+# at 0.3 the first live run over-seeded the window with staccato and the
+# register flipped to fragment-chanting ("stressed-out haiku", artist's
+# read) — rhythm wants a minority beat, not a near-third.
+CAPTION_SHORT_BEAT_P = float(os.getenv("CAPTION_SHORT_BEAT_P", 0.2))
+CAPTION_SHORT_BEAT_TOKENS = int(os.getenv("CAPTION_SHORT_BEAT_TOKENS", 40))
+
 # Drawing calls get a real timeout (Aug 2). query_model defaults to 30s — a
 # 9B-era number. The drawing INTENT prompt is the largest in the system (stream
 # tail + musings + felt + desire + the executed body of work + reflections, plus
@@ -994,6 +1051,14 @@ IDENTITY_EVERY_N_CAPTIONS = int(os.getenv("IDENTITY_EVERY_N_CAPTIONS", 6))
 # identity dose so interior lines don't stack). The 3-injection burst after a
 # desire change is unchanged. 0 = burst only (the pre-Aug-22 behavior).
 DESIRE_REDOSE_EVERY_N = int(os.getenv("DESIRE_REDOSE_EVERY_N", 8))
+
+# Relational elicitation dose (Aug 25): "What do you make of them being here?"
+# used to ride EVERY relational caption — with someone working in the room it
+# was the only standing question the machine heard, re-anchoring every turn
+# onto the person. Same law as the identity dose: the question fires on
+# presence/salience ONSET (arrival, fresh eye contact) and every Nth
+# relational caption after that. 0 = onset only.
+RELATIONAL_ELICIT_EVERY_N = int(os.getenv("RELATIONAL_ELICIT_EVERY_N", 8))
 
 # BASE-VOICE CLEAN ROOM (June 28). When True, the caption prompt carries NO
 # stored/compressed material — no persona, drawings, baseline, reflections,

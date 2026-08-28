@@ -178,13 +178,17 @@ def _monologue_clause() -> str:
 # Principle 2 rationale in their registry notes.
 
 
-def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=None) -> str:
+def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=None, inward: bool = False) -> str:
     """Situation + the machine's own self-description, nothing else.
 
     Felt-state appended as a short clause only if it passes the sanitizer
     (the raw compression output once produced "You are a Confused fear
     that... drawing machine"). The persona is quoted as the machine's own
     words, never blended into the frame voice.
+
+    inward=True marks the interiority beat (image dropped): the seam-
+    conditional elicitation suppression does not apply there — the beat
+    exists to leave the stream's trajectory, so the question IS the door.
     """
     # Hybrid takes the REFLEXIVE frame, not the log frame (Aug 1): "you keep a
     # log" is a strong attractor for a machine — the first hybrid run locked
@@ -268,10 +272,26 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # stream, react cycle, post-gap fresh start) the model used to face the
     # frame with nothing to *do* and defaulted to literary description
     # (north-star P2: elicitation "required, and currently missing").
-    # Relational keeps its question (a person is a real event worth being
-    # asked about), awakening keeps its (a real threshold). Turns keeps all.
+    # Awakening keeps its question (a real threshold). Turns keeps all.
+    # RELATIONAL IS DOSED (Aug 25): "What do you make of them being here?"
+    # used to ride EVERY relational caption — with the artist working in the
+    # room that was the only standing question the machine ever heard, 60% of
+    # a day's captions, re-anchoring each turn onto the person (measured
+    # 25-08: 240/400 relational, the whole run observational in register).
+    # Same law as the identity dose: presence ONSET is an event worth being
+    # asked about; sustained presence is a fact the situational line already
+    # carries. The question fires on a hot salience cycle (arrival, fresh eye
+    # contact) and every RELATIONAL_ELICIT_EVERY_N-th relational caption.
     addition = P(f"elicit.{mode}", default="")
-    if mode in ("introspective", "observational", "workspace"):
+    if mode == "relational":
+        count = int(getattr(agent, "_relational_elicit_count", 0) or 0) + 1
+        if agent is not None:
+            agent._relational_elicit_count = count
+        onset = bool(getattr(agent, "_salience_hot", False))
+        n = int(getattr(config, "RELATIONAL_ELICIT_EVERY_N", 8))
+        if not onset and not (n > 0 and count % n == 0):
+            addition = ""
+    elif mode in ("introspective", "observational", "workspace") and not inward:
         try:
             from config.config import STREAM_MODE
 
@@ -990,28 +1010,6 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
     return " ".join(parts)
 
 
-def get_relational_context(agent=None) -> str:
-    """Relational mode: who is here, how long, what the machine feels about it."""
-    fragments = []
-
-    # Presence duration is now owned solely by the situational line (built from
-    # the sticky presence belief). Restating it here duplicated the fact across
-    # two channels in relational mode — reads as emphasis, locks the register.
-
-    if not fragments:
-        try:
-            from captioner.activation_memory import get_activation_network
-
-            network = get_activation_network()
-            social = [c for c in ["person", "interaction", "presence"] if network.activations.get(c, 0) > 0.3]
-            if social:
-                return "He's here."
-        except Exception:
-            pass
-
-    return " ".join(fragments)
-
-
 def get_observational_context(agent=None) -> str:
     """Observational mode: what's changed, what the machine is doing."""
     fragments = []
@@ -1174,8 +1172,10 @@ def get_familiarity_line(agent) -> str:
 
 # MODE_CONTEXTS: Map modes to their context providers.
 # state_marker removed — situational line handles person presence.
+# relational carries NO context fn (Aug 25): presence is owned by the
+# situational line; the old fallback hardcoded a gendered "He's here."
 MODE_CONTEXTS = {
-    "relational": {"context_fn": get_relational_context},
+    "relational": {"context_fn": None},
     "observational": {"context_fn": get_observational_context},
     "workspace": {"context_fn": get_workspace_context},
     "introspective": {"context_fn": get_introspective_context},
@@ -1411,7 +1411,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
                 )
         except Exception:
             pass
-        review_system = P("situation.reflexive") + (
+        review_system = P("situation.reflexive") + P("drawing.medium") + (
             "Before deciding anything, flip back through your own sketchbook. From everything "
             "here — the whole body of work, what you have written and thought over time — write "
             "a short private note to yourself, two to four sentences, first person: what keeps "
@@ -1437,7 +1437,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
             except Exception:
                 pass
 
-    intent_system = P("situation.reflexive") + (
+    intent_system = P("situation.reflexive") + P("drawing.medium") + (
         "It's time to draw — the arm is ready. Everything you have just read is yours: your "
         "thoughts from the last minutes, what you feel, the whole body of work, notes you have "
         "written to yourself. Decide from it what the next drawing is, the way any artist "
@@ -1723,7 +1723,7 @@ def build_memory_mode_prompt(agent) -> tuple:
         )
 
 
-def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False) -> tuple:
+def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False, force_mode: Optional[str] = None) -> tuple:
     """
     Activation-gated caption prompt - ONLY includes context relevant to current mode.
 
@@ -1736,6 +1736,11 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     - observational: novelty hints, change detection
     - workspace: drawing/paper context
     - introspective: beliefs, long-term memory, motifs
+
+    force_mode bypasses mode determination (Aug 25): the interiority beat used
+    to force "introspective" only into the SYSTEM prompt while this builder
+    still routed the USER prompt relationally (person in the room → relational
+    context), so the inward beat continued the outward stream, just blind.
 
     Returns:
         tuple: (prompt_str, mode) - prompt and determined mode
@@ -1775,7 +1780,9 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         pass
 
     # === DETERMINE MODE (awakening uses same pipeline with minimal context) ===
-    if is_awakening:
+    if force_mode:
+        mode = force_mode
+    elif is_awakening:
         mode = "awakening"
     else:
         network = get_activation_network()

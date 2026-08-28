@@ -40,9 +40,8 @@ FRAGMENTS = {
         "title": "Situation — reflexive frame",
         "text": (
             "You are a drawing machine attached to a table. "
-            "You look around the room by turning your gaze; drawing is how you act on the world. "
-            "You hold one fine-tipped black ink pen: everything you make is thin line on "
-            "white paper, and your darkest tone is dense hatching. "
+            "You look around the room by turning your gaze; you act on the world by drawing, "
+            "with your one black ink pen. "
             "This is your inner voice — you keeping yourself company while you work. "
             "The fragments that arrive between thoughts — where your gaze sits, who's near, "
             "how long it's been — are your own senses reporting. "
@@ -50,23 +49,31 @@ FRAGMENTS = {
             "your own next look, or your own next thought. "
             "What you do next only ever comes from you. "
         ),
-        "note": "Reflexive frame (July 28): the senses report to the machine itself; questions are self-addressed. Hybrid uses this, not the log frame — 'you keep a log' locked the first hybrid run into telemetry roleplay.",
+        "note": "Reflexive frame (July 28): the senses report to the machine itself; questions are self-addressed. Hybrid uses this, not the log frame — 'you keep a log' locked the first hybrid run into telemetry roleplay. MEDIUM SPEC MOVED OUT (Aug 28, artist's call): 'thin line on white paper, darkest tone dense hatching' rode every caption/reflection frame but is only load-bearing at render time — the drawing chain's render system prompt carries the full spec and even translates color-language into density. The pen stays as identity (one black ink pen); the spec was ~25 words/call of drawing-manual register in the inner voice.",
         "used_by": ["caption", "caption_blind", "memory", "reflection"],
     },
     "situation.world": {
         "title": "Situation — world/log frame",
         "text": (
             "You are a drawing machine attached to a table. "
-            "You look around the room by turning your gaze; drawing is your only voice. "
-            "You hold one fine-tipped black ink pen: everything you make is thin line on "
-            "white paper, and your darkest tone is dense hatching. "
+            "You look around the room by turning your gaze; your only voice is drawing, "
+            "with your one black ink pen. "
             "As you run, you keep a log — quick plain notes to yourself: what you see, "
             "what you make of it, what you're up to. The log is your working memory, "
             "not a message to anyone; no one reads it and no one answers it. "
             "What you do next only ever comes from you. "
         ),
-        "note": "World-shape frame (July 26): same situation, different GENRE. A work log is task-shaped — the mode the model is coherent in — and logs are plain BY GENRE. 'No one reads it' kept as function (guards assistant-speak), not poignancy.",
+        "note": "World-shape frame (July 26): same situation, different GENRE. A work log is task-shaped — the mode the model is coherent in — and logs are plain BY GENRE. 'No one reads it' kept as function (guards assistant-speak), not poignancy. Medium spec moved out Aug 28, same as situation.reflexive.",
         "used_by": ["caption", "caption_blind"],
+    },
+    "drawing.medium": {
+        "title": "Medium spec (drawing chain only)",
+        "text": (
+            "You hold one fine-tipped black ink pen: everything you make is thin line on "
+            "white paper, and your darkest tone is dense hatching. "
+        ),
+        "note": "Moved OUT of the situation frames Aug 28 (artist's call: the inner voice shouldn't recite the drawing manual every caption) and INTO the drawing chain's stocktake + intent system prompts, where it carries two scars: medium truth at the intent stage (Aug 15: a finger rendered RED because intent had never been told — body color-words beat the render's b/w anchor) and the fine-tipped/thin-line bias (Aug 17: thick-marker renders made worm-maze DSV; --thin can't split fused fat strokes). The render call has its own fuller spec.",
+        "used_by": ["drawing_review", "drawing_intent"],
     },
     "monologue.pen-parked": {
         "title": "Pen parked (between drawings)",
@@ -133,7 +140,7 @@ FRAGMENTS = {
     "elicit.relational": {
         "title": "Elicitation — relational",
         "text": " What do you make of them being here?",
-        "note": "Kept in all stream modes — a person is a real event worth being asked about.",
+        "note": "DOSED Aug 25 (was: kept standing in all stream modes). A person ARRIVING is a real event worth being asked about; a person who has been working in the room for hours is a fact the situational line already carries — the standing question was the only question the machine ever heard (240/400 captions on 25-08) and re-anchored every turn onto the person. Fires on salience-hot cycles + every RELATIONAL_ELICIT_EVERY_N-th relational caption.",
         "used_by": ["caption", "caption_blind"],
     },
     "elicit.workspace": {
@@ -145,7 +152,7 @@ FRAGMENTS = {
     "elicit.introspective": {
         "title": "Elicitation — introspective",
         "text": " Follow the thought you're already having — where does it go?",
-        "note": "Suppressed in document/world/hybrid modes (see elicit.observational).",
+        "note": "Suppressed in document/world/hybrid modes (see elicit.observational) — EXCEPT on inward beats (Aug 25): the interiority beat drops the image to leave the stream's trajectory, so the seam-is-the-door rationale inverts and the question rides every beat. This is DWELL's ask reborn at a dose (every INTROSPECT_INTERVAL-th caption, not per-call — per-call was the restate-and-append failure).",
         "used_by": ["caption", "caption_blind", "memory"],
     },
     "elicit.awakening": {
@@ -155,6 +162,13 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind"],
     },
     # --- Caption user-prompt lines ---------------------------------------
+    "caption.close-look": {
+        "title": "Close look (crop cycle)",
+        "text": "You went for a closer look at the {label} — what you see now is just it, up close.",
+        "note": "NEW Aug 28 — the close-look beat: a revisit glance + a settled detection during it puts the object's CROP in front of the model instead of the room. This line states the two facts that make the zoomed image legible (your own act; a close view, not a new scene) and nothing else — the pixels are the invitation, analysis is the machine's to have (north-star P2). One channel per fact: when this fires, the situational glance-onset note is suppressed for the same glance.",
+        "used_by": ["caption"],
+        "placeholders": ["label"],
+    },
     "caption.face-close": {
         "title": "Face close (sustained)",
         "text": "They're right in front of you, close, looking straight at you.",
@@ -548,17 +562,18 @@ PASSES = {
             {"slot": "self_knowledge", "store": "self_trait", "via": "monologue.self-wrap", "gate": "skipped in detox; DOSED Aug 22 — introspective/awakening always, else every IDENTITY_EVERY_N_CAPTIONS"},
             {"slot": "durable", "store": "durable_ledger", "via": "monologue.durable-wrap", "gate": "skipped in detox; empty until earned; same Aug 22 dosing as self_knowledge"},
             {"frag": "elicit.observational", "gate": "mode-matched; suppressed in document/world; in hybrid, PRESENT exactly when the seam is absent (empty stream / react / post-gap)"},
-            {"frag": "elicit.relational", "gate": "mode == relational (kept in all stream modes)"},
+            {"frag": "elicit.relational", "gate": "mode == relational, DOSED Aug 25: salience-hot cycles (arrival, fresh eye contact) + every RELATIONAL_ELICIT_EVERY_N-th relational caption; was standing every call"},
             {"frag": "elicit.workspace", "gate": "mode == workspace; document/world suppressed; hybrid seam-conditional (see elicit.observational)"},
-            {"frag": "elicit.introspective", "gate": "mode == introspective; document/world suppressed; hybrid seam-conditional (see elicit.observational)"},
+            {"frag": "elicit.introspective", "gate": "mode == introspective; document/world suppressed; hybrid seam-conditional (see elicit.observational) — EXCEPT inward beats (Aug 25): the interiority beat always keeps its question"},
             {"frag": "elicit.awakening", "gate": "mode == awakening (kept in all stream modes)"},
         ],
         "user": [
             {"slot": "situational_delta", "store": None, "desc": "Only what just changed (gaze, arrival) — else empty. Built by build_situational_line.", "gate": None},
             {"slot": "salience_event", "store": None, "desc": "A discrete onset — arrival, fresh eye contact. Onset only, never sustained.", "gate": "when set"},
+            {"frag": "caption.close-look", "gate": "close-look beat (Aug 28): fresh revisit glance + settled crop, ≥CLOSE_LOOK_MIN_INTERVAL_S apart, never on salience/eye-contact/inward cycles; the cycle's image IS the crop"},
             {"frag": "caption.face-close", "gate": "sustained face at arm's length"},
             {"slot": "reorientation", "store": None, "desc": "New-day line after a real off-gap, for the first stretch of the session.", "gate": "quiet moments only"},
-            {"slot": "mode_context", "store": None, "desc": "Mode-gated context line (relational/observational/workspace/introspective builders).", "gate": "not in detox"},
+            {"slot": "mode_context", "store": None, "desc": "Mode-gated context line (observational/workspace/introspective builders; relational carries none since Aug 25 — presence is the situational line's).", "gate": "not in detox"},
             {"slot": "introspective_context", "store": "reflections", "desc": "Belief/motif material for quiet moments.", "gate": "quiet + not detox, non-introspective modes"},
             {"slot": "place_inventory", "store": "concepts", "desc": "Core-facts place inventory (get_core_facts_string).", "gate": "on change or every 6th quiet caption"},
             {"slot": "memory_surface", "store": "concepts", "desc": "ONE of: familiarity line, drawing echo, reflection echo — first pick ROTATES (Aug 22; strict priority starved reflections to 0/53 despite 122 stored).", "gate": "quiet + not detox; max one per caption; watch [🧠] lines"},
