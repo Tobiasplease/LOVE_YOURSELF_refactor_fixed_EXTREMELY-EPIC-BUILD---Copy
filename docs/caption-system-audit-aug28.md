@@ -256,12 +256,20 @@ music.
   Pattern: capture at camera max, detect on a 720p downscale (same CPU),
   crop from the full-res frame (2.25× pixels at 1080p). Probe camera ceiling
   when the machine is off (v4l2-utils not installed; generic USB identity).
-- **Paper-state staleness**: paper is only CHECKED inside a drawing attempt,
-  and the last verdict is asserted in the prompt for up to 30 min
-  (PAPER_STATE_TTL_S=1800) — after the artist swapped the sheet, the prompt
-  kept claiming marks while the machine had SEEN the swap (the 18:29
-  reflection: "he took it, and then he cleaned the desk"). Perception is
-  ahead of the state machinery. Fixes, cheap→elegant: TTL → ~360; surface
-  state TRANSITIONS as a one-shot code-attested event line ("a fresh sheet
-  is on the table" — same law as absence events); opportunistic re-check
-  when the gaze is already down at the desk and the state is stale.
+- **Paper-state: from standing assertion to event + relevance (artist's
+  design, Aug 28 late)**: paper is only CHECKED inside a drawing attempt
+  (with servo choreography), and the last verdict rides EVERY caption for up
+  to 30 min (PAPER_STATE_TTL_S=1800) — after the artist swapped the sheet,
+  the prompt kept claiming marks while the machine had SEEN the swap (the
+  18:29 reflection: "he took it, and then he cleaned the desk"). Redesign:
+  (1) KILL the standing injection — the fact is relevant at exactly three
+  moments: state TRANSITION (one-shot event line, "a fresh sheet is on the
+  table" — same law as absence events), the want being blocked by it (the
+  desire line carries its own blocker — one fact, one situation), and an
+  actual draw attempt. All other cycles: silence about paper. (2) CHECK
+  WITHOUT CHOREOGRAPHY — the gaze already goes down on its own (a logged
+  position; 332 workspace captions in one run): when gaze is down and the
+  state is stale, run the structured PAPER/MARKS question on the CURRENT
+  frame, no servo movement, rate-limited (~5-10 min, never mid-drawing).
+  Looking at the desk becomes when the machine knows about the desk; TTL
+  shrinks to a footnote because the state refreshes on natural glances.
