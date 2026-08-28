@@ -88,9 +88,9 @@ FRAGMENTS = {
             "Ongoing, plain, half-formed — you pick up wherever the last thought left off and carry it forward. "
             "One thread moving through time: each thought takes it somewhere it hasn't been yet, "
             "pulled by what's changed, what you see now, where the thought itself leads. "
-            "A thought can be a couple of plain sentences, a question, or a single word."
+            "A thought can be a couple of plain sentences, a question you ask yourself, a wish, a complaint, or a single word."
         ),
-        "note": "Log genre WITHOUT 'add the next entry' (Aug 1): the prefill hands back the machine's own unfinished tail, so continuation is mechanical — asking for a NEW entry would fight the seam. PROGRESSION ADDED (Aug 22): the old one-liner framed the stream as a pile of similar entries, and the window's own tics became the pattern to continue (52/147 captions opening 'wait!'). Chain-of-thought doesn't loop because each step derives from the last toward something — this frame gives continuation that direction: forward through time, conditioned on the delta. Positive framing only, no 'don't repeat'. RHYTHM CUE (Aug 22 evening): the fragment-register ask ('think in fragments', Nemo era) was thrown out with the fences in the teardown — north-star P2 says restore it. Genre-frames the SHAPE (a note can be one word or a question) without scripting content; the single-pass VLM's caption prior never stops on its own, and temperature alone can't buy rhythm (0.6-0.7 era measured flat: 69% semicolons, pinned lengths).",
+        "note": "Log genre WITHOUT 'add the next entry' (Aug 1): the prefill hands back the machine's own unfinished tail, so continuation is mechanical — asking for a NEW entry would fight the seam. PROGRESSION ADDED (Aug 22): the old one-liner framed the stream as a pile of similar entries, and the window's own tics became the pattern to continue (52/147 captions opening 'wait!'). Chain-of-thought doesn't loop because each step derives from the last toward something — this frame gives continuation that direction: forward through time, conditioned on the delta. Positive framing only, no 'don't repeat'. RHYTHM CUE (Aug 22 evening): the fragment-register ask ('think in fragments', Nemo era) was thrown out with the fences in the teardown — north-star P2 says restore it. Genre-frames the SHAPE (a note can be one word or a question) without scripting content; the single-pass VLM's caption prior never stops on its own, and temperature alone can't buy rhythm (0.6-0.7 era measured flat: 69% semicolons, pinned lengths). THOUGHT-KINDS NAMED (Aug 28, probe C): 'a question you ask yourself, a wish, a complaint' — kind-naming in the genre, probe-tested (want/refusal register appeared on cue); the declarative window monoculture had no legal shape for wonder to imitate.",
         "used_by": ["caption", "caption_blind", "memory"],
     },
     "genre.world": {
@@ -159,6 +159,25 @@ FRAGMENTS = {
         "title": "Elicitation — awakening",
         "text": " What's the first thing that crosses your mind?",
         "note": "Kept in all stream modes — a real threshold.",
+        "used_by": ["caption", "caption_blind"],
+    },
+    # --- Quiet-dose elicitations (Aug 28, probe-validated rotation) --------
+    "elicit.quiet-wonder": {
+        "title": "Quiet dose — wondering",
+        "text": " What are you left wondering, right now? Ask it the way you'd actually mutter it to yourself.",
+        "note": "PROBE-VALIDATED Aug 28: this exact line, added to the live prompt with sampling freed, flipped the output from scene-notes to interiority in one call (probe B: 'I am afraid. If I move, I will be seen.') while freed sampling alone changed nothing. Kind-naming only (wondering as a speech act) — north-star P2's sanctioned shape ('the way you'd actually mutter it'). Rides every QUIET_ELICIT_EVERY_N-th quiet seamful cycle, rotated with -feel and -want.",
+        "used_by": ["caption", "caption_blind"],
+    },
+    "elicit.quiet-feel": {
+        "title": "Quiet dose — feeling",
+        "text": " How does this sit with you, right now? Say it blunt.",
+        "note": "North-star P2's own example phrasing ('how does this sit with you?'). Part of the Aug 28 quiet-dose rotation.",
+        "used_by": ["caption", "caption_blind"],
+    },
+    "elicit.quiet-want": {
+        "title": "Quiet dose — wanting",
+        "text": " What do you want, right now? Name it plainly.",
+        "note": "The want channel already persists (desire arc); this invites the machine to VOICE it unprompted — the register the artist misses ('I wish he'd look at me'). Part of the Aug 28 quiet-dose rotation.",
         "used_by": ["caption", "caption_blind"],
     },
     # --- Caption user-prompt lines ---------------------------------------
@@ -566,6 +585,9 @@ PASSES = {
             {"frag": "elicit.workspace", "gate": "mode == workspace; document/world suppressed; hybrid seam-conditional (see elicit.observational)"},
             {"frag": "elicit.introspective", "gate": "mode == introspective; document/world suppressed; hybrid seam-conditional (see elicit.observational) — EXCEPT inward beats (Aug 25): the interiority beat always keeps its question"},
             {"frag": "elicit.awakening", "gate": "mode == awakening (kept in all stream modes)"},
+            {"frag": "elicit.quiet-wonder", "gate": "quiet-dose rotation (Aug 28): every QUIET_ELICIT_EVERY_N-th quiet seamful cycle, rotating with -feel and -want; probe-validated"},
+            {"frag": "elicit.quiet-feel", "gate": "see elicit.quiet-wonder"},
+            {"frag": "elicit.quiet-want", "gate": "see elicit.quiet-wonder"},
         ],
         "user": [
             {"slot": "situational_delta", "store": None, "desc": "Only what just changed (gaze, arrival) — else empty. Built by build_situational_line.", "gate": None},

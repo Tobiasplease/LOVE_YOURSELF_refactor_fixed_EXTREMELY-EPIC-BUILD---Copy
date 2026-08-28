@@ -298,11 +298,39 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
             if STREAM_MODE in ("document", "world"):
                 addition = ""
             elif STREAM_MODE == "hybrid" and _hybrid_seam_expected(agent):
-                addition = ""
+                # QUIET DOSE (Aug 28, probe-validated): total suppression left
+                # the machine never asked to wonder — "?" measured 0/59 while
+                # a single invitation flipped the probe to interiority and
+                # freed sampling alone changed nothing. Every Nth quiet
+                # seamful cycle carries one rotating kind-invitation.
+                addition = _quiet_elicit_dose(agent)
         except ImportError:
             pass
     base += addition
     return base
+
+
+def _quiet_elicit_dose(agent) -> str:
+    """Every QUIET_ELICIT_EVERY_N-th eligible quiet cycle, one elicitation
+    rides despite the seam — rotating the KIND of thought invited (wondering,
+    feeling, wanting), so no single question becomes a standing instruction
+    and the thread isn't forked every call (the real Aug 22 problem). Between
+    doses: silence, as before."""
+    try:
+        from config.config import QUIET_ELICIT_EVERY_N
+
+        if QUIET_ELICIT_EVERY_N <= 0 or agent is None:
+            return ""
+        count = int(getattr(agent, "_quiet_elicit_count", 0) or 0) + 1
+        agent._quiet_elicit_count = count
+        if count % QUIET_ELICIT_EVERY_N != 0:
+            return ""
+        kinds = ("elicit.quiet-wonder", "elicit.quiet-feel", "elicit.quiet-want")
+        rr = int(getattr(agent, "_quiet_elicit_rr", 0) or 0)
+        agent._quiet_elicit_rr = rr + 1
+        return P(kinds[rr % len(kinds)], default="")
+    except Exception:
+        return ""
 
 
 def _identity_due(agent, mode: str) -> bool:
@@ -842,14 +870,34 @@ def get_reflection_echo_line(agent) -> str:
     present rhymes with it).
 
     Guards: never the same reflection twice in a row, always temporally
-    framed and quoted as the machine's own past words. The old internal
-    every-4th counter is GONE (Aug 22): the memory-surface slot already
-    rations invocations (one surface per caption, rotated), and stacking a
-    second counter on top starved reflections to zero — the double gate.
+    framed and quoted as the machine's own past words.
+
+    PACED AGAIN (Aug 28): the Aug 22 removal of the internal counter
+    overshot. It assumed the rotation slot rations — but rotation only picks
+    who goes FIRST, and with 180+ reflections stored a relevance match
+    always exists, so this source won the memory slot nearly every quiet
+    caption (measured runs 640cb96e, b611d2c3): a standing "something you
+    worked out..." every cycle is the identity-dose failure with a memory
+    coat on, and every declined call falls through to familiarity/drawing
+    echo, which diversifies the window. The Aug 22 starvation (0/53) was the
+    counter STACKED on strict priority — with rotation, one modest counter
+    is a ration, not a double gate. REFLECTION_ECHO_EVERY_N=0 restores the
+    unpaced behavior.
     """
     seed = (getattr(agent, "last_caption", "") or "").strip()
     if len(seed) < 10:
         return ""
+
+    try:
+        from config.config import REFLECTION_ECHO_EVERY_N
+
+        if REFLECTION_ECHO_EVERY_N > 0:
+            calls = int(getattr(agent, "_reflection_echo_calls", 0) or 0) + 1
+            agent._reflection_echo_calls = calls
+            if calls % REFLECTION_ECHO_EVERY_N != 0:
+                return ""
+    except ImportError:
+        pass
 
     try:
         from captioner.semantic_memory import get_semantic_memory

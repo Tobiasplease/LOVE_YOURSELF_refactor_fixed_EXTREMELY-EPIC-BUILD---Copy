@@ -1052,6 +1052,26 @@ IDENTITY_EVERY_N_CAPTIONS = int(os.getenv("IDENTITY_EVERY_N_CAPTIONS", 6))
 # desire change is unchanged. 0 = burst only (the pre-Aug-22 behavior).
 DESIRE_REDOSE_EVERY_N = int(os.getenv("DESIRE_REDOSE_EVERY_N", 8))
 
+# Quiet elicitation dose (Aug 28 evening, probe-validated): with the seam
+# present, quiet cycles carried NO question at all — and the machine's
+# wonder/wish register measured literal zero ("?" in 0/59 captions) while a
+# single invitation line flipped the probe output to fear/want/intention
+# immediately (sampling was exonerated: freeing it changed nothing). Every
+# Nth quiet seamful cycle now carries one rotating elicitation — wondering /
+# feeling / wanting — kind-naming only, never content (north-star P2). The
+# Aug 22 suppression rationale (a question EVERY call fragments the thread)
+# is answered by the dose, not by abolition. 0 = never (the Aug 22 rule).
+QUIET_ELICIT_EVERY_N = int(os.getenv("QUIET_ELICIT_EVERY_N", 5))
+
+# Reflection-echo pacing (Aug 28 evening). Aug 22 removed this source's
+# internal counter "because the rotation slot rations" — but rotation only
+# picks who goes FIRST, and with 180+ reflections stored a relevance match
+# always exists, so reflection echo won the memory slot nearly every quiet
+# caption (a standing "something you worked out..." = the identity-dose
+# lesson re-learned). Fire at most every Nth invocation; declining falls
+# through to familiarity/drawing echo, which diversifies the window.
+REFLECTION_ECHO_EVERY_N = int(os.getenv("REFLECTION_ECHO_EVERY_N", 3))
+
 # Relational elicitation dose (Aug 25): "What do you make of them being here?"
 # used to ride EVERY relational caption — with someone working in the room it
 # was the only standing question the machine heard, re-anchoring every turn
