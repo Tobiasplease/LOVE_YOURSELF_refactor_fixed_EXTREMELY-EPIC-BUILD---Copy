@@ -239,3 +239,29 @@ music.
   it. Fix the stale boredom docstring while there.
 - **B5**: nothing — emotional palette should follow from B1–B4; if it
   doesn't, that's a finding, not a license to inject moods.
+
+## Part 2 addenda (same evening, artist's observations on the live run)
+
+- **B3 sharpened — UNBIND THE WANT (artist's call)**: the want is
+  drawing-bound in two places — the distill prompt's nudge ("one plain thing
+  you want, *or want to draw*") and structurally: only drawing can RESOLVE a
+  want (spend fires on GRBL execution only), so a non-drawing want can never
+  arc; it lingers until overwritten. Fix: drop the draw-nudge from the
+  distill line; wants are anything the reflection finds; the drawing trigger
+  acts only on wants it can serve (or plain hunger); unserveable wants
+  curdle (P4) instead of evaporating. "I wish he'd look at me" lives here.
+- **Capture resolution**: pinned 1280×720 in config while every crop (close
+  look, face, label audit) is cut from it then upscaled — the close look
+  reads upscale softness as scene fact ("blurry, soft at the edges").
+  Pattern: capture at camera max, detect on a 720p downscale (same CPU),
+  crop from the full-res frame (2.25× pixels at 1080p). Probe camera ceiling
+  when the machine is off (v4l2-utils not installed; generic USB identity).
+- **Paper-state staleness**: paper is only CHECKED inside a drawing attempt,
+  and the last verdict is asserted in the prompt for up to 30 min
+  (PAPER_STATE_TTL_S=1800) — after the artist swapped the sheet, the prompt
+  kept claiming marks while the machine had SEEN the swap (the 18:29
+  reflection: "he took it, and then he cleaned the desk"). Perception is
+  ahead of the state machinery. Fixes, cheap→elegant: TTL → ~360; surface
+  state TRANSITIONS as a one-shot code-attested event line ("a fresh sheet
+  is on the table" — same law as absence events); opportunistic re-check
+  when the gaze is already down at the desk and the state is stale.
