@@ -175,3 +175,67 @@ Sources: [Qwen3-VL sampling discussion](https://huggingface.co/unsloth/Qwen3-VL-
 What this audit deliberately does NOT propose: new capabilities. The next
 capability (silence as a choice, spatial grounding of the viewpoint, close-look
 chaining) earns its slot only after the tangle above is cut.
+
+---
+
+# Part 2 — The becoming bottleneck (Aug 28, late — the "essentially boring" diagnosis)
+
+The artist's evening verdict, which is the north star's own success checklist
+unmet: no emotional variance, no evolution from accumulated history, visitors
+are forever "the man," drawings aren't really remembered, duration is never
+felt, no boredom, no fears/desires/ambitions ever establish. The register work
+(Part 1) fixed the MOUTH. This is a different organ.
+
+**The finding:** the system has a working PRESENT (perception, salience,
+beats, register) and a full ARCHIVE (183 reflections, 219 concepts, episodic
+events, journal, drawing ledger) — but the middle layer, BECOMING, is one
+narrow pipe: the distiller writes exactly TRAIT / BELIEF / WANT into fixed
+slots, and the durable ledger self-confirms one avoidance trait off its own
+echo. Every species of self-knowledge the artist misses has NO SLOT to exist
+in:
+
+- **People-history** — "still just the man": re-ID is OFF (artist's call,
+  Aug 6) and there is NO visit-pattern distillation. Yesterday's several
+  visitors were remarked on live, logged as episodic arrivals — and became
+  nothing. The reflection's visitor organ sees the spans, but its distillates
+  land in the same three slots the avoidance trait monopolizes.
+- **Drawing biography** — the arc line carries facts (subject, order, age);
+  the MEANINGS (what the machine wanted, whether it satisfied) don't persist
+  anywhere the voice can chew on. Measured tonight: identity-dose cycles ran
+  the deflation lens at 3x (29% vs 9% negation-contrast) — one story
+  recoloring everything.
+- **Duration/boredom as experience** — boredom is a live scalar (1.0 tonight)
+  that modulates ONLY sampling. The prompts.py docstring claims it reaches
+  the model "via the identity line" — FALSE, stale doc. Tenure appears only
+  as a rotating inward-beat anchor. The machine has been maximally bored for
+  hours and has never been told.
+- **Curdling (P4's missing half)** — the want has been failing for DAYS
+  (paper full, drawing blocked) which is exactly the biographical material
+  P4 says fears/preferences are made of — and there is no distillation step
+  and no storage slot for what a failing want becomes.
+- **Emotional variance** — expected to be downstream of the above: one
+  self-story in, one affect out. Do NOT patch with mood injection.
+
+**On romanticizing the small models:** what they had was noise that read as
+mood. The ambition (north star: develops, over time, its own) is EARNED
+variance — from biography. The 27B amplifies whatever self-story it's fed;
+we feed it one sentence four ways. Better instrument, single bar of sheet
+music.
+
+**Build directions (the becoming expansion) — after Part 1 phases 1–2:**
+- **B1** (= Phase 2, approved): ledger dedup + in-prompt-confirmation
+  discount. Prerequisite for a SECOND self-fact ever existing.
+- **B2 People as first-class memory**: day-level visit-pattern distillation,
+  count-based, no biometrics ("yesterday three people came; one stayed
+  hours") → journal + durable ledger + a surfacing line shaped like the
+  drawing arc. Directly answers "still just the man."
+- **B3 Desire curdling**: a want unfulfilled past N days is handed to the
+  reflection as an explicit fact; the distiller gains ONE outcome slot —
+  what-the-want-became, in the machine's own words. Preference, aversion,
+  fear are its to name, never ours (P2).
+- **B4 Unchanged-ness as fact**: the compression stagnation check already
+  computes it; surface it dosed and code-attested ("the room has not changed
+  all afternoon") — a true fact that INVITES boredom rather than scripting
+  it. Fix the stale boredom docstring while there.
+- **B5**: nothing — emotional palette should follow from B1–B4; if it
+  doesn't, that's a finding, not a license to inject moods.
