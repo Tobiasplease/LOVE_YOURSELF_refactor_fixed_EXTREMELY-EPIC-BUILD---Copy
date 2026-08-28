@@ -8,6 +8,9 @@ import time
 from datetime import datetime
 
 from config.config import (
+    ABSENCE_GLOBAL_GAP_S,
+    ABSENCE_MIN_HITS,
+    ABSENCE_TERM_COOLDOWN_S,
     MOOD_SNAPSHOT_FOLDER,
     PAN_MAX,
     PAN_MIN,
@@ -159,7 +162,14 @@ class SpatialRegistry:
         decays; the 2nd consecutive miss becomes an absence EVENT for the
         mind ("it isn't where it was"); the 4th forgets the entry — the map
         stores where things ARE, not where they once were. Returns
-        "seen" | "missed" | "gone" | None."""
+        "seen" | "missed" | "gone" | None.
+
+        ABSENCE IS THROTTLED (Aug 28): the bare 2-miss rule minted 105 events
+        in one evening (CPU detector misses are routine — occlusion, light,
+        conf floors), and the monologue fed its emptiness/ghost register on
+        the drip. An event now needs an ESTABLISHED anchor (ABSENCE_MIN_HITS),
+        a per-term cooldown, and a room-wide gap. Weak terms still decay and
+        get forgotten — silently, which is what forgetting noise should be."""
         now = time.time()
         with self.lock:
             e = self.entries.get(term)
@@ -170,7 +180,14 @@ class SpatialRegistry:
                 return "seen"
             e["misses"] = e.get("misses", 0) + 1
             e["conf"] *= 0.7
-            if e["misses"] == 2:
+            if (
+                e["misses"] == 2
+                and e.get("hits", 0) >= ABSENCE_MIN_HITS
+                and now - e.get("last_absence_ts", 0.0) > ABSENCE_TERM_COOLDOWN_S
+                and now - getattr(self, "_last_absence_global", 0.0) > ABSENCE_GLOBAL_GAP_S
+            ):
+                e["last_absence_ts"] = now
+                self._last_absence_global = now
                 self._absence_events.append({"term": term, "ts": now})
                 self._absence_events = self._absence_events[-6:]
             if e["misses"] >= 4:

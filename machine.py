@@ -685,20 +685,14 @@ _caption_monitor_script = os.path.join(os.path.dirname(os.path.abspath(__file__)
 _caption_monitor_proc = None
 if os.path.exists(_caption_monitor_script):
     try:
+        # tkinter window — owns its own colors/fonts, no terminal emulator involved
         _caption_monitor_proc = subprocess.Popen(
-            ["x-terminal-emulator", "-e", sys.executable, _caption_monitor_script],
+            [sys.executable, _caption_monitor_script],
             start_new_session=True,
         )
-        print("[INIT] Caption monitor launched in separate terminal")
-    except FileNotFoundError:
-        try:
-            _caption_monitor_proc = subprocess.Popen(
-                ["gnome-terminal", "--", sys.executable, _caption_monitor_script],
-                start_new_session=True,
-            )
-            print("[INIT] Caption monitor launched in separate terminal")
-        except FileNotFoundError:
-            print("[INIT] Could not find a terminal emulator to launch caption monitor")
+        print("[INIT] Caption monitor window launched")
+    except Exception as e:
+        print(f"[INIT] Could not launch caption monitor: {e}")
 
 debug_print("Initializing mood engine", "INIT")
 mood_engine = MoodEngine()

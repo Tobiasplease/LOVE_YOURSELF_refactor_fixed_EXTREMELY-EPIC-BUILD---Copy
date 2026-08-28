@@ -798,6 +798,21 @@ def get_glance_info():
     return {"label": _glance_label, "kind": _glance_kind, "started": _glance_started}
 
 
+def get_last_glance():
+    """The most recent glance, active or already released: {label, kind,
+    started, ended (None while active)} or None if none has run yet. The
+    close-look beat needs this because a dwell (~7s) can end between caption
+    cycles (~7-12s) — the active-only view would race and lose the moment."""
+    if _glance_label is None:
+        return None
+    return {
+        "label": _glance_label,
+        "kind": _glance_kind,
+        "started": _glance_started,
+        "ended": None if _glance_active else _glance_last_end,
+    }
+
+
 def get_self_motion() -> dict:
     """Efference copy, minimal form: is the gaze actively turning right now,
     from its own motor state. Structured signal — prompt framing is a separate,

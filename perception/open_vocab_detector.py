@@ -19,6 +19,13 @@ from config.config import (
 )
 from perception.detection_memory import DetectionMemory
 
+_detector_singleton = None
+
+
+def get_detector():
+    """The live detector thread, or None before machine.py starts it."""
+    return _detector_singleton
+
 
 @contextlib.contextmanager
 def _cpu_without_hiding_the_gpu():
@@ -68,7 +75,9 @@ class OpenVocabDetectorThread(threading.Thread):
         self._last_pass_time = time.time()
         self._prev_pass_terms = set()
         self._term_hits = {}  # term -> {"count": int, "last": ts}; cumulative, feeds ghost detection (Phase 2)
-        self._term_crops = {}  # term -> {"jpg": bytes, "ts": ts, "conf": float}; latest settled crop, feeds the label audit
+        self._term_crops = {}  # term -> {"jpg": bytes, "ts": ts, "conf": float}; latest settled crop, feeds the label audit + close look
+        global _detector_singleton
+        _detector_singleton = self  # module accessor for consumers wired after startup (close look)
 
     def set_frame(self, frame):
         with self.lock:
