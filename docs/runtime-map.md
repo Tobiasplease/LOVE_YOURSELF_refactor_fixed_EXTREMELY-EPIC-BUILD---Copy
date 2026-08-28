@@ -114,6 +114,40 @@ camera frame (~30fps)
 Verify salience in logs: every CAPTION entry carries `salience_hot` and
 `caption_interval`.
 
+### Generation regime (Aug 28 — the long/rambly/unpunctuated diagnosis)
+
+Measured on run 640cb96e (1532 captions): 70% of caption responses ended AT
+the token cap (the model near-never stops on its own — so the cap IS the
+length; median 67 words, p10 32, and "a short thought" was impossible);
+median 6.8 sentence marks per 100 words with 52 fully unpunctuated captions
+(repeat_penalty 1.15 taxes every repeated token, and prose's most-repeated
+tokens are the period and comma — the "manic" run-on the storage trims only
+fought after the fact, 247 erosions + 32 refused run-ons in one evening).
+Three changes, all sampling/shape, no content:
+- `CAPTION_REPEAT_PENALTY`=1.05 — punctuation lightly taxed at most; loops
+  stay DRY's job + the storage gates'. **REBALANCED same evening (run
+  3f59eae6)**: at 1.0 flat the voice flipped to the OPPOSITE attractor —
+  declarative chanting ("i am just sitting" ×6, a caption replayed verbatim
+  ×3, 18 spoken-not-stored echoes in 7 min). The old tax was quietly the
+  only cross-sentence resistance to re-typing a short line; 1.05 restores a
+  mild version (~3× slower compounding than 1.15), and punctuation survival
+  is measured now, so regression is visible.
+- `CAPTION_DRY_LAST_N`=384 (was 128) — DRY now reaches ~3 entries back, so
+  a chanted sentence recurs as a penalized sequence; July 9's whole-context
+  lesson was about -1, not a bounded middle ground.
+- LENGTH RHYTHM — `CAPTION_SHORT_BEAT_P` (0.2; 0.3 over-seeded staccato and
+  the register went fragment-chanting) of ordinary cycles run at
+  `CAPTION_SHORT_BEAT_TOKENS` (40) instead of 80/110; inward 150 and close
+  look 120 keep their fixed room. Short entries then enter the window and
+  self-imitation starts working FOR rhythm.
+- `_trim_to_boundary` at the MOUTH — the spoken/logged caption lands on a
+  sentence end (the stream already trimmed its stored copy since Aug 20; the
+  display used to speak the raw amputation). Boundary-less fragments pass
+  raw; the full response stays in the llm log.
+Same commit: the numeric_fragment gate redrawn so real one-word thoughts
+are legal (see gate catalog) — the genre frame's "a single word" was
+structurally vetoed before.
+
 ### The stream (July 2026 — docs/continuity-plan.md)
 
 **LIVE MODE: `"document"` again since July 28** — the rooster was a detection
@@ -255,12 +289,12 @@ rules, no registers, no mood clause. Voice comes from content.
 
 | Line | Source | Health |
 |------|--------|--------|
-| situation — **REFLEXIVE FRAME July 28**: "drawing machine bolted… This is your inner voice — you keeping yourself company… The fragments that arrive between thoughts are your own senses reporting… When a question forms, it's you asking yourself" | registry `situation.reflexive` (+ `situation.world` in world mode) + genre clause `genre.*` per STREAM_MODE — prompt_registry.py, assembled in prompts.py | REWRITTEN July 28: the old five-negation solitude clause ("no one hears/answers/instructs/assists") invoked assistant vocabulary while denying it, and nothing told the model what the per-cycle user turns ARE — it inferred a speaker and bred "What do you think?" into full assistant mode. Now the incoming channel is named honestly (its own senses) and questions get an answer-path (own next look/thought — the PEN deliberately absent until drawing initiative is real; a frame must not promise agency the code doesn't grant). Outward hooks also admission-gated (`_OUTWARD_HOOKS` — storage, not mouth: say it once, never re-seed). Genre framing stays positive; NO "camera" language anywhere — it primes cinematography. **PROGRESSION FRAME Aug 22** (`genre.hybrid`): the hybrid clause now frames the stream as ONE thread moving forward through time ("each thought takes it somewhere it hasn't been yet, pulled by what's changed") — the old one-liner framed it as a pile of similar entries, so the window's own tics became the pattern to continue; chain-of-thought doesn't loop because each step derives from the last toward something, and the frame now gives continuation that direction |
+| situation — **REFLEXIVE FRAME July 28**: "drawing machine bolted… This is your inner voice — you keeping yourself company… The fragments that arrive between thoughts are your own senses reporting… When a question forms, it's you asking yourself" | registry `situation.reflexive` (+ `situation.world` in world mode) + genre clause `genre.*` per STREAM_MODE — prompt_registry.py, assembled in prompts.py | REWRITTEN July 28: the old five-negation solitude clause ("no one hears/answers/instructs/assists") invoked assistant vocabulary while denying it, and nothing told the model what the per-cycle user turns ARE — it inferred a speaker and bred "What do you think?" into full assistant mode. Now the incoming channel is named honestly (its own senses) and questions get an answer-path (own next look/thought — the PEN deliberately absent until drawing initiative is real; a frame must not promise agency the code doesn't grant). Outward hooks also admission-gated (`_OUTWARD_HOOKS` — storage, not mouth: say it once, never re-seed). Genre framing stays positive; NO "camera" language anywhere — it primes cinematography. **PROGRESSION FRAME Aug 22** (`genre.hybrid`): the hybrid clause now frames the stream as ONE thread moving forward through time ("each thought takes it somewhere it hasn't been yet, pulled by what's changed") — the old one-liner framed it as a pile of similar entries, so the window's own tics became the pattern to continue; chain-of-thought doesn't loop because each step derives from the last toward something, and the frame now gives continuation that direction. **MEDIUM SPEC OUT (Aug 28, artist's call)**: "thin line on white paper / darkest tone dense hatching" no longer rides the caption/reflection frames — the pen stays as identity ("your one black ink pen"); the full spec moved to registry `drawing.medium`, appended to the drawing chain's stocktake + intent system prompts (its two scars — Aug 15 RED finger, Aug 17 fat-stroke DSV — are drawing-side scars) |
 | persona storage gate | `_valid_self_fact` in context_compression.py — BOTH persona writers (self-synthesis AND core-facts SELF line) require first person, bar "the person"/reality-register | NEW June 12 — the core-facts path had no gate and stored "The person sits... holding an unpressed pen" (its own arm) as identity |
 | "You are between drawings at the moment." | state_manager drawing status (gated, never lies; absent while drawing) | NEW June 12 — without it the model narrated drawings that weren't happening. States the fact only; deliberately does NOT say what the machine is doing instead |
 | ~~"Right now: {felt}."~~ **RETIRED Aug 22** | was the mood read's own phrase in the SYSTEM prompt — but the same fact already rides the user turn as the felt-state delta, so every call carried the machine's own metaphor twice (P2: one channel per fact; "heavy ink threatens to spill" rode both channels and colonized six consecutive stream entries on the Aug 22 run). The user-turn felt_delta is now the single channel; `monologue.felt-wrap` removed from the registry. The July 26 `_felt_phrase_held_reason` gate still guards the delta's source phrase | retired — watch that felt still reaches the voice via the delta |
 | persona — quoted as the machine's own words: `What you've come to know about yourself: "…"` | core_facts.self, self-synthesis every 3rd introspection | June 28: the WHOLE identity-feedback blob (self + current/historic desire + belief + discoveries) was reset to empty — it had saturated with one purple theme ("grid/silhouette/shadows") and `_synthesize_self_model` rebuilds self FROM the histories, so a partial clear re-grows it in ~10 min. place/people/drawings facts + journal preserved (backup: machine_identity.json.purple-bak). Will re-form from the now-elicited base voice — judge what it re-grows. NOTE: `_valid_self_fact` gate bars surveillance/reality words but NOT metaphor — "grid" walked through; metaphor gate is a Phase-2 item |
-| mode addition — now an ELICITATION ("What do you make of them being here?" / "Follow the thought you're already having…" / per mode incl. awakening) | mode selection in prompts.py, text = registry `elicit.<mode>` | NEW June 28 — was a bare state clause ("You're aware of someone near you"). Per north-star Principle 2: names the KIND of thought (react/wonder/continue) so the model stops defaulting to literary description. **SEAM-CONDITIONAL IN HYBRID (Aug 22)**: July 27 suppressed quiet-mode elicitations in document/world/hybrid (a fresh question every call fragmented the thread) — but that left the model with NOTHING to do whenever the seam was also absent, and it defaulted to literary fiction (the detached 3.6-arm run). Now `_hybrid_seam_expected` mirrors llama_server's seam condition: seam present → no question (the seam is the door); seam absent (empty stream / react / post-gap) → the elicitation returns. Relational/awakening keep theirs always |
+| mode addition — now an ELICITATION ("What do you make of them being here?" / "Follow the thought you're already having…" / per mode incl. awakening) | mode selection in prompts.py, text = registry `elicit.<mode>` | NEW June 28 — was a bare state clause ("You're aware of someone near you"). Per north-star Principle 2: names the KIND of thought (react/wonder/continue) so the model stops defaulting to literary description. **SEAM-CONDITIONAL IN HYBRID (Aug 22)**: July 27 suppressed quiet-mode elicitations in document/world/hybrid (a fresh question every call fragmented the thread) — but that left the model with NOTHING to do whenever the seam was also absent, and it defaulted to literary fiction (the detached 3.6-arm run). Now `_hybrid_seam_expected` mirrors llama_server's seam condition: seam present → no question (the seam is the door); seam absent (empty stream / react / post-gap) → the elicitation returns. Awakening keeps its always. **RELATIONAL DOSED + INWARD EXCEPTION (Aug 25)**: relational's standing question was the only question the machine ever heard with the artist in the room (240/400 captions on 25-08, whole run observational in register) — now fires on salience-hot cycles + every `RELATIONAL_ELICIT_EVERY_N`(8)-th relational caption. Inverse fix on the inward beat: the interiority beat (INTROSPECT_INTERVAL=4, image dropped) now ALWAYS keeps `elicit.introspective` — the beat exists to leave the stream's trajectory, so the seam-is-the-door rationale inverts there. The beat also routes the USER prompt through `force_mode="introspective"` (it used to force only the system prompt while the user prompt still routed relationally — the inward beat continued the outward stream, just blind) and gets num_predict 150 (vs 80/110) |
 | identity injections (self-wrap + durable-wrap) | core_facts.self + durable_ledger.render(), **DOSED Aug 22** (`_identity_due`): introspective/awakening always, other modes every `IDENTITY_EVERY_N_CAPTIONS`=6 | Riding EVERY frame turned identity into a standing instruction — "I invent imaginary critics to justify my hesitation" read ~180×/night elicited invented observers (the boy in the corner, Aug 22 run), which the distiller then re-confirmed off the machine's own echo (8 confirmations). Dosing breaks the resonance structurally. NEXT (not yet built): the distiller should discount confirmations from captions generated while the fact was in-prompt |
 
 Mood engine note: the numeric mood vector no longer reaches the system
@@ -278,6 +312,7 @@ moment gets the present only (north-star principle 6).
 | "Been watching 18 minutes. Looking left." / "Looking down at the desk, where your own arms rest." | session clock + gaze; the arms clause keeps the model from reading its own arm as a person | ok |
 | presence line — now from a STICKY UNCERTAIN BELIEF, not episodic events: "Someone's just come in." / "Someone's been here N minutes." / "Someone's here, just out of your view for a second." / "You can't see anyone right now, but someone was here a moment ago — they may still be." | `captioner._presence_believed/_presence_seen_now/_presence_since/_presence_last_seen`, set in `_assess_scene`; belief decays after `PRESENCE_BELIEF_DECAY_SECONDS`=240 | NEW June 28 — replaced discrete arrive/leave framing. The machine sees someone only when its gaze lands on them; the old "Someone just arrived / just walked in" re-fired every detection regain → perpetual fresh-arrival → salience permanently hot → interiority stripped every cycle (the run that produced this rewrite). Belief persists through gaps; only the OFF→ON edge is an arrival (spikes salience once). Out-of-view state states the machine's real uncertainty so it can WONDER instead of narrating an arrival |
 | "They've come and gone N times." | episodic pairs (debounced 90s) | ok |
+| "You went for a closer look at the {label} — what you see now is just it, up close." | close-look beat (Aug 28, registry `caption.close-look`): fresh revisit glance + settled crop during it; the cycle's IMAGE is the upscaled crop, not the room. Paced by `CLOSE_LOOK_MIN_INTERVAL_S` (300s); never on salience/eye-contact/inward cycles; suppresses the glance-onset note for its glance (one channel per fact) | NEW — see Phase 5 in the open-vocab section |
 | [interior] introspective ctx — **ARC LINE Aug 22**: "My last drawings: X — drawn twice in a row, the latest about an hour ago. Before that: Y; earlier, Z." | drawing_memory.get_arc_line, executed only. Subjects come clean now: store-time distill (`_condense_subject`, one extractive call per drawing — the old `[:120]` cut kept the intent's wind-up and lost the reveal, so the line spoke "The subject is not the light bulb — that is too loud. It…"); render-time `_subject_phrase` rescues legacy entries (scaffold + negation-rhetoric strip, comfy-depiction fallback). Consecutive repeats folded via `_same_motif` (content-word overlap ≥0.5) into words — "drawn twice in a row" — so fixation is VISIBLE as a fact. Facts only: what, how many, order, age; any "why do I keep drawing this" is the machine's to conclude (no content priors — the elicitation is the door) | NEW — replaces the July 11 intent-phrase list ("My last drawings were of: <90-char truncations>") |
 | [interior] core facts line | core_facts place/drawings — **OCCASIONAL July 26** (the June 28 brief's #1 voice fix): injected when the inventory changes or every 6th quiet caption, not per call. Per-call injection made every caption re-describe the same list, and the model re-voiced it ("scattered dust, pale floorboards" → "the dust on the floorboards settles" — the unearned-ephemera awakening) | ok |
 | [interior] familiarity ("That pink shelf again...") | ChromaDB concept matches, every ~3rd caption | ok; concept near-dups sprawl a bit |
@@ -499,8 +534,39 @@ thread). Seen → memory holds (misses reset; any re-sighting elsewhere also
 resets). Not seen → conf ×0.7 per miss; the 2nd consecutive miss queues an
 absence EVENT the situational line delivers once ("The rooster figurine
 isn't where it was." — absence as real observation); the 4th forgets the
-anchor — the map stores where things ARE. Test:
-`debug/test_glance_cognition.py` (mention boost, miss ladder, line events).
+anchor — the map stores where things ARE. **ABSENCE THROTTLED (Aug 28)**: the
+bare 2-miss rule minted 105 events in one evening (run 640cb96e, one per ~4
+min — CPU detector misses are routine, and the monologue's emptiness/ghost
+register fed on the drip). An event now also needs an established anchor
+(`ABSENCE_MIN_HITS`=5), a per-term cooldown (`ABSENCE_TERM_COOLDOWN_S` 6h),
+and a room-wide gap (`ABSENCE_GLOBAL_GAP_S` 15 min); weak terms decay and get
+forgotten silently. Test:
+`debug/test_glance_cognition.py` (mention boost, miss ladder, gates, line events).
+
+**Phase 5 — the close look (Aug 28): the crop reaches the voice.** The audit
+proved the machine already looks closely (37 crop examinations in run
+640cb96e) — but only a label-checker ever saw the result. Now the same
+coincidence discernment trusts (revisit glance + settled detection during it,
+which stores a fresh crop) can hand the crop to the MONOLOGUE:
+`captioner._maybe_close_look` fires when the last glance is a fresh revisit
+(`gaze.get_last_glance` — active-or-just-ended, because a ~7s dwell can end
+between caption cycles) with a crop captured DURING it; that caption cycle
+sends the upscaled crop instead of the room (`_write_close_look_crop`, saved
+beside the frame for provenance — the event log's image_path IS what the
+machine saw), with one fact-line in the prompt (registry `caption.close-look`:
+your own act; a close view, not a new scene — the zoomed pixels are the whole
+invitation, north-star P2). Guards: `CLOSE_LOOK_MIN_INTERVAL_S` (300s — a
+beat, not a mode), `CLOSE_LOOK_MAX_AGE_S` (45s freshness), never on
+salience-hot / eye-contact / inward cycles, and never in a session's first
+`CLOSE_LOOK_MIN_SESSION_S` (120s — run 3f59eae6's FIRST caption woke up
+looking at a laptop crop instead of the room: a boot-churn glance during
+startup playback passed every freshness gate; the awakening owns those
+minutes); close look beats video for its
+one cycle (a parked gaze's diff is saccade, not event); num_predict 120.
+One channel per fact: the close-look line owns the glance — the situational
+onset note is suppressed for that glance. Caption log rows carry
+`close_look: <term>`. Kill: `CLOSE_LOOK_ENABLED=False`. Test:
+`debug/test_close_look.py` (gates, freshness, ownership, crop writer).
 
 **Aware-churn fix (Aug 10 evening).** The gaze flickered idle↔aware every few
 seconds on marginal YOLO hits ("person detected but no tracking target" →
@@ -525,7 +591,11 @@ single-occupant PRIOR: the presence line is now the definite singular —
 "He's come in." (person_count 1) / "People have come in." (count > 1) /
 "He's back." (session re-ID resumed, only when PRESENCE_REID_ENABLED — OFF
 since ~Aug 6 by the artist's hand; all re-ID calls no-op while off).
-Relational "Someone is here" → "He's here." Gaze-aware belief decay
+(The relational-mode context line that echoed this register — a hardcoded
+"He's here." in get_relational_context — was REMOVED Aug 25 with the function:
+it bypassed the ledger/regime machinery entirely and duplicated the presence
+fact; presence is solely the situational line's. relational carries no
+context fn now.) Gaze-aware belief decay
 (re-applied — the Aug 5 version was lost to another session's
 `git checkout -- captioner/captioner.py`, see transcripts): absence only
 accumulates while the gaze points near last-seen
@@ -789,8 +859,12 @@ stream entry — see "Gate split (Aug 22)" above): template_echo (same
 5-word opening as a stream entry, punctuation-blind) · assistant_speak
 (_STREAM_META_MARKERS: "as an ai", "language model", service closers
 "would you like/let me know/feel free to", "the user", token leaks
-"<think"/"<end_of") · cjk_drift · numeric_fragment (<8 letters after
-strips) · number_chain (second number-led thought in the window) ·
+"<think"/"<end_of") · cjk_drift · numeric_fragment (REDRAWN Aug 28,
+artist's call — the old flat 8-letter floor also killed every real
+one-word thought ("Rain.", "Still.") while the genre frame promised "a
+single word", so the window never held a short entry to imitate; now only
+digit-bearing stubs and <2-letter symbol scraps die) ·
+number_chain (second number-led thought in the window) ·
 phantom_drawing (present-tense marking acts while the pen is parked —
 state-checked; free while GRBL executes; "as I draw closer/breath" idioms
 exempt) · word_salad (≥12 words with <15% function words — salad is
@@ -1011,10 +1085,13 @@ Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step commit
    channel IS artistic growth), b/w line-art anchor, metaphor translated
    into visibles ("feeling arrives as image, not explanation"), presence
    not absence, adds nothing of its own, never mentions plotters/tracing/
-   vectors/machines. Medium truth lives UPSTREAM in _SITUATION ("You hold
-   one black ink pen: everything you make is line on white paper" — both
-   frames), so no stage ever imagines color (Aug 15: a finger rendered RED
-   because intent had never been told; body color-words beat the prefix).
+   vectors/machines. Medium truth lives UPSTREAM of the render — since Aug 28 in the
+   registry fragment `drawing.medium`, appended to the stocktake + intent
+   system prompts (it rode BOTH situation frames before, which put the
+   drawing manual in every caption's inner voice; artist's call to split).
+   Same guarantee as before: no stage ever imagines color (Aug 15: a finger
+   rendered RED because intent had never been told; body color-words beat
+   the prefix).
    TRIGGER_PROMPT reverted to the 2025 "impostor black and white sketch
    line art " (the Jul 27 "sharp clean lines…stark white background"
    prefix measurably worsened the blur era). Temp 0.5, logged as
@@ -1098,8 +1175,9 @@ sheets; the SVG→gcode conversion was faithful, everything physical wasn't:
   dwell total on a 767-stroke sheet). WARP_INK_SCALE tried 0.85 Aug 17,
   REVERTED to 1.0 Aug 18 — the shrink compounded the dotted feel. Thick-marker renders worm-maze DSV
   (--thin can't split fused fat strokes) → generation now biased fine-tipped:
-  "fine-tipped black ink pen / thin line" in both situation frames + formatter
-  anchor. vpype tolerances (0.1/0.05mm at ~5x warp upscale) noted as the next
+  "fine-tipped black ink pen / thin line" in the `drawing.medium` fragment
+  (stocktake + intent system prompts; lived in both situation frames until
+  Aug 28) + formatter anchor. vpype tolerances (0.1/0.05mm at ~5x warp upscale) noted as the next
   cleanup lever, not yet changed.
   **GPU slot contract (Aug 12 night, artist's rule)**: llama-server must not
   start until g-code is FULLY generated; it runs alongside GRBL execution
