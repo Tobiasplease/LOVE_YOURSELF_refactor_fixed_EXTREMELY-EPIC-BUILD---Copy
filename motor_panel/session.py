@@ -35,7 +35,6 @@ class Track:
         return bool(self.samples)
 
 
-GROUPS = ["A", "B", "solo"]
 
 
 class Session:

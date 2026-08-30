@@ -128,25 +128,6 @@ class DrawingMemory:
             pass
         return text[:120]
 
-    def update_last_drawing(self, **fields) -> None:
-        """Enrich the newest entry in place (thematic reflection at drawing
-        start used to add_drawing a DUPLICATE — every drawing appeared twice
-        and narrative_thread landed on the phantom copy)."""
-        if not self._history:
-            return
-        entry = self._history[0]
-        limits = {"compressed_summary": 120, "emotional_tone": 30, "narrative_thread": 50, "comfy_prompt": 200}
-        for k, v in fields.items():
-            if v in (None, "", []):
-                continue
-            if k == "theme_tags":
-                entry[k] = list(v)[:3]
-            elif k in limits:
-                entry[k] = str(v)[: limits[k]]
-            else:
-                entry[k] = v
-        self._save_memory()
-
     def mark_last_completed(self) -> None:
         """The pen actually drew: flip the newest entry to completed. Called
         from register_drawing (post-GRBL) — the ONLY place that may set it.
@@ -170,10 +151,6 @@ class DrawingMemory:
         }
         self._save_memory()
         print(f"[📚] Drawing failed: {reason}")
-
-    def get_last_failure(self) -> Optional[Dict]:
-        """Get the most recent drawing failure, if any."""
-        return getattr(self, "_last_failure", None)
 
     def get_recent_drawings_summary(self, max_count: int = 3, completed_only: bool = True) -> str:
         """LEDGER (June 28; un-starved July 11): one short phrase per drawing
@@ -427,11 +404,6 @@ Write as "I" — this is your own artistic development."""
             print(f"[⚠️] Artistic arc generation failed: {e}")
 
         return ""
-
-    def get_artistic_arc_context(self) -> str:
-        """The artistic arc, as prompt material."""
-        arc = self.get_artistic_arc()
-        return f"Your artistic arc so far: {arc}" if arc else ""
 
     @staticmethod
     def _strip_comfy_preamble(desc: str) -> str:

@@ -216,19 +216,6 @@ def pick_anchors(cal: "WarpCalibration", k: int = 5) -> List[int]:
     return out
 
 
-def similarity_transform(src: np.ndarray, dst: np.ndarray):
-    """Least-squares similarity (rotation+scale+translation) src -> dst."""
-    sc, dc = src.mean(axis=0), dst.mean(axis=0)
-    s, d = src - sc, dst - dc
-    U, S, Vt = np.linalg.svd(s.T @ d)
-    R = (U @ Vt).T
-    if np.linalg.det(R) < 0:
-        Vt[-1] *= -1
-        R = (U @ Vt).T
-    scale = S.sum() / (s**2).sum()
-    t = dc - scale * (R @ sc)
-    return lambda pts: (scale * (np.asarray(pts) @ R.T)) + t
-
 
 def save_survey(points: List[Tuple[float, float]], meta: dict = None) -> str:
     with open(SURVEY_PATH, "w") as f:

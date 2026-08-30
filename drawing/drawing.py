@@ -47,19 +47,15 @@ class DrawingController:
     def __init__(self) -> None:
         self.last_drawing_time: float = time.time() - DRAWING_COOLDOWN - 10  # Allow immediate first drawing
         self.cooldown: float = DRAWING_COOLDOWN  # seconds between drawings
-        self.last_prompt: Optional[str] = None
         # Why ready_to_draw() last said no. The caller used to print "cooldown"
         # for every refusal, so a stuck GRBL flag read as a cooldown that had
         # already expired ("Blocked: cooldown (0s remaining)").
         self.last_block_reason: str = ""
-        self.last_drawing_prompt: str = ""
         self.last_reflection: Optional[str] = None
         # The single self-critique of the latest drawing. Published here so the
         # GRBL completion path can record it WITHOUT running a second critique
         # of the same drawing (Aug 5, artist: "it should definitely only
         # critique it once").
-        self.last_critique: Optional[str] = None
-        self.quota_manager = None  # No quota system - use timer-based drawing
         # First drawing of a session rides the timer regardless of the want
         # (artist, Aug 17: keep the startup drawing for now, for testing)
         self._startup_drawing_done = False
@@ -242,8 +238,6 @@ class DrawingController:
         self._last_registered_at = time.time()
 
         self.last_drawing_time = time.time()
-        self.last_prompt = prompt
-        self.last_drawing_prompt = prompt
 
         # The pen actually drew — this is the one place that may promote the
         # drawing-memory entry to executed (the arc reads executed-only)

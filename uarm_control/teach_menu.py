@@ -1161,13 +1161,6 @@ class UArmTeachApp:
             json.dump(cfg, f, indent=2)
 
     # --- Smoothing helpers ---
-    def _smoothed_path(self, path: str) -> str:
-        base, _ = os.path.splitext(path)
-        # Strip any existing .smooth suffixes to avoid chaining
-        while base.lower().endswith(".smooth"):
-            base = base[:-7]
-        return f"{base}.smooth.txt"
-
     def _strip_smooth_suffix(self, path: str) -> str:
         base, _ = os.path.splitext(path)
         while base.lower().endswith(".smooth"):

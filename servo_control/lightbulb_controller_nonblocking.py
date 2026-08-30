@@ -78,19 +78,6 @@ class NonBlockingLightbulbController:
         if self.debug:
             print("[NonBlockingLightbulb] Flash triggered")
 
-    # Legacy compatibility
-    def set_brightness(self, brightness: int):
-        self.set_frame_diff_brightness(brightness)
-
-    def set_base_brightness(self, brightness: int):
-        self.set_frame_diff_brightness(brightness)
-
-    def set_pwm(self, value: int):
-        self.set_frame_diff_brightness(value)
-
-    def caption_boost(self, duration=None):
-        self.caption_flash()
-
     def close(self):
         """Close connection if it exists."""
         try:
@@ -99,6 +86,3 @@ class NonBlockingLightbulbController:
         except:
             pass
 
-
-# Alias for compatibility
-LightbulbController = NonBlockingLightbulbController

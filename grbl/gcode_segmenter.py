@@ -30,7 +30,6 @@ class GCodeSegment:
         self.lines = lines
         self.segment_id = segment_id
         self.start_line = start_line
-        self.end_line = start_line + len(lines) - 1
         self.line_count = len(lines)
 
     def __len__(self):

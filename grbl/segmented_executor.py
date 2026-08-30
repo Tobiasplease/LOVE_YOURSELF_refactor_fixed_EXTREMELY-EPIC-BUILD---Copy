@@ -37,7 +37,6 @@ class SegmentedExecutor:
         self.current_segment = 0
         self.total_segments = 0
         self.execution_start_time = None
-        self.fallback_to_original = False
 
         # Person detection pause functionality
         self.enable_person_detection_pause = enable_person_detection_pause

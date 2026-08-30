@@ -100,9 +100,6 @@ class ServoController:
         if self._should_send("tilt", angle):
             self.send(f"TILT:{angle}", key="tilt")
 
-    def set_lung(self, mode: str):
-        self.send(f"LUNG:{mode}", key="lung_mode")
-
     def set_lung_position(self, angle: int, force=False):
         if force or self._should_send("lung_angle", angle):
             self.send(f"LUNG:{angle}", key="lung_angle")

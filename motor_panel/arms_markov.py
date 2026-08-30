@@ -229,7 +229,6 @@ class Generator:
         self.speed = speed
         self.on_state = on_state
         self.enter_ease = enter_ease
-        self._pause_until = 0.0
         self._running = False
         self._thread = None
 
@@ -242,11 +241,6 @@ class Generator:
         self._running = False
         if self._thread:
             self._thread.join(timeout=2)
-
-    def freeze(self, seconds: float):
-        """Hold the body exactly where it is for `seconds` — the startle /
-        hesitation beat. Motion resumes mid-transition, no state is lost."""
-        self._pause_until = max(self._pause_until, time.time() + seconds)
 
     def _nearest_key(self, current: Dict[str, float], first: Dict[str, dict]) -> str:
         """The demonstrated state closest to where the body actually is,
@@ -415,8 +409,6 @@ class Generator:
         for i in range(1, steps + 1):
             if not self._running:
                 return
-            while time.time() < self._pause_until and self._running:  # freeze: hold mid-transition
-                time.sleep(0.02)
             if self.ease_channels:
                 f = i / steps
                 self.send_ease({c: frm[c] + (to[c] - frm[c]) * f for c in self.ease_channels})

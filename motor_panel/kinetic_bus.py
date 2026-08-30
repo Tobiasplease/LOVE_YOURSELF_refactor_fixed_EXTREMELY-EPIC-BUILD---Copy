@@ -179,23 +179,6 @@ class TemperamentLibrary:
         pool = [fn for state, fns in buckets.items() if state != DRAWING_STATE and state not in INTERRUPT_STATES for fn in fns]
         return random.choice(pool) if pool else None
 
-    def pose_of(self, filename: str) -> Dict[str, float]:
-        """A held pose from a take: per-channel MEDIAN of its samples
-        (record yourself HOLDING the pose and the median IS the pose).
-        Gantry and pen are excluded — poses live in the servos. Used for
-        the startle flinch and the homing tuck."""
-        session = Session.load(filename)
-        pose: Dict[str, float] = {}
-        for t in session.tracks:
-            if not t.has_take:
-                continue
-            for c in t.channels:
-                if c in self.owned and c not in ("x", "y", "pen"):
-                    vals = sorted(s[c] for s in t.samples if c in s)
-                    if vals:
-                        pose[c] = float(vals[len(vals) // 2])
-        return pose
-
     def retire(self, filename: str) -> str:
         """Un-publish a runtime bundle: move it back to projects/ (the take
         survives, the bus stops seeing it on its next scan)."""

@@ -20,8 +20,6 @@ from typing import Optional
 class IdleMovementManager:
     """No-op shim for the retired wanderer; keeps legacy call sites safe."""
 
-    RETIRED = True
-
     def pause_for_drawing(self) -> bool:
         print("[INFO] No idle movements to pause")
         return True

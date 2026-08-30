@@ -94,18 +94,6 @@ class ComfyUIController:
         """Set the workflow file path."""
         self.workflow_file = workflow_file
 
-    def set_config(self, config: ImpostorConfig) -> None:
-        """Set the configuration for impostor template parameters."""
-        self.config = config
-
-    def update_config(self, **kwargs) -> None:
-        """Update specific configuration parameters."""
-        for key, value in kwargs.items():
-            if hasattr(self.config, key):
-                setattr(self.config, key, value)
-            else:
-                print(f"Warning: Unknown configuration parameter '{key}' ignored")
-
     def _apply_config_to_workflow(self, workflow_data: Dict[str, Any]) -> Dict[str, Any]:
         """Apply configuration parameters to workflow data."""
         # Generate random seed if not specified

@@ -1415,84 +1415,39 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         completion_thread_running = threading.Event()
 
         def completion_self_critique():
-            """Generate self-critique reflection during completion pause."""
+            """Record the completion fact. (The LLM self-critique that used to
+            run here was REMOVED Aug 5 — artist: "not useful and underutilised",
+            to be redesigned to judge the paper rather than the ComfyUI image.
+            Its dead stumps — the unused prompt, the always-empty self_critique
+            and its log branch — were deleted Aug 30; git history keeps them.
+            What survives is the fact: the pen finished, and the machine should
+            remember drawing.)"""
             try:
-                # Get the drawing context for self-critique
                 from utils.state_manager import state_manager
-                from captioner.prompt_interface import PromptInterface
-
-                # Get drawing details
-                drawing_prompt = getattr(state_manager, "current_drawing_prompt", "recent drawing")
-
-                # Get the compressed description if available
                 from utils.drawing_state import DrawingState
 
                 drawing_info = DrawingState.get_drawing_info()
                 compressed_desc = drawing_info.get("description", "a drawing") if drawing_info else "a drawing"
 
-                # Build self-critique prompt using existing system
-                critique_prompt = f"""You have just finished drawing. Look at what you created.
-                
-You were drawing: {compressed_desc}
-Original intent: {drawing_prompt}
-
-The pen has lifted, the machine has returned home. You can feel the completion.
-How do you reflect on this creative act? What did you express through these lines?
-
-Respond with 2-3 sentences of honest self-reflection about your artwork."""
-
-                # The critique was REMOVED Aug 5 (artist: "not useful and
-                # underutilised", and it will be redesigned to judge the paper
-                # rather than the ComfyUI image). What survives is the fact:
-                # the pen finished, and the machine should remember drawing.
                 try:
-                    self_critique = ""
-
-                    if self_critique:
-                        log_json_entry(
-                            LogType.REFLECTION,
-                            {
-                                "message": "Drawing completion self-critique",
-                                "action": "drawing_self_critique",
-                                "drawing_intent": drawing_prompt,
-                                "drawing_description": compressed_desc,
-                                "self_critique": self_critique,
-                                "completion_type": "post_drawing_reflection",
-                            },
-                            print_message=f"[🎨💭] Drawing self-critique: {self_critique}",
+                    if hasattr(state_manager, "captioner") and hasattr(state_manager.captioner, "observe"):
+                        completion_text = f"Completed drawing {compressed_desc}."
+                        state_manager.captioner.observe(
+                            completion_text,
+                            state_manager.captioner.current_mood if hasattr(state_manager.captioner, "current_mood") else 0.5,
+                            "",
+                            memory_type="drawing_completion",
                         )
-
-                    # The completion is recorded WHETHER OR NOT a critique
-                    # exists. Having drawn is the fact; the reflection is
-                    # commentary on it. This used to sit inside the critique
-                    # branch, so a failed critique erased the machine's memory
-                    # of having drawn at all — and with the critique now living
-                    # in another module, absent is a normal state, not an error.
-                    if True:
-                        try:
-                            if hasattr(state_manager, "captioner") and hasattr(state_manager.captioner, "observe"):
-                                completion_text = f"Completed drawing {compressed_desc}." + (
-                                    f" Reflection: {self_critique[:100]}" if self_critique else ""
-                                )
-                                state_manager.captioner.observe(
-                                    completion_text,
-                                    state_manager.captioner.current_mood if hasattr(state_manager.captioner, "current_mood") else 0.5,
-                                    "",
-                                    memory_type="drawing_completion",
-                                )
-                                print(f"[📝] Stored drawing completion in memory: {completion_text[:50]}...")
-                            else:
-                                print(
-                                    f"[⚠️] Drawing completion not stored: state_manager.captioner exists={hasattr(state_manager, 'captioner')}, observe method exists={hasattr(state_manager.captioner, 'observe') if hasattr(state_manager, 'captioner') else False}"
-                                )
-                        except Exception as e:
-                            print(f"[❌] Failed to store drawing completion: {e}")
-                            import traceback
-
-                            traceback.print_exc()
-
+                        print(f"[📝] Stored drawing completion in memory: {completion_text[:50]}...")
+                    else:
+                        print(
+                            f"[⚠️] Drawing completion not stored: state_manager.captioner exists={hasattr(state_manager, 'captioner')}, observe method exists={hasattr(state_manager.captioner, 'observe') if hasattr(state_manager, 'captioner') else False}"
+                        )
                 except Exception as e:
-                    print(f"[⚠️] Could not generate drawing self-critique: {e}")
+                    print(f"[❌] Failed to store drawing completion: {e}")
+                    import traceback
+
+                    traceback.print_exc()
 
             except Exception as e:
                 print(f"[⚠️] Error in completion self-critique: {e}")
