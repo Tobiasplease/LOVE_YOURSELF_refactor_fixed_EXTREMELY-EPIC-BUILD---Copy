@@ -9,7 +9,6 @@ import random
 from typing import Optional
 
 from config import config
-from config.model_settings import get_model_options
 
 from .prompts import DRAWING_SYSTEM_PROMPT
 
@@ -97,5 +96,14 @@ class PromptInterface:
         )
 
     def _get_base_model_options(self):
-        """Get base model options for the current model."""
-        return get_model_options(self.model_name)
+        """Base options for the drawing call.
+
+        config/model_settings.py was deleted Aug 30 2026: its table was keyed by
+        ollama-era model names, so every live lookup fell through to the llava
+        default — and the backend (utils/llama_server.py) forwards only
+        temperature/top_p/num_predict/repeat_penalty/seed plus the sampler
+        passthrough set, never `stop`/`top_k`/`num_ctx`. These four values are
+        that default's surviving fields; build_drawing_prompt_with_options
+        overrides all of them except num_predict (which its max() clamps to 400).
+        """
+        return {"temperature": 0.8, "top_p": 0.9, "repeat_penalty": 1.1, "num_predict": 200}
