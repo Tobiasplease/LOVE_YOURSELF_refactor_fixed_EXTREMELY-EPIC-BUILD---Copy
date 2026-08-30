@@ -201,15 +201,3 @@ def get_aruco_detector() -> ArucoDetectorThread:
         _aruco_detector = ArucoDetectorThread()
         _aruco_detector.start()
     return _aruco_detector
-
-
-def is_paper_present() -> bool:
-    """
-    Quick check: is paper covering the marker?
-    Returns True if paper is present (marker NOT visible).
-    Returns False if no paper (marker IS visible).
-    """
-    detector = get_aruco_detector()
-    marker_visible = detector.is_marker_visible()
-    # Marker visible = no paper covering it
-    return not marker_visible

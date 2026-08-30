@@ -127,24 +127,6 @@ class Captioner(MemoryMixin):
         except Exception as e:
             print(f"[❌] Environmental update failed: {e}")
 
-    def capture_mood_snapshot(self, capture_reason: str = "general") -> Optional[str]:
-        """Capture a mood snapshot from current frame queue or latest frame."""
-        if not self.snapshot_queue:
-            return None
-
-        # Get the most recent frame from the queue
-        frame, _, _ = self.snapshot_queue[-1]  # Get the latest frame without removing it
-
-        ts = int(time.time())
-        img_path = get_run_image_path(MOOD_SNAPSHOT_FOLDER, f"mood_{capture_reason}_{ts}.jpg")
-
-        try:
-            cv2.imwrite(img_path, frame)
-            return img_path
-        except Exception as e:
-            print(f"[ERROR] Failed to save mood snapshot: {e}")
-            return None
-
     caption_window: Optional[any] = None  # type: ignore
 
     def __init__(self) -> None:
@@ -2748,18 +2730,6 @@ class Captioner(MemoryMixin):
         """Mark that awakening is complete but allow first caption to still show loading animation."""
         # Don't set first_caption_done = True here - let the first caption handle this
         pass
-
-    @staticmethod
-    def truncate_caption(raw: str) -> str:
-        # Since prompts now encourage brevity, allow longer captions but still ensure clean sentence endings
-        sentences = re.split(r"[.!?]", raw.strip())
-        first_sentence = sentences[0].strip()
-
-        # If first sentence is reasonable length, use it. Otherwise truncate more aggressively.
-        if len(first_sentence.split()) <= 35:
-            return first_sentence
-        else:
-            return " ".join(first_sentence.split()[:25])
 
     @property
     def novelty_score(self) -> float:

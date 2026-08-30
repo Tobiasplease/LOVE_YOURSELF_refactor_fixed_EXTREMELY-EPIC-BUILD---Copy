@@ -48,11 +48,6 @@ _SPATIAL_TILT_PATTERNS = [
     (r'\bsuspended from\b|\bhanging from\b', "up"),
 ]
 
-# --- Familiarity tiers ---
-TIER_NEW = 5  # seen < 5 times — still forming an impression
-TIER_FAMILIAR = 30  # seen 5-30 times — recognized, evolving relationship
-# above 30 = deeply familiar, part of the environment
-
 # Singleton
 _instance = None
 _lock = threading.Lock()

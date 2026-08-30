@@ -20,9 +20,7 @@ from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 from captioner.activation_memory import (
     get_activation_network,
     get_contextual_memory,
-    get_beliefs as activation_get_beliefs,
     boost_from_compression,
-    save_state as save_activation_state,
     save_comprehensive_snapshot,
 )
 
@@ -205,17 +203,6 @@ class MemoryMixin:
         selected = random.sample(candidates, min(k, len(candidates))) if candidates else []
         return selected
 
-    def get_recent_memory(self, k: int = 5) -> str:
-        """Returns the most recent k memory snippets as a single formatted string."""
-        snippets = self.get_current_session_memory_snippets(k=k)
-        return "\n".join(f"- {s}" for s in snippets)
-
-    def get_identity_summary(self) -> str:
-        beliefs = activation_get_beliefs()
-        if not beliefs:
-            return "I am still learning what matters to me."
-        return " ".join(beliefs[-3:])
-
     def get_memory_entries_by_type(self, memory_type: str, limit: int = 5) -> list[dict]:
         return [entry for entry in reversed(self.memory_queue) if entry["type"] == memory_type][:limit]
 
@@ -289,11 +276,6 @@ class MemoryMixin:
             if confidence > 0.1 or self.self_model["environmental_certainty"] < 0.3:
                 self.self_model["location_understanding"] = best_location
                 self.self_model["environmental_certainty"] = min(1.0, self.self_model["environmental_certainty"] + confidence * 0.1)
-
-    # === ACTIVATION MEMORY PERSISTENCE ===
-    def save_activation_state(self):
-        """Save activation network state for persistence across sessions."""
-        save_activation_state()
 
     def get_activated_concepts(self, threshold: float = 0.3) -> list:
         """Get currently activated concepts above threshold."""

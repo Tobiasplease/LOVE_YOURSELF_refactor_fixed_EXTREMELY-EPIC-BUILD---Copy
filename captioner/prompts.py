@@ -407,65 +407,6 @@ def get_tenure_line() -> str:
         return ""
 
 
-def build_identity_line(agent, mode: str = "observational") -> str:
-    """Build second-person status line about the machine's current state."""
-    parts = []
-
-    # Session time
-    try:
-        session_mins = (time.time() - agent.true_session_start) / 60.0
-        if session_mins >= 2:
-            parts.append(f"You have been awake {casual_time_string(session_mins)}")
-    except Exception:
-        pass
-
-    # Drawing state / history
-    try:
-        from utils.state_manager import state_manager as _sm
-
-        if _sm.is_generating_drawing:
-            parts.append("your arm is working on a drawing right now")
-        elif _sm.current_drawing_phase == "executing":
-            parts.append("your arm is physically drawing right now")
-        else:
-            parts.append("not drawing right now, just watching")
-            try:
-                from drawing.drawing_memory import get_drawing_memory
-
-                dm = get_drawing_memory()
-
-                # Check for recent drawing failure (no paper, etc.)
-                failure = dm.get_last_failure()
-                if failure:
-                    import time as _time
-
-                    failure_age = _time.time() - failure.get("timestamp", 0)
-                    if failure_age < 600:
-                        reason = failure.get("reason", "unknown").lower()
-                        if "already a drawing" in reason:
-                            parts.append("you wanted to draw but the sheet on the desk already carries a drawing")
-                        elif "paper" in reason:
-                            parts.append("you wanted to draw but there's no paper")
-                        else:
-                            parts.append("you tried to draw but couldn't")
-
-                # Last completed drawing — use actual prompt description
-                desc = dm.get_last_drawing_description()
-                if desc:
-                    parts.append(f"you last drew {desc}")
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    if not parts:
-        return ""
-    line = ". ".join([p.rstrip(".") for p in parts]) + "."
-    # Capitalize each sentence
-    line = ". ".join(s.strip().capitalize() if s.strip() else s for s in line.split(". "))
-    return line
-
-
 # Internal awakening prompt template - narrative style
 # FOUR MOVEMENTS (Aug 2, artist's spec): how long I was gone → how long I have
 # existed → what surfaces from before, HELD AS RECALL → where I am now.
@@ -857,42 +798,6 @@ SELF_CRITIQUE_PROMPT = (
 )
 
 # ===== PROMPT BUILDING FUNCTIONS =====
-
-# === HELPER FUNCTIONS FOR NATURAL LANGUAGE CONVERSION ===
-
-
-def get_social_context(agent=None, saw_person=None) -> str:
-    """Get natural language social context for roleplay prompts."""
-
-    # Try to get rich consciousness context from PersonDetectionState
-    try:
-        # Check if we have person consciousness context in reactivity data
-        if (
-            agent
-            and hasattr(agent, "_current_reactivity_data")
-            and agent._current_reactivity_data
-            and "person_consciousness" in agent._current_reactivity_data
-        ):
-            return agent._current_reactivity_data["person_consciousness"]
-    except:
-        pass
-
-    if saw_person is True:
-        return "Someone is in front of me. "
-    elif saw_person is False:
-        return "I'm alone. "
-    elif agent and hasattr(agent, "last_person_seen_time"):
-        import time
-
-        last_seen = getattr(agent, "last_person_seen_time", None)
-        if last_seen and (time.time() - last_seen) < 300:  # Within 5 minutes
-            minutes_ago = int((time.time() - last_seen) / 60)
-            return f"I saw someone {minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago. "
-        else:
-            return "I've been alone for a while. "
-    else:
-        return "The space is empty. "
-
 
 # === MODE-SPECIFIC CONTEXT FUNCTIONS ===
 # Each returns max 1 sentence or empty string

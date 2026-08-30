@@ -192,16 +192,6 @@ class ContextCompressionEngine:
         """Set callback function for environmental model updates."""
         self.environmental_update_callback = callback
 
-    def reset_context(self) -> None:
-        """Reset compression state for new session."""
-        self.baseline_context = ""
-        self.recent_captions.clear()
-        self.caption_count = 0
-        self.last_compression_time = time.time()
-        # Reset session tracking
-        self.space_observation_start = time.time()
-        self.total_session_duration = 0.0
-
     def _start_compression_worker(self) -> None:
         """Start background compression worker thread."""
         if not self.compression_thread or not self.compression_thread.is_alive():

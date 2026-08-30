@@ -691,54 +691,6 @@ def get_gaze_state() -> dict:
     }
 
 
-def get_gaze_narrative() -> str:
-    """Return simple first-person gaze direction.
-
-    Returns direct statements like 'Looking up.' to match first-person prompts.
-    Clear and unambiguous for the vision model.
-    """
-    global servo_x, servo_y, state
-
-    pan_center = (PAN_MIN + PAN_MAX) / 2
-    tilt_center = (TILT_MIN + TILT_MAX) / 2
-
-    pan_offset = servo_x - pan_center
-    tilt_offset = servo_y - tilt_center
-
-    # Determine direction components
-    v_dir = None
-    if tilt_offset < -8:
-        v_dir = "down"
-    elif tilt_offset > 8:
-        v_dir = "up"
-
-    h_dir = None
-    if pan_offset < -8:
-        h_dir = "left"
-    elif pan_offset > 8:
-        h_dir = "right"
-
-    # Build simple direction
-    if v_dir and h_dir:
-        direction = f"{v_dir}-{h_dir}"
-    elif v_dir:
-        direction = v_dir
-    elif h_dir:
-        direction = h_dir
-    else:
-        direction = "ahead"
-
-    # Simple first-person statement
-    if state == "tracking":
-        return f"Looking {direction}. Someone here."
-    elif state == "aware":
-        return f"Looking {direction}. Someone nearby."
-    elif state == "searching":
-        return f"Looking {direction}. Searching."
-    else:
-        return f"Looking {direction}."
-
-
 _glance_active = False
 _glance_until = 0.0
 _glance_target = (90.0, 90.0)
@@ -811,17 +763,6 @@ def get_last_glance():
         "started": _glance_started,
         "ended": None if _glance_active else _glance_last_end,
     }
-
-
-def get_self_motion() -> dict:
-    """Efference copy, minimal form: is the gaze actively turning right now,
-    from its own motor state. Structured signal — prompt framing is a separate,
-    deliberate step."""
-    speed = abs(physics_state.pan_velocity) + abs(physics_state.tilt_velocity)
-    direction = None
-    if abs(physics_state.pan_velocity) > 2.0:
-        direction = "right" if physics_state.pan_velocity > 0 else "left"
-    return {"moving": speed > 3.0, "speed_dps": round(speed, 1), "direction": direction}
 
 
 def clamp(val, min_val, max_val):
@@ -1497,8 +1438,3 @@ def update_paper_search_target():
         drawing_target_y = target_tilt
 
     return (target_pan, target_tilt)
-
-
-def is_paper_search_active() -> bool:
-    """Check if paper search mode is currently active."""
-    return _paper_search_active

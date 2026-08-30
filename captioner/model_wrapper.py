@@ -300,19 +300,3 @@ class MultimodalModel:
 
 
 
-    def _clean_response(self, response: str) -> str:
-        """Remove unwanted AI-generated prompt leakage from responses."""
-        unwanted_patterns = [
-            r"\\n\\nFeelings:.*?\\?",
-            r"\\n\\nReflection:.*?\\?",
-            r"\\n\\nWhat do you feel\\?",
-            r"\\n\\nHow does.*?feel\\?",
-            r"Feelings: What do you feel\\?",
-            r"Reflection: How does.*?\\?",
-        ]
-
-        cleaned = response
-        for pattern in unwanted_patterns:
-            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE | re.DOTALL)
-
-        return cleaned.strip()
