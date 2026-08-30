@@ -17,13 +17,6 @@ import time
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
-from captioner.activation_memory import (
-    get_activation_network,
-    get_contextual_memory,
-    boost_from_compression,
-    save_comprehensive_snapshot,
-)
-
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.continuity import describe_duration, now
@@ -57,13 +50,15 @@ class MemoryMixin:
             },
         )
 
-        # Activation Memory System — nodes are ChromaDB concept IDs
-        self._activation_network = get_activation_network()
-        self._contextual_memory = get_contextual_memory()
-
-        # Novelty/Boredom
-        self._novelty_score: float = 1.0
+        # Boredom (the activation network's one surviving output — retired
+        # Aug 30 2026, memory-effectiveness-audit-aug30.md §1: novelty had
+        # zero behavioral effect, edges never persisted, and the compression
+        # boost inflated the concepts ledger's times_seen. What boredom needs
+        # is a per-concept recent-attention level, kept here directly.)
         self._boredom: float = 0.0
+        # concept_id -> (attention_level, last_seen_ts); +0.3 per sighting,
+        # decayed 0.95 per 10s — the same boost/decay the network applied.
+        self._concept_attention: Dict[str, Tuple[float, float]] = {}
 
         # Timing
         self.session_start: float = now()
@@ -76,7 +71,6 @@ class MemoryMixin:
         memory_type: str = "observation",
         derived_from: list[str] | None = None,
         reactivity_data: Optional[Dict] = None,
-        gaze_zone: str = "ahead",
         matched_concepts: Optional[List[Dict]] = None,
     ):
         ts = int(now())
@@ -92,19 +86,34 @@ class MemoryMixin:
 
         self.memory_queue.append(entry)
 
-        # Feed concept IDs from SemanticMemory into the activation network
+        # Boredom from concept metadata + recent attention (see __init__ note).
+        # Weights preserved from the retired network's calculate_boredom:
+        # new concepts and people barely count; the more familiar a concept,
+        # the more its sustained recent attention reads as a stale scene.
         if matched_concepts:
-            concept_ids = [c["id"] for c in matched_concepts]
-            novelty = self._activation_network.observe(concept_ids, gaze_zone, matched_concepts)
-            boredom = self._activation_network.calculate_boredom(matched_concepts)
-            self._novelty_score = novelty
-            self._boredom = boredom
+            now_ts = float(ts)
+            total_weighted = 0.0
+            total_weight = 0.0
+            for cd in matched_concepts:
+                level, seen = self._concept_attention.get(cd["id"], (0.0, now_ts))
+                level *= 0.95 ** ((now_ts - seen) / 10.0)
+                level = min(1.0, level + 0.3)
+                self._concept_attention[cd["id"]] = (level, now_ts)
 
-            # Store in contextual memory for session recall
-            self._contextual_memory.store(text, concept_ids, gaze_zone, ts)
+                label = cd.get("label", "").lower()
+                if cd.get("is_new", False):
+                    weight = 0.1
+                elif any(w in label for w in ["person", "someone", "man", "woman", "people", "figure", "sitting", "standing"]):
+                    weight = 0.1
+                else:
+                    weight = min(1.0, cd.get("times_seen", 1) / 20.0)
 
-            # Save comprehensive snapshot for real-time visualizer
-            save_comprehensive_snapshot(agent=self)
+                total_weighted += level * weight
+                total_weight += weight
+            self._boredom = total_weighted / total_weight if total_weight > 0 else 0.0
+            if len(self._concept_attention) > 500:
+                cutoff = now_ts - 3600
+                self._concept_attention = {k: v for k, v in self._concept_attention.items() if v[1] > cutoff}
 
         # Apply temporal mood effects
         temporal_mood_modifier = self.get_temporal_mood_modifier()
@@ -273,6 +282,3 @@ class MemoryMixin:
                 self.self_model["location_understanding"] = best_location
                 self.self_model["environmental_certainty"] = min(1.0, self.self_model["environmental_certainty"] + confidence * 0.1)
 
-    def get_activated_concepts(self, threshold: float = 0.3) -> list:
-        """Get currently activated concepts above threshold."""
-        return self._activation_network.get_activated_concepts(threshold)

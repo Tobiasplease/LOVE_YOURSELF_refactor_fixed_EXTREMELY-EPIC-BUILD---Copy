@@ -2169,12 +2169,11 @@ class Captioner(MemoryMixin):
         if not CLEAN_LLM_OUTPUT:
             print(f"\n[🎨 STATE EVALUATION]")
             print(f"  Current mood: {self.current_mood:.3f}")
-            print(f"  Current novelty: {self.novelty_score:.3f}")
             print(f"  Current boredom: {self.boredom:.3f}")
 
         # Evaluate whether to draw based on internal state
         should_draw = self.drawing.should_draw(
-            mood=self.current_mood, novelty=self.novelty_score, boredom=self.boredom, reflection=getattr(self, "last_reflection", None)
+            mood=self.current_mood, boredom=self.boredom, reflection=getattr(self, "last_reflection", None)
         )
 
         if not should_draw:
@@ -2225,7 +2224,6 @@ class Captioner(MemoryMixin):
                         "action": "drawing_check",
                         "system_type": system_type.lower(),
                         "mood": self.current_mood,
-                        "novelty": self.novelty_score,
                         "boredom": self.boredom,
                     },
                     print_message=f"[🎨] {system_type} drawing ready, evaluating...",
@@ -2702,22 +2700,13 @@ class Captioner(MemoryMixin):
         pass
 
     @property
-    def novelty_score(self) -> float:
-        """Activation-network novelty, written in MemoryMixin.observe().
-        (Sole writer since Aug 12 — the mood engine's saturated motif novelty
-        used to race it through set_novelty_score.)"""
-        if hasattr(self, "_novelty_score"):
-            return self._novelty_score
-        return 0.0
-
-    @property
     def boredom(self) -> float:
-        """Get current boredom level from activation memory (semantic-aware).
-
-        Static concepts (table, desk) contribute more to boredom.
-        Dynamic concepts (threat, fear) contribute less - ongoing concern, not boredom.
-        Social concepts (person) contribute least - engagement, not boredom.
-        """
+        """Current boredom, computed in MemoryMixin.observe() from concept
+        metadata + recent attention (the activation network's one surviving
+        output after its Aug 30 retirement). Familiar static concepts under
+        sustained attention read as a stale scene; new concepts and people
+        barely count. Consumed only by caption sampling (temp/num_predict)
+        and the drawing-trigger logs."""
         if hasattr(self, "_boredom"):
             return self._boredom
         return 0.0

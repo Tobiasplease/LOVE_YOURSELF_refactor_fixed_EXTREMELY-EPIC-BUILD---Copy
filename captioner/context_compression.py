@@ -371,14 +371,11 @@ class ContextCompressionEngine:
                     self.baseline_context = understanding.strip()
                     self.last_compression_time = time.time()
 
-                    # === ACTIVATION MEMORY FEEDBACK LOOP ===
-                    # Boost concepts mentioned in compression output - creates reinforcement
-                    try:
-                        from captioner.activation_memory import boost_from_compression
-
-                        boost_from_compression(understanding)
-                    except Exception:
-                        pass  # Non-critical, continue without feedback
+                    # (The activation-memory feedback boost that ran here was
+                    # retired Aug 30 2026: it re-ran concept matching on the
+                    # compression text, which bumped times_seen on the concepts
+                    # ledger — inflating the counters the familiarity line and
+                    # memory mode read. memory-effectiveness-audit-aug30.md §1.)
 
                     # === LLM CONCEPT EXTRACTION ===
                     # Extract clean noun phrases from compression output (not raw monologue).

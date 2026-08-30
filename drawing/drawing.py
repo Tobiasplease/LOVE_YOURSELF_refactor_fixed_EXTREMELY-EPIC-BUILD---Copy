@@ -143,7 +143,7 @@ class DrawingController:
         }
 
     def _log_trigger_decision(
-        self, *, mode: str, verdict: bool, reason: str, shadow: dict, mood: float, novelty: float, boredom: float, time_since: float
+        self, *, mode: str, verdict: bool, reason: str, shadow: dict, mood: float, boredom: float, time_since: float
     ) -> None:
         try:
             log_json_entry(
@@ -160,7 +160,6 @@ class DrawingController:
                     "drive_level": round(getattr(self.drive, "level", 0.0), 3),
                     "minutes_since_last": round(time_since / 60),
                     "mood": mood,
-                    "novelty": novelty,
                     "boredom": boredom,
                 },
                 print_message=(
@@ -172,7 +171,7 @@ class DrawingController:
             if not CLEAN_LLM_OUTPUT:
                 print(f"[⚠️] Trigger decision logging failed: {e}")
 
-    def should_draw(self, *, mood: float, novelty: float, boredom: float, reflection: Optional[str] = None) -> bool:
+    def should_draw(self, *, mood: float, boredom: float, reflection: Optional[str] = None) -> bool:
         # Clean room: the 5-step drawing pipeline is detox blind spot #3 — it
         # injects ~23 layers of stored prose AND its step system-prompts push
         # metaphor by design, so a drawing can't come out plain yet and would
@@ -197,7 +196,7 @@ class DrawingController:
             reason = f"drive {'full' if verdict else 'charging'} ({level:.2f})"
             self._log_trigger_decision(
                 mode="drive", verdict=verdict, reason=reason, shadow=shadow,
-                mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
+                mood=mood, boredom=boredom, time_since=time_since,
             )
             return verdict
 
@@ -222,7 +221,7 @@ class DrawingController:
             verdict, reason = False, "no formed want"
         self._log_trigger_decision(
             mode="desire", verdict=verdict, reason=reason, shadow=shadow,
-            mood=mood, novelty=novelty, boredom=boredom, time_since=time_since,
+            mood=mood, boredom=boredom, time_since=time_since,
         )
         if verdict:
             self._startup_drawing_done = True
@@ -312,7 +311,6 @@ class DrawingController:
         so a second check would always fail.
         """
         self.last_reflection = reflection
-        novelty = getattr(agent, "novelty_score", 0.0)
         boredom = getattr(agent, "boredom", 0.0)
 
         try:
@@ -344,7 +342,6 @@ class DrawingController:
                                     "decision": "skip_drawing",
                                     "reason": "early_paper_check_failed",
                                     "mood": agent.current_mood,
-                                    "novelty": novelty,
                                     "boredom": boredom,
                                 },
                                 print_message=f"[📄] Early paper check: {getattr(state_manager, 'paper_state', '') or 'NO PAPER'} - skipping ComfyUI generation",
@@ -408,7 +405,6 @@ class DrawingController:
                     "decision": "trigger_drawing",
                     "reason": "inspired",
                     "mood": agent.current_mood,
-                    "novelty": novelty,
                     "boredom": boredom,
                     "drawing_prompt": drawing_prompt,
                     "reflection": (reflection or "").strip(),

@@ -1369,20 +1369,21 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     return final_result
 
 
-def determine_prompt_mode(gaze_state: str, gaze_direction: str, novelty: float, person_present: bool) -> str:
+def determine_prompt_mode(gaze_state: str, gaze_direction: str, person_present: bool) -> str:
     """Determine prompt mode based on situational context.
 
     Modes:
     1. relational - a person is present (detected by YOLO or gaze tracking)
     2. workspace - looking down at desk
     3. introspective - default for everything else, including boredom
-    (observational — the novelty > 0.65 branch — was removed Aug 30 2026:
-    live novelty sits ~0.05 in a familiar room, so it hadn't fired for weeks.
+    (observational — the novelty > 0.65 branch — was removed Aug 30 2026 as
+    unreachable; the whole activation-network novelty signal followed it out.
     The "observational" elicitation fragment stays for the drawing-watch beat.)
 
-    Boredom is NOT a separate mode. The model receives boredom as context
-    (via the identity line) and decides its own response — restlessness,
-    introspection, fascination with details, irritation, whatever emerges.
+    Boredom is NOT a separate mode, and it does NOT reach the model as text —
+    it only nudges caption sampling (temperature/num_predict) in captioner.py.
+    (The old claim here that boredom rides the identity line was stale — see
+    docs/memory-effectiveness-audit-aug30.md.)
     """
     # Priority 1: Looking down — workspace mode regardless of YOLO detections.
     # When the camera is physically pointed down, any "person" detection is the
@@ -1523,7 +1524,6 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     """
     import time as _time
 
-    from captioner.activation_memory import get_activation_network
 
     session_mins = 0
     observation_count = 0
@@ -1561,10 +1561,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     elif is_awakening:
         mode = "awakening"
     else:
-        network = get_activation_network()
-        novelty = getattr(network, "_last_novelty", 0.5)
-
-        mode = determine_prompt_mode(gaze_state=gaze_state, gaze_direction=gaze_direction, novelty=novelty, person_present=person_present)
+        mode = determine_prompt_mode(gaze_state=gaze_state, gaze_direction=gaze_direction, person_present=person_present)
     if not config.PRINT_CLEAN_CAPTIONS:
         print(f"[MODE] {mode} (gaze={gaze_state})")
 
