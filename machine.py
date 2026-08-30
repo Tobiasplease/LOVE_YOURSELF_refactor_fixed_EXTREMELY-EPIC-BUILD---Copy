@@ -59,11 +59,6 @@ from config.config import (
     USE_UARM,
     USE_CAPTION_DISPLAY,
     CAPTION_DISPLAY_PORT,
-    UARM_PORT,
-    UARM_CONNECT_ON_STARTUP,
-    UARM_HOME_ON_CONNECT,
-    UARM_DEFAULT_SPEED,
-    UARM_MOTION_STORAGE,
 )
 from event_logging.event_logger import get_current_run_id, log_json_entry, set_start_time
 from event_logging.log_type import LogType
@@ -135,20 +130,16 @@ if USE_LIGHTBULB_PWM:
     from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
 
 if USE_UARM:
-    # Try native controller API; if unavailable, fall back to official Teach API
-    UARM_BACKEND = "controller"
+    # Teach API is the only backend. (The "controller" backend — uarm_control.
+    # uarm_controller / motion_manager / simple_api — was dead by construction:
+    # those modules don't exist, so the import always fell through to teach.
+    # Removed Aug 30 2026; git history keeps the branch.)
+    UARM_BACKEND = "teach"
     try:
-        from uarm_control.uarm_controller import UarmController
-        from uarm_control.motion_manager import MotionManager
-        from uarm_control.simple_api import UarmSimpleAPI
-        import uarm_control.simple_api as uarm_api
-    except Exception:
-        UARM_BACKEND = "teach"
-        try:
-            from uarm_control.teach_menu import UArmTeachApp  # Official SDK path
-        except Exception as e:
-            print(f"Warning: uArm controller imports unavailable: {e}")
-            UARM_BACKEND = None
+        from uarm_control.teach_menu import UArmTeachApp  # Official SDK path
+    except Exception as e:
+        print(f"Warning: uArm controller imports unavailable: {e}")
+        UARM_BACKEND = None
 
 VERBOSE = False
 
@@ -273,8 +264,6 @@ else:
     servos = None
 
 # Initialize uArm Swift Pro robotic arm (separate from servos)
-uarm_controller = None
-motion_manager = None
 uarm_teach_app = None
 if USE_UARM and UARM_BACKEND:
     try:
@@ -285,23 +274,7 @@ if USE_UARM and UARM_BACKEND:
             print(f"WARNING: uArm device not found at {uarm_port}")
             print("  Check USB connection or udev symlink")
         else:
-            if UARM_BACKEND == "controller":
-                uarm_controller = UarmController(port=uarm_port, connect_on_init=UARM_CONNECT_ON_STARTUP)
-                if uarm_controller and uarm_controller.is_connected():
-                    debug_print("uArm connected successfully", "INIT")
-                    motion_manager = MotionManager(storage_path=UARM_MOTION_STORAGE, controller=uarm_controller)
-                    debug_print("uArm motion manager initialized", "INIT")
-                    simple_api = UarmSimpleAPI(controller=uarm_controller, motion_manager=motion_manager)
-                    uarm_api.uarm_api = simple_api
-                    debug_print("uArm simple API initialized", "INIT")
-                    if UARM_HOME_ON_CONNECT:
-                        debug_print("Performing uArm homing sequence", "INIT")
-                        uarm_controller.home()
-                else:
-                    debug_print("uArm connection failed - check USB connection and firmware", "WARN")
-                    if uarm_controller and uarm_controller.last_error:
-                        debug_print(f"uArm error: {uarm_controller.last_error}", "WARN")
-            elif UARM_BACKEND == "teach":
+            if UARM_BACKEND == "teach":
                 try:
                     uarm_teach_app = UArmTeachApp()
                     uarm_teach_app.connect()
@@ -343,8 +316,6 @@ if USE_UARM and UARM_BACKEND:
 
     except Exception as e:
         debug_print(f"uArm initialization failed: {e}", "ERROR")
-        uarm_controller = None
-        motion_manager = None
 else:
     debug_print("uArm control disabled in config", "INIT")
 
@@ -516,14 +487,8 @@ def graceful_cleanup():
     except Exception as e:
         print(f"[ERROR] Error stopping kinetic bus: {e}")
 
-    # Stop uArm controller
-    if uarm_controller:
-        try:
-            debug_print("Disconnecting uArm controller", "CLEANUP")
-            uarm_controller.disconnect()
-        except Exception as e:
-            print(f"[ERROR] Error stopping uArm controller: {e}")
-    elif "uarm_teach_app" in globals() and uarm_teach_app:
+    # Stop uArm (Teach API)
+    if "uarm_teach_app" in globals() and uarm_teach_app:
         try:
             debug_print("Disconnecting uArm (Teach API)", "CLEANUP")
             uarm_teach_app.disconnect()
