@@ -41,7 +41,6 @@ class PersonDetectionState:
         # Configuration
         self.confidence_threshold = 0.5
         self.stability_window = 3.0  # seconds to stabilize detection
-        self.departure_delay = 2.0   # seconds to confirm person departure
 
         # Event tracking for behavior
         self.recent_arrivals = []    # List of recent arrival timestamps

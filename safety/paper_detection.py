@@ -324,7 +324,6 @@ class PaperDetector:
 
             search_start = time.time()
             marker_ever_detected = False
-            detection_count = 0
             total_checks = 0
 
             # Search loop - continuously move and check for marker
@@ -338,7 +337,6 @@ class PaperDetector:
 
                 if status["marker_visible"]:
                     marker_ever_detected = True
-                    detection_count += 1
                     elapsed = time.time() - search_start
                     print(f"[📄] 🎯 Marker DETECTED at {elapsed:.1f}s (IDs={status['detected_ids']}) → No paper!")
                     # Early exit - marker detected means no paper

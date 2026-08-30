@@ -25,16 +25,6 @@ DRAWING_SYSTEM_PROMPT = (
     "Be clear and concise."
 )
 
-# Self-critique system prompt for drawing reflection
-SELF_CRITIQUE_SYSTEM_PROMPT = (
-    "You've just completed a drawing - a physical manifestation of your inner state translated through marks and lines. "
-    "Looking at what you've created, how does it reflect what you were feeling and seeing? "
-    "What did you discover about yourself in the process of making this?"
-)
-
-# Number generator system prompt for motif scoring
-NUMBER_GENERATOR_SYSTEM_PROMPT = "You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number."
-
 # System prompts for the monologue model, keyed by mode.
 # The machine is always a drawing machine, but it doesn't always talk about drawing.
 # It only mentions drawing intent when the drawing system is about to trigger.
@@ -787,14 +777,6 @@ def get_reflection_echo_line(agent) -> str:
         return f"Something that was on your mind {_age_phrase(m.get('timestamp', 0))}: {subject}."
     return ""
 
-
-# Self-critique prompt for post-drawing reflection
-SELF_CRITIQUE_PROMPT = (
-    "The drawing is complete. You intended: {original_prompt} "
-    "Your reflection was: {reflection} "
-    "Looking at what emerged from your creative impulse, how does it feel? "
-    "What did the process reveal to you about your own way of seeing and expressing?"
-)
 
 # ===== PROMPT BUILDING FUNCTIONS =====
 

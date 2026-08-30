@@ -8,7 +8,8 @@ the llama.cpp migration, per-call model selection was ignored anyway (one
 loaded model), so compression/reflection/drawing analysis were already
 running on the main model in practice.
 
-Also re-exports unload_model / reload_model for the ComfyUI VRAM dance.
+Also re-exports unload_model for the ComfyUI VRAM handoff (the reload half
+happens lazily via ensure_server_up on the next query).
 """
 
 from typing import List, Optional, Union
@@ -117,10 +118,3 @@ def unload_model() -> None:
 
     stop_server()
 
-
-def reload_model() -> None:
-    """Reload model into VRAM after ComfyUI is done."""
-    from utils.llama_server import is_server_running, start_server
-
-    if not is_server_running():
-        start_server()

@@ -983,7 +983,6 @@ def _query_superframe(
     from llama_video.types import Frame
     import cv2
     import numpy as np
-    import io
     from PIL import Image
 
     settings = Settings()

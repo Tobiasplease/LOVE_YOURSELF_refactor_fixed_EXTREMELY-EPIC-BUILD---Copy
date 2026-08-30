@@ -28,7 +28,6 @@ from config.config import (
     MOOD_SNAPSHOT_FOLDER,
     TRIGGER_PROMPT,
 )
-from captioner.prompts import SELF_CRITIQUE_PROMPT, SELF_CRITIQUE_SYSTEM_PROMPT
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
@@ -356,7 +355,6 @@ class DrawingController:
                                 },
                                 print_message=f"[📄] Early paper check: {getattr(state_manager, 'paper_state', '') or 'NO PAPER'} - skipping ComfyUI generation",
                             )
-                            state_manager.last_no_paper_skip_ts = time.time()
                             _fail_reason = (
                                 "already a drawing on the paper" if getattr(state_manager, "paper_state", "") == "drawn_paper" else "no paper"
                             )

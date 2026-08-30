@@ -127,8 +127,6 @@ class Captioner(MemoryMixin):
         except Exception as e:
             print(f"[❌] Environmental update failed: {e}")
 
-    caption_window: Optional[any] = None  # type: ignore
-
     def __init__(self) -> None:
         super().__init__()
         self.model = MultimodalModel(memory_ref=self)
@@ -170,11 +168,8 @@ class Captioner(MemoryMixin):
         # genuine arrival (the only thing that spikes salience) is the OFF->ON
         # edge, which is now rare.
         self._presence_believed: bool = False
-        self._presence_since: float = 0.0
-        self._presence_last_seen: float = 0.0
         self._absence_watch_s: float = 0.0  # seconds spent looking at the last-seen spot and finding nobody
         self._last_presence_check: float = 0.0
-        self._presence_seen_now: bool = False
 
         # The stream (CoT-style continuity): recent captions ride as the
         # model's own assistant turns. Gated by _stream_admissible.
@@ -187,7 +182,6 @@ class Captioner(MemoryMixin):
         self.last_memory_mode_time: float = time.time()  # Track memory mode trigger (every 4 min)
 
         # Track session continuity
-        self.sessions_since_boot = 0
         self.memory_loaded_from_previous = False
 
         # Session continuity - time gap will be set by state manager if restoring session
@@ -312,10 +306,6 @@ class Captioner(MemoryMixin):
         if time.time() - ts[-1] >= STREAM_GAP_MARK_SECONDS:
             lines.append(f"({casual_time_string((time.time() - ts[-1]) / 60.0)} later)")
         return lines
-
-    @property
-    def is_processing(self) -> bool:
-        return bool(self.snapshot_queue)
 
     @track_component_health("captioner")
     def update(
@@ -517,7 +507,6 @@ class Captioner(MemoryMixin):
         arrival = False
         resumed = False
         if seen_now:
-            self._presence_last_seen = now
             self._absence_watch_s = 0.0
             if not self._presence_believed:
                 # Re-ID (no-op while PRESENCE_REID_ENABLED is False): a match
@@ -530,7 +519,6 @@ class Captioner(MemoryMixin):
                 except Exception:
                     resumed = False
                 self._presence_believed = True
-                self._presence_since = now
                 arrival = not resumed  # OFF->ON edge — the only genuine arrival
                 # For the presence line: the single-occupant prior. Measured
                 # Aug 10: CLIP cross-outfit similarity sits BELOW cross-person,
@@ -582,7 +570,6 @@ class Captioner(MemoryMixin):
                 except Exception:
                     pass
         self._last_presence_check = now
-        self._presence_seen_now = seen_now
         info["presence_believed"] = self._presence_believed
         info["presence_seen_now"] = seen_now
         info["presence_resumed"] = resumed
@@ -1292,7 +1279,6 @@ class Captioner(MemoryMixin):
             self._stream_clear()
 
         # Store reactivity data for later cycles
-        self._current_reactivity_data = reactivity_data
 
         # Don't update timestamp yet - wait until caption is actually generated
         ts = int(now)
@@ -2043,10 +2029,6 @@ class Captioner(MemoryMixin):
         should_print = True
 
         if should_print:
-            # RESTORED: Back to original working logic
-            # Track last sent caption for deduplication
-            self._last_sent_caption = caption.strip()
-
             # Send to LCD display (skip during GRBL execution to show drawing title)
             try:
                 from utils.state_manager import state_manager
@@ -2058,8 +2040,6 @@ class Captioner(MemoryMixin):
                     send_caption_to_display(caption)
             except Exception as e:
                 print(f"[LCD] Failed to send caption: {e}")
-            # Track last sent caption for deduplication
-            self._last_sent_caption = caption.strip()
 
             log_json_entry(
                 LogType.CAPTION,

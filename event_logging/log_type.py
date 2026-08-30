@@ -8,7 +8,6 @@ class LogType(Enum):
     SESSION_START = "session_start"
     INFO = "info"
     ERROR = "error"
-    SYSTEM = "system"
     DEBUG = "debug"
     RUN_METADATA = "run_metadata"
 
@@ -16,7 +15,6 @@ class LogType(Enum):
     CAPTION = "caption"
     REFLECTION = "reflection"
     VOCAB_PROMOTION = "vocab_promotion"
-    INTROSPECTION = "introspection"
     # SENTIMENT = "sentiment_analysis"
     COMPRESSION = "compression"
     LLM_API_CALL = "llm_api_call"  # was OLLAMA_API_CALL/"ollama_api_call" pre-July 9 (old logs keep the old string)

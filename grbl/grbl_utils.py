@@ -1824,7 +1824,6 @@ def process_svg_to_grbl(
                             try:
                                 from utils.state_manager import state_manager as _sm
 
-                                _sm.last_no_paper_skip_ts = time.time()
                             except Exception:
                                 pass
                             # Ensure gaze unlocked after skip

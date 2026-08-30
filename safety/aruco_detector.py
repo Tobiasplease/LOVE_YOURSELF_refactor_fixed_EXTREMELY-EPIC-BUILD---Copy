@@ -146,16 +146,6 @@ class ArucoDetectorThread(threading.Thread):
             self.marker_visible = False
             self.detection_confidence = 0.0
 
-    def is_marker_visible(self) -> bool:
-        """Check if marker is currently visible (paper NOT present)."""
-        with self.lock:
-            return self.marker_visible
-
-    def get_detection_confidence(self) -> float:
-        """Get rolling detection rate (0.0 to 1.0)."""
-        with self.lock:
-            return self.detection_confidence
-
     def get_status(self) -> dict:
         """Get full detection status."""
         with self.lock:

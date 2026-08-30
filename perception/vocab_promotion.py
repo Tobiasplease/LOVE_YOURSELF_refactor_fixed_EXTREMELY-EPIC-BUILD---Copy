@@ -77,10 +77,6 @@ class VocabularyPromoter:
             if self._observe_calls % 25 == 0:
                 self._update_ghosts()
 
-    def get_promotion_history(self):
-        with self.lock:
-            return list(self.history)
-
     def _extract_candidates(self, caption):
         from utils.nlp import nlp  # module-level spaCy singleton
 

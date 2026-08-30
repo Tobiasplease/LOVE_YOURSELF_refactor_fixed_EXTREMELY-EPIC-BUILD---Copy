@@ -14,8 +14,6 @@ class MoodEngine:
         self.current_mood = 0.5  # Backward compatibility scalar
         self.mood_vector = (0.0, 0.0, 0.0)  # Initial: truly neutral valence, arousal, clarity
         self.emotional_momentum = 0.2  # How much previous mood influences new mood (0.0-1.0) - lower for more responsive emotional evolution
-        self.last_caption = ""
-        self.last_person_detected = False
         self.session_start = time.time()  # Oscillator phase in get_emotion_for_hand_controller
 
     # -------------------------------------------------------------- main hook
@@ -72,8 +70,6 @@ class MoodEngine:
         change = self.current_mood - previous_scalar
         if abs(change) > 0.05:
             print(f"[😊] Mood {'↗' if change > 0 else '↘'} {self.current_mood:.2f} (Δ{change:+.2f})")
-        self.last_caption = caption
-        self.last_person_detected = saw_person
         return self.current_mood
 
     # --------------------------------------------------------------- helpers

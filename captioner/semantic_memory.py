@@ -445,24 +445,6 @@ class SemanticMemory:
         return best
 
     # ------------------------------------------------------------------
-    # Session start: load familiar concepts for early prompts
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # Injection formatting — the most important part
-    # ------------------------------------------------------------------
-        text = text.strip()
-        if len(text) <= max_len:
-            return text
-        # Try sentence boundary
-        for i in range(min(len(text), max_len), 15, -1):
-            if text[i - 1] in ".!?":
-                return text[:i]
-        # Word boundary
-        truncated = text[:max_len].rsplit(" ", 1)[0]
-        return truncated.rstrip(",.;:") + "..."
-
-    # ------------------------------------------------------------------
     # Concept CRUD
     # ------------------------------------------------------------------
 
@@ -567,8 +549,9 @@ class SemanticMemory:
         try:
             concept_data = self._concepts.get(ids=[concept_id], include=["documents"])
             if concept_data["documents"]:
-                concept_name = concept_data["documents"][0]
-                # Query: how close is this monologue to the concept's name?
+                # NOTE: this queries the whole concepts collection with the monologue
+                # text — it does NOT compare against this concept's name, despite the
+                # old comment claiming so (census-aug30 §2.5, latent behavior gap).
                 relevance = self._concepts.query(
                     query_texts=[text],
                     n_results=1,
@@ -846,6 +829,8 @@ class SemanticMemory:
 
         result.sort(key=lambda x: x["timestamp"])
         return result
+
+    def delete_concept(self, concept_id: str) -> bool:
         """Delete a concept and all its observations."""
         existing = self._concepts.get(ids=[concept_id])
         if not existing["ids"]:

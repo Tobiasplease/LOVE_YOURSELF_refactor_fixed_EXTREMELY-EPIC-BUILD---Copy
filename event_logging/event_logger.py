@@ -27,11 +27,6 @@ def get_current_run_id() -> str:
     return _current_run_id
 
 
-def set_run_id(run_id: str) -> None:
-    """Set a custom run ID."""
-    global _current_run_id
-    _current_run_id = run_id
-
 
 def set_start_time(start_time: float) -> None:
     """Set the start time for elapsed time calculations."""

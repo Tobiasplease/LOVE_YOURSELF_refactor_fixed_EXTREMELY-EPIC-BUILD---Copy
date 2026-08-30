@@ -29,7 +29,6 @@ class FrameBuffer:
     """Thread-safe ring buffer for camera frames with frame-diff gating."""
 
     def __init__(self, target_fps: float = 2.0, max_seconds: float = 30.0):
-        self._target_fps = target_fps
         self._min_interval = 1.0 / target_fps
         self._max_frames = int(target_fps * max_seconds)
 

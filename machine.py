@@ -141,7 +141,6 @@ if USE_UARM:
         print(f"Warning: uArm controller imports unavailable: {e}")
         UARM_BACKEND = None
 
-VERBOSE = False
 
 # Fixed udev device paths for each Arduino
 ARDUINO_DEVICES = {
@@ -924,7 +923,6 @@ if previous_state:
     # Generate awakening message with continuity
     save_time = previous_state["metadata"]["save_time"]
     time_since_last = describe_duration(save_time)
-    previous_beliefs = previous_state["captioner"].get("beliefs", {})
 
     # The awakening is ONE path now (Aug 2): generate_internal_awakening, run as
     # the first caption. This used to also call generate_awakening_message here
@@ -956,15 +954,13 @@ last_face_box = None  # Persisted face box for flicker suppression
 last_face_time = 0.0  # When we last had a valid face detection
 FACE_PERSIST_DURATION = 0.3  # Hold face box for 300ms after losing detection
 
-# Track last printed caption timestamp to prevent duplicates
-last_printed_caption_time = 0.0
 last_state_save_time = 0.0
 
 
 # Redundant functions removed - using existing MoodEngine functionality
 
 
-def mood_update_thread(mood_frame, timestamp):
+def mood_update_thread(timestamp):
     global last_snapshot_time, last_state_save_time, mood_thread_running
 
     # Set running flag at start
@@ -1000,11 +996,6 @@ def mood_update_thread(mood_frame, timestamp):
                             lightbulb.caption_flash()
                         except Exception as e:
                             debug_print(f"Lightbulb caption flash failed: {e}", "ERROR")
-
-                    # PRINT_CLEAN_CAPTIONS? chuck into logging func?
-                    # if captioner.last_caption_time > last_printed_caption_time:
-                    #     print(f"\n{clean_caption}\n")
-                    #     last_printed_caption_time = captioner.last_caption_time
 
                     # SimpleLightbulbController doesn't have mood parameters - uses frame diff only
 
@@ -1252,8 +1243,6 @@ def _awakening():
 threading.Thread(target=_awakening, daemon=True, name="awakening").start()
 
 try:
-    prev_gray = None
-    smoothed_pwm = 0
     debug_print("Entering main camera processing loop", "MAIN")
     while True:
         _loop_heartbeat = time.time()
@@ -1484,7 +1473,7 @@ try:
                 if not mood_thread_running:
                     debug_print(f"Starting mood update thread - interval: {MOOD_EVALUATION_INTERVAL}s", "MOOD")
                     # Use full_res_frame for LLM captioning (2560x1440 instead of 320x240)
-                    threading.Thread(target=mood_update_thread, args=(full_res_frame, int(now)), daemon=True).start()
+                    threading.Thread(target=mood_update_thread, args=(int(now),), daemon=True).start()
                     last_mood_time = now
                 else:
                     debug_print("Mood analysis already running - skipping this interval", "MOOD")

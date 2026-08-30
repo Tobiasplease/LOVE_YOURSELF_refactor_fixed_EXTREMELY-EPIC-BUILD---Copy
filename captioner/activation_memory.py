@@ -15,7 +15,7 @@ import os
 import threading
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from config.config import MOOD_SNAPSHOT_FOLDER
 from event_logging.event_logger import log_json_entry

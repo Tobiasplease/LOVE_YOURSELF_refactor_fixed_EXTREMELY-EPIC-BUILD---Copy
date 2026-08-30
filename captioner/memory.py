@@ -15,7 +15,7 @@ import re
 import threading
 import time
 from collections import deque
-from typing import Any, Deque, Dict, List, Optional, Set, Tuple
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 from captioner.activation_memory import (
     get_activation_network,
@@ -30,10 +30,6 @@ from utils.continuity import describe_duration, now
 
 # constants shared with Captioner
 MAX_MEMORY_ENTRIES: int = 30
-BOREDOM_THRESHOLD: float = 0.7
-CAPTION_SAVE_THRESHOLD: float = 0.3
-
-CaptionTuple = Tuple[int, str, float, str]  # (ts, caption, mood, file)
 
 
 class MemoryMixin:

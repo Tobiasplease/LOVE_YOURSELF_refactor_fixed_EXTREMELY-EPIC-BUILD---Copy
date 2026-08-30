@@ -30,7 +30,6 @@ class StateManager:
         self.timeout_timer = None
         # Minimal CNC execution tracking (added for idle/drawing handoff)
         self.is_executing_cnc = False
-        self.cnc_start_time = None
         self.current_gcode_file = None
         self.current_drawing_phase = None  # "executing" when active
         # Expected output from ComfyUI for current job (filename prefix)
@@ -42,7 +41,6 @@ class StateManager:
         self.paper_state: str = ""
         self.last_paper_check_ts: float = 0.0
         self.last_paper_check_reason: str = ""
-        self.last_no_paper_skip_ts: float = 0.0
         # Hardware references for early paper detection
         self._camera = None
         self._servos = None
@@ -80,7 +78,7 @@ class StateManager:
                 return None
             return self._latest_frame.copy()
 
-    def save_session_state(self, captioner, mood_engine, timekeeper=None) -> bool:
+    def save_session_state(self, captioner, mood_engine) -> bool:
         """Save current session state for next startup."""
         try:
             state = {
@@ -109,8 +107,6 @@ class StateManager:
                     # Recent memory (last 50 entries for richer context)
                     "recent_memory": list(captioner.memory_queue)[-50:] if captioner.memory_queue else [],
                 },
-                # Timekeeper state (if available)
-                "timekeeper": self._get_timekeeper_state(timekeeper) if timekeeper else {},
             }
 
             # Write to temp file first, then rename for atomic operation
@@ -231,7 +227,6 @@ class StateManager:
             # IMPORTANT: Mark that we've restored state, so we don't repeat awakening
             # The awakening should only happen once per session start
             captioner.first_caption_done = False  # Will trigger awakening sequence once
-            captioner.awaiting_environmental_phase = False  # Reset environmental phase flag
 
             # Debug: Show when state was actually saved
             from datetime import datetime
@@ -266,17 +261,6 @@ class StateManager:
                 return json.load(f)
         except Exception:
             return {"total_sessions": 0, "total_runtime": 0, "first_boot": now()}
-
-    def _get_timekeeper_state(self, timekeeper) -> Dict[str, Any]:
-        """Extract timekeeper state if available."""
-        try:
-            return {
-                "system_start": timekeeper.system_start,
-                "last_wake": timekeeper.last_wake,
-                "session_starts": timekeeper.session_starts[-5:],  # Last 5 sessions
-            }
-        except Exception:
-            return {}
 
     def _validate_state(self, state: Dict[str, Any]) -> bool:
         """Validate that state has required structure."""
@@ -368,7 +352,6 @@ class StateManager:
     def start_cnc_execution(self, gcode_file: str, original_prompt: str) -> None:
         """Enter Drawing Mode - used to block idle movements during CNC execution."""
         self.is_executing_cnc = True
-        self.cnc_start_time = time.time()
         self.current_gcode_file = gcode_file
         self.current_drawing_phase = "executing"
 
@@ -381,7 +364,6 @@ class StateManager:
     def finish_cnc_execution(self, image_path: str = None, gcode_path: str = None) -> None:
         """Exit Drawing Mode - allow idle movements to resume."""
         self.is_executing_cnc = False
-        self.cnc_start_time = None
         self.current_gcode_file = None
         self.current_drawing_phase = None
         # Clear the drawing prompt now that physical drawing is complete

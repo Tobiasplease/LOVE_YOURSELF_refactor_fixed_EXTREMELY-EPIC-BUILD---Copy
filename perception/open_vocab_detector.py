@@ -88,13 +88,6 @@ class OpenVocabDetectorThread(threading.Thread):
         with self.lock:
             self._pending_vocabulary = [t.strip() for t in terms if t.strip()]
 
-    def get_detections(self, max_age=None):
-        """Latest pass as [{term, conf, box, pan, tilt, time}]."""
-        with self.lock:
-            if max_age is not None and time.time() - self._detection_time > max_age:
-                return []
-            return [dict(d) for d in self._detections]
-
     def get_term_hit_counts(self):
         with self.lock:
             return {t: dict(s) for t, s in self._term_hits.items()}

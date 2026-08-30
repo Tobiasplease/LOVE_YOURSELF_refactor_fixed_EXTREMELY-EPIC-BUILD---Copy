@@ -160,13 +160,11 @@ class ObjectDetectionThread(threading.Thread):
 
             DetectionMemory.update(
                 list(detected),
-                time.time(),
                 clean_frame,
                 best_person_bbox,
                 best_person_conf,
                 person_count=person_count,
                 best_track_id=self._target_track_id,
-                person_tracks=person_tracks,
             )
 
             # Chunked sleep: inference time counts toward the interval, and a

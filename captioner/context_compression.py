@@ -5,7 +5,6 @@ Frequent LLM-based compression of recent observations to create evolving baselin
 Prevents repetition by building understanding that carries forward.
 """
 
-import hashlib
 import json
 import os
 import queue
@@ -226,13 +225,6 @@ class ContextCompressionEngine:
             captions_snapshot = list(valid_captions)
             current_baseline = self.baseline_context
 
-            # Get the most recent image path for visual grounding
-            recent_image = None
-            for cap in reversed(captions_snapshot):
-                if cap.get("image_path"):
-                    recent_image = cap["image_path"]
-                    break
-
             self.compression_queue.put_nowait(
                 {
                     "captions": captions_snapshot,
@@ -298,42 +290,12 @@ class ContextCompressionEngine:
         try:
             recent_text = "\n".join([f"• {cap['text']}" for cap in captions])
 
-            # Build historical context if available
-            historical_context = ""
-            if len(self.compression_history) > 0:
-                # Get last 3 compressions for context
-                recent_history = list(self.compression_history)[-3:]
-                history_parts = []
-                for i, hist in enumerate(recent_history):
-                    age_desc = f"{hist['age_minutes']:.0f} minutes ago" if hist["age_minutes"] < 60 else f"{hist['age_minutes'] / 60:.1f} hours ago"
-                    history_parts.append(f"[{age_desc}] {hist['understanding']}")
-
-                historical_context = f"""
-EARLIER UNDERSTANDINGS (for context):
-{chr(10).join(history_parts)}"""
-
-            # Calculate how long you've been observing this space
-            session_duration = self.total_session_duration / 60.0  # Convert to minutes
-            duration_description = self._format_duration(session_duration)
-
-            # === ACTIVATION MEMORY INTEGRATION ===
-            # Get rich context from activation network to make compression smarter
-            activation_context = ""
-            try:
-                from captioner.activation_memory import get_activation_summary_for_compression
-
-                act_data = get_activation_summary_for_compression()
-
-                activation_parts = []
-                if act_data["concepts_str"]:
-                    activation_parts.append(f"On my mind: {act_data['concepts_str']}")
-                if act_data.get("association_str"):
-                    activation_parts.append(f"I've noticed: {act_data['association_str']} often together")
-
-                if activation_parts:
-                    activation_context = "\n".join(activation_parts)
-            except Exception:
-                pass  # Continue without activation context if unavailable
+            # NOTE (census-aug30 §3): three context blocks that used to be built
+            # here — historical compressions, session duration, and the activation
+            # summary — were computed and never interpolated into the compression
+            # prompt (its template has only recent_text/current_baseline/self_known
+            # slots). Removed as dead; they document intended-but-disconnected
+            # features, not lost behavior.
 
             # MEMORY DIFF (July 12) — one structured call over the recent
             # thoughts, diffed against what the machine already knows. The

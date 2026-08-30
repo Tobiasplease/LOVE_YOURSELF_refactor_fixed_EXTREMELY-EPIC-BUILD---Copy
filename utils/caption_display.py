@@ -16,7 +16,6 @@ class CaptionDisplay:
         self.current_brightness = 255  # Default full brightness
 
         # Slower timing for better readability
-        self.chunk_delay = 1000  # 1000ms (1 second) between chunks for readability
 
         # Simple rate limiting with skip-ahead logic
         self.last_sent_time = 0
