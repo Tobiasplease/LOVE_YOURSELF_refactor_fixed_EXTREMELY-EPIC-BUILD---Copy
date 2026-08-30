@@ -39,8 +39,6 @@ FACE_TRACK_MAX_STEP = 2.5  # max target movement per update, degrees (~75°/s at
 
 # === IDLE GAZE SETTINGS ===
 FACE_STABLE_TIMEOUT = 3.0  # Time before going idle after losing face
-IDLE_PAUSE_MIN = 1.5  # Minimum pause between idle movements (more organic)
-IDLE_PAUSE_MAX = 6.0  # Maximum pause between idle movements (more frequent)
 
 # === BREATHING SETTINGS ===
 LUNG_MIN = 60

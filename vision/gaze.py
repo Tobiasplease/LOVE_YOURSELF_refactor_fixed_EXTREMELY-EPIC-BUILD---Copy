@@ -12,8 +12,6 @@ from config.config import (
     FACE_TRACK_MAX_STEP,
     FLIP_X,
     FLIP_Y,
-    IDLE_PAUSE_MAX,
-    IDLE_PAUSE_MIN,
     PAN_MIN,
     PAN_MAX,
     TILT_MIN,
@@ -27,13 +25,9 @@ FACE_TILT_VELOCITY = 12.0  # Maximum degrees per update during face tracking
 FACE_VELOCITY_SMOOTHING = 0.0  # No velocity smoothing for face tracking (immediate response)
 
 # General movement - higher limits for responsive tracking
-MAX_PAN_VELOCITY = 15.0  # Maximum degrees per update for pan servo
-MAX_TILT_VELOCITY = 12.0  # Maximum degrees per update for tilt servo
 VELOCITY_SMOOTHING = 0.3  # Less smoothing = faster response (0.0 = instant, 1.0 = never change)
 
 # Dynamic pause timing for idle movement
-IDLE_PAUSE_LONG = 6.0  # Occasional longer contemplative pauses
-IDLE_LONG_PAUSE_CHANCE = 0.10  # 10% chance for a longer pause
 IDLE_STILLNESS_MIN = 1.0  # Minimum stillness duration (seconds)
 IDLE_STILLNESS_MAX = 3.0  # Maximum stillness duration (seconds)
 IDLE_STILLNESS_CHANCE = 0.35  # 35% of movements end in stillness — more alive
@@ -41,11 +35,8 @@ IDLE_STILLNESS_CHANCE = 0.35  # 35% of movements end in stillness — more alive
 # === SIMPLIFIED STATE MANAGEMENT ===
 servo_x = 90
 servo_y = 90
-target_x = 90
-target_y = 90
 last_seen_time = time.time() - 10  # Start as if we've been idle for 10 seconds
 state = "idle"
-idle_next_move_time = 0  # Trigger immediate movement
 idle_in_stillness = False  # Whether we're in a stillness period (no target updates)
 idle_stillness_until = 0  # Timestamp when stillness ends
 startup_sequence_active = False  # Flag to prevent conflicts during startup
@@ -63,12 +54,8 @@ drawing_transition_active = False  # Flag for smooth transition to/from drawing 
 # === ORGANIC MOVEMENT DECOUPLING ===
 # Independent timing and curves for pan/tilt
 _person_seen_since = None  # aware-entry debounce: when continuous YOLO person detection began
-pan_offset_time = random.uniform(0, 2.0)  # Random phase offset for pan
-tilt_offset_time = random.uniform(0, 2.0)  # Random phase offset for tilt
 pan_micro_target = 90  # Intermediate target for curved movement
 tilt_micro_target = 90  # Intermediate target for curved movement
-pan_easing_variance = 1.0  # Dynamic easing multiplier for pan
-tilt_easing_variance = 1.0  # Dynamic easing multiplier for tilt
 
 # === PERLIN NOISE FOR ORGANIC MOVEMENT ===
 pan_noise_offset = random.uniform(0, 1000)  # Random seed for pan noise
@@ -79,8 +66,6 @@ tilt_frequency = 0.06  # Tilt movement frequency (different from pan)
 # === INDEPENDENT SERVO CONTROLLERS ===
 pan_velocity = 0.0  # Current pan movement velocity
 tilt_velocity = 0.0  # Current tilt movement velocity
-pan_target_time = 0.0  # When pan reaches target
-tilt_target_time = 0.0  # When tilt reaches target
 last_state_change = 0.0  # Track state transitions for clean handoff
 aware_minimum_dwell = 5.0  # Minimum seconds to stay in aware state before returning to idle
 
@@ -107,10 +92,8 @@ class GazePhysicsState:
         self.spring_constant = 8.0
         self.damping = 5.0
         self.tremor_amplitude = 0.2
-        self.orbital_phase = 0.0
         self.orbital_strength = 0.2
         self.last_update_time = time.time()
-        self.param_blend_factor = 0.0
 
     def blend_params(self, target_params: dict, blend_rate: float = 0.05):
         """Smoothly blend physics parameters to avoid jarring transitions."""
@@ -266,8 +249,6 @@ nudge_duration = 5.0  # How long nudge lasts before decaying (seconds)
 # === SEARCHING STATE ===
 # Goal-directed searching when person is "remembered" or LLM has interest points
 searching_active = False
-searching_target_pan = 90.0  # Current search target
-searching_target_tilt = 90.0
 searching_zones_to_visit = []  # Queue of zones to scan
 searching_last_known_pan = None  # Where person was last seen
 searching_last_known_tilt = None
@@ -299,7 +280,6 @@ llm_zone_set_time = 0.0  # When LLM zone was last set
 llm_zone_timeout = 45.0  # LLM zones expire after 45 seconds, return to free wandering
 
 # Tracking angle awareness
-tracking_person_position = "center"  # left/center/right
 tracking_person_last_x = None
 tracking_person_movement = "stationary"
 
@@ -356,23 +336,13 @@ def set_llm_zone(pan_zone: str, tilt_zone: str = None):
 
 def update_tracking_awareness(face_box, frame_width: int):
     """Track where the person is relative to frame center."""
-    global tracking_person_position, tracking_person_last_x, tracking_person_movement
+    global tracking_person_last_x, tracking_person_movement
 
     if face_box is None:
         return
 
     x1, y1, x2, y2 = face_box
     face_center_x = (x1 + x2) / 2
-    frame_center_x = frame_width / 2
-
-    # Relative position
-    offset_ratio = (face_center_x - frame_center_x) / frame_center_x
-    if offset_ratio < -0.2:
-        tracking_person_position = "left"
-    elif offset_ratio > 0.2:
-        tracking_person_position = "right"
-    else:
-        tracking_person_position = "center"
 
     # Movement detection
     if tracking_person_last_x is not None:
@@ -730,12 +700,6 @@ def _update_registry_glance(now):
     return _glance_target
 
 
-def get_current_glance():
-    """(label, kind-ish) of the active registry glance, or None. Structured
-    data for downstream consumers; never prose."""
-    return _glance_label if _glance_active else None
-
-
 def get_glance_info():
     """Full structured view of the active glance for downstream consumers
     (caption loop, glance verification): {label, kind, started} or None."""
@@ -781,7 +745,7 @@ def perlin_noise_1d(x, octaves=3, persistence=0.5):
 
 def update_organic_movement(now):
     """Generate organic movement targets using Perlin noise within the LLM-directed zone."""
-    global pan_micro_target, tilt_micro_target, pan_easing_variance, tilt_easing_variance
+    global pan_micro_target, tilt_micro_target
     global pan_noise_offset, tilt_noise_offset, pan_frequency, tilt_frequency
     global llm_target_zone_pan, llm_target_zone_tilt, llm_zone_active
 
@@ -827,8 +791,6 @@ def update_organic_movement(now):
         tilt_micro_target = clamp(tilt_micro_target, TILT_MIN, TILT_MAX)
 
     # Create organic easing variance
-    pan_easing_variance = 0.8 + 0.4 * perlin_noise_1d(pan_noise_time * 0.5)
-    tilt_easing_variance = 0.7 + 0.3 * perlin_noise_1d(tilt_noise_time * 0.3)
 
 
 def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_person_detected=False, person_direction=None, person_bbox=None):
@@ -844,7 +806,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         person_direction: Direction of last known person ("to my left", "to my right", "ahead", None)
         person_bbox: YOLO person bounding box (x1, y1, x2, y2) for tracking in aware state
     """
-    global servo_x, servo_y, target_x, target_y, last_seen_time, state, idle_next_move_time
+    global servo_x, servo_y, last_seen_time, state
     global startup_sequence_active, drawing_sequence_active, last_state_change
     global drawing_target_x, drawing_target_y, drawing_transition_active
     global physics_state, llm_zone_active, llm_zone_set_time
@@ -929,8 +891,6 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
         if abs(face_y_norm - 0.5) > dead_zone:
             raw_target_y = TILT_MIN + (TILT_MAX - TILT_MIN) * face_y_norm
             physics_state.tilt_target += clamp(raw_target_y - physics_state.tilt_target, -FACE_TRACK_MAX_STEP, FACE_TRACK_MAX_STEP)
-        target_x = physics_state.pan_target
-        target_y = physics_state.tilt_target
 
         physics_state.blend_params(TRACKING_PHYSICS, blend_rate=0.9)  # Near-instant snap to face tracking physics
 
@@ -960,12 +920,6 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             if state != "idle":
                 last_state_change = now
             state = "idle"
-            # Dynamic pause timing - shorter base pauses with occasional longer ones
-            if random.random() < IDLE_LONG_PAUSE_CHANCE:
-                pause_duration = random.uniform(IDLE_PAUSE_LONG * 0.8, IDLE_PAUSE_LONG * 1.2)
-            else:
-                pause_duration = random.uniform(IDLE_PAUSE_MIN, IDLE_PAUSE_MAX)
-            idle_next_move_time = now + pause_duration
 
     elif state == "aware":
         # AWARE STATE: Person detected by YOLO but no face to track
