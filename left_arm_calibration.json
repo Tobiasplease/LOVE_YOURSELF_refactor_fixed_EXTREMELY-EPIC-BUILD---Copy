@@ -1,9 +1,0 @@
-{
-  "servo4_center": 90,
-  "servo5_center": 90,
-  "servo4_range": 51,
-  "servo5_range": 48,
-  "servo4_flipped": false,
-  "servo5_flipped": false,
-  "left_arm_enabled": true
-}
