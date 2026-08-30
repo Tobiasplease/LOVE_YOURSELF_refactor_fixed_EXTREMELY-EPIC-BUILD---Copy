@@ -112,29 +112,10 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
-    def _handle_environmental_update(self, understanding: str) -> None:
-        """Handle environmental updates from context compression system."""
-        try:
-            # Update location understanding based on compression insights
-            self.update_location_understanding(understanding)
-
-            # Also update environmental certainty based on compression frequency
-            if hasattr(self, "self_model") and "environmental_certainty" in self.self_model:
-                # Increase certainty as we get more compression-based understanding
-                current_certainty = self.self_model.get("environmental_certainty", 0.0)
-                self.self_model["environmental_certainty"] = min(1.0, current_certainty + 0.1)
-
-        except Exception as e:
-            print(f"[❌] Environmental update failed: {e}")
-
     def __init__(self) -> None:
         super().__init__()
         self.model = MultimodalModel(memory_ref=self)
         self.drawing = DrawingController()
-
-        # Set up environmental update callback for context compression
-        if context_compressor:
-            context_compressor.set_environmental_update_callback(self._handle_environmental_update)
 
         self.true_session_start = time.time()
         self.first_caption_done = False

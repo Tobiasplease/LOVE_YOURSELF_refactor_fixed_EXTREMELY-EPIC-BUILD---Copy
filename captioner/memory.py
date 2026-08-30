@@ -30,25 +30,11 @@ class MemoryMixin:
         # Experience queue (used by emotional journey, session snippets)
         self.memory_queue: Deque[dict] = deque(maxlen=MAX_MEMORY_ENTRIES)
 
-        # Temporal spine
+        # Temporal spine. (The wider spine that used to sit here — timeline,
+        # day_stones, known_people, primary_person, self_model — was dead
+        # state: never appended or never read, yet serialized every save.
+        # Removed Aug 30 2026; memory-effectiveness-audit-aug30.md §8.)
         self.boot_ts = getattr(self, "boot_ts", time.time()) if hasattr(self, "boot_ts") else time.time()
-        self.timeline = getattr(self, "timeline", deque(maxlen=50000))
-        self.day_stones = getattr(self, "day_stones", [])
-        self._last_consolidation_day = getattr(self, "_last_consolidation_day", time.strftime("%Y-%m-%d"))
-
-        # Person identity tracking
-        self.known_people = getattr(self, "known_people", {})
-        self.primary_person = getattr(self, "primary_person", None)
-
-        # Self-understanding and environmental model
-        self.self_model = getattr(
-            self,
-            "self_model",
-            {
-                "location_understanding": "unknown space",
-                "environmental_certainty": 0.0,
-            },
-        )
 
         # Boredom (the activation network's one surviving output — retired
         # Aug 30 2026, memory-effectiveness-audit-aug30.md §1: novelty had
@@ -240,45 +226,13 @@ class MemoryMixin:
                     sleep_days = int(gap / 86400)
                     sleep_context = f"slept {sleep_days}d"
 
-        last_person = None
-        for e in reversed(self.timeline):
-            if "person" in e.get("text", "").lower():
-                last_person = now_time - e["ts"]
-                break
-
-        lp = f"last person {int(last_person / 3600)}h ago" if last_person else "no person yet"
-
-        lines = [f"day {days_alive}", session_time, lp]
+        # (The "last person Xh ago / no person yet" clause was removed Aug 30
+        # 2026: it scanned self.timeline, which nothing ever appended to, so it
+        # said "no person yet" permanently — a standing lie in the drawing
+        # system prompt. Presence lives in the caption path's presence belief.)
+        lines = [f"day {days_alive}", session_time]
         if sleep_context:
             lines.insert(1, sleep_context)
 
         return lines
-
-    # === SELF-UNDERSTANDING & ENVIRONMENTAL MODEL ===
-
-    def update_location_understanding(self, caption: str):
-        """Update understanding of current location based on observations."""
-        location_indicators = {
-            "office": ["desk", "computer", "chair", "workspace", "office"],
-            "workshop": ["tools", "materials", "construction", "renovation", "scattered"],
-            "studio": ["art", "creative", "drawing", "canvas", "studio"],
-            "room": ["room", "space", "area", "interior"],
-            "laboratory": ["equipment", "experiment", "scientific", "lab"],
-        }
-
-        caption_lower = caption.lower()
-        location_scores = {}
-
-        for location, keywords in location_indicators.items():
-            score = sum(1 for keyword in keywords if keyword in caption_lower)
-            if score > 0:
-                location_scores[location] = score
-
-        if location_scores:
-            best_location = max(location_scores, key=location_scores.get)  # type: ignore
-            confidence = location_scores[best_location] / 10.0
-
-            if confidence > 0.1 or self.self_model["environmental_certainty"] < 0.3:
-                self.self_model["location_understanding"] = best_location
-                self.self_model["environmental_certainty"] = min(1.0, self.self_model["environmental_certainty"] + confidence * 0.1)
 

@@ -131,9 +131,6 @@ class ContextCompressionEngine:
         # Felt-state transition tracking
         self.previous_felt_state = ""
 
-        # Environmental update callback
-        self.environmental_update_callback = None
-
         # Background compression system
         self.compression_queue = queue.Queue(maxsize=5)  # Limit queue size
         self.compression_thread = None
@@ -186,10 +183,6 @@ class ContextCompressionEngine:
                     return f"{self.baseline_context} ({age_mins}m ago: {old_text})"
 
         return self.baseline_context
-
-    def set_environmental_update_callback(self, callback):
-        """Set callback function for environmental model updates."""
-        self.environmental_update_callback = callback
 
     def _start_compression_worker(self) -> None:
         """Start background compression worker thread."""
@@ -408,19 +401,47 @@ class ContextCompressionEngine:
                         if not config.CLEAN_LLM_OUTPUT:
                             print(f"[🧠 {duration}] {first_sentence}...")
 
-                    # Update spatial familiarity callback if available
-                    if self.environmental_update_callback and understanding:
-                        try:
-                            # Always update - builds familiarity over time in same space
-                            if not config.CLEAN_LLM_OUTPUT:
-                                print("[🏠] Building spatial familiarity - updating location model")
-                            self.environmental_update_callback(understanding)
-                        except Exception as e:
-                            log_json_entry(
-                                LogType.ERROR,
-                                {"message": f"Spatial familiarity update failed: {e}", "component": "compression"},
-                                print_message=f"[❌] Spatial familiarity update failed: {e}",
-                            )
+                    # (The activation-memory feedback boost that ran here was
+                    # retired Aug 30 2026: it re-ran concept matching on the
+                    # compression text, which bumped times_seen on the concepts
+                    # ledger — inflating the counters the familiarity line and
+                    # memory mode read. memory-effectiveness-audit-aug30.md §1.)
+
+                    # === LLM CONCEPT EXTRACTION ===
+                    # Extract clean noun phrases from compression output (not raw monologue).
+                    # Replaces per-caption regex _extract_canonical_name for concept creation.
+                    try:
+                        self._extract_concepts_from_compression(understanding, compression_model)
+                    except Exception as ce:
+                        print(f"[SEMANTIC] Concept extraction failed: {ce}")
+
+                    # Log compression with enhanced visibility
+                    log_json_entry(
+                        LogType.COMPRESSION,
+                        {
+                            "message": "Updated baseline understanding",
+                            "action": "update_baseline",
+                            "understanding": understanding,
+                            "understanding_length": len(understanding),
+                            "compression_history_count": len(self.compression_history),
+                            "model": compression_model,
+                        },
+                        print_message=f"[🧠] Updated baseline: {truncate_for_print(self.baseline_context, 80)}",
+                    )
+
+                    # Quiet compression output - only show brief spatial update
+                    if understanding and len(understanding.strip()) > 20:
+                        session_info = self.get_current_session_info()
+                        duration = session_info["duration_description"]
+                        # Truncate to first sentence for cleaner output
+                        first_sentence = understanding.split(".")[0][:100] if "." in understanding else understanding[:100]
+                        if not config.CLEAN_LLM_OUTPUT:
+                            print(f"[🧠 {duration}] {first_sentence}...")
+
+                    # (The spatial-familiarity callback that fired here fed
+                    # captioner.update_location_understanding → self_model,
+                    # which nothing ever read. Removed Aug 30 2026 with the
+                    # rest of the dead self-model state.)
 
                     # Introspection RETIRED June 28: desire/belief/persona now come
                     # from the reflection loop's distillation (distill_reflection),
