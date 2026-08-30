@@ -7,7 +7,6 @@ from typing import List, Optional
 
 from captioner.prompt_registry import P
 from config import config
-from utils.view_orientation import describe_view_orientation
 
 # ===== PROMPT BUILDERS =====
 # Authored fragment TEXT lives in captioner/prompt_registry.py (editable live

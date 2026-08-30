@@ -121,9 +121,6 @@ class CameraReactivityEngine:
         if len(self.activity_history) > self.max_history:
             self.activity_history.pop(0)
 
-        # Detect sudden changes (spikes) - simplified
-        recent_peak = max(self.activity_history[-5:]) if len(self.activity_history) >= 5 else 0.0
-
         # MEMORY FIX: Reuse previous frame buffer instead of copying
         np.copyto(self.previous_frame, blurred_frame)
 
@@ -150,62 +147,6 @@ class CameraReactivityEngine:
             "chaos_multiplier": min(3.5, 0.3 + (self.activity_level * 3.2)),  # Convert activity to chaos range
             "speed_multiplier": min(2.0, 1.0 + self.activity_level),  # Convert activity to speed range
         }
-
-    def _calculate_motion_intensity(self, frame_diff: np.ndarray) -> float:
-        """Calculate motion intensity using gradient analysis."""
-        # Calculate gradients to detect directional movement
-        grad_x = cv2.Sobel(frame_diff, cv2.CV_64F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(frame_diff, cv2.CV_64F, 0, 1, ksize=3)
-
-        # Calculate magnitude of gradient vectors
-        magnitude = np.sqrt(grad_x**2 + grad_y**2)
-
-        # Normalize to 0-1 range
-        max_possible = frame_diff.shape[0] * frame_diff.shape[1] * 255
-        intensity = np.sum(magnitude) / max_possible
-
-        # Smooth the intensity
-        self.motion_intensity = self.smoothing_factor * self.motion_intensity + (1 - self.smoothing_factor) * intensity
-
-        return min(1.0, self.motion_intensity)
-
-    def _calculate_chaos_multiplier(self) -> float:
-        """
-        Calculate chaos multiplier for Markov chain generation.
-        Higher activity = more chaotic/random behavior.
-        """
-        # Base multiplier is 1.0 (normal behavior)
-        base = 1.0
-
-        # Activity contribution (0.0-1.0 becomes 0.0-1.5 bonus)
-        activity_bonus = self.activity_level * 1.5
-
-        # Sudden change contribution (spikes add extra chaos)
-        spike_bonus = self.sudden_change * 0.8
-
-        # Total chaos multiplier: 1.0-3.5 range
-        chaos = base + activity_bonus + spike_bonus
-
-        return min(3.5, max(0.3, chaos))
-
-    def _calculate_speed_multiplier(self) -> float:
-        """
-        Calculate speed multiplier for movement timing.
-        Higher motion = faster movements.
-        """
-        # Base speed is 1.0 (normal timing)
-        base = 1.0
-
-        # Motion intensity affects speed (0.0-1.0 becomes 0.0-2.5 bonus)
-        motion_bonus = self.motion_intensity * 2.5
-
-        # Sudden changes trigger immediate fast responses
-        sudden_bonus = self.sudden_change * 1.0
-
-        # Total speed multiplier: 0.2-4.5 range
-        speed = base + motion_bonus + sudden_bonus
-
-        return min(4.5, max(0.2, speed))
 
     def _check_pause_conditions(self, current_time: float) -> bool:
         """
@@ -258,10 +199,6 @@ class CameraReactivityEngine:
         """Update sensitivity (0.0-1.0)."""
         self.sensitivity = max(0.0, min(1.0, sensitivity))
 
-    def set_smoothing(self, smoothing_factor: float):
-        """Update temporal smoothing (0.0-1.0)."""
-        self.smoothing_factor = max(0.0, min(1.0, smoothing_factor))
-
     def enable_debug(self, enabled: bool = True):
         """Enable/disable debug output."""
         self.debug_enabled = enabled
@@ -274,20 +211,6 @@ class CameraReactivityEngine:
         self.sudden_change = 0.0
         self.motion_intensity = 0.0
         self.activity_history = []
-
-    def get_status_info(self) -> Dict[str, Any]:
-        """Get current status and metrics for debugging."""
-        return {
-            "frame_count": self.frame_count,
-            "activity_level": self.activity_level,
-            "sudden_change": self.sudden_change,
-            "motion_intensity": self.motion_intensity,
-            "sensitivity": self.sensitivity,
-            "smoothing_factor": self.smoothing_factor,
-            "history_length": len(self.activity_history),
-            "active": self.reactivity_active,
-            "last_update": self.last_update_time,
-        }
 
 
 def test_camera_reactivity():

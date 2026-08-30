@@ -26,7 +26,7 @@ from captioner.activation_memory import (
 
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
-from utils.continuity import describe_duration, describe_time_gap, now
+from utils.continuity import describe_duration, now
 
 # constants shared with Captioner
 MAX_MEMORY_ENTRIES: int = 30

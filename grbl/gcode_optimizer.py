@@ -351,53 +351,6 @@ class GCodeOptimizer:
 
         return optimized_lines
 
-    def optimize_file(self, input_file: str, output_file: Optional[str] = None) -> str:
-        """Optimize an entire G-code file"""
-        if output_file is None:
-            output_file = input_file.replace('.gcode', '_optimized.gcode')
-
-        try:
-            with open(input_file, 'r') as f:
-                lines = f.readlines()
-
-            # Strip whitespace but preserve line structure
-            lines = [line.rstrip() for line in lines]
-
-            optimized_lines = self.optimize_gcode(lines)
-
-            with open(output_file, 'w') as f:
-                for line in optimized_lines:
-                    f.write(line + '\n')
-
-            log_json_entry(
-                LogType.GRBL,
-                {
-                    "message": "G-code file optimization complete",
-                    "action": "file_optimization_complete",
-                    "input_file": input_file,
-                    "output_file": output_file,
-                    "original_lines": len(lines),
-                    "optimized_lines": len(optimized_lines)
-                },
-                print_message=f"[💾] Optimized G-code saved: {output_file}"
-            )
-
-            return output_file
-
-        except Exception as e:
-            log_json_entry(
-                LogType.ERROR,
-                {
-                    "message": "G-code optimization failed",
-                    "component": "gcode_optimizer",
-                    "error": str(e),
-                    "input_file": input_file
-                },
-                print_message=f"[❌] G-code optimization failed: {e}"
-            )
-            raise
-
-
 def create_optimizer_from_config() -> GCodeOptimizer:
     """Create optimizer instance using configuration values"""
     try:
