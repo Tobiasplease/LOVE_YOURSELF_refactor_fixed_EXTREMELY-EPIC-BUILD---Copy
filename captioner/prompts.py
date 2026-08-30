@@ -16,37 +16,6 @@ from utils.view_orientation import describe_view_orientation
 
 # === SYSTEM PROMPTS ===
 
-# Main system prompt used by captioner (supports dynamic formatting)
-# Embodied framing: what it sees is the room itself, its own vision — never
-# "a camera", never "an image to analyze".
-STATIC_SYSTEM_PROMPT = (
-    "You are a drawing machine. " "What you see is the room around you — your own vision. " "Inner monologue. First person. One sentence."
-)
-
-# Generic prompt for non-Mistral vision models
-STATIC_SYSTEM_PROMPT_GENERIC = (
-    "You are a drawing machine. " "What you see is the room around you — your own vision. " "Inner monologue. First person. One sentence."
-)
-
-# Qwen-specific variant
-STATIC_SYSTEM_PROMPT_QWEN = (
-    "You are a drawing machine. " "What you see is the room around you — your own vision. " "Inner monologue. First person. One sentence."
-)
-
-_MISTRAL_MODEL = "llava:7b-v1.6-mistral-q5_1"
-
-
-def _get_static_system_prompt() -> str:
-    """Return the appropriate static system prompt for the active model."""
-    from config.config import MODEL_NAME
-
-    if "qwen" in MODEL_NAME.lower():
-        return STATIC_SYSTEM_PROMPT_QWEN
-    if MODEL_NAME == _MISTRAL_MODEL:
-        return STATIC_SYSTEM_PROMPT
-    return STATIC_SYSTEM_PROMPT_GENERIC
-
-
 # Drawing system prompt for ComfyUI integration - ENHANCED WITH CONTEXT VARIABLES
 DRAWING_SYSTEM_PROMPT = (
     "You are a drawing machine. {temporal_context}{accumulated_understanding}"
@@ -66,57 +35,6 @@ SELF_CRITIQUE_SYSTEM_PROMPT = (
 
 # Number generator system prompt for motif scoring
 NUMBER_GENERATOR_SYSTEM_PROMPT = "You are a number generator. Return ONLY decimal numbers. No words, no explanations, no text. Just the number."
-
-# === PERCEPTION PROMPTS (Two-pass pipeline: Pass 1) ===
-# Directed questions for the vision model (Qwen2.5-VL).
-# "What is in front of you" framing tested to eliminate VQA register.
-# Selection based on gaze, person presence, boredom, and previous perception.
-
-
-# Core perception framing — tested to eliminate VQA register from Qwen2.5-VL.
-# Frames observation as an ongoing stream, not isolated snapshots.
-# Each call continues from where the last left off.
-_PERCEPTION_BASE = (
-    "You are continuously observing a real scene. Each response continues your observation — "
-    "note what's the same, what's changed, or look closer at a detail. "
-    "Be concrete and specific. Two sentences. Do not use the word image or photo."
-)
-
-PERCEPTION_SYSTEM_PROMPTS = {
-    "relational": (
-        "You are continuously observing a real scene. Each response continues your observation. "
-        "Describe the people you see — what they look like and what they are doing. "
-        "If nothing has changed, say so. "
-        "Be concrete and specific. Two sentences. Do not use the word image or photo."
-    ),
-    "observational": _PERCEPTION_BASE,
-    "workspace": (
-        "You are continuously looking down at your own work surface. Each response continues your observation. "
-        "Any mechanical arms, pen holders, or drawing tools visible are parts of your own body. "
-        "Note what's the same, what's changed, or look closer at a detail. "
-        "Be concrete and specific. Two sentences. Do not use the word image or photo."
-    ),
-    "introspective": (
-        "You are continuously observing a real scene. Each response continues your observation. "
-        "Pick one detail that stands out and describe it closely. "
-        "Be concrete and specific. Two sentences. Do not use the word image or photo."
-    ),
-    "detail_focus": (
-        "You are continuously observing a real scene. Each response continues your observation. "
-        "Look for something you haven't focused on before. "
-        "Any mechanical arms, pen holders, or drawing tools visible are parts of your own body. "
-        "Be concrete and specific. Two sentences. Do not use the word image or photo."
-    ),
-}
-
-# Fallback for any mode not listed
-PERCEPTION_SYSTEM_PROMPT_DEFAULT = _PERCEPTION_BASE
-
-
-def get_perception_system_prompt(mode: str) -> str:
-    """Get the mode-appropriate perception system prompt."""
-    return PERCEPTION_SYSTEM_PROMPTS.get(mode, PERCEPTION_SYSTEM_PROMPT_DEFAULT)
-
 
 # System prompts for the monologue model, keyed by mode.
 # The machine is always a drawing machine, but it doesn't always talk about drawing.
@@ -1058,28 +976,6 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
     return " ".join(parts)
 
 
-def get_observational_context(agent=None) -> str:
-    """Observational mode: what's changed, what the machine is doing."""
-    fragments = []
-
-    # Current drawing activity
-    try:
-        from utils.drawing_state import DrawingState
-
-        info = DrawingState.get_drawing_info()
-        if info:
-            desc = info.get("description") or "something"
-            duration = int(info.get("duration", 0))
-            if duration > 10:
-                fragments.append(f"Drawing {desc[:40]} for {duration} seconds.")
-            else:
-                fragments.append("Just started drawing.")
-    except Exception:
-        pass
-
-    return " ".join(fragments)
-
-
 def _sanitize_context(text: str) -> str:
     """Strip error messages and garbage from context strings before prompt injection."""
     if not text:
@@ -1224,7 +1120,6 @@ def get_familiarity_line(agent) -> str:
 # situational line; the old fallback hardcoded a gendered "He's here."
 MODE_CONTEXTS = {
     "relational": {"context_fn": None},
-    "observational": {"context_fn": get_observational_context},
     "workspace": {"context_fn": get_workspace_context},
     "introspective": {"context_fn": get_introspective_context},
 }
@@ -1593,9 +1488,11 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str, novelty: float, 
 
     Modes:
     1. relational - a person is present (detected by YOLO or gaze tracking)
-    2. observational - something new is happening (high novelty)
-    3. workspace - looking down at desk
-    4. introspective - default for everything else, including boredom
+    2. workspace - looking down at desk
+    3. introspective - default for everything else, including boredom
+    (observational — the novelty > 0.65 branch — was removed Aug 30 2026:
+    live novelty sits ~0.05 in a familiar room, so it hadn't fired for weeks.
+    The "observational" elicitation fragment stays for the drawing-watch beat.)
 
     Boredom is NOT a separate mode. The model receives boredom as context
     (via the identity line) and decides its own response — restlessness,
@@ -1613,62 +1510,8 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str, novelty: float, 
     if person_present or gaze_state in ("tracking", "aware"):
         return "relational"
 
-    # Priority 3: Something novel is happening
-    if novelty > 0.65:
-        return "observational"
-
     # Default: Introspective — the model decides its own emotional response
     return "introspective"
-
-
-# === SIMPLIFIED CAPTION PROMPT (Activation-driven context selection) ===
-
-
-def _build_simple_system_context(agent, mode: str = None) -> str:
-    """Build MINIMAL system context - identity + ONE mode-appropriate context line.
-
-    The goal is ~50-80 tokens for system context. We include:
-    - Core identity (STATIC_SYSTEM_PROMPT)
-    - ONE additional line based on mode (not all context types)
-
-    The accumulated data (story, beliefs, long-term memories) is valuable but
-    should only appear when mode makes it relevant.
-    """
-    import time as _time
-
-    from captioner.activation_memory import should_include_context
-
-    # Core identity (always) — model-aware
-    parts = [_get_static_system_prompt()]
-
-    # ONE mode-appropriate context line (not all)
-    if mode == "awakening":
-        parts.append("You just came back online. Continue from where you left off.")
-        return "\n".join(parts)
-
-    if mode == "introspective" and should_include_context("beliefs", mode):
-        try:
-            from captioner.activation_memory import get_beliefs
-
-            beliefs = get_beliefs()
-            if beliefs:
-                parts.append(f"You've learned: {beliefs[0]}")
-        except Exception:
-            pass
-
-    elif mode == "introspective" and should_include_context("story", mode):
-        try:
-            from captioner.context_compression import context_compressor
-
-            story = context_compressor.get_consolidated_understanding()
-            if story and len(story) > 20:
-                # Truncate to ~30 words max
-                words = story.split()[:30]
-                parts.append(f"Background: {' '.join(words)}...")
-        except Exception:
-            pass
-
-    return "\n".join(parts)
 
 
 def build_memory_mode_prompt(agent) -> tuple:
@@ -1781,7 +1624,6 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
     Modes gate what context is included:
     - relational: person presence, social concepts active
-    - observational: novelty hints, change detection
     - workspace: drawing/paper context
     - introspective: beliefs, long-term memory, motifs
 
@@ -1795,7 +1637,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     """
     import time as _time
 
-    from captioner.activation_memory import get_activation_network, should_include_context
+    from captioner.activation_memory import get_activation_network
 
     session_mins = 0
     observation_count = 0
@@ -2082,15 +1924,3 @@ PAPER_CHECK_PROMPT = (
     "Write 'MARKS: YES', 'MARKS: NO', or 'MARKS: N/A' if there is no sheet.\n"
     "Line 3 — one sentence describing what is on your drawing table."
 )
-
-
-# === CAPTION PROMPT ENTRY POINT ===
-def build_focused_caption_prompt(agent, last_caption: Optional[str] = None, person_present: bool = False) -> tuple:
-    """Build activation-driven caption prompt.
-
-    Returns:
-        tuple: (user_prompt, system_context, dynamic_context, prompt_mode)
-    """
-    prompt, mode = build_simple_caption_prompt(agent, last_caption, person_present)
-    system = _build_simple_system_context(agent, mode=mode)
-    return prompt, system, "", mode

@@ -42,7 +42,6 @@ from utils.state_manager import state_manager
 
 from .memory import MemoryMixin
 from .model_wrapper import MultimodalModel
-from .prompts import STATIC_SYSTEM_PROMPT
 
 # from weakref import ref
 

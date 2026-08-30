@@ -503,27 +503,6 @@ def get_contextual_memory() -> ContextualMemory:
     return _memory
 
 
-def should_include_context(context_type: str, mode: str = "introspective") -> bool:
-    """Whether a context type belongs in the prompt for this mode.
-
-    Only "beliefs" and "story" are requested at runtime (prompts.py). The old
-    pressure/curiosity/relational/mood types — and the "restless" mode that
-    never had a producer — were torn out Aug 12 2026.
-    """
-    network = get_activation_network()
-
-    if context_type == "beliefs":
-        if mode != "introspective":
-            return False
-        return len(network.get_strong_edges(threshold=0.7)) > 0
-
-    if context_type == "story":
-        return mode == "introspective"
-
-    return False
-
-
-
 def get_beliefs() -> List[str]:
     """Get LLM-generated beliefs from compression introspection.
 
