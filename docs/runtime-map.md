@@ -336,7 +336,7 @@ moment gets the present only (north-star principle 6).
 | ~~during introspection~~ | ~~core-facts update~~ **RETIRED June 28** | place=concepts, drawings=drawing_memory, self=reflection |
 | every 30 min + shutdown | journal entry | machine_identity.json journal |
 | after each reflection | **DISTILLATION (the identity engine, June 28)**: `context_compression.distill_reflection` pulls TRAIT/BELIEF/WANT from the long-form reflection (plain, temp 0.3, _valid_self_fact gate, _roughly_same desire persistence) | core_facts.self (persona), current_belief, current_desire — the Reflect→Become loop. Replaced the inert compression-thread introspection/self-synthesis |
-| (folded into memory diff) | **MOOD READ (July 10; merged July 12)**: PLEASANTNESS/ENERGY/FELT lines of the memory-diff call. The keyword lexicon it replaced matched emotion adjectives the post-teardown voice never uses — valence flatlined ~0 since June. FELT phrase gated July 26 (persona-overlap + lease rules — see the system-prompt felt row); numbers always land | `last_mood_read` {valence, arousal, felt}; MoodEngine.analyze_mood blends it as the vector's core each caption, person/novelty nudge on top; felt-state = the read's own phrase when the gate passes it (no stand-in otherwise — vector fallback removed Aug 12). Prints [🫀] |
+| (folded into memory diff) | **MOOD READ (July 10; merged July 12)**: PLEASANTNESS/ENERGY/FELT lines of the memory-diff call. The keyword lexicon it replaced matched emotion adjectives the post-teardown voice never uses — valence flatlined ~0 since June. FELT phrase gated July 26 (persona-overlap + lease rules — see the system-prompt felt row); numbers always land | `last_mood_read` {valence, arousal, felt}; MoodEngine.analyze_mood blends it as the vector's core each caption, person nudge on top (the novelty nudge died with the pattern engine Aug 12, and the whole novelty signal was retired Aug 30); felt-state = the read's own phrase when the gate passes it (no stand-in otherwise — vector fallback removed Aug 12). Prints [🫀] |
 | on GRBL execution | **DESIRE SPEND (July 10, the desire arc)**: `context_compression.spend_desire` from `drawing.register_drawing` (post-GRBL only) | the act discharges the want: current_desire clears, desire_since resets, history tail annotated {spent, drawing}, last_spent_desire persisted. Surfaces: captions get "You wanted: X — you drew it." (3-caption cap, 2h), the drawing intent call gets "the next want hasn't formed yet", awakening gets "I wanted: X. I acted on it", and the next REFLECTION receives the spent want as fact so the next want forms informed, not amnesiac. Without this the slot held one sentence indefinitely and every drawing re-rendered it |
 | every ~20 quiet min | REFLECTION LOOP (captioner/reflection.py): long-form thought (600-token budget) on rotating subjects — room / visitor / drawings / time / itself. **SUBJECTS ARE ORGANS (July 31, piece 1 of `docs/reflection-organs-handover.md`): each subject now gets its OWN slice of memory, not one shared bundle behind five different questions.** Shared spine = **THE RAW RECORD — up to 80 verbatim captions from the last 75 min (hour_log; July 12 "dreaming" upgrade: every prior input was a summary of a summary, so the loop could never notice what actually happened in its own head — e.g. an hour of questions addressed to a visitor that nothing ever answered)** + that subject's OWN prior-reflection thread. Then per organ (`_diet_*`): room = compressions + concept-ledger place inventory; visitor = episodic arrival/departure spans + people pattern + events; drawings = the framed drawing scrap + full executed sequence (8) + artistic arc (an LLM call, 2-sentence trim, purple-prone — watch it) + current desire + desire_history; time = journal chronology (6) + session duration + durable-ledger multi-day spans + events; yourself = identity slots (persona/belief/desire) + self_notes. The subject question becomes a reading lens and the ask is a digest-then-advance: what moved, what it circled, what it assumed the record doesn't show, what it asked and whether any answer came — fact questions, not fences (how it can LEARN it needs no permission); uses the main model; skipped while drawing; POSTPONED while the store is empty (reflecting on nothing invents a past that would echo forever) | ChromaDB `reflections` collection + REFLECTION log entry; surfaces into quiet captions via echo line |
 | per reflection | REFLECTION SYSTEM PROMPT is **subject-gated** (July 31): the standing persona (`core_facts['self']`) rides `yourself` ONLY, the durable ledger rides `yourself` + `time passing`. Both used to ride all five, asserting one identity at the top of every lens while `distill_reflection` wrote that same persona back from every reflection — the frame re-homogenised whatever the data did. Identity material now enters `yourself` as DATA (the `identity` block) instead of as frame | `get_reflection_system_prompt(subject)`, captioner/prompts.py |
@@ -511,7 +511,7 @@ under-visited pan bucket ("look around"). Arrival triggers the existing
 stillness logic → stillness settles the gaze → detector fires on settle → the
 anchor sharpens: look→arrive→see is one loop with no new choreography. Person
 tracking outranks everything, untouched. Console: `[👁️] Glance (revisit):
-pink shelf → ...`. Structured consumers: `get_current_glance()`,
+pink shelf → ...`. Structured consumers:
 `get_self_motion()` (efference signal, surfaced as `info["self_motion"]` in
 `_assess_scene` — NO prompt consumer yet, deliberately; "I was turning"
 framing is a separate prompt-tree step). Test:
@@ -804,6 +804,21 @@ dropped into `PresenceIdentity.embed_crop`, then re-run the test and enable.
   constant fallback to all-frames, the 2° ego threshold needs tuning.
 
 ## Dead / deprecated (do not revive without checking docs/memory-redesign-plan.md)
+
+- **Aug 30 2026 — the activation network is RETIRED** (branch
+  claude/memory-retirement; memory-effectiveness-audit-aug30.md §1):
+  captioner/activation_memory.py deleted — ActivationNetwork, ContextualMemory,
+  the per-caption activation_snapshot.json dump (activation_visualizer.py has
+  no feed now), the every-8-captions compression boost (it was inflating
+  times_seen on the concepts ledger), get_beliefs, and the novelty signal
+  end-to-end. Boredom survives, computed in MemoryMixin.observe from concept
+  metadata + a per-concept recent-attention table (same boost/decay/weights);
+  its only consumer remains caption sampling (temp 0.85 / num_predict 110 when
+  > 0.7). Also removed: MemoryMixin's never-read timeline/day_stones/
+  known_people/primary_person/self_model (and their state_manager round-trip),
+  and the drawing system prompt's permanently-false "no person yet" clause.
+  The census deletions (claude/census-deletions, dead-code-census-aug30.md)
+  landed the same day — zero-behavior-change, five commits.
 
 - **Aug 30 2026 trim pass** (docs/trim-plan-aug30.md §1, five revertable
   commits "trim 1a"–"trim 1e"): the dead caption-prompt layer
