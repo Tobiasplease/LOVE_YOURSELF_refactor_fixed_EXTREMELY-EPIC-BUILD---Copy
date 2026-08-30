@@ -12,18 +12,12 @@ from config.config import (
     FACE_TRACK_MAX_STEP,
     FLIP_X,
     FLIP_Y,
-    IDLE_AMPLITUDE_X,
-    IDLE_AMPLITUDE_Y,
-    IDLE_CENTER_X,
-    IDLE_CENTER_Y,
-    IDLE_EASING,
     IDLE_PAUSE_MAX,
     IDLE_PAUSE_MIN,
     PAN_MIN,
     PAN_MAX,
     TILT_MIN,
     TILT_MAX,
-    SWEEP_PROBABILITY,
 )
 
 # === VELOCITY LIMITING CONSTANTS ===

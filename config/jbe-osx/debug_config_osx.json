@@ -12,6 +12,5 @@
     "mood_update",
     "new_drawing"
   ],
-  "PRINT_CLEAN_CAPTIONS": false,
-  "NO_HANDS": true
+  "PRINT_CLEAN_CAPTIONS": false
 }

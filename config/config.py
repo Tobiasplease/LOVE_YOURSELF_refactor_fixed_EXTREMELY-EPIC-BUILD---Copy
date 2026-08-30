@@ -14,7 +14,6 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 # === SERVO SETTINGS ===
 USE_SERVO = True
-USE_HAND_CONTROLLER = True  # Enable hand controller system
 # Natural head movement limits for realistic gaze
 PAN_MIN = 45  # Left limit (±45° from center) - expanded range
 PAN_MAX = 135  # Right limit (±45° from center) - expanded range
@@ -39,15 +38,9 @@ FACE_TRACK_DEAD_ZONE_FACE_SCALE = 0.4  # dead zone added per unit of face-width 
 FACE_TRACK_MAX_STEP = 2.5  # max target movement per update, degrees (~75°/s at 30fps)
 
 # === IDLE GAZE SETTINGS ===
-IDLE_AMPLITUDE_X = 35  # Increased from 10 for more prominent horizontal movement
-IDLE_AMPLITUDE_Y = 30  # Increased from 15 for more prominent vertical movement
-IDLE_CENTER_X = 90
-IDLE_CENTER_Y = 90
 FACE_STABLE_TIMEOUT = 3.0  # Time before going idle after losing face
 IDLE_PAUSE_MIN = 1.5  # Minimum pause between idle movements (more organic)
 IDLE_PAUSE_MAX = 6.0  # Maximum pause between idle movements (more frequent)
-IDLE_EASING = 0.18  # Easing factor for idle movements (more responsive)
-SWEEP_PROBABILITY = 0.6  # Probability of doing a big sweep movement vs small movement
 
 # === BREATHING SETTINGS ===
 LUNG_MIN = 60
@@ -302,7 +295,6 @@ BODY_SCHEMA_ENABLED = True
 BODY_SELF_THRESHOLD = 0.72  # similarity bar INSIDE the reach envelope
 BODY_SELF_STRICT = 0.92  # similarity bar with no place evidence
 BODY_POSE_TOLERANCE = 15.0  # deg; envelope records apply within this pan AND tilt distance
-BODY_REGION_OVERLAP = 0.3  # min overlap (over smaller box) with an envelope record
 BODY_HARVEST_INTERVAL = 20.0  # seconds between self-reference harvests while drawing
 BODY_GALLERY_SIZE = 60  # references kept (persistent; the body is stable across sessions)
 BODY_SELF_FILTER_DETECTIONS = True  # drop open-vocab detections matching the schema (max a few embeds per pass)
@@ -620,7 +612,6 @@ KINETIC_SAFE_SMOOTH = 0.25  # how fast the pull-back eases in per send (~0.5s to
 KINETIC_SAFE_SLEW = 0.5  # hard cap on how much the correction may CHANGE in one send. Easing alone still
 # passes a fraction of a jump straight through (a 13-unit swap x 0.25 = 3.3 units of snap); capping the
 # change makes the pull-back strictly gradual. A 12-unit correction converges in ~1s at send rate.
-KINETIC_SAFE_NEIGHBOURS = 8  # pull toward the average of this many demonstrated points, not the single
 # nearest — a lone neighbour flips as the body crosses between them and the correction snaps (3.6 units,
 # measured); an average moves smoothly. The correction is applied in full: a steady offset like the lean
 # pushes out on EVERY send, so a rate-limited pull-back would just lose a tug of war forever.
@@ -702,12 +693,7 @@ GRBL_USE_CENTRALIZED_PEN_UP = os.getenv("GRBL_USE_CENTRALIZED_PEN_UP", "false").
 # === GRBL IDLE MOVEMENT SETTINGS ===
 # Idle movements happen in far corner away from home (0,0)
 # Physical work area constrained to 40x40mm for safe operation
-GRBL_IDLE_CENTER = (30, 30)  # Center point for idle movements (far corner of 40x40 area)
-GRBL_IDLE_RADIUS_MIN = 5  # Minimum movement radius in mm
-GRBL_IDLE_RADIUS_MAX = 8  # Maximum movement radius in mm (reduced for 40x40 area)
-GRBL_IDLE_FEED_RATE = 500  # Feed rate for idle movements (mm/min) - very slow and organic
 GRBL_IDLE_ZONE = (20, 40, 20, 40)  # Boundary box: (x_min, x_max, y_min, y_max) for 40x40 area
-GRBL_IDLE_UPDATE_INTERVAL = 3.0  # Seconds between movement updates - longer pauses
 
 # === GRBL G-CODE OPTIMIZATION SETTINGS ===
 # Intelligent feed rate and pen lift optimization for better drawing performance
@@ -725,9 +711,6 @@ GRBL_ENABLE_STROKE_FILTERING = os.getenv("GRBL_ENABLE_STROKE_FILTERING", "false"
 
 # === GRBL SEGMENTED EXECUTION ===
 # Splits large G-code files into segments to prevent buffer overload
-GRBL_ENABLE_SEGMENTED_EXECUTION = os.getenv("GRBL_ENABLE_SEGMENTED_EXECUTION", "true").lower() in ("1", "true", "yes")
-GRBL_MAX_SEGMENT_SIZE = int(os.getenv("GRBL_MAX_SEGMENT_SIZE", 150))  # Lines per segment
-GRBL_ENABLE_PERSON_DETECTION_PAUSE = os.getenv("GRBL_ENABLE_PERSON_DETECTION_PAUSE", "false").lower() in ("1", "true", "yes")
 
 # === FEED RATES (Aug 10 2026: flat ink speed, dynamic scaling retired) ===
 # The distance-scaled system (300/700/2000 over 1-8mm thresholds) was tuned on
@@ -781,9 +764,6 @@ USE_UARM = True  # Enable uArm Swift Pro robotic arm integration
 UARM_PORT = "/dev/arduino_uarm"  # Fixed udev symlink (matches ARDUINO_DEVICES)
 UARM_MOVEMENT_NAMES = {1: "pickup", 2: "place", 3: "gesture"}  # Primary pickup motion  # Primary placement motion  # Gestural expression motion
 UARM_MOTION_STORAGE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "movement_recordings", "uarm")
-UARM_CONNECT_ON_STARTUP = True  # Connect to uArm during system initialization
-UARM_HOME_ON_CONNECT = False  # Avoid blocking/slow homing on connect; handled by Teach flow
-UARM_DEFAULT_SPEED = 100  # Default movement speed (1-250)
 
 # --- uArm post-drawing playback ---
 # If True, after a drawing fully completes AND GRBL has homed, the uArm
@@ -1172,7 +1152,6 @@ LLM_SHOW_PROGRESS = False  # Show animated progress bar during LLM calls
 
 # === CAPTIONING TEMPERATURE SETTINGS ===
 # Control creativity and expressiveness in different types of responses
-CAPTIONER_TEMPERATURE = float(os.getenv("CAPTIONER_TEMPERATURE", 0.85))  # Regular observations (0.85 for Qwen)
 DRAWING_TEMPERATURE = float(os.getenv("DRAWING_TEMPERATURE", 1.0))  # Drawing prompts (lowered from 1.2 for Qwen's higher base entropy)
 # Stocktake beat (Aug 10 2026): before the intent call, the machine reads its
 # whole executed ledger + retrieved reflections and writes a short first-person
@@ -1182,7 +1161,6 @@ DRAWING_REVIEW_ENABLED = os.getenv("DRAWING_REVIEW_ENABLED", "true").lower() in 
 REFLECTION_TEMPERATURE = float(
     os.getenv("REFLECTION_TEMPERATURE", 0.75)
 )  # Long-form reflection loop — stored output, keep it grounded (Qwen drifts ornate at higher temps)
-ENVIRONMENTAL_TEMPERATURE = float(os.getenv("ENVIRONMENTAL_TEMPERATURE", 0.9))  # First observations (slightly more grounded)
 
 # === OUTPUT SETTINGS ===
 # Control which log types are printed to console
@@ -1193,11 +1171,9 @@ CLEAN_LLM_OUTPUT = False  # Print only LLM response text without metadata prefix
 PRINT_CLEAN_CAPTIONS = True  # Suppress verbose runtime messages, show only LLM captions
 
 DEBUG_HAND_CONTROLLER = False  # enable hand controller debug output
-DEBUG_EMOTION_CHANGES = False  # suppress detailed emotion switching messages
 DEBUG_REACTIVITY_PAUSE = False  # show reactivity pause debug messages
 DEBUG_LLM_PROMPTS = True  # print full prompts alongside LLM call logs
 LLM_PRINT_FULL_RESPONSE = True  # print full responses in console output (ignores truncation)
-NO_HANDS = False
 
 # === REACTIVITY PAUSE SYSTEM ===
 REACTIVITY_PAUSE_THRESHOLD = 0.30  # Activity level to trigger pause
@@ -1207,7 +1183,6 @@ REACTIVITY_PAUSE_COOLDOWN = 10.0  # Seconds between pause triggers
 # === DRAWING MEMORY SETTINGS ===
 # Store concise summaries of drawing intents and reflections for future prompts
 INCLUDE_DRAWING_HISTORY = True
-DRAWING_HISTORY_LIMIT = 3  # how many recent drawing entries to surface in prompts
 
 # Drawing prompt pipeline: stream only (stocktake → intent → render; see
 # prompts.stream_drawing_analysis). The 5-step committee, kept "for A/B"
@@ -1242,7 +1217,6 @@ ENABLE_POST_HOME_PAPER_CHECK = True
 # This is in addition to the post-home check (double verification)
 ENABLE_EARLY_PAPER_CHECK = True
 # Use the same tilt as drawing lock for detection (aligns view)
-PAPER_USE_DRAWING_TILT = False  # Use PAPER_DETECTION_GAZE_TILT instead (65° for proper ArUco viewing)
 
 # === LCD CAPTION DISPLAY ===
 USE_CAPTION_DISPLAY = True
@@ -1262,7 +1236,6 @@ HAND_CONTROLLER_PORT = "/dev/arduino_lefthand"  # Hand controller (5 micro servo
 GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 
 # 4. uArm Swift Pro Controller
-UARM_SWIFT_PORT = "/dev/arduino_uarm"  # uArm Swift Pro Arduino (future connection - fixed udev symlink)
 
 # 5. Additional devices can be added here
 # CUSTOM_DEVICE_PORT = "/dev/ttyUSB5"

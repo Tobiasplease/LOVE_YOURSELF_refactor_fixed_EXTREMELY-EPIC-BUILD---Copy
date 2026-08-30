@@ -11,7 +11,6 @@
   "FLUX_DEV_PATH": "flux1/flux1-dev.safetensors",
   "CONTROLNET_NET_PATH": "flux/flux-dev-controlnet-union-pro-2.safetensors",
   "BATCH_SIZE": 1,
-  "NO_HANDS": true,
   "DEBUG_OLLAMA_PROMPTS": false,
   "OLLAMA_PRINT_FULL_RESPONSE": false,
   "LOG_TYPES_TO_PRINT": [

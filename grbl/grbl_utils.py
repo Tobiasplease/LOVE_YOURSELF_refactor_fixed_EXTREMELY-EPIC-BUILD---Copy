@@ -32,9 +32,6 @@ try:
         GRBL_USE_CENTRALIZED_PEN_UP,
         GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING,
         GRBL_PEN_UP_IS_HIGH,
-        GRBL_ENABLE_SEGMENTED_EXECUTION,
-        GRBL_MAX_SEGMENT_SIZE,
-        GRBL_ENABLE_PERSON_DETECTION_PAUSE,
         GRBL_PEN_DOWN_SETTLE_S,
         GRBL_PEN_UP_SETTLE_S,
     )
@@ -46,9 +43,6 @@ except Exception:
     GRBL_USE_CENTRALIZED_PEN_UP = False
     GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING = True
     GRBL_PEN_UP_IS_HIGH = False
-    GRBL_ENABLE_SEGMENTED_EXECUTION = True
-    GRBL_MAX_SEGMENT_SIZE = 150
-    GRBL_ENABLE_PERSON_DETECTION_PAUSE = False
     GRBL_PEN_DOWN_SETTLE_S = 0.35
     GRBL_PEN_UP_SETTLE_S = 0.2
 
@@ -1769,14 +1763,12 @@ def process_svg_to_grbl(
                         ALLOW_PAPER_DETECTION_OVERRIDE,
                         PAPER_DETECTION_GAZE_PAN,
                         PAPER_DETECTION_GAZE_TILT,
-                        PAPER_USE_DRAWING_TILT,
                     )
                 except Exception:
                     ENABLE_PAPER_DETECTION = False
                     ENABLE_POST_HOME_PAPER_CHECK = False
                     ALLOW_PAPER_DETECTION_OVERRIDE = True
                     PAPER_DETECTION_GAZE_PAN = 90
-                    PAPER_USE_DRAWING_TILT = True
                     from config.config import TILT_MIN
 
                     PAPER_DETECTION_GAZE_TILT = TILT_MIN + 2
