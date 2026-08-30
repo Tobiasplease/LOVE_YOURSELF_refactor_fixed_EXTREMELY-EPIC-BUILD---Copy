@@ -28,6 +28,13 @@ Baseline: ~62,000 lines of project Python. A third of it — ~21,000 lines acros
 
 ## 1. Zero-behavior-change deletions (~1,750 lines) — do first
 
+> **DONE Aug 30 2026** — executed as five independently revertable commits
+> ("trim 1a" … "trim 1e") on this branch; see each commit message for exact
+> contents. Two deviations: sdk_uarm was KEPT (it's a submodule pointer to
+> the uArm SDK the live teach backend installs from, not an empty dir), and
+> the beliefs store's read fn (`get_beliefs`) was kept pending the
+> ship-or-delete decision (§1a note below).
+
 ### 1a. The audit's §2 DEAD list — confirmed, 359 lines
 
 All verified dead with caller lists; the audit's ~350 estimate was accurate.

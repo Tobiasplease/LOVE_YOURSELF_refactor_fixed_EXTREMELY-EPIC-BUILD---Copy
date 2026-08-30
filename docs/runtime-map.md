@@ -805,6 +805,21 @@ dropped into `PresenceIdentity.embed_crop`, then re-run the test and enable.
 
 ## Dead / deprecated (do not revive without checking docs/memory-redesign-plan.md)
 
+- **Aug 30 2026 trim pass** (docs/trim-plan-aug30.md §1, five revertable
+  commits "trim 1a"–"trim 1e"): the dead caption-prompt layer
+  (build_caption_prompt_with_options + drawing-introspection prompt,
+  build_focused_caption_prompt, _build_simple_system_context,
+  PERCEPTION_SYSTEM_PROMPTS, the STATIC_SYSTEM_PROMPT trio,
+  should_include_context, the unreachable observational router branch);
+  whole files perception/spatial_memory.py, vision/spatial_awareness.py,
+  vision/drawing_inspection.py, config/model_settings.py (base drawing
+  options inlined in prompt_interface — payloads unchanged); ~25 orphaned
+  symbols across captioner/vision/utils/safety; machine.py's nonexistent
+  uArm "controller" backend (teach is the only backend); the retired grbl
+  wanderer's subprocess machinery (pause/resume gantry hooks kept);
+  run_machine.py, labs/, and root clutter. ~2,000 lines, zero behavior
+  change; each commit reverts independently.
+
 - **Aug 12 mood/novelty teardown** (docs/mood-novelty-audit.md tiers 0–3):
   utils/pattern_recognition.py (motif engine + saturated novelty; spaCy
   singleton moved to utils/nlp.py for vocab promotion), hand_control/ app
