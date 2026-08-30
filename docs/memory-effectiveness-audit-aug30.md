@@ -105,7 +105,61 @@ of "forever the man").
   docstring above; `memory-redesign-plan.md:106,129` list
   `activation_memory get_beliefs/get_desires` as live readers (both gone).
 
-## 5. Recommendation (order)
+## 5. How the field does it (survey, Aug 30 2026) — and what to steal
+
+Checked against the current state of the art in agent memory (Letta/MemGPT,
+Stanford generative agents, Zep/Graphiti, Mem0, and the 2025-26 consolidation
+literature). The honest headline: **this system independently converged on
+most of the right architecture.** The reflection loop IS what Letta ships as
+a "sleep-time agent" (a background consolidator that edits the main agent's
+memory, deliberately separated from the talking agent); the identity slots
+ARE Letta's "memory blocks" (labeled, size-limited, re-injected context
+sections); the ledger-not-transcript reframe and the storage gates are what
+the literature now calls write-gating, invented here from spiral scars. The
+gaps are specific and small:
+
+1. **Importance scoring at store time (generative agents).** Park et al.'s
+   retrieval is recency × relevance × IMPORTANCE — each memory gets a
+   one-shot salience rating when stored. Our stream and reflection echo have
+   recency and relevance; nothing anywhere scores importance, so a caption
+   about the wall and a caption about a visitor's arrival weigh the same in
+   every downstream fold. Cheapest structural upgrade on the list.
+2. **Validity windows instead of TTLs (Zep/Graphiti).** Temporal-KG memory
+   stores facts as bi-temporal — valid_at/invalid_at set by contradiction,
+   never deletion. That is the general form of the paper-state redesign
+   (event + relevance, kill the standing 30-min TTL) and of the north-star
+   would-it-lie test: a fact that can go stale carries when-it-was-true, and
+   a new observation CLOSES the old fact rather than coexisting with it.
+   Worth adopting as the pattern for every stateful fact (paper, presence,
+   pen), not just paper.
+3. **Provenance on confirmations (the faulty-update literature).** 2025-26
+   work on continuously self-updated memories documents exactly the durable
+   ledger's failure: an agent that re-reads its own memory and re-stores
+   agreement inflates confidence without evidence. The mitigation is the
+   already-planned B1 (discount in-prompt confirmations) plus a provenance
+   field per confirmation (distill vs echo vs fresh observation). The field
+   considers this table stakes; we planned it and haven't built it.
+4. **Reflections that cite their evidence (generative agents).** Park's
+   reflections store pointers to the observations they derive from, so a
+   conclusion can be traced and re-weighed. Our distillates land in three
+   anonymous slots. B2/B3's outcome slots are a step toward typed,
+   evidenced self-knowledge.
+5. **What NOT to import:** the retrieval-heavy frameworks (Mem0-style
+   per-turn fact extraction into a graph) solve chat personalization, not
+   a continuous single-viewpoint perception stream — our stream window is
+   already the right short-term memory for that. And LongMemEval-style
+   benchmarks don't transfer; the north-star "how we'll know it's working"
+   week-test remains the right eval.
+
+Sources: [Letta sleep-time agents](https://docs.letta.com/guides/agents/architectures/sleeptime/),
+[Letta memory blocks](https://www.letta.com/blog/memory-blocks/),
+[Zep temporal knowledge graph](https://www.getzep.com/ai-agents/temporal-knowledge-graph/),
+[Zep architecture paper](https://arxiv.org/abs/2501.13956),
+[Mem0 vs Zep comparison](https://vectorize.io/articles/mem0-vs-zep),
+plus the 2025-26 arXiv consolidation/faulty-update literature
+(e.g. "Useful Memories Become Faulty When Continuously Updated by LLMs").
+
+## 6. Recommendation (order)
 
 1. **Retire ActivationNetwork + ContextualMemory.** Keep the boredom
    scalar as ~15 lines off `matched_concepts` (`times_seen`/`is_new`/
