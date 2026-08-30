@@ -1,5 +1,15 @@
 # Dead-Code Census — Aug 30, 2026 (the holistic view)
 
+> **STATUS**: §1 EXECUTED on branch `claude/census-deletions` — five revertable
+> commits "census (a)"–"census (e)", −891 lines net (above the ~730 estimate:
+> collateral orphans included — the idle pause block, IDLE_PAUSE_* knobs,
+> arms_markov's dead wait, the grbl critique scaffolding flattened). Two §2
+> bugs resolved along the way: delete_concept's lost def line RESTORED (its
+> body was intact; the concept-curation tool works again) and the stranded
+> truncation body deleted. §8 (the debug/ classification) added after; §5
+> (memory retirement) goes on `claude/memory-retirement`, stacked on the
+> census branch.
+
 One document of record for everything found dead, vestigial, or silently
 broken across the ENTIRE codebase, before any further deletion. Method:
 vulture 2.16 over all runtime packages (231 candidates at ≥60% confidence),
@@ -227,7 +237,36 @@ paper path (PAPER_CHECK_METHOD). `debug/caption_monitor.py` (spawned at
 boot). `GRBL_IDLE_ZONE` (tools/arm_gui_tk). `DEBUG_HAND_CONTROLLER`
 (getattr). sdk_uarm submodule pointer.
 
-## 7. Proposed execution order (each its own revertable commit, pending go)
+## 7. debug/ — every file classified (Aug 30 pass; ~25k lines total)
+
+| Category | Files | Lines | Disposition |
+|---|---|---|---|
+| RUNTIME | 1 (`caption_monitor.py`, spawned by machine.py) | 153 | keep, it's runtime |
+| OPERATIONAL TOOL | 36 (log_viewer, clear_sticky_slots, sanitize_future_timestamps, resets, servo/aruco/camera/warp calibration, arduino checks, caption_metrics, activation_visualizer, uarm_teach_cli…) | 5,529 | keep — these are the machine's maintenance surface |
+| BIT-ROTTED | 17 — import symbols that no longer exist (spatial_awareness, the uArm controller stack, build_focused_caption_prompt / build_caption_prompt_with_options ×5, caption_frame, UARM_EMOTION_INTEGRATION…) | 2,801 | delete — they crash on import |
+| FINISHED EXPERIMENT | 42 files + 2 dirs (~5 MB): think-probe, 27B replay, crisp A/B, phase0 open-vocab report, the warp-math saga, the gaze-tuning series, the hook bug-hunt, tone-centerliner-proto | 9,874 | archive wholesale (git remembers); `identity_restore_staging.md` is an incident record — artist call |
+| PLAUSIBLY USEFUL | 61 — component tests whose imports all still resolve (llama_server, reflection loop/organs, pose gate, paper VLM matrix, kinetic bus suite, clock guard…) | 6,790 | keep |
+
+Keep-together pairs: `hand_control/` ↔ `test_left_arm_servos.py`;
+`grbl/segmented_executor.py`+`gcode_segmenter.py` ↔ `test_person_responsive_cnc.py`.
+Stale docs found by this pass: `docs/arduino_connections.md` /
+`arduino_usb_solution.md` and `config.py`'s paper-check comment reference
+seven debug scripts that DO NOT EXIST (identify_arduinos.py,
+test_all_arduinos.py, setup_arduino_ports.py, test_arduino_direct.py,
+arduino_diagnostic_tool.py, test_lightbulb_crash_fix.py,
+test_frame_diff_debug.py); `comprehensive_state_reset.py:58` still reads the
+retired motif_counter key; `memory-redesign-plan.md:242` cites the archived
+`test_base_voice.py` as a verification step.
+
+## 7b. Commented-out-code scan (Aug 30, post-deletion tree)
+
+A heuristic sweep for ≥6-line commented-out code blocks across the runtime
+packages found exactly ONE hit (`grbl/grid_drawing_ui.py:309`, inside the
+already-flagged broken-warp region §2.1). The "stubs of abandoned directions"
+in the runtime tree were function-shaped, not comment-shaped — and are now
+gone; what remains of that era lives in debug/ (§7).
+
+## 8. Proposed execution order (each its own revertable commit, pending go)
 
 1. §1 mechanical deletions, clustered as: (a) whole modules/features,
    (b) config constants + their dead imports, (c) gaze globals,
