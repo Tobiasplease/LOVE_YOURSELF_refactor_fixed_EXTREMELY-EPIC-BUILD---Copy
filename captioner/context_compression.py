@@ -401,43 +401,6 @@ class ContextCompressionEngine:
                         if not config.CLEAN_LLM_OUTPUT:
                             print(f"[🧠 {duration}] {first_sentence}...")
 
-                    # (The activation-memory feedback boost that ran here was
-                    # retired Aug 30 2026: it re-ran concept matching on the
-                    # compression text, which bumped times_seen on the concepts
-                    # ledger — inflating the counters the familiarity line and
-                    # memory mode read. memory-effectiveness-audit-aug30.md §1.)
-
-                    # === LLM CONCEPT EXTRACTION ===
-                    # Extract clean noun phrases from compression output (not raw monologue).
-                    # Replaces per-caption regex _extract_canonical_name for concept creation.
-                    try:
-                        self._extract_concepts_from_compression(understanding, compression_model)
-                    except Exception as ce:
-                        print(f"[SEMANTIC] Concept extraction failed: {ce}")
-
-                    # Log compression with enhanced visibility
-                    log_json_entry(
-                        LogType.COMPRESSION,
-                        {
-                            "message": "Updated baseline understanding",
-                            "action": "update_baseline",
-                            "understanding": understanding,
-                            "understanding_length": len(understanding),
-                            "compression_history_count": len(self.compression_history),
-                            "model": compression_model,
-                        },
-                        print_message=f"[🧠] Updated baseline: {truncate_for_print(self.baseline_context, 80)}",
-                    )
-
-                    # Quiet compression output - only show brief spatial update
-                    if understanding and len(understanding.strip()) > 20:
-                        session_info = self.get_current_session_info()
-                        duration = session_info["duration_description"]
-                        # Truncate to first sentence for cleaner output
-                        first_sentence = understanding.split(".")[0][:100] if "." in understanding else understanding[:100]
-                        if not config.CLEAN_LLM_OUTPUT:
-                            print(f"[🧠 {duration}] {first_sentence}...")
-
                     # (The spatial-familiarity callback that fired here fed
                     # captioner.update_location_understanding → self_model,
                     # which nothing ever read. Removed Aug 30 2026 with the
