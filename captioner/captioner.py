@@ -490,15 +490,24 @@ class Captioner(MemoryMixin):
         if seen_now:
             self._absence_watch_s = 0.0
             if not self._presence_believed:
-                # Re-ID (no-op while PRESENCE_REID_ENABLED is False): a match
-                # against recent sightings means the same person resumed — no
-                # arrival event, and the presence line says "He's back."
+                # Resumption prior (Aug 31): re-ID is off (CLIP can't tell
+                # outfits apart), so matches_recent() returned None and every
+                # re-sighting after a belief drop counted as a genuine arrival.
+                # The time prior does what appearance can't: someone believed
+                # here within PRESENCE_REARRIVAL_WINDOW_S is the same visit
+                # resuming. Re-ID, when it exists, overrides in both
+                # directions (a match resumes past the window; a clear
+                # mismatch is an arrival inside it).
+                from config.config import PRESENCE_REARRIVAL_WINDOW_S
+
+                recently_present = (now - getattr(self, "_presence_dropped_at", 0.0)) < PRESENCE_REARRIVAL_WINDOW_S
                 try:
                     from perception.presence_identity import presence_identity
 
-                    resumed = presence_identity.matches_recent() is True
+                    _reid = presence_identity.matches_recent()
                 except Exception:
-                    resumed = False
+                    _reid = None
+                resumed = recently_present if _reid is None else (_reid is True)
                 self._presence_believed = True
                 arrival = not resumed  # OFF->ON edge — the only genuine arrival
                 # For the presence line: the single-occupant prior. Measured
@@ -543,6 +552,7 @@ class Captioner(MemoryMixin):
                 self._absence_watch_s += dt
             if self._absence_watch_s > PRESENCE_BELIEF_DECAY_SECONDS:
                 self._presence_believed = False  # looked, repeatedly, nobody there — they really left
+                self._presence_dropped_at = now  # anchors the resumption prior on the next sighting
                 self._absence_watch_s = 0.0
                 try:
                     from perception.presence_adjudicator import presence_adjudicator

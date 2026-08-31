@@ -789,6 +789,28 @@ scale change). Needs a real person-reid embedding (OSNet-class, ~2MB, CPU)
 dropped into `PresenceIdentity.embed_crop`, then re-run the test and enable.
 `DetectionMemory.get_person_crop()` added for the crop path.
 
+**Aug 31 — the re-arrival TIME prior (the fix that didn't need re-ID).**
+Measured: 73 "genuine" arrivals in one solo workday, median 1.9 min apart —
+all the artist returning from out-of-frame. Two independent arrival systems
+each had a too-short memory: gaze.py's episodic recorder used a hardcoded 90s
+absence heuristic, and the captioner belief's `matches_recent()` returned
+None with re-ID off, so EVERY re-sighting after the 240s belief decay
+counted as an arrival. Both now share `PRESENCE_REARRIVAL_WINDOW_S` (1800s,
+env-tunable): a sighting within the window of the last believed presence is
+the SAME VISIT resuming — no arrival event, no episodic record, no salience
+spike ("[👤] Re-detected"). Re-ID, when enabled, overrides the prior in both
+directions. Departures are now confirmed in retrospect: the belief/state
+transition happens on the sweep's honest verdict as before, but the episodic
+`person_left` is only WRITTEN once the absence outlasts the same window —
+backdated to when they vanished (`episodic_log.record(timestamp=…)`);
+re-sighting inside the window cancels it silently
+(`person_detection_state._pending_departure`). Consequences: the episodic
+record means what it says, "They've come and gone N times" counts real
+visits, the visitor reflection organ stops distilling phantom traffic, and
+the B4 unchanged-ness clock can actually accumulate (the longest
+episodic-quiet stretch in the 8h before this fix was 10.3 min — under B4's
+20-min threshold — in a room where nothing happened all day).
+
 ## Known-weak / watch list
 
 - **Mood engine** (mood/mood.py): core signal is the LLM mood read (every 8

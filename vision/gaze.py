@@ -55,6 +55,13 @@ drawing_transition_active = False  # Flag for smooth transition to/from drawing 
 # === ORGANIC MOVEMENT DECOUPLING ===
 # Independent timing and curves for pan/tilt
 _person_seen_since = None  # aware-entry debounce: when continuous YOLO person detection began
+# Re-arrival gate (Aug 31): when a sighting begins, how long the room had
+# been personless. None = no person seen yet this session. The arrival
+# record fires only when this gap exceeds PRESENCE_REARRIVAL_WINDOW_S —
+# the artist stepping out of frame for a few minutes is the same visit.
+_last_person_present_ts = 0.0
+_sighting_gap_s = None
+_arrival_recorded_this_sighting = False
 pan_micro_target = 90  # Intermediate target for curved movement
 tilt_micro_target = 90  # Intermediate target for curved movement
 
@@ -816,6 +823,16 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
     now = time.time()
     dt = now - physics_state.last_update_time
 
+    # Sighting continuity for the re-arrival gate (state-independent: aware
+    # tracking counts as presence too, or every trackless minute would open
+    # a fake gap). 5s hysteresis so detection flicker doesn't restart it.
+    global _last_person_present_ts, _sighting_gap_s, _arrival_recorded_this_sighting
+    if yolo_person_detected:
+        if now - _last_person_present_ts > 5.0:
+            _sighting_gap_s = (now - _last_person_present_ts) if _last_person_present_ts > 0 else None
+            _arrival_recorded_this_sighting = False
+        _last_person_present_ts = now
+
     if startup_sequence_active:
         return False, int(servo_x + 0.5), int(servo_y + 0.5)
 
@@ -1071,24 +1088,25 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             print("[👁️] Person detected while idle - entering 'aware' state")
             state = "aware"
             deactivate_search_mode()
-            # Only record arrival if person has been genuinely absent for >90 seconds
-            # (not just a brief tracking gap from camera movement or occlusion)
+            # Re-arrival gate (Aug 31, replaces the 90s heuristic): an arrival
+            # is only recorded when the sighting follows a REAL absence — the
+            # room personless longer than PRESENCE_REARRIVAL_WINDOW_S. The old
+            # 90s window logged the artist's every return from out-of-frame as
+            # a genuine arrival (73 in one solo workday), so the machine lived
+            # in a hallucinated busy train station and the episodic record,
+            # the visitor reflections, and the unchanged-ness clock all fed on
+            # phantom visits. First sighting of the session (gap None) counts
+            # as an arrival; one record per continuous sighting.
             try:
+                from config.config import PRESENCE_REARRIVAL_WINDOW_S
                 from utils.episodic_log import episodic_log
 
-                last_arrival = episodic_log.get_last_event("person_arrived")
-                last_departure = episodic_log.get_last_event("person_left")
-                genuine_new_arrival = True
-                if last_arrival:
-                    time_since_arrival = now - last_arrival["timestamp"]
-                    if time_since_arrival < 90:
-                        genuine_new_arrival = False  # Re-detection, not new arrival
-                    elif last_departure:
-                        gap = now - last_departure["timestamp"]
-                        if gap < 90:
-                            genuine_new_arrival = False  # Brief absence, same visit
+                genuine_new_arrival = (
+                    _sighting_gap_s is None or _sighting_gap_s > PRESENCE_REARRIVAL_WINDOW_S
+                ) and not _arrival_recorded_this_sighting
                 if genuine_new_arrival:
                     episodic_log.record("person_arrived", "someone arrived")
+                    _arrival_recorded_this_sighting = True
                     print("[👤] Genuine new arrival recorded")
                 else:
                     print(f"[👤] Re-detected (not a new arrival)")

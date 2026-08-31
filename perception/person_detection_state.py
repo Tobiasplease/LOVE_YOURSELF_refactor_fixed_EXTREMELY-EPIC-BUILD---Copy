@@ -58,6 +58,13 @@ class PersonDetectionState:
         # Tri-state presence: "absent" | "visible" | "remembered"
         self.person_state = "absent"
 
+        # Pending departure (Aug 31): the state flips to absent on the sweep's
+        # honest verdict, but the EPISODIC record waits — a departure is only
+        # written once the absence outlasts PRESENCE_REARRIVAL_WINDOW_S
+        # (backdated to when they vanished). Re-detection inside the window
+        # cancels it: the artist stepping out of frame was never a departure.
+        self._pending_departure = None  # (timestamp, reason) | None
+
         # Extended timeouts for gaze-aware logic
         # 180s (was 60): YOLO misses a still, distant person for stretches at
         # idle cadence — the 60s hard timeout churned phantom departures
@@ -128,6 +135,31 @@ class PersonDetectionState:
                 self.scan_zones_visited.clear()
             # Don't clear yolo_detection when not detected - let it expire via timestamp
             self._update_person_state()
+
+    def _resolve_pending_departure(self, now: float, resighted: bool) -> None:
+        """Commit or cancel the held departure (see __init__ note).
+
+        Re-sighting inside the window cancels silently — same visit, the
+        departure never happened. Past the window it commits backdated
+        (whether the room stayed empty or someone just walked back in after
+        a real absence)."""
+        if self._pending_departure is None:
+            return
+        try:
+            from config.config import PRESENCE_REARRIVAL_WINDOW_S
+
+            left_ts, reason = self._pending_departure
+            if now - left_ts < PRESENCE_REARRIVAL_WINDOW_S:
+                if resighted:
+                    self._pending_departure = None  # out-of-frame stretch, not a departure
+                return  # room still empty, window still open — keep holding
+            from utils.episodic_log import episodic_log
+
+            episodic_log.record("person_left", reason, timestamp=left_ts)
+            print(f"[👤] Departure confirmed ({reason}, {int((now - left_ts) / 60)} min ago)")
+            self._pending_departure = None
+        except Exception:
+            self._pending_departure = None
 
     def update_servo_position(self, pan: float, tilt: float):
         """Update current gaze position - called from machine.py main loop."""
@@ -213,6 +245,7 @@ class PersonDetectionState:
                 self.recent_arrivals.append(now)
                 self.person_absence_duration = 0.0
                 self.recent_arrivals = [t for t in self.recent_arrivals if now - t < 300]
+                self._resolve_pending_departure(now, resighted=True)
 
             # Store spatial memory - where did we see them
             if self.current_servo_pan is not None:
@@ -238,12 +271,8 @@ class PersonDetectionState:
                 self.person_presence_duration = 0.0
                 self.recent_departures = [t for t in self.recent_departures if now - t < 300]
                 print(f"[👤] Person marked absent after sweep ({len(self.scan_zones_visited)} zones scanned)")
-                try:
-                    from utils.episodic_log import episodic_log
-
-                    episodic_log.record("person_left", "confirmed gone after sweep")
-                except Exception:
-                    pass
+                if self._pending_departure is None:
+                    self._pending_departure = (now, "confirmed gone after sweep")
             elif time_since > self.remembered_timeout:
                 # Hard timeout - even without sweep, don't remember forever
                 self.person_state = "absent"
@@ -253,16 +282,17 @@ class PersonDetectionState:
                 self.person_presence_duration = 0.0
                 self.recent_departures = [t for t in self.recent_departures if now - t < 300]
                 print(f"[👤] Person marked absent after timeout ({int(self.remembered_timeout)}s)")
-                try:
-                    from utils.episodic_log import episodic_log
-
-                    episodic_log.record("person_left", "gone after timeout")
-                except Exception:
-                    pass
+                if self._pending_departure is None:
+                    self._pending_departure = (now, "gone after timeout")
             else:
                 # Stay in "remembered" state - person might still be here
                 self.person_state = "remembered"
                 self.is_person_present = True
+        else:
+            # Nobody detected, nobody believed present — if a departure is
+            # pending and the absence has now outlasted the window, it was
+            # real: commit it, backdated to when they vanished.
+            self._resolve_pending_departure(now, resighted=False)
 
         # Update duration tracking
         if self.is_person_present:

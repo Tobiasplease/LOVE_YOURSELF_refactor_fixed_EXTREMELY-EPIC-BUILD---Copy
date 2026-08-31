@@ -982,6 +982,15 @@ SALIENCE_ARRIVAL_WINDOW = 10  # seconds an arrival keeps salience hot (~one live
 # manufacture a false "new presence" every time it looked back (the artist was
 # greeted as new dozens of times a day). Not-looking is not evidence of absence.
 PRESENCE_BELIEF_DECAY_SECONDS = 240
+
+# Re-arrival prior (Aug 31). Re-ID is off (CLIP can't tell outfits apart),
+# so every re-sighting after a belief drop counted as a GENUINE arrival —
+# 73 phantom arrivals in one solo workday, from the artist stepping out of
+# frame. In this room a sighting within this window of the last believed
+# presence is the same visit resuming: no arrival event, no episodic
+# record, no salience spike. A confirmed departure is only RECORDED once
+# the absence outlasts the same window (backdated to when they vanished).
+PRESENCE_REARRIVAL_WINDOW_S = float(os.getenv("PRESENCE_REARRIVAL_WINDOW_S", 1800))
 PRESENCE_ABSENCE_LOOK_TOLERANCE = 30.0  # deg; gaze within this of last-seen pan AND tilt = "looking there", decay may tick
 
 # Session re-ID (Aug 5, layer 2 of the false-arrival fix): person crops are

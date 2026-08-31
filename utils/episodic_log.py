@@ -57,12 +57,16 @@ class EpisodicLog:
         except Exception:
             pass
 
-    def record(self, event_type: str, description: str, metadata: Optional[Dict] = None) -> None:
-        """Record a significant event. Silently ignored if duplicate within 5 seconds."""
+    def record(self, event_type: str, description: str, metadata: Optional[Dict] = None, timestamp: Optional[float] = None) -> None:
+        """Record a significant event. Silently ignored if duplicate within 5 seconds.
+
+        timestamp: override for events confirmed in retrospect (a departure is
+        only recorded once the absence has held — backdated to when they
+        actually vanished, so downstream durations stay honest)."""
         if not description or not description.strip():
             return
         event = {
-            "timestamp": time.time(),
+            "timestamp": float(timestamp) if timestamp else time.time(),
             "type": event_type,
             "description": description.strip()[:200],
         }
