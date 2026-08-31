@@ -279,6 +279,12 @@ def _hybrid_seam_expected(agent) -> bool:
 
 def casual_time_string(minutes: float) -> str:
     """Convert minutes to casual human-readable time description."""
+    if minutes < -2:
+        # A meaningfully negative age means the stored stamp is in the future —
+        # clock-skew corruption, not recency. "just now" here told the machine
+        # it had JUST drawn, every caption, for days (the Aug 31 diagnosis).
+        # Composes at every call site: "a while ago" / "a while later".
+        return "a while"
     if minutes < 2:
         return "just now"
     elif minutes < 6:
