@@ -89,21 +89,32 @@ class PaperDetector:
 
             # Kinetic bus: both arms play their recorded get-clear move so
             # they don't occlude the marker; released again in the finally.
+            # paper_clear() returns 0.0 when there is NO recorded 'paper'
+            # move — the body stays wherever it is, and a blank read through
+            # an uncleared view is not evidence (Aug 31: gantry parked on
+            # the drawn band, two frames agreed blank → false ALLOW, wasted
+            # ComfyUI cycle; the warning only existed behind DEBUG_MODE).
             _clear_wait = 0.0
+            _clear_expected = False
             try:
                 from utils import hooks as _kin_hooks
 
                 if _kin_hooks.on_paper_check_start:
+                    _clear_expected = True
                     _clear_wait = min(float(_kin_hooks.on_paper_check_start() or 0.0), 20.0)
             except Exception:
                 pass
             if _clear_wait > 0:
                 print(f"[📄] Arms clearing the view ({_clear_wait:.1f}s)…")
                 time.sleep(_clear_wait)
+            elif _clear_expected:
+                print(
+                    "[📄] ⚠️ Body did NOT clear the view — no 'paper' get-clear recording in the movement library; blank verdicts downgrade to unclear"
+                )
 
             try:
                 if method == "vlm":
-                    result = self._check_vlm(camera)
+                    result = self._check_vlm(camera, view_cleared=(_clear_wait > 0 or not _clear_expected))
                 else:
                     result = self._check_aruco_detection_continuous(camera)
             finally:
@@ -180,12 +191,19 @@ class PaperDetector:
             return out
         return None
 
-    def _check_vlm(self, camera) -> PaperCheckResult:
+    def _check_vlm(self, camera, view_cleared: bool = True) -> PaperCheckResult:
         """Ask the loaded model whether a blank sheet is on the table.
 
         Captures PAPER_VLM_FRAMES frames at the paper-check angle and queries
         the model per frame. Every frame must read as blank_paper to allow;
         drawn_paper / no_paper / unclear / any failure blocks (fail closed).
+
+        view_cleared=False means the kinetic get-clear was supposed to move
+        the body off the sheet and couldn't (no recorded 'paper' move): an
+        all-blank consensus then downgrades to unclear — marks hide under
+        the hands, so blank-through-occlusion is absence of evidence, not
+        evidence of absence. Drawn/no_paper stand either way (occlusion
+        cannot fake marks into view).
         """
         import cv2
 
@@ -254,6 +272,13 @@ class PaperDetector:
 
             allow = bool(states) and all(s == "blank_paper" for s in states)
             summary = "+".join(states) if states else "no_frames"
+            if allow and not view_cleared:
+                allow = False
+                states = ["unclear"] * len(states)
+                summary += "→unclear(uncleared view)"
+                print(
+                    "[📄] ⚠️ All frames read blank but the view was never cleared — downgrading to unclear (record the 'paper' get-clear move to re-enable ALLOW)"
+                )
             # Consensus must never claim more than every frame agrees on:
             # a mixed no_paper+blank_paper vote (first live fire, 17:14 —
             # frame 1 shot mid-gaze-travel) spoke "no paper on the desk"

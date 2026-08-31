@@ -1018,7 +1018,20 @@ CNC execution. The kinetic get-clear (arms tuck + hold) wraps every check.
   KNOWN LIMITS: at 1280x720 (16:9, cropped vertical FOV) with tilt already
   at TILT_MIN, the drawing table sits at the frame's bottom edge; marks
   hidden under the hands/objects on the sheet can read as blank — the
-  kinetic get-clear pose matters for MARKS accuracy. A drawn-on
+  kinetic get-clear pose matters for MARKS accuracy. **Aug 31: that exact
+  failure fired live** — NO 'paper' get-clear recording exists
+  (session_paper_*.json missing from movement_recordings/arms/), so
+  paper_clear() has returned 0.0 on every check since Aug 20 and its
+  warning was DEBUG_MODE-gated (silent). The gantry sat parked on the drawn
+  band; two frames honestly agreed blank → false ALLOW → one wasted ComfyUI
+  cycle; the post-home backstop (clear view by construction — homing moves
+  the carriage) caught it before the pen moved. FIX (same day): when the
+  kinetic hook is registered and the get-clear didn't run, an all-blank
+  consensus DOWNGRADES to unclear (blocks, monologue silent; summary logs
+  "→unclear(uncleared view)"), and the missing-recording warning prints
+  loudly at the check site. Drawn/no_paper verdicts stand — occlusion
+  cannot fake marks into view. ALLOW resumes once a 'paper' get-clear move
+  is recorded in the panel and lands as session_paper_*.json. A drawn-on
   sheet, bare table, clutter, unparseable answer, or model failure all BLOCK —
   the vlm path fails CLOSED at every layer (paper_detection outer except,
   check_paper_before_drawing, and both call-site fallbacks are method-aware).
