@@ -653,6 +653,30 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
             since = identity.get("desire_since") or 0
             when = f" (since {_age_phrase(since)})" if since else ""
             id_lines.append(f"- what you've wanted{when}: {identity['desire']}")
+            # B3: an old or refused want arrives as explicit fact — age and
+            # what pursuing it met. The reflection decides what it means.
+            try:
+                from config.config import WANT_REFLECTION_FACT_AFTER_S
+                from utils.want_ledger import want_ledger
+
+                facts = want_ledger.current_facts()
+                if facts and (facts["age_s"] >= WANT_REFLECTION_FACT_AFTER_S or facts["refusals"] >= 2):
+                    tail = f"you have wanted this for {casual_time_string(facts['age_s'] / 60.0)}"
+                    if facts["refusals"]:
+                        tail += f"; {facts['refusals']} attempts came to nothing"
+                    id_lines.append(f"- {tail}")
+            except Exception:
+                pass
+        # B3: wants that already ended, with what became of them — in your
+        # own recorded words where you named it.
+        try:
+            from utils.want_ledger import want_ledger as _wl
+
+            resolved = _wl.recently_resolved(2)
+            for r in resolved:
+                id_lines.append(f'- a want that ended: "{r["text"]}" — {r["outcome"]}')
+        except Exception:
+            pass
         parts.append("Where your own ledger stands — your words, from before:\n" + "\n".join(id_lines))
 
     events = data.get("events") or []
@@ -1800,7 +1824,23 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             _cc = int(getattr(agent, "_caption_count", 0) or 0)
             _redose = DESIRE_REDOSE_EVERY_N > 0 and _cc > 0 and _cc % DESIRE_REDOSE_EVERY_N == 3
             if desire and len(desire) > 5 and (inj_count < 3 or _redose):
-                prompt_parts.append(P("caption.desire-wrap").format(desire=desire))
+                desire_line = P("caption.desire-wrap").format(desire=desire)
+                # B3 arc tail: once the want is old or has been refused, its
+                # history rides along as fact — age and refusal count, nothing
+                # more. What that feels like is the machine's to say.
+                try:
+                    from config.config import WANT_ARC_TAIL_AFTER_S
+                    from utils.want_ledger import want_ledger
+
+                    facts = want_ledger.current_facts()
+                    if facts and (facts["age_s"] >= WANT_ARC_TAIL_AFTER_S or facts["refusals"] > 0):
+                        refused_clause = f", and been refused {facts['refusals']} times" if facts["refusals"] > 0 else ""
+                        desire_line += P("caption.desire-arc-tail").format(
+                            duration=casual_time_string(facts["age_s"] / 60.0), refused_clause=refused_clause
+                        )
+                except Exception:
+                    pass
+                prompt_parts.append(desire_line)
                 context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
             elif not desire:
                 # Desire arc: the emptied slot right after an executed drawing

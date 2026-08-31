@@ -1057,6 +1057,13 @@ QUIET_ELICIT_EVERY_N = int(os.getenv("QUIET_ELICIT_EVERY_N", 5))
 UNCHANGED_FACT_AFTER_S = float(os.getenv("UNCHANGED_FACT_AFTER_S", 1200))
 UNCHANGED_FACT_MIN_GAP_S = float(os.getenv("UNCHANGED_FACT_MIN_GAP_S", 600))
 
+# B3 want ledger (Aug 31) — the want's lifecycle as recorded fact.
+# The desire line grows its arc tail (age + refusal count) once the want is
+# this old OR has any refusals; the reflection prompt receives the standing
+# want as an explicit fact once it has lived this long unanswered.
+WANT_ARC_TAIL_AFTER_S = float(os.getenv("WANT_ARC_TAIL_AFTER_S", 21600))
+WANT_REFLECTION_FACT_AFTER_S = float(os.getenv("WANT_REFLECTION_FACT_AFTER_S", 86400))
+
 # Reflection-echo pacing (Aug 28 evening). Aug 22 removed this source's
 # internal counter "because the rotation slot rations" — but rotation only
 # picks who goes FIRST, and with 180+ reflections stored a relevance match

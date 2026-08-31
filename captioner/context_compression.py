@@ -690,18 +690,22 @@ class ContextCompressionEngine:
         if not reflection_text or len(reflection_text.strip()) < 80:
             return None
         try:
-            prompt = P("distill.user").format(reflection_text=reflection_text[:1500])
+            # B3: when a want already stands, the distiller gets the BECAME
+            # slot — what the old want turned into, in the machine's own words.
+            prior_want = (self.introspective_state.get("current_desire") or "").strip()
+            became_line = P("distill.became-line").format(prior_want=prior_want[:200]) if prior_want else ""
+            prompt = P("distill.user").format(reflection_text=reflection_text[:1500], became_line=became_line)
             response = query_model(
                 prompt=prompt,
                 model=model,
                 image=None,
                 system_prompt=P("distill.system"),
-                options={"temperature": 0.3, "num_predict": 90},
+                options={"temperature": 0.3, "num_predict": 110},
                 prompt_type="reflection_distill",
             )
             if not response or not isinstance(response, str):
                 return None
-            trait, belief, want, kernel = self._parse_distillation(response)
+            trait, belief, want, kernel, became = self._parse_distillation(response)
             now = time.time()
             changed = []
             if trait and self._valid_self_fact(trait):
@@ -718,13 +722,22 @@ class ContextCompressionEngine:
                 changed.append(f"belief={belief}")
             if want:
                 prev = self.introspective_state.get("current_desire", "")
-                if prev and self._roughly_same(want, prev):
+                affirmed = bool(prev) and self._roughly_same(want, prev)
+                if affirmed:
                     want = prev  # persist the stable wish + its since
                 else:
                     self.introspective_state["desire_injection_count"] = 0
                     self.introspective_state["desire_since"] = now
                 self.introspective_state["current_desire"] = want
                 changed.append(f"want={want}")
+                # B3 ledger: affirmation keeps the clock running; a new want
+                # closes the old entry with the machine's BECAME words.
+                try:
+                    from utils.want_ledger import want_ledger
+
+                    want_ledger.note_want(want, affirmed=affirmed, became=became)
+                except Exception:
+                    pass
             if changed:
                 self.introspective_state["last_introspection"] = now
                 self._save_identity()
@@ -741,10 +754,10 @@ class ContextCompressionEngine:
             return None
 
     def _parse_distillation(self, response: str) -> tuple:
-        """Parse TRAIT / BELIEF / WANT / KERNEL; strips any leaked label; 'none'/blank → empty."""
+        """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL; strips any leaked label; 'none'/blank → empty."""
         import re
 
-        trait = belief = want = kernel = ""
+        trait = belief = want = kernel = became = ""
 
         def _val(line: str, label_re: str) -> str:
             v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
@@ -759,9 +772,11 @@ class ContextCompressionEngine:
                 belief = _val(line, r"^(?:belief|believe)\b[\s:：—–\-]*")
             elif low.startswith("want"):
                 want = _val(line, r"^want\b[\s:：—–\-]*")
+            elif low.startswith("became"):
+                became = _val(line, r"^became\b[\s:：—–\-]*")
             elif low.startswith("kernel"):
                 kernel = _val(line, r"^kernel\b[\s:：—–\-]*")
-        return trait, belief, want, kernel
+        return trait, belief, want, kernel, became
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).
@@ -848,6 +863,14 @@ class ContextCompressionEngine:
         self.introspective_state["desire_since"] = 0.0
         self.introspective_state["desire_injection_count"] = 0
         self._save_identity()
+        # B3 ledger: the machine acted on this want, and it ended by being spent.
+        try:
+            from utils.want_ledger import want_ledger
+
+            want_ledger.note_acted()
+            want_ledger.note_faded(became=f"drawn: {(drawing_summary or '')[:80]}" if drawing_summary else "spent by drawing")
+        except Exception:
+            pass
         print(f'[🪞] Desire spent by execution: "{want[:60]}"')
 
     def _save_identity(self) -> None:

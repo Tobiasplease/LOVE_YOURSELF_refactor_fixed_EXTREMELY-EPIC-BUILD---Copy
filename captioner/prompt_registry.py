@@ -223,6 +223,13 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind"],
         "placeholders": ["desire"],
     },
+    "caption.desire-arc-tail": {
+        "title": "Desire arc tail (B3)",
+        "text": " You've wanted this {duration}{refused_clause}.",
+        "note": "B3 curdling surface: appended to the desire line only when the want is old (WANT_ARC_TAIL_AFTER_S) or has been refused. Facts only — age and refusal count; what that feels like is the machine's to say. refused_clause is ', and been refused {n} times' or empty.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["duration", "refused_clause"],
+    },
     "caption.desire-spent-wrap": {
         "title": "Spent desire (post-drawing)",
         "text": "You wanted: {desire} — you drew it.",
@@ -466,13 +473,21 @@ FRAGMENTS = {
             "Pull out what's worth keeping — plainly, in your own words, or 'none' for a line with nothing genuine:\n"
             "TRAIT — one plain fact about what kind of machine you are: a habit or fixation, in your own words.\n"
             "BELIEF — one plain thing you've come to think is true about this place or yourself.\n"
-            "WANT — one plain thing you want, or want to draw (if any).\n"
+            "WANT — one plain thing you want (if any).\n"
+            "{became_line}"
             "KERNEL — the reflection's one load-bearing sentence, kept plain, in your own words.\n"
             "A few words each, first person, no metaphor."
         ),
-        "note": "IDENTITY ENGINE (Reflect → Become). No example sentence — any concrete example gets aped verbatim and becomes the shape of every future persona ('I keep returning to X' was locked in for weeks).",
+        "note": "IDENTITY ENGINE (Reflect → Become). No example sentence — any concrete example gets aped verbatim and becomes the shape of every future persona ('I keep returning to X' was locked in for weeks). B3 (Aug 31): the 'or want to draw' nudge is GONE — wants are anything the reflection finds; the drawing trigger only listens for shapes it can serve. {became_line} is distill.became-line when a prior want stands, else empty.",
         "used_by": ["reflection_distill"],
-        "placeholders": ["reflection_text"],
+        "placeholders": ["reflection_text", "became_line"],
+    },
+    "distill.became-line": {
+        "title": "Distillation BECAME slot (B3)",
+        "text": "BECAME — you had been wanting: \"{prior_want}\". What has that turned into, in a few plain words — or 'none' if it stands unchanged.\n",
+        "note": "B3 outcome slot: what-the-want-became, in the machine's own words. Only injected when a prior want exists. The answer closes the old ledger entry when the want changes; preference, aversion, fear are the machine's to name, never ours.",
+        "used_by": ["reflection_distill"],
+        "placeholders": ["prior_want"],
     },
 }
 

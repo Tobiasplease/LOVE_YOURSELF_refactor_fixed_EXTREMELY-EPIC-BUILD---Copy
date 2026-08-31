@@ -2190,6 +2190,16 @@ class Captioner(MemoryMixin):
                         {"decision": "skip_drawing", "reason": "no_paper_before_conception"},
                         print_message="[🎨] No paper on the board — the want keeps, nothing is conceived",
                     )
+                    # B3: a refusal is a fact of the want's life, not just a
+                    # log line — only counted when the want was drawing-shaped
+                    # (a hunger-fired attempt refuses the CLOCK, not the want).
+                    try:
+                        if self.drawing.desire_shadow_verdict().get("drawing_directed"):
+                            from utils.want_ledger import want_ledger
+
+                            want_ledger.note_refusal()
+                    except Exception:
+                        pass
                     return
         except Exception as e:
             print(f"[📄] Pre-conception paper check errored (proceeding): {e}")
