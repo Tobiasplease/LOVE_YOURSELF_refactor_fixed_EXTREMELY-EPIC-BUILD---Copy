@@ -398,11 +398,21 @@ def get_unchanged_line(agent) -> str:
             anchors.append(new_ts)
         unchanged_s = now - max(anchors)
         if unchanged_s < UNCHANGED_FACT_AFTER_S:
+            agent._unchanged_line_last_phrase = None  # clock reset — a rebuilt stillness may reuse a phrase
+            return ""
+        # Dose on PHRASE CHANGE, not a timer (first live evening: the coarse
+        # "about an hour" bracket spans 56-91 min, so a fixed min-gap fed the
+        # model the identical sentence three times — a standing fact recited
+        # becomes the scene). Each dose is a new sentence: 20 min → half an
+        # hour → 45 → an hour → 2 hours. The min-gap survives as a floor.
+        phrase = casual_time_string(unchanged_s / 60.0)
+        if phrase == getattr(agent, "_unchanged_line_last_phrase", None):
             return ""
         if now - float(getattr(agent, "_unchanged_line_last_ts", 0) or 0) < UNCHANGED_FACT_MIN_GAP_S:
             return ""
+        agent._unchanged_line_last_phrase = phrase
         agent._unchanged_line_last_ts = now
-        return P("caption.unchanged").format(duration=casual_time_string(unchanged_s / 60.0))
+        return P("caption.unchanged").format(duration=phrase)
     except Exception:
         return ""
 
