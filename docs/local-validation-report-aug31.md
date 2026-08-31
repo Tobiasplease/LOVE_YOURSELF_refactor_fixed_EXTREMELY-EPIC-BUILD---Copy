@@ -83,17 +83,31 @@ Every §2 signal, with evidence:
 - **Familiarity honest** — memory mode fired (240s gate), familiarity lines
   surfaced; concept extraction once per cycle post-fix.
 - **Drawing cycle** — trigger fired (`startup`, then `desire`; mood+boredom
-  fields, no novelty). The artist swapped in a blank sheet: early VLM check
-  ALLOW (13:00) → conception → ComfyUI (VRAM handoff clean both directions)
-  → centerline → GRBL init → homing (attempt-1 timeout, attempt-2 success —
-  recurring hardware quirk, recovers by design) → **post-home backstop read
-  drawn_paper+drawn_paper → BLOCK → aborted before streaming.** Pen never
-  moved; the flattened completion ritual was therefore NOT exercised live
-  (diff-verified byte-identical + flake8-clean only). Not a stack regression —
-  it is the paper-state staleness/flap the queued redesign targets, now with
-  a clean log specimen. Afterward the 13:07 reflection distilled a
-  non-drawing want and the trigger honestly reported "no formed want" —
-  correct desire-arc behavior, so no second cycle was forced (hunger = 2h).
+  fields, no novelty). Early VLM check ALLOW (13:00) → conception → ComfyUI
+  (VRAM handoff clean both directions) → centerline → GRBL init → homing
+  (attempt-1 timeout, attempt-2 success — recurring hardware quirk, recovers
+  by design) → **post-home backstop read drawn_paper+drawn_paper → BLOCK →
+  aborted before streaming.** Pen never moved; the flattened completion
+  ritual was therefore NOT exercised live (diff-verified byte-identical +
+  flake8-clean only). Not a stack regression. **CORRECTION (post-report,
+  artist input + frame forensics): the 13:00 ALLOW was FALSE.** No sheet was
+  ever swapped — the same drawn-on sheet from the morning sat there all day.
+  The saved check frames (event_log/paper_checks/paper_check_1300*.jpg vs
+  _1307*.jpg) show the gantry + hands parked directly on the drawn band at
+  13:00 — both frames honestly read the visible margins as blank — while the
+  post-home check saw a cleared sheet (homing moves the carriage) and read
+  the marks. Root cause: NO 'paper' get-clear recording exists
+  (session_paper_*.json), so kinetic_bus.paper_clear() has returned 0.0 on
+  every check since Aug 20, and its warning was DEBUG_MODE-gated — silent.
+  Fixed same day (commit e819540): blank-through-uncleared-view downgrades
+  to unclear, warning prints loudly; ALLOW resumes once the get-clear move
+  is recorded. Note the inversion worth keeping: the STANDING paper state
+  ("already carries a drawing") was right and the fresh look was wrong —
+  an occluded look is not perception; the event+relevance redesign should
+  encode view-validity, not just recency. Afterward the 13:07 reflection
+  distilled a non-drawing want and the trigger honestly reported "no formed
+  want" — correct desire-arc behavior, so no second cycle was forced
+  (hunger = 2h).
 - **Drawing system prompt** — zero "no person yet" (see correction 4).
 - **Presence** — genuine-arrival vs re-detected discrimination correct all
   session; the artist tracked at the workbench throughout.
