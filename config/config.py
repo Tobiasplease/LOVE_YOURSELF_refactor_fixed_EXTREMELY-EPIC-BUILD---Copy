@@ -1041,6 +1041,13 @@ DESIRE_REDOSE_EVERY_N = int(os.getenv("DESIRE_REDOSE_EVERY_N", 8))
 # is answered by the dose, not by abolition. 0 = never (the Aug 22 rule).
 QUIET_ELICIT_EVERY_N = int(os.getenv("QUIET_ELICIT_EVERY_N", 5))
 
+# Unchanged-ness as fact (B4, Aug 31) — boredom's text channel. After this
+# long with no episodic change (arrival, departure, drawing, new sighting),
+# the caption prompt states the duration as a plain fact; re-stated at most
+# every MIN_GAP so a standing fact never becomes the scene.
+UNCHANGED_FACT_AFTER_S = float(os.getenv("UNCHANGED_FACT_AFTER_S", 1200))
+UNCHANGED_FACT_MIN_GAP_S = float(os.getenv("UNCHANGED_FACT_MIN_GAP_S", 600))
+
 # Reflection-echo pacing (Aug 28 evening). Aug 22 removed this source's
 # internal counter "because the rotation slot rations" — but rotation only
 # picks who goes FIRST, and with 180+ reflections stored a relevance match

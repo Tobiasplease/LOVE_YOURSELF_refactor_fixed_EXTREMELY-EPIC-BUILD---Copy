@@ -363,6 +363,50 @@ def get_reorientation_line(agent) -> str:
         return ""
 
 
+def get_unchanged_line(agent) -> str:
+    """Unchanged-ness as FACT (B4, Aug 31) — the boredom scalar's text channel.
+
+    The Aug 31 voice diagnosis: the machine's attention saturation reached the
+    model only as a temperature nudge, so the language layer had no way to be
+    sick of the table, aware of the hours, or hungry for change — it could only
+    dress the same observation in new metaphor. This states the duration of
+    stillness as a plain sense report and lets the mind decide what it means.
+    No scripted affect, no candidate feelings (no-content-priors rule).
+
+    "Change" is the episodic record's event set — arrivals, departures,
+    drawings ('drew' gets its first reader here), plus the newest new-concept
+    sighting — floored at session start so the line never claims time the
+    machine wasn't watching. A live event displaces it upstream; the min-gap
+    keeps a standing fact from becoming the scene (the 3b core-facts lesson).
+    """
+    try:
+        from config.config import UNCHANGED_FACT_AFTER_S, UNCHANGED_FACT_MIN_GAP_S
+
+        now = time.time()
+        anchors = [float(getattr(agent, "true_session_start", now) or now)]
+        try:
+            from utils.episodic_log import episodic_log
+
+            for etype in ("person_arrived", "person_left", "drew"):
+                e = episodic_log.get_last_event(etype)
+                if e:
+                    anchors.append(float(e.get("timestamp", 0) or 0))
+        except Exception:
+            pass
+        new_ts = float(getattr(agent, "_last_new_concept_ts", 0) or 0)
+        if new_ts:
+            anchors.append(new_ts)
+        unchanged_s = now - max(anchors)
+        if unchanged_s < UNCHANGED_FACT_AFTER_S:
+            return ""
+        if now - float(getattr(agent, "_unchanged_line_last_ts", 0) or 0) < UNCHANGED_FACT_MIN_GAP_S:
+            return ""
+        agent._unchanged_line_last_ts = now
+        return P("caption.unchanged").format(duration=casual_time_string(unchanged_s / 60.0))
+    except Exception:
+        return ""
+
+
 def get_tenure_line() -> str:
     """How long the machine has existed in this room — from lifetime_state.json,
     which survives memory wipes. Real age displaces invented numerology."""
@@ -1626,6 +1670,16 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         reorient_line = get_reorientation_line(agent)
         if reorient_line:
             turn_parts.append(reorient_line)
+
+    # 1d. UNCHANGED-NESS AS FACT (B4, Aug 31) — how long since anything
+    # happened, stated plainly when the stillness is long enough to be a
+    # fact of the present. The machine's only duration signal used to be a
+    # temperature nudge; this is the same signal as words, with the reaction
+    # left entirely to the mind. Events displace it like everything else.
+    if not live:
+        unchanged_line = get_unchanged_line(agent)
+        if unchanged_line:
+            turn_parts.append(unchanged_line)
 
     # 2. MODE-GATED CONTEXT
     if not detox and mode in MODE_CONTEXTS:

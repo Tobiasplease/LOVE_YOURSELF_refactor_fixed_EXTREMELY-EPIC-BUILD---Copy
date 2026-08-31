@@ -198,6 +198,12 @@ FRAGMENTS = {
         "text": "Your arm is drawing right now.",
         "used_by": ["caption", "caption_blind"],
     },
+    "caption.unchanged": {
+        "title": "Unchanged-ness (B4)",
+        "text": "Nothing has happened for {duration}.",
+        "note": "Boredom's text channel (Aug 31): a FACT computed from the episodic record (arrivals, departures, drawings, new sightings), never a scripted feeling — whether it reads as tedium, peace, or an itch for change is the machine's business. Fires after UNCHANGED_FACT_AFTER_S of stillness, re-doses at most every UNCHANGED_FACT_MIN_GAP_S; a live event displaces it.",
+        "used_by": ["caption"],
+    },
     "caption.no-paper": {
         "title": "No paper",
         "text": "There is no paper on the desk — you can't draw until a sheet is put down.",
@@ -633,6 +639,10 @@ PASSES = {
                 "store": None,
                 "desc": "New-day line after a real off-gap, for the first stretch of the session.",
                 "gate": "quiet moments only",
+            },
+            {
+                "frag": "caption.unchanged",
+                "gate": "B4 (Aug 31): no episodic change (arrival/departure/drew/new sighting) for UNCHANGED_FACT_AFTER_S, re-dosed at most every UNCHANGED_FACT_MIN_GAP_S; quiet cycles only",
             },
             {
                 "slot": "mode_context",

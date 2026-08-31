@@ -77,6 +77,10 @@ class MemoryMixin:
         # new concepts and people barely count; the more familiar a concept,
         # the more its sustained recent attention reads as a stale scene.
         if matched_concepts:
+            if any(cd.get("is_new", False) for cd in matched_concepts):
+                # A new thing entered the world — a change anchor for the
+                # unchanged-ness fact line (prompts.get_unchanged_line).
+                self._last_new_concept_ts = float(ts)
             now_ts = float(ts)
             total_weighted = 0.0
             total_weight = 0.0
