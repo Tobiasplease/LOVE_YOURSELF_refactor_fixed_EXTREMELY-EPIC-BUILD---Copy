@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Detect actual camera capabilities and optimal settings."""
 
-import cv2
 import sys
+
+import cv2
+
 
 def test_camera_capabilities():
     print("Opening camera...")
@@ -14,18 +16,18 @@ def test_camera_capabilities():
 
     print("\n=== CURRENT SETTINGS ===")
     properties = {
-        'Width': cv2.CAP_PROP_FRAME_WIDTH,
-        'Height': cv2.CAP_PROP_FRAME_HEIGHT,
-        'FPS': cv2.CAP_PROP_FPS,
-        'Brightness': cv2.CAP_PROP_BRIGHTNESS,
-        'Contrast': cv2.CAP_PROP_CONTRAST,
-        'Saturation': cv2.CAP_PROP_SATURATION,
-        'Hue': cv2.CAP_PROP_HUE,
-        'Gain': cv2.CAP_PROP_GAIN,
-        'Exposure': cv2.CAP_PROP_EXPOSURE,
-        'Sharpness': cv2.CAP_PROP_SHARPNESS,
-        'Auto Exposure': cv2.CAP_PROP_AUTO_EXPOSURE,
-        'Auto Focus': cv2.CAP_PROP_AUTOFOCUS,
+        "Width": cv2.CAP_PROP_FRAME_WIDTH,
+        "Height": cv2.CAP_PROP_FRAME_HEIGHT,
+        "FPS": cv2.CAP_PROP_FPS,
+        "Brightness": cv2.CAP_PROP_BRIGHTNESS,
+        "Contrast": cv2.CAP_PROP_CONTRAST,
+        "Saturation": cv2.CAP_PROP_SATURATION,
+        "Hue": cv2.CAP_PROP_HUE,
+        "Gain": cv2.CAP_PROP_GAIN,
+        "Exposure": cv2.CAP_PROP_EXPOSURE,
+        "Sharpness": cv2.CAP_PROP_SHARPNESS,
+        "Auto Exposure": cv2.CAP_PROP_AUTO_EXPOSURE,
+        "Auto Focus": cv2.CAP_PROP_AUTOFOCUS,
     }
 
     for name, prop in properties.items():
@@ -135,6 +137,7 @@ def test_camera_capabilities():
 
     cap.release()
     print("\nDone!")
+
 
 if __name__ == "__main__":
     test_camera_capabilities()

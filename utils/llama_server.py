@@ -196,7 +196,6 @@ def _note_query_outcome(error_msg: Optional[str] = None) -> None:
 
 from utils.llm_log import log_llm_call
 
-
 # ---------------------------------------------------------------------------
 # The stream: how prior captions reach the model (docs/continuity-plan.md)
 # ---------------------------------------------------------------------------
@@ -978,11 +977,11 @@ def _query_superframe(
     - Support system prompt as a proper message role
     - Use our streaming infrastructure
     """
+    import cv2
+    import numpy as np
     from llama_video import Preprocessor, Settings
     from llama_video.client import LlamaServerClient
     from llama_video.types import Frame
-    import cv2
-    import numpy as np
     from PIL import Image
 
     settings = Settings()

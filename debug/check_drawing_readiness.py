@@ -2,14 +2,16 @@
 """
 Check if drawing system is ready and diagnose why it might not be triggering.
 """
-import sys
 import os
+import sys
 import time
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.config import DRAWING_INTERVAL, DRAWING_COOLDOWN, DRAWING_STARTUP_DELAY
+from config.config import DRAWING_COOLDOWN, DRAWING_INTERVAL, DRAWING_STARTUP_DELAY
 from drawing.drawing import DrawingController
 from utils.state_manager import state_manager
+
 
 def check_drawing_readiness():
     print("=" * 80)
@@ -52,6 +54,7 @@ def check_drawing_readiness():
     print(f"  - Drawing check happens every {DRAWING_INTERVAL}s ({DRAWING_INTERVAL/60:.1f} min)")
     print(f"  - If first check fails (paper, ComfyUI, etc.), won't retry for {DRAWING_INTERVAL/60:.1f} minutes!")
     print(f"  - Check captioner.py:508 - updates last_drawing_check_time BEFORE verifying drawing can start")
+
 
 if __name__ == "__main__":
     check_drawing_readiness()

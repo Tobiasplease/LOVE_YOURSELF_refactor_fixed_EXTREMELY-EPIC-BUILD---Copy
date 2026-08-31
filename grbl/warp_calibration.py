@@ -216,7 +216,6 @@ def pick_anchors(cal: "WarpCalibration", k: int = 5) -> List[int]:
     return out
 
 
-
 def save_survey(points: List[Tuple[float, float]], meta: dict = None) -> str:
     with open(SURVEY_PATH, "w") as f:
         json.dump({"points": points, **(meta or {})}, f, indent=1)

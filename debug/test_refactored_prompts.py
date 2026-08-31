@@ -3,13 +3,15 @@
 
 import sys
 import time
-sys.path.insert(0, '/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy')
+
+sys.path.insert(0, "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy")
+
+import os
 
 from captioner.captioner import Captioner
-from captioner.prompts import build_simple_caption_prompt, build_memory_mode_prompt
-from captioner.model_wrapper import build_caption_thread, _is_plantable_prior
+from captioner.model_wrapper import _is_plantable_prior, build_caption_thread
+from captioner.prompts import build_memory_mode_prompt, build_simple_caption_prompt
 from config.config import MOOD_SNAPSHOT_FOLDER
-import os
 
 # Initialize captioner
 print("[TEST] Initializing Captioner...")
@@ -48,9 +50,9 @@ print("\n[TEST] Testing build_simple_caption_prompt()...")
 prompt, mode = build_simple_caption_prompt(captioner, person_present=False)
 print(f"\nMode: {mode}")
 print(f"\nPrompt ({len(prompt)} chars):")
-print("="*80)
+print("=" * 80)
 print(prompt)
-print("="*80)
+print("=" * 80)
 
 # Test build_memory_mode_prompt
 print("\n[TEST] Testing build_memory_mode_prompt()...")
@@ -58,18 +60,20 @@ try:
     mem_prompt, mem_mode = build_memory_mode_prompt(captioner)
     print(f"\nMode: {mem_mode}")
     print(f"\nMemory Mode Prompt ({len(mem_prompt)} chars):")
-    print("="*80)
+    print("=" * 80)
     print(mem_prompt)
-    print("="*80)
+    print("=" * 80)
 except Exception as e:
     print(f"[ERROR] Memory mode failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 # Check context_compressor
 print("\n[TEST] Checking context_compressor...")
 try:
     from captioner.context_compression import context_compressor
+
     baseline = context_compressor.get_baseline_context()
     print(f"Baseline context: '{baseline}'")
     print(f"Baseline length: {len(baseline) if baseline else 0} chars")
@@ -80,6 +84,7 @@ except Exception as e:
 print("\n[TEST] Checking activation network...")
 try:
     from captioner.activation_memory import get_activation_network
+
     network = get_activation_network()
     print(f"Novelty: {network._last_novelty:.2f}")
     print(f"Boredom: {network._last_boredom:.2f}")

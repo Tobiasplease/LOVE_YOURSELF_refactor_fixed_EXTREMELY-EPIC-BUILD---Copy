@@ -16,8 +16,8 @@ before execution. Two methods, selected by config.PAPER_CHECK_METHOD:
 import os
 import re
 import time
-from typing import Optional, Dict, Any
 from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from config import config as _cfg
 from config.config import (
@@ -25,7 +25,7 @@ from config.config import (
     PAPER_DETECTION_GAZE_PAN,
     PAPER_DETECTION_GAZE_TILT,
 )
-from event_logging.event_logger import log_json_entry, LogType
+from event_logging.event_logger import LogType, log_json_entry
 
 _PAPER_RE = re.compile(r"paper:\s*(yes|no)", re.I)
 _MARKS_RE = re.compile(r"marks:\s*(yes|no|n/?a)", re.I)

@@ -7,8 +7,8 @@ import re
 from typing import Optional
 
 from config.config import (
-    MOOD_SNAPSHOT_FOLDER,
     MODEL_NAME,
+    MOOD_SNAPSHOT_FOLDER,
 )
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
@@ -254,8 +254,6 @@ def build_caption_thread(agent, max_captions: int = 3) -> str:
     return "\n".join(thread_lines)
 
 
-
-
 class MultimodalModel:
     """Simplified model wrapper - pure API handler."""
 
@@ -263,7 +261,6 @@ class MultimodalModel:
         self.memory_ref = memory_ref
         self.model_name = MODEL_NAME
         self.prompt_interface = PromptInterface(self.model_name)
-
 
     def generate_drawing_prompt(self, *, extra: Optional[str] = None, image_path: Optional[str] = None) -> str:
         """Generate drawing prompt using centralized prompt interface with VISUAL GROUNDING."""
@@ -295,8 +292,3 @@ class MultimodalModel:
         # The stream pipeline already returned the final drawing prompt
         # (sole pipeline since the Aug 19 consolidation)
         return prompt
-
-
-
-
-

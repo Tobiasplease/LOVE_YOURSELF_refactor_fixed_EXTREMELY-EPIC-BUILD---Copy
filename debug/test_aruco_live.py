@@ -5,12 +5,14 @@ Shows real-time detection status with your actual camera.
 Includes real-time parameter tuning via trackbars.
 """
 import sys
-import cv2
 import time
+
+import cv2
 
 # Test with the actual camera from config
 try:
-    from config.config import CAMERA_INDEX, CAMERA_WIDTH, CAMERA_HEIGHT
+    from config.config import CAMERA_HEIGHT, CAMERA_INDEX, CAMERA_WIDTH
+
     camera_index = CAMERA_INDEX
     width = CAMERA_WIDTH
     height = CAMERA_HEIGHT
@@ -61,8 +63,10 @@ WINDOW_NAME = "ArUco Tuning"
 cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 cv2.resizeWindow(WINDOW_NAME, 900, 700)
 
+
 def nothing(x):
     pass
+
 
 # Create trackbars for key parameters
 cv2.createTrackbar("WinSizeMin", WINDOW_NAME, PARAM_DEFAULTS["adaptiveThreshWinSizeMin"], 30, nothing)
@@ -75,6 +79,7 @@ cv2.createTrackbar("PolyApprox x100", WINDOW_NAME, PARAM_DEFAULTS["polygonalAppr
 cv2.createTrackbar("MinCornerDist x100", WINDOW_NAME, PARAM_DEFAULTS["minCornerDistanceRate"], 20, nothing)
 cv2.createTrackbar("MinBorderDist", WINDOW_NAME, PARAM_DEFAULTS["minDistanceToBorder"], 10, nothing)
 cv2.createTrackbar("CornerRefine", WINDOW_NAME, PARAM_DEFAULTS["cornerRefinementMethod"], 2, nothing)
+
 
 def get_params_from_trackbars():
     """Read current trackbar values and update detector parameters."""
@@ -104,6 +109,7 @@ def get_params_from_trackbars():
 
     return params
 
+
 def print_current_params():
     """Print current parameter values for copying to aruco_detector.py"""
     params = get_params_from_trackbars()
@@ -123,6 +129,7 @@ def print_current_params():
     corner_idx = cv2.getTrackbarPos("CornerRefine", WINDOW_NAME)
     print(f"self.aruco_params.cornerRefinementMethod = cv2.aruco.{corner_names[corner_idx]}")
     print("=" * 60 + "\n")
+
 
 print("Using new OpenCV ArUco API with real-time tuning")
 print("\nStarting detection...\n")
@@ -166,35 +173,45 @@ try:
             center_y = int(sum([c[1] for c in marker_corners]) / 4)
 
             # Display info on frame
-            cv2.putText(frame, f"DETECTED: ID {ids[0][0]}", (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.putText(frame, f"Size: {width_px}x{height_px}px", (10, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            cv2.putText(frame, f"Center: ({center_x}, {center_y})", (10, 85),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            cv2.putText(frame, f"Detection: {detection_count}/{frame_count} ({detection_count/frame_count*100:.1f}%)",
-                       (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(frame, f"DETECTED: ID {ids[0][0]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, f"Size: {width_px}x{height_px}px", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(frame, f"Center: ({center_x}, {center_y})", (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(
+                frame,
+                f"Detection: {detection_count}/{frame_count} ({detection_count/frame_count*100:.1f}%)",
+                (10, 110),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 0),
+                2,
+            )
 
             # Console output
             if detection_count % 10 == 1:  # Print every 10th detection
-                print(f"✓ Detection #{detection_count}: ID={ids[0][0]}, Size={width_px}x{height_px}px, " +
-                      f"Rate={detection_count/frame_count*100:.1f}%")
+                print(
+                    f"✓ Detection #{detection_count}: ID={ids[0][0]}, Size={width_px}x{height_px}px, "
+                    + f"Rate={detection_count/frame_count*100:.1f}%"
+                )
         else:
             # No detection
-            cv2.putText(frame, "NO MARKER DETECTED", (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.putText(frame, f"Detection: {detection_count}/{frame_count} ({detection_count/frame_count*100:.1f}%)",
-                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cv2.putText(frame, "NO MARKER DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(
+                frame,
+                f"Detection: {detection_count}/{frame_count} ({detection_count/frame_count*100:.1f}%)",
+                (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 0, 255),
+                2,
+            )
 
             # Warn if no detection for a while
             if last_detection_time > 0 and time.time() - last_detection_time > 3:
-                cv2.putText(frame, "Adjust sliders to improve detection", (10, 90),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                cv2.putText(frame, "Adjust sliders to improve detection", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         # Show rejected candidates (potential markers that failed validation)
         if rejected and len(rejected) > 0:
-            cv2.putText(frame, f"Rejected candidates: {len(rejected)}", (10, actual_height - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 128, 128), 1)
+            cv2.putText(frame, f"Rejected candidates: {len(rejected)}", (10, actual_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 128, 128), 1)
             # Draw rejected candidates in gray
             for rej in rejected:
                 pts = rej[0].astype(int)
@@ -214,9 +231,9 @@ try:
 
         # Handle key presses
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
+        if key == ord("q"):
             break
-        elif key == ord('s'):
+        elif key == ord("s"):
             print_current_params()
 
 except KeyboardInterrupt:

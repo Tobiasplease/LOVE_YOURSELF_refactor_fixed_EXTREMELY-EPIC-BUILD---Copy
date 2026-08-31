@@ -27,8 +27,7 @@ from skimage.morphology import skeletonize
 NEIGH = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
 
 
-def binarize(img: np.ndarray, contrast_alpha: float = 2.0, adaptive: bool = True,
-             threshold_value: int = 180, min_component: int = 12) -> np.ndarray:
+def binarize(img: np.ndarray, contrast_alpha: float = 2.0, adaptive: bool = True, threshold_value: int = 180, min_component: int = 12) -> np.ndarray:
     """Ink mask. Union of adaptive and global thresholds: adaptive keeps
     faint fine strokes that v1's global 180 erased; global keeps broad soft
     strokes that look locally uniform and fool the adaptive pass."""
@@ -40,8 +39,7 @@ def binarize(img: np.ndarray, contrast_alpha: float = 2.0, adaptive: bool = True
         img8 = 255 - img8
     b = img8 < threshold_value
     if adaptive:
-        b |= cv2.adaptiveThreshold(img8, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                   cv2.THRESH_BINARY_INV, 51, 12) > 0
+        b |= cv2.adaptiveThreshold(img8, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 12) > 0
     n, lab, stats, _ = cv2.connectedComponentsWithStats(b.astype(np.uint8))
     keep = np.zeros_like(b)
     for i in range(1, n):
@@ -106,8 +104,7 @@ def skeleton_paths(skel: np.ndarray) -> list:
     return paths, nodes, deg
 
 
-def prune_spurs(paths: list, nodes: set, deg: dict, width_map: np.ndarray,
-                spur_factor: float = 1.6, spur_min: float = 6.0) -> list:
+def prune_spurs(paths: list, nodes: set, deg: dict, width_map: np.ndarray, spur_factor: float = 1.6, spur_min: float = 6.0) -> list:
     """Drop stub edges (one free end) shorter than the local stroke width —
     they're skeletonization noise (the sawteeth), not drawn marks."""
     out = []
@@ -231,8 +228,7 @@ def split_fills(binary: np.ndarray, width_map: np.ndarray, fill_factor: float = 
     return binary & ~fill, fill, w_half
 
 
-def hatch_fills(fill_mask: np.ndarray, w_half: float, angle_deg: float = 45.0,
-                spacing_factor: float = 3.0) -> list:
+def hatch_fills(fill_mask: np.ndarray, w_half: float, angle_deg: float = 45.0, spacing_factor: float = 3.0) -> list:
     """Fill regions the way a pen does: contour outlines plus serpentine
     hatch lines. Consecutive hatch rows are linked into zigzags where they
     overlap, so a dark mass costs a handful of pen lifts, not hundreds."""
@@ -264,8 +260,7 @@ def _serpentine(fill_mask: np.ndarray, spacing: int, angle_deg: float) -> list:
     Minv = cv2.invertAffineTransform(M)
 
     def unrotate(x, y):
-        return (Minv[0, 0] * x + Minv[0, 1] * y + Minv[0, 2],
-                Minv[1, 0] * x + Minv[1, 1] * y + Minv[1, 2])
+        return (Minv[0, 0] * x + Minv[0, 1] * y + Minv[0, 2], Minv[1, 0] * x + Minv[1, 1] * y + Minv[1, 2])
 
     chains, open_chains = [], []  # open: (last_x0, last_x1, points)
     for y in range(spacing // 2, diag, spacing):
@@ -399,22 +394,25 @@ def simplify(path: list, epsilon: float = 1.2, smooth_iterations: int = 1) -> np
     return _chaikin(pts.astype(np.float64), smooth_iterations)
 
 
-def raster_to_centerline_svg(input_path: str, output_path: str,
-                             contrast_alpha: float = 2.0,
-                             adaptive: bool = True,
-                             threshold_value: int = 180,
-                             min_component: int = 12,
-                             spur_factor: float = 1.6,
-                             merge_angle_deg: float = 35.0,
-                             hatch_angle_deg: float = 45.0,
-                             hatch_spacing_factor: float = 3.0,
-                             simplify_epsilon: float = 1.2,
-                             smooth_iterations: int = 1,
-                             min_path_px: int = 5,
-                             scale: float = 1.0,
-                             save_steps: bool = False,
-                             tone_fills: bool = None,
-                             engine: str = None):
+def raster_to_centerline_svg(
+    input_path: str,
+    output_path: str,
+    contrast_alpha: float = 2.0,
+    adaptive: bool = True,
+    threshold_value: int = 180,
+    min_component: int = 12,
+    spur_factor: float = 1.6,
+    merge_angle_deg: float = 35.0,
+    hatch_angle_deg: float = 45.0,
+    hatch_spacing_factor: float = 3.0,
+    simplify_epsilon: float = 1.2,
+    smooth_iterations: int = 1,
+    min_path_px: int = 5,
+    scale: float = 1.0,
+    save_steps: bool = False,
+    tone_fills: bool = None,
+    engine: str = None,
+):
     """v1-compatible entry point: PNG in, polyline-SVG out.
 
     tone_fills: None reads CENTERLINE_TONE_FILLS from config (default True);
@@ -481,8 +479,7 @@ def raster_to_centerline_svg(input_path: str, output_path: str,
         paths, nodes, deg = skeleton_paths(skel)
         paths = prune_spurs(paths, nodes, deg, width_map, spur_factor)
         paths = merge_through_junctions(paths, merge_angle_deg)
-        polylines = [simplify(p, simplify_epsilon, smooth_iterations)
-                     for p in paths if len(p) >= min_path_px]
+        polylines = [simplify(p, simplify_epsilon, smooth_iterations) for p in paths if len(p) >= min_path_px]
     if fills.any() and not dsv_pure:
         # Pure DSV IS the whole rendering — its reduction drops tone by
         # design; adding fills back would recreate the hybrid.
@@ -504,5 +501,6 @@ def raster_to_centerline_svg(input_path: str, output_path: str,
 
 if __name__ == "__main__":
     import sys
+
     inp = sys.argv[1] if len(sys.argv) > 1 else "input.png"
     raster_to_centerline_svg(inp, inp.rsplit(".", 1)[0] + "_center_lined_v2.svg", save_steps=True)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 """drawing.py – final version
 
 Captioner now hands us a *ready-made* drawing prompt that already contains
@@ -142,9 +141,7 @@ class DrawingController:
             "would_draw": drawing_directed and age_s >= self.DESIRE_SHADOW_MIN_AGE_S,
         }
 
-    def _log_trigger_decision(
-        self, *, mode: str, verdict: bool, reason: str, shadow: dict, mood: float, boredom: float, time_since: float
-    ) -> None:
+    def _log_trigger_decision(self, *, mode: str, verdict: bool, reason: str, shadow: dict, mood: float, boredom: float, time_since: float) -> None:
         try:
             log_json_entry(
                 LogType.DECISION,
@@ -195,8 +192,13 @@ class DrawingController:
             verdict = self.drive.full()
             reason = f"drive {'full' if verdict else 'charging'} ({level:.2f})"
             self._log_trigger_decision(
-                mode="drive", verdict=verdict, reason=reason, shadow=shadow,
-                mood=mood, boredom=boredom, time_since=time_since,
+                mode="drive",
+                verdict=verdict,
+                reason=reason,
+                shadow=shadow,
+                mood=mood,
+                boredom=boredom,
+                time_since=time_since,
             )
             return verdict
 
@@ -220,8 +222,13 @@ class DrawingController:
         else:
             verdict, reason = False, "no formed want"
         self._log_trigger_decision(
-            mode="desire", verdict=verdict, reason=reason, shadow=shadow,
-            mood=mood, boredom=boredom, time_since=time_since,
+            mode="desire",
+            verdict=verdict,
+            reason=reason,
+            shadow=shadow,
+            mood=mood,
+            boredom=boredom,
+            time_since=time_since,
         )
         if verdict:
             self._startup_drawing_done = True

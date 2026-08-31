@@ -36,6 +36,7 @@ def svg_to_grbl(svg_input, output_gcode=None, execute_grbl=True, scale_to=None):
     if scale_to is None:
         try:
             from config.config import DRAWING_SCALE_TARGET
+
             scale_to = DRAWING_SCALE_TARGET
         except (ImportError, AttributeError):
             scale_to = "65x35mm"

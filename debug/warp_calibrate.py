@@ -108,6 +108,7 @@ def cmd_generate(args):
 
 def cmd_run(args):
     from grbl.grbl_utils import ensure_homed, find_grbl_port, send_cmd
+
     pts = _survey_points(args)
     lines = wc.generate_calibration_gcode(points=pts)
     wc.save_survey(pts, {"spacing": args.spacing})
@@ -125,6 +126,7 @@ def cmd_run(args):
 
 def cmd_measure(args):
     import tkinter as tk
+
     from PIL import Image, ImageTk
 
     cmd_pts = wc.load_survey()
@@ -163,8 +165,8 @@ def cmd_measure(args):
         anchors = [(k, p) for k, p in zip(state["kept"], state["paper_pts"]) if k < n_a]
         if len(anchors) < 4:
             return None, None, None
-        src = [p for _, p in anchors]                    # photo px (full res)
-        dst = [expected_old[k] for k, _ in anchors]      # original frame mm
+        src = [p for _, p in anchors]  # photo px (full res)
+        dst = [expected_old[k] for k, _ in anchors]  # original frame mm
         return fit_frame_transform(src, dst)
 
     def _anchor_loo_errors():
@@ -177,8 +179,7 @@ def cmd_measure(args):
         out = []
         for i, (ki, pi) in enumerate(anchors):
             rest = [a for j, a in enumerate(anchors) if j != i]
-            T, _, _ = fit_frame_transform([p for _, p in rest],
-                                          [expected_old[k] for k, _ in rest])
+            T, _, _ = fit_frame_transform([p for _, p in rest], [expected_old[k] for k, _ in rest])
             err = float(np.linalg.norm(T(np.array(pi)) - np.array(expected_old[ki])))
             out.append((ki + 1, err))
         return out
@@ -207,8 +208,7 @@ def cmd_measure(args):
         if len(anchors) < 4:
             return
         # reverse fit (old frame -> photo px) purely for ghost projection
-        T_rev, _, _ = fit_frame_transform([expected_old[k] for k, _ in anchors],
-                                          [p for _, p in anchors])
+        T_rev, _, _ = fit_frame_transform([expected_old[k] for k, _ in anchors], [p for _, p in anchors])
         for i in range(state["i"], len(cmd_pts)):
             gpx = T_rev(np.array(expected_old[i]))
             px, py = gpx[0] * scale, gpx[1] * scale
@@ -223,12 +223,15 @@ def cmd_measure(args):
 
     def prompt():
         if state["phase"] == "corners":
-            status.config(text=f"click paper corner {len(state['corners_px']) + 1}/4: "
-                               f"{corner_names[len(state['corners_px'])]}  (top = far from robot)")
+            status.config(
+                text=f"click paper corner {len(state['corners_px']) + 1}/4: " f"{corner_names[len(state['corners_px'])]}  (top = far from robot)"
+            )
         else:
-            status.config(text=f"click dot {state['i'] + 1}/{len(cmd_pts)} "
-                               f"(command {cmd_pts[state['i']]}) — dot #1 has the dash. "
-                               f"right-click = skip, u = undo" + (_anchor_feedback() if ring_mode else ""))
+            status.config(
+                text=f"click dot {state['i'] + 1}/{len(cmd_pts)} "
+                f"(command {cmd_pts[state['i']]}) — dot #1 has the dash. "
+                f"right-click = skip, u = undo" + (_anchor_feedback() if ring_mode else "")
+            )
 
     click_marks = []
 
@@ -291,8 +294,7 @@ def cmd_measure(args):
         cal = wc.WarpCalibration.fit(kept_cmd, state["paper_pts"])
         rms, mx = cal.residuals_mm()
         path = cal.save()
-        status.config(text=f"saved {path} — {len(kept_cmd)} points, fit residual rms {rms:.2f}mm "
-                           f"max {mx:.2f}mm. Draw the --square test next.")
+        status.config(text=f"saved {path} — {len(kept_cmd)} points, fit residual rms {rms:.2f}mm " f"max {mx:.2f}mm. Draw the --square test next.")
         print(f"calibration saved: {path}")
         print(f"paper area for drawings: {['%.1f' % v for v in cal.paper_area]} mm")
 
@@ -306,8 +308,9 @@ def cmd_measure(args):
         T, kind, reg_err = _anchor_transform()
         if reg_err > 2.5:
             per = ", ".join(f"anchor {k}: {e:.1f}mm" for k, e in _anchor_loo_errors())
-            status.config(text=f"MERGE REFUSED — registration {reg_err:.1f}mm (need <2.5). {per}. "
-                               f"Press u repeatedly to rewind and re-click the bad anchor.")
+            status.config(
+                text=f"MERGE REFUSED — registration {reg_err:.1f}mm (need <2.5). {per}. " f"Press u repeatedly to rewind and re-click the bad anchor."
+            )
             print(f"merge refused: registration {reg_err:.2f}mm — per-anchor: {per}")
             return
         cal_old = wc.WarpCalibration.load()
@@ -317,8 +320,9 @@ def cmd_measure(args):
         new_cal = wc.WarpCalibration.fit(merged_cmd, merged_paper)
         new_cal.paper_window = cal_old.paper_window
         new_cal.save()
-        status.config(text=f"ring merged: +{len(ring)} points (now {len(merged_cmd)}), "
-                           f"anchor registration err {reg_err:.2f}mm. Redraw --outline to verify.")
+        status.config(
+            text=f"ring merged: +{len(ring)} points (now {len(merged_cmd)}), " f"anchor registration err {reg_err:.2f}mm. Redraw --outline to verify."
+        )
         print(f"ring survey merged: {len(ring)} new points, anchor registration {reg_err:.2f}mm mean")
         print("the grown window now rests on measured ground — redraw the outline to verify the corner")
 
@@ -364,6 +368,7 @@ def cmd_square(args):
     with open(SQUARE_PATH, "w") as f:
         f.write("\n".join(lines) + "\n")
     import math as _m
+
     print(f"wrote {SQUARE_PATH} — an exactly {size:.0f}x{size:.0f}mm square (diagonals {size*_m.sqrt(2):.1f}mm).")
     print("Stream: python debug/warp_calibrate.py --run-file " + SQUARE_PATH)
 
@@ -372,6 +377,7 @@ def cmd_run_file(args):
     """Stream a gcode file raw over the same isolated path as --run —
     no bCNC, no pipeline, no transforms (the file is already final)."""
     from grbl.grbl_utils import ensure_homed, find_grbl_port, send_cmd
+
     with open(args.run_file) as f:
         lines = [l.strip() for l in f if l.strip() and not l.startswith(";")]
     ser = find_grbl_port(preferred_port=os.getenv("GRBL_PORT", "/dev/arduino_cnc"))
@@ -440,6 +446,7 @@ def cmd_ring(args):
     usual: anchors register the new sheet to the old frame, ring dots merge
     into the calibration, extrapolation guessing ends."""
     from grbl.grbl_utils import ensure_homed, find_grbl_port, send_cmd
+
     cal = wc.WarpCalibration.load()
     if cal is None:
         print("no calibration to extend — run the base survey first")
@@ -452,13 +459,15 @@ def cmd_ring(args):
     anchor_cmd = [tuple(cal.command_pts[i]) for i in anchors]
     pts = anchor_cmd + ring
     lines = wc.generate_calibration_gcode(points=pts)
-    wc.save_survey(pts, {
-        "mode": "ring",
-        "n_anchors": len(anchor_cmd),
-        "anchor_paper_old": [list(cal.paper_pts[i]) for i in anchors],
-    })
-    print(f"{len(anchor_cmd)} anchor re-dots + {len(ring)} ring dots "
-          f"(dash marks anchor #1). Click order: anchors first, then ring.")
+    wc.save_survey(
+        pts,
+        {
+            "mode": "ring",
+            "n_anchors": len(anchor_cmd),
+            "anchor_paper_old": [list(cal.paper_pts[i]) for i in anchors],
+        },
+    )
+    print(f"{len(anchor_cmd)} anchor re-dots + {len(ring)} ring dots " f"(dash marks anchor #1). Click order: anchors first, then ring.")
     ser = find_grbl_port(preferred_port=os.getenv("GRBL_PORT", "/dev/arduino_cnc"))
     if ser is None:
         print("no GRBL found")
@@ -481,6 +490,7 @@ def _expected_layout():
     pts = [tuple(p) for p in survey["points"]]
     n_a = survey.get("n_anchors", 0)
     from scipy.interpolate import RBFInterpolator
+
     fwd = RBFInterpolator(cal.command_pts, cal.paper_pts, kernel="thin_plate_spline", smoothing=1e-3)
     expected = []
     for i, p in enumerate(pts):
@@ -498,8 +508,10 @@ def cmd_guide(args):
         print("no survey/calibration to render")
         return
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=(11, 8))
     for i, (ex, ey) in enumerate(expected):
         if i < n_a:
@@ -523,7 +535,9 @@ def cmd_corner_dots(args):
     measured territory — the exact curve the outline draws. Appends to the
     saved survey so ONE photo + click session covers ring + corners."""
     from scipy.spatial import Delaunay
+
     from grbl.grbl_utils import ensure_homed, find_grbl_port, send_cmd
+
     cal = wc.WarpCalibration.load()
     survey = wc.load_survey_full()
     if cal is None or not survey or survey.get("mode") != "ring":
@@ -569,6 +583,7 @@ def cmd_grow_window(args):
     every drawing stays fully calibrated. Verify with --outline after."""
     import numpy as np
     from scipy.spatial import Delaunay
+
     cal = wc.WarpCalibration.load()
     if cal is None or not cal.paper_window:
         print("need a calibration with a fitted window (--fit-paper) first")
@@ -609,8 +624,10 @@ def cmd_grow_window(args):
     total = len(perimeter(f))
     print(f"max reach-safe factor: {fmax:.3f}  (window {w*fmax:.0f} x {h*fmax:.0f} mm)")
     print(f"applying factor {f:.3f}: window {w*f:.0f} x {h*f:.0f} mm at {ang:+.0f}°")
-    print(f"extrapolation exposure: {outside}/{total} perimeter samples outside the dotted "
-          f"region — expect curvature to creep back in those stretches, middle stays true")
+    print(
+        f"extrapolation exposure: {outside}/{total} perimeter samples outside the dotted "
+        f"region — expect curvature to creep back in those stretches, middle stays true"
+    )
     cal.paper_window = (cx, cy, w * f, h * f, ang)
     cal.save()
     print("saved. Draw it and judge: python debug/warp_calibrate.py --outline")
@@ -638,6 +655,7 @@ def cmd_auto_measure(args):
     # Registration uses ALL matched knowns — after a partial merge that can
     # be a dozen points, making leave-one-out statistically honest.
     from scipy.interpolate import RBFInterpolator
+
     survey_pts = wc.load_survey()
     if survey_pts is None:
         print("no saved survey (warp_survey.json)")
@@ -664,9 +682,16 @@ def cmd_auto_measure(args):
     # bases for the search: the 5 most-spread knowns
     kidx = np.nonzero(known)[0]
     Ek = E[kidx]
-    spread = [int(kidx[i]) for i in (np.argmin(Ek[:, 0]), np.argmax(Ek[:, 0]),
-                                     np.argmin(Ek[:, 1]), np.argmax(Ek[:, 1]),
-                                     np.argmin(np.linalg.norm(Ek - Ek.mean(axis=0), axis=1)))]
+    spread = [
+        int(kidx[i])
+        for i in (
+            np.argmin(Ek[:, 0]),
+            np.argmax(Ek[:, 0]),
+            np.argmin(Ek[:, 1]),
+            np.argmax(Ek[:, 1]),
+            np.argmin(np.linalg.norm(Ek - Ek.mean(axis=0), axis=1)),
+        )
+    ]
     base_idx = list(dict.fromkeys(spread))
     n_a = len(base_idx)  # naming kept for downstream code
 
@@ -781,8 +806,7 @@ def cmd_auto_measure(args):
         need = n_a + max(3, int(0.35 * (len(E) - n_a)))
         if entourage < need:
             return None
-        print(f"knowns locked: {best[0]}/{len(Ea)} (sim), {tight}/{len(Ea)} within 3.5mm after affine, "
-              f"{best[1]}/{len(E)} total")
+        print(f"knowns locked: {best[0]}/{len(Ea)} (sim), {tight}/{len(Ea)} within 3.5mm after affine, " f"{best[1]}/{len(E)} total")
         return refine, D, s0
 
     result = None
@@ -836,8 +860,7 @@ def cmd_auto_measure(args):
         return
 
     # final frame: anchor-fitted photo->old-frame transform (LOO-guarded)
-    Tfin, kind, loo = fit_frame_transform([D[matched[k]] for k in anchors_matched],
-                                          [E[k] for k in anchors_matched])
+    Tfin, kind, loo = fit_frame_transform([D[matched[k]] for k in anchors_matched], [E[k] for k in anchors_matched])
     print(f"frame registration: {kind}, leave-one-out {loo:.2f}mm")
     # Acceptance: strict LOO alone, OR moderate LOO backed by the entourage —
     # LOO over 5 points amplifies honest re-dot scatter ~2-3x (true locks
@@ -848,6 +871,7 @@ def cmd_auto_measure(args):
         print("MERGE REFUSED — registration too poor. Inspect /tmp/automatch.png")
     else:
         import shutil
+
         shutil.copy(wc.CALIBRATION_PATH, wc.CALIBRATION_PATH + ".bak")
         new_cmd = [tuple(c) for c in cal.command_pts]
         new_paper = [tuple(p) for p in cal.paper_pts]
@@ -865,8 +889,10 @@ def cmd_auto_measure(args):
 
     # overlay for human eyes
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=(13, 10))
     ax.imshow(arr, cmap="gray")
     ax.scatter(D[:, 0], D[:, 1], s=14, c="#4ecdc4", label="detected")
@@ -892,8 +918,7 @@ def cmd_fit_paper(args):
     w_req, h_req = args.fit_paper
     aspect = w_req / h_req
     angles = [args.angle] if args.angle is not None else None
-    cx, cy, w_ach, h_ach, ang = wc.best_rect_rotated(
-        cal.paper_pts, aspect, **({"angles": angles} if angles else {}))
+    cx, cy, w_ach, h_ach, ang = wc.best_rect_rotated(cal.paper_pts, aspect, **({"angles": angles} if angles else {}))
     pct = 100 * h_ach / h_req
     corners = wc.window_corners(cx, cy, w_ach, h_ach, ang)
     print(f"requested window : {w_req:.0f} x {h_req:.0f} mm")
@@ -922,25 +947,30 @@ def main():
     ap.add_argument("--run-file", metavar="GCODE", help="stream a gcode file raw (isolated, no bCNC/pipeline)")
     ap.add_argument("--square-size", type=float, default=60.0, help="test square side length in mm (default 60)")
     ap.add_argument("--outline", action="store_true", help="trace the calibrated drawing window on the bed (taping guide)")
-    ap.add_argument("--grow-window", type=float, metavar="FACTOR",
-                    help="scale the window into the reach-safe extrapolation ring (0 = max safe)")
-    ap.add_argument("--angle", type=float, metavar="DEG",
-                    help="pin the window rotation for --fit-paper (default: search all angles)")
-    ap.add_argument("--ring", action="store_true",
-                    help="dot the unmeasured ring + anchor re-dots, to be merged via --measure")
-    ap.add_argument("--guide", action="store_true",
-                    help="render the click-order constellation map for the current survey")
-    ap.add_argument("--corner-dots", action="store_true",
-                    help="append targeted dots on the window's command track (same sheet, before photographing)")
-    ap.add_argument("--auto-measure", metavar="PHOTO",
-                    help="fully automatic ring measurement from a photo — no clicking")
-    ap.add_argument("--fit-paper", nargs=2, type=float, metavar=("W", "H"),
-                    help="compute + set the largest W×H-aspect drawing window inside the measured region (mm)")
+    ap.add_argument("--grow-window", type=float, metavar="FACTOR", help="scale the window into the reach-safe extrapolation ring (0 = max safe)")
+    ap.add_argument("--angle", type=float, metavar="DEG", help="pin the window rotation for --fit-paper (default: search all angles)")
+    ap.add_argument("--ring", action="store_true", help="dot the unmeasured ring + anchor re-dots, to be merged via --measure")
+    ap.add_argument("--guide", action="store_true", help="render the click-order constellation map for the current survey")
+    ap.add_argument(
+        "--corner-dots", action="store_true", help="append targeted dots on the window's command track (same sheet, before photographing)"
+    )
+    ap.add_argument("--auto-measure", metavar="PHOTO", help="fully automatic ring measurement from a photo — no clicking")
+    ap.add_argument(
+        "--fit-paper",
+        nargs=2,
+        type=float,
+        metavar=("W", "H"),
+        help="compute + set the largest W×H-aspect drawing window inside the measured region (mm)",
+    )
     ap.add_argument("--n", type=int, default=5, help="grid size for --domain rectangular mode")
-    ap.add_argument("--spacing", type=float, default=10.0,
-                    help="dot spacing (command units) for the polygon survey (default 10)")
-    ap.add_argument("--domain", nargs=4, type=float, metavar=("X0", "X1", "Y0", "Y1"),
-                    help="OVERRIDE: rectangular survey domain instead of the measured reach polygon")
+    ap.add_argument("--spacing", type=float, default=10.0, help="dot spacing (command units) for the polygon survey (default 10)")
+    ap.add_argument(
+        "--domain",
+        nargs=4,
+        type=float,
+        metavar=("X0", "X1", "Y0", "Y1"),
+        help="OVERRIDE: rectangular survey domain instead of the measured reach polygon",
+    )
     ap.add_argument("--paper-w", type=float, default=210.0, help="paper width mm (default A5 landscape 210)")
     ap.add_argument("--paper-h", type=float, default=148.0, help="paper height mm (default 148)")
     args = ap.parse_args()

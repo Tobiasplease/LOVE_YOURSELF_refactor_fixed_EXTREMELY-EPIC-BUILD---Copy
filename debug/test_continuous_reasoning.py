@@ -46,6 +46,7 @@ THINKING_MODEL = "qwen3-vl:8b-thinking"
 # Ollama helpers
 # ---------------------------------------------------------------------------
 
+
 def ollama_generate(model, prompt, system=None, images=None, options=None):
     """Single Ollama generate call. Returns (response_text, duration_ms, eval_count)."""
     payload = {
@@ -87,6 +88,7 @@ def capture_frame():
     """Capture a single frame from camera 0. Returns path to temp jpg."""
     try:
         import cv2
+
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
             return None
@@ -107,7 +109,7 @@ def parse_think_block(text):
     think_match = re.search(r"<think>(.*?)</think>", text, re.DOTALL)
     if think_match:
         think_content = think_match.group(1).strip()
-        response = text[think_match.end():].strip()
+        response = text[think_match.end() :].strip()
         return think_content, response
     return None, text
 
@@ -154,8 +156,11 @@ def run_current_pipeline(image_b64, last_thought="", cycle_num=0, session_second
     """Run the current two-pass pipeline: Qwen perception -> Nemo monologue."""
     perc_prompt = "What is in front of you right now?"
     perception, perc_ms, perc_tokens = ollama_generate(
-        PERCEPTION_MODEL, perc_prompt, system=PERCEPTION_SYSTEM,
-        images=[image_b64], options=PERCEPTION_OPTIONS,
+        PERCEPTION_MODEL,
+        perc_prompt,
+        system=PERCEPTION_SYSTEM,
+        images=[image_b64],
+        options=PERCEPTION_OPTIONS,
     )
 
     mono_parts = []
@@ -169,7 +174,9 @@ def run_current_pipeline(image_b64, last_thought="", cycle_num=0, session_second
 
     mono_prompt = "\n".join(mono_parts)
     monologue, mono_ms, mono_tokens = ollama_generate(
-        MODEL_NAME, mono_prompt, system=MONOLOGUE_SYSTEM,
+        MODEL_NAME,
+        mono_prompt,
+        system=MONOLOGUE_SYSTEM,
         options=MONOLOGUE_OPTIONS,
     )
 
@@ -212,19 +219,28 @@ THINKING_OPTIONS = {
     "temperature": 0.7,
     "top_p": 0.85,
     "repeat_penalty": 1.3,
-    "num_predict": 500,       # room for think block + response
-    "num_ctx": 8192,          # Qwen3-VL supports 256K, use more for stream
+    "num_predict": 500,  # room for think block + response
+    "num_ctx": 8192,  # Qwen3-VL supports 256K, use more for stream
     "stop": ["<|im_end|>"],
 }
 
 # VQA-relapse stops — kill generation if model slips into analytical mode
 # Applied inside the think block too
 THINKING_VQA_STOPS = [
-    "The image shows", "The image depicts", "This image",
-    "In this image", "The scene shows", "The scene depicts",
-    "I can see that the", "I can observe that",
-    "Let me analyze", "Let me describe", "I'll describe",
-    "As an AI", "I am an AI", "language model",
+    "The image shows",
+    "The image depicts",
+    "This image",
+    "In this image",
+    "The scene shows",
+    "The scene depicts",
+    "I can see that the",
+    "I can observe that",
+    "Let me analyze",
+    "Let me describe",
+    "I'll describe",
+    "As an AI",
+    "I am an AI",
+    "language model",
 ]
 
 # Awakening seed — establishes the register for cycle 1 when there's
@@ -303,8 +319,11 @@ def run_thinking_pipeline(image_b64, thought_stream="", cycle_num=0, session_sec
     options["stop"] = THINKING_OPTIONS["stop"] + THINKING_VQA_STOPS
 
     raw_response, resp_ms, resp_tokens = ollama_generate(
-        model, prompt, system=THINKING_SYSTEM,
-        images=[image_b64], options=options,
+        model,
+        prompt,
+        system=THINKING_SYSTEM,
+        images=[image_b64],
+        options=options,
     )
 
     think_content, visible_response = parse_think_block(raw_response)
@@ -327,11 +346,11 @@ def trim_thought_stream(stream, max_chars=2000):
     """
     if len(stream) <= max_chars:
         return stream, False
-    cut = stream[len(stream) - max_chars:]
+    cut = stream[len(stream) - max_chars :]
     # Find first sentence boundary in the first 150 chars
     for i in range(min(150, len(cut))):
         if cut[i] in ".!?" and i + 1 < len(cut) and cut[i + 1] in " \n":
-            return cut[i + 2:].strip(), True
+            return cut[i + 2 :].strip(), True
     return cut.strip(), True
 
 
@@ -364,6 +383,7 @@ def get_sim_concepts(cycle_num):
 # Display helpers
 # ---------------------------------------------------------------------------
 
+
 def print_indented(text, indent=4, label=None):
     """Print text with indentation, handling multi-line."""
     prefix = " " * indent
@@ -382,6 +402,7 @@ def print_separator(char="=", width=70):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(description="Continuous reasoning vs two-pass pipeline test")
@@ -456,7 +477,7 @@ def main():
         thought_stream = AWAKENING_SEED
 
     if thought_stream and run_proposed:
-        print(f"\n  Awakening seed: \"{thought_stream[:80]}...\"")
+        print(f'\n  Awakening seed: "{thought_stream[:80]}..."')
 
     for cycle in range(args.cycles):
         elapsed = time.time() - session_start
@@ -493,8 +514,12 @@ def main():
             sim_concepts = None if args.no_concepts else get_sim_concepts(cycle)
 
             result = run_thinking_pipeline(
-                image_b64, thought_stream, cycle, elapsed,
-                model=thinking_model, sim_concepts=sim_concepts,
+                image_b64,
+                thought_stream,
+                cycle,
+                elapsed,
+                model=thinking_model,
+                sim_concepts=sim_concepts,
             )
 
             if result["think"]:
@@ -539,7 +564,8 @@ def main():
         print(thought_stream)
         print("-" * 50)
 
-    print("""
+    print(
+        """
 EVALUATION CRITERIA:
   1. Does the <think> block read as inner monologue or image analysis?
   2. Do thoughts develop WITHIN a single think block (associative leaps)?
@@ -548,7 +574,8 @@ EVALUATION CRITERIA:
   5. Is latency acceptable for a 4-10s cycle on RTX 3090?
   6. Compare: current pipeline monologue vs proposed think block — which
      feels more like a continuous mind experiencing its environment?
-""")
+"""
+    )
 
 
 if __name__ == "__main__":

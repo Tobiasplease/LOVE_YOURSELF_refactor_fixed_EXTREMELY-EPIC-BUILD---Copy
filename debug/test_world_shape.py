@@ -118,7 +118,9 @@ check("plain prior still plantable", _plant("The lamp is still on; the chair has
 
 print("— hybrid shape (Aug 1) —")
 config.STREAM_MODE = "hybrid"
-import importlib, utils.llama_server as _ls
+import importlib
+
+import utils.llama_server as _ls
 
 msgs = [{"role": "system", "content": "sys"}]
 u = {"role": "user", "content": "the world turn"}
@@ -191,7 +193,8 @@ check("erosion drops oldest and keeps timestamps aligned", list(capE._stream) ==
 config.STREAM_MODE = "world"
 
 print("— seam coherence + re-typing (Aug 1) —")
-from utils.llama_server import _seam_of as _so, _clean_continuation as _cc
+from utils.llama_server import _clean_continuation as _cc
+from utils.llama_server import _seam_of as _so
 
 check(
     "seam starts at a sentence boundary, never mid-word",
@@ -224,7 +227,10 @@ check("cap of one keeps the newest", _thin(6, 1) == [5])
 check("thinning never grows the set", all(len(_thin(n, 3)) <= max(n, 0) for n in range(1, 8)))
 
 print("— inference gate: serialised (Aug 5) —")
-import threading as _th, time as _tm, utils.llama_server as _L
+import threading as _th
+import time as _tm
+
+import utils.llama_server as _L
 
 check("one request at a time (slots are sessions, not parallel compute)", _L.INFERENCE_CONCURRENCY == 1)
 

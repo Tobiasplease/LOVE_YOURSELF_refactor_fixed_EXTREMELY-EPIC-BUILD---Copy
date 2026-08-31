@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -65,10 +66,8 @@ def main():
         axes[0].imshow(Image.open(png).convert("L"), cmap="gray")
         axes[0].axis("off")
         axes[0].set_title("ComfyUI original", fontsize=9)
-        render(axes[1], s1["lines"],
-               f"v1: {s1['paths']} paths ({s1['closed']} closed=double-drawn), ink {s1['ink']:.0f}")
-        render(axes[2], s2["lines"],
-               f"v2: {s2['paths']} strokes ({s2['closed']} closed), ink {s2['ink']:.0f}")
+        render(axes[1], s1["lines"], f"v1: {s1['paths']} paths ({s1['closed']} closed=double-drawn), ink {s1['ink']:.0f}")
+        render(axes[2], s2["lines"], f"v2: {s2['paths']} strokes ({s2['closed']} closed), ink {s2['ink']:.0f}")
         out = f"/tmp/{base}_ab.png"
         plt.tight_layout()
         plt.savefig(out, dpi=75, facecolor="white")

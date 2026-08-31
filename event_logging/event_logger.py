@@ -27,7 +27,6 @@ def get_current_run_id() -> str:
     return _current_run_id
 
 
-
 def set_start_time(start_time: float) -> None:
     """Set the start time for elapsed time calculations."""
     global _start_time
@@ -166,7 +165,7 @@ def log_json_entry(
         should_print = True
     elif CLEAN_LLM_OUTPUT and lt in llm_always_print:
         should_print = True
-    
+
     # If PRINT_CLEAN_CAPTIONS is enabled, suppress non-LLM messages
     if PRINT_CLEAN_CAPTIONS and lt not in llm_always_print:
         should_print = False
@@ -175,6 +174,7 @@ def log_json_entry(
     if lt == LogType.CAPTION and "caption" in data:
         try:
             from utils.caption_display import send_caption_to_display
+
             send_caption_to_display(data["caption"])
             if not CLEAN_LLM_OUTPUT:
                 print(f"[LCD] Sent: {data['caption'][:40]}...")

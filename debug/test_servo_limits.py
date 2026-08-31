@@ -3,9 +3,10 @@
 Direct servo limit testing tool
 Tests tilt servo at various angles to find actual physical limits
 """
-import sys
 import os
+import sys
 import time
+
 import serial
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,7 +27,7 @@ try:
 
     # Clear any startup messages
     while ser.in_waiting:
-        line = ser.readline().decode('utf-8', errors='ignore').strip()
+        line = ser.readline().decode("utf-8", errors="ignore").strip()
         print(f"Arduino: {line}")
 
     print("\n✓ Connected to Arduino\n")
@@ -40,23 +41,23 @@ try:
     for angle in test_angles:
         command = f"TILT:{angle}\n"
         print(f"\nSending: {command.strip()}")
-        ser.write(command.encode('utf-8'))
+        ser.write(command.encode("utf-8"))
         ser.flush()
 
         # Read response
         time.sleep(0.1)
         while ser.in_waiting:
-            response = ser.readline().decode('utf-8', errors='ignore').strip()
+            response = ser.readline().decode("utf-8", errors="ignore").strip()
             print(f"  Arduino: {response}")
 
         # Wait for servo to move
         time.sleep(1.5)
 
         user_input = input(f"  Did servo move to {angle}°? (y/n/q to quit): ").lower()
-        if user_input == 'q':
+        if user_input == "q":
             print("\nTest stopped by user")
             break
-        elif user_input == 'n':
+        elif user_input == "n":
             print(f"  ⚠️ Servo did NOT reach {angle}° - likely at physical limit")
 
     print("\n" + "=" * 60)
@@ -75,4 +76,5 @@ except serial.SerialException as e:
 except Exception as e:
     print(f"❌ Error: {e}")
     import traceback
+
     traceback.print_exc()

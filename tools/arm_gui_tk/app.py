@@ -10,8 +10,8 @@ import numpy as np
 try:
     from .calibration import apply_homography, compute_homography, invert_homography, load_calibration, save_calibration
     from .correct import prewarp_points, simulate_print
-    from .grbl_link import GrblLink
     from .gcode_utils import parse_path_for_preview, transform_gcode_file
+    from .grbl_link import GrblLink
 except Exception:
     # Fallback when executed as a script: add repo root to sys.path and import absolute package
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +21,7 @@ except Exception:
     from tools.arm_gui_tk.correct import prewarp_points, simulate_print
     from tools.arm_gui_tk.grbl_link import GrblLink
     from tools.arm_gui_tk.gcode_utils import parse_path_for_preview, transform_gcode_file
+
 from grbl.grbl_utils import execute_gcode_file
 
 
@@ -101,6 +102,7 @@ class HomographyApp:
         # Work bounds (safe area). Use repo GRBL_IDLE_ZONE if present.
         try:
             from config.config import GRBL_IDLE_ZONE
+
             self.bounds = GRBL_IDLE_ZONE  # (x_min, x_max, y_min, y_max)
         except Exception:
             # Default safe region
@@ -325,7 +327,7 @@ class HomographyApp:
         if self.mode == "arm":
             bx, by = self.mm_to_canvas(*self.arm_base_mm)
             # Determine if click is near base handle
-            if (event.x - bx) ** 2 + (event.y - by) ** 2 <= 12 ** 2:
+            if (event.x - bx) ** 2 + (event.y - by) ** 2 <= 12**2:
                 self.drag_target = "base"
                 self.arm_set_base_px(event.x, event.y)
             else:
@@ -484,7 +486,7 @@ class HomographyApp:
         self.canvas.create_line(bx, by, ex, ey, fill="#333", width=4)
         self.canvas.create_line(ex, ey, tx, ty, fill="#333", width=4)
         # Joints with labels
-        for (cx, cy, lbl, color) in [
+        for cx, cy, lbl, color in [
             (bx, by, "Base", "#2ca02c"),
             (ex, ey, "Elbow", "#ff7f0e"),
             (tx, ty, "Tip", "#1f77b4"),
@@ -689,11 +691,7 @@ class HomographyApp:
         pos = self.grbl.get_machine_position()
         if pos is not None:
             # Debounce small jitter to avoid flicker
-            changed = (
-                self.machine_pos_mm is None
-                or abs(self.machine_pos_mm[0] - pos[0]) > 0.05
-                or abs(self.machine_pos_mm[1] - pos[1]) > 0.05
-            )
+            changed = self.machine_pos_mm is None or abs(self.machine_pos_mm[0] - pos[0]) > 0.05 or abs(self.machine_pos_mm[1] - pos[1]) > 0.05
             self.machine_pos_mm = pos
             if changed:
                 # Keep the virtual arm matched to the real tip position (no motion commands)

@@ -47,16 +47,22 @@ def test_echo_split():
     print("\n[1] echo-class split + erosion")
     from captioner.captioner import Captioner
 
-    check("echo-class covers the template/refrain/tail/number reasons",
-          Captioner._ECHO_REASONS == {"template_echo", "refrain_echo", "tail_echo", "number_chain"})
-    check("shape-class stays out of echo-class",
-          not Captioner._ECHO_REASONS & {"assistant_speak", "outward_address", "prompt_parrot", "word_salad", "cjk_drift"})
+    check(
+        "echo-class covers the template/refrain/tail/number reasons",
+        Captioner._ECHO_REASONS == {"template_echo", "refrain_echo", "tail_echo", "number_chain"},
+    )
+    check(
+        "shape-class stays out of echo-class",
+        not Captioner._ECHO_REASONS & {"assistant_speak", "outward_address", "prompt_parrot", "word_salad", "cjk_drift"},
+    )
 
-    c = make_shell([
-        "wait! look at the shelves again tonight under the light",
-        "the cup sits where he left it an hour ago",
-        "something about the cable coil keeps pulling my eye back",
-    ])
+    c = make_shell(
+        [
+            "wait! look at the shelves again tonight under the light",
+            "the cup sits where he left it an hour ago",
+            "something about the cable coil keeps pulling my eye back",
+        ]
+    )
     reason = c._caption_reject_reason("wait! look at the shelves again, taller somehow", "")
     check("opening echo classified as template_echo", reason == "template_echo", str(reason))
     check("template_echo would be spoken-not-stored", reason in Captioner._ECHO_REASONS)
@@ -101,8 +107,7 @@ def test_seam_elicitation():
     sp = get_monologue_system_prompt("workspace", agent=stale)
     check("post-gap: elicitation PRESENT", question in sp)
 
-    check("relational keeps its question regardless",
-          P("elicit.relational").strip() in get_monologue_system_prompt("relational", agent=fresh))
+    check("relational keeps its question regardless", P("elicit.relational").strip() in get_monologue_system_prompt("relational", agent=fresh))
 
 
 def test_identity_dosing():

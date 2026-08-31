@@ -88,7 +88,12 @@ class VocabularyPromoter:
             if not toks or toks[-1].pos_ != "NOUN" or len(toks) > 4:
                 continue
             head = toks[-1].lemma_.lower()
-            if head in OPEN_VOCAB_PERSON_NOUNS or head in OPEN_VOCAB_STOP_HEAD_NOUNS or head in OPEN_VOCAB_SELF_NOUNS or head.endswith(_ABSTRACT_SUFFIXES):
+            if (
+                head in OPEN_VOCAB_PERSON_NOUNS
+                or head in OPEN_VOCAB_STOP_HEAD_NOUNS
+                or head in OPEN_VOCAB_SELF_NOUNS
+                or head.endswith(_ABSTRACT_SUFFIXES)
+            ):
                 continue
             term = " ".join(t.lemma_.lower() for t in toks)
             if len(term) < 3 or not all(w.isalpha() or "-" in w for w in term.split()):

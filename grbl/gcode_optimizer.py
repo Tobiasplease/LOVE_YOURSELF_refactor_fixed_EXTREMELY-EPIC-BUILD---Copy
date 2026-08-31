@@ -5,18 +5,19 @@ Intelligently adjusts feed rates and pen lift patterns for optimal drawing perfo
 
 import math
 import re
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
+
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 
 try:
     from config.config import (
-        GRBL_PEN_UP_S,
-        GRBL_PEN_DOWN_S,
-        GRBL_NORMAL_PEN_UP,
-        GRBL_NORMAL_PEN_DOWN,
-        GRBL_FAST_PEN_UP,
         GRBL_FAST_PEN_DOWN,
+        GRBL_FAST_PEN_UP,
+        GRBL_NORMAL_PEN_DOWN,
+        GRBL_NORMAL_PEN_UP,
+        GRBL_PEN_DOWN_S,
+        GRBL_PEN_UP_S,
     )
 except ImportError:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S = 30, 50
@@ -27,20 +28,22 @@ except ImportError:
 class GCodeOptimizer:
     """Main G-code optimization system with modular feed rate and pen lift optimization"""
 
-    def __init__(self,
-                 enable_feed_optimization=True,
-                 enable_pen_optimization=True,
-                 enable_stroke_filtering=True,
-                 draw_feed_rate=450,
-                 traversal_feed_rate=2000,
-                 cluster_distance_threshold=5.0,
-                 cluster_sequence_min=3,
-                 micro_stroke_threshold=0.15,
-                 continuous_path_threshold=2.0,
-                 normal_pen_up=None,
-                 normal_pen_down=None,
-                 fast_pen_up=None,
-                 fast_pen_down=None):
+    def __init__(
+        self,
+        enable_feed_optimization=True,
+        enable_pen_optimization=True,
+        enable_stroke_filtering=True,
+        draw_feed_rate=450,
+        traversal_feed_rate=2000,
+        cluster_distance_threshold=5.0,
+        cluster_sequence_min=3,
+        micro_stroke_threshold=0.15,
+        continuous_path_threshold=2.0,
+        normal_pen_up=None,
+        normal_pen_down=None,
+        fast_pen_up=None,
+        fast_pen_down=None,
+    ):
 
         self.enable_feed_optimization = enable_feed_optimization
         self.enable_pen_optimization = enable_pen_optimization
@@ -72,19 +75,19 @@ class GCodeOptimizer:
                 "feed_optimization": enable_feed_optimization,
                 "pen_optimization": enable_pen_optimization,
                 "feed_rates": f"draw:{draw_feed_rate} traverse:{traversal_feed_rate}",
-                "pen_values": f"normal:{self.normal_pen_up}/{self.normal_pen_down}, fast:{self.fast_pen_up}/{self.fast_pen_down}"
+                "pen_values": f"normal:{self.normal_pen_up}/{self.normal_pen_down}, fast:{self.fast_pen_up}/{self.fast_pen_down}",
             },
-            print_message=f"[🎯] G-code optimizer: feed={enable_feed_optimization}, pen={enable_pen_optimization}"
+            print_message=f"[🎯] G-code optimizer: feed={enable_feed_optimization}, pen={enable_pen_optimization}",
         )
 
     def calculate_distance(self, x1: float, y1: float, x2: float, y2: float) -> float:
         """Calculate Euclidean distance between two points"""
-        return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
     def parse_coordinates(self, line: str) -> Tuple[Optional[float], Optional[float]]:
         """Extract X,Y coordinates from G-code line"""
-        x_match = re.search(r'X([\d\.-]+)', line)
-        y_match = re.search(r'Y([\d\.-]+)', line)
+        x_match = re.search(r"X([\d\.-]+)", line)
+        y_match = re.search(r"Y([\d\.-]+)", line)
 
         x = float(x_match.group(1)) if x_match else None
         y = float(y_match.group(1)) if y_match else None
@@ -135,7 +138,7 @@ class GCodeOptimizer:
                             pen_lift_count = 0
 
                 # Find the next coordinate line after pen down
-                for j in range(i+1, min(i+3, len(lines))):
+                for j in range(i + 1, min(i + 3, len(lines))):
                     next_line = lines[j].strip()
                     if next_line.startswith(("G01", "G1")):
                         x, y = self.parse_coordinates(next_line)
@@ -251,7 +254,7 @@ class GCodeOptimizer:
             log_json_entry(
                 LogType.GRBL,
                 {"message": "G-code optimization skipped (disabled)", "action": "optimization_skipped"},
-                print_message="[🎯] G-code optimization disabled"
+                print_message="[🎯] G-code optimization disabled",
             )
             return lines
 
@@ -278,9 +281,9 @@ class GCodeOptimizer:
                 "total_lines": len(lines),
                 "detected_clusters": len(clusters),
                 "feed_optimization": self.enable_feed_optimization,
-                "pen_optimization": self.enable_pen_optimization
+                "pen_optimization": self.enable_pen_optimization,
             },
-            print_message=f"[🎯] Optimizing {len(lines)} G-code lines ({len(clusters)} pen clusters detected)"
+            print_message=f"[🎯] Optimizing {len(lines)} G-code lines ({len(clusters)} pen clusters detected)",
         )
 
         for i, line in enumerate(lines):
@@ -300,8 +303,7 @@ class GCodeOptimizer:
                     distance = self.calculate_distance(last_x, last_y, x, y)
                     optimal_feed_rate = self.calculate_optimal_feed_rate(distance, is_traversal=is_traversal)
 
-                    if (self.enable_feed_optimization and
-                        (last_feed_rate is None or abs(optimal_feed_rate - last_feed_rate) > 200)):
+                    if self.enable_feed_optimization and (last_feed_rate is None or abs(optimal_feed_rate - last_feed_rate) > 200):
                         optimized_lines.append(f"F{optimal_feed_rate}")
                         last_feed_rate = optimal_feed_rate
 
@@ -336,36 +338,35 @@ class GCodeOptimizer:
             "optimized_lines": len(optimized_lines),
             "clusters_optimized": len(clusters),
             "feed_optimization": self.enable_feed_optimization,
-            "pen_optimization": self.enable_pen_optimization
+            "pen_optimization": self.enable_pen_optimization,
         }
 
         log_json_entry(
             LogType.GRBL,
-            {
-                "message": "G-code optimization complete",
-                "action": "optimization_complete",
-                **optimization_stats
-            },
-            print_message=f"[✅] G-code optimized: {len(clusters)} pen clusters, feed rates adjusted"
+            {"message": "G-code optimization complete", "action": "optimization_complete", **optimization_stats},
+            print_message=f"[✅] G-code optimized: {len(clusters)} pen clusters, feed rates adjusted",
         )
 
         return optimized_lines
+
 
 def create_optimizer_from_config() -> GCodeOptimizer:
     """Create optimizer instance using configuration values"""
     try:
         from config.config import (
+            GRBL_CLUSTER_DISTANCE_THRESHOLD,
+            GRBL_CLUSTER_SEQUENCE_MIN,
+            GRBL_DRAW_FEED_RATE,
             GRBL_ENABLE_FEED_OPTIMIZATION,
             GRBL_ENABLE_PEN_OPTIMIZATION,
-            GRBL_DRAW_FEED_RATE,
             GRBL_TRAVERSAL_FEED_RATE,
-            GRBL_CLUSTER_DISTANCE_THRESHOLD,
-            GRBL_CLUSTER_SEQUENCE_MIN
         )
 
         # Try to get stroke filtering config, default to True
         try:
-            GRBL_ENABLE_STROKE_FILTERING = getattr(__import__('config.config', fromlist=['GRBL_ENABLE_STROKE_FILTERING']), 'GRBL_ENABLE_STROKE_FILTERING', True)
+            GRBL_ENABLE_STROKE_FILTERING = getattr(
+                __import__("config.config", fromlist=["GRBL_ENABLE_STROKE_FILTERING"]), "GRBL_ENABLE_STROKE_FILTERING", True
+            )
         except:
             GRBL_ENABLE_STROKE_FILTERING = True
 
@@ -377,8 +378,8 @@ def create_optimizer_from_config() -> GCodeOptimizer:
             traversal_feed_rate=GRBL_TRAVERSAL_FEED_RATE,
             cluster_distance_threshold=GRBL_CLUSTER_DISTANCE_THRESHOLD,
             cluster_sequence_min=GRBL_CLUSTER_SEQUENCE_MIN,
-            micro_stroke_threshold=0.5,   # Skip pen lifts for moves < 0.5mm
-            continuous_path_threshold=2.0
+            micro_stroke_threshold=0.5,  # Skip pen lifts for moves < 0.5mm
+            continuous_path_threshold=2.0,
         )
 
     except ImportError:

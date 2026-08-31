@@ -61,7 +61,7 @@ class FrameRing:
         _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
         self.frames.append((now, jpeg.tobytes(), diff))
         if len(self.frames) > self.max_frames:
-            self.frames = self.frames[-self.max_frames:]
+            self.frames = self.frames[-self.max_frames :]
         self.last_push = now
 
     def get_recent(self, seconds: float, max_frames: int = 16):
@@ -70,7 +70,7 @@ class FrameRing:
         if len(recent) > max_frames:
             first, last = recent[0], recent[-1]
             middle = sorted(recent[1:-1], key=lambda x: x[2], reverse=True)
-            recent = sorted([first] + middle[:max_frames - 2] + [last], key=lambda x: x[0])
+            recent = sorted([first] + middle[: max_frames - 2] + [last], key=lambda x: x[0])
         return recent
 
 
@@ -98,6 +98,7 @@ def query_video_superframe(frames_data, thought_thread: str = "", fps: float = 2
     video_input = preprocessor.process(lv_frames, fps=fps)
 
     from llama_video.client import LlamaServerClient
+
     client = LlamaServerClient(settings.server)
     content = []
     for sf in video_input.super_frames:
@@ -203,8 +204,12 @@ def main():
     parser.add_argument("--interval", type=float, default=8.0, help="Seconds between analysis cycles")
     parser.add_argument("--fps", type=float, default=2.0, help="Frame buffer capture rate")
     parser.add_argument("--max-frames", type=int, default=6, help="Max frames per video query")
-    parser.add_argument("--mode", choices=["single", "superframe", "multi"], default="multi",
-                        help="single=one frame, superframe=Conv3D pipeline, multi=plain multi-image (default)")
+    parser.add_argument(
+        "--mode",
+        choices=["single", "superframe", "multi"],
+        default="multi",
+        help="single=one frame, superframe=Conv3D pipeline, multi=plain multi-image (default)",
+    )
     parser.add_argument("--single", action="store_true", help="Shorthand for --mode single")
     parser.add_argument("--motion-threshold", type=float, default=0.015, help="Min avg diff to trigger video mode")
     parser.add_argument("--camera", type=int, default=0, help="Camera index")
@@ -265,9 +270,7 @@ def main():
                 diffs = [d for _, _, d in recent]
                 avg_diff = sum(diffs) / len(diffs) if diffs else 0
 
-                use_video = (args.mode != "single"
-                             and avg_diff >= args.motion_threshold
-                             and len(recent) >= 2)
+                use_video = args.mode != "single" and avg_diff >= args.motion_threshold and len(recent) >= 2
 
                 if not use_video:
                     # Single frame — either by choice or nothing moved

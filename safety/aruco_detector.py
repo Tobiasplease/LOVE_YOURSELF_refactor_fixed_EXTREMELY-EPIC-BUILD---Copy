@@ -5,6 +5,7 @@ Runs continuously like YOLO/face detection - just check the result when needed.
 
 import threading
 import time
+
 import cv2
 
 
@@ -67,9 +68,7 @@ class ArucoDetectorThread(threading.Thread):
                 if self.use_new_api:
                     corners, ids, _ = self.detector.detectMarkers(frame)
                 else:
-                    corners, ids, _ = cv2.aruco.detectMarkers(
-                        frame, self.aruco_dict, parameters=self.aruco_params
-                    )
+                    corners, ids, _ = cv2.aruco.detectMarkers(frame, self.aruco_dict, parameters=self.aruco_params)
 
                 # Filter detections: only accept valid ID and minimum size
                 detected = False
@@ -78,7 +77,7 @@ class ArucoDetectorThread(threading.Thread):
                 raw_corners = []  # All corners before filtering
 
                 # Track total frames for debug
-                if not hasattr(self, '_total_frames'):
+                if not hasattr(self, "_total_frames"):
                     self._total_frames = 0
                 self._total_frames += 1
 
@@ -94,10 +93,8 @@ class ArucoDetectorThread(threading.Thread):
                             marker_corners = corners[i][0]
                             raw_corners.append((marker_corners.copy(), int(marker_id)))
 
-                            side1 = ((marker_corners[0][0] - marker_corners[1][0])**2 +
-                                    (marker_corners[0][1] - marker_corners[1][1])**2)**0.5
-                            side2 = ((marker_corners[1][0] - marker_corners[2][0])**2 +
-                                    (marker_corners[1][1] - marker_corners[2][1])**2)**0.5
+                            side1 = ((marker_corners[0][0] - marker_corners[1][0]) ** 2 + (marker_corners[0][1] - marker_corners[1][1]) ** 2) ** 0.5
+                            side2 = ((marker_corners[1][0] - marker_corners[2][0]) ** 2 + (marker_corners[1][1] - marker_corners[2][1]) ** 2) ** 0.5
                             avg_side = (side1 + side2) / 2
 
                             if int(marker_id) == self.valid_marker_id and avg_side >= self.min_marker_pixels:
@@ -110,10 +107,7 @@ class ArucoDetectorThread(threading.Thread):
                 # Update rolling window
                 self._recent_detections.append((now, detected))
                 # Remove old entries
-                self._recent_detections = [
-                    (t, d) for t, d in self._recent_detections
-                    if now - t < self._window_seconds
-                ]
+                self._recent_detections = [(t, d) for t, d in self._recent_detections if now - t < self._window_seconds]
 
                 # Calculate detection rate over window
                 if self._recent_detections:

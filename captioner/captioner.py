@@ -13,11 +13,11 @@ import cv2  # type: ignore
 import numpy as np  # type: ignore
 
 from config.config import (
+    CAPTION_DRY_LAST_N,
     CAPTION_INTERVAL,
     CAPTION_INTERVAL_LIVE,
     CAPTION_INTERVAL_QUIET,
     CAPTION_MIN_P,
-    CAPTION_DRY_LAST_N,
     CAPTION_QUIET_AFTER,
     CAPTION_REPEAT_PENALTY,
     CAPTION_SHORT_BEAT_P,
@@ -433,7 +433,7 @@ class Captioner(MemoryMixin):
         # active gaze lock. The belief persists through gaps so a glance away
         # doesn't read as a departure, and a re-detection doesn't read as a new
         # arrival. Only the OFF->ON edge is a genuine arrival.
-        from config.config import SALIENCE_MOTION_RESIDUAL, PRESENCE_ABSENCE_LOOK_TOLERANCE, PRESENCE_BELIEF_DECAY_SECONDS
+        from config.config import PRESENCE_ABSENCE_LOOK_TOLERANCE, PRESENCE_BELIEF_DECAY_SECONDS, SALIENCE_MOTION_RESIDUAL
 
         now = time.time()
         gaze_engaged = False
@@ -1347,15 +1347,14 @@ class Captioner(MemoryMixin):
                 try:
                     if is_memory_mode_time:
                         # Memory mode: pull actual caption text from long-term memory
-                        from captioner.prompts import build_memory_mode_prompt
-                        from captioner.prompts import get_monologue_system_prompt
-                        from utils.inference import query_model
+                        from captioner.prompts import build_memory_mode_prompt, get_monologue_system_prompt
 
                         # Read the label locally under its own name: _process_frame
                         # re-binds MODEL_NAME from config further down, which makes
                         # the name local to the WHOLE function — so touching it up
                         # here raises UnboundLocalError (found live, Aug 3).
                         from config.config import MODEL_NAME as _model_label
+                        from utils.inference import query_model
 
                         memory_prompt, caption_mode = build_memory_mode_prompt(self)
                         memory_system = (
@@ -1636,7 +1635,9 @@ class Captioner(MemoryMixin):
                         # and any diff over threshold is mostly the saccade
                         # that got it there (real events are excluded upstream
                         # — salience hot blocks the close look entirely).
-                        use_video = not inward and not close_look and VIDEO_MODE_ENABLED and bool(recent_meta) and scene["max_diff"] > MOTION_THRESHOLD
+                        use_video = (
+                            not inward and not close_look and VIDEO_MODE_ENABLED and bool(recent_meta) and scene["max_diff"] > MOTION_THRESHOLD
+                        )
 
                         if use_video:
                             # Ego-motion frames inside a superframe pair encode the
@@ -2037,6 +2038,7 @@ class Captioner(MemoryMixin):
             )
             try:
                 import os as _os
+
                 from config import config as _cfg
 
                 _live_log = _os.path.join(_cfg.MOOD_SNAPSHOT_FOLDER, "live_captions.txt")
@@ -2153,9 +2155,7 @@ class Captioner(MemoryMixin):
             print(f"  Current boredom: {self.boredom:.3f}")
 
         # Evaluate whether to draw based on internal state
-        should_draw = self.drawing.should_draw(
-            mood=self.current_mood, boredom=self.boredom, reflection=getattr(self, "last_reflection", None)
-        )
+        should_draw = self.drawing.should_draw(mood=self.current_mood, boredom=self.boredom, reflection=getattr(self, "last_reflection", None))
 
         if not should_draw:
             return  # the trigger_decision log already carries the wait + reason
@@ -2266,9 +2266,8 @@ class Captioner(MemoryMixin):
         # Also reset the drawing cooldown so prompts don't stack up when there's no paper.
         if "[ERROR]" not in prompt:
             try:
-                from drawing.drawing_memory import get_drawing_memory
-
                 from captioner.context_compression import context_compressor as _cc
+                from drawing.drawing_memory import get_drawing_memory
 
                 dm = get_drawing_memory()
                 dm.add_drawing(
@@ -2365,6 +2364,7 @@ class Captioner(MemoryMixin):
             # went dark, and say plainly that this is a new day.
             try:
                 import datetime as _dt
+
                 from captioner.prompts import part_of_day_string
 
                 went_dark = _dt.datetime.now() - _dt.timedelta(seconds=gap_seconds)
@@ -2381,6 +2381,7 @@ class Captioner(MemoryMixin):
         # Clock awareness: what time of day it is waking up into
         try:
             import datetime as _dt
+
             from captioner.prompts import part_of_day_string
 
             now_dt = _dt.datetime.now()
@@ -2394,7 +2395,8 @@ class Captioner(MemoryMixin):
         # old: amnesia, not infancy. (total_runtime is unreliable; use sessions +
         # days-since-first-boot.)
         try:
-            import os as _os, json as _json
+            import json as _json
+            import os as _os
 
             _lf = _os.path.join(config.MOOD_SNAPSHOT_FOLDER, "lifetime_state.json")
             if _os.path.exists(_lf):
@@ -2598,8 +2600,8 @@ class Captioner(MemoryMixin):
         named, memory checked against the actual room, before the ordinary
         flow resumes. (Artist: the single-beat awakening "jumps in quite
         jarringly into the prior flow".)"""
-        from config import config
         from captioner.prompt_registry import P
+        from config import config
         from utils.inference import query_model
 
         gap = getattr(self, "_awakening_gap_phrase", "") or "a while"
@@ -2711,6 +2713,7 @@ class Captioner(MemoryMixin):
         self._last_drawing_watch = now_ts
         try:
             import cv2 as _cv2
+
             from captioner.prompts import get_monologue_system_prompt
             from config import config as _cfg
             from utils.inference import query_model

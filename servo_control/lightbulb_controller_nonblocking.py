@@ -85,4 +85,3 @@ class NonBlockingLightbulbController:
                 self.ser.close()
         except:
             pass
-

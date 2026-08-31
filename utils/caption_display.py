@@ -25,7 +25,6 @@ class CaptionDisplay:
 
         self._connect()
 
-
     def _connect(self):
         try:
             self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
@@ -43,6 +42,7 @@ class CaptionDisplay:
             print(f"[DISPLAY] Failed to connect to caption display: {e}")
             print(f"[DISPLAY] Error type: {type(e)}")
             import traceback
+
             traceback.print_exc()
             self.connected = False
 
@@ -58,6 +58,7 @@ class CaptionDisplay:
 
             try:
                 from config.config import PRINT_CLEAN_CAPTIONS
+
                 if not PRINT_CLEAN_CAPTIONS:
                     print(f"[DEBUG] Sending to Arduino: {message.strip()}")
             except ImportError:
@@ -77,14 +78,27 @@ class CaptionDisplay:
         caption_lower = caption.lower()
 
         # High priority: movement, interaction, changes
-        high_priority_words = ['moving', 'walking', 'entering', 'leaving', 'appears', 'disappears',
-                              'person', 'face', 'hand', 'gesture', 'looking', 'turns', 'stops']
+        high_priority_words = [
+            "moving",
+            "walking",
+            "entering",
+            "leaving",
+            "appears",
+            "disappears",
+            "person",
+            "face",
+            "hand",
+            "gesture",
+            "looking",
+            "turns",
+            "stops",
+        ]
 
         # Medium priority: emotions, expressions
-        medium_priority_words = ['smiling', 'frowning', 'surprised', 'focused', 'tired', 'happy']
+        medium_priority_words = ["smiling", "frowning", "surprised", "focused", "tired", "happy"]
 
         # Low priority: static observations
-        low_priority_words = ['sitting', 'standing', 'room', 'wall', 'table', 'chair']
+        low_priority_words = ["sitting", "standing", "room", "wall", "table", "chair"]
 
         if any(word in caption_lower for word in high_priority_words):
             return "HIGH"
@@ -95,20 +109,20 @@ class CaptionDisplay:
 
         return "MEDIUM"  # Default priority
 
-
     def send_caption(self, caption: str, priority: str = None):
         if not self.connected or not self.ser:
             return
 
         clean_caption = caption.strip()
         import time
+
         now = time.time()
 
         # Add to queue
         self.caption_queue.append((clean_caption, priority))
 
         # Rate limit captions for readability
-        if hasattr(self, 'last_sent_time') and now - self.last_sent_time < self.min_interval:
+        if hasattr(self, "last_sent_time") and now - self.last_sent_time < self.min_interval:
             return
 
         # Every 4th caption, skip to the latest

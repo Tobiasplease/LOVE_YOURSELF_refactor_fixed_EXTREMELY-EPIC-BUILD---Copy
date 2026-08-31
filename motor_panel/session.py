@@ -35,8 +35,6 @@ class Track:
         return bool(self.samples)
 
 
-
-
 class Session:
     """One emotional temperament: tracks grouped into joint chains (limbs
     that learned to move in relation) plus solo chains (independent parts),

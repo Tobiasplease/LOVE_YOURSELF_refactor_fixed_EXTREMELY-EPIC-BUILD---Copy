@@ -1,5 +1,5 @@
-import re
 import math
+import re
 
 # ================================================================
 # MEASURED CALIBRATION OVERRIDE (July 2026)
@@ -24,12 +24,15 @@ def _get_measured_calibration():
             _measured_cal = WarpCalibration.load()
             if _measured_cal is not None:
                 rms, mx = _measured_cal.residuals_mm()
-                print(f"[warp] measured TPS calibration active ({len(_measured_cal.command_pts)} points, "
-                      f"fit residual rms {rms:.2f}mm max {mx:.2f}mm) — legacy quad bypassed")
+                print(
+                    f"[warp] measured TPS calibration active ({len(_measured_cal.command_pts)} points, "
+                    f"fit residual rms {rms:.2f}mm max {mx:.2f}mm) — legacy quad bypassed"
+                )
         except Exception as e:
             print(f"[warp] calibration load failed, using legacy quad: {e}")
             _measured_cal = None
     return _measured_cal
+
 
 # ================================================================
 # Optional PRE‑TRANSFORM (ideal domain) settings
@@ -55,10 +58,10 @@ def _get_measured_calibration():
 # Modified settings: scaled and positioned for drawing area
 # History: 1.66/-4/-14.5 → 1.45/-8/-8 → 1.0/-12/0 → 1.0/-6/-6 → BASELINE → 1.2/0/0
 # Vertical stretch to counteract hydraulic-press flattening in physical output
-PRE_SCALE_X = 1.0    # no horizontal scaling
-PRE_SCALE_Y = 1.2    # stretch vertically 20% to counteract flattening
-PRE_OFFSET_X = 0.0   # no offset (tune if drawing is off-center horizontally)
-PRE_OFFSET_Y = 0.0   # no offset (tune if drawing is off-center vertically)
+PRE_SCALE_X = 1.0  # no horizontal scaling
+PRE_SCALE_Y = 1.2  # stretch vertically 20% to counteract flattening
+PRE_OFFSET_X = 0.0  # no offset (tune if drawing is off-center horizontally)
+PRE_OFFSET_Y = 0.0  # no offset (tune if drawing is off-center vertically)
 PRE_PIVOT_X = None  # e.g., 0.0 to use origin, or None for center
 PRE_PIVOT_Y = None
 PRE_CLAMP_TO_DOMAIN = False
@@ -66,6 +69,7 @@ PRE_CLAMP_TO_DOMAIN = False
 # Rotation correction (degrees, positive = clockwise when looking down at paper)
 # If drawings appear rotated to the left, increase this value
 PRE_ROTATION_DEG = 13.0  # Reduced from 20° — was overcorrecting, causing visible clockwise tilt
+
 
 def find_xy_bounds_from_lines(lines):
     """(min_x, min_y, max_x, max_y) over all X/Y words, or Nones if absent.
@@ -91,20 +95,20 @@ def find_xy_bounds_from_lines(lines):
 
 
 def find_max_xy_from_lines(lines):
-    max_x = float('-inf')
-    max_y = float('-inf')
+    max_x = float("-inf")
+    max_y = float("-inf")
 
     for line in lines:
         parts = line.strip().split()
         for part in parts:
-            if part.startswith('X'):
+            if part.startswith("X"):
                 try:
                     x_val = float(part[1:])
                     if x_val > max_x:
                         max_x = x_val
                 except ValueError:
                     pass
-            elif part.startswith('Y'):
+            elif part.startswith("Y"):
                 try:
                     y_val = float(part[1:])
                     if y_val > max_y:
@@ -113,9 +117,10 @@ def find_max_xy_from_lines(lines):
                     pass
 
     return (
-        None if max_x == float('-inf') else max_x,
-        None if max_y == float('-inf') else max_y,
+        None if max_x == float("-inf") else max_x,
+        None if max_y == float("-inf") else max_y,
     )
+
 
 # DET HÄR är funktionen som ska konvertera tillbaka skjuvningen
 # Den mappar (x,y) from 40x40-rutan in i en skev rektangel som blir en kvadratish när man skriver ut den
@@ -132,9 +137,9 @@ def map_to_quad(x, y, x_max=40, y_max=40):
     v = 1.0 - v
 
     # Professor's latest calibrated values (2025-09-17) - corrected for leftward skew
-    Ax, Ay = 1, 40   # vänster längst från robot (top-left) - shifted right 1mm
-    Bx, By = 35, 2   # vänster närmast robot (bottom-left) - unchanged
-    Cx, Cy = 70, 3   # höger närmast robot (bottom-right) - unchanged
+    Ax, Ay = 1, 40  # vänster längst från robot (top-left) - shifted right 1mm
+    Bx, By = 35, 2  # vänster närmast robot (bottom-left) - unchanged
+    Cx, Cy = 70, 3  # höger närmast robot (bottom-right) - unchanged
     Dx, Dy = 26, 40  # höger längst från robot (top-right) - shifted right 1mm
 
     # Previous coordinate versions (for reference):
@@ -151,11 +156,10 @@ def map_to_quad(x, y, x_max=40, y_max=40):
     # Dx, Dy = -28, 40   # vänster längst från robot
 
     # Bilinear interpolation
-    X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u)* v * Bx + u * v * Cx
+    X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u) * v * Bx + u * v * Cx
     Y = (1 - u) * (1 - v) * Ay + u * (1 - v) * Dy + (1 - u) * v * By + u * v * Cy
 
     return X, Y
-
 
 
 def warp_transform_line(gcode_line, max_x, max_y, min_x=0.0, min_y=0.0):

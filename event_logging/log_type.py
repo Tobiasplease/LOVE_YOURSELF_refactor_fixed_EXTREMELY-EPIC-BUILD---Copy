@@ -24,4 +24,3 @@ class LogType(Enum):
     COMFY_PROMPT = "comfy_prompt"
     NEW_DRAWING = "new_drawing"
     GRBL = "grbl"
-

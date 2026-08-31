@@ -8,16 +8,6 @@ Current safety systems:
 - Paper Detection: Prevents drawing on bare surfaces
 """
 
-from .paper_detection import (
-    paper_detector,
-    check_paper_before_drawing,
-    get_paper_detection_status,
-    PaperCheckResult
-)
+from .paper_detection import PaperCheckResult, check_paper_before_drawing, get_paper_detection_status, paper_detector
 
-__all__ = [
-    'paper_detector',
-    'check_paper_before_drawing',
-    'get_paper_detection_status',
-    'PaperCheckResult'
-]
+__all__ = ["paper_detector", "check_paper_before_drawing", "get_paper_detection_status", "PaperCheckResult"]

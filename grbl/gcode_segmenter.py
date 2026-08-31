@@ -5,7 +5,7 @@ Splits G-code at pen lifts to prevent GRBL buffer overload while preserving imag
 
 import os
 import sys
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,6 +18,7 @@ except ImportError:
     # Fallback for testing
     def log_json_entry(log_type, data, print_message=""):
         print(print_message)
+
     class LogType:
         INFO = "info"
         DEBUG = "debug"
@@ -60,11 +61,11 @@ class GCodeSegmenter:
         log_json_entry(
             LogType.INFO,
             {"action": "gcode_segmentation_start", "file": gcode_file, "max_segment_size": self.max_segment_size},
-            print_message=f"[📋] Segmenting G-code: {os.path.basename(gcode_file)}"
+            print_message=f"[📋] Segmenting G-code: {os.path.basename(gcode_file)}",
         )
 
         try:
-            with open(gcode_file, 'r') as f:
+            with open(gcode_file, "r") as f:
                 lines = [line.strip() for line in f.readlines()]
         except Exception as e:
             raise IOError(f"Failed to read G-code file: {e}")
@@ -86,9 +87,9 @@ class GCodeSegmenter:
                 "header_lines": len(header_lines),
                 "drawing_lines": len(drawing_lines),
                 "segments": len(final_segments),
-                "avg_segment_size": sum(len(seg) for seg in final_segments) / len(final_segments)
+                "avg_segment_size": sum(len(seg) for seg in final_segments) / len(final_segments),
             },
-            print_message=f"[✅] Segmented into {len(final_segments)} segments (avg {sum(len(seg) for seg in final_segments) / len(final_segments):.0f} lines)"
+            print_message=f"[✅] Segmented into {len(final_segments)} segments (avg {sum(len(seg) for seg in final_segments) / len(final_segments):.0f} lines)",
         )
 
         return header_lines, final_segments
@@ -99,12 +100,12 @@ class GCodeSegmenter:
         drawing_start_idx = 0
 
         for i, line in enumerate(lines):
-            if not line or line.startswith(';'):
+            if not line or line.startswith(";"):
                 header_lines.append(line)
                 continue
 
             # Look for first movement or pen command
-            if any(line.startswith(cmd) for cmd in ['G0', 'G1', 'M3']):
+            if any(line.startswith(cmd) for cmd in ["G0", "G1", "M3"]):
                 drawing_start_idx = i
                 break
             else:
@@ -124,34 +125,23 @@ class GCodeSegmenter:
 
             # End segment on pen up commands
             if self._is_pen_up_command(line):
-                segment = GCodeSegment(
-                    lines=current_segment.copy(),
-                    segment_id=len(segments) + 1,
-                    start_line=line_offset
-                )
+                segment = GCodeSegment(lines=current_segment.copy(), segment_id=len(segments) + 1, start_line=line_offset)
                 segments.append(segment)
                 line_offset += len(current_segment)
                 current_segment = []
 
         # Add final segment if exists
         if current_segment:
-            segment = GCodeSegment(
-                lines=current_segment.copy(),
-                segment_id=len(segments) + 1,
-                start_line=line_offset
-            )
+            segment = GCodeSegment(lines=current_segment.copy(), segment_id=len(segments) + 1, start_line=line_offset)
             segments.append(segment)
 
         return segments
 
     def _is_pen_up_command(self, line: str) -> bool:
         """Check if line represents a pen up command"""
-        return any(marker in line for marker in [
-            "PEN UP",
-            "S47",  # Common pen up servo value
-            "S20",  # Another common pen up value
-            "S0"    # Spindle off
-        ])
+        return any(
+            marker in line for marker in ["PEN UP", "S47", "S20", "S0"]  # Common pen up servo value  # Another common pen up value  # Spindle off
+        )
 
     def _split_large_segments(self, segments: List[GCodeSegment]) -> List[GCodeSegment]:
         """Split segments that are too large for optimal buffering"""
@@ -165,12 +155,8 @@ class GCodeSegmenter:
 
                 log_json_entry(
                     LogType.DEBUG,
-                    {
-                        "action": "large_segment_split",
-                        "original_size": len(segment),
-                        "sub_segments": len(sub_segments)
-                    },
-                    print_message=f"[✂️] Split large segment ({len(segment)} lines) into {len(sub_segments)} parts"
+                    {"action": "large_segment_split", "original_size": len(segment), "sub_segments": len(sub_segments)},
+                    print_message=f"[✂️] Split large segment ({len(segment)} lines) into {len(sub_segments)} parts",
                 )
             else:
                 final_segments.append(segment)
@@ -187,25 +173,16 @@ class GCodeSegmenter:
             current_chunk.append(line)
 
             # Split at movement commands when chunk gets large enough
-            if (len(current_chunk) >= self.max_segment_size // 2 and
-                line.startswith(('G0', 'G1'))):
+            if len(current_chunk) >= self.max_segment_size // 2 and line.startswith(("G0", "G1")):
 
-                sub_segment = GCodeSegment(
-                    lines=current_chunk.copy(),
-                    segment_id=len(sub_segments) + 1,
-                    start_line=line_offset
-                )
+                sub_segment = GCodeSegment(lines=current_chunk.copy(), segment_id=len(sub_segments) + 1, start_line=line_offset)
                 sub_segments.append(sub_segment)
                 line_offset += len(current_chunk)
                 current_chunk = []
 
         # Add final chunk
         if current_chunk:
-            sub_segment = GCodeSegment(
-                lines=current_chunk.copy(),
-                segment_id=len(sub_segments) + 1,
-                start_line=line_offset
-            )
+            sub_segment = GCodeSegment(lines=current_chunk.copy(), segment_id=len(sub_segments) + 1, start_line=line_offset)
             sub_segments.append(sub_segment)
 
         return sub_segments

@@ -9,6 +9,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+
 def test_drawing_memory():
     """Test drawing memory storage and retrieval."""
     from drawing.drawing_memory import get_drawing_memory
@@ -26,7 +27,7 @@ def test_drawing_memory():
         compressed_summary="boxes, room, geometry",
         theme_tags=["spatial", "material"],
         emotional_tone="quiet",
-        narrative_thread="containment"
+        narrative_thread="containment",
     )
 
     memory.add_drawing(
@@ -34,7 +35,7 @@ def test_drawing_memory():
         compressed_summary="light, shadows, ceiling",
         theme_tags=["spatial", "relational"],
         emotional_tone="contemplative",
-        narrative_thread="presence-absence"
+        narrative_thread="presence-absence",
     )
 
     memory.add_drawing(
@@ -42,7 +43,7 @@ def test_drawing_memory():
         compressed_summary="angles, geometry, form",
         theme_tags=["spatial", "material"],
         emotional_tone="precise",
-        narrative_thread="structure"
+        narrative_thread="structure",
     )
 
     # Test retrieval
@@ -82,20 +83,20 @@ def test_thematic_reflection():
             theme_words = []
             summary_lower = drawing_summary.lower()
 
-            spatial_themes = ['space', 'room', 'container', 'boundary', 'edge', 'corner', 'ceiling', 'wall', 'floor']
-            object_themes = ['box', 'boxes', 'window', 'light', 'shadow', 'object', 'thing', 'form', 'shape']
-            emotional_themes = ['solitude', 'isolation', 'presence', 'absence', 'quiet', 'stillness', 'tension', 'calm']
-            relational_themes = ['inside', 'outside', 'between', 'against', 'within', 'beyond', 'toward']
+            spatial_themes = ["space", "room", "container", "boundary", "edge", "corner", "ceiling", "wall", "floor"]
+            object_themes = ["box", "boxes", "window", "light", "shadow", "object", "thing", "form", "shape"]
+            emotional_themes = ["solitude", "isolation", "presence", "absence", "quiet", "stillness", "tension", "calm"]
+            relational_themes = ["inside", "outside", "between", "against", "within", "beyond", "toward"]
 
             for word in summary_lower.split():
                 if word in spatial_themes:
-                    theme_words.append('spatial')
+                    theme_words.append("spatial")
                 elif word in object_themes:
-                    theme_words.append('material')
+                    theme_words.append("material")
                 elif word in emotional_themes:
-                    theme_words.append('affective')
+                    theme_words.append("affective")
                 elif word in relational_themes:
-                    theme_words.append('relational')
+                    theme_words.append("relational")
 
             theme_tags = list(set(theme_words))[:3]
 
@@ -111,7 +112,7 @@ def test_thematic_reflection():
                 emotional_tone = "bright"
 
             words = drawing_summary.split()[:3]
-            compressed_summary = ' '.join(words)
+            compressed_summary = " ".join(words)
 
             if len(theme_tags) >= 2:
                 narrative_thread = f"{theme_tags[0]}-{theme_tags[1]}"
@@ -123,38 +124,29 @@ def test_thematic_reflection():
             reflection_text = f"Drawing: {compressed_summary}. {emotional_tone.capitalize()} {narrative_thread}."
 
             return {
-                'reflection_text': reflection_text,
-                'compressed_summary': compressed_summary,
-                'theme_tags': theme_tags,
-                'emotional_tone': emotional_tone,
-                'narrative_thread': narrative_thread
+                "reflection_text": reflection_text,
+                "compressed_summary": compressed_summary,
+                "theme_tags": theme_tags,
+                "emotional_tone": emotional_tone,
+                "narrative_thread": narrative_thread,
             }
 
     captioner = MockCaptioner()
 
     print("\n1. Testing with spatial drawing...")
-    result = captioner._generate_drawing_thematic_reflection(
-        "boxes and ceiling in room",
-        mood=0.2
-    )
+    result = captioner._generate_drawing_thematic_reflection("boxes and ceiling in room", mood=0.2)
     print(f"   Reflection: {result['reflection_text']}")
     print(f"   Tags: {result['theme_tags']}")
     print(f"   Tone: {result['emotional_tone']}")
 
     print("\n2. Testing with emotional drawing...")
-    result = captioner._generate_drawing_thematic_reflection(
-        "quiet solitude and stillness",
-        mood=-0.2
-    )
+    result = captioner._generate_drawing_thematic_reflection("quiet solitude and stillness", mood=-0.2)
     print(f"   Reflection: {result['reflection_text']}")
     print(f"   Tags: {result['theme_tags']}")
     print(f"   Tone: {result['emotional_tone']}")
 
     print("\n3. Testing with relational drawing...")
-    result = captioner._generate_drawing_thematic_reflection(
-        "light between shadows inside",
-        mood=0.0
-    )
+    result = captioner._generate_drawing_thematic_reflection("light between shadows inside", mood=0.0)
     print(f"   Reflection: {result['reflection_text']}")
     print(f"   Tags: {result['theme_tags']}")
     print(f"   Tone: {result['emotional_tone']}")

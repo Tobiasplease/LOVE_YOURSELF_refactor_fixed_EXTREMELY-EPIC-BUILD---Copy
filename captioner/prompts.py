@@ -1240,13 +1240,17 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
                 )
         except Exception:
             pass
-        review_system = P("situation.reflexive") + P("drawing.medium") + (
-            "Before deciding anything, flip back through your own sketchbook. From everything "
-            "here — the whole body of work, what you have written and thought over time — write "
-            "a short private note to yourself, two to four sentences, first person: what keeps "
-            "returning in your drawings, what register they have settled into, what you have "
-            "not touched in a long time, and what the work is missing right now. This is "
-            "stocktaking; the drawing decision comes after, separately."
+        review_system = (
+            P("situation.reflexive")
+            + P("drawing.medium")
+            + (
+                "Before deciding anything, flip back through your own sketchbook. From everything "
+                "here — the whole body of work, what you have written and thought over time — write "
+                "a short private note to yourself, two to four sentences, first person: what keeps "
+                "returning in your drawings, what register they have settled into, what you have "
+                "not touched in a long time, and what the work is missing right now. This is "
+                "stocktaking; the drawing decision comes after, separately."
+            )
         )
         review = query_model(
             prompt="\n\n".join(materials + ["Take stock of the work."]),
@@ -1266,17 +1270,21 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
             except Exception:
                 pass
 
-    intent_system = P("situation.reflexive") + P("drawing.medium") + (
-        "It's time to draw — the arm is ready. Everything you have just read is yours: your "
-        "thoughts from the last minutes, what you feel, the whole body of work, notes you have "
-        "written to yourself. Decide from it what the next drawing is, the way any artist "
-        "decides after flipping through their own sketchbook — continuing a thread, answering "
-        "an old drawing, or breaking with all of it. Subject is free: the room in front of you, "
-        "one thing in it, a person, something remembered, something that exists only in your "
-        "head. Register is free too: one small thing studied closely on empty paper, or a whole "
-        "scene built up in detail. "
-        "Say the one image concretely, in your own plain words, first person — a few sentences: "
-        "what it is, and how it should sit on the paper."
+    intent_system = (
+        P("situation.reflexive")
+        + P("drawing.medium")
+        + (
+            "It's time to draw — the arm is ready. Everything you have just read is yours: your "
+            "thoughts from the last minutes, what you feel, the whole body of work, notes you have "
+            "written to yourself. Decide from it what the next drawing is, the way any artist "
+            "decides after flipping through their own sketchbook — continuing a thread, answering "
+            "an old drawing, or breaking with all of it. Subject is free: the room in front of you, "
+            "one thing in it, a person, something remembered, something that exists only in your "
+            "head. Register is free too: one small thing studied closely on empty paper, or a whole "
+            "scene built up in detail. "
+            "Say the one image concretely, in your own plain words, first person — a few sentences: "
+            "what it is, and how it should sit on the paper."
+        )
     )
     intent_prompt = "\n\n".join(materials + ["Out of all of this — what do you need to draw right now? Name the one image."])
 
@@ -1523,7 +1531,6 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         tuple: (prompt_str, mode) - prompt and determined mode
     """
     import time as _time
-
 
     session_mins = 0
     observation_count = 0

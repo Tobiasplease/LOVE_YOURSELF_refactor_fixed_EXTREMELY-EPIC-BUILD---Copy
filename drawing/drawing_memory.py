@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
+
 from config.config import MOOD_SNAPSHOT_FOLDER
 
 
@@ -205,9 +206,7 @@ class DrawingMemory:
         doorway' vs 'that black curtain, hanging' → same."""
         import re
 
-        stop = frozenset(
-            "the a an of in on at with and or that this it its is was to from by one two only just near under over".split()
-        )
+        stop = frozenset("the a an of in on at with and or that this it its is was to from by one two only just near under over".split())
         wa = {w for w in re.sub(r"[^a-z0-9 ]", " ", (a or "").lower()).split() if w not in stop}
         wb = {w for w in re.sub(r"[^a-z0-9 ]", " ", (b or "").lower()).split() if w not in stop}
         if not wa or not wb:
@@ -371,8 +370,8 @@ class DrawingMemory:
             lines.append(line)
 
         try:
-            from utils.inference import query_model
             from config.config import MOOD_SNAPSHOT_FOLDER
+            from utils.inference import query_model
 
             try:
                 from config.config import MODEL_NAME

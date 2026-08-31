@@ -4,9 +4,9 @@ Test the improved LCD display system.
 Tests the new state tracking and caption skipping logic.
 """
 
-import time
-import sys
 import os
+import sys
+import time
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

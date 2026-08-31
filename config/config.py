@@ -1104,7 +1104,9 @@ YOLO_CONFIDENCE_THRESHOLD = 0.55  # Raised to 0.55 to avoid detecting hands/arms
 # preference order over raising confidence (which worsens the known
 # seated-still-person misses):
 YOLO_PERSON_MIN_AREA_FRAC = 0.008  # min person bbox area as fraction of frame (~60x120px at 720p); phantom persons are small, real ones aren't
-AWARE_ENTRY_CONFIRM_S = 2.0  # person must be continuously detected this long before idle->aware (2 idle-cadence YOLO passes; one-frame phantoms can't trigger)
+AWARE_ENTRY_CONFIRM_S = (
+    2.0  # person must be continuously detected this long before idle->aware (2 idle-cadence YOLO passes; one-frame phantoms can't trigger)
+)
 # yolov8m (July 10 eval, debug/compare_yolo_models.py): rejects the desk
 # mannequin head that nano fired on constantly, and finds still/seated people
 # nano missed for whole stretches. Known remaining false positive: the

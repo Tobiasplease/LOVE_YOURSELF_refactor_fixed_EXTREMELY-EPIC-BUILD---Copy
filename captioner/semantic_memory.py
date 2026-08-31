@@ -16,8 +16,8 @@ Design principles:
 
 import os
 import re
-import time
 import threading
+import time
 from typing import Dict, List, Optional, Tuple
 
 import chromadb
@@ -37,15 +37,15 @@ MAX_OBSERVATIONS_PER_CONCEPT = 10  # Keep only the N most recent observations pe
 # --- Spatial extraction patterns ---
 # Maps phrases from Qwen's output to rough spatial zones (pan/tilt)
 _SPATIAL_PAN_PATTERNS = [
-    (r'\bto the left\b|\bon the left\b|\bleft side\b', "left"),
-    (r'\bto the right\b|\bon the right\b|\bright side\b', "right"),
-    (r'\bin the center\b|\bin the middle\b|\bin front\b|\bdirectly ahead\b', "ahead"),
-    (r'\bin the background\b|\bbehind\b|\bback wall\b|\bagainst the .* wall\b', "ahead"),
+    (r"\bto the left\b|\bon the left\b|\bleft side\b", "left"),
+    (r"\bto the right\b|\bon the right\b|\bright side\b", "right"),
+    (r"\bin the center\b|\bin the middle\b|\bin front\b|\bdirectly ahead\b", "ahead"),
+    (r"\bin the background\b|\bbehind\b|\bback wall\b|\bagainst the .* wall\b", "ahead"),
 ]
 _SPATIAL_TILT_PATTERNS = [
-    (r'\babove\b|\bceiling\b|\bhung from\b|\bmounted.*ceiling\b|\boverhead\b', "up"),
-    (r'\bbelow\b|\bfloor\b|\bground\b|\bon the (?:desk|table|surface)\b', "down"),
-    (r'\bsuspended from\b|\bhanging from\b', "up"),
+    (r"\babove\b|\bceiling\b|\bhung from\b|\bmounted.*ceiling\b|\boverhead\b", "up"),
+    (r"\bbelow\b|\bfloor\b|\bground\b|\bon the (?:desk|table|surface)\b", "down"),
+    (r"\bsuspended from\b|\bhanging from\b", "up"),
 ]
 
 # Singleton
@@ -57,8 +57,28 @@ _lock = threading.Lock()
 # scraps. Earlier runs minted "Chaos on the floor is", "Light from their desk is"
 # (a regex mangler, now removed); this also screens legacy garbage at surfacing.
 _LABEL_TAIL_STOPWORDS = {
-    "is", "are", "was", "were", "the", "a", "an", "of", "and", "but", "with",
-    "to", "in", "on", "at", "it", "as", "that", "this", "their", "its", "from",
+    "is",
+    "are",
+    "was",
+    "were",
+    "the",
+    "a",
+    "an",
+    "of",
+    "and",
+    "but",
+    "with",
+    "to",
+    "in",
+    "on",
+    "at",
+    "it",
+    "as",
+    "that",
+    "this",
+    "their",
+    "its",
+    "from",
 }
 
 
@@ -169,8 +189,7 @@ class SemanticMemory:
         if subject:
             rows = [r for r in rows if (r[2].get("subject") or "") == subject]
         return [
-            {"id": rid, "text": doc, "subject": meta.get("subject", ""), "timestamp": meta.get("timestamp", 0)}
-            for rid, doc, meta in rows[-limit:]
+            {"id": rid, "text": doc, "subject": meta.get("subject", ""), "timestamp": meta.get("timestamp", 0)} for rid, doc, meta in rows[-limit:]
         ]
 
     def query_reflections(self, query_text: str, n_results: int = 2, max_distance: float = 0.6) -> List[Dict]:
@@ -248,18 +267,20 @@ class SemanticMemory:
                     doc = results["documents"][0][i]
 
                     self._bump_concept(cid, perception=cleaned)
-                    matched.append({
-                        "id": cid,
-                        "label": doc,
-                        "times_seen": meta.get("times_seen", 0) + 1,
-                        "is_new": False,
-                        "session_count": meta.get("session_count", 1),
-                        "last_observation": meta.get("last_observation", ""),
-                        "first_seen": meta.get("first_seen", 0),
-                        "last_seen": meta.get("last_seen", 0),
-                        "spatial_pan": meta.get("spatial_pan"),
-                        "spatial_tilt": meta.get("spatial_tilt"),
-                    })
+                    matched.append(
+                        {
+                            "id": cid,
+                            "label": doc,
+                            "times_seen": meta.get("times_seen", 0) + 1,
+                            "is_new": False,
+                            "session_count": meta.get("session_count", 1),
+                            "last_observation": meta.get("last_observation", ""),
+                            "first_seen": meta.get("first_seen", 0),
+                            "last_seen": meta.get("last_seen", 0),
+                            "spatial_pan": meta.get("spatial_pan"),
+                            "spatial_tilt": meta.get("spatial_tilt"),
+                        }
+                    )
 
         # If no matches and it mentions a person, bump the existing person concept
         # New concept creation is now handled by compression-time LLM extraction
@@ -269,15 +290,17 @@ class SemanticMemory:
                 existing_person = self._find_any_person_concept()
                 if existing_person is not None:
                     self._bump_concept(existing_person["id"], perception=cleaned)
-                    return [{
-                        "id": existing_person["id"],
-                        "label": existing_person["name"],
-                        "times_seen": existing_person["times_seen"] + 1,
-                        "is_new": False,
-                        "last_observation": existing_person.get("last_observation", ""),
-                        "spatial_pan": existing_person.get("spatial_pan"),
-                        "spatial_tilt": existing_person.get("spatial_tilt"),
-                    }]
+                    return [
+                        {
+                            "id": existing_person["id"],
+                            "label": existing_person["name"],
+                            "times_seen": existing_person["times_seen"] + 1,
+                            "is_new": False,
+                            "last_observation": existing_person.get("last_observation", ""),
+                            "spatial_pan": existing_person.get("spatial_pan"),
+                            "spatial_tilt": existing_person.get("spatial_tilt"),
+                        }
+                    ]
 
         return matched
 
@@ -285,12 +308,29 @@ class SemanticMemory:
     def _mentions_person(text: str) -> bool:
         """Check if text describes a person."""
         t = text.lower()
-        return any(w in t for w in [
-            "person", "someone", "individual", "man", "woman",
-            "people", "figure", "they are", "he is", "she is",
-            "sitting", "standing", "typing", "working", "looking",
-            "seated", "focused on", "wearing",
-        ])
+        return any(
+            w in t
+            for w in [
+                "person",
+                "someone",
+                "individual",
+                "man",
+                "woman",
+                "people",
+                "figure",
+                "they are",
+                "he is",
+                "she is",
+                "sitting",
+                "standing",
+                "typing",
+                "working",
+                "looking",
+                "seated",
+                "focused on",
+                "wearing",
+            ]
+        )
 
     def match_perception(self, perception: str) -> Optional[Dict]:
         """Find the best matching concept for a perception string.
@@ -539,9 +579,28 @@ class SemanticMemory:
         if text_lower.startswith(("feeling ", "still ", "bored", "...", "sigh")):
             # Only reject if the ENTIRE text is filler — if there's substance after, keep it
             # Check: does it contain any concrete nouns or specific references?
-            concrete_markers = ["ceiling", "wall", "shelf", "sign", "light", "plant", "desk",
-                                "person", "chair", "bag", "wire", "crack", "hole", "window",
-                                "door", "screen", "monitor", "book", "shadow", "dust"]
+            concrete_markers = [
+                "ceiling",
+                "wall",
+                "shelf",
+                "sign",
+                "light",
+                "plant",
+                "desk",
+                "person",
+                "chair",
+                "bag",
+                "wire",
+                "crack",
+                "hole",
+                "window",
+                "door",
+                "screen",
+                "monitor",
+                "book",
+                "shadow",
+                "dust",
+            ]
             if not any(m in text_lower for m in concrete_markers):
                 return  # Pure emotional filler — don't store
 
@@ -591,13 +650,15 @@ class SemanticMemory:
         self._observations.add(
             ids=[obs_id],
             documents=[text[:300]],
-            metadatas=[{
-                "concept_id": concept_id,
-                "timestamp": time.time(),
-                "session_id": self._session_id,
-                "type": "observation",
-                "depth": 0,
-            }],
+            metadatas=[
+                {
+                    "concept_id": concept_id,
+                    "timestamp": time.time(),
+                    "session_id": self._session_id,
+                    "type": "observation",
+                    "depth": 0,
+                }
+            ],
         )
 
     def _prune_oldest_observations(self, concept_id: str):
@@ -636,7 +697,10 @@ class SemanticMemory:
 
         # Reject pure filler and generic scene descriptions
         filler_patterns = [
-            r"^same\b", r"^nothing\b", r"^unclear\b", r"^still\b",
+            r"^same\b",
+            r"^nothing\b",
+            r"^unclear\b",
+            r"^still\b",
             r"^a (?:room|space|area|place)\b",
             r"^(?:the )?(?:usual|same|familiar) ",
             r"^(?:the )?scene\b",
@@ -651,9 +715,23 @@ class SemanticMemory:
 
         # Accept if it has spatial specificity (location phrases)
         spatial_markers = [
-            "on the", "near the", "above the", "below the", "next to",
-            "behind the", "in front of", "corner", "left", "right",
-            "wall", "shelf", "desk", "ceiling", "floor", "window", "door",
+            "on the",
+            "near the",
+            "above the",
+            "below the",
+            "next to",
+            "behind the",
+            "in front of",
+            "corner",
+            "left",
+            "right",
+            "wall",
+            "shelf",
+            "desk",
+            "ceiling",
+            "floor",
+            "window",
+            "door",
         ]
         has_spatial = any(m in text for m in spatial_markers)
 
@@ -663,10 +741,29 @@ class SemanticMemory:
 
         # Accept if it has descriptive specificity (color, text, distinctive features)
         detail_markers = [
-            "red", "blue", "green", "yellow", "black", "white", "brown", "orange",
-            "sign", "text", "label", "sticker", "poster", "writing",
-            "damaged", "broken", "new", "old", "large", "small",
-            "says", "reads", "written",
+            "red",
+            "blue",
+            "green",
+            "yellow",
+            "black",
+            "white",
+            "brown",
+            "orange",
+            "sign",
+            "text",
+            "label",
+            "sticker",
+            "poster",
+            "writing",
+            "damaged",
+            "broken",
+            "new",
+            "old",
+            "large",
+            "small",
+            "says",
+            "reads",
+            "written",
         ]
         has_detail = any(m in text for m in detail_markers)
 
@@ -684,13 +781,13 @@ class SemanticMemory:
         Removes "of the image", "in this image", verbose editorial tails, etc.
         """
         # Strip "of/in the image" references
-        text = re.sub(r'\s*(?:of|in|from)\s+(?:the|this)\s+(?:image|photo|picture|frame)\s*', ' ', text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*(?:of|in|from)\s+(?:the|this)\s+(?:image|photo|picture|frame)\s*", " ", text, flags=re.IGNORECASE)
         # Strip editorial tails: "adding a pop of color...", "which appears to be..."
-        text = re.sub(r',\s*(?:adding|which|creating|making|giving|providing)\b.*$', '', text, flags=re.IGNORECASE)
+        text = re.sub(r",\s*(?:adding|which|creating|making|giving|providing)\b.*$", "", text, flags=re.IGNORECASE)
         # Strip "is prominently placed/positioned/located"
-        text = re.sub(r'\s+is\s+(?:prominently|strategically|carefully)\s+(?:placed|positioned|located)\b', '', text, flags=re.IGNORECASE)
+        text = re.sub(r"\s+is\s+(?:prominently|strategically|carefully)\s+(?:placed|positioned|located)\b", "", text, flags=re.IGNORECASE)
         # Collapse double spaces from stripping
-        text = re.sub(r'\s{2,}', ' ', text)
+        text = re.sub(r"\s{2,}", " ", text)
         return text.strip()
 
     def register_concepts_from_compression(self, labels: list[str]) -> None:
@@ -735,15 +832,17 @@ class SemanticMemory:
             self._concepts.add(
                 ids=[concept_id],
                 documents=[label],
-                metadatas=[{
-                    "times_seen": 1,
-                    "first_seen": now,
-                    "last_seen": now,
-                    "session_count": 1,
-                    "last_session": self._session_id,
-                    "last_observation": "",
-                    "source": "compression",
-                }],
+                metadatas=[
+                    {
+                        "times_seen": 1,
+                        "first_seen": now,
+                        "last_seen": now,
+                        "session_count": 1,
+                        "last_session": self._session_id,
+                        "last_observation": "",
+                        "source": "compression",
+                    }
+                ],
             )
             print(f"[SEMANTIC] New concept (from compression): '{label}'")
 
@@ -759,15 +858,17 @@ class SemanticMemory:
 
         concepts = []
         for cid, doc, meta in zip(all_data["ids"], all_data["documents"], all_data["metadatas"]):
-            concepts.append({
-                "id": cid,
-                "name": doc,
-                "times_seen": meta.get("times_seen", 0),
-                "first_seen": meta.get("first_seen", 0),
-                "last_seen": meta.get("last_seen", 0),
-                "session_count": meta.get("session_count", 0),
-                "last_observation": meta.get("last_observation", ""),
-            })
+            concepts.append(
+                {
+                    "id": cid,
+                    "name": doc,
+                    "times_seen": meta.get("times_seen", 0),
+                    "first_seen": meta.get("first_seen", 0),
+                    "last_seen": meta.get("last_seen", 0),
+                    "session_count": meta.get("session_count", 0),
+                    "last_observation": meta.get("last_observation", ""),
+                }
+            )
 
         concepts.sort(key=lambda x: x["times_seen"], reverse=True)
         return concepts
@@ -783,10 +884,9 @@ class SemanticMemory:
         import random as _random
 
         concepts = [
-            c for c in self.get_all_concepts()
-            if c.get("times_seen", 0) >= min_times_seen
-            and len((c.get("name") or "").strip()) >= 3
-            and _looks_like_noun_phrase(c.get("name"))
+            c
+            for c in self.get_all_concepts()
+            if c.get("times_seen", 0) >= min_times_seen and len((c.get("name") or "").strip()) >= 3 and _looks_like_noun_phrase(c.get("name"))
         ]
         if not concepts:
             return None
@@ -803,7 +903,7 @@ class SemanticMemory:
         labels = []
         for c in self.get_all_concepts():  # already sorted by times_seen desc
             name = (c.get("name") or "").strip()
-            if (c.get("times_seen", 0) >= min_times_seen and _looks_like_noun_phrase(name)):
+            if c.get("times_seen", 0) >= min_times_seen and _looks_like_noun_phrase(name):
                 labels.append(name[0].lower() + name[1:])
                 if len(labels) >= max_items:
                     break
@@ -820,12 +920,14 @@ class SemanticMemory:
 
         result = []
         for oid, doc, meta in zip(obs["ids"], obs["documents"], obs["metadatas"]):
-            result.append({
-                "id": oid,
-                "text": doc,
-                "timestamp": meta.get("timestamp", 0),
-                "session_id": meta.get("session_id", ""),
-            })
+            result.append(
+                {
+                    "id": oid,
+                    "text": doc,
+                    "timestamp": meta.get("timestamp", 0),
+                    "session_id": meta.get("session_id", ""),
+                }
+            )
 
         result.sort(key=lambda x: x["timestamp"])
         return result

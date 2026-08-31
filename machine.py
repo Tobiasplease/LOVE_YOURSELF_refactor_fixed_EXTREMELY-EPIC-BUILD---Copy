@@ -11,7 +11,6 @@ import sys
 import threading
 import time
 
-
 # Before ANY project import can write a timestamp: if the RTC booted us into
 # the future, let NTP step the clock BEFORE the run exists, and watch for
 # steps after that (a mid-run step froze run 980f6e82 for what would have
@@ -31,17 +30,19 @@ except ImportError:
 
 from breathing.breathing import update_lung_position
 from captioner.captioner import Captioner
+from captioner.frame_buffer import frame_buffer
 from config.config import (
     BAUD_RATE,
-    CAMERA_INDEX,
-    CAMERA_WIDTH,
-    CAMERA_HEIGHT,
-    CAMERA_SHARPNESS,
-    CAMERA_SATURATION,
-    CAMERA_CONTRAST,
-    CAMERA_BRIGHTNESS,
-    CAMERA_EXPOSURE,
     CAMERA_AUTO_FOCUS,
+    CAMERA_BRIGHTNESS,
+    CAMERA_CONTRAST,
+    CAMERA_EXPOSURE,
+    CAMERA_HEIGHT,
+    CAMERA_INDEX,
+    CAMERA_SATURATION,
+    CAMERA_SHARPNESS,
+    CAMERA_WIDTH,
+    CAPTION_DISPLAY_PORT,
     CONFIDENCE_THRESHOLD,
     DEBUG_REACTIVITY_PAUSE,
     KINETIC_BUS_ENABLED,
@@ -54,11 +55,10 @@ from config.config import (
     REACTIVITY_PAUSE_COOLDOWN,
     REACTIVITY_PAUSE_DURATION,
     REACTIVITY_PAUSE_THRESHOLD,
+    USE_CAPTION_DISPLAY,
     USE_LIGHTBULB_PWM,
     USE_SERVO,
     USE_UARM,
-    USE_CAPTION_DISPLAY,
-    CAPTION_DISPLAY_PORT,
 )
 from event_logging.event_logger import get_current_run_id, log_json_entry, set_start_time
 from event_logging.log_type import LogType
@@ -69,9 +69,8 @@ from mood.mood import MoodEngine
 from perception.detection_memory import DetectionMemory
 from perception.object_detection import ObjectDetectionThread
 from perception.person_detection_state import get_person_detection_state
-from safety.aruco_detector import get_aruco_detector
 from reactivity.camera_reactive import CameraReactivityEngine
-from captioner.frame_buffer import frame_buffer
+from safety.aruco_detector import get_aruco_detector
 from utils.continuity import describe_duration
 from utils.error_tracking import get_failure_tracker
 from utils.state_manager import state_manager
@@ -810,7 +809,7 @@ image_monitor.start()
 # Register GRBL-complete hook to trigger uArm after actual G-code completion
 try:
     import utils.hooks as _hooks
-    from config.config import USE_UARM, UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE
+    from config.config import UARM_PLAY_AFTER_DRAW, UARM_PLAY_FILE, USE_UARM
 
     if USE_UARM and UARM_PLAY_AFTER_DRAW and UARM_PLAY_FILE:
 
@@ -823,7 +822,7 @@ try:
         def _uarm_after_grbl():
             def _run():
                 try:
-                    from grbl.idle_movement_manager import pause_for_drawing, get_manager
+                    from grbl.idle_movement_manager import get_manager, pause_for_drawing
 
                     # Force pause idle movements regardless of CNC state
                     # (since we're in transition period between GRBL completion and uArm execution)

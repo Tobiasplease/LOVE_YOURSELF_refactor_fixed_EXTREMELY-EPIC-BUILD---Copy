@@ -171,6 +171,7 @@ def print_report():
     for r in rows:
         by_scenario[(r["scenario"], r["ground_truth"])].append(r)
     for (scenario, truth), srows in sorted(by_scenario.items()):
+
         def n_ok(method):
             return sum(1 for r in srows if r[method] == truth)
 

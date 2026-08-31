@@ -6,13 +6,13 @@ Shows corner mapping and aspect ratio distortion for different PRE_ROTATION_DEG 
 Run: python debug/test_warp_with_landscape.py
 """
 
+import math
 import os
 import sys
-import math
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from grbl.warp_transform import map_to_quad, warp_transform_line, find_max_xy_from_lines, PRE_ROTATION_DEG
+from grbl.warp_transform import PRE_ROTATION_DEG, find_max_xy_from_lines, map_to_quad, warp_transform_line
 
 
 def test_corners(max_x, max_y, label=""):
@@ -27,7 +27,7 @@ def test_corners(max_x, max_y, label=""):
         (max_x, 0, "bottom-right"),
         (max_x, max_y, "top-right"),
         (0, max_y, "top-left"),
-        (max_x/2, max_y/2, "center"),
+        (max_x / 2, max_y / 2, "center"),
     ]
 
     mapped = []
@@ -38,6 +38,7 @@ def test_corners(max_x, max_y, label=""):
 
         # Parse back
         import re
+
         tx = float(re.search(r"X([-+]?\d*\.?\d+)", transformed).group(1))
         ty = float(re.search(r"Y([-+]?\d*\.?\d+)", transformed).group(1))
         mapped.append((tx, ty, name))
@@ -78,6 +79,7 @@ def test_corners(max_x, max_y, label=""):
 def test_with_rotation(max_x, max_y, rotation_deg, label=""):
     """Temporarily override rotation and test."""
     import grbl.warp_transform as wt
+
     original = wt.PRE_ROTATION_DEG
     wt.PRE_ROTATION_DEG = rotation_deg
     result = test_corners(max_x, max_y, label)
@@ -100,9 +102,9 @@ if __name__ == "__main__":
     for target in [(50, 28), (45, 25)]:
         test_with_rotation(target[0], target[1], 15, f"{target[0]}x{target[1]}mm @ 15° rotation")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("GOAL: Output should fit within quad bounds:")
     print("  X: 1 to 70 mm")
     print("  Y: 2 to 40 mm")
     print("  No negative coordinates")
-    print("="*60)
+    print("=" * 60)

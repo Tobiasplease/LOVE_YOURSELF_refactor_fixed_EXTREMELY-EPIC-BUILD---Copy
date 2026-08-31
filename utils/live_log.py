@@ -12,6 +12,7 @@ import os
 
 try:
     from config.config import MOOD_SNAPSHOT_FOLDER
+
     _LIVE_LOG_PATH = os.path.join(MOOD_SNAPSHOT_FOLDER, "live_captions.txt")
 except Exception:
     _LIVE_LOG_PATH = None
@@ -38,11 +39,9 @@ def log_drawing_intent(prompt: str) -> None:
     """Log when a drawing prompt has been generated and queued."""
     # Strip the standard ComfyUI preamble for readability
     p = prompt.strip()
-    for prefix in ("Black ink line drawing on white paper. ",
-                   "Black ink line drawing on white paper.",
-                   "black ink line drawing on white paper. "):
+    for prefix in ("Black ink line drawing on white paper. ", "Black ink line drawing on white paper.", "black ink line drawing on white paper. "):
         if p.lower().startswith(prefix.lower()):
-            p = p[len(prefix):]
+            p = p[len(prefix) :]
             break
     if len(p) > 220:
         p = p[:220].rsplit(" ", 1)[0] + "..."

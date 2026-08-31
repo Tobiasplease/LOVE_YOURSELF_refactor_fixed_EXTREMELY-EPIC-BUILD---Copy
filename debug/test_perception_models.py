@@ -110,22 +110,19 @@ def check_quality(response: str) -> dict:
     issues = []
 
     # VQA register
-    vqa_phrases = ["the image", "this image", "in this image", "the photo", "photograph",
-                   "the picture", "appears to be taken", "provided photo"]
+    vqa_phrases = ["the image", "this image", "in this image", "the photo", "photograph", "the picture", "appears to be taken", "provided photo"]
     for phrase in vqa_phrases:
         if phrase in lower:
             issues.append(f"VQA: '{phrase}'")
 
     # Vague language
-    vague_phrases = ["various objects", "various items", "some items", "different items",
-                     "miscellaneous", "several things"]
+    vague_phrases = ["various objects", "various items", "some items", "different items", "miscellaneous", "several things"]
     for phrase in vague_phrases:
         if phrase in lower:
             issues.append(f"VAGUE: '{phrase}'")
 
     # Hedging
-    hedge_phrases = ["appears to be", "seems to be", "looks like it might", "could be",
-                     "possibly", "suggesting that"]
+    hedge_phrases = ["appears to be", "seems to be", "looks like it might", "could be", "possibly", "suggesting that"]
     for phrase in hedge_phrases:
         if phrase in lower:
             issues.append(f"HEDGE: '{phrase}'")
@@ -161,9 +158,7 @@ def run_test(image_path: str):
             temp = 0.3 if "qwen" in model_name else 0.7
 
             print(f"  [{label.upper()}] ({model_name}, temp={temp})")
-            response, duration = query_model(
-                model_name, test["prompt"], image_path, test["system"], temperature=temp
-            )
+            response, duration = query_model(model_name, test["prompt"], image_path, test["system"], temperature=temp)
             quality = check_quality(response)
 
             # Truncate for display
@@ -182,10 +177,7 @@ def run_test(image_path: str):
 
 def find_latest_image() -> str:
     """Find the most recent mood snapshot."""
-    pattern = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "event_log", "*-images", "mood_*.jpg"
-    )
+    pattern = os.path.join(os.path.dirname(os.path.dirname(__file__)), "event_log", "*-images", "mood_*.jpg")
     images = sorted(glob.glob(pattern))
     if not images:
         print("No mood snapshots found. Pass an image path as argument.")

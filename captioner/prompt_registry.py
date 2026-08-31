@@ -69,8 +69,7 @@ FRAGMENTS = {
     "drawing.medium": {
         "title": "Medium spec (drawing chain only)",
         "text": (
-            "You hold one fine-tipped black ink pen: everything you make is thin line on "
-            "white paper, and your darkest tone is dense hatching. "
+            "You hold one fine-tipped black ink pen: everything you make is thin line on " "white paper, and your darkest tone is dense hatching. "
         ),
         "note": "Moved OUT of the situation frames Aug 28 (artist's call: the inner voice shouldn't recite the drawing manual every caption) and INTO the drawing chain's stocktake + intent system prompts, where it carries two scars: medium truth at the intent stage (Aug 15: a finger rendered RED because intent had never been told — body color-words beat the render's b/w anchor) and the fine-tipped/thin-line bias (Aug 17: thick-marker renders made worm-maze DSV; --thin can't split fused fat strokes). The render call has its own fuller spec.",
         "used_by": ["drawing_review", "drawing_intent"],
@@ -578,32 +577,95 @@ PASSES = {
             {"frag": "genre.world", "gate": "STREAM_MODE == world"},
             {"frag": "genre.turns", "gate": "other modes"},
             {"frag": "genre.turns-continue", "gate": "STREAM_MODE == turns only"},
-            {"slot": "self_knowledge", "store": "self_trait", "via": "monologue.self-wrap", "gate": "skipped in detox; DOSED Aug 22 — introspective/awakening always, else every IDENTITY_EVERY_N_CAPTIONS"},
-            {"slot": "durable", "store": "durable_ledger", "via": "monologue.durable-wrap", "gate": "skipped in detox; empty until earned; same Aug 22 dosing as self_knowledge"},
-            {"frag": "elicit.observational", "gate": "mode-matched; suppressed in document/world; in hybrid, PRESENT exactly when the seam is absent (empty stream / react / post-gap)"},
-            {"frag": "elicit.relational", "gate": "mode == relational, DOSED Aug 25: salience-hot cycles (arrival, fresh eye contact) + every RELATIONAL_ELICIT_EVERY_N-th relational caption; was standing every call"},
+            {
+                "slot": "self_knowledge",
+                "store": "self_trait",
+                "via": "monologue.self-wrap",
+                "gate": "skipped in detox; DOSED Aug 22 — introspective/awakening always, else every IDENTITY_EVERY_N_CAPTIONS",
+            },
+            {
+                "slot": "durable",
+                "store": "durable_ledger",
+                "via": "monologue.durable-wrap",
+                "gate": "skipped in detox; empty until earned; same Aug 22 dosing as self_knowledge",
+            },
+            {
+                "frag": "elicit.observational",
+                "gate": "mode-matched; suppressed in document/world; in hybrid, PRESENT exactly when the seam is absent (empty stream / react / post-gap)",
+            },
+            {
+                "frag": "elicit.relational",
+                "gate": "mode == relational, DOSED Aug 25: salience-hot cycles (arrival, fresh eye contact) + every RELATIONAL_ELICIT_EVERY_N-th relational caption; was standing every call",
+            },
             {"frag": "elicit.workspace", "gate": "mode == workspace; document/world suppressed; hybrid seam-conditional (see elicit.observational)"},
-            {"frag": "elicit.introspective", "gate": "mode == introspective; document/world suppressed; hybrid seam-conditional (see elicit.observational) — EXCEPT inward beats (Aug 25): the interiority beat always keeps its question"},
+            {
+                "frag": "elicit.introspective",
+                "gate": "mode == introspective; document/world suppressed; hybrid seam-conditional (see elicit.observational) — EXCEPT inward beats (Aug 25): the interiority beat always keeps its question",
+            },
             {"frag": "elicit.awakening", "gate": "mode == awakening (kept in all stream modes)"},
-            {"frag": "elicit.quiet-wonder", "gate": "quiet-dose rotation (Aug 28): every QUIET_ELICIT_EVERY_N-th quiet seamful cycle, rotating with -feel and -want; probe-validated"},
+            {
+                "frag": "elicit.quiet-wonder",
+                "gate": "quiet-dose rotation (Aug 28): every QUIET_ELICIT_EVERY_N-th quiet seamful cycle, rotating with -feel and -want; probe-validated",
+            },
             {"frag": "elicit.quiet-feel", "gate": "see elicit.quiet-wonder"},
             {"frag": "elicit.quiet-want", "gate": "see elicit.quiet-wonder"},
         ],
         "user": [
-            {"slot": "situational_delta", "store": None, "desc": "Only what just changed (gaze, arrival) — else empty. Built by build_situational_line.", "gate": None},
-            {"slot": "salience_event", "store": None, "desc": "A discrete onset — arrival, fresh eye contact. Onset only, never sustained.", "gate": "when set"},
-            {"frag": "caption.close-look", "gate": "close-look beat (Aug 28): fresh revisit glance + settled crop, ≥CLOSE_LOOK_MIN_INTERVAL_S apart, never on salience/eye-contact/inward cycles; the cycle's image IS the crop"},
+            {
+                "slot": "situational_delta",
+                "store": None,
+                "desc": "Only what just changed (gaze, arrival) — else empty. Built by build_situational_line.",
+                "gate": None,
+            },
+            {
+                "slot": "salience_event",
+                "store": None,
+                "desc": "A discrete onset — arrival, fresh eye contact. Onset only, never sustained.",
+                "gate": "when set",
+            },
+            {
+                "frag": "caption.close-look",
+                "gate": "close-look beat (Aug 28): fresh revisit glance + settled crop, ≥CLOSE_LOOK_MIN_INTERVAL_S apart, never on salience/eye-contact/inward cycles; the cycle's image IS the crop",
+            },
             {"frag": "caption.face-close", "gate": "sustained face at arm's length"},
-            {"slot": "reorientation", "store": None, "desc": "New-day line after a real off-gap, for the first stretch of the session.", "gate": "quiet moments only"},
-            {"slot": "mode_context", "store": None, "desc": "Mode-gated context line (observational/workspace/introspective builders; relational carries none since Aug 25 — presence is the situational line's).", "gate": "not in detox"},
-            {"slot": "introspective_context", "store": "reflections", "desc": "Belief/motif material for quiet moments.", "gate": "quiet + not detox, non-introspective modes"},
-            {"slot": "place_inventory", "store": "concepts", "desc": "Core-facts place inventory (get_core_facts_string).", "gate": "on change or every 6th quiet caption"},
-            {"slot": "memory_surface", "store": "concepts", "desc": "ONE of: familiarity line, drawing echo, reflection echo — first pick ROTATES (Aug 22; strict priority starved reflections to 0/53 despite 122 stored).", "gate": "quiet + not detox; max one per caption; watch [🧠] lines"},
+            {
+                "slot": "reorientation",
+                "store": None,
+                "desc": "New-day line after a real off-gap, for the first stretch of the session.",
+                "gate": "quiet moments only",
+            },
+            {
+                "slot": "mode_context",
+                "store": None,
+                "desc": "Mode-gated context line (observational/workspace/introspective builders; relational carries none since Aug 25 — presence is the situational line's).",
+                "gate": "not in detox",
+            },
+            {
+                "slot": "introspective_context",
+                "store": "reflections",
+                "desc": "Belief/motif material for quiet moments.",
+                "gate": "quiet + not detox, non-introspective modes",
+            },
+            {
+                "slot": "place_inventory",
+                "store": "concepts",
+                "desc": "Core-facts place inventory (get_core_facts_string).",
+                "gate": "on change or every 6th quiet caption",
+            },
+            {
+                "slot": "memory_surface",
+                "store": "concepts",
+                "desc": "ONE of: familiarity line, drawing echo, reflection echo — first pick ROTATES (Aug 22; strict priority starved reflections to 0/53 despite 122 stored).",
+                "gate": "quiet + not detox; max one per caption; watch [🧠] lines",
+            },
             {"frag": "caption.arm-drawing", "gate": "while drawing"},
             {"frag": "caption.no-paper", "gate": "last paper check saw a bare desk, within PAPER_STATE_TTL_S"},
             {"frag": "caption.paper-drawn", "gate": "last paper check saw a drawn-on sheet, within PAPER_STATE_TTL_S"},
             {"slot": "felt_delta", "store": "felt_state", "desc": "'{prev}, then {curr}.' or '{curr}.'", "gate": "not in detox"},
-            {"frag": "caption.desire-wrap", "gate": "first 3 captions after desire changes + every DESIRE_REDOSE_EVERY_N (8) quiet captions while the desire persists (Aug 22, P4 — the want stayed invisible between bursts); quiet only"},
+            {
+                "frag": "caption.desire-wrap",
+                "gate": "first 3 captions after desire changes + every DESIRE_REDOSE_EVERY_N (8) quiet captions while the desire persists (Aug 22, P4 — the want stayed invisible between bursts); quiet only",
+            },
             {"frag": "caption.desire-spent-wrap", "gate": "emptied desire slot, <2h after an executed drawing"},
             {"frag": "caption.empty-tick", "gate": "when every other block is empty"},
         ],
@@ -625,7 +687,12 @@ PASSES = {
         "system": "caption",
         "user": [
             {"frag": "memory.surface-frame", "gate": None},
-            {"slot": "memorable_concept", "store": "concepts", "desc": "A neutral fact about a recurring object — qualitative bands ('again and again'), never the raw count.", "gate": None},
+            {
+                "slot": "memorable_concept",
+                "store": "concepts",
+                "desc": "A neutral fact about a recurring object — qualitative bands ('again and again'), never the raw count.",
+                "gate": None,
+            },
             {"frag": "memory.fallback-place", "gate": "no memorable concept available"},
             {"slot": "thread", "store": "stream_seam", "via": "memory.thread-wrap", "desc": "Max 2 recent captions.", "gate": "when present"},
             {"frag": "memory.ask-real", "gate": "real concept surfaced"},
@@ -641,7 +708,12 @@ PASSES = {
         "user": [
             {"frag": "awakening.template", "gate": "has prior memory"},
             {"slot": "time_context", "store": None, "desc": "Offline gap in casual words + day boundary + clock time.", "gate": None},
-            {"slot": "lifetime_context", "store": None, "desc": "Sessions + days since first boot, in words not counters (lifetime_state.json survives memory wipes: amnesia, not infancy).", "gate": None},
+            {
+                "slot": "lifetime_context",
+                "store": None,
+                "desc": "Sessions + days since first boot, in words not counters (lifetime_state.json survives memory wipes: amnesia, not infancy).",
+                "gate": None,
+            },
             {"frag": "awakening.recall-frame", "gate": "has prior memory"},
             {"slot": "memory_context", "store": "stream_seam", "desc": "Last thought of the prior session.", "gate": None},
             {"slot": "identity_context", "store": "self_trait", "desc": "Persona + desire.", "gate": None},
@@ -705,7 +777,12 @@ PASSES = {
             {"frag": "reflection.subject.the-drawings", "gate": "subject rotation"},
             {"frag": "reflection.subject.time-passing", "gate": "subject rotation"},
             {"frag": "reflection.subject.yourself", "gate": "subject rotation"},
-            {"slot": "subject_data", "store": "reflections", "desc": "Subject-gated organ diet: concepts, prior reflections, drawings, sessions — built by build_reflection_loop_prompt.", "gate": None},
+            {
+                "slot": "subject_data",
+                "store": "reflections",
+                "desc": "Subject-gated organ diet: concepts, prior reflections, drawings, sessions — built by build_reflection_loop_prompt.",
+                "gate": None,
+            },
         ],
     },
     "reflection_distill": {

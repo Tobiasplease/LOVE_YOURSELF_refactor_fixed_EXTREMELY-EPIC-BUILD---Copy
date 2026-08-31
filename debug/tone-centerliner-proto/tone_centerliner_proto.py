@@ -3,15 +3,15 @@ machinery, unchanged). Ink regions -> hatching whose DENSITY carries the
 gray value underneath and whose ANGLE follows each region's own axis.
 Dark passages cross-hatch; light passages breathe. Region detection widened
 beyond v2's width-cores to include fused scribble (the honeycomb source)."""
+
 import sys
 
-sys.path.insert(0, '/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy')
+sys.path.insert(0, "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy")
 import cv2
 import numpy as np
 from skimage.morphology import skeletonize
 
-from bcnc.svg_centerliner_v2 import (binarize, skeleton_paths, prune_spurs,
-                                     merge_through_junctions, simplify)
+from bcnc.svg_centerliner_v2 import binarize, merge_through_junctions, prune_spurs, simplify, skeleton_paths
 
 
 def serpentine_hatch(mask, spacing_px, angle_deg, outline=False):
@@ -36,8 +36,7 @@ def serpentine_hatch(mask, spacing_px, angle_deg, outline=False):
     Minv = cv2.invertAffineTransform(M)
 
     def unrotate(x, y):
-        return (Minv[0, 0] * x + Minv[0, 1] * y + Minv[0, 2],
-                Minv[1, 0] * x + Minv[1, 1] * y + Minv[1, 2])
+        return (Minv[0, 0] * x + Minv[0, 1] * y + Minv[0, 2], Minv[1, 0] * x + Minv[1, 1] * y + Minv[1, 2])
 
     chains, open_chains = [], []
     for y in range(spacing // 2, diag, spacing):
@@ -76,9 +75,9 @@ def serpentine_hatch(mask, spacing_px, angle_deg, outline=False):
 
 def principal_angle(comp_mask):
     m = cv2.moments(comp_mask.astype(np.uint8), binaryImage=True)
-    if m['mu20'] + m['mu02'] < 1e-3:
+    if m["mu20"] + m["mu02"] < 1e-3:
         return 45.0
-    return float(np.degrees(0.5 * np.arctan2(2 * m['mu11'], m['mu20'] - m['mu02'])))
+    return float(np.degrees(0.5 * np.arctan2(2 * m["mu11"], m["mu20"] - m["mu02"])))
 
 
 def tone_aware_centerline(src_path):
@@ -97,7 +96,7 @@ def tone_aware_centerline(src_path):
     paths = prune_spurs(paths, nodes, deg, width_map, 1.6)
     paths = merge_through_junctions(paths, 35.0)
     polylines = [simplify(p, 1.2, 1) for p in paths if len(p) >= 5]
-    stats_out = {'w_half': w_half, 'strokes': len(polylines)}
+    stats_out = {"w_half": w_half, "strokes": len(polylines)}
 
     if not region.any():
         return polylines, stats_out
@@ -118,9 +117,9 @@ def tone_aware_centerline(src_path):
     # (collinear layers deepen it), cross-hatch only where it's darkest.
     base_angle = principal_angle(region)
     layers = [
-        ('light', region, 5.0 * w_half, base_angle),
-        ('mid', midplus, 2.4 * w_half, base_angle),
-        ('dark', dark, 3.0 * w_half, base_angle + 90.0),
+        ("light", region, 5.0 * w_half, base_angle),
+        ("mid", midplus, 2.4 * w_half, base_angle),
+        ("dark", dark, 3.0 * w_half, base_angle + 90.0),
     ]
     # One outline pass around each tonal mass — the pen edge a hand would give it.
     contours, _ = cv2.findContours(region.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
@@ -137,41 +136,46 @@ def tone_aware_centerline(src_path):
     return polylines, stats_out
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import re
+
     import matplotlib
-    matplotlib.use('Agg')
+
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     from bcnc.svg_centerliner_v2 import raster_to_centerline_svg
 
     cases = {
-        'foam-blob': '/home/impostor/ComfyUI/output/impostor-20260812_152527_00001_.png',
-        'trash-bag': '/home/impostor/ComfyUI/output/impostor-20260812_172004_00001_.png',
-        'mannequin': '/home/impostor/ComfyUI/output/impostor-20260812_171211_00001_.png',
+        "foam-blob": "/home/impostor/ComfyUI/output/impostor-20260812_152527_00001_.png",
+        "trash-bag": "/home/impostor/ComfyUI/output/impostor-20260812_172004_00001_.png",
+        "mannequin": "/home/impostor/ComfyUI/output/impostor-20260812_171211_00001_.png",
     }
     fig, axes = plt.subplots(len(cases), 3, figsize=(21, 7 * len(cases)))
     for row, (name, src) in enumerate(cases.items()):
         img = cv2.imread(src, cv2.IMREAD_GRAYSCALE)
-        axes[row][0].imshow(img, cmap='gray')
-        axes[row][0].set_title(f'{name}: source')
+        axes[row][0].imshow(img, cmap="gray")
+        axes[row][0].set_title(f"{name}: source")
 
-        out = f'v2_{name}.svg'
+        out = f"v2_{name}.svg"
         raster_to_centerline_svg(src, out)
         svg = open(out).read()
         for pts_attr in re.findall(r'points="([^"]+)"', svg):
-            nums = [float(x) for x in re.findall(r'-?[\d.]+', pts_attr)]
+            nums = [float(x) for x in re.findall(r"-?[\d.]+", pts_attr)]
             pts = [(nums[i], nums[i + 1]) for i in range(0, len(nums) - 1, 2)]
-            axes[row][1].plot([p[0] for p in pts], [p[1] for p in pts], 'k-', lw=0.55)
-        axes[row][1].set_title(f'{name}: current v2')
+            axes[row][1].plot([p[0] for p in pts], [p[1] for p in pts], "k-", lw=0.55)
+        axes[row][1].set_title(f"{name}: current v2")
         axes[row][1].invert_yaxis()
 
         polylines, st = tone_aware_centerline(src)
         for pl in polylines:
-            axes[row][2].plot(pl[:, 0], pl[:, 1], 'k-', lw=0.55)
-        axes[row][2].set_title(f"{name}: tone-aware (strokes {st['strokes']}, dark {st.get('dark', 0)}, mid {st.get('mid', 0)}, light {st.get('light', 0)})")
+            axes[row][2].plot(pl[:, 0], pl[:, 1], "k-", lw=0.55)
+        axes[row][2].set_title(
+            f"{name}: tone-aware (strokes {st['strokes']}, dark {st.get('dark', 0)}, mid {st.get('mid', 0)}, light {st.get('light', 0)})"
+        )
         axes[row][2].invert_yaxis()
         for ax in axes[row]:
-            ax.set_aspect('equal')
+            ax.set_aspect("equal")
     plt.tight_layout()
-    plt.savefig('tone_proto_compare.png', dpi=80)
-    print('saved tone_proto_compare.png')
+    plt.savefig("tone_proto_compare.png", dpi=80)
+    print("saved tone_proto_compare.png")

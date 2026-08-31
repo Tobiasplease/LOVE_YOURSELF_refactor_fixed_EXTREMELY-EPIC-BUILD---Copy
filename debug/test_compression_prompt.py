@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Test the compression prompt without examples."""
 import sys
-sys.path.insert(0, '/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy')
 
-from utils.inference import query_model
+sys.path.insert(0, "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy")
+
 import config.config as config
+from utils.inference import query_model
 
 recent_captions = [
     "The desk has papers scattered across it.",
@@ -14,7 +15,7 @@ recent_captions = [
     "Cables run behind the desk in tangles.",
 ]
 
-recent_text = '\n'.join(f'- "{c}"' for c in recent_captions)
+recent_text = "\n".join(f'- "{c}"' for c in recent_captions)
 
 prompt = f"""You are a consciousness. Reflect on these moments and distill your current state.
 
@@ -41,12 +42,9 @@ model_options = {
     "repeat_penalty": 1.2,
 }
 
-narrative_system_prompt = (
-    "You are reflecting on recent experience. "
-    "Speak in first person. Follow the format exactly."
-)
+narrative_system_prompt = "You are reflecting on recent experience. " "Speak in first person. Follow the format exactly."
 
-compression_model = getattr(config, 'MODEL_NAME', config.MODEL_NAME)
+compression_model = getattr(config, "MODEL_NAME", config.MODEL_NAME)
 print(f"Using model: {compression_model}")
 print("=" * 50)
 

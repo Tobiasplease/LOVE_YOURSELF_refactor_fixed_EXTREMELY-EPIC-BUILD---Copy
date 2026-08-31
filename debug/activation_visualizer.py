@@ -6,8 +6,8 @@ Open: http://localhost:5050
 """
 
 import json
-import sys
 import os
+import sys
 import time
 from threading import Thread
 
@@ -493,92 +493,95 @@ HTML_TEMPLATE = """
 </html>
 """
 
-@app.route('/')
+
+@app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-@app.route('/api/state')
+
+@app.route("/api/state")
 def get_state():
     """Return current activation network state from snapshot file."""
     try:
         # Read from snapshot file (written by machine.py process)
         from captioner.activation_memory import VISUALIZER_SNAPSHOT_FILE
+
         snapshot_file = VISUALIZER_SNAPSHOT_FILE
 
         if not os.path.exists(snapshot_file):
-            return jsonify({
-                'error': 'No snapshot file yet. Is machine.py running?',
-                'activations': {},
-                'edges': {},
-                'beliefs': [],
-                'recent_memories': [],
-                'novelty': 0,
-                'boredom': 0,
-            })
+            return jsonify(
+                {
+                    "error": "No snapshot file yet. Is machine.py running?",
+                    "activations": {},
+                    "edges": {},
+                    "beliefs": [],
+                    "recent_memories": [],
+                    "novelty": 0,
+                    "boredom": 0,
+                }
+            )
 
-        with open(snapshot_file, 'r') as f:
+        with open(snapshot_file, "r") as f:
             snapshot = json.load(f)
 
         # Check freshness
-        snapshot_age = time.time() - snapshot.get('timestamp', 0)
+        snapshot_age = time.time() - snapshot.get("timestamp", 0)
         if snapshot_age > 30:
-            snapshot['stale'] = True
+            snapshot["stale"] = True
 
         # Format memories for display
         recent_memories = []
         now = time.time()
-        for mem in snapshot.get('memories', [])[-5:]:
-            age = now - mem.get('timestamp', now)
+        for mem in snapshot.get("memories", [])[-5:]:
+            age = now - mem.get("timestamp", now)
             if age < 60:
                 time_ago = f"{int(age)}s ago"
             elif age < 3600:
                 time_ago = f"{int(age/60)}m ago"
             else:
                 time_ago = f"{int(age/3600)}h ago"
-            recent_memories.append({
-                'text': mem.get('text', '')[:80],
-                'time_ago': time_ago,
-                'zone': mem.get('zone', 'unknown')
-            })
+            recent_memories.append({"text": mem.get("text", "")[:80], "time_ago": time_ago, "zone": mem.get("zone", "unknown")})
 
         # Use beliefs from snapshot if available, otherwise generate from edges
-        beliefs = snapshot.get('beliefs', [])
+        beliefs = snapshot.get("beliefs", [])
         if not beliefs:
-            edges = snapshot.get('edges', {})
+            edges = snapshot.get("edges", {})
             for c1, neighbors in edges.items():
                 for c2, weight in neighbors.items():
                     if weight > 0.7 and c1 < c2:
                         beliefs.append(f"The {c1} and {c2} are connected.")
             beliefs = beliefs[:5]
 
-        return jsonify({
-            'activations': snapshot.get('activations', {}),
-            'edges': snapshot.get('edges', {}),
-            'spatial_tags': snapshot.get('spatial_tags', {}),
-            'concept_labels': snapshot.get('concept_labels', {}),
-            'beliefs': beliefs,
-            'trends': snapshot.get('trends', {}),
-            'recent_memories': list(reversed(recent_memories)),
-            'novelty': snapshot.get('novelty', 0.5),
-            'boredom': snapshot.get('boredom', 0.0),
-            'compression': snapshot.get('compression', {}),
-            'identity': snapshot.get('identity', {}),
-            'snapshot_age': snapshot_age,
-        })
+        return jsonify(
+            {
+                "activations": snapshot.get("activations", {}),
+                "edges": snapshot.get("edges", {}),
+                "spatial_tags": snapshot.get("spatial_tags", {}),
+                "concept_labels": snapshot.get("concept_labels", {}),
+                "beliefs": beliefs,
+                "trends": snapshot.get("trends", {}),
+                "recent_memories": list(reversed(recent_memories)),
+                "novelty": snapshot.get("novelty", 0.5),
+                "boredom": snapshot.get("boredom", 0.0),
+                "compression": snapshot.get("compression", {}),
+                "identity": snapshot.get("identity", {}),
+                "snapshot_age": snapshot_age,
+            }
+        )
     except Exception as e:
-        return jsonify({'error': str(e), 'activations': {}, 'edges': {}})
+        return jsonify({"error": str(e), "activations": {}, "edges": {}})
 
 
 def run_server():
     """Run the Flask server."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("ACTIVATION MEMORY VISUALIZER")
-    print("="*60)
+    print("=" * 60)
     print("\nOpen in browser: http://localhost:5050")
     print("Press Ctrl+C to stop\n")
 
-    app.run(host='0.0.0.0', port=5050, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_server()

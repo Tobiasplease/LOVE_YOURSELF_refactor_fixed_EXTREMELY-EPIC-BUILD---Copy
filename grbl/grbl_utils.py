@@ -3,10 +3,10 @@ GRBL Utility Functions
 Shared functions for GRBL communication and control
 """
 
+import math
 import subprocess
 import threading
 import time
-import math
 
 import serial
 from serial.tools import list_ports
@@ -15,25 +15,25 @@ from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 
 try:
-    from .warp_transform import warp_transform_line, find_xy_bounds_from_lines
+    from .warp_transform import find_xy_bounds_from_lines, warp_transform_line
 except ImportError:
-    from warp_transform import warp_transform_line, find_xy_bounds_from_lines
+    from warp_transform import find_xy_bounds_from_lines, warp_transform_line
 
 # Import pen servo configuration
 try:
     from config.config import (
+        GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING,
         GRBL_PEN_DOWN_S,
+        GRBL_PEN_DOWN_SETTLE_S,
+        GRBL_PEN_UP_DWELL_S,
+        GRBL_PEN_UP_IS_HIGH,
+        GRBL_PEN_UP_REPEATS,
         GRBL_PEN_UP_S,
+        GRBL_PEN_UP_SETTLE_S,
         GRBL_SPINDLE_MAX_S,
         GRBL_SPINDLE_MIN_S,
-        GRBL_WARP_TRANSFORM,
-        GRBL_PEN_UP_REPEATS,
-        GRBL_PEN_UP_DWELL_S,
         GRBL_USE_CENTRALIZED_PEN_UP,
-        GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING,
-        GRBL_PEN_UP_IS_HIGH,
-        GRBL_PEN_DOWN_SETTLE_S,
-        GRBL_PEN_UP_SETTLE_S,
+        GRBL_WARP_TRANSFORM,
     )
 except Exception:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S, GRBL_SPINDLE_MAX_S, GRBL_SPINDLE_MIN_S = 30, 50, 255, 0
@@ -82,8 +82,8 @@ class DrawingLightbulbFluctuation:
                 self.lightbulb_controller = state_manager.lightbulb
             else:
                 # Try to import and create if not available
-                from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
                 from config.config import USE_LIGHTBULB_PWM
+                from servo_control.lightbulb_controller_nonblocking import NonBlockingLightbulbController
 
                 if USE_LIGHTBULB_PWM:
                     self.lightbulb_controller = NonBlockingLightbulbController("/dev/arduino_lightbulb", debug=False)
@@ -1104,9 +1104,10 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
 
     # Notify drawing state manager with actual drawing prompt
     try:
+        import os
+
         from utils.drawing_state import DrawingState
         from utils.state_manager import state_manager
-        import os
 
         # Get drawing summary for state tracking
         # The drawing summary was generated and stored in drawing.py during prompt generation
@@ -1129,7 +1130,7 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
 
     # Lock gaze system to drawing position during execution
     try:
-        from config.config import USE_SERVO, TILT_MIN
+        from config.config import TILT_MIN, USE_SERVO
         from vision.gaze import set_drawing_mode
 
         if USE_SERVO:
@@ -1423,8 +1424,8 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             What survives is the fact: the pen finished, and the machine should
             remember drawing.)"""
             try:
-                from utils.state_manager import state_manager
                 from utils.drawing_state import DrawingState
+                from utils.state_manager import state_manager
 
                 drawing_info = DrawingState.get_drawing_info()
                 compressed_desc = drawing_info.get("description", "a drawing") if drawing_info else "a drawing"
@@ -1713,9 +1714,9 @@ def process_svg_to_grbl(
                 # === PAPER CHECK AFTER HOMING (opt-in) ===
                 try:
                     from config.config import (
+                        ALLOW_PAPER_DETECTION_OVERRIDE,
                         ENABLE_PAPER_DETECTION,
                         ENABLE_POST_HOME_PAPER_CHECK,
-                        ALLOW_PAPER_DETECTION_OVERRIDE,
                         PAPER_DETECTION_GAZE_PAN,
                         PAPER_DETECTION_GAZE_TILT,
                     )
@@ -1800,7 +1801,7 @@ def process_svg_to_grbl(
                 # This eliminates the gap where gaze could track a person between
                 # paper search ending and execute_gcode_file engaging its own lock
                 try:
-                    from config.config import USE_SERVO, TILT_MIN
+                    from config.config import TILT_MIN, USE_SERVO
                     from vision.gaze import set_drawing_mode
 
                     if USE_SERVO:
@@ -1854,6 +1855,7 @@ def process_svg_to_grbl(
                 # This ensures proper spacing between actual drawings, not just prompt generations
                 try:
                     import sys
+
                     from utils.state_manager import state_manager
 
                     # Get the drawing prompt that was used for this drawing

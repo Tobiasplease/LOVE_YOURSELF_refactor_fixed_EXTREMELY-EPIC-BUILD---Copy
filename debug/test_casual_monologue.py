@@ -79,33 +79,41 @@ def get_perception(img_path: str) -> str:
     with open(img_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode()
 
-    resp = requests.post(OLLAMA_URL, json={
-        "model": PERCEPTION_MODEL,
-        "prompt": "What is in front of you right now?",
-        "images": [img_b64],
-        "stream": False,
-        "system": PERCEPTION_SYSTEM,
-        "options": {"temperature": 0.3, "num_predict": 100, "num_ctx": 4096},
-    }, timeout=60)
+    resp = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": PERCEPTION_MODEL,
+            "prompt": "What is in front of you right now?",
+            "images": [img_b64],
+            "stream": False,
+            "system": PERCEPTION_SYSTEM,
+            "options": {"temperature": 0.3, "num_predict": 100, "num_ctx": 4096},
+        },
+        timeout=60,
+    )
     return resp.json().get("response", "").strip()
 
 
 def get_monologue(system_prompt: str, user_prompt: str) -> str:
-    resp = requests.post(OLLAMA_URL, json={
-        "model": MODEL_NAME,
-        "prompt": user_prompt,
-        "stream": False,
-        "system": system_prompt,
-        "options": {
-            "temperature": 0.4,
-            "top_p": 0.8,
-            "repeat_penalty": 1.25,
-            "num_predict": 80,
-            "num_ctx": 4096,
-            "seed": random.randint(1, 1000000),
-            "stop": ["\n\n", "[Image", "[image", "[INST]", "[/INST]"],
+    resp = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": MODEL_NAME,
+            "prompt": user_prompt,
+            "stream": False,
+            "system": system_prompt,
+            "options": {
+                "temperature": 0.4,
+                "top_p": 0.8,
+                "repeat_penalty": 1.25,
+                "num_predict": 80,
+                "num_ctx": 4096,
+                "seed": random.randint(1, 1000000),
+                "stop": ["\n\n", "[Image", "[image", "[INST]", "[/INST]"],
+            },
         },
-    }, timeout=60)
+        timeout=60,
+    )
     return resp.json().get("response", "").strip()
 
 

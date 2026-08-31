@@ -84,11 +84,11 @@ def update_lung_position(
     mode_multipliers = {
         "FAST_BURST": 0.4,  # Faster but still servo-friendly
         "ALERT_HOLD": 1.0,  # Normal speed with pauses
-        "SLOW_SIGH": 1.8,   # Slower but smoother (was 2.2)
-        "SHALLOW": 1.3,     # Gentle, not choppy (was 1.5)
+        "SLOW_SIGH": 1.8,  # Slower but smoother (was 2.2)
+        "SHALLOW": 1.3,  # Gentle, not choppy (was 1.5)
         "CONTEMPLATIVE_PAUSE": 1.0,  # Normal speed with long pauses
-        "HESITANT_PAUSE": 1.2,       # Slightly slower with hesitation
-        "WITHDRAWN_PAUSE": 1.4,      # Subdued with long pauses
+        "HESITANT_PAUSE": 1.2,  # Slightly slower with hesitation
+        "WITHDRAWN_PAUSE": 1.4,  # Subdued with long pauses
         "BIRTH_WAKE": 0.4,
         "NORMAL": 1.0,
     }
@@ -107,13 +107,13 @@ def update_lung_position(
     # === Emotion-based pause modulation ===
     pause_scale = pattern["pause_scale"]
     mode_pause_modifier = {
-        "FAST_BURST": 0.3,           # Quick energy pauses
-        "ALERT_HOLD": 1.2,           # Attentive pauses
-        "SLOW_SIGH": 1.6,            # Sighing pauses (reduced from 1.8)
-        "SHALLOW": 1.4,              # Gentle hesitation
+        "FAST_BURST": 0.3,  # Quick energy pauses
+        "ALERT_HOLD": 1.2,  # Attentive pauses
+        "SLOW_SIGH": 1.6,  # Sighing pauses (reduced from 1.8)
+        "SHALLOW": 1.4,  # Gentle hesitation
         "CONTEMPLATIVE_PAUSE": 2.2,  # Long thoughtful pauses
-        "HESITANT_PAUSE": 2.8,       # Extended hesitation
-        "WITHDRAWN_PAUSE": 3.5,      # Very long listless pauses
+        "HESITANT_PAUSE": 2.8,  # Extended hesitation
+        "WITHDRAWN_PAUSE": 3.5,  # Very long listless pauses
         "BIRTH_WAKE": 0.1,
         "NORMAL": 1.0,
     }.get(breath_mode, 1.0)

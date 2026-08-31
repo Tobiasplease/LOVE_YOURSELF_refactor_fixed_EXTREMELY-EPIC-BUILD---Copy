@@ -117,4 +117,3 @@ def unload_model() -> None:
     from utils.llama_server import stop_server
 
     stop_server()
-

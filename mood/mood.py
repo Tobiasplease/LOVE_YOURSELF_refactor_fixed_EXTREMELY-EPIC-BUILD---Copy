@@ -42,6 +42,7 @@ class MoodEngine:
         read_valence, read_arousal = 0.0, 0.35
         try:
             from captioner.context_compression import context_compressor
+
             read = context_compressor.get_last_mood_read()
             if read:
                 read_valence = read.get("valence", 0.0)
@@ -59,7 +60,7 @@ class MoodEngine:
         self.mood_vector = (
             (1 - momentum) * valence + momentum * prev_valence,
             (1 - momentum) * arousal + momentum * prev_arousal,
-            (1 - momentum) * clarity + momentum * prev_clarity
+            (1 - momentum) * clarity + momentum * prev_clarity,
         )
 
         # Legacy scalar (0..1) now derives from blended valence — the keyword

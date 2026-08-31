@@ -67,4 +67,3 @@ def fk_2link(theta1: float, theta2: float, base: Tuple[float, float], L1: float,
     tx = ex + L2 * math.cos(theta1 + theta2)
     ty = ey + L2 * math.sin(theta1 + theta2)
     return (ex, ey), (tx, ty)
-

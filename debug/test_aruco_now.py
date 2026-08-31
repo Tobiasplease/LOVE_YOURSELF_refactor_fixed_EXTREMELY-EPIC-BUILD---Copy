@@ -3,12 +3,15 @@
 Simple ArUco marker detection test - LIVE VIEW
 Just shows what the camera sees and if marker is detected.
 """
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import cv2
 import time
+
+import cv2
+
 from config.config import CAMERA_INDEX, PAPER_DETECTION_GAZE_PAN, PAPER_DETECTION_GAZE_TILT
 
 print("=" * 60)
@@ -28,6 +31,7 @@ print(f"✓ Camera working: {frame.shape}")
 # Initialize servos
 try:
     from servo_control.servo_control import ServoController
+
     servos = ServoController()
     print(f"✓ Servos initialized")
 
@@ -110,34 +114,28 @@ try:
             height_px = int(marker_corners[2][1] - marker_corners[1][1])
 
             # Green overlay - DETECTED
-            cv2.putText(frame, "MARKER DETECTED!", (20, 40),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
-            cv2.putText(frame, f"ID: {ids[0][0]}", (20, 80),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-            cv2.putText(frame, f"Size: {width_px}x{height_px}px", (20, 110),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(frame, "MARKER DETECTED!", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+            cv2.putText(frame, f"ID: {ids[0][0]}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.putText(frame, f"Size: {width_px}x{height_px}px", (20, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
             rate = detection_count / frame_count * 100
-            cv2.putText(frame, f"Rate: {rate:.0f}%", (20, 140),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(frame, f"Rate: {rate:.0f}%", (20, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
             # Console output every 30 frames
             if detection_count % 30 == 1:
                 print(f"✓ Detecting: ID={ids[0][0]}, Size={width_px}x{height_px}px, Rate={rate:.0f}%")
         else:
             # Red overlay - NO DETECTION
-            cv2.putText(frame, "NO MARKER", (20, 40),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+            cv2.putText(frame, "NO MARKER", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
 
             rate = detection_count / frame_count * 100 if frame_count > 0 else 0
-            cv2.putText(frame, f"Rate: {rate:.0f}%", (20, 80),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cv2.putText(frame, f"Rate: {rate:.0f}%", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
         # Show frame
         cv2.imshow("ArUco Detection Test", frame)
 
         # Quit on 'q'
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
 except KeyboardInterrupt:

@@ -41,6 +41,7 @@ class LogViewer:
             run_id = os.path.basename(log_file).replace("-event-log.json", "")
             try:
                 from event_logging.event_logger import load_event_log_entries
+
                 entries = load_event_log_entries(log_file)
                 if entries:
                     logs[run_id] = entries

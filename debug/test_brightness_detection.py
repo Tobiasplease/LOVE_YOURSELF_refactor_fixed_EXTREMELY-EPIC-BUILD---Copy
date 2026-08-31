@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import sys
+
 import cv2
-sys.path.insert(0, '/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy')
+
+sys.path.insert(0, "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy")
 
 from safety.paper_detection import PaperDetector
 

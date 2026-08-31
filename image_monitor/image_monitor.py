@@ -5,6 +5,9 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
+import cv2
+import numpy as np
+
 from bcnc import raster_to_centerline_svg
 from config.config import CENTER_LINE_SVG, COMFY_OUTPUT_FOLDER, EXECUTE_GRBL_GCODE, MOOD_SNAPSHOT_FOLDER
 from event_logging.event_logger import log_json_entry
@@ -12,14 +15,21 @@ from event_logging.log_type import LogType
 from grbl import svg_to_grbl
 from grbl.idle_movement_manager import pause_for_drawing, resume_after_drawing
 from utils.state_manager import state_manager
-import numpy as np
-import cv2
 
 
 class ImageMonitor:
     """Monitor a folder for new images and log them when they appear."""
 
-    def __init__(self, monitor_folder=None, log_folder=None, check_interval=1.0, on_image_complete: Optional[Callable[[str], None]] = None, camera=None, servos=None, captioner=None):
+    def __init__(
+        self,
+        monitor_folder=None,
+        log_folder=None,
+        check_interval=1.0,
+        on_image_complete: Optional[Callable[[str], None]] = None,
+        camera=None,
+        servos=None,
+        captioner=None,
+    ):
         self.monitor_folder = monitor_folder or COMFY_OUTPUT_FOLDER
         self.log_folder = log_folder or MOOD_SNAPSHOT_FOLDER
         self.check_interval = check_interval
@@ -137,8 +147,7 @@ class ImageMonitor:
                 # GPU (Aug 12). llama must never run alongside the vectorizer;
                 # a fresh window keeps the flag held until finish below.
                 try:
-                    state_manager.start_drawing_generation(
-                        getattr(state_manager, "current_drawing_prompt", None) or "vectorizing")
+                    state_manager.start_drawing_generation(getattr(state_manager, "current_drawing_prompt", None) or "vectorizing")
                 except Exception:
                     pass
 
@@ -170,14 +179,14 @@ class ImageMonitor:
                     # Trigger self-critique AFTER physical drawing completes
                     if self.on_image_complete:
                         self.on_image_complete(png_path)
-                    
+
                     # Note: CNC execution state is cleared by grbl_utils.py after physical drawing completes
                 else:
                     # Determine if this was a deliberate skip due to no paper
                     no_paper_skip = False
                     try:
                         now_ts = time.time()
-                        if getattr(state_manager, 'last_paper_check_ts', 0) > 0 and not getattr(state_manager, 'paper_present', True):
+                        if getattr(state_manager, "last_paper_check_ts", 0) > 0 and not getattr(state_manager, "paper_present", True):
                             if now_ts - state_manager.last_paper_check_ts < 5.0:
                                 no_paper_skip = True
                     except Exception:
@@ -189,7 +198,7 @@ class ImageMonitor:
                     if no_paper_skip:
                         # If a generation cycle was active, end it now to avoid long timeouts blocking captions
                         try:
-                            if getattr(state_manager, 'is_generating_drawing', False):
+                            if getattr(state_manager, "is_generating_drawing", False):
                                 state_manager.finish_drawing_generation()
                                 state_manager.clear_expected_output_prefix()
                         except Exception:
@@ -197,15 +206,20 @@ class ImageMonitor:
 
                         # Record context for LLM/memory
                         try:
-                            if self.captioner and hasattr(self.captioner, 'observe'):
-                                reason = getattr(state_manager, 'last_paper_check_reason', 'no_paper')
-                                self.captioner.observe(f"Skipped drawing: no paper detected ({reason}).", getattr(self.captioner, 'current_mood', 0.5), png_path, memory_type="environment")
+                            if self.captioner and hasattr(self.captioner, "observe"):
+                                reason = getattr(state_manager, "last_paper_check_reason", "no_paper")
+                                self.captioner.observe(
+                                    f"Skipped drawing: no paper detected ({reason}).",
+                                    getattr(self.captioner, "current_mood", 0.5),
+                                    png_path,
+                                    memory_type="environment",
+                                )
                         except Exception:
                             pass
 
                         log_json_entry(
                             LogType.DECISION,
-                            {"decision": "skip_drawing_no_paper", "reason": getattr(state_manager, 'last_paper_check_reason', '')},
+                            {"decision": "skip_drawing_no_paper", "reason": getattr(state_manager, "last_paper_check_reason", "")},
                             print_message="[🛑] Skipped drawing: no paper detected",
                         )
                     else:
@@ -242,14 +256,14 @@ class ImageMonitor:
                         # Trigger self-critique AFTER physical drawing completes
                         if self.on_image_complete:
                             self.on_image_complete(png_path)
-                        
+
                         # Note: CNC execution state is cleared by grbl_utils.py after physical drawing completes
                     else:
                         # Determine if skipped due to no paper and log accordingly
                         no_paper_skip = False
                         try:
                             now_ts = time.time()
-                            if getattr(state_manager, 'last_paper_check_ts', 0) > 0 and not getattr(state_manager, 'paper_present', True):
+                            if getattr(state_manager, "last_paper_check_ts", 0) > 0 and not getattr(state_manager, "paper_present", True):
                                 if now_ts - state_manager.last_paper_check_ts < 5.0:
                                     no_paper_skip = True
                         except Exception:
@@ -258,21 +272,26 @@ class ImageMonitor:
                         state_manager.finish_cnc_execution()
                         # If generation was active, end it to prevent captioner waiting for timeout
                         try:
-                            if getattr(state_manager, 'is_generating_drawing', False):
+                            if getattr(state_manager, "is_generating_drawing", False):
                                 state_manager.finish_drawing_generation()
                                 state_manager.clear_expected_output_prefix()
                         except Exception:
                             pass
                         if no_paper_skip:
                             try:
-                                if self.captioner and hasattr(self.captioner, 'observe'):
-                                    reason = getattr(state_manager, 'last_paper_check_reason', 'no_paper')
-                                    self.captioner.observe(f"Skipped drawing: no paper detected ({reason}).", getattr(self.captioner, 'current_mood', 0.5), png_path, memory_type="environment")
+                                if self.captioner and hasattr(self.captioner, "observe"):
+                                    reason = getattr(state_manager, "last_paper_check_reason", "no_paper")
+                                    self.captioner.observe(
+                                        f"Skipped drawing: no paper detected ({reason}).",
+                                        getattr(self.captioner, "current_mood", 0.5),
+                                        png_path,
+                                        memory_type="environment",
+                                    )
                             except Exception:
                                 pass
                             log_json_entry(
                                 LogType.DECISION,
-                                {"decision": "skip_drawing_no_paper", "reason": getattr(state_manager, 'last_paper_check_reason', '')},
+                                {"decision": "skip_drawing_no_paper", "reason": getattr(state_manager, "last_paper_check_reason", "")},
                                 print_message="[🛑] Skipped drawing: no paper detected",
                             )
                         else:

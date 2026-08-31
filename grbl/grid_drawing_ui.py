@@ -272,6 +272,7 @@ class GridDrawingUI:
             result_y = (1 - v) * bottom[1] + v * top[1]
 
             return result_x, result_y
+
         # Den här ska in direkt efter bilinear interpolation i ui-filen
         # Den mappar (x,y) from 40x40-rutan in i en skev rektangel som blir en kvadratish när man skriver ut den
 
@@ -281,17 +282,15 @@ class GridDrawingUI:
             v = y / y_max
 
             # Den skeva rektangelns hörn i 40x40-världen, uppskattade från rutnätet så de kan behöver putsas
-            Dx, Dy = 40, 0   # vänster längst från robot
-            Ax, Ay = 8, 18   # vänster närmast robot
-            Bx, By = 0, 40   # höger närmast robot
+            Dx, Dy = 40, 0  # vänster längst från robot
+            Ax, Ay = 8, 18  # vänster närmast robot
+            Bx, By = 0, 40  # höger närmast robot
             Cx, Cy = 33, 20  # höger längst från robot
 
             # Bilinjär interpolation
-            X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u)* v * Bx + u * v * Cx
+            X = (1 - u) * (1 - v) * Ax + u * (1 - v) * Dx + (1 - u) * v * Bx + u * v * Cx
             Y = (1 - u) * (1 - v) * Ay + u * (1 - v) * Dy + (1 - u) * v * By + u * v * Cy
             return X, Y
-
-
 
         # Extract coordinates from G-code line
         x_match = re.search(r"X([-+]?\d*\.?\d+)", gcode_line, re.IGNORECASE)

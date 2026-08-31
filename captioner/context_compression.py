@@ -9,9 +9,9 @@ import json
 import os
 import queue
 import threading
-from typing import Optional
 import time
 from collections import deque
+from typing import Optional
 
 from captioner.prompt_registry import P
 from config import config

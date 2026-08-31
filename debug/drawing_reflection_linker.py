@@ -5,16 +5,18 @@ Usage: python debug/drawing_reflection_linker.py [run_id]
 """
 
 import json
-import sys
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
+
 def extract_timestamp_from_filename(filename):
     """Extract timestamp from drawing_introspection_TIMESTAMP.jpg"""
-    if 'drawing_introspection_' in filename:
-        return filename.split('drawing_introspection_')[1].split('.')[0]
+    if "drawing_introspection_" in filename:
+        return filename.split("drawing_introspection_")[1].split(".")[0]
     return None
+
 
 def load_run_data(run_id):
     """Load the event log JSON for a run"""
@@ -23,8 +25,9 @@ def load_run_data(run_id):
         print(f"Error: Log file {log_file} not found")
         return None
 
-    with open(log_file, 'r') as f:
+    with open(log_file, "r") as f:
         return json.load(f)
+
 
 def find_drawing_creation_story(events, image_timestamp):
     """Find the creative decision process that led to this drawing"""
@@ -33,8 +36,7 @@ def find_drawing_creation_story(events, image_timestamp):
     # Find the ComfyUI prompt that created this drawing
     comfy_prompt = None
     for event in events:
-        if (event['type'] == 'comfy_prompt' and
-            abs(event.get('timestamp', 0) - target_time) <= 300):  # Within 5 minutes
+        if event["type"] == "comfy_prompt" and abs(event.get("timestamp", 0) - target_time) <= 300:  # Within 5 minutes
             comfy_prompt = event
             break
 
@@ -42,16 +44,16 @@ def find_drawing_creation_story(events, image_timestamp):
         return None, []
 
     # Find reflections and captions in the 10 minutes BEFORE the drawing decision
-    decision_time = comfy_prompt['timestamp']
+    decision_time = comfy_prompt["timestamp"]
     leading_events = []
 
     for event in events:
-        event_time = event.get('timestamp', 0)
-        if (decision_time - 600 <= event_time <= decision_time and  # 10 minutes before
-            event['type'] in ['caption', 'reflection']):
+        event_time = event.get("timestamp", 0)
+        if decision_time - 600 <= event_time <= decision_time and event["type"] in ["caption", "reflection"]:  # 10 minutes before
             leading_events.append(event)
 
-    return comfy_prompt, sorted(leading_events, key=lambda x: x['timestamp'])
+    return comfy_prompt, sorted(leading_events, key=lambda x: x["timestamp"])
+
 
 def display_drawing_analysis(run_id, image_file=None):
     """Display drawing analysis for a specific image or all images in a run"""
@@ -87,7 +89,7 @@ def display_drawing_analysis(run_id, image_file=None):
             print(f"\n🎨 FINAL DRAWING PROMPT SENT TO COMFYUI:")
             print(f"📅 {comfy_prompt['iso_timestamp']}")
             print(f"{'='*60}")
-            print(comfy_prompt.get('drawing_prompt', 'N/A'))
+            print(comfy_prompt.get("drawing_prompt", "N/A"))
 
             print(f"\n🧠 LEADING THOUGHTS (10 minutes before decision):")
             print(f"{'='*60}")
@@ -96,17 +98,17 @@ def display_drawing_analysis(run_id, image_file=None):
                 print("No leading reflections found")
             else:
                 for i, event in enumerate(leading_events, 1):
-                    time_diff = comfy_prompt['timestamp'] - event['timestamp']
+                    time_diff = comfy_prompt["timestamp"] - event["timestamp"]
                     minutes_before = time_diff // 60
 
                     print(f"\n{i}. [{event['iso_timestamp']}] (-{minutes_before}m {time_diff % 60}s before)")
-                    if event['type'] == 'caption':
+                    if event["type"] == "caption":
                         print(f"   👁️  SAW: {event['caption']}")
-                    elif event['type'] == 'reflection':
+                    elif event["type"] == "reflection":
                         print(f"   💭 REFLECTED: {event.get('content', 'N/A')}")
     else:
         # List all drawings with brief summaries
-        image_files = [f for f in os.listdir(images_dir) if f.endswith('.jpg')]
+        image_files = [f for f in os.listdir(images_dir) if f.endswith(".jpg")]
         image_files.sort()
 
         print(f"\n{'='*80}")
@@ -120,7 +122,7 @@ def display_drawing_analysis(run_id, image_file=None):
 
                 print(f"\n{i+1}. {image_file}")
                 if comfy_prompt:
-                    prompt_preview = comfy_prompt.get('drawing_prompt', 'N/A')[:100]
+                    prompt_preview = comfy_prompt.get("drawing_prompt", "N/A")[:100]
                     print(f"   🎨 Drew: {prompt_preview}...")
                 else:
                     print(f"   No ComfyUI prompt found")
@@ -130,6 +132,7 @@ def display_drawing_analysis(run_id, image_file=None):
 
         print(f"\nTo analyze a specific drawing, run:")
         print(f"python debug/drawing_reflection_linker.py {run_id} <image_filename>")
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

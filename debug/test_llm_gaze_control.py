@@ -29,22 +29,24 @@ Controls:
   p - Force person detection (debug)
 """
 
-import sys
-import os
-import time
-import cv2
 import argparse
+import os
+import sys
+import time
+
+import cv2
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config.config import CAMERA_INDEX, PAN_MAX, PAN_MIN, TILT_MAX, TILT_MIN
 from perception.person_detection_state import get_person_detection_state
 from vision import gaze
 from vision.spatial_awareness import get_spatial_awareness_engine
-from config.config import PAN_MIN, PAN_MAX, TILT_MIN, TILT_MAX, CAMERA_INDEX
 
 # YOLO (optional)
 try:
     from ultralytics import YOLO
+
     YOLO_AVAILABLE = True
 except ImportError:
     YOLO_AVAILABLE = False
@@ -52,7 +54,6 @@ except ImportError:
 
 # Face detection
 import numpy as np
-
 
 # === CONFIGURATION ===
 LLM_QUERY_INTERVAL = 3.0  # Seconds between LLM zone decisions
@@ -98,8 +99,9 @@ class GazeController:
         # Servos
         if self.use_hardware:
             try:
-                from servo_control.servo_control import ServoController
                 from config.config import SERIAL_PORT
+                from servo_control.servo_control import ServoController
+
                 self.servos = ServoController(port=SERIAL_PORT)
                 if self.servos.ser is None:
                     print("[!] Servo serial connection failed")
@@ -182,7 +184,6 @@ class GazeController:
 
         return False, None
 
-
     def draw_overlay(self, frame, person_detected: bool, person_box, face_box=None):
         """Draw status overlay on frame."""
         h, w = frame.shape[:2]
@@ -193,33 +194,30 @@ class GazeController:
         if person_box is not None:
             x1, y1, x2, y2 = map(int, person_box)
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, "YOLO", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            cv2.putText(frame, "YOLO", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
         # Draw face box if detected (cyan)
         if face_box is not None:
             x1, y1, x2, y2 = face_box
             cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)
-            cv2.putText(frame, "FACE", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+            cv2.putText(frame, "FACE", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 
         # Status panel background
         cv2.rectangle(frame, (5, 5), (400, 200), (0, 0, 0), -1)
         cv2.rectangle(frame, (5, 5), (400, 200), (0, 255, 0), 1)
 
         # Title
-        cv2.putText(frame, "LLM-DIRECTED ZONE GAZE", (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(frame, "LLM-DIRECTED ZONE GAZE", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
         # Current zone (where gaze is looking)
         zone_text = gaze.get_current_zone_text()
-        cv2.putText(frame, f"Looking: {zone_text}", (10, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(frame, f"Looking: {zone_text}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         # LLM target zone
         llm_zone = f"{gaze.llm_target_zone_pan}/{gaze.llm_target_zone_tilt}"
         active = "ACTIVE" if gaze.llm_zone_active else "inactive"
         zone_color = (0, 255, 0) if gaze.llm_zone_active else (100, 100, 100)
-        cv2.putText(frame, f"LLM zone: {llm_zone} ({active})", (10, 70),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, zone_color, 1)
+        cv2.putText(frame, f"LLM zone: {llm_zone} ({active})", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, zone_color, 1)
 
         # Gaze state
         gaze_state = gaze.state.upper()
@@ -230,34 +228,28 @@ class GazeController:
             "AWARE": (255, 165, 0),
         }
         gaze_color = gaze_colors.get(gaze_state, (255, 255, 255))
-        cv2.putText(frame, f"Gaze state: {gaze_state}", (10, 90),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, gaze_color, 1)
+        cv2.putText(frame, f"Gaze state: {gaze_state}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, gaze_color, 1)
 
         # Servo position
-        cv2.putText(frame, f"Servos: pan={self.pan:.0f} tilt={self.tilt:.0f}", (10, 110),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        cv2.putText(frame, f"Servos: pan={self.pan:.0f} tilt={self.tilt:.0f}", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
         # Person state
         person_state_str = ps.get("person_state", "absent")
         person_color = (0, 255, 0) if ps["is_present"] else (100, 100, 100)
-        cv2.putText(frame, f"Person: {person_state_str}", (10, 130),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, person_color, 1)
+        cv2.putText(frame, f"Person: {person_state_str}", (10, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, person_color, 1)
 
         # Tracking context (if tracking)
         if gaze.state == "tracking":
             tracking_ctx = gaze.get_tracking_context()
-            cv2.putText(frame, f"Tracking: {tracking_ctx}", (10, 150),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
+            cv2.putText(frame, f"Tracking: {tracking_ctx}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
 
         # Last LLM response
         if status["last_response"]:
             response = status["last_response"][:50]
-            cv2.putText(frame, f"LLM: {response}", (10, 170),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 255, 150), 1)
+            cv2.putText(frame, f"LLM: {response}", (10, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 255, 150), 1)
 
         # Last LLM direction
-        cv2.putText(frame, f"LLM says: {status['last_direction'].upper()}", (10, 190),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 255), 2)
+        cv2.putText(frame, f"LLM says: {status['last_direction'].upper()}", (10, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 255), 2)
 
         # Zone indicator bar at bottom
         zone_width = w // 3
@@ -267,9 +259,8 @@ class GazeController:
             color = (0, 100, 0)
             if gaze.llm_target_zone_pan == zone_name and gaze.llm_zone_active:
                 color = (0, 255, 0)
-            cv2.rectangle(frame, (x_start, h-30), (x_start + zone_width, h-5), color, -1)
-            cv2.putText(frame, zone_name.upper(), (x_start + 10, h-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.rectangle(frame, (x_start, h - 30), (x_start + zone_width, h - 5), color, -1)
+            cv2.putText(frame, zone_name.upper(), (x_start + 10, h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         return frame
 
@@ -358,7 +349,7 @@ class GazeController:
                     face_box=tuple(face_box) if face_detected else None,
                     current_emotion_state="calm_observant",
                     yolo_person_detected=smoothed_person,
-                    person_direction=ps.get("direction")
+                    person_direction=ps.get("direction"),
                 )
 
                 # Move physical servos
@@ -378,7 +369,9 @@ class GazeController:
                     status = self.spatial_engine.get_status()
                     llm_zone = f"{gaze.llm_target_zone_pan}/{gaze.llm_target_zone_tilt}"
                     active = "ON" if gaze.llm_zone_active else "off"
-                    print(f"[STATUS] {gaze.state:8s} | Looking: {zone_text:12s} | LLM zone: {llm_zone} ({active}) | pan={new_pan:.0f}° tilt={new_tilt:.0f}°")
+                    print(
+                        f"[STATUS] {gaze.state:8s} | Looking: {zone_text:12s} | LLM zone: {llm_zone} ({active}) | pan={new_pan:.0f}° tilt={new_tilt:.0f}°"
+                    )
 
                 # Draw overlay and show
                 if SHOW_VIDEO:
@@ -387,9 +380,9 @@ class GazeController:
 
                 # Handle keys
                 key = cv2.waitKey(30) & 0xFF
-                if key == ord('q'):
+                if key == ord("q"):
                     break
-                elif key == ord('r'):
+                elif key == ord("r"):
                     print("[RESET] Returning to center, disabling LLM zone")
                     gaze.servo_x = 90
                     gaze.servo_y = 90
@@ -398,22 +391,22 @@ class GazeController:
                     gaze.llm_target_zone_pan = "ahead"
                     gaze.llm_target_zone_tilt = "level"
                     self.move_servos(90, 90)
-                elif key == ord('l'):
+                elif key == ord("l"):
                     print("[MANUAL] Zone → LEFT")
                     gaze.set_llm_zone("left")
-                elif key == ord('a'):
+                elif key == ord("a"):
                     print("[MANUAL] Zone → AHEAD")
                     gaze.set_llm_zone("ahead")
-                elif key == ord('h'):
+                elif key == ord("h"):
                     print("[MANUAL] Zone → RIGHT")
                     gaze.set_llm_zone("right")
-                elif key == ord('u'):
+                elif key == ord("u"):
                     print("[MANUAL] Zone → UP")
                     gaze.set_llm_zone("ahead", "up")
-                elif key == ord('d'):
+                elif key == ord("d"):
                     print("[MANUAL] Zone → DOWN")
                     gaze.set_llm_zone("ahead", "down")
-                elif key == ord('p'):
+                elif key == ord("p"):
                     print("[DEBUG] Forcing person detection")
                     self.person_state.update_yolo_detection(True, 0.95)
                     self.person_state.update_face_detection(0.9, (280, 200, 360, 280))

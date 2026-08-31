@@ -1,7 +1,8 @@
-import random
-import time
 import math
+import random
 import threading
+import time
+
 import numpy as np
 
 from config.config import (
@@ -12,10 +13,10 @@ from config.config import (
     FACE_TRACK_MAX_STEP,
     FLIP_X,
     FLIP_Y,
-    PAN_MIN,
     PAN_MAX,
-    TILT_MIN,
+    PAN_MIN,
     TILT_MAX,
+    TILT_MIN,
 )
 
 # === VELOCITY LIMITING CONSTANTS ===

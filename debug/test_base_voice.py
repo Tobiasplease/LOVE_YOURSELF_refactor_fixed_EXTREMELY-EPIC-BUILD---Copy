@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 LLAMA_SERVER_URL = "http://localhost:8080"
 
-from captioner.prompts import get_monologue_system_prompt, build_situational_line  # noqa: E402
+from captioner.prompts import build_situational_line, get_monologue_system_prompt  # noqa: E402
 from config import config  # noqa: E402
 
 CAPTION_OPTS = {"temperature": 0.7, "top_p": 0.85, "repeat_penalty": 1.15}
@@ -45,8 +45,8 @@ def make_agent():
     detox situational line (session time + sticky presence belief)."""
     now = time.time()
     a = types.SimpleNamespace()
-    a.true_session_start = now - 120          # "Been watching 2 minutes"
-    a._presence_believed = True               # someone/something is in view
+    a.true_session_start = now - 120  # "Been watching 2 minutes"
+    a._presence_believed = True  # someone/something is in view
     a._presence_seen_now = True
     a._presence_since = now - 95
     a._presence_last_seen = now
@@ -75,6 +75,7 @@ def query(frames, system_prompt, user_prompt):
     try:
         from llama_video import Frame, Preprocessor, Settings
         from llama_video.client import LlamaServerClient
+
         lv = []
         for i, (ts, jpg) in enumerate(frames):
             img = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
@@ -87,9 +88,9 @@ def query(frames, system_prompt, user_prompt):
         for sf in vi.super_frames:
             for url in client._super_frame_to_base64_pair(sf.data):
                 content.append({"type": "image_url", "image_url": {"url": url}})
-        payload_extra = {"mm_processor_kwargs": {
-            "fps": vi.fps, "is_video": True, "grid_thw": list(vi.grid_thw),
-            "temporal_positions": vi.temporal_positions}}
+        payload_extra = {
+            "mm_processor_kwargs": {"fps": vi.fps, "is_video": True, "grid_thw": list(vi.grid_thw), "temporal_positions": vi.temporal_positions}
+        }
     except Exception as e:
         print(f"[harness] super-frame unavailable ({e}); using multi-image")
         content = []
@@ -105,7 +106,8 @@ def query(frames, system_prompt, user_prompt):
         ],
         "max_tokens": 80,
         "chat_template_kwargs": {"enable_thinking": False},
-        **CAPTION_OPTS, **payload_extra,
+        **CAPTION_OPTS,
+        **payload_extra,
     }
     r = requests.post(f"{LLAMA_SERVER_URL}/v1/chat/completions", json=payload, timeout=60)
     r.raise_for_status()
@@ -115,8 +117,7 @@ def query(frames, system_prompt, user_prompt):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cycles", type=int, default=6)
-    ap.add_argument("--mode", default="alternate",
-                    help="relational | observational | introspective | alternate")
+    ap.add_argument("--mode", default="alternate", help="relational | observational | introspective | alternate")
     ap.add_argument("--device", type=int, default=0)
     args = ap.parse_args()
 
@@ -124,11 +125,13 @@ def main():
     try:
         requests.get(f"{LLAMA_SERVER_URL}/health", timeout=3)
     except Exception:
-        print("llama-server not reachable on :8080 — start it first."); return
+        print("llama-server not reachable on :8080 — start it first.")
+        return
 
     cap = cv2.VideoCapture(args.device)
     if not cap.isOpened():
-        print(f"camera {args.device} not available"); return
+        print(f"camera {args.device} not available")
+        return
 
     agent = make_agent()
     modes = ["relational", "observational"]
@@ -138,7 +141,8 @@ def main():
         agent._presence_last_seen = time.time()
         frames = capture(cap, seconds=8.0, fps=2.0)
         if len(frames) < 2:
-            print("no frames captured"); break
+            print("no frames captured")
+            break
         system_prompt = get_monologue_system_prompt(mode, agent=agent)
         user_prompt = build_situational_line(agent, gaze_direction="ahead", gaze_state="aware")
         try:

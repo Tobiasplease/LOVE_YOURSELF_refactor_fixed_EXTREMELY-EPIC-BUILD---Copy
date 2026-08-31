@@ -5,15 +5,15 @@ Provides sliders for scale, skew, translate, rotate before G-code conversion
 """
 
 import json
+import math
 import os
+import re
 import subprocess
 import sys
 import tkinter as tk
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
-import xml.etree.ElementTree as ET
-import re
-import math
 
 # Add repo root to path for imports
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -42,8 +42,8 @@ class SVGTransformUI:
 
     def setup_ui(self):
         # Main layout: controls on left, preview on right
-        main_frame = ttk.PanedWindow(self.root, orient='horizontal')
-        main_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        main_frame = ttk.PanedWindow(self.root, orient="horizontal")
+        main_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Left panel: controls
         left_frame = ttk.Frame(main_frame)
@@ -55,19 +55,19 @@ class SVGTransformUI:
 
         # File selection
         file_frame = ttk.Frame(left_frame)
-        file_frame.pack(fill='x', padx=10, pady=5)
+        file_frame.pack(fill="x", padx=10, pady=5)
 
-        ttk.Button(file_frame, text="Select SVG", command=self.select_svg).pack(side='left')
-        self.svg_label = ttk.Label(file_frame, text="No file selected", foreground='gray')
-        self.svg_label.pack(side='left', padx=(10, 0))
+        ttk.Button(file_frame, text="Select SVG", command=self.select_svg).pack(side="left")
+        self.svg_label = ttk.Label(file_frame, text="No file selected", foreground="gray")
+        self.svg_label.pack(side="left", padx=(10, 0))
 
         # Transform controls
         controls_frame = ttk.LabelFrame(left_frame, text="Transform Controls", padding=10)
-        controls_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        controls_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
         # Preview canvas
-        self.canvas = tk.Canvas(right_frame, bg='white', width=400, height=400)
-        self.canvas.pack(fill='both', expand=True, padx=5, pady=5)
+        self.canvas = tk.Canvas(right_frame, bg="white", width=400, height=400)
+        self.canvas.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Scale
         self.add_slider(controls_frame, "Scale X", "scale_x", 0.1, 3.0, 1.5, 0.1)
@@ -86,40 +86,35 @@ class SVGTransformUI:
 
         # Presets
         preset_frame = ttk.Frame(controls_frame)
-        preset_frame.pack(fill='x', pady=(10, 0))
+        preset_frame.pack(fill="x", pady=(10, 0))
 
-        ttk.Button(preset_frame, text="Reset All", command=self.reset_transforms).pack(side='left')
-        ttk.Button(preset_frame, text="Save Preset", command=self.save_preset).pack(side='left', padx=(5, 0))
-        ttk.Button(preset_frame, text="Load Preset", command=self.load_preset).pack(side='left', padx=(5, 0))
+        ttk.Button(preset_frame, text="Reset All", command=self.reset_transforms).pack(side="left")
+        ttk.Button(preset_frame, text="Save Preset", command=self.save_preset).pack(side="left", padx=(5, 0))
+        ttk.Button(preset_frame, text="Load Preset", command=self.load_preset).pack(side="left", padx=(5, 0))
 
         # Enable toggle
         self.enabled_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(controls_frame, text="Enable transforms",
-                       variable=self.enabled_var).pack(pady=(10, 0))
+        ttk.Checkbutton(controls_frame, text="Enable transforms", variable=self.enabled_var).pack(pady=(10, 0))
 
         # Output
         output_frame = ttk.LabelFrame(left_frame, text="Output", padding=10)
-        output_frame.pack(fill='x', padx=10, pady=5)
+        output_frame.pack(fill="x", padx=10, pady=5)
 
         # Preview command
-        self.command_text = tk.Text(output_frame, height=4, wrap='word',
-                                   background='#f8f8f8', state='disabled')
-        self.command_text.pack(fill='x', pady=(0, 5))
+        self.command_text = tk.Text(output_frame, height=4, wrap="word", background="#f8f8f8", state="disabled")
+        self.command_text.pack(fill="x", pady=(0, 5))
 
         # Action buttons
         button_frame = ttk.Frame(output_frame)
-        button_frame.pack(fill='x')
+        button_frame.pack(fill="x")
 
-        ttk.Button(button_frame, text="Preview Command",
-                  command=self.update_preview).pack(side='left')
-        ttk.Button(button_frame, text="Convert to G-code",
-                  command=self.convert_to_gcode).pack(side='left', padx=(5, 0))
+        ttk.Button(button_frame, text="Preview Command", command=self.update_preview).pack(side="left")
+        ttk.Button(button_frame, text="Convert to G-code", command=self.convert_to_gcode).pack(side="left", padx=(5, 0))
 
         # Status
         self.status_var = tk.StringVar(value="Ready")
-        status_bar = ttk.Label(self.root, textvariable=self.status_var,
-                              relief='sunken', anchor='w')
-        status_bar.pack(fill='x', side='bottom')
+        status_bar = ttk.Label(self.root, textvariable=self.status_var, relief="sunken", anchor="w")
+        status_bar.pack(fill="x", side="bottom")
 
         # Initialize preview after a short delay to ensure UI is ready
         self.root.after(100, self.update_preview)
@@ -127,25 +122,24 @@ class SVGTransformUI:
 
     def add_slider(self, parent, label, var_name, min_val, max_val, default, resolution):
         frame = ttk.Frame(parent)
-        frame.pack(fill='x', pady=2)
+        frame.pack(fill="x", pady=2)
 
         # Label with current value
         label_frame = ttk.Frame(frame)
-        label_frame.pack(fill='x')
+        label_frame.pack(fill="x")
 
-        ttk.Label(label_frame, text=label).pack(side='left')
+        ttk.Label(label_frame, text=label).pack(side="left")
 
         # Variable and value label
         var = tk.DoubleVar(value=default)
         setattr(self, f"{var_name}_var", var)
 
         value_label = ttk.Label(label_frame, text=f"{default}")
-        value_label.pack(side='right')
+        value_label.pack(side="right")
 
         # Slider
-        slider = ttk.Scale(frame, from_=min_val, to=max_val,
-                          variable=var, orient='horizontal')
-        slider.pack(fill='x', pady=(2, 0))
+        slider = ttk.Scale(frame, from_=min_val, to=max_val, variable=var, orient="horizontal")
+        slider.pack(fill="x", pady=(2, 0))
 
         # Update value label and preview when changed
         def on_change(*args):
@@ -154,24 +148,21 @@ class SVGTransformUI:
                 self.root.after_idle(self.update_preview)
                 self.root.after_idle(self.update_visual_preview)
 
-        var.trace('w', on_change)
+        var.trace("w", on_change)
 
     def select_svg(self):
-        filetypes = [
-            ("SVG files", "*.svg"),
-            ("All files", "*.*")
-        ]
+        filetypes = [("SVG files", "*.svg"), ("All files", "*.*")]
 
         filename = filedialog.askopenfilename(
             title="Select SVG file",
             filetypes=filetypes,
             initialdir="/home/impostor/ComfyUI/output",
-            initialfile="impostor-20250920_005332_00001__center_lined.svg"
+            initialfile="impostor-20250920_005332_00001__center_lined.svg",
         )
 
         if filename:
             self.input_svg = Path(filename)
-            self.svg_label.config(text=self.input_svg.name, foreground='black')
+            self.svg_label.config(text=self.input_svg.name, foreground="black")
             self.parse_svg()
             self.update_preview()
             self.update_visual_preview()
@@ -218,10 +209,10 @@ class SVGTransformUI:
             cmd = self.build_vpype_command(self.input_svg, temp_output)
             command = " ".join(cmd)
 
-        self.command_text.config(state='normal')
-        self.command_text.delete(1.0, 'end')
+        self.command_text.config(state="normal")
+        self.command_text.delete(1.0, "end")
         self.command_text.insert(1.0, command)
-        self.command_text.config(state='disabled')
+        self.command_text.config(state="disabled")
 
     def convert_to_gcode(self):
         """Convert SVG to G-code with transforms"""
@@ -235,7 +226,7 @@ class SVGTransformUI:
             defaultextension=".gcode",
             filetypes=[("G-code files", "*.gcode"), ("All files", "*.*")],
             initialdir=str(self.input_svg.parent),
-            initialfile=f"{self.input_svg.stem}_transformed.gcode"
+            initialfile=f"{self.input_svg.stem}_transformed.gcode",
         )
 
         if not output_path:
@@ -273,19 +264,19 @@ class SVGTransformUI:
     def save_preset(self):
         """Save current settings as preset"""
         settings = {
-            'scale_x': self.scale_x_var.get(),
-            'scale_y': self.scale_y_var.get(),
-            'translate_x': self.translate_x_var.get(),
-            'translate_y': self.translate_y_var.get(),
-            'rotation': self.rotation_var.get(),
-            'skew_x': self.skew_x_var.get(),
-            'skew_y': self.skew_y_var.get(),
-            'enabled': self.enabled_var.get()
+            "scale_x": self.scale_x_var.get(),
+            "scale_y": self.scale_y_var.get(),
+            "translate_x": self.translate_x_var.get(),
+            "translate_y": self.translate_y_var.get(),
+            "rotation": self.rotation_var.get(),
+            "skew_x": self.skew_x_var.get(),
+            "skew_y": self.skew_y_var.get(),
+            "enabled": self.enabled_var.get(),
         }
 
         try:
             os.makedirs(self.settings_file.parent, exist_ok=True)
-            with open(self.settings_file, 'w') as f:
+            with open(self.settings_file, "w") as f:
                 json.dump(settings, f, indent=2)
             self.status_var.set("Preset saved")
         except Exception as e:
@@ -321,18 +312,18 @@ class SVGTransformUI:
 
             # Extract basic shapes and paths
             for elem in root.iter():
-                tag_name = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag  # Handle namespaces
+                tag_name = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag  # Handle namespaces
 
-                if tag_name == 'rect':
+                if tag_name == "rect":
                     rect_count += 1
                     self.parse_rect(elem)
-                elif tag_name == 'path':
+                elif tag_name == "path":
                     path_count += 1
                     self.parse_path(elem)
-                elif tag_name == 'line':
+                elif tag_name == "line":
                     line_count += 1
                     self.parse_line(elem)
-                elif tag_name == 'polyline':
+                elif tag_name == "polyline":
                     polyline_count += 1
                     self.parse_polyline(elem)
 
@@ -346,12 +337,12 @@ class SVGTransformUI:
     def parse_rect(self, elem):
         """Convert rectangle to path points"""
         try:
-            x = float(elem.get('x', 0))
-            y = float(elem.get('y', 0))
-            w = float(elem.get('width', 0))
-            h = float(elem.get('height', 0))
+            x = float(elem.get("x", 0))
+            y = float(elem.get("y", 0))
+            w = float(elem.get("width", 0))
+            h = float(elem.get("height", 0))
 
-            points = [(x, y), (x+w, y), (x+w, y+h), (x, y+h), (x, y)]
+            points = [(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)]
             self.svg_paths.append(points)
         except:
             pass
@@ -359,19 +350,19 @@ class SVGTransformUI:
     def parse_path(self, elem):
         """Basic path parsing - just extract moveto/lineto commands"""
         try:
-            d = elem.get('d', '')
+            d = elem.get("d", "")
             points = []
             current_pos = [0, 0]
 
             # Very basic parser for M and L commands
-            commands = re.findall(r'[ML]\s*[-+]?\d*\.?\d+(?:\s*,?\s*[-+]?\d*\.?\d+)*', d)
+            commands = re.findall(r"[ML]\s*[-+]?\d*\.?\d+(?:\s*,?\s*[-+]?\d*\.?\d+)*", d)
 
             for cmd in commands:
-                parts = re.findall(r'[-+]?\d*\.?\d+', cmd)
-                if cmd.startswith('M') and len(parts) >= 2:
+                parts = re.findall(r"[-+]?\d*\.?\d+", cmd)
+                if cmd.startswith("M") and len(parts) >= 2:
                     current_pos = [float(parts[0]), float(parts[1])]
                     points.append(tuple(current_pos))
-                elif cmd.startswith('L') and len(parts) >= 2:
+                elif cmd.startswith("L") and len(parts) >= 2:
                     current_pos = [float(parts[0]), float(parts[1])]
                     points.append(tuple(current_pos))
 
@@ -383,10 +374,10 @@ class SVGTransformUI:
     def parse_line(self, elem):
         """Parse line element"""
         try:
-            x1 = float(elem.get('x1', 0))
-            y1 = float(elem.get('y1', 0))
-            x2 = float(elem.get('x2', 0))
-            y2 = float(elem.get('y2', 0))
+            x1 = float(elem.get("x1", 0))
+            y1 = float(elem.get("y1", 0))
+            x2 = float(elem.get("x2", 0))
+            y2 = float(elem.get("y2", 0))
 
             # Only add lines that have actual coordinates
             if not (x1 == 0 and y1 == 0 and x2 == 0 and y2 == 0):
@@ -399,16 +390,16 @@ class SVGTransformUI:
     def parse_polyline(self, elem):
         """Parse polyline element"""
         try:
-            points_str = elem.get('points', '')
+            points_str = elem.get("points", "")
             if not points_str:
                 return
 
             # Split by spaces and commas, then filter out empty strings
-            coords = re.findall(r'[-+]?\d*\.?\d+', points_str)
+            coords = re.findall(r"[-+]?\d*\.?\d+", points_str)
             points = []
-            for i in range(0, len(coords)-1, 2):
-                if i+1 < len(coords):
-                    points.append((float(coords[i]), float(coords[i+1])))
+            for i in range(0, len(coords) - 1, 2):
+                if i + 1 < len(coords):
+                    points.append((float(coords[i]), float(coords[i + 1])))
 
             if len(points) > 1:  # Need at least 2 points for a line
                 self.svg_paths.append(points)
@@ -466,17 +457,14 @@ class SVGTransformUI:
         canvas_h = self.canvas.winfo_height()
 
         # Debug info
-        self.canvas.create_text(10, 10, text=f"Canvas: {canvas_w}x{canvas_h}",
-                               anchor="nw", fill="green", font=("Arial", 8))
+        self.canvas.create_text(10, 10, text=f"Canvas: {canvas_w}x{canvas_h}", anchor="nw", fill="green", font=("Arial", 8))
 
         if not self.svg_paths:
-            self.canvas.create_text(canvas_w//2, canvas_h//2, text="Load an SVG file to preview",
-                                   fill="gray", font=("Arial", 12))
+            self.canvas.create_text(canvas_w // 2, canvas_h // 2, text="Load an SVG file to preview", fill="gray", font=("Arial", 12))
             return
 
         # Debug: show that we have paths
-        self.canvas.create_text(10, 30, text=f"Paths loaded: {len(self.svg_paths)}",
-                               anchor="nw", fill="green", font=("Arial", 8))
+        self.canvas.create_text(10, 30, text=f"Paths loaded: {len(self.svg_paths)}", anchor="nw", fill="green", font=("Arial", 8))
 
         # Calculate bounds for all paths
         all_points = []
@@ -514,7 +502,7 @@ class SVGTransformUI:
         if data_w == 0 or data_h == 0:
             return
 
-        scale = min((canvas_w - 2*margin) / data_w, (canvas_h - 2*margin) / data_h)
+        scale = min((canvas_w - 2 * margin) / data_w, (canvas_h - 2 * margin) / data_h)
 
         # Draw original paths in light gray
         for path in self.svg_paths:
@@ -542,11 +530,11 @@ class SVGTransformUI:
                 self.canvas.create_line(canvas_points, fill="#2196F3", width=2, tags="transformed")
 
         # Add legend
-        self.canvas.create_line(10, canvas_h-40, 30, canvas_h-40, fill="#cccccc", width=1)
-        self.canvas.create_text(35, canvas_h-40, text="Original", anchor="w", fill="#666")
+        self.canvas.create_line(10, canvas_h - 40, 30, canvas_h - 40, fill="#cccccc", width=1)
+        self.canvas.create_text(35, canvas_h - 40, text="Original", anchor="w", fill="#666")
 
-        self.canvas.create_line(10, canvas_h-20, 30, canvas_h-20, fill="#2196F3", width=2)
-        self.canvas.create_text(35, canvas_h-20, text="Transformed", anchor="w", fill="#2196F3")
+        self.canvas.create_line(10, canvas_h - 20, 30, canvas_h - 20, fill="#2196F3", width=2)
+        self.canvas.create_text(35, canvas_h - 20, text="Transformed", anchor="w", fill="#2196F3")
 
     def get_bounds(self, points):
         """Get bounding box of points: (min_x, max_x, min_y, max_y)"""
@@ -561,19 +549,19 @@ class SVGTransformUI:
         """Load settings from file"""
         try:
             if self.settings_file.exists():
-                with open(self.settings_file, 'r') as f:
+                with open(self.settings_file, "r") as f:
                     settings = json.load(f)
 
                 # Apply settings if UI is initialized
-                if hasattr(self, 'scale_x_var'):
-                    self.scale_x_var.set(settings.get('scale_x', 1.5))
-                    self.scale_y_var.set(settings.get('scale_y', 1.5))
-                    self.translate_x_var.set(settings.get('translate_x', 0))
-                    self.translate_y_var.set(settings.get('translate_y', 0))
-                    self.rotation_var.set(settings.get('rotation', 3))
-                    self.skew_x_var.set(settings.get('skew_x', 0))
-                    self.skew_y_var.set(settings.get('skew_y', 0))
-                    self.enabled_var.set(settings.get('enabled', True))
+                if hasattr(self, "scale_x_var"):
+                    self.scale_x_var.set(settings.get("scale_x", 1.5))
+                    self.scale_y_var.set(settings.get("scale_y", 1.5))
+                    self.translate_x_var.set(settings.get("translate_x", 0))
+                    self.translate_y_var.set(settings.get("translate_y", 0))
+                    self.rotation_var.set(settings.get("rotation", 3))
+                    self.skew_x_var.set(settings.get("skew_x", 0))
+                    self.skew_y_var.set(settings.get("skew_y", 0))
+                    self.enabled_var.set(settings.get("enabled", True))
         except Exception:
             pass  # Use defaults if loading fails
 

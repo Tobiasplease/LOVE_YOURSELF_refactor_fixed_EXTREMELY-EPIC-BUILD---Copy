@@ -35,7 +35,7 @@ for path in glob.glob(os.path.join(MOOD_SNAPSHOT_FOLDER, "*-event-log.json")):
             continue
         start = float(head[i:].split(":", 1)[1].split(",")[0].strip())
         if start > horizon:
-            ghosts.append((path, head[head.find('"start_time_iso"'):].split('"')[3] if '"start_time_iso"' in head else "?"))
+            ghosts.append((path, head[head.find('"start_time_iso"') :].split('"')[3] if '"start_time_iso"' in head else "?"))
     except Exception:
         continue
 

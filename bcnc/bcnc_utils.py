@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 try:
-    from config.config import GRBL_PEN_UP_S, GRBL_PEN_DOWN_S
+    from config.config import GRBL_PEN_DOWN_S, GRBL_PEN_UP_S
 except ImportError:
     GRBL_PEN_UP_S, GRBL_PEN_DOWN_S = 20, 50
 

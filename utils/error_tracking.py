@@ -118,5 +118,3 @@ def track_component_health(component_name: str):
         return wrapper
 
     return decorator
-
-

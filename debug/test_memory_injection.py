@@ -17,6 +17,7 @@ class MockAgent:
 
     def __init__(self, session_age_mins=5):
         import time
+
         # Set session start time to be session_age_mins ago
         self.session_start_time = time.time() - (session_age_mins * 60)
         self.caption_count = 12
@@ -49,15 +50,17 @@ class MockMemory:
 
 def test_narrative_injection():
     """Test that narrative_state is injected into user prompt."""
-    from captioner import prompts
     import captioner.context_compression as context_compression_module
+    from captioner import prompts
 
     # Create mock objects
     agent = MockAgent()
     agent.memory = MockMemory()
 
     # Simulate a narrative_state (this is what context_compressor returns)
-    test_narrative = "I'm watching a cluttered workspace with shifting light. Papers and desk often appear together. The ceiling catches my attention."
+    test_narrative = (
+        "I'm watching a cluttered workspace with shifting light. Papers and desk often appear together. The ceiling catches my attention."
+    )
 
     # Mock the context compressor to return our test narrative
     class MockCompressor:
@@ -108,8 +111,8 @@ def test_narrative_injection():
 
 def test_narrative_not_in_system_only():
     """Verify narrative isn't ONLY in system context."""
-    from captioner import prompts
     import captioner.context_compression as context_compression_module
+    from captioner import prompts
 
     agent = MockAgent()
     agent.memory = MockMemory()
@@ -159,8 +162,8 @@ def test_narrative_not_in_system_only():
 
 def test_awakening_mode_excluded():
     """Verify narrative is NOT injected during awakening."""
-    from captioner import prompts
     import captioner.context_compression as context_compression_module
+    from captioner import prompts
 
     agent = MockAgent()
     agent.memory = MockMemory()

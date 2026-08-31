@@ -5,11 +5,12 @@ Global state tracking for drawing operations to inform captioning system
 
 import threading
 import time
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 
 class DrawingState:
     """Global drawing state manager"""
-    
+
     _lock = threading.Lock()
     _is_drawing = False
     # A latched flag disables drawing for the whole session (Aug 10): a
@@ -25,7 +26,7 @@ class DrawingState:
     _drawing_intent: Optional[str] = None
     _drawing_file: Optional[str] = None
     _drawing_description: Optional[str] = None
-    
+
     @classmethod
     def start_drawing(cls, intent: str = None, drawing_file: str = None, description: str = None):
         """Mark drawing as started"""
@@ -36,7 +37,7 @@ class DrawingState:
             cls._drawing_file = drawing_file
             cls._drawing_description = description
             print(f"[🎨] Drawing started: {description or 'Unknown subject'}")
-    
+
     @classmethod
     def end_drawing(cls):
         """Mark drawing as completed"""
@@ -44,13 +45,13 @@ class DrawingState:
             if cls._is_drawing:
                 duration = time.time() - (cls._drawing_start_time or 0)
                 print(f"[🎨] Drawing completed after {duration:.1f} seconds")
-            
+
             cls._is_drawing = False
             cls._drawing_start_time = None
             cls._drawing_intent = None
             cls._drawing_file = None
             cls._drawing_description = None
-    
+
     @classmethod
     def is_drawing(cls) -> bool:
         """Check if currently drawing. A flag older than _MAX_DRAWING_SECONDS is
@@ -66,7 +67,9 @@ class DrawingState:
                 cls._drawing_intent = None
                 cls._drawing_file = None
                 cls._drawing_description = None
-                print(f"[⚠️] Drawing state was stuck for {stale_for / 60:.0f} min with no completion — clearing it (a drawing run raised past end_drawing)")
+                print(
+                    f"[⚠️] Drawing state was stuck for {stale_for / 60:.0f} min with no completion — clearing it (a drawing run raised past end_drawing)"
+                )
                 return False
             return True
 
@@ -98,14 +101,14 @@ class DrawingState:
             if cls._vision_offline_since is None:
                 return None
             return (time.time() - cls._vision_offline_since) / 3600.0
-    
+
     @classmethod
     def get_drawing_info(cls) -> Dict[str, Any]:
         """Get current drawing information"""
         with cls._lock:
             if not cls._is_drawing:
                 return {}
-                
+
             duration = time.time() - (cls._drawing_start_time or 0)
             return {
                 "is_drawing": cls._is_drawing,
@@ -113,7 +116,7 @@ class DrawingState:
                 "intent": cls._drawing_intent,
                 "file": cls._drawing_file,
                 "description": cls._drawing_description,
-                "start_time": cls._drawing_start_time
+                "start_time": cls._drawing_start_time,
             }
-    
+
     # Removed legacy get_drawing_context_for_caption (unused)

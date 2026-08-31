@@ -6,16 +6,19 @@ that can influence breathing, hand control, and consciousness.
 
 import threading
 import time
-from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
+from typing import Dict, Optional, Tuple
+
 
 @dataclass
 class PersonDetectionEvent:
     """Represents a person detection event with confidence and source."""
+
     confidence: float
     source: str  # "face" or "yolo"
     timestamp: float
     bbox: Optional[Tuple[int, int, int, int]] = None
+
 
 class PersonDetectionState:
     """Unified person detection state that combines multiple detection sources."""
@@ -35,15 +38,15 @@ class PersonDetectionState:
 
         # Behavioral state tracking
         self.person_presence_duration = 0.0  # How long person has been present
-        self.person_absence_duration = 0.0   # How long person has been absent
-        self.detection_stability = 0.0       # Stability of detection (0.0-1.0)
+        self.person_absence_duration = 0.0  # How long person has been absent
+        self.detection_stability = 0.0  # Stability of detection (0.0-1.0)
 
         # Configuration
         self.confidence_threshold = 0.5
         self.stability_window = 3.0  # seconds to stabilize detection
 
         # Event tracking for behavior
-        self.recent_arrivals = []    # List of recent arrival timestamps
+        self.recent_arrivals = []  # List of recent arrival timestamps
         self.recent_departures = []  # List of recent departure timestamps
 
         # Spatial memory - where was the person last seen
@@ -80,12 +83,7 @@ class PersonDetectionState:
         """Update face detection state."""
         with self._lock:
             if confidence > 0.0:
-                self.face_detection = PersonDetectionEvent(
-                    confidence=confidence,
-                    source="face",
-                    timestamp=time.time(),
-                    bbox=bbox
-                )
+                self.face_detection = PersonDetectionEvent(confidence=confidence, source="face", timestamp=time.time(), bbox=bbox)
                 # Reset sweep tracking when face detected
                 self.scan_zones_visited.clear()
             # Don't clear face_detection - let it expire via timestamp
@@ -124,10 +122,7 @@ class PersonDetectionState:
             # Update YOLO detection event based on smoothed state
             if self._smoothed_detection_active:
                 self.yolo_detection = PersonDetectionEvent(
-                    confidence=confidence,
-                    source="yolo",
-                    timestamp=now,
-                    bbox=self._last_valid_bbox  # Use persisted bbox
+                    confidence=confidence, source="yolo", timestamp=now, bbox=self._last_valid_bbox  # Use persisted bbox
                 )
                 # Reset sweep tracking when person detected
                 self.scan_zones_visited.clear()
@@ -245,6 +240,7 @@ class PersonDetectionState:
                 print(f"[👤] Person marked absent after sweep ({len(self.scan_zones_visited)} zones scanned)")
                 try:
                     from utils.episodic_log import episodic_log
+
                     episodic_log.record("person_left", "confirmed gone after sweep")
                 except Exception:
                     pass
@@ -259,6 +255,7 @@ class PersonDetectionState:
                 print(f"[👤] Person marked absent after timeout ({int(self.remembered_timeout)}s)")
                 try:
                     from utils.episodic_log import episodic_log
+
                     episodic_log.record("person_left", "gone after timeout")
                 except Exception:
                     pass
@@ -271,7 +268,7 @@ class PersonDetectionState:
         if self.is_person_present:
             self.person_presence_duration = now - self.last_detection_time
         else:
-            self.person_absence_duration = now - self.last_departure_time if self.last_departure_time > 0 else float('inf')
+            self.person_absence_duration = now - self.last_departure_time if self.last_departure_time > 0 else float("inf")
 
         # Update detection stability
         if best_detection:
@@ -334,6 +331,7 @@ class PersonDetectionState:
 
 # Global instance
 _person_detection_state = None
+
 
 def get_person_detection_state() -> PersonDetectionState:
     """Get the global person detection state instance."""

@@ -101,7 +101,7 @@ class UArmTeachApp:
 
     def _custom_key1_callback(self, ret):
         """Custom key1 callback that toggles pump, overriding firmware play function"""
-        if ret == '1':  # Button pressed
+        if ret == "1":  # Button pressed
             try:
                 print(f"\nDEBUG: Button pressed, pump_on was: {self.pump_on}")
                 # Simple toggle - just flip the state
@@ -111,9 +111,9 @@ class UArmTeachApp:
                 print(f"Hardware button: Pump {'ON' if self.pump_on else 'OFF'}")
 
                 # If we're recording, also add the ee command to the recording
-                if self.teach and hasattr(self.teach, '_Teach__is_recording') and self.teach._Teach__is_recording:
-                    if hasattr(self.teach, '_Teach__record_list'):
-                        self.teach._Teach__record_list.append(f'ee,{1 if self.pump_on else 0}')
+                if self.teach and hasattr(self.teach, "_Teach__is_recording") and self.teach._Teach__is_recording:
+                    if hasattr(self.teach, "_Teach__record_list"):
+                        self.teach._Teach__record_list.append(f"ee,{1 if self.pump_on else 0}")
                         print("  (Recorded as ee command)")
             except Exception as e:
                 print(f"\nHardware button pump toggle failed: {e}")

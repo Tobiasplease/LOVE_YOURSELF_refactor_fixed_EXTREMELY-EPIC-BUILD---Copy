@@ -11,8 +11,8 @@ This script:
 Run: python debug/test_spatial_awareness.py
 """
 
-import sys
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,13 +36,13 @@ def visualize_zones(state: PersonDetectionState, current_pan: float) -> str:
 
         # Check if current position is in this zone
         current_zone = int(current_pan // 30)
-        is_current = (zone_num == current_zone)
+        is_current = zone_num == current_zone
 
         # Check if last seen position is in this zone
         last_seen_zone = None
         if state.last_seen_servo_pan is not None:
             last_seen_zone = int(state.last_seen_servo_pan // 30)
-        is_last_seen = (zone_num == last_seen_zone)
+        is_last_seen = zone_num == last_seen_zone
 
         # Build zone display
         if is_current and is_last_seen:
@@ -76,12 +76,7 @@ def get_llm_gaze_suggestion(state: PersonDetectionState, current_pan: float) -> 
 
     # Decision tree for gaze behavior
     if person_state == "visible":
-        return {
-            "action": "hold",
-            "target_pan": None,
-            "reasoning": "Person is visible - maintain current gaze",
-            "urgency": "low"
-        }
+        return {"action": "hold", "target_pan": None, "reasoning": "Person is visible - maintain current gaze", "urgency": "low"}
 
     elif person_state == "remembered":
         if direction == "to my left":
@@ -89,14 +84,14 @@ def get_llm_gaze_suggestion(state: PersonDetectionState, current_pan: float) -> 
                 "action": "look_left",
                 "target_pan": current_pan - 30,
                 "reasoning": f"Person was to my left. I should check there. ({zones_visited}/4 zones scanned)",
-                "urgency": "medium"
+                "urgency": "medium",
             }
         elif direction == "to my right":
             return {
                 "action": "look_right",
                 "target_pan": current_pan + 30,
                 "reasoning": f"Person was to my right. I should check there. ({zones_visited}/4 zones scanned)",
-                "urgency": "medium"
+                "urgency": "medium",
             }
         elif not sweep_complete:
             # Need to scan more zones
@@ -108,40 +103,35 @@ def get_llm_gaze_suggestion(state: PersonDetectionState, current_pan: float) -> 
                     "action": "scan",
                     "target_pan": target_pan,
                     "reasoning": f"Looking for them. Scanning zone {target_zone}. ({zones_visited}/4 zones)",
-                    "urgency": "medium"
+                    "urgency": "medium",
                 }
         elif not looking_at_last and state.last_seen_servo_pan is not None:
             return {
                 "action": "return_to_last",
                 "target_pan": state.last_seen_servo_pan,
                 "reasoning": "Sweep complete. Checking where I last saw them.",
-                "urgency": "high"
+                "urgency": "high",
             }
         else:
             return {
                 "action": "wait",
                 "target_pan": None,
                 "reasoning": "Completed sweep and checked last location. They may have left.",
-                "urgency": "low"
+                "urgency": "low",
             }
 
     else:  # absent
-        return {
-            "action": "idle",
-            "target_pan": None,
-            "reasoning": "No one here. Free to wander.",
-            "urgency": "none"
-        }
+        return {"action": "idle", "target_pan": None, "reasoning": "No one here. Free to wander.", "urgency": "none"}
 
 
 def print_status(state: PersonDetectionState, pan: float, scenario: str = ""):
     """Print comprehensive status."""
     person_state = state.get_person_state()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     if scenario:
         print(f"  SCENARIO: {scenario}")
-        print("="*60)
+        print("=" * 60)
 
     # Zone visualization
     print(f"\n  ZONES:  {visualize_zones(state, pan)}")
@@ -162,16 +152,16 @@ def print_status(state: PersonDetectionState, pan: float, scenario: str = ""):
     suggestion = get_llm_gaze_suggestion(state, pan)
     print(f"\n  LLM SUGGESTION:")
     print(f"    Action:    {suggestion['action']}")
-    print(f"    Target:    {suggestion['target_pan']}°" if suggestion['target_pan'] else "    Target:    (stay)")
+    print(f"    Target:    {suggestion['target_pan']}°" if suggestion["target_pan"] else "    Target:    (stay)")
     print(f"    Reasoning: {suggestion['reasoning']}")
     print(f"    Urgency:   {suggestion['urgency']}")
 
 
 def run_scenario(title: str, steps: list):
     """Run a test scenario with multiple steps."""
-    print("\n" + "#"*60)
+    print("\n" + "#" * 60)
     print(f"# {title}")
-    print("#"*60)
+    print("#" * 60)
 
     state = PersonDetectionState()
 
@@ -225,45 +215,54 @@ def run_scenario(title: str, steps: list):
 
 
 def main():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  SPATIAL AWARENESS SYSTEM TEST")
     print("  Testing zone tracking, departure logic, and LLM suggestions")
-    print("="*60)
+    print("=" * 60)
 
     # Scenario 1: Basic detection and loss
-    run_scenario("SCENARIO 1: Person detected, then camera looks away", [
-        {"action": "detect", "pan": 90, "description": "Person detected at center"},
-        {"action": "lose", "pan": 90, "description": "Person leaves frame (camera still at center)"},
-        {"action": "move", "pan": 60, "description": "Camera pans left - zone 2 visited"},
-        {"action": "move", "pan": 30, "description": "Camera pans more left - zone 1 visited"},
-        {"action": "move", "pan": 120, "description": "Camera pans right - zone 4 visited"},
-        {"action": "move", "pan": 150, "description": "Camera pans far right - zone 5 visited (sweep complete!)"},
-        {"action": "move", "pan": 90, "description": "Camera returns to last known location"},
-        {"action": "wait", "pan": 90, "seconds": 10, "description": "Wait 10 seconds at last location"},
-    ])
+    run_scenario(
+        "SCENARIO 1: Person detected, then camera looks away",
+        [
+            {"action": "detect", "pan": 90, "description": "Person detected at center"},
+            {"action": "lose", "pan": 90, "description": "Person leaves frame (camera still at center)"},
+            {"action": "move", "pan": 60, "description": "Camera pans left - zone 2 visited"},
+            {"action": "move", "pan": 30, "description": "Camera pans more left - zone 1 visited"},
+            {"action": "move", "pan": 120, "description": "Camera pans right - zone 4 visited"},
+            {"action": "move", "pan": 150, "description": "Camera pans far right - zone 5 visited (sweep complete!)"},
+            {"action": "move", "pan": 90, "description": "Camera returns to last known location"},
+            {"action": "wait", "pan": 90, "seconds": 10, "description": "Wait 10 seconds at last location"},
+        ],
+    )
 
     # Scenario 2: Person detected on left, camera sweeps
-    run_scenario("SCENARIO 2: Person detected on LEFT, camera must search", [
-        {"action": "detect", "pan": 45, "description": "Person detected on LEFT side"},
-        {"action": "lose", "pan": 45, "description": "Person disappears"},
-        {"action": "move", "pan": 90, "description": "Camera moves to center (away from last seen)"},
-        {"action": "move", "pan": 120, "description": "Camera moves right"},
-        {"action": "move", "pan": 150, "description": "Camera moves far right"},
-    ])
+    run_scenario(
+        "SCENARIO 2: Person detected on LEFT, camera must search",
+        [
+            {"action": "detect", "pan": 45, "description": "Person detected on LEFT side"},
+            {"action": "lose", "pan": 45, "description": "Person disappears"},
+            {"action": "move", "pan": 90, "description": "Camera moves to center (away from last seen)"},
+            {"action": "move", "pan": 120, "description": "Camera moves right"},
+            {"action": "move", "pan": 150, "description": "Camera moves far right"},
+        ],
+    )
 
     # Scenario 3: Person reappears during sweep
-    run_scenario("SCENARIO 3: Person REAPPEARS during sweep", [
-        {"action": "detect", "pan": 90, "description": "Person detected at center"},
-        {"action": "lose", "pan": 90, "description": "Person disappears"},
-        {"action": "move", "pan": 60, "description": "Camera pans left"},
-        {"action": "move", "pan": 30, "description": "Camera pans more left"},
-        {"action": "detect", "pan": 120, "description": "Person REAPPEARS on right!"},
-        {"action": "lose", "pan": 120, "description": "Person disappears again"},
-    ])
+    run_scenario(
+        "SCENARIO 3: Person REAPPEARS during sweep",
+        [
+            {"action": "detect", "pan": 90, "description": "Person detected at center"},
+            {"action": "lose", "pan": 90, "description": "Person disappears"},
+            {"action": "move", "pan": 60, "description": "Camera pans left"},
+            {"action": "move", "pan": 30, "description": "Camera pans more left"},
+            {"action": "detect", "pan": 120, "description": "Person REAPPEARS on right!"},
+            {"action": "lose", "pan": 120, "description": "Person disappears again"},
+        ],
+    )
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  TEST COMPLETE")
-    print("="*60)
+    print("=" * 60)
     print("\nKey insights:")
     print("  [●] = Current gaze position")
     print("  [◎] = Where person was last seen")

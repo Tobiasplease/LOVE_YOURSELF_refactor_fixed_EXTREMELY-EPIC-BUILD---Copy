@@ -14,6 +14,7 @@ costs nothing). Measured: ~24s on GPU even with 19GB held; ~7min CPU
 fallback. Every failure falls through to the v2 skeleton walk — a drawing
 must never die from this experiment.
 """
+
 import os
 import re
 import shutil
@@ -95,8 +96,9 @@ def _wait_for_vram(min_free_mb: int = 4500, timeout_s: float = 15.0) -> None:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         try:
-            out = subprocess.run(["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
-                                 capture_output=True, timeout=5, text=True)
+            out = subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"], capture_output=True, timeout=5, text=True
+            )
             if int(out.stdout.split()[0]) >= min_free_mb:
                 return
         except Exception:
@@ -155,8 +157,14 @@ def dsv_stroke_polylines(stroke_input: np.ndarray, free_gpu: bool = True, thin: 
         for attempt, res in enumerate(rungs, start=1):
             _wait_for_vram(min_free_mb=9000 if res > 512 else 4500)
             try:
-                subprocess.run(base_cmd + ["-d", "cuda", "--resize_to", str(res)], cwd=DSV_HOME,
-                               timeout=DSV_GPU_TIMEOUT_S, check=True, capture_output=True, env=env)
+                subprocess.run(
+                    base_cmd + ["-d", "cuda", "--resize_to", str(res)],
+                    cwd=DSV_HOME,
+                    timeout=DSV_GPU_TIMEOUT_S,
+                    check=True,
+                    capture_output=True,
+                    env=env,
+                )
                 cuda_ok = True
                 break
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
@@ -172,11 +180,9 @@ def dsv_stroke_polylines(stroke_input: np.ndarray, free_gpu: bool = True, thin: 
             src = cv2.imread(png, cv2.IMREAD_GRAYSCALE)
             if max(src.shape) > 512:
                 f = max(src.shape) / 512.0
-                small = cv2.resize(src, (int(src.shape[1] / f), int(src.shape[0] / f)),
-                                   interpolation=cv2.INTER_AREA)
+                small = cv2.resize(src, (int(src.shape[1] / f), int(src.shape[0] / f)), interpolation=cv2.INTER_AREA)
                 cv2.imwrite(png, small)
-            subprocess.run(base_cmd + ["-d", "cpu"], cwd=DSV_HOME, timeout=DSV_CPU_TIMEOUT_S,
-                           check=True, capture_output=True, env=env)
+            subprocess.run(base_cmd + ["-d", "cpu"], cwd=DSV_HOME, timeout=DSV_CPU_TIMEOUT_S, check=True, capture_output=True, env=env)
         polys, canvas_long = _parse_dsv_svg(out_svg)
         if not polys:
             raise RuntimeError("DSV produced no strokes")

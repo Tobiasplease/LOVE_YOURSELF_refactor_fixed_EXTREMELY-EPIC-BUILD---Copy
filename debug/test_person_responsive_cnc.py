@@ -192,7 +192,6 @@ def test_person_detection_states():
         print(f"   Would actually pause: {state['is_present']}")
 
 
-
 if __name__ == "__main__":
     # Test person detection states first
     test_person_detection_states()

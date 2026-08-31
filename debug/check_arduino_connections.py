@@ -3,10 +3,10 @@
 Arduino Connection Diagnostic Tool
 Checks which Arduino devices are connected and shows their status
 """
-import os
-import sys
 import glob
+import os
 import subprocess
+import sys
 
 EXPECTED_DEVICES = {
     "arduino_lightbulb": {"name": "Lightbulb PWM Controller", "port": "USB 0:3.4"},
@@ -16,6 +16,7 @@ EXPECTED_DEVICES = {
     "arduino_uarm": {"name": "uArm Swift Pro", "port": "USB 0:4"},
     "arduino_lcd": {"name": "LCD Caption Display", "port": "USB 0:3"},
 }
+
 
 def check_symlinks():
     """Check which Arduino symlinks exist"""
@@ -58,6 +59,7 @@ def check_symlinks():
 
     return connected, missing
 
+
 def check_raw_usb():
     """Check raw USB serial devices"""
     print("\nRAW USB SERIAL DEVICES:")
@@ -74,18 +76,14 @@ def check_raw_usb():
 
         # Get USB path
         try:
-            result = subprocess.run(
-                ["udevadm", "info", "-q", "property", "-n", device],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
+            result = subprocess.run(["udevadm", "info", "-q", "property", "-n", device], capture_output=True, text=True, timeout=2)
 
-            for line in result.stdout.split('\n'):
-                if 'ID_PATH=' in line or 'ID_SERIAL=' in line or 'ID_MODEL=' in line:
+            for line in result.stdout.split("\n"):
+                if "ID_PATH=" in line or "ID_SERIAL=" in line or "ID_MODEL=" in line:
                     print(f"  {line}")
         except Exception as e:
             print(f"  Error getting info: {e}")
+
 
 def suggest_fix(missing):
     """Suggest fixes for missing devices"""
@@ -103,6 +101,7 @@ def suggest_fix(missing):
     print("4. If not in dialout group:")
     print("   sudo usermod -a -G dialout $USER")
     print("   (then logout/login)")
+
 
 if __name__ == "__main__":
     print("\nChecking Arduino connections...\n")

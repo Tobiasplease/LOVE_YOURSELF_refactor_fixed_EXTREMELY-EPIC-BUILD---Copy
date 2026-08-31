@@ -14,8 +14,7 @@ class DetectionMemory:
     _best_track_id: Optional[int] = None
 
     @classmethod
-    def update(cls, labels, image=None, person_bbox=None, person_confidence=0.0,
-               person_count=0, best_track_id=None):
+    def update(cls, labels, image=None, person_bbox=None, person_confidence=0.0, person_count=0, best_track_id=None):
         with cls._lock:
             cls._labels = labels
             cls._image = image
@@ -59,4 +58,3 @@ class DetectionMemory:
         """Get the ByteTrack ID of the highest-confidence person detection."""
         with cls._lock:
             return cls._best_track_id
-

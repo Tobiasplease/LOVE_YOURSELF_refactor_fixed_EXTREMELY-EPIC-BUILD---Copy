@@ -32,7 +32,9 @@ def _timedatectl(prop):
     try:
         out = subprocess.run(
             ["timedatectl", "show", "-p", prop, "--value"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return out.stdout.strip()
     except Exception:
@@ -58,16 +60,17 @@ def wait_for_clock_sync(max_wait_s=SYNC_MAX_WAIT_S):
     if not _has_default_route():
         return "offline — no clock step coming, starting on the local clock"
 
-    print(f"[CLOCK] Clock not yet NTP-synchronized — waiting up to {max_wait_s:.0f}s "
-          f"so the correction lands BEFORE the run starts (RTC runs ~53 days fast)")
+    print(
+        f"[CLOCK] Clock not yet NTP-synchronized — waiting up to {max_wait_s:.0f}s "
+        f"so the correction lands BEFORE the run starts (RTC runs ~53 days fast)"
+    )
     deadline = time.monotonic() + max_wait_s
     while time.monotonic() < deadline:
         time.sleep(2.0)
         if _timedatectl("NTPSynchronized") == "yes":
             print("[CLOCK] Clock synchronized — starting clean")
             return "synchronized after wait"
-    print("[CLOCK] ⚠ Gave up waiting for sync — if the clock steps mid-run, "
-          "the jump watch will call it out")
+    print("[CLOCK] ⚠ Gave up waiting for sync — if the clock steps mid-run, " "the jump watch will call it out")
     return "sync wait timed out"
 
 

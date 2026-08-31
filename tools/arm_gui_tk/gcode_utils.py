@@ -88,4 +88,3 @@ def parse_path_for_preview(lines: Sequence[str]) -> List[Point]:
         pts.append((x, y))
         last_x, last_y = x, y
     return pts
-

@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """Test script for physics-based gaze simulation system."""
 
+import math
 import sys
 import time
-import math
 
 sys.path.insert(0, "/home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy")
 
 from vision.gaze import (
-    GazePhysicsState,
-    PHYSICS_PATTERNS,
-    TRACKING_PHYSICS,
-    update_physics_step,
-    physics_state,
-    PAN_MIN,
     PAN_MAX,
-    TILT_MIN,
+    PAN_MIN,
+    PHYSICS_PATTERNS,
     TILT_MAX,
+    TILT_MIN,
+    TRACKING_PHYSICS,
+    GazePhysicsState,
+    physics_state,
+    update_physics_step,
 )
 
 

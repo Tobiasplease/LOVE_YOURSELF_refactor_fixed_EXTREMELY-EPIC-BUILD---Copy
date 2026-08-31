@@ -26,10 +26,10 @@ NEARDUP_LOOKBACK = 10
 NEARDUP_RATIO = 0.75
 ANAPHORA = re.compile(r"^(and |but |so |still[, ]|that |it |they |the same|again[, ]|maybe th)", re.I)
 SURFACE_MARKERS = (
-    "Something that was on your mind",   # reflection echo
-    "again —",                            # familiarity
-    "Preoccupied with:",                  # desire
-    "A memory surfaces",                  # memory mode
+    "Something that was on your mind",  # reflection echo
+    "again —",  # familiarity
+    "Preoccupied with:",  # desire
+    "A memory surfaces",  # memory mode
 )
 
 
@@ -53,7 +53,7 @@ def analyze(path):
         return {"path": os.path.basename(path), "captions": n, "note": "too few captions"}
 
     openings = [" ".join(c.lower().split()[:OPEN_WORDS]) for c in caps]
-    open_rep = sum(1 for i in range(1, n) if openings[i] in openings[max(0, i - NEARDUP_LOOKBACK):i])
+    open_rep = sum(1 for i in range(1, n) if openings[i] in openings[max(0, i - NEARDUP_LOOKBACK) : i])
 
     neardup = 0
     for i in range(1, n):
@@ -88,8 +88,7 @@ def analyze(path):
 def main():
     args = sys.argv[1:]
     if not args:
-        logs = [p for p in glob.glob("event_log/*-event-log.json")
-                if os.path.getmtime(p) <= __import__("time").time()]  # skip future-dated strays
+        logs = [p for p in glob.glob("event_log/*-event-log.json") if os.path.getmtime(p) <= __import__("time").time()]  # skip future-dated strays
         args = [max(logs, key=os.path.getmtime)]
     for path in args:
         r = analyze(path)

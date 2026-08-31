@@ -51,6 +51,7 @@ def draw_square(transform_line, n_per_edge=20, ideal=40.0):
             y = a[1] + (b[1] - a[1]) * f
             line = transform_line(f"G1 X{x:.3f} Y{y:.3f} F1000", ideal, ideal)
             import re
+
             cx = float(re.search(r"X([-+]?\d*\.?\d+)", line).group(1))
             cy = float(re.search(r"Y([-+]?\d*\.?\d+)", line).group(1))
             pts.append(machine(cx, cy))

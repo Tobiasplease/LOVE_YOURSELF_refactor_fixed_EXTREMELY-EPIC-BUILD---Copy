@@ -47,7 +47,7 @@ def simulate(gaze, face_w_px, person_angle=100.0, seed=7):
         gaze.update_gaze(frame, box, "calm_observant")
         positions.append((gaze.physics_state.pan, gaze.physics_state.tilt))
         time.sleep(1 / FPS)
-    steady = positions[SETTLE * FPS:]
+    steady = positions[SETTLE * FPS :]
     pans = [p for p, _ in steady]
     path = sum(abs(steady[i][0] - steady[i - 1][0]) + abs(steady[i][1] - steady[i - 1][1]) for i in range(1, len(steady)))
     return {"pan_std": float(np.std(pans)), "path_deg": path, "path_deg_per_s": path / (SECONDS - SETTLE)}
@@ -55,6 +55,7 @@ def simulate(gaze, face_w_px, person_angle=100.0, seed=7):
 
 def run(label, patch_old):
     import vision.gaze as gaze
+
     results = {}
     for scenario, face_w in (("far (60px face)", 60), ("close (320px face)", 320)):
         importlib.reload(gaze)  # reset state machine + physics between runs

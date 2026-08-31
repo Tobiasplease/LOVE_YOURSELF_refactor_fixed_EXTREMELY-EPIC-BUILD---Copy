@@ -12,6 +12,7 @@ from config import config
 
 from .prompts import DRAWING_SYSTEM_PROMPT
 
+
 class PromptInterface:
     """Interface for building the drawing prompt and its model options."""
 

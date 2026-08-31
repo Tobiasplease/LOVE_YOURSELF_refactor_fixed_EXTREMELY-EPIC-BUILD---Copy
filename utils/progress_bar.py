@@ -48,5 +48,3 @@ class ProgressBar:
             print(f"\r{dots[idx % len(dots)]}", end="", flush=True)
             idx += 1
             time.sleep(0.5)  # Slower animation for dots
-
-

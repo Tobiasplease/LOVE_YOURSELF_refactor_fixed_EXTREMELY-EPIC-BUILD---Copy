@@ -8,20 +8,21 @@ spatial baseline — without narrative drift or hallucinated fiction.
 Run from project root:
     python debug/test_spatial_compression.py [image_path]
 """
-import sys
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.inference import query_model
 from config.config import MODEL_NAME, MOOD_SNAPSHOT_FOLDER
+from utils.inference import query_model
 
 # Use provided image or find most recent mood snapshot
 if len(sys.argv) > 1:
     IMAGE = sys.argv[1]
 else:
     import glob
+
     images = sorted(glob.glob(os.path.join(MOOD_SNAPSHOT_FOLDER, "**", "mood_*.jpg"), recursive=True))
     if not images:
         print("No images found. Pass an image path as argument.")
@@ -35,6 +36,7 @@ print("=" * 70)
 # Also load current drifted baseline for comparison
 try:
     import json
+
     identity_path = os.path.join(MOOD_SNAPSHOT_FOLDER, "machine_identity.json")
     with open(identity_path) as f:
         identity = json.load(f)
@@ -54,7 +56,7 @@ CANDIDATES = [
             "Describe only physical objects and surfaces. No feelings, no story, no narrative. "
             "First person, present tense. One sentence."
         ),
-        "prompt": "Complete this sentence with physical facts only: \"I'm in a space with...\"",
+        "prompt": 'Complete this sentence with physical facts only: "I\'m in a space with..."',
         "options": {"temperature": 0.2, "num_predict": 60, "repeat_penalty": 1.4},
     },
     {
@@ -81,31 +83,22 @@ CANDIDATES = [
             "One sentence, first person."
         ),
         "prompt": (
-            f"Previously I noted: \"{current_baseline[:80]}\"\n\n"
+            f'Previously I noted: "{current_baseline[:80]}"\n\n'
             "Looking at my space now: one sentence starting with 'I', physical objects and arrangement only."
         ),
         "options": {"temperature": 0.2, "num_predict": 70, "repeat_penalty": 1.4},
     },
     {
         "name": "D — Forced 'I see' start, minimal system",
-        "system": (
-            "You ARE a drawing machine inside this space. Never say 'the image'. "
-            "Physical description only. First person."
-        ),
-        "prompt": (
-            "Start your response with exactly 'I see' and describe only the physical objects "
-            "and surfaces present. One sentence."
-        ),
+        "system": ("You ARE a drawing machine inside this space. Never say 'the image'. " "Physical description only. First person."),
+        "prompt": ("Start your response with exactly 'I see' and describe only the physical objects " "and surfaces present. One sentence."),
         "options": {"temperature": 0.2, "num_predict": 60, "repeat_penalty": 1.4},
     },
     {
         "name": "E — Two questions: what's there, what's changed",
-        "system": (
-            "You ARE a drawing machine. You live in this space — never say 'the image'. "
-            "Physical facts only. No feelings, no story."
-        ),
+        "system": ("You ARE a drawing machine. You live in this space — never say 'the image'. " "Physical facts only. No feelings, no story."),
         "prompt": (
-            f"I previously understood: \"{current_baseline[:60]}\"\n\n"
+            f'I previously understood: "{current_baseline[:60]}"\n\n'
             "Looking now:\n"
             "- What physical objects do I consistently see here?\n"
             "- Has anything changed?\n"

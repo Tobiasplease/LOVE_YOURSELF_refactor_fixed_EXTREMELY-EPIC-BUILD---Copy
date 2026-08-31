@@ -42,6 +42,7 @@ class FrameBuffer:
         self._last_tilt: Optional[float] = None
 
         from vision.scene_motion import SceneMotionEstimator
+
         self._motion_estimator = SceneMotionEstimator()
 
     def push(self, frame: np.ndarray, detection: Optional[dict] = None) -> None:
@@ -127,8 +128,7 @@ class FrameBuffer:
     def get_recent_with_metadata(self, seconds: float = 10.0, max_frames: int = 20) -> List[dict]:
         """Get recent frames with timestamps, diff scores, and detection snapshots."""
         return [
-            {"timestamp": ts, "jpeg": jpg, "diff_score": diff, "detection": det}
-            for ts, jpg, diff, det in self._select_frames(seconds, max_frames)
+            {"timestamp": ts, "jpeg": jpg, "diff_score": diff, "detection": det} for ts, jpg, diff, det in self._select_frames(seconds, max_frames)
         ]
 
     @property

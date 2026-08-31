@@ -22,6 +22,7 @@ from typing import Dict, List, Optional
 
 try:
     from config.config import MOOD_SNAPSHOT_FOLDER
+
     _LOG_PATH = os.path.join(MOOD_SNAPSHOT_FOLDER, "episodic_events.json")
 except Exception:
     _LOG_PATH = None
@@ -72,17 +73,14 @@ class EpisodicLog:
             # De-dupe rapid repeats
             if self._events:
                 last = self._events[-1]
-                if (last.get("type") == event_type
-                        and last.get("description") == event["description"]
-                        and time.time() - last.get("timestamp", 0) < 5):
+                if last.get("type") == event_type and last.get("description") == event["description"] and time.time() - last.get("timestamp", 0) < 5:
                     return
             self._events.append(event)
             if len(self._events) > MAX_EVENTS:
                 self._events = self._events[-MAX_EVENTS:]
             self._save()
 
-    def get_recent_events(self, window_seconds: int = DEFAULT_WINDOW_SECONDS,
-                          types: Optional[List[str]] = None) -> List[Dict]:
+    def get_recent_events(self, window_seconds: int = DEFAULT_WINDOW_SECONDS, types: Optional[List[str]] = None) -> List[Dict]:
         """Return events from the last `window_seconds`, optionally filtered by type(s)."""
         cutoff = time.time() - window_seconds
         with self._lock:
@@ -100,8 +98,7 @@ class EpisodicLog:
                     return e
         return None
 
-    def get_pairs_in_window(self, start_type: str, end_type: str,
-                             window_seconds: int = DEFAULT_WINDOW_SECONDS) -> List[Dict]:
+    def get_pairs_in_window(self, start_type: str, end_type: str, window_seconds: int = DEFAULT_WINDOW_SECONDS) -> List[Dict]:
         """For event pairs like person_arrived/person_left, return matched pairs.
 
         Returns a list of {start: <event>, end: <event or None>, duration_seconds: float}.

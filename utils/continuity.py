@@ -61,5 +61,3 @@ def get_current_time_description():
         time_of_day = "night"
 
     return f"{time_of_day} ({dt.strftime('%I:%M %p')})"
-
-

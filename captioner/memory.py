@@ -235,4 +235,3 @@ class MemoryMixin:
             lines.insert(1, sleep_context)
 
         return lines
-

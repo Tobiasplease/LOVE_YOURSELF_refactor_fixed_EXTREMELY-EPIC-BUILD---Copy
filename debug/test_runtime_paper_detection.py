@@ -4,15 +4,17 @@ Test script to debug runtime paper detection issues.
 This simulates exactly what the runtime system does.
 """
 
-import sys
 import os
+import sys
 import time
+
 import cv2
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from config.config import CAMERA_INDEX
 from safety.paper_detection import PaperDetector
+
 
 def test_runtime_detection():
     """Test paper detection using exact same code path as runtime."""
@@ -29,8 +31,11 @@ def test_runtime_detection():
 
     # Mock servo object (runtime expects this)
     class MockServos:
-        def set_pan(self, value): pass
-        def set_tilt(self, value): pass
+        def set_pan(self, value):
+            pass
+
+        def set_tilt(self, value):
+            pass
 
     servos = MockServos()
 
@@ -67,9 +72,11 @@ def test_runtime_detection():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         camera.release()
+
 
 if __name__ == "__main__":
     test_runtime_detection()

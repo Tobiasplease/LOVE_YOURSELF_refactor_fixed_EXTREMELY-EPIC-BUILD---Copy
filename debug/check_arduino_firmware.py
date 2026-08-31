@@ -2,8 +2,9 @@
 """
 Check which Arduino firmware is loaded and test actual servo range.
 """
-import serial
 import time
+
+import serial
 
 print("=" * 60)
 print("Arduino Firmware Checker")
@@ -22,7 +23,7 @@ try:
 
     startup_messages = []
     while ser.in_waiting:
-        msg = ser.readline().decode('utf-8', errors='ignore').strip()
+        msg = ser.readline().decode("utf-8", errors="ignore").strip()
         if msg:
             startup_messages.append(msg)
             print(f"  Arduino: {msg}")
@@ -36,7 +37,7 @@ try:
         time.sleep(2)
 
         while ser.in_waiting:
-            msg = ser.readline().decode('utf-8', errors='ignore').strip()
+            msg = ser.readline().decode("utf-8", errors="ignore").strip()
             if msg:
                 startup_messages.append(msg)
                 print(f"  Arduino: {msg}")
@@ -51,14 +52,14 @@ try:
 
     for angle in test_angles:
         cmd = f"TILT:{angle}\n"
-        ser.write(cmd.encode('utf-8'))
+        ser.write(cmd.encode("utf-8"))
         ser.flush()
         time.sleep(0.1)
 
         # Read response
         responses = []
         while ser.in_waiting:
-            resp = ser.readline().decode('utf-8', errors='ignore').strip()
+            resp = ser.readline().decode("utf-8", errors="ignore").strip()
             if resp:
                 responses.append(resp)
 
@@ -83,4 +84,5 @@ except serial.SerialException as e:
 except Exception as e:
     print(f"❌ Error: {e}")
     import traceback
+
     traceback.print_exc()

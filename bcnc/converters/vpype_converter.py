@@ -37,11 +37,7 @@ class VpypeConverter:
         try:
             # Import experimental settings
             try:
-                from config.config import (
-                    GRBL_EXPERIMENTAL_SIMPLIFICATION,
-                    GRBL_SIMPLIFICATION_TOLERANCE,
-                    GRBL_MERGE_TOLERANCE
-                )
+                from config.config import GRBL_EXPERIMENTAL_SIMPLIFICATION, GRBL_MERGE_TOLERANCE, GRBL_SIMPLIFICATION_TOLERANCE
             except ImportError:
                 GRBL_EXPERIMENTAL_SIMPLIFICATION = False
                 GRBL_SIMPLIFICATION_TOLERANCE = 0.05
@@ -55,17 +51,20 @@ class VpypeConverter:
 
             if GRBL_EXPERIMENTAL_SIMPLIFICATION:
                 print(f"[EXPERIMENTAL] Using path simplification (tolerance: {GRBL_SIMPLIFICATION_TOLERANCE}mm)")
-                cmd.extend([
-                    "linemerge", "--tolerance", f"{GRBL_MERGE_TOLERANCE}mm",
-                    "linesimplify", "--tolerance", f"{GRBL_SIMPLIFICATION_TOLERANCE}mm",
-                    "linesort"
-                ])
+                cmd.extend(
+                    [
+                        "linemerge",
+                        "--tolerance",
+                        f"{GRBL_MERGE_TOLERANCE}mm",
+                        "linesimplify",
+                        "--tolerance",
+                        f"{GRBL_SIMPLIFICATION_TOLERANCE}mm",
+                        "linesort",
+                    ]
+                )
             else:
                 print("[STANDARD] Using high-quality mode (no simplification)")
-                cmd.extend([
-                    "linemerge", "--tolerance", "0.1mm",
-                    "linesort"
-                ])
+                cmd.extend(["linemerge", "--tolerance", "0.1mm", "linesort"])
 
             cmd.extend(["gwrite", "--profile", "gcode", temp_gcode])
 

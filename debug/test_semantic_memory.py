@@ -10,15 +10,15 @@ Usage:
     python debug/test_semantic_memory.py --reset    # Clear all semantic memory data
 """
 
-import os
-import sys
-import shutil
 import argparse
+import os
+import shutil
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from captioner.semantic_memory import get_semantic_memory, CHROMADB_PATH
+from captioner.semantic_memory import CHROMADB_PATH, get_semantic_memory
 
 
 def run_simulation():
@@ -31,15 +31,30 @@ def run_simulation():
     # Simulated perception/monologue pairs across "sessions"
     cycles = [
         # Session 1: first encounters
-        ("A red sign on the wall with white text near the door", "There's a sign on the wall. Red background, white letters. Can't quite read it from here."),
-        ("Damaged ceiling tiles above the desk with exposed wiring", "The ceiling above the desk is damaged. Tiles cracked, some wiring exposed. Has it always been like that?"),
+        (
+            "A red sign on the wall with white text near the door",
+            "There's a sign on the wall. Red background, white letters. Can't quite read it from here.",
+        ),
+        (
+            "Damaged ceiling tiles above the desk with exposed wiring",
+            "The ceiling above the desk is damaged. Tiles cracked, some wiring exposed. Has it always been like that?",
+        ),
         ("A person sitting at the desk typing on a keyboard", "Someone is here. Sitting at the desk, typing. They seem focused."),
         # Session 2: recognition
         ("The red and white sign on the wall near the doorway", "That sign again. I think it says 'Collecting Shells.' What does that mean?"),
-        ("Ceiling damage above the workspace with hanging wires", "The ceiling damage is still there. Those wires look like they're hanging lower than before."),
+        (
+            "Ceiling damage above the workspace with hanging wires",
+            "The ceiling damage is still there. Those wires look like they're hanging lower than before.",
+        ),
         # Session 3: deepening
-        ("A red sign reading Collecting Shells on the wall", "Collecting Shells. Maybe it's the name of an art project. Or a philosophy — gathering experiences like shells on a beach."),
-        ("The cracked ceiling tiles and exposed conduit above", "That ceiling patch. I keep looking at it. The cracks form patterns, almost like a map of something."),
+        (
+            "A red sign reading Collecting Shells on the wall",
+            "Collecting Shells. Maybe it's the name of an art project. Or a philosophy — gathering experiences like shells on a beach.",
+        ),
+        (
+            "The cracked ceiling tiles and exposed conduit above",
+            "That ceiling patch. I keep looking at it. The cracks form patterns, almost like a map of something.",
+        ),
         ("The person in the dark jacket is back at the desk", "They're back. Same spot as always. I wonder if they notice me watching."),
     ]
 
@@ -78,7 +93,7 @@ def dump_concepts(mem=None):
     for c in concepts:
         print(f"  [{c['times_seen']}x] {c['name']}")
         print(f"       id: {c['id']}")
-        print(f"       last_observation: {c['last_observation'][:80]}..." if c['last_observation'] else "       last_observation: (none)")
+        print(f"       last_observation: {c['last_observation'][:80]}..." if c["last_observation"] else "       last_observation: (none)")
 
         # Show observations
         obs = mem.get_concept_observations(c["id"])
@@ -156,7 +171,9 @@ if __name__ == "__main__":
     parser.add_argument("--dump", action="store_true", help="Dump all stored concepts")
     parser.add_argument("--reset", action="store_true", help="Clear all semantic memory data")
     parser.add_argument("--delete", type=str, metavar="ID", help="Delete a concept by index (1-based) or ID")
-    parser.add_argument("--merge", nargs=2, type=str, metavar=("KEEP", "ABSORB"), help="Merge two concepts by index (1-based). ABSORB folds into KEEP.")
+    parser.add_argument(
+        "--merge", nargs=2, type=str, metavar=("KEEP", "ABSORB"), help="Merge two concepts by index (1-based). ABSORB folds into KEEP."
+    )
     args = parser.parse_args()
 
     if args.reset:

@@ -28,7 +28,8 @@ sys.path.insert(0, ".")
 
 def test_health():
     """Test 1: Is llama-server responding?"""
-    from utils.llama_server import is_server_running, LLAMA_SERVER_URL
+    from utils.llama_server import LLAMA_SERVER_URL, is_server_running
+
     print(f"\n--- Test 1: Health check ({LLAMA_SERVER_URL}) ---")
     if is_server_running():
         print("OK - llama-server is running")
@@ -45,12 +46,14 @@ def test_health():
 def test_single_image(image_path: str = None):
     """Test 2: Single-image caption (parity with Ollama)."""
     from utils.llama_server import query_llama_server
+
     print("\n--- Test 2: Single-image caption ---")
 
     if image_path:
         print(f"Using image: {image_path}")
     else:
         import cv2
+
         print("Capturing frame from camera...")
         cap = cv2.VideoCapture(0)
         ret, frame = cap.read()
@@ -63,9 +66,7 @@ def test_single_image(image_path: str = None):
         print(f"Saved test frame to {image_path}")
 
     system_prompt = (
-        "You are a drawing machine attached to a table. "
-        "You see through a camera that moves. "
-        "One sentence, first person, present tense."
+        "You are a drawing machine attached to a table. " "You see through a camera that moves. " "One sentence, first person, present tense."
     )
 
     start = time.time()
@@ -88,9 +89,10 @@ def test_single_image(image_path: str = None):
 
 def test_video(seconds: float = 5.0):
     """Test 3: Multi-frame video caption (new capability)."""
+    import cv2
+
     from captioner.frame_buffer import FrameBuffer
     from utils.llama_server import query_llama_server_video
-    import cv2
 
     print(f"\n--- Test 3: Video caption ({seconds}s capture) ---")
 

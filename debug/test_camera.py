@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Camera test - shows native firmware defaults before touching anything."""
 
-import cv2
 import sys
+
+import cv2
 
 CAMERA_INDEX = 0
 TARGET_WIDTH = 2560
@@ -50,9 +51,9 @@ while True:
     cv2.imshow("Camera Test - RAW", frame)
 
     key = cv2.waitKey(1) & 0xFF
-    if key == ord('q'):
+    if key == ord("q"):
         break
-    elif key == ord('d'):
+    elif key == ord("d"):
         print(f"Brightness: {cap.get(cv2.CAP_PROP_BRIGHTNESS)}")
         print(f"Contrast: {cap.get(cv2.CAP_PROP_CONTRAST)}")
         print(f"Saturation: {cap.get(cv2.CAP_PROP_SATURATION)}")

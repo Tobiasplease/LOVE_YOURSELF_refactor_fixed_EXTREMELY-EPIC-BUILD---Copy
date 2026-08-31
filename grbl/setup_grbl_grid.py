@@ -1,7 +1,7 @@
 # setup_grbl_grid.py
 
-import time
 import sys
+import time
 
 import serial
 from serial.tools import list_ports
@@ -9,6 +9,7 @@ from serial.tools import list_ports
 # Import warp transform
 try:
     from warp_transform import warp_transform_line
+
     WARP_AVAILABLE = True
 except ImportError:
     print("[WARN] Warp transform not available")
@@ -78,9 +79,7 @@ def read_until_ok_or_error(ser, timeout=5.0):
 def send_cmd(ser, cmd, wait_ok=True, timeout=5.0):
     # Apply warp transform to movement commands if enabled
     original_cmd = cmd
-    if (USE_WARP_TRANSFORM and WARP_AVAILABLE and
-        cmd.startswith(("G0", "G1", "G00", "G01")) and
-        ("X" in cmd or "Y" in cmd)):
+    if USE_WARP_TRANSFORM and WARP_AVAILABLE and cmd.startswith(("G0", "G1", "G00", "G01")) and ("X" in cmd or "Y" in cmd):
         cmd = warp_transform_line(cmd)
         print(f"[WARP] {original_cmd} -> {cmd}")
     else:
@@ -223,11 +222,11 @@ def main():
     # Command line argument parsing
     if len(sys.argv) > 1:
         arg = sys.argv[1].lower()
-        if arg in ['--no-warp', '--nowarp', 'false', '0']:
+        if arg in ["--no-warp", "--nowarp", "false", "0"]:
             USE_WARP_TRANSFORM = False
-        elif arg in ['--warp', 'true', '1']:
+        elif arg in ["--warp", "true", "1"]:
             USE_WARP_TRANSFORM = True
-        elif arg in ['--help', '-h']:
+        elif arg in ["--help", "-h"]:
             print("Usage: python setup_grbl_grid.py [--warp|--no-warp]")
             print("  --warp     : Enable warp transform correction (default)")
             print("  --no-warp  : Disable warp transform correction")

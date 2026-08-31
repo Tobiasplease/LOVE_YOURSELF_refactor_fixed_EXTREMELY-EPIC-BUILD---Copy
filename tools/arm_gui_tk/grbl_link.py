@@ -7,9 +7,9 @@ from grbl.grbl_utils import (
     DEFAULT_FEED_RATE,
     PEN_DOWN_CMD,
     PEN_UP_CMD,
-    get_status,
     ensure_homed,
     find_grbl_port,
+    get_status,
     send_cmd,
     setup_basic_grbl,
     wait_until_idle,
@@ -38,8 +38,8 @@ class GrblLink:
         self._lock = threading.Lock()
         self._last_move_ts = 0.0
         self._move_min_interval = 0.05  # 20 Hz max command rate
-        self.max_speed_mm_s = 5.0       # hard speed limit (safety)
-        self.max_step_mm = 0.8          # max step per command (safety)
+        self.max_speed_mm_s = 5.0  # hard speed limit (safety)
+        self.max_step_mm = 0.8  # max step per command (safety)
 
     def connect_and_home(self, preferred_port: Optional[str] = None, max_homing_retries: int = -1) -> bool:
         try:
