@@ -77,7 +77,6 @@ def query_model(
         prior_assistant_turn=prior_assistant_turn,
         history=history,
         react=react,
-        frame_ts=frame_ts,
     )
 
 
@@ -108,6 +107,7 @@ def query_model_video(
         skip_generation_wait=skip_generation_wait,
         history=history,
         react=react,
+        frame_ts=frame_ts,
     )
 
 
