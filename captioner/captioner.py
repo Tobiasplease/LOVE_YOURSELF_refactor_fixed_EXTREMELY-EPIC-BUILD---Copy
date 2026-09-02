@@ -1766,6 +1766,29 @@ class Captioner(MemoryMixin):
 
                         caption = self._trim_to_boundary(self._strip_list_shape(_generate(gen_options)))
 
+                        # THE SILENCE BEAT (Sep 2): the genre menu now ends
+                        # "or nothing at all — staying quiet is yours to
+                        # choose." An empty or ellipsis-only answer from a
+                        # SUCCESSFUL call is that choice, honored: nothing
+                        # spoken, nothing stored (a silent turn teaches no
+                        # genre), the stream's gap markers carry the elapsed
+                        # time. It shares the unstored-cycle streak, so the
+                        # stuck-breaker remains a natural floor against
+                        # wall-to-wall silence. Failures stay failures —
+                        # is_failed_response guards the branch.
+                        from utils.inference import is_failed_response as _ifr
+
+                        _bare = (caption or "").strip()
+                        if self.first_caption_done and not _ifr(caption) and (not _bare or all(c in ".…·-— " for c in _bare)):
+                            self._note_unstored_cycle("chosen_silence", _bare or "(empty)")
+                            log_json_entry(
+                                LogType.CAPTION,
+                                {"message": "Chose silence", "action": "chosen_silence", "silent": True, "raw": _bare[:20]},
+                                print_message=f"[🤫] chose silence (streak {self._skip_streak})",
+                            )
+                            self.last_caption_time = now
+                            return None
+
                         # Gate split (Aug 22): echo-class rejections are spoken
                         # but never stored (the fix lives at storage, north-star
                         # P1); shape-class rejections stay mouth-gated — one
