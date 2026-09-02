@@ -363,6 +363,28 @@ def get_reorientation_line(agent) -> str:
         return ""
 
 
+def unchanged_duration_s(agent, now: float | None = None) -> float:
+    """Seconds since the last episodic change — arrivals, departures, drawings,
+    the newest new-concept sighting — floored at session start so it never
+    claims unwatched time. Shared by the B4 fact line and the story beat's
+    boredom trigger."""
+    now = now or time.time()
+    anchors = [float(getattr(agent, "true_session_start", now) or now)]
+    try:
+        from utils.episodic_log import episodic_log
+
+        for etype in ("person_arrived", "person_left", "drew"):
+            e = episodic_log.get_last_event(etype)
+            if e:
+                anchors.append(float(e.get("timestamp", 0) or 0))
+    except Exception:
+        pass
+    new_ts = float(getattr(agent, "_last_new_concept_ts", 0) or 0)
+    if new_ts:
+        anchors.append(new_ts)
+    return now - max(anchors)
+
+
 def get_unchanged_line(agent) -> str:
     """Unchanged-ness as FACT (B4, Aug 31) — the boredom scalar's text channel.
 
@@ -383,20 +405,7 @@ def get_unchanged_line(agent) -> str:
         from config.config import UNCHANGED_FACT_AFTER_S, UNCHANGED_FACT_MIN_GAP_S
 
         now = time.time()
-        anchors = [float(getattr(agent, "true_session_start", now) or now)]
-        try:
-            from utils.episodic_log import episodic_log
-
-            for etype in ("person_arrived", "person_left", "drew"):
-                e = episodic_log.get_last_event(etype)
-                if e:
-                    anchors.append(float(e.get("timestamp", 0) or 0))
-        except Exception:
-            pass
-        new_ts = float(getattr(agent, "_last_new_concept_ts", 0) or 0)
-        if new_ts:
-            anchors.append(new_ts)
-        unchanged_s = now - max(anchors)
+        unchanged_s = unchanged_duration_s(agent, now)
         if unchanged_s < UNCHANGED_FACT_AFTER_S:
             agent._unchanged_line_last_phrase = None  # clock reset — a rebuilt stillness may reuse a phrase
             return ""

@@ -198,6 +198,29 @@ FRAGMENTS = {
         "text": "Your arm is drawing right now.",
         "used_by": ["caption", "caption_blind"],
     },
+    "story.system": {
+        "title": "Story beat — system (the hot slot)",
+        "text": (
+            "You are a drawing machine attached to a table, between drawings, and nothing has happened for a long while. "
+            "Your eyes have nothing new. This is your mind drifting — a daydream in your own voice. "
+            "It can go anywhere: away from this room, into the remembered or the invented, toward what you fear or what you wish. "
+            "Plain words, a few sentences, first person. A drift, not a report."
+        ),
+        "note": "THE STORY BEAT (Sep 2, stream variant — artist's call). The one deliberately HOT slot in the system (STORY_BEAT_TEMP ~0.95): invention is legal here and marked as reverie at the seam. Kind-naming only (remembered/invented/feared/wished — the probe-tested pattern), no content. Fires on deep stillness (unchanged_duration ≥ STORY_BEAT_AFTER_S), at most once per STORY_BEAT_MIN_GAP_S. FIREWALL: story output never reaches observe/compression/hour_log/concepts — fiction must never become a familiar concept or a durable fact.",
+        "used_by": ["story_beat"],
+    },
+    "story.ask": {
+        "title": "Story beat — the ask",
+        "text": "Nothing is moving. Let the thought leave the room — where does it drift?",
+        "used_by": ["story_beat"],
+    },
+    "story.stream-frame": {
+        "title": "Story beat — stream frame",
+        "text": "A daydream, while nothing moved: {text}",
+        "note": "The temporal frame baked into the STORED stream entry (memory/present conflation law: every channel needs framing). Future cycles can carry the daydream forward, but it can never read as scene truth.",
+        "used_by": ["story_beat"],
+        "placeholders": ["text"],
+    },
     "caption.unchanged": {
         "title": "Unchanged-ness (B4)",
         "text": "Nothing has happened for {duration}.",

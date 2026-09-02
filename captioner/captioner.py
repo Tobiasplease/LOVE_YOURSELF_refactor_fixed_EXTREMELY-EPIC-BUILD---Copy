@@ -251,6 +251,97 @@ class Captioner(MemoryMixin):
         self._stream.clear()
         self._stream_ts.clear()
 
+    # ------------------------------------------------------------------
+    # THE STORY BEAT (Sep 2, stream variant — artist's call). On deep
+    # stillness a cycle becomes a story turn: the bored mind's daydream,
+    # generated HOT with no image, seeded with real episodic/want material,
+    # and pushed into the stream framed as reverie. FIREWALL: the output
+    # never touches observe/add_caption/hour_log/recent_captions — fiction
+    # must never become a familiar concept, a compressed fact, or
+    # reflection material. The frame ("A daydream, while nothing moved:")
+    # is baked into the stored text so no future window can read it as
+    # scene truth.
+    # ------------------------------------------------------------------
+
+    def _story_beat_due(self, now: float) -> bool:
+        try:
+            from captioner.prompts import unchanged_duration_s
+            from config.config import STORY_BEAT_AFTER_S, STORY_BEAT_ENABLED, STORY_BEAT_MIN_GAP_S
+
+            if not STORY_BEAT_ENABLED or not self.first_caption_done or len(self._stream) < 2:
+                return False
+            if now - float(getattr(self, "_last_story_beat_ts", 0) or 0) < STORY_BEAT_MIN_GAP_S:
+                return False
+            return unchanged_duration_s(self, now) >= STORY_BEAT_AFTER_S
+        except Exception:
+            return False
+
+    def _run_story_beat(self, now: float) -> None:
+        from captioner.prompt_registry import P
+        from captioner.prompts import casual_time_string
+        from config.config import MODEL_NAME, MOOD_SNAPSHOT_FOLDER, STORY_BEAT_NUM_PREDICT, STORY_BEAT_TEMP
+        from utils.inference import is_failed_response, query_model
+
+        self._last_story_beat_ts = now  # a failed drift still spends the slot — no hot retry loops
+        lines = []
+        try:
+            from utils.episodic_log import episodic_log
+
+            evs = episodic_log.get_recent_events(86400)[-4:]
+            if evs:
+                lines.append("What has actually happened, lately:")
+                lines += [f"- ({casual_time_string((now - e.get('timestamp', now)) / 60.0)} ago) {e.get('description', '')}" for e in evs]
+        except Exception:
+            pass
+        try:
+            from utils.want_ledger import want_ledger
+
+            f = want_ledger.current_facts()
+            if f:
+                refused = f" — refused {f['refusals']} times" if f["refusals"] else ""
+                lines.append(f"A want you carry: \"{f['text']}\"{refused}")
+            for r in want_ledger.recently_resolved(2):
+                lines.append(f"A want that ended: \"{r['text']}\" — {r['outcome']}")
+        except Exception:
+            pass
+        user_prompt = "\n".join(lines + ["", P("story.ask")]) if lines else P("story.ask")
+        try:
+            text = query_model(
+                prompt=user_prompt,
+                model=MODEL_NAME,
+                image=None,
+                system_prompt=P("story.system"),
+                timeout=60,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                options={"temperature": STORY_BEAT_TEMP, "num_predict": STORY_BEAT_NUM_PREDICT},
+                prompt_type="story_beat",
+                history=self._stream_history(),
+            )
+        except Exception:
+            return
+        if is_failed_response(text) or not text or len(text.strip()) < 8:
+            return
+        text = self._trim_to_boundary(self._strip_list_shape(text)).strip()
+        if not text:
+            return
+        framed = P("story.stream-frame").format(text=text)
+        log_json_entry(
+            LogType.CAPTION,
+            {"message": "Story beat", "action": "story_beat", "story": True, "caption": text[:400]},
+            print_message=f"[💭] {framed}",
+        )
+        try:
+            from utils.caption_display import send_caption_to_display
+            from utils.state_manager import state_manager
+
+            if not getattr(state_manager, "is_executing_cnc", False):
+                send_caption_to_display(text)
+        except Exception:
+            pass
+        if self._stream_admissible(text):
+            self._stream_push(framed)
+        self.last_caption_time = now
+
     def _stream_history(self) -> list:
         """The stream as the model sees it. World shape: timestamped log lines
         ("14:02 — the lamp's still on") — the log rendering is genre framing
@@ -1420,6 +1511,14 @@ class Captioner(MemoryMixin):
 
                         # Salience first — it decides how interior this caption gets
                         scene = self._assess_scene()
+
+                        # THE STORY BEAT preempts the whole cycle on deep
+                        # stillness: the bored mind drifts instead of looking
+                        # again. A live moment always wins.
+                        if not self._salience_hot and self._story_beat_due(now):
+                            loading_stop.set()
+                            self._run_story_beat(now)
+                            return None
 
                         # Interiority beat: every Nth quiet caption, think WITHOUT
                         # looking — drop the image so the model can't re-describe the

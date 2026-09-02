@@ -1064,6 +1064,16 @@ UNCHANGED_FACT_MIN_GAP_S = float(os.getenv("UNCHANGED_FACT_MIN_GAP_S", 600))
 WANT_ARC_TAIL_AFTER_S = float(os.getenv("WANT_ARC_TAIL_AFTER_S", 21600))
 WANT_REFLECTION_FACT_AFTER_S = float(os.getenv("WANT_REFLECTION_FACT_AFTER_S", 86400))
 
+# The story beat (Sep 2) — the waking-dream slot, stream variant. On deep
+# stillness a caption cycle becomes a story turn: no image, hot temperature,
+# real episodic/want material, output entering the stream framed as reverie.
+# Fiction is firewalled from every ledger (see registry story.system note).
+STORY_BEAT_ENABLED = os.getenv("STORY_BEAT_ENABLED", "true").lower() in ("true", "1", "yes")
+STORY_BEAT_AFTER_S = float(os.getenv("STORY_BEAT_AFTER_S", 2700))
+STORY_BEAT_MIN_GAP_S = float(os.getenv("STORY_BEAT_MIN_GAP_S", 3600))
+STORY_BEAT_TEMP = float(os.getenv("STORY_BEAT_TEMP", 0.95))
+STORY_BEAT_NUM_PREDICT = int(os.getenv("STORY_BEAT_NUM_PREDICT", 150))
+
 # Reflection-echo pacing (Aug 28 evening). Aug 22 removed this source's
 # internal counter "because the rotation slot rations" — but rotation only
 # picks who goes FIRST, and with 180+ reflections stored a relevance match
