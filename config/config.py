@@ -1118,6 +1118,11 @@ DRAWING_MIN_INTERVAL = 900  # hard floor between drawings (desire mode; drive mo
 # The warp transform maps this to the physical quad (~70x38mm).
 # Larger = more detail but more distortion at edges. Tune empirically.
 DRAWING_SCALE_TARGET = "50x50mm"
+# Fragment-merge tolerance for the SVG→G-code conversion (see the Sep 2 note
+# in grbl_utils.convert_with_vpype). 0.3 = measured safe default (halves pen
+# plunges, doubles median stroke, no visible welding). 0.5 = aggressive:
+# adjacent hatch lines weld into zigzag scribble — an aesthetic choice.
+GRBL_LINEMERGE_TOLERANCE_MM = float(os.getenv("GRBL_LINEMERGE_TOLERANCE_MM", 0.3))
 
 # === OBJECT DETECTION ===
 YOLO_CONFIDENCE_THRESHOLD = 0.55  # Raised to 0.55 to avoid detecting hands/arms as person

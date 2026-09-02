@@ -698,8 +698,35 @@ def convert_with_vpype(svg_file, output_file, scale_to=None):
         if scale_to:
             cmd.extend(["layout", "--fit-to-margins", "1cm", scale_to])
 
+        # Linemerge tolerance (Sep 2 2026, the dots diagnosis): the DSV
+        # centerliner emits ~2,000 abutting polylines per drawing with median
+        # end-to-start gaps of ~0.19mm — at the old 0.1mm tolerance most
+        # never merged, so every fragment cost a pen plunge and continuous
+        # curves executed as dotted lines (1,258 plunges, median stroke
+        # 0.51mm, 49% shorter than the pen's own line width). Measured on a
+        # real drawing: 0.3mm → 457 strokes, median 1.22mm, no visible
+        # welding; 0.5mm → 208 strokes, median 2.42mm, adjacent hatch lines
+        # weld into zigzag scribble (a look the artist may choose). Bridged
+        # gaps are drawn, so total ink RISES (+14% at 0.3) — that ink is the
+        # previously missing detail.
+        try:
+            from config.config import GRBL_LINEMERGE_TOLERANCE_MM as _lm_tol
+        except (ImportError, AttributeError):
+            _lm_tol = 0.3
         cmd.extend(
-            ["linemerge", "--tolerance", "0.1mm", "linesimplify", "--tolerance", "0.05mm", "linesort", "gwrite", "--profile", "gcodemm", output_file]
+            [
+                "linemerge",
+                "--tolerance",
+                f"{_lm_tol}mm",
+                "linesimplify",
+                "--tolerance",
+                "0.05mm",
+                "linesort",
+                "gwrite",
+                "--profile",
+                "gcodemm",
+                output_file,
+            ]
         )
 
         log_json_entry(
