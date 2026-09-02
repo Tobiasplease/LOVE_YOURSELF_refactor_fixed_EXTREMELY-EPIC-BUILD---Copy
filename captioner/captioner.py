@@ -1721,6 +1721,20 @@ class Captioner(MemoryMixin):
                             "num_ctx": 4096,
                             "seed": _random.randint(1, 1000000),
                         }
+                        # Vendor-shaped sampling arm (queued since July 28,
+                        # plumbed Sep 2): Qwen's official non-thinking recipe
+                        # is repetition_penalty 1.0 + presence_penalty as the
+                        # repetition control. presence_penalty taxes every
+                        # already-used token once — vocabulary-level pressure
+                        # against the copula monotony ("The X is Y" every
+                        # sentence) that repeat_penalty/DRY never touch. OFF
+                        # by default (0.0): the A/B arm is
+                        #   CAPTION_PRESENCE_PENALTY=0.8 CAPTION_REPEAT_PENALTY=1.0 ./start_impostor.sh
+                        # judged by debug/caption_metrics.py, not the last caption.
+                        from config.config import CAPTION_PRESENCE_PENALTY
+
+                        if CAPTION_PRESENCE_PENALTY > 0:
+                            gen_options["presence_penalty"] = CAPTION_PRESENCE_PENALTY
 
                         # Frozen-input breaker (Aug 22, run e66279fd): 2+ cycles
                         # without the stream growing means the model is re-typing

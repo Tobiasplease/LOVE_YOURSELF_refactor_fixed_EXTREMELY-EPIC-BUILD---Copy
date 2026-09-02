@@ -863,6 +863,11 @@ HYBRID_PREFILL_CHARS = int(os.getenv("HYBRID_PREFILL_CHARS", 220))
 # The rhythm itself (fragments, emphasis, questions) is genre-framed in
 # genre.hybrid, not bought with temperature.
 CAPTION_TEMP = float(os.getenv("CAPTION_TEMP", 0.9))
+# Vendor-shaped repetition control (Qwen official non-thinking recipe:
+# repetition_penalty 1.0 + presence_penalty 0.6-1.5). 0.0 = off (default).
+# The A/B arm pairs it with CAPTION_REPEAT_PENALTY=1.0; judge with
+# debug/caption_metrics.py over a full evening, never by the last caption.
+CAPTION_PRESENCE_PENALTY = float(os.getenv("CAPTION_PRESENCE_PENALTY", 0.0))
 CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.85))
 CAPTION_TOP_P = float(os.getenv("CAPTION_TOP_P", 1.0))
 CAPTION_MIN_P = float(os.getenv("CAPTION_MIN_P", 0.05))

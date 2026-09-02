@@ -85,6 +85,11 @@ _SAMPLER_PASSTHROUGH = (
     "dry_base",
     "dry_allowed_length",
     "dry_penalty_last_n",
+    # Vendor-shaped arm (Sep 2): Qwen's official recipe uses presence_penalty
+    # as the repetition control (with repetition_penalty at 1.0). Forwarded
+    # only when a caller sets it — CAPTION_PRESENCE_PENALTY, default off.
+    "presence_penalty",
+    "frequency_penalty",
 )
 
 
