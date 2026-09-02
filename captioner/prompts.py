@@ -106,19 +106,19 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # the continuity work, so it can keep the plain inner-voice frame.
     base = P("situation.world") if getattr(config, "STREAM_MODE", "") == "world" else P("situation.reflexive")
 
-    # Drawing state, gated so it can never lie. Without this line "drawing
-    # machine" + "drawing is how you communicate" primes present-tense
-    # drawing and the monologue narrates a drawing that isn't happening
-    # (regression observed June 12 after the teardown). States the fact only —
-    # no "just looking" or similar, which would lock the register into
-    # observation and out of wondering/introspection.
-    try:
-        from utils.state_manager import state_manager as _sm
-
-        if not (_sm.is_generating_drawing or _sm.current_drawing_phase == "executing"):
-            base += P("monologue.pen-parked")
-    except Exception:
-        pass
+    # "The pen is parked" — TEST-RETIRED Sep 2 2026 (artist's call). The
+    # June 12 phantom-drawing regression this fence guarded was never the
+    # identity frame (constant since day one) — it was the then-new,
+    # then-ungated STREAM amplifying one phantom stroke into a genre. The
+    # actual drivers are since cured at the source: corrupted recency clocks
+    # (Sep 1), stored unexecuted drawing intents (Aug 20, executed-only
+    # provenance), plus the full gate catalog that didn't exist in June.
+    # Meanwhile the standing clause was the loudest pane in the pen
+    # hall-of-mirrors (12 pen/draw refs per prompt pair, measured Sep 2).
+    # RESTORE PATH if phantom strokes return: re-add
+    #   base += P("monologue.pen-parked")
+    # gated on `not (_sm.is_generating_drawing or _sm.current_drawing_phase
+    # == "executing")` — the registry entry still exists, panel-editable.
 
     base += _monologue_clause()
 

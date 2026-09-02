@@ -488,6 +488,26 @@ class ReflectionLoop:
             # surface a re-thinkable clause instead of a bare subject label.
             if kernel and refl_id:
                 get_semantic_memory().set_reflection_kernel(refl_id, kernel)
+            # KERNEL INTO THE STREAM (Sep 2, artist's call: "it's the
+            # interaction between the exterior and the interior that is the
+            # whole point"). The reflection's load-bearing sentence enters the
+            # visible train of thought as the machine's own turn — it WAS just
+            # thought, this is not memory posing as present. The stream then
+            # carries interior register alongside room-talk, and the same law
+            # that locked in observational genre starts teaching wondering
+            # from within the machine's own voice. Naturally dosed (one per
+            # reflection, ~20+ min apart); the standard admission gate holds
+            # register; length bounds mirror the blink-seed check.
+            try:
+                if kernel and 20 < len(kernel) < 220 and self.agent._stream_admissible(kernel):
+                    self.agent._stream_push(kernel.strip())
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {"message": "Reflection kernel admitted to stream", "action": "kernel_to_stream", "kernel": kernel[:160]},
+                        print_message=f"[🪞→] kernel joins the stream: {kernel[:80]}",
+                    )
+            except Exception:
+                pass
         except Exception as e:
             print(f"[REFLECT] distill failed: {e}")
 
