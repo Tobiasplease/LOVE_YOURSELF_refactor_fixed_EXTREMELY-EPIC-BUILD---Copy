@@ -75,10 +75,10 @@ FRAGMENTS = {
         "used_by": ["drawing_review", "drawing_intent"],
     },
     "monologue.pen-parked": {
-        "title": "Pen parked (between drawings) — TEST-RETIRED Sep 2",
+        "title": "Pen parked (between drawings)",
         "text": "You are between drawings at the moment — the pen is parked, touching nothing. ",
-        "note": "NOT INJECTED since Sep 2 2026 (artist's call — see prompts.py for the restore path). History: built June 12 when 'drawing machine' + the then-new ungated stream bred phantom strokes. The real drivers (corrupted recency clocks, stored unexecuted intents, no gate catalog) are since cured at source; the standing clause had become the loudest pane of the pen hall-of-mirrors. Entry kept for instant restoration if phantom drawing returns.",
-        "used_by": [],
+        "note": "LOAD-BEARING, twice proven: built June 12 (phantom strokes bred through the young stream), test-retired Sep 2 for twenty minutes — first wake without it, facing a fresh blank sheet with a standing want, the monologue narrated phantom execution immediately ('A thin line from the pen tip...'). The 'drawing machine' identity alone plants the seed; honest clocks and provenance only stop the breeding. Do not retire again; SLIM the wording here instead if the pen-density bothers (the fact must stand, the phrasing is the artist's).",
+        "used_by": ["caption", "caption_blind", "memory"],
     },
     # --- Genre clauses ----------------------------------------------------
     "genre.hybrid": {

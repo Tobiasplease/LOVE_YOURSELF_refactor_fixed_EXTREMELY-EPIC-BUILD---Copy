@@ -106,19 +106,24 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # the continuity work, so it can keep the plain inner-voice frame.
     base = P("situation.world") if getattr(config, "STREAM_MODE", "") == "world" else P("situation.reflexive")
 
-    # "The pen is parked" — TEST-RETIRED Sep 2 2026 (artist's call). The
-    # June 12 phantom-drawing regression this fence guarded was never the
-    # identity frame (constant since day one) — it was the then-new,
-    # then-ungated STREAM amplifying one phantom stroke into a genre. The
-    # actual drivers are since cured at the source: corrupted recency clocks
-    # (Sep 1), stored unexecuted drawing intents (Aug 20, executed-only
-    # provenance), plus the full gate catalog that didn't exist in June.
-    # Meanwhile the standing clause was the loudest pane in the pen
-    # hall-of-mirrors (12 pen/draw refs per prompt pair, measured Sep 2).
-    # RESTORE PATH if phantom strokes return: re-add
-    #   base += P("monologue.pen-parked")
-    # gated on `not (_sm.is_generating_drawing or _sm.current_drawing_phase
-    # == "executing")` — the registry entry still exists, panel-editable.
+    # "The pen is parked" — RESTORED Sep 2, twenty minutes after the test
+    # retirement. The experiment was clean and the answer decisive: first
+    # wake without the fence, facing a fresh blank sheet with a standing
+    # want, the monologue slid from legal intent ("I think I'll start with
+    # the red foam finger") into phantom execution ("A thin line from the
+    # pen tip... a few marks around its base") — pen parked the whole time.
+    # The cured amplifiers (honest clocks, executed-only provenance) explain
+    # the June breeding, but the "drawing machine" identity alone plants the
+    # seed; the counter-fact must stand whenever the pen is idle. The
+    # WORDING is the artist's to slim in the panel (monologue.pen-parked) —
+    # the pen-density complaint stands even though the fact must.
+    try:
+        from utils.state_manager import state_manager as _sm
+
+        if not (_sm.is_generating_drawing or _sm.current_drawing_phase == "executing"):
+            base += P("monologue.pen-parked")
+    except Exception:
+        pass
 
     base += _monologue_clause()
 
