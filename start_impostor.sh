@@ -1,40 +1,29 @@
 #!/bin/bash
+# Canonical supervised launcher (Sep 2 2026) — the 3.8 stack under tmux with
+# auto-restart and a STOP-file kill, so the machine can run unattended.
+#
+#   start:   ./start_impostor.sh
+#   watch:   tmux attach -t impostor-system   (detach: Ctrl+B, D)
+#   stop:    ./stop_machine.sh               (works over any SSH session)
+#
+# ComfyUI is NOT launched here — utils/comfy_launcher.py auto-starts it at
+# machine boot if port 8188 is silent (detached, survives restarts; log at
+# event_log/comfyui.log). One launcher, one loop, one kill.
+# History: this script used to pin the parked 3.6 arm (run_27b.sh) — the
+# exhibition launchers booted the wrong model (trim-plan-aug30 §4).
 
-# Start impostor system with tmux and auto-restart capability
 SESSION_NAME="impostor-system"
+REPO="$(cd "$(dirname "$0")" && pwd)"
+STOP_FILE="$REPO/STOP"
 
-# Kill existing session if it exists
-tmux kill-session -t $SESSION_NAME 2>/dev/null
+rm -f "$STOP_FILE"
+tmux kill-session -t "$SESSION_NAME" 2>/dev/null
 
-# Create new tmux session
-tmux new-session -d -s $SESSION_NAME
+tmux new-session -d -s "$SESSION_NAME" -n Machine
+tmux send-keys -t "$SESSION_NAME:0" "cd $REPO" C-m
+tmux send-keys -t "$SESSION_NAME:0" \
+  'while [ ! -f STOP ]; do echo "=== starting machine (3.8 stack, code default) ==="; ./run_38.sh; echo "=== machine exited — restarting in 5s (./stop_machine.sh to end) ==="; sleep 5; done; echo "=== STOP present — supervisor loop ended ==="' C-m
 
-# Window 0: ComfyUI
-tmux rename-window -t $SESSION_NAME:0 'ComfyUI'
-tmux send-keys -t $SESSION_NAME:0 'cd /home/impostor/ComfyUI' C-m
-tmux send-keys -t $SESSION_NAME:0 'while true; do echo "Starting ComfyUI..."; source .venv/bin/activate && python3.12 main.py; echo "ComfyUI crashed, restarting in 5 seconds..."; sleep 5; done' C-m
-
-# Window 1: Main Machine
-tmux new-window -t $SESSION_NAME -n 'Machine'
-tmux send-keys -t $SESSION_NAME:1 'cd /home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy' C-m
-# Same stack as start_impostor_panes.sh (Aug 2). This script used to run a
-# bare `python3.12 machine.py`, which silently starts the 9B on document
-# defaults — an experiment could be attributed to the wrong model just by
-# choosing the other launcher. Run the 9B deliberately if you want it.
-tmux send-keys -t $SESSION_NAME:1 'while true; do echo "Starting Machine (27B hybrid)..."; STREAM_MODE=hybrid ./run_27b.sh; echo "Machine crashed, restarting in 5 seconds..."; sleep 5; done' C-m
-
-# Window 2: Log Viewer
-tmux new-window -t $SESSION_NAME -n 'LogViewer'
-tmux send-keys -t $SESSION_NAME:2 'cd /home/impostor/impostor-log-viewer/webapp' C-m
-tmux send-keys -t $SESSION_NAME:2 'while true; do echo "Starting Log Viewer..."; npm run start; echo "Log Viewer crashed, restarting in 5 seconds..."; sleep 5; done' C-m
-
-# Attach to session
-echo "Starting impostor system in tmux session: $SESSION_NAME"
-echo "Use 'tmux attach -t $SESSION_NAME' to view the session"
-echo "Use Ctrl-B + number (0,1,2) to switch between windows"
-echo "Use 'tmux kill-session -t $SESSION_NAME' to stop all processes"
-
-tmux attach -t $SESSION_NAME
-
-
-# tmux kill-session -t impostor-system
+echo "[start] session '$SESSION_NAME' running the 3.8 stack"
+echo "[start] attach:  tmux attach -t $SESSION_NAME"
+echo "[start] stop:    $REPO/stop_machine.sh"

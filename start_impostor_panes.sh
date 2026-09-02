@@ -17,7 +17,7 @@ tmux split-window -v -t $SESSION_NAME:0.1
 tmux send-keys -t $SESSION_NAME:0.0 'cd /home/impostor/ComfyUI' C-m
 tmux send-keys -t $SESSION_NAME:0.0 'while true; do echo "Starting ComfyUI..."; source .venv/bin/activate && python3.12 main.py; echo "ComfyUI crashed, restarting in 5 seconds..."; sleep 5; done' C-m
 
-# Pane 1 (top right): Main Machine — 27B HYBRID stack (Aug 2; run_27b.sh owns
+# Pane 1 (top right): Main Machine — 3.8 stack (repointed Sep 2; run_38.sh owns
 # the env: model paths, ctx, sampling, STREAM_WINDOW/CONSOLIDATE, honest
 # MODEL_NAME label). Hybrid = world ordering (perception last) + a seam of the
 # machine's own unfinished thought, which is where the varied cadence came
@@ -26,7 +26,7 @@ tmux send-keys -t $SESSION_NAME:0.0 'while true; do echo "Starting ComfyUI..."; 
 # `python3.12 machine.py` here silently reverts to the 9B document stack —
 # still the A/B fallback, never the accidental default.
 tmux send-keys -t $SESSION_NAME:0.1 'cd /home/impostor/LOVE_YOURSELF_refactor_fixed_EXTREMELY-EPIC-BUILD---Copy' C-m
-tmux send-keys -t $SESSION_NAME:0.1 'while true; do echo "Starting Machine (27B hybrid)..."; STREAM_MODE=hybrid ./run_27b.sh; echo "Machine crashed, restarting in 5 seconds..."; sleep 5; done' C-m
+tmux send-keys -t $SESSION_NAME:0.1 'while [ ! -f STOP ]; do echo "Starting Machine (3.8 stack)..."; ./run_38.sh; echo "Machine exited, restarting in 5 seconds..."; sleep 5; done' C-m
 
 # Pane 2 (bottom right): Log Viewer
 tmux send-keys -t $SESSION_NAME:0.2 'cd /home/impostor/impostor-log-viewer/webapp' C-m
