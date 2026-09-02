@@ -2337,6 +2337,11 @@ class Captioner(MemoryMixin):
                             want_ledger.note_refusal()
                     except Exception:
                         pass
+                    # The refusal cools down on the CONCEPTION clock (Sep 2),
+                    # never the hunger clock: re-attempt — and re-look at the
+                    # sheet — after DRAWING_COOLDOWN (~12 min), so a swapped
+                    # sheet is discovered at the pace of appetite, not 2h.
+                    self.drawing.last_conception_time = time.time()
                     return
         except Exception as e:
             print(f"[📄] Pre-conception paper check errored (proceeding): {e}")
@@ -2444,10 +2449,11 @@ class Captioner(MemoryMixin):
             except Exception as e:
                 print(f"[⚠️] Could not store drawing intent: {e}")
 
-            # Reset cooldown on prompt generation, not just physical completion.
-            # Without this, failed/skipped drawings don't reset the timer and
-            # prompts queue up rapidly when ComfyUI isn't running or paper is absent.
-            self.drawing.last_drawing_time = time.time()
+            # Conception cooldown on prompt generation (Sep 2: this used to
+            # stamp last_drawing_time itself — a failed conception then read
+            # as "drew 2h ago" and silenced hunger; the anti-spam purpose
+            # survives on its own clock, DRAWING_COOLDOWN, in should_draw).
+            self.drawing.last_conception_time = time.time()
 
         # Proceed with drawing flow (ComfyUI + GRBL)
         if "[ERROR]" not in prompt:

@@ -44,7 +44,21 @@ class DrawingController:
     """Decides when to draw and queues ComfyUI jobs."""
 
     def __init__(self) -> None:
-        self.last_drawing_time: float = time.time() - DRAWING_COOLDOWN - 10  # Allow immediate first drawing
+        # Hunger clock from REAL provenance (Sep 2): this used to reset to
+        # "now minus cooldown" at every boot, so a restart silenced hunger
+        # for 2h regardless of when the pen actually last touched paper —
+        # the night of the invisible fresh sheet. Executed-only ledger is
+        # the truth; the old default only survives as the no-history case.
+        self.last_drawing_time: float = time.time() - DRAWING_COOLDOWN - 10
+        try:
+            from drawing.drawing_memory import get_drawing_memory
+
+            _stamps = [e.get("timestamp", 0) for e in get_drawing_memory()._history if e.get("completed")]
+            if _stamps:
+                self.last_drawing_time = max(_stamps)
+        except Exception:
+            pass
+        self.last_conception_time: float = 0.0  # failed/skipped conceptions cool down HERE, never on the hunger clock
         self.cooldown: float = DRAWING_COOLDOWN  # seconds between drawings
         # Why ready_to_draw() last said no. The caller used to print "cooldown"
         # for every refusal, so a stuck GRBL flag read as a cooldown that had
@@ -208,6 +222,14 @@ class DrawingController:
         # in the Aug 19 consolidation — it was proven a pure timer (26/26) and
         # git history keeps it if archaeology ever needs it.
         if time_since < DRAWING_MIN_INTERVAL:
+            return False
+        # Conception-retry cooldown (Sep 2): a failed/skipped conception —
+        # no paper, ComfyUI down — used to stamp last_drawing_time itself,
+        # which read as "drew 2h ago" and silenced hunger. Now it cools down
+        # on its own clock: re-attempt (and re-CHECK the sheet) after
+        # DRAWING_COOLDOWN, so a fresh sheet is discovered in minutes, not
+        # hours. Beliefs about the workspace refresh at the pace of appetite.
+        if time.time() - self.last_conception_time < self.cooldown:
             return False
         shadow = self.desire_shadow_verdict()
         # Drive runs as shadow here — tune its constants on real days
