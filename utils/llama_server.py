@@ -866,18 +866,39 @@ def _query_multi_image(
     show_progress: bool = SHOW_PROGRESS,
     history: Optional[List[str]] = None,
     react: bool = False,
+    frame_ts: Optional[List[float]] = None,
 ) -> str:
     """Plain multi-image mode: send each frame as a separate image_url in the content array.
     The model sees them as independent images but can still infer temporal change.
     ~1200 vision tokens for 4-6 frames.
+
+    frame_ts (Sep 2): capture timestamps, one per frame. When present, a small
+    time marker is interleaved between the images — "(4 seconds later)" — in
+    the stream's own gap-marker idiom. Qwen-VL's video training interleaves
+    frames with time markers; stock llama.cpp serves no temporal encoding, so
+    without these the model must guess that three images are moments of one
+    scene rather than three pictures. Costs a handful of tokens per frame.
+    Toggle: VIDEO_TIME_MARKERS (config, for A/B).
     """
     messages = []
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
 
+    _markers = frame_ts is not None and len(frame_ts) == len(frames)
+    if _markers:
+        try:
+            from config.config import VIDEO_TIME_MARKERS as _vtm
+
+            _markers = bool(_vtm)
+        except (ImportError, AttributeError):
+            pass
+
     # Build user content with interleaved images + final text prompt
     user_content = []
-    for frame_bytes in frames:
+    for i, frame_bytes in enumerate(frames):
+        if _markers and i > 0:
+            dt = frame_ts[i] - frame_ts[i - 1]
+            user_content.append({"type": "text", "text": f"({dt:.0f} seconds later)" if dt >= 1.5 else "(a moment later)"})
         img_b64 = base64.b64encode(frame_bytes).decode("utf-8")
         user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
     user_content.append({"type": "text", "text": prompt})
@@ -1113,6 +1134,7 @@ def query_llama_server_video(
     mode: str = "",
     history: Optional[List[str]] = None,
     react: bool = False,
+    frame_ts: Optional[List[float]] = None,
 ) -> str:
     """
     Query llama-server with multiple video frames.
@@ -1200,6 +1222,7 @@ def query_llama_server_video(
                     show_progress=show_progress,
                     history=history,
                     react=react,
+                    frame_ts=frame_ts,
                 )
             except Exception as e:
                 error_msg = str(e)

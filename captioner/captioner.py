@@ -1826,6 +1826,7 @@ class Captioner(MemoryMixin):
                                 return query_model_video(
                                     prompt=video_prompt,
                                     frames=video_frames,
+                                    frame_ts=[f["timestamp"] for f in send_meta],
                                     fps=2.0,
                                     system_prompt=system_prompt,
                                     options=_opts,

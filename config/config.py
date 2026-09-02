@@ -64,6 +64,11 @@ MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # frame diff b
 # most of the cost of a video cycle. Three keeps the temporal span (they are
 # sampled evenly across the window) at half the tokens.
 VIDEO_SEND_FRAMES = int(os.getenv("VIDEO_SEND_FRAMES", 3))
+# Interleave "(N seconds later)" markers between video frames (Sep 2) —
+# Qwen-VL's video training uses time-interleaved frames; stock llama.cpp
+# serves no temporal encoding, so without markers the model must guess that
+# three images are moments of one scene. Flip off for A/B.
+VIDEO_TIME_MARKERS = os.getenv("VIDEO_TIME_MARKERS", "true").lower() in ("true", "1", "yes")
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 
 # Label only: the weights llama-server loads come from LLAMA_MODEL_PATH
