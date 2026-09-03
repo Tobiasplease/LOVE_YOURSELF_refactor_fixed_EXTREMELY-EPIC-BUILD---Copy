@@ -371,8 +371,8 @@ def get_reorientation_line(agent) -> str:
 def unchanged_duration_s(agent, now: float | None = None) -> float:
     """Seconds since the last episodic change — arrivals, departures, drawings,
     the newest new-concept sighting — floored at session start so it never
-    claims unwatched time. Shared by the B4 fact line and the story beat's
-    boredom trigger."""
+    claims unwatched time. Consumed by the B4 fact line (the drift turn, which
+    used to read this clock as the story beat, rolls on boredom instead)."""
     now = now or time.time()
     anchors = [float(getattr(agent, "true_session_start", now) or now)]
     try:

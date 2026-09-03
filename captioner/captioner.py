@@ -252,69 +252,51 @@ class Captioner(MemoryMixin):
         self._stream_ts.clear()
 
     # ------------------------------------------------------------------
-    # THE STORY BEAT (Sep 2, stream variant — artist's call). On deep
-    # stillness a cycle becomes a story turn: the bored mind's daydream,
-    # generated HOT with no image, seeded with real episodic/want material,
-    # and pushed into the stream framed as reverie. FIREWALL: the output
-    # never touches observe/add_caption/hour_log/recent_captions — fiction
-    # must never become a familiar concept, a compressed fact, or
-    # reflection material. The frame ("A daydream, while nothing moved:")
-    # is baked into the stored text so no future window can read it as
-    # scene truth.
+    # THE DRIFT TURN (Sep 3 — interiority as population, not residue;
+    # rework of the Sep 2 story beat). Any quiet cycle can become a drift
+    # turn: generated HOT with no image, the stream as its only seed, and
+    # pushed back into the stream so the mind can carry the thought
+    # forward. Chosen per cycle by a standing probability scaled by the
+    # boredom scalar — never by a stillness clock (the story beat's
+    # 45-minute trigger required solitude the no-overnight doctrine says
+    # doesn't occur). FIREWALL: the output never touches observe/
+    # add_caption/hour_log/recent_captions — invention must never become
+    # a familiar concept, a compressed fact, or reflection material.
+    # Gates belong on fact storage, never on thought.
     # ------------------------------------------------------------------
 
-    def _story_beat_due(self, now: float) -> bool:
+    def _drift_due(self) -> bool:
         try:
-            from captioner.prompts import unchanged_duration_s
-            from config.config import STORY_BEAT_AFTER_S, STORY_BEAT_ENABLED, STORY_BEAT_MIN_GAP_S
+            import random
 
-            if not STORY_BEAT_ENABLED or not self.first_caption_done or len(self._stream) < 2:
+            from config.config import DRIFT_BASE_P, DRIFT_BOREDOM_GAIN, DRIFT_ENABLED
+
+            if not DRIFT_ENABLED or not self.first_caption_done or len(self._stream) < 2:
                 return False
-            if now - float(getattr(self, "_last_story_beat_ts", 0) or 0) < STORY_BEAT_MIN_GAP_S:
+            if self._is_currently_drawing():
+                # the frame says "between drawings" — it must never lie, and a
+                # hot inventive turn mid-execution is phantom-stroke bait
                 return False
-            return unchanged_duration_s(self, now) >= STORY_BEAT_AFTER_S
+            p = DRIFT_BASE_P * (1.0 + DRIFT_BOREDOM_GAIN * self.boredom)
+            return random.random() < p
         except Exception:
             return False
 
-    def _run_story_beat(self, now: float) -> None:
+    def _run_drift_turn(self, now: float) -> None:
         from captioner.prompt_registry import P
-        from captioner.prompts import casual_time_string
-        from config.config import MODEL_NAME, MOOD_SNAPSHOT_FOLDER, STORY_BEAT_NUM_PREDICT, STORY_BEAT_TEMP
+        from config.config import DRIFT_NUM_PREDICT, DRIFT_TEMP, MODEL_NAME, MOOD_SNAPSHOT_FOLDER
         from utils.inference import is_failed_response, query_model
 
-        self._last_story_beat_ts = now  # a failed drift still spends the slot — no hot retry loops
-        lines = []
-        try:
-            from utils.episodic_log import episodic_log
-
-            evs = episodic_log.get_recent_events(86400)[-4:]
-            if evs:
-                lines.append("What has actually happened, lately:")
-                lines += [f"- ({casual_time_string((now - e.get('timestamp', now)) / 60.0)} ago) {e.get('description', '')}" for e in evs]
-        except Exception:
-            pass
-        try:
-            from utils.want_ledger import want_ledger
-
-            f = want_ledger.current_facts()
-            if f:
-                refused = f" — refused {f['refusals']} times" if f["refusals"] else ""
-                lines.append(f"A want you carry: \"{f['text']}\"{refused}")
-            for r in want_ledger.recently_resolved(2):
-                lines.append(f"A want that ended: \"{r['text']}\" — {r['outcome']}")
-        except Exception:
-            pass
-        user_prompt = "\n".join(lines + ["", P("story.ask")]) if lines else P("story.ask")
         try:
             text = query_model(
-                prompt=user_prompt,
+                prompt=P("drift.ask"),
                 model=MODEL_NAME,
                 image=None,
-                system_prompt=P("story.system"),
+                system_prompt=P("drift.system"),
                 timeout=60,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
-                options={"temperature": STORY_BEAT_TEMP, "num_predict": STORY_BEAT_NUM_PREDICT},
-                prompt_type="story_beat",
+                options={"temperature": DRIFT_TEMP, "num_predict": DRIFT_NUM_PREDICT},
+                prompt_type="drift_turn",
                 history=self._stream_history(),
             )
         except Exception:
@@ -324,10 +306,11 @@ class Captioner(MemoryMixin):
         text = self._trim_to_boundary(self._strip_list_shape(text)).strip()
         if not text:
             return
-        framed = P("story.stream-frame").format(text=text)
+        framed = P("drift.stream-frame").format(text=text)
+        stored = self._stream_admissible(text)
         log_json_entry(
             LogType.CAPTION,
-            {"message": "Story beat", "action": "story_beat", "story": True, "caption": text[:400]},
+            {"message": "Drift turn", "action": "drift_turn", "drift": True, "stored": stored, "caption": text[:400]},
             print_message=f"[💭] {framed}",
         )
         try:
@@ -338,7 +321,7 @@ class Captioner(MemoryMixin):
                 send_caption_to_display(text)
         except Exception:
             pass
-        if self._stream_admissible(text):
+        if stored:
             self._stream_push(framed)
         self.last_caption_time = now
 
@@ -1512,12 +1495,13 @@ class Captioner(MemoryMixin):
                         # Salience first — it decides how interior this caption gets
                         scene = self._assess_scene()
 
-                        # THE STORY BEAT preempts the whole cycle on deep
-                        # stillness: the bored mind drifts instead of looking
-                        # again. A live moment always wins.
-                        if not self._salience_hot and self._story_beat_due(now):
+                        # THE DRIFT TURN preempts the cycle when its roll
+                        # lands: the mind wanders instead of looking again,
+                        # more often the more bored it is. A live moment
+                        # always wins.
+                        if not self._salience_hot and self._drift_due():
                             loading_stop.set()
-                            self._run_story_beat(now)
+                            self._run_drift_turn(now)
                             return None
 
                         # Interiority beat: every Nth quiet caption, think WITHOUT

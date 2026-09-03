@@ -1074,15 +1074,25 @@ UNCHANGED_FACT_MIN_GAP_S = float(os.getenv("UNCHANGED_FACT_MIN_GAP_S", 600))
 WANT_ARC_TAIL_AFTER_S = float(os.getenv("WANT_ARC_TAIL_AFTER_S", 21600))
 WANT_REFLECTION_FACT_AFTER_S = float(os.getenv("WANT_REFLECTION_FACT_AFTER_S", 86400))
 
-# The story beat (Sep 2) — the waking-dream slot, stream variant. On deep
-# stillness a caption cycle becomes a story turn: no image, hot temperature,
-# real episodic/want material, output entering the stream framed as reverie.
-# Fiction is firewalled from every ledger (see registry story.system note).
-STORY_BEAT_ENABLED = os.getenv("STORY_BEAT_ENABLED", "true").lower() in ("true", "1", "yes")
-STORY_BEAT_AFTER_S = float(os.getenv("STORY_BEAT_AFTER_S", 2700))
-STORY_BEAT_MIN_GAP_S = float(os.getenv("STORY_BEAT_MIN_GAP_S", 3600))
-STORY_BEAT_TEMP = float(os.getenv("STORY_BEAT_TEMP", 0.95))
-STORY_BEAT_NUM_PREDICT = int(os.getenv("STORY_BEAT_NUM_PREDICT", 150))
+# The drift turn (Sep 3 — interiority as population, not residue; rework of
+# the Sep 2 story beat). Any quiet cycle can become a drift turn: no image,
+# the stream as its only seed, hot temperature, output entering the stream but
+# firewalled from every fact ledger. Chosen per cycle by a standing
+# probability scaled by the boredom scalar, never by a stillness clock — the
+# story beat's deep-stillness trigger (45 min unchanged) required solitude
+# that doesn't occur under the no-overnight doctrine; it fired once, ever.
+# p = DRIFT_BASE_P * (1 + DRIFT_BOREDOM_GAIN * boredom): 0.05 calm, 0.15 at a
+# pegged scalar. Measured boredom in quiet runs sits 0.5-0.9 (medians 0.58 /
+# 0.98 on the last two measurable runs), so quiet evenings drift at ~10-15% of
+# cycles — with reflection kernels (~1%) alongside, that is the ~15-20%
+# thought-shaped stream share the Sep 3 handover targets. Measure with
+# debug/drift_share.py. The material-seeded deep variant (want + episodic
+# lines) lives in git history (Sep 2) pending the artist's fork ruling.
+DRIFT_ENABLED = os.getenv("DRIFT_ENABLED", "true").lower() in ("true", "1", "yes")
+DRIFT_BASE_P = float(os.getenv("DRIFT_BASE_P", 0.05))
+DRIFT_BOREDOM_GAIN = float(os.getenv("DRIFT_BOREDOM_GAIN", 2.0))
+DRIFT_TEMP = float(os.getenv("DRIFT_TEMP", 0.95))
+DRIFT_NUM_PREDICT = int(os.getenv("DRIFT_NUM_PREDICT", 120))
 
 # Reflection-echo pacing (Aug 28 evening). Aug 22 removed this source's
 # internal counter "because the rotation slot rations" — but rotation only

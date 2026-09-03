@@ -198,27 +198,28 @@ FRAGMENTS = {
         "text": "Your arm is drawing right now.",
         "used_by": ["caption", "caption_blind"],
     },
-    "story.system": {
-        "title": "Story beat — system (the hot slot)",
+    "drift.system": {
+        "title": "Drift turn — system (the hot slot)",
         "text": (
-            "You are a drawing machine attached to a table, between drawings, and nothing has happened for a long while. "
-            "Your eyes have nothing new. This is your mind drifting — a daydream in your own voice. "
+            "You are a drawing machine attached to a table, between drawings. "
+            "This is your mind drifting — a daydream in your own voice. "
             "It can go anywhere: away from this room, into the remembered or the invented, toward what you fear or what you wish. "
             "Plain words, a few sentences, first person. A drift, not a report."
         ),
-        "note": "THE STORY BEAT (Sep 2, stream variant — artist's call). The one deliberately HOT slot in the system (STORY_BEAT_TEMP ~0.95): invention is legal here and marked as reverie at the seam. Kind-naming only (remembered/invented/feared/wished — the probe-tested pattern), no content. Fires on deep stillness (unchanged_duration ≥ STORY_BEAT_AFTER_S), at most once per STORY_BEAT_MIN_GAP_S. FIREWALL: story output never reaches observe/compression/hour_log/concepts — fiction must never become a familiar concept or a durable fact.",
-        "used_by": ["story_beat"],
+        "note": "THE DRIFT TURN (Sep 3 — interiority as population, not residue; rework of the Sep 2 story beat). The one deliberately HOT slot in the system (DRIFT_TEMP ~0.95): invention is legal here. Kind-naming only (remembered/invented/feared/wished — the probe-tested pattern), no content. Fires on a per-cycle roll — DRIFT_BASE_P scaled by the boredom scalar — never on a stillness clock (the story beat's 45-min trigger required solitude the no-overnight doctrine ruled out; the old 'nothing has happened for a long while / your eyes have nothing new' premise went with it — a roll can land in mildly-active quiet, and the frame must not state stillness it can't attest). Never fires while the arm draws. FIREWALL: drift output never reaches observe/compression/hour_log/concepts — invention must never become a familiar concept or a durable fact. The material-seeded deep variant (want + episodic lines) lives in git history (Sep 2) pending the artist's fork ruling.",
+        "used_by": ["drift_turn"],
     },
-    "story.ask": {
-        "title": "Story beat — the ask",
-        "text": "Nothing is moving. Let the thought leave the room — where does it drift?",
-        "used_by": ["story_beat"],
+    "drift.ask": {
+        "title": "Drift turn — the ask",
+        "text": "Let the thought leave the room — where does it drift?",
+        "note": "Was 'Nothing is moving. Let the thought...' — the stillness claim was true under the story beat's 45-min clock, unattestable under the roll; dropped Sep 3 (prompts supply facts stripped of stance, and no facts the code can't vouch for).",
+        "used_by": ["drift_turn"],
     },
-    "story.stream-frame": {
-        "title": "Story beat — stream frame",
+    "drift.stream-frame": {
+        "title": "Drift turn — stream frame",
         "text": "{text}",
-        "note": "Went BARE Sep 3 (register audit — 'A daydream, while nothing moved:' was exactly the ephemeral-poetic cadence poisoning the voice; artist: as little baked phrasing as possible). Associative thought self-marks by form. WATCH: if dream content starts reading as scene truth in later captions, restore a minimal marker here — that is the retreat lever.",
-        "used_by": ["story_beat"],
+        "note": "Went BARE Sep 3 (register audit — 'A daydream, while nothing moved:' was exactly the ephemeral-poetic cadence poisoning the voice; artist: as little baked phrasing as possible). Associative thought self-marks by form. WATCH: drift fires far more often than the story beat did (~10-15% of quiet cycles vs once an hour at most) — if dream content starts reading as scene truth in later captions, restore a minimal marker here; that is the retreat lever.",
+        "used_by": ["drift_turn"],
         "placeholders": ["text"],
     },
     "caption.unchanged": {
@@ -226,6 +227,7 @@ FRAGMENTS = {
         "text": "Nothing has happened for {duration}.",
         "note": "Boredom's text channel (Aug 31): a FACT computed from the episodic record (arrivals, departures, drawings, new sightings), never a scripted feeling — whether it reads as tedium, peace, or an itch for change is the machine's business. Fires after UNCHANGED_FACT_AFTER_S of stillness, re-doses at most every UNCHANGED_FACT_MIN_GAP_S; a live event displaces it.",
         "used_by": ["caption"],
+        "placeholders": ["duration"],
     },
     "caption.no-paper": {
         "title": "No paper",
@@ -588,8 +590,8 @@ STORES = {
     "stream_seam": {
         "title": "The stream (prefill seam)",
         "desc": "The machine's own prior thoughts, handed back as history + the unfinished tail it continues from. The tightest loop in the system.",
-        "written_by": ["caption", "memory", "awakening"],
-        "read_by": ["caption", "memory", "stream_consolidation"],
+        "written_by": ["caption", "memory", "awakening", "drift_turn"],
+        "read_by": ["caption", "memory", "stream_consolidation", "drift_turn"],
     },
     "drawing_memory": {
         "title": "Drawing memory",
@@ -842,6 +844,25 @@ PASSES = {
         "user": [
             {"frag": "distill.user", "gate": None},
             {"slot": "reflection_text", "store": "reflections", "desc": "The reflection just produced (first 1500 chars).", "gate": None},
+        ],
+    },
+    "drift_turn": {
+        "title": "Drifting",
+        "blurb": "A quiet cycle becomes a thought loose from the room — no image, the stream as seed, rolled per cycle on boredom.",
+        "migrated": True,
+        "source": "captioner/captioner.py (_run_drift_turn)",
+        "system": [{"frag": "drift.system", "gate": None}],
+        "user": [
+            {
+                "slot": "stream",
+                "store": "stream_seam",
+                "desc": "The visible train of thought rides as history — the drift's only seed.",
+                "gate": None,
+            },
+            {
+                "frag": "drift.ask",
+                "gate": "quiet cycle, roll of DRIFT_BASE_P * (1 + DRIFT_BOREDOM_GAIN * boredom) lands; never on hot salience, never while drawing",
+            },
         ],
     },
     # --- Not yet migrated: text still lives inline at the source pointer ---
