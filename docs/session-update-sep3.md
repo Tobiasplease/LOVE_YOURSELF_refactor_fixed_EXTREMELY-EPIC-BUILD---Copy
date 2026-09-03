@@ -10,9 +10,16 @@ stack below.
    model — were poisoning the register. "A daydream, while nothing moved",
    "A memory surfaces —", "That X again, it's always there": ephemeral-poetic
    cadence repeated verbatim hundreds of times (the wallpaper law applied to
-   tone). Rule: **supply the bare fact; the voice adds the "of course."**
-   All framing texts rewritten minimal or removed (see register-audit commit);
-   final wording is the artist's, everything panel-editable.
+   tone). Rule: **prompts supply facts stripped of stance; attitude words
+   belong to the model.** In the artist's spec line — "the foam hand is
+   still there in the same spot, of course" — the "of course" is attitude
+   (expectation, familiarity) and must come from the machine, so it can vary
+   with its state; the fact (foam hand, same spot) is all the prompt gives.
+   The old templates baked one feeling into every recurrence ("it's ALWAYS
+   there" = wistfulness, "COUNTLESS times" = awe, "a memory SURFACES" =
+   dreaminess) — scripted stance, repeated hundreds of times, is how the
+   register poisoned. All framing texts rewritten minimal or removed (see
+   register-audit commit); final wording is the artist's, panel-editable.
 2. **Wondering is not confabulation** (Sep 2, artist): purpose-questions,
    tangents, daydreams are "the experience of being a thinking thing." Gates
    belong on FACT STORAGE, never on thought. No scheduled wonder-beats, no
