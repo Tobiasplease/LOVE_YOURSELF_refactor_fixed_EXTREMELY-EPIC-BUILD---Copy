@@ -118,15 +118,17 @@ def test_run_drift_turn():
     inf_mod.query_model = fake_query_model
     cap_mod.log_json_entry = lambda *a, **k: logs.append((a, k))
     disp_mod.send_caption_to_display = lambda t: displayed.append(t)
+    saved_flag = cfg.DRIFT_SEND_IMAGE
     try:
+        cfg.DRIFT_SEND_IMAGE = True
         c = make_shell(stream_entries=3)
         before = len(c._stream)
-        c._run_drift_turn(time.time())
+        c._run_drift_turn(time.time(), "/tmp/fake_frame.jpg")
 
         check("exactly one model call", len(calls) == 1)
         if calls:
             kw = calls[0]
-            check("no image — the drift doesn't look", kw.get("image") is None)
+            check("eyes open — the frame rides along", kw.get("image") == "/tmp/fake_frame.jpg")
             check("stream rides as history", bool(kw.get("history")))
             check("hot slot temperature", kw.get("options", {}).get("temperature") == cfg.DRIFT_TEMP)
             check("asks the registry ask", kw.get("prompt") == P("drift.ask"))
@@ -136,13 +138,22 @@ def test_run_drift_turn():
         check("stored flag logged true", any(a[1].get("stored") is True for a, k in logs))
         check("last_caption_time stamped", getattr(c, "last_caption_time", 0) > 0)
 
+        # the blind A/B arm: flag off drops the image even when a frame exists
+        calls.clear()
+        cfg.DRIFT_SEND_IMAGE = False
+        c2 = make_shell(stream_entries=3)
+        c2._run_drift_turn(time.time(), "/tmp/fake_frame.jpg")
+        check("DRIFT_SEND_IMAGE=false drops the image", calls and calls[0].get("image") is None)
+        cfg.DRIFT_SEND_IMAGE = True
+
         # a too-short response pushes nothing and stamps nothing new
         calls.clear()
         inf_mod.query_model = lambda **kw: "..."
-        c2 = make_shell(stream_entries=3)
-        c2._run_drift_turn(time.time())
-        check("short response pushes nothing", len(c2._stream) == 3)
+        c3 = make_shell(stream_entries=3)
+        c3._run_drift_turn(time.time(), None)
+        check("short response pushes nothing", len(c3._stream) == 3)
     finally:
+        cfg.DRIFT_SEND_IMAGE = saved_flag
         inf_mod.query_model, cap_mod.log_json_entry, disp_mod.send_caption_to_display = saved
 
 
@@ -165,11 +176,44 @@ def test_clocks_gone():
         check(f"{knob} present", hasattr(cfg, knob))
 
 
+def test_registry_panel_path():
+    print("\n[6] registry + panel edit path")
+    import string as _string
+
+    from captioner.prompt_registry import FRAGMENTS, PASSES, validate_override
+
+    def ok(fid, text):
+        try:
+            validate_override(fid, text)
+            return True
+        except (KeyError, ValueError):
+            return False
+
+    check("drift.stream-frame accepts a marker edit", ok("drift.stream-frame", "~ {text}"))
+    check("caption.unchanged editable keeping {duration}", ok("caption.unchanged", "Still nothing, {duration} now."))
+    check("bogus placeholder rejected", not ok("drift.ask", "where does it {bogus}?"))
+    check("unknown fragment rejected", not ok("story.ask", "gone"))
+
+    p = PASSES.get("drift_turn", {})
+    frags = [b["frag"] for b in p.get("system", []) + p.get("user", []) if "frag" in b]
+    check("drift_turn pass declared + migrated", p.get("migrated") is True)
+    check("pass references only real fragments", frags and all(f in FRAGMENTS for f in frags), str(frags))
+
+    # consistency sweep: any fragment whose text has {fields} must declare them
+    undeclared = []
+    for fid, frag in FRAGMENTS.items():
+        fields = {f for _l, f, _s, _c in _string.Formatter().parse(frag["text"]) if f}
+        if fields - set(frag.get("placeholders", [])):
+            undeclared.append(fid)
+    check("no fragment with undeclared placeholders", not undeclared, str(undeclared))
+
+
 if __name__ == "__main__":
     test_drift_due_gates()
     test_salience_guard()
     test_run_drift_turn()
     test_firewall()
     test_clocks_gone()
+    test_registry_panel_path()
     print(f"\n{'ALL PASS' if FAIL == 0 else f'{FAIL} FAILURES'}")
     sys.exit(1 if FAIL else 0)

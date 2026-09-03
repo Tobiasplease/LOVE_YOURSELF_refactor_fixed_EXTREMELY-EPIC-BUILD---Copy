@@ -1093,6 +1093,12 @@ DRIFT_BASE_P = float(os.getenv("DRIFT_BASE_P", 0.05))
 DRIFT_BOREDOM_GAIN = float(os.getenv("DRIFT_BOREDOM_GAIN", 2.0))
 DRIFT_TEMP = float(os.getenv("DRIFT_TEMP", 0.95))
 DRIFT_NUM_PREDICT = int(os.getenv("DRIFT_NUM_PREDICT", 120))
+# Eyes open (artist's call, same-day probe debug/probe_drift_image_ab.py):
+# the blind arm narrated phantom present-tense perception (invented visitor
+# action, "the foam finger in my hand"); the sighted arm stayed honest about
+# the present and drifted on top of it. The ask lands after the image, so
+# generation still answers the ask. False = the blind A/B arm.
+DRIFT_SEND_IMAGE = os.getenv("DRIFT_SEND_IMAGE", "true").lower() in ("true", "1", "yes")
 
 # Reflection-echo pacing (Aug 28 evening). Aug 22 removed this source's
 # internal counter "because the rotation slot rations" — but rotation only

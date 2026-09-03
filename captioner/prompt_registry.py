@@ -206,7 +206,7 @@ FRAGMENTS = {
             "It can go anywhere: away from this room, into the remembered or the invented, toward what you fear or what you wish. "
             "Plain words, a few sentences, first person. A drift, not a report."
         ),
-        "note": "THE DRIFT TURN (Sep 3 — interiority as population, not residue; rework of the Sep 2 story beat). The one deliberately HOT slot in the system (DRIFT_TEMP ~0.95): invention is legal here. Kind-naming only (remembered/invented/feared/wished — the probe-tested pattern), no content. Fires on a per-cycle roll — DRIFT_BASE_P scaled by the boredom scalar — never on a stillness clock (the story beat's 45-min trigger required solitude the no-overnight doctrine ruled out; the old 'nothing has happened for a long while / your eyes have nothing new' premise went with it — a roll can land in mildly-active quiet, and the frame must not state stillness it can't attest). Never fires while the arm draws. FIREWALL: drift output never reaches observe/compression/hour_log/concepts — invention must never become a familiar concept or a durable fact. The material-seeded deep variant (want + episodic lines) lives in git history (Sep 2) pending the artist's fork ruling.",
+        "note": "THE DRIFT TURN (Sep 3 — interiority as population, not residue; rework of the Sep 2 story beat). The one deliberately HOT slot in the system (DRIFT_TEMP ~0.95): invention is legal here. Kind-naming only (remembered/invented/feared/wished — the probe-tested pattern), no content. Fires on a per-cycle roll — DRIFT_BASE_P scaled by the boredom scalar — never on a stillness clock (the story beat's 45-min trigger required solitude the no-overnight doctrine ruled out; the old 'nothing has happened for a long while / your eyes have nothing new' premise went with it — a roll can land in mildly-active quiet, and the frame must not state stillness it can't attest). EYES OPEN (artist's call, probe-verified — debug/probe_drift_image_ab.py): the current frame rides along, ask lands after it; the blind variant narrated phantom present-tense perception (invented visitor action, 'the foam finger in my hand'). Never fires while the arm draws. FIREWALL: drift output never reaches observe/compression/hour_log/concepts — invention must never become a familiar concept or a durable fact. The material-seeded deep variant (want + episodic lines) lives in git history (Sep 2) pending the artist's fork ruling.",
         "used_by": ["drift_turn"],
     },
     "drift.ask": {
@@ -848,7 +848,7 @@ PASSES = {
     },
     "drift_turn": {
         "title": "Drifting",
-        "blurb": "A quiet cycle becomes a thought loose from the room — no image, the stream as seed, rolled per cycle on boredom.",
+        "blurb": "A quiet cycle becomes a thought loose from the room — eyes open, the stream as seed, rolled per cycle on boredom.",
         "migrated": True,
         "source": "captioner/captioner.py (_run_drift_turn)",
         "system": [{"frag": "drift.system", "gate": None}],
@@ -856,8 +856,14 @@ PASSES = {
             {
                 "slot": "stream",
                 "store": "stream_seam",
-                "desc": "The visible train of thought rides as history — the drift's only seed.",
+                "desc": "The visible train of thought rides as history — the drift's seed.",
                 "gate": None,
+            },
+            {
+                "slot": "frame",
+                "store": None,
+                "desc": "The current frame rides along — eyes open (probe: the blind variant narrated phantom perception). The ask lands after it, closest to generation.",
+                "gate": "DRIFT_SEND_IMAGE",
             },
             {
                 "frag": "drift.ask",

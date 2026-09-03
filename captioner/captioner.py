@@ -254,12 +254,18 @@ class Captioner(MemoryMixin):
     # ------------------------------------------------------------------
     # THE DRIFT TURN (Sep 3 — interiority as population, not residue;
     # rework of the Sep 2 story beat). Any quiet cycle can become a drift
-    # turn: generated HOT with no image, the stream as its only seed, and
-    # pushed back into the stream so the mind can carry the thought
-    # forward. Chosen per cycle by a standing probability scaled by the
-    # boredom scalar — never by a stillness clock (the story beat's
-    # 45-minute trigger required solitude the no-overnight doctrine says
-    # doesn't occur). FIREWALL: the output never touches observe/
+    # turn: generated HOT, seeded by the stream, and pushed back into the
+    # stream so the mind can carry the thought forward. Chosen per cycle
+    # by a standing probability scaled by the boredom scalar — never by a
+    # stillness clock (the story beat's 45-minute trigger required
+    # solitude the no-overnight doctrine says doesn't occur). EYES OPEN
+    # (artist's call, probe-verified same day): the frame rides along —
+    # the blind arm of debug/probe_drift_image_ab.py narrated phantom
+    # present-tense perception (invented what the visitor was doing,
+    # "the foam finger in my hand"), the sighted arm stayed honest about
+    # the present and drifted on top of it. Interiority comes from the
+    # frame+ask ordering (ask lands last, closest to generation), not
+    # from blinding. FIREWALL: the output never touches observe/
     # add_caption/hour_log/recent_captions — invention must never become
     # a familiar concept, a compressed fact, or reflection material.
     # Gates belong on fact storage, never on thought.
@@ -282,16 +288,16 @@ class Captioner(MemoryMixin):
         except Exception:
             return False
 
-    def _run_drift_turn(self, now: float) -> None:
+    def _run_drift_turn(self, now: float, img_path: str = None) -> None:
         from captioner.prompt_registry import P
-        from config.config import DRIFT_NUM_PREDICT, DRIFT_TEMP, MODEL_NAME, MOOD_SNAPSHOT_FOLDER
+        from config.config import DRIFT_NUM_PREDICT, DRIFT_SEND_IMAGE, DRIFT_TEMP, MODEL_NAME, MOOD_SNAPSHOT_FOLDER
         from utils.inference import is_failed_response, query_model
 
         try:
             text = query_model(
                 prompt=P("drift.ask"),
                 model=MODEL_NAME,
-                image=None,
+                image=(img_path if DRIFT_SEND_IMAGE else None),
                 system_prompt=P("drift.system"),
                 timeout=60,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -1496,12 +1502,12 @@ class Captioner(MemoryMixin):
                         scene = self._assess_scene()
 
                         # THE DRIFT TURN preempts the cycle when its roll
-                        # lands: the mind wanders instead of looking again,
-                        # more often the more bored it is. A live moment
-                        # always wins.
+                        # lands: the mind wanders with its eyes open, more
+                        # often the more bored it is. A live moment always
+                        # wins.
                         if not self._salience_hot and self._drift_due():
                             loading_stop.set()
-                            self._run_drift_turn(now)
+                            self._run_drift_turn(now, img_path)
                             return None
 
                         # Interiority beat: every Nth quiet caption, think WITHOUT

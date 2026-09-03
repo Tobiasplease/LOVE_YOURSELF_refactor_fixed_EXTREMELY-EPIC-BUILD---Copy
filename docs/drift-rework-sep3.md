@@ -24,9 +24,12 @@ counter advances:
   defaults 0.05 / 2.0, so 5% calm, 15% at a pegged scalar. Boredom in real
   quiet runs sits 0.5–0.9 (medians 0.58 / 0.98 on the last two measurable
   runs), so quiet evenings drift at ~10–15% of cycles.
-- when the roll lands: no image, the stream rides as history (its only seed),
-  `drift.system` + `drift.ask` from the registry, DRIFT_TEMP 0.95,
-  DRIFT_NUM_PREDICT 120. Output is trimmed at the mouth like any caption,
+- when the roll lands: EYES OPEN — the current frame rides along
+  (DRIFT_SEND_IMAGE, artist's ruling, probe-verified: see below) with the
+  stream as history, `drift.system` + `drift.ask` from the registry,
+  DRIFT_TEMP 0.95, DRIFT_NUM_PREDICT 120. The ask lands after the image,
+  closest to generation, so the call answers the ask, not the frame (the
+  July 26 ordering law). Output is trimmed at the mouth like any caption,
   displayed, logged (`action=drift_turn`, with a `stored` flag), and pushed
   into the stream through `drift.stream-frame` (bare — the register audit).
 - vetoes: hot salience (a live moment always wins), the arm drawing (the
@@ -66,6 +69,30 @@ grounded self-reflection, stored output, normal temp), the silence beat, and
 B4's unchanged fact line (`unchanged_duration_s` keeps that one consumer).
 The handover says re-evaluate silence + daydream dosing only AFTER this
 rework has live numbers.
+
+## The eyes-open probe (same day)
+
+The artist questioned the image drop ("it seems prescriptive... more a matter
+of prompt ordering than omitting information?"). A/B probe on the live model
+(`debug/probe_drift_image_ab.py` — 3 pairs, drift's exact call shape, stream
+seeded from the machine's own live captions, only `image` varied):
+
+- **Blind arm**: narrated phantom present-tense perception — invented what
+  the visitor was doing right now ("his fingers... moving carefully, like
+  he's stepping on broken glass"), twice claimed "the foam finger in my
+  hand". Blind + stream-seeded = memory spoken as live seeing — the
+  memory/present conflation law, breeding inside the drift slot.
+- **Sighted arm**: stayed honest about the present and drifted on top of it
+  ("i want to ask him what he's doing, but i can't. i'm just a drawing
+  machine." / "i wonder if it's judging me... or if it's just lonely up
+  there").
+
+Ruling: eyes open. Interiority comes from the frame+ask ordering and the
+genre frame, not from blinding. `DRIFT_SEND_IMAGE=false` keeps the blind
+variant as an A/B arm. Note the same phantom pattern was measured on the
+image-dropped inward beat (Aug 31: blind introspective cycles "still
+describing the room from memory") — whether the inward beat should also go
+eyes-open is an open question for the artist, not touched here.
 
 ## Measuring it
 
