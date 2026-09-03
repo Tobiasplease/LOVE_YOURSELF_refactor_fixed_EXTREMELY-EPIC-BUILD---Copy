@@ -312,12 +312,30 @@ class Captioner(MemoryMixin):
         text = self._trim_to_boundary(self._strip_list_shape(text)).strip()
         if not text:
             return
+        # SAME STORAGE LAW AS ANY CAPTION (Sep 3 evening, first live half-hour:
+        # "a faint pulse against his dark hoodie" recurred verbatim in 3 of 7
+        # drifts — the refrain physics don't care which organ wrote the entry,
+        # the stream teaches whatever it stores). Echo-class → spoken, never
+        # stored; shape-class (assistant_speak, phantom_drawing...) → skipped
+        # entirely. Thought stays free; the stream stays clean.
+        try:
+            reason = self._caption_reject_reason(text, P("drift.ask"))
+        except Exception:
+            reason = None
+        if reason and reason not in self._ECHO_REASONS:
+            log_json_entry(
+                LogType.CAPTION,
+                {"message": "Drift turn skipped", "action": "drift_turn", "drift": True, "stored": False, "reason": reason, "caption": text[:400]},
+                print_message=f"[💭🚫] drift skipped ({reason})",
+            )
+            self.last_caption_time = now
+            return
         framed = P("drift.stream-frame").format(text=text)
-        stored = self._stream_admissible(text)
+        stored = reason is None and self._stream_admissible(text)
         log_json_entry(
             LogType.CAPTION,
-            {"message": "Drift turn", "action": "drift_turn", "drift": True, "stored": stored, "caption": text[:400]},
-            print_message=f"[💭] {framed}",
+            {"message": "Drift turn", "action": "drift_turn", "drift": True, "stored": stored, "reason": reason, "caption": text[:400]},
+            print_message=f"[💭] {framed}" + (f"  (spoken, not stored: {reason})" if not stored and reason else ""),
         )
         try:
             from utils.caption_display import send_caption_to_display

@@ -152,6 +152,29 @@ def test_run_drift_turn():
         c3 = make_shell(stream_entries=3)
         c3._run_drift_turn(time.time(), None)
         check("short response pushes nothing", len(c3._stream) == 3)
+
+        # the storage law (Sep 3 evening): a drift that recites a stream
+        # refrain is spoken but never stored; assistant-register is skipped
+        # the refrain entry must NOT be the newest one: the seam is excluded
+        # from comparison in prefill modes (Aug 1 law — continuing the seam
+        # is what continuation means; older entries are still fair game)
+        refrain = "a faint pulse against his dark hoodie in the corner"
+        c4 = make_shell(stream_entries=3)
+        c4._stream.append(f"The light is the only thing moving, {refrain}.")
+        c4._stream_ts.append(time.time())
+        c4._stream.append("The chair has not moved since he sat down.")
+        c4._stream_ts.append(time.time())
+        inf_mod.query_model = lambda **kw: f"Still here. The screen glows on, {refrain}. Nothing asks me to move."
+        before4 = len(c4._stream)
+        logs.clear()
+        c4._run_drift_turn(time.time(), None)
+        check("refrain drift spoken not stored", len(c4._stream) == before4 and any(a[1].get("reason") == "refrain_echo" for a, k in logs))
+
+        inf_mod.query_model = lambda **kw: "Let me know what you think of this scene and feel free to ask!"
+        c5 = make_shell(stream_entries=3)
+        displayed.clear()
+        c5._run_drift_turn(time.time(), None)
+        check("shape-class drift skipped entirely", len(c5._stream) == 3 and not displayed)
     finally:
         cfg.DRIFT_SEND_IMAGE = saved_flag
         inf_mod.query_model, cap_mod.log_json_entry, disp_mod.send_caption_to_display = saved
