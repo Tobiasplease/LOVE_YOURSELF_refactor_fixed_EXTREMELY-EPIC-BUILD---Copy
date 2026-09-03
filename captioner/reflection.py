@@ -236,6 +236,19 @@ class ReflectionLoop:
             data["reflections"] = get_semantic_memory().get_recent_reflections(limit=3, subject=subject)
         except Exception:
             pass
+        try:
+            # Reveries ride the spine (Sep 3 evening, re-entry round): no
+            # subject is blind to what it has been imagining — rendered by the
+            # prompt builder as inventions, never observations. This is the
+            # loom: the distiller downstream may keep a thread of it as lore.
+            from config.config import LORE_ENABLED
+
+            if LORE_ENABLED:
+                from utils.lore_ledger import lore_ledger
+
+                data["reveries"] = lore_ledger.recent_reveries(5)
+        except Exception:
+            pass
 
         diet = {
             "the room": self._diet_room,

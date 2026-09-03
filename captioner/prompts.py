@@ -158,6 +158,13 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
             self_knowledge = context_compressor.core_facts.get("self", "").strip()
             if self_knowledge and len(self_knowledge) > 10:
                 base += P("monologue.self-wrap").format(self_knowledge=self_knowledge)
+            # A distilled self-name rides the same dose (re-entry round) —
+            # it exists only once the machine has named itself in a reflection
+            from utils.lore_ledger import lore_ledger
+
+            _name = lore_ledger.current_name()
+            if _name:
+                base += P("monologue.name-wrap").format(name=_name)
         except Exception:
             pass
         # Durable ledger (July 30): facts that held across days — the
@@ -524,6 +531,11 @@ def get_reflection_system_prompt(subject: str = "") -> str:
             self_knowledge = context_compressor.core_facts.get("self", "").strip()
             if self_knowledge and len(self_knowledge) > 10:
                 base += P("monologue.self-wrap").format(self_knowledge=self_knowledge)
+            from utils.lore_ledger import lore_ledger
+
+            _name = lore_ledger.current_name()
+            if _name:
+                base += P("monologue.name-wrap").format(name=_name)
         except Exception:
             pass
     if subject in ("yourself", "time passing"):
@@ -609,6 +621,17 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     journal = data.get("journal") or []
     if journal:
         parts.append("From your diary:\n" + "\n".join(f"- {e.get('date', '')}: {e.get('summary', '')}" for e in journal))
+
+    # THE REVERIE BLOCK (Sep 3 evening, re-entry round): imagination finally
+    # reaches the loom. Framed unmistakably as invention — the conflation law
+    # holds at this seam like every other — so the reflection can weave its
+    # own fictions into durable lore without them ever posing as observation.
+    reveries = data.get("reveries") or []
+    if reveries:
+        parts.append(
+            "Things you've imagined lately — your own inventions, daydreams, not observations:\n"
+            + "\n".join(f"- ({_age_phrase(r.get('ts', 0))}) \"{(r.get('text', '') or '')[:200]}\"" for r in reveries)
+        )
 
     drawings = (data.get("drawings") or "").strip()
     if drawings:
@@ -1031,6 +1054,33 @@ def get_introspective_context(agent=None) -> str:
 
 
 _PERSON_WORDS = ("person", "someone", "man", "woman", "people", "figure", "visitor")
+
+
+def get_lore_line(agent) -> str:
+    """One lore thread's arc-line back into the voice (re-entry round, Sep 3
+    evening). Fourth source in the memory-surface rotation; own internal
+    pacing like its siblings. Provenance-marked framing ('a story you've been
+    carrying') — lore must never read as observation."""
+    try:
+        from config.config import LORE_ENABLED, LORE_LINE_EVERY_N
+
+        if not LORE_ENABLED:
+            return ""
+        counter = getattr(agent, "_lore_line_counter", 0) + 1
+        agent._lore_line_counter = counter
+        if counter % max(LORE_LINE_EVERY_N, 1) != 0:
+            return ""
+        from utils.lore_ledger import lore_ledger
+
+        threads = lore_ledger.alive_threads(3)
+        if not threads:
+            return ""
+        rr = int(getattr(agent, "_lore_thread_rr", 0) or 0)
+        pick = threads[rr % len(threads)]
+        agent._lore_thread_rr = rr + 1
+        return P("caption.lore").format(text=pick["text"])
+    except Exception:
+        return ""
 
 
 def _same_spot_verified(label) -> bool:
@@ -1797,9 +1847,11 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             ("familiarity", get_familiarity_line),
             ("drawing_echo", get_drawing_echo_line),
             ("reflection_echo", get_reflection_echo_line),
+            ("lore", get_lore_line),
         ]
         rr = int(getattr(agent, "_memory_surface_rr", 0) or 0)
-        for name, fn in sources[rr % 3 :] + sources[: rr % 3]:
+        n_src = len(sources)
+        for name, fn in sources[rr % n_src :] + sources[: rr % n_src]:
             try:
                 line = fn(agent)
             except Exception:

@@ -290,12 +290,30 @@ class Captioner(MemoryMixin):
 
     def _run_drift_turn(self, now: float, img_path: str = None) -> None:
         from captioner.prompt_registry import P
-        from config.config import DRIFT_NUM_PREDICT, DRIFT_SEND_IMAGE, DRIFT_TEMP, MODEL_NAME, MOOD_SNAPSHOT_FOLDER
+        from config.config import DRIFT_NUM_PREDICT, DRIFT_SEND_IMAGE, DRIFT_TEMP, LORE_ENABLED, LORE_SEED_P, MODEL_NAME, MOOD_SNAPSHOT_FOLDER
         from utils.inference import is_failed_response, query_model
 
+        # LORE SEED (Sep 3 evening, re-entry round): sometimes the daydream
+        # opens from a story the machine is already carrying — the ledger's
+        # least-recently-surfaced alive thread — so imagination can compound
+        # instead of restarting from the room every time. The seed rides as
+        # its own telling ("You've been imagining"), never as scene truth.
+        ask = P("drift.ask")
+        if LORE_ENABLED:
+            try:
+                import random as _r
+
+                from utils.lore_ledger import lore_ledger
+
+                if _r.random() < LORE_SEED_P:
+                    seed = lore_ledger.pick_seed()
+                    if seed:
+                        ask = P("drift.lore-seed").format(text=seed["text"]) + "\n" + ask
+            except Exception:
+                pass
         try:
             text = query_model(
-                prompt=P("drift.ask"),
+                prompt=ask,
                 model=MODEL_NAME,
                 image=(img_path if DRIFT_SEND_IMAGE else None),
                 system_prompt=P("drift.system"),
@@ -319,9 +337,19 @@ class Captioner(MemoryMixin):
         # stored; shape-class (assistant_speak, phantom_drawing...) → skipped
         # entirely. Thought stays free; the stream stays clean.
         try:
-            reason = self._caption_reject_reason(text, P("drift.ask"))
+            reason = self._caption_reject_reason(text, ask)
         except Exception:
             reason = None
+        if reason is None and LORE_ENABLED:
+            # the imagination record (re-entry round): clean daydreams are
+            # remembered AS the machine's own inventions — read back only by
+            # the reflection's marked reverie block, never by any fact path
+            try:
+                from utils.lore_ledger import lore_ledger
+
+                lore_ledger.note_reverie(text)
+            except Exception:
+                pass
         if reason and reason not in self._ECHO_REASONS:
             log_json_entry(
                 LogType.CAPTION,
@@ -2693,6 +2721,16 @@ class Captioner(MemoryMixin):
                     identity_parts.append(f"I wanted: {spent['desire']} I acted on it — it became a drawing.")
             if persistent_belief:
                 identity_parts.append(f"I knew: {persistent_belief}")
+            try:
+                # the self-name survives the night (re-entry round) — waking
+                # up still knowing what you call yourself IS the stability
+                from utils.lore_ledger import lore_ledger
+
+                _name = lore_ledger.current_name()
+                if _name:
+                    identity_parts.append(f"I call myself {_name}.")
+            except Exception:
+                pass
             if identity_parts:
                 identity_context = "\n".join(identity_parts) + "\n"
         except Exception:

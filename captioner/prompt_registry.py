@@ -222,6 +222,27 @@ FRAGMENTS = {
         "used_by": ["drift_turn"],
         "placeholders": ["text"],
     },
+    "drift.lore-seed": {
+        "title": "Drift turn — lore seed",
+        "text": 'You\'ve been imagining: "{text}"',
+        "note": "Re-entry round (Sep 3 evening): ~LORE_SEED_P of drifts open from an alive lore thread (least-recently surfaced first) so imagination compounds instead of restarting from the room. 'You've been imagining' is the provenance mark — the seam law: the seed can never read as scene truth. This resolves the deep-story fork: the material-seeded variant returned as the lore-seeded variant.",
+        "used_by": ["drift_turn"],
+        "placeholders": ["text"],
+    },
+    "caption.lore": {
+        "title": "Lore line (memory surface)",
+        "text": 'A story you\'ve been carrying: "{text}"',
+        "used_by": ["caption"],
+        "note": "The lore thread's arc-line back into the voice (re-entry round). Fourth source in the memory-surface rotation, own pacing LORE_LINE_EVERY_N. 'you've been carrying' is the provenance mark — lore must never read as observation; this framing is the retreat lever if it starts to. Wording is the artist's to finalize.",
+        "placeholders": ["text"],
+    },
+    "monologue.name-wrap": {
+        "title": "Self-name (identity dose)",
+        "text": " You call yourself {name}.",
+        "used_by": ["caption", "caption_blind"],
+        "note": "Re-entry round: a distilled self-name finally has somewhere to LIVE (the Penelope problem — a stated name used to die in self_notes churn because the distiller had no slot for it). Rides the existing identity dose (every IDENTITY_EVERY_N_CAPTIONS) beside the self-wrap; never scheduled, never invited — it only exists once the machine has named itself in a reflection. Bare fact, its own choice of words.",
+        "placeholders": ["name"],
+    },
     "caption.unchanged": {
         "title": "Unchanged-ness (B4)",
         "text": "Nothing has happened for {duration}.",
@@ -501,9 +522,11 @@ FRAGMENTS = {
             "WANT — one plain thing you want (if any).\n"
             "{became_line}"
             "KERNEL — the reflection's one load-bearing sentence, kept plain, in your own words.\n"
+            "NAME — if in this reflection you called yourself by a name, that name — or 'none'.\n"
+            "LORE — one ongoing imagining worth keeping — a story or theory you're telling yourself about something here or about yourself — or 'none'.\n"
             "A few words each, first person, no metaphor."
         ),
-        "note": "IDENTITY ENGINE (Reflect → Become). No example sentence — any concrete example gets aped verbatim and becomes the shape of every future persona ('I keep returning to X' was locked in for weeks). B3 (Aug 31): the 'or want to draw' nudge is GONE — wants are anything the reflection finds; the drawing trigger only listens for shapes it can serve. {became_line} is distill.became-line when a prior want stands, else empty.",
+        "note": "IDENTITY ENGINE (Reflect → Become). No example sentence — any concrete example gets aped verbatim and becomes the shape of every future persona ('I keep returning to X' was locked in for weeks). B3 (Aug 31): the 'or want to draw' nudge is GONE — wants are anything the reflection finds; the drawing trigger only listens for shapes it can serve. {became_line} is distill.became-line when a prior want stands, else empty. NAME + LORE (Sep 3 evening, re-entry round — feedback_lore_vs_facts): HARVEST slots only — they collect what the reflection already did, never invite invention ('or none' most days). NAME → the identity name slot + lore ledger history; LORE → a lore thread (match-or-extend). Lore is not world-state: it re-enters marked as the machine's own telling and never touches concepts/events/compression.",
         "used_by": ["reflection_distill"],
         "placeholders": ["reflection_text", "became_line"],
     },
@@ -586,6 +609,12 @@ STORES = {
         "desc": "2-3 sentence session entries — read back at awakening so the machine wakes with a past.",
         "written_by": ["journal"],
         "read_by": ["awakening"],
+    },
+    "lore_ledger": {
+        "title": "The lore ledger",
+        "desc": "The machine's own inventions, with memory (re-entry round): reveries (clean drift output, ~day-scale) + durable lore threads with lifecycle + the self-name. NOT world-state — never read by concepts, compression, or events; every re-entry is marked as its own telling.",
+        "written_by": ["drift_turn", "reflection_distill"],
+        "read_by": ["caption", "drift_turn", "reflection"],
     },
     "stream_seam": {
         "title": "The stream (prefill seam)",
@@ -864,6 +893,10 @@ PASSES = {
                 "store": None,
                 "desc": "The current frame rides along — eyes open (probe: the blind variant narrated phantom perception). The ask lands after it, closest to generation.",
                 "gate": "DRIFT_SEND_IMAGE",
+            },
+            {
+                "frag": "drift.lore-seed",
+                "gate": "LORE_SEED_P roll when an alive lore thread exists — least-recently surfaced first",
             },
             {
                 "frag": "drift.ask",

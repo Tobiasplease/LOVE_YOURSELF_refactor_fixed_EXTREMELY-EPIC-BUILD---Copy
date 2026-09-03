@@ -1127,6 +1127,21 @@ DRIFT_NUM_PREDICT = int(os.getenv("DRIFT_NUM_PREDICT", 120))
 # generation still answers the ask. False = the blind A/B arm.
 DRIFT_SEND_IMAGE = os.getenv("DRIFT_SEND_IMAGE", "true").lower() in ("true", "1", "yes")
 
+# The lore ledger (Sep 3 evening — the re-entry round, docs/re-entry-round-
+# sep3.md). Artist ruling: inventive self-fiction was never the issue —
+# names, object mythologies, self-stories are WANTED; only world-state stays
+# provenance-gated. Clean drift output lands in a marked reverie store; the
+# existing reflection reads it; the existing distill harvests NAME/LORE
+# ("or none" — structure only, nothing scheduled); durable threads re-enter
+# as a dosed arc-line, the identity dose carries the name, and ~1/3 of
+# drifts open from an alive thread (the deep-story fork resolved: the
+# material-seeded variant is now the lore-seeded variant).
+LORE_ENABLED = os.getenv("LORE_ENABLED", "true").lower() in ("true", "1", "yes")
+LORE_REVERIES_MAX = 40
+LORE_THREADS_MAX = 6
+LORE_SEED_P = float(os.getenv("LORE_SEED_P", 0.33))
+LORE_LINE_EVERY_N = int(os.getenv("LORE_LINE_EVERY_N", 4))  # the lore line's internal pacing inside the memory-surface rotation
+
 # Reflection-echo pacing (Aug 28 evening). Aug 22 removed this source's
 # internal counter "because the rotation slot rations" — but rotation only
 # picks who goes FIRST, and with 180+ reflections stored a relevance match

@@ -705,7 +705,7 @@ class ContextCompressionEngine:
             )
             if not response or not isinstance(response, str):
                 return None
-            trait, belief, want, kernel, became = self._parse_distillation(response)
+            trait, belief, want, kernel, became, name, lore = self._parse_distillation(response)
             now = time.time()
             changed = []
             if trait and self._valid_self_fact(trait):
@@ -738,6 +738,25 @@ class ContextCompressionEngine:
                     want_ledger.note_want(want, affirmed=affirmed, became=became)
                 except Exception:
                     pass
+            # LORE HARVEST (Sep 3 evening, re-entry round): the distiller only
+            # collects what the reflection already did — a name it called
+            # itself, an imagining worth keeping. Nothing here invites
+            # invention; the slots say "or none" and most days they are.
+            try:
+                from config.config import LORE_ENABLED
+
+                if LORE_ENABLED and (name or lore):
+                    from utils.lore_ledger import lore_ledger
+
+                    if name and lore_ledger.note_name(name):
+                        self.introspective_state["self_name"] = lore_ledger.current_name()
+                        changed.append(f"name={lore_ledger.current_name()}")
+                    if lore:
+                        outcome = lore_ledger.note_lore(lore)
+                        if outcome:
+                            changed.append(f"lore[{outcome}]={lore[:60]}")
+            except Exception:
+                pass
             if changed:
                 self.introspective_state["last_introspection"] = now
                 self._save_identity()
@@ -754,10 +773,10 @@ class ContextCompressionEngine:
             return None
 
     def _parse_distillation(self, response: str) -> tuple:
-        """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL; strips any leaked label; 'none'/blank → empty."""
+        """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL / NAME / LORE; strips any leaked label; 'none'/blank → empty."""
         import re
 
-        trait = belief = want = kernel = became = ""
+        trait = belief = want = kernel = became = name = lore = ""
 
         def _val(line: str, label_re: str) -> str:
             v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
@@ -776,7 +795,11 @@ class ContextCompressionEngine:
                 became = _val(line, r"^became\b[\s:：—–\-]*")
             elif low.startswith("kernel"):
                 kernel = _val(line, r"^kernel\b[\s:：—–\-]*")
-        return trait, belief, want, kernel, became
+            elif low.startswith("name"):
+                name = _val(line, r"^name\b[\s:：—–\-]*")
+            elif low.startswith("lore"):
+                lore = _val(line, r"^lore\b[\s:：—–\-]*")
+        return trait, belief, want, kernel, became, name, lore
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).
