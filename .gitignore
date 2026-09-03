@@ -259,3 +259,4 @@ config/prompt_overrides.json
 # paper-check bench evidence (trial frames + model responses)
 debug/paper_vlm_frames/
 STOP
+debug/probe_drift_logs/
