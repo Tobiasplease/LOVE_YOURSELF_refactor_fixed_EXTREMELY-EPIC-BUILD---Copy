@@ -496,8 +496,13 @@ class Captioner(MemoryMixin):
                 import cv2 as _cv2
                 import numpy as _np
 
+                counts = getattr(self, "_pose_verdicts", None)
+                if counts is None:
+                    counts = self._pose_verdicts = {}
                 last_det = recent_meta[-1].get("detection", {}) or {}
-                if not last_det.get("ego_motion") and last_det.get("flow_reason") != "saccade":
+                if last_det.get("ego_motion") or last_det.get("flow_reason") == "saccade":
+                    counts["skipped_moving"] = counts.get("skipped_moving", 0) + 1
+                else:
                     arr = _np.frombuffer(recent_meta[-1]["jpeg"], dtype=_np.uint8)
                     img = _cv2.imdecode(arr, _cv2.IMREAD_GRAYSCALE)
                     if img is not None:
@@ -506,6 +511,7 @@ class Captioner(MemoryMixin):
                         if not hasattr(self, "_pose_views"):
                             self._pose_views = PoseViewMemory()
                         verdict = self._pose_views.observe(_cv2.resize(img, (64, 64)), last_det.get("pan"), last_det.get("tilt"), time.time())
+                        counts[verdict["status"]] = counts.get(verdict["status"], 0) + 1
                         if verdict["status"] == "changed":
                             view_changed = True
                             world_change_away_s = float(verdict.get("away_s", 0.0))
@@ -531,6 +537,27 @@ class Captioner(MemoryMixin):
         except Exception:
             view_changed = False
         info["view_changed"] = view_changed
+        # Referee pulse (Sep 3): the pose-view verdicts are otherwise silent —
+        # a too-strict ego gate would present as "never compares" with no
+        # evidence trail (the house silent-failure lesson). One summary line
+        # every 5 minutes: compare rate, verdict mix, current confirm streak.
+        try:
+            now_p = time.time()
+            if now_p - getattr(self, "_pose_pulse_ts", 0) > 300 and getattr(self, "_pose_verdicts", None):
+                self._pose_pulse_ts = now_p
+                c = dict(self._pose_verdicts)
+                log_json_entry(
+                    LogType.DEBUG,
+                    {
+                        "message": "Pose-view referee pulse",
+                        "action": "world_referee_pulse",
+                        **c,
+                        "world_confirms": getattr(self, "_world_confirms", 0),
+                    },
+                    print_message=f"[🌍] referee: {c}",
+                )
+        except Exception:
+            pass
 
         # Update the sticky presence belief from live detection. "Seen now" is
         # any current evidence of a person — world-angle hit, eye contact, or an
@@ -2200,6 +2227,8 @@ class Captioner(MemoryMixin):
                     "salience_hot": self._salience_hot,
                     "close_look": (close_look or {}).get("term"),  # term when this cycle saw a crop, else None
                     "caption_interval": self._current_caption_interval(time.time()),
+                    "boredom": round(float(self.boredom), 3),  # blended scalar (Sep 3) — was only visible in drawing_check entries
+                    "world_confirms": getattr(self, "_world_confirms", 0),  # pose-referee confirmed-unchanged looks since last change/salience
                 },
                 print_message=print_msg,
             )
