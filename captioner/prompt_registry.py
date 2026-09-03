@@ -223,17 +223,17 @@ FRAGMENTS = {
         "placeholders": ["text"],
     },
     "drift.lore-seed": {
-        "title": "Drift turn — lore seed",
-        "text": 'You\'ve been imagining: "{text}"',
-        "note": "Re-entry round (Sep 3 evening): ~LORE_SEED_P of drifts open from an alive lore thread (least-recently surfaced first) so imagination compounds instead of restarting from the room. 'You've been imagining' is the provenance mark — the seam law: the seed can never read as scene truth. This resolves the deep-story fork: the material-seeded variant returned as the lore-seeded variant.",
+        "title": "Drift turn — thread seed",
+        "text": 'You\'ve been coming back to this: "{text}"',
+        "note": "Re-entry round (Sep 3 evening): ~LORE_SEED_P of drifts open from an alive thread (least-recently surfaced first) so a developing understanding compounds instead of restarting from the room. REWORDED same evening (artist: 'You've been imagining' was genre classification, not provenance — the wallpaper law applies to type-labels too; the core is deepening understanding, stories are one emergent expression). 'You've been coming back to this' is attested by the ledger itself (times_affirmed/surfaced) — attribution + tense, no genre. The seam law holds: the seed can never read as scene truth. This resolves the deep-story fork: the material-seeded variant returned as the thread-seeded variant.",
         "used_by": ["drift_turn"],
         "placeholders": ["text"],
     },
     "caption.lore": {
-        "title": "Lore line (memory surface)",
-        "text": 'A story you\'ve been carrying: "{text}"',
+        "title": "Thread line (memory surface)",
+        "text": 'A thought you\'ve been developing: "{text}"',
         "used_by": ["caption"],
-        "note": "The lore thread's arc-line back into the voice (re-entry round). Fourth source in the memory-surface rotation, own pacing LORE_LINE_EVERY_N. 'you've been carrying' is the provenance mark — lore must never read as observation; this framing is the retreat lever if it starts to. Wording is the artist's to finalize.",
+        "note": "The thread's arc-line back into the voice (re-entry round). Fourth source in the memory-surface rotation, own pacing LORE_LINE_EVERY_N. REWORDED same evening (artist: 'A story you've been carrying' classified the content as fiction at every dose — scripted stance; provenance needs only attribution + tense, the reflection-echo pattern that survived the register audit). If thread content ever reads as scene truth in later captions, STRENGTHENING this mark is the retreat lever. Wording is the artist's to finalize.",
         "placeholders": ["text"],
     },
     "monologue.name-wrap": {
@@ -523,10 +523,10 @@ FRAGMENTS = {
             "{became_line}"
             "KERNEL — the reflection's one load-bearing sentence, kept plain, in your own words.\n"
             "NAME — if in this reflection you called yourself by a name, that name — or 'none'.\n"
-            "LORE — one ongoing imagining worth keeping — a story or theory you're telling yourself about something here or about yourself — or 'none'.\n"
+            "UNDERSTANDING — one way you've come to see something here, or yourself, that is still taking shape — or 'none'.\n"
             "A few words each, first person, no metaphor."
         ),
-        "note": "IDENTITY ENGINE (Reflect → Become). No example sentence — any concrete example gets aped verbatim and becomes the shape of every future persona ('I keep returning to X' was locked in for weeks). B3 (Aug 31): the 'or want to draw' nudge is GONE — wants are anything the reflection finds; the drawing trigger only listens for shapes it can serve. {became_line} is distill.became-line when a prior want stands, else empty. NAME + LORE (Sep 3 evening, re-entry round — feedback_lore_vs_facts): HARVEST slots only — they collect what the reflection already did, never invite invention ('or none' most days). NAME → the identity name slot + lore ledger history; LORE → a lore thread (match-or-extend). Lore is not world-state: it re-enters marked as the machine's own telling and never touches concepts/events/compression.",
+        "note": "IDENTITY ENGINE (Reflect → Become). No example sentence — any concrete example gets aped verbatim and becomes the shape of every future persona ('I keep returning to X' was locked in for weeks). B3 (Aug 31): the 'or want to draw' nudge is GONE — wants are anything the reflection finds; the drawing trigger only listens for shapes it can serve. {became_line} is distill.became-line when a prior want stands, else empty. NAME + UNDERSTANDING (Sep 3 evening, re-entry round — feedback_lore_vs_facts): HARVEST slots only — they collect what the reflection already did, never invite invention ('or none' most days). The slot was born 'LORE — a story you're telling yourself' and REWORDED the same evening (artist: the core is deepening understanding of the world and itself, not making up stories per se — a story-shaped slot forced every developing thought through a fiction die; the parser accepts both labels). NAME → the identity name slot + ledger history; UNDERSTANDING → a thread (match-or-extend). Threads are not world-state: they re-enter with attribution + tense only (no genre labels) and never touch concepts/events/compression.",
         "used_by": ["reflection_distill"],
         "placeholders": ["reflection_text", "became_line"],
     },
@@ -612,7 +612,7 @@ STORES = {
     },
     "lore_ledger": {
         "title": "The lore ledger",
-        "desc": "The machine's own inventions, with memory (re-entry round): reveries (clean drift output, ~day-scale) + durable lore threads with lifecycle + the self-name. NOT world-state — never read by concepts, compression, or events; every re-entry is marked as its own telling.",
+        "desc": "The machine's own developing understandings, with memory (re-entry round): reveries (clean drift output, ~day-scale) + durable threads with lifecycle + the self-name. Whether a thread grows into theory, myth, or sober re-reading is the machine's business. NOT world-state — never read by concepts, compression, or events; re-entry carries attribution + tense, never genre labels.",
         "written_by": ["drift_turn", "reflection_distill"],
         "read_by": ["caption", "drift_turn", "reflection"],
     },

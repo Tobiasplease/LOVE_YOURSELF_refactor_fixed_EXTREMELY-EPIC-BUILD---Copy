@@ -797,8 +797,8 @@ class ContextCompressionEngine:
                 kernel = _val(line, r"^kernel\b[\s:：—–\-]*")
             elif low.startswith("name"):
                 name = _val(line, r"^name\b[\s:：—–\-]*")
-            elif low.startswith("lore"):
-                lore = _val(line, r"^lore\b[\s:：—–\-]*")
+            elif low.startswith(("understanding", "lore")):
+                lore = _val(line, r"^(?:understanding|lore)\b[\s:：—–\-]*")
         return trait, belief, want, kernel, became, name, lore
 
     def get_current_desire(self) -> str:

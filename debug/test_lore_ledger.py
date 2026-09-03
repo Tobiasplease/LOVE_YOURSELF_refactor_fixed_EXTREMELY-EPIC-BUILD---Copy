@@ -82,16 +82,19 @@ def test_distill_harvest():
     from captioner.prompt_registry import FRAGMENTS
 
     parse = ContextCompressionEngine._parse_distillation
-    r = parse(None, "TRAIT: I stall.\nBELIEF: none\nWANT: to draw\nKERNEL: I saw it plain.\nNAME: Penelope\nLORE: The finger is a lighthouse.")
+    r = parse(
+        None, "TRAIT: I stall.\nBELIEF: none\nWANT: to draw\nKERNEL: I saw it plain.\nNAME: Penelope\nUNDERSTANDING: The finger is a lighthouse."
+    )
     trait, belief, want, kernel, became, name, lore = r
     check("name parsed", name == "Penelope")
-    check("lore parsed", lore == "The finger is a lighthouse.")
+    check("understanding parsed", lore == "The finger is a lighthouse.")
+    check("legacy LORE label still parses", parse(None, "LORE: old label")[6] == "old label")
     check("none stays empty", belief == "")
     r2 = parse(None, "TRAIT: none\nNAME: none\nLORE: none")
     check("all-none harvest is empty", r2[5] == "" and r2[6] == "")
     txt = FRAGMENTS["distill.user"]["text"]
     check("template carries NAME slot", "NAME —" in txt)
-    check("template carries LORE slot", "LORE —" in txt)
+    check("template carries UNDERSTANDING slot", "UNDERSTANDING —" in txt)
     check("slots are harvest-only ('or none')", txt.count("or 'none'") >= 2)
 
 
@@ -143,7 +146,11 @@ def test_drift_integration():
         inf_mod.query_model = lambda **kw: calls.append(kw) or "It keeps the agreement even when no one watches the floorboards."
         c3 = shell()
         c3._run_drift_turn(time.time(), None)
-        check("lore seed rides the ask", calls and "You've been imagining:" in calls[0]["prompt"], str(calls[0]["prompt"])[:80] if calls else "")
+        check(
+            "lore seed rides the ask",
+            calls and "You've been coming back to this:" in calls[0]["prompt"],
+            str(calls[0]["prompt"])[:80] if calls else "",
+        )
         check("ask still lands last", calls and calls[0]["prompt"].rstrip().endswith(P("drift.ask")))
         cfg.LORE_SEED_P = saved_seed_p
     finally:
@@ -166,7 +173,7 @@ def test_reentry_surfaces():
         lines = [get_lore_line(agent) for _ in range(LORE_LINE_EVERY_N)]
         fired = [ln for ln in lines if ln]
         check("lore line paced (one per cycle-set)", len(fired) == 1, str(len(fired)))
-        check("provenance-marked framing", fired and "you've been carrying" in fired[0].lower(), fired[0] if fired else "")
+        check("provenance-marked framing", fired and "you've been developing" in fired[0].lower(), fired[0] if fired else "")
 
         prompt = build_reflection_loop_prompt(
             "What of it?", {"reveries": led.recent_reveries(3) or [{"ts": time.time(), "text": "The mannequin head dreams in plaster"}]}

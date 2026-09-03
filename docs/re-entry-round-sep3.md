@@ -28,7 +28,7 @@ try to get back to that organically." (memory: feedback_lore_vs_facts)
 - **LORE** — the machine's own inventions: names, self-stories, object
   mythologies, theories. Gets persistence, lifecycle, growth, and re-entry.
   Lives in its OWN store (never becomes a concept/compressed fact/event);
-  re-enters marked as its own ("a story you've been carrying"), so it can
+  re-enters with attribution + tense only ("a thought you've been developing" — reworded same evening: genre labels like "story" were scripted stance; the core is deepening understanding, stories one emergent expression), so it can
   never override live perception.
 - **ORGANIC** — no scheduled invention, no leading questions, no content
   priors. The distill slots only HARVEST what a reflection already did
@@ -45,18 +45,20 @@ drift turn (hot, eyes-open, 5-15% of quiet cycles)
 reflection (~20 quiet min, existing)
   └─ spine gains "things you've imagined lately — your own inventions"
 distill (existing cold call, temp 0.3)
-  └─ two new harvest slots: NAME (or none) · LORE (or none)
+  └─ two new harvest slots: NAME (or none) · UNDERSTANDING (or none;
+       born "LORE — a story", reworded same evening — no fiction die)
        ├─ NAME → identity self_name slot (persisted; history in the ledger)
        └─ LORE → lore_ledger.note_lore() — match-or-extend a THREAD
              {text, first_ts, last_ts, times_affirmed, history[], status}
 re-entry (all dosed, all panel-editable):
   ├─ caption memory-surface rotation gains a 4th source: the lore line
-  │    ("A story you've been carrying: "...")
+  │    ("A thought you've been developing: "..." — attribution+tense, no genre)
   ├─ the identity dose line gains the name ("You call yourself {name}.")
   │    — same every-6th pacing, awakening includes it
   └─ drift seeding: ~1/3 of drifts open from an alive thread
-       ("You've been imagining: "..." ") — resolves the deep-story fork:
-       the material-seeded variant returns as the LORE-seeded variant
+       ("You've been coming back to this: "..." — attested by the ledger's
+       own counters) — resolves the deep-story fork: the material-seeded
+       variant returns as the thread-seeded variant
 ```
 
 Reveries from echo-gated drifts are not recorded (a borrowed refrain must
