@@ -864,10 +864,17 @@ HYBRID_PREFILL_CHARS = int(os.getenv("HYBRID_PREFILL_CHARS", 220))
 # genre.hybrid, not bought with temperature.
 CAPTION_TEMP = float(os.getenv("CAPTION_TEMP", 0.9))
 # Vendor-shaped repetition control (Qwen official non-thinking recipe:
-# repetition_penalty 1.0 + presence_penalty 0.6-1.5). 0.0 = off (default).
-# The A/B arm pairs it with CAPTION_REPEAT_PENALTY=1.0; judge with
-# debug/caption_metrics.py over a full evening, never by the last caption.
-CAPTION_PRESENCE_PENALTY = float(os.getenv("CAPTION_PRESENCE_PENALTY", 0.0))
+# repetition_penalty 1.0 + presence_penalty 0.6-1.5). 0.0 = off.
+# ON since Sep 3 evening (0.6, vendor floor): the deflation template the
+# Aug 31 handover predicted ("The ___ is just a ___" — the model's survival
+# strategy under fixed sampling; frames never repeat as tokens, so DRY can't
+# see them) hit 38% of the evening's caption lines, with ZERO exclamation
+# marks all day — the artist's ear, confirmed numerically. This is the
+# queued experiment, triggered. Judge with debug/caption_metrics.py over a
+# full evening (punctuation survival is measured — watch it; the penalty
+# taxes reused sentence frames, not the period). CAPTION_PRESENCE_PENALTY=0
+# reverts to the old arm.
+CAPTION_PRESENCE_PENALTY = float(os.getenv("CAPTION_PRESENCE_PENALTY", 0.6))
 CAPTION_TEMP_BORED = float(os.getenv("CAPTION_TEMP_BORED", 0.85))
 CAPTION_TOP_P = float(os.getenv("CAPTION_TOP_P", 1.0))
 CAPTION_MIN_P = float(os.getenv("CAPTION_MIN_P", 0.05))
