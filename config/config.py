@@ -916,13 +916,40 @@ CAPTION_SHORT_BEAT_TOKENS = int(os.getenv("CAPTION_SHORT_BEAT_TOKENS", 40))
 # the timeout error string was then used AS the drawing prompt.
 DRAWING_CALL_TIMEOUT = int(os.getenv("DRAWING_CALL_TIMEOUT", 180))
 
-# View-replacement detector (world shape's honest change line): if the servo
-# barely moved between caption cycles but the frame content changed past this
-# threshold (normalized mean abs diff on 64px grays), the WORLD changed — a
-# bumped camera, a swapped scene, lights out. Fires salience + a named event.
-# Breathing sway measures ~0.05-0.1 at this scale; a scene replacement ~0.4+.
-WORLD_VIEW_DIFF_THRESHOLD = float(os.getenv("WORLD_VIEW_DIFF_THRESHOLD", 0.30))
-WORLD_VIEW_SERVO_STILL_DEG = 3.0  # above this pan+tilt delta the change is self-caused (a gaze turn), already carried by the situational line
+# World-anchored change detection (Sep 3, queue #2 — the camera-vs-world
+# referee; supersedes the July 26 single-slot view-replacement check, which
+# forgot its one reference frame on any gaze turn). Per-pose 64px grayscale
+# references (vision/pose_view_memory.py): a settled frame within COMPARE_DEG
+# of a fresh reference is an honest comparison — catching both the same-pose
+# change (bumped camera, lights-out; the rooster run) and change discovered
+# on RETURNING to a view ("it's different here from when you last looked").
+# Older references re-baseline silently: lighting drifts, and a change the
+# code can't attest must not mint an event. Confirmed-unchanged looks roll
+# the reference forward (slow drift never accumulates into a false event)
+# and count toward world-verified stillness. world_changed lands in the
+# episodic log — a new anchor for the unchanged clock, which was episodic-
+# only and rightly distrusted.
+WORLD_VIEW_DIFF_THRESHOLD = float(os.getenv("WORLD_VIEW_DIFF_THRESHOLD", 0.30))  # breathing sway ~0.05-0.1 at 64px; scene replacement ~0.4+
+WORLD_POSE_MEMORY_ENABLED = os.getenv("WORLD_POSE_MEMORY_ENABLED", "true").lower() in ("true", "1", "yes")  # false = NO view-change detection at all
+WORLD_POSE_CELL_DEG = 6.0  # reference grid: one remembered view per 6-degree pose cell
+WORLD_POSE_COMPARE_DEG = 3.0  # honest-comparison regime, same value the July 26 check proved (sway ~1 deg)
+WORLD_POSE_REF_MAX_AGE_S = float(os.getenv("WORLD_POSE_REF_MAX_AGE_S", 1800))
+WORLD_POSE_MAX_REFS = 32
+# Anchor verification: a detector re-sighting within this many degrees of the
+# stored anchor stamps last_verified_ts — position stability, not just
+# existence. The familiarity line's "still in the same spot" now REQUIRES a
+# verification within WORLD_SAME_SPOT_WINDOW_S (else the softer line ships) —
+# prompts must not claim positions the code can't vouch for.
+WORLD_ANCHOR_CONFIRM_DEG = 10.0
+WORLD_SAME_SPOT_WINDOW_S = float(os.getenv("WORLD_SAME_SPOT_WINDOW_S", 900))
+# Verified stillness -> boredom: needs MIN_CONFIRMS confirmed-unchanged looks
+# since the last world change / salience spike (absence of evidence isn't
+# stillness), saturates over SATURATION_S, contributes at most BOREDOM_MAX —
+# deliberately below the 0.7 bored threshold, so the world being still raises
+# drift propensity but never flips the sampling regime on its own.
+WORLD_STILL_MIN_CONFIRMS = 3
+WORLD_STILLNESS_SATURATION_S = float(os.getenv("WORLD_STILLNESS_SATURATION_S", 3600))
+WORLD_STILLNESS_BOREDOM_MAX = float(os.getenv("WORLD_STILLNESS_BOREDOM_MAX", 0.6))
 
 # Anti-echo storage gate: a caption that OPENS with the same N words as a
 # recent stream entry is a template imitation, not a continuation. One retry

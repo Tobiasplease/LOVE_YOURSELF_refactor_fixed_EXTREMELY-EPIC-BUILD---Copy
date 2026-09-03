@@ -53,30 +53,39 @@ class SceneMotionEstimator:
             camera_shift_px: float — magnitude of the camera's own movement
             residual_fraction: float 0..1 — share of the frame still moving
                 after the camera's movement is mathematically undone
+            reason: str|None — why valid is False. "saccade" is load-bearing
+                provenance (Sep 3, world-anchor): it means "the CAMERA jumped,
+                not the world" — downstream must not treat it like the other
+                can't-measure cases
         """
-        result = {"valid": False, "camera_shift_px": 0.0, "residual_fraction": 0.0}
+        result = {"valid": False, "camera_shift_px": 0.0, "residual_fraction": 0.0, "reason": None}
         prev = self._prev_gray
         self._prev_gray = gray
         if prev is None or prev.shape != gray.shape:
+            result["reason"] = "first_frame"
             return result
 
         corners = cv2.goodFeaturesToTrack(prev, maxCorners=_MAX_CORNERS, qualityLevel=0.01, minDistance=8)
         if corners is None or len(corners) < _MIN_TRACKED:
+            result["reason"] = "few_features"
             return result
 
         moved, status, _err = cv2.calcOpticalFlowPyrLK(prev, gray, corners, None)
         ok = status.ravel() == 1
         src, dst = corners[ok], moved[ok]
         if len(src) < _MIN_TRACKED:
+            result["reason"] = "few_features"
             return result
 
         transform, _inliers = cv2.estimateAffinePartial2D(src, dst, method=cv2.RANSAC, ransacReprojThreshold=2.0)
         if transform is None:
+            result["reason"] = "no_transform"
             return result
 
         result["camera_shift_px"] = float(np.hypot(transform[0, 2], transform[1, 2]))
         if result["camera_shift_px"] > _MAX_TRUSTED_SHIFT_PX:
-            return result  # saccade — blurred frames, measurement would be noise
+            result["reason"] = "saccade"
+            return result  # blurred frames, measurement would be noise
 
         # Undo the camera's movement, then diff. Borders the warp can't fill
         # are masked out; means are matched so auto-exposure shifts during
@@ -86,6 +95,7 @@ class SceneMotionEstimator:
         coverage = cv2.warpAffine(np.full((h, w), 255, dtype=np.uint8), transform, (w, h))
         mask = coverage > 250
         if mask.sum() < (h * w) * 0.5:
+            result["reason"] = "low_coverage"
             return result  # camera moved too far to compare
 
         a = gray.astype(np.int16)

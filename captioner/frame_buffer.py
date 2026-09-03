@@ -73,12 +73,18 @@ class FrameBuffer:
         # own movement between pushes and undoes it; what still changes is
         # true scene motion, measurable even mid-sway. residual_motion is
         # None when flow couldn't be estimated — consumers fall back to the
-        # servo-delta heuristic.
+        # servo-delta heuristic. flow_reason keeps WHY it failed (Sep 3,
+        # world-anchor): "saccade" means the camera jumped, not the world —
+        # the pose-view referee must not compare across that frame.
         try:
             flow = self._motion_estimator.update(small)
             det["residual_motion"] = flow["residual_fraction"] if flow["valid"] else None
+            det["camera_shift_px"] = flow.get("camera_shift_px", 0.0)
+            det["flow_reason"] = flow.get("reason")
         except Exception:
             det["residual_motion"] = None
+            det["camera_shift_px"] = 0.0
+            det["flow_reason"] = "error"
 
         # Ego-motion: if the servo moved since the last push, this frame's diff
         # is (mostly) self-caused — the camera looked around, the room may be

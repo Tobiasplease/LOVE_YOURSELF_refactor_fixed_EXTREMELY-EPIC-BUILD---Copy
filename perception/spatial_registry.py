@@ -22,6 +22,7 @@ from config.config import (
     SPATIAL_REGISTRY_VFOV,
     TILT_MAX,
     TILT_MIN,
+    WORLD_ANCHOR_CONFIRM_DEG,
 )
 
 
@@ -68,6 +69,13 @@ class SpatialRegistry:
                         "last_seen": now,
                     }
                 else:
+                    # World-anchor verification (Sep 3): a re-sighting NEAR the
+                    # stored anchor attests position stability — the basis for
+                    # an honest "still in the same spot". A sighting far from
+                    # the anchor still updates the EMA (the map follows the
+                    # object) but verifies nothing.
+                    if abs(pan - e["pan"]) <= WORLD_ANCHOR_CONFIRM_DEG and abs(tilt - e["tilt"]) <= WORLD_ANCHOR_CONFIRM_DEG:
+                        e["last_verified_ts"] = now
                     a = SPATIAL_REGISTRY_EMA
                     e["pan"] += (pan - e["pan"]) * a
                     e["tilt"] += (tilt - e["tilt"]) * a
@@ -199,6 +207,22 @@ class SpatialRegistry:
         """One verified absence for the caption loop, oldest first, or None."""
         with self.lock:
             return self._absence_events.pop(0) if self._absence_events else None
+
+    def verified_recently_matching(self, label, window_s):
+        """True if a registry term matching this concept label was re-sighted
+        at (near) its stored anchor within the window — the code-attested
+        basis for the familiarity line's "still in the same spot" (Sep 3).
+        Substring match both ways, same idiom as note_mentions."""
+        if not label:
+            return False
+        low = label.lower()
+        now = time.time()
+        with self.lock:
+            for t, e in self.entries.items():
+                tl = t.lower()
+                if (tl in low or low in tl) and now - e.get("last_verified_ts", 0.0) <= window_s:
+                    return True
+        return False
 
     def _explore_target(self, entries):
         n_buckets = 6

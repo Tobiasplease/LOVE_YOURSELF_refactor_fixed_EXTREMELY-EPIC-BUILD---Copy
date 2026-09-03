@@ -476,34 +476,58 @@ class Captioner(MemoryMixin):
             info["face_close"] = bool(close_frames > len(recent_meta) * 0.4)
             info["eye_contact"] = bool(face_frames > len(recent_meta) * 0.4 and (info["person_present_in_window"] or info["face_close"]))
 
-        # VIEW REPLACEMENT (July 26): the ego-compensated flow calls a huge
-        # frame shift a saccade and returns invalid — so a bumped camera, a
-        # swapped scene or lights-out was NOT an event to the salience system
-        # (the rooster run: the camera fell, ended up pointed at a toy rooster,
-        # and the machine mused straight past it). Cheap cross-cycle check: if
-        # the servo barely moved since the last caption cycle but the frame
-        # content is mostly different, the WORLD changed. Servo state unknown →
-        # don't fire (a gaze turn already explains changed pixels).
+        # WORLD-ANCHORED VIEW MEMORY (Sep 3, queue #2 — supersedes the July 26
+        # single-slot view-replacement check, whose one previous frame was
+        # discarded by any gaze turn). Per-pose 64px references
+        # (vision/pose_view_memory.py): a same-pose comparison still catches
+        # the bumped camera / swapped scene / lights-out the flow calls a
+        # saccade (the rooster run), and a fresh reference at a pose the gaze
+        # RETURNS to catches "the world changed while you were looking away" —
+        # invisible to any consecutive-cycle check. Saccade/ego frames are
+        # never compared (blur is not evidence); a confirmed-unchanged look
+        # counts toward world-verified stillness (feeds boredom + the
+        # unchanged clock's trustworthiness).
         view_changed = False
+        world_change_away_s = 0.0
         try:
-            if recent_meta:
+            from config.config import WORLD_POSE_MEMORY_ENABLED
+
+            if recent_meta and WORLD_POSE_MEMORY_ENABLED:
                 import cv2 as _cv2
                 import numpy as _np
 
-                from config.config import WORLD_VIEW_DIFF_THRESHOLD, WORLD_VIEW_SERVO_STILL_DEG
-
                 last_det = recent_meta[-1].get("detection", {}) or {}
-                arr = _np.frombuffer(recent_meta[-1]["jpeg"], dtype=_np.uint8)
-                img = _cv2.imdecode(arr, _cv2.IMREAD_GRAYSCALE)
-                if img is not None:
-                    cur_gray = _cv2.resize(img, (64, 64))
-                    pan, tilt = last_det.get("pan"), last_det.get("tilt")
-                    prev = getattr(self, "_view_prev", None)
-                    if prev is not None and None not in (pan, tilt, prev.get("pan"), prev.get("tilt")):
-                        servo_delta = abs(pan - prev["pan"]) + abs(tilt - prev["tilt"])
-                        score = float(_np.mean(_np.abs(cur_gray.astype(_np.int16) - prev["gray"].astype(_np.int16))) / 255.0)
-                        view_changed = bool(servo_delta < WORLD_VIEW_SERVO_STILL_DEG and score > WORLD_VIEW_DIFF_THRESHOLD)
-                    self._view_prev = {"gray": cur_gray, "pan": pan, "tilt": tilt}
+                if not last_det.get("ego_motion") and last_det.get("flow_reason") != "saccade":
+                    arr = _np.frombuffer(recent_meta[-1]["jpeg"], dtype=_np.uint8)
+                    img = _cv2.imdecode(arr, _cv2.IMREAD_GRAYSCALE)
+                    if img is not None:
+                        from vision.pose_view_memory import PoseViewMemory
+
+                        if not hasattr(self, "_pose_views"):
+                            self._pose_views = PoseViewMemory()
+                        verdict = self._pose_views.observe(_cv2.resize(img, (64, 64)), last_det.get("pan"), last_det.get("tilt"), time.time())
+                        if verdict["status"] == "changed":
+                            view_changed = True
+                            world_change_away_s = float(verdict.get("away_s", 0.0))
+                            self._world_change_ts = time.time()
+                            self._world_confirms = 0
+                            try:
+                                from utils.episodic_log import episodic_log
+
+                                episodic_log.record(
+                                    "world_changed",
+                                    "the view changed while looking elsewhere" if world_change_away_s > 30 else "the view changed",
+                                    metadata={
+                                        "pan": last_det.get("pan"),
+                                        "tilt": last_det.get("tilt"),
+                                        "away_s": round(world_change_away_s, 1),
+                                        "score": round(float(verdict.get("score", 0.0)), 3),
+                                    },
+                                )
+                            except Exception:
+                                pass
+                        elif verdict["status"] == "unchanged":
+                            self._world_confirms = getattr(self, "_world_confirms", 0) + 1
         except Exception:
             view_changed = False
         info["view_changed"] = view_changed
@@ -695,7 +719,10 @@ class Captioner(MemoryMixin):
         # again here would be a duplicate (reads as emphasis, locks register).
         event = None
         if view_changed:
-            event = "The view in front of you has just changed — this isn't what you were looking at a moment ago."
+            if world_change_away_s > 30:
+                event = "It's different here from when you last looked this way."
+            else:
+                event = "The view in front of you has just changed — this isn't what you were looking at a moment ago."
         elif close_onset:
             event = "They've come right up close — their face is filling your view, looking straight at you."
         elif eye_onset:
@@ -2840,15 +2867,34 @@ class Captioner(MemoryMixin):
 
     @property
     def boredom(self) -> float:
-        """Current boredom, computed in MemoryMixin.observe() from concept
-        metadata + recent attention (the activation network's one surviving
-        output after its Aug 30 retirement). Familiar static concepts under
-        sustained attention read as a stale scene; new concepts and people
-        barely count. Consumed only by caption sampling (temp/num_predict)
-        and the drawing-trigger logs."""
-        if hasattr(self, "_boredom"):
-            return self._boredom
-        return 0.0
+        """Current boredom: the linguistic scalar from MemoryMixin.observe()
+        (concept metadata + recent attention — the activation network's one
+        surviving output after its Aug 30 retirement), blended with
+        WORLD-VERIFIED STILLNESS (Sep 3, queue #2): the pose-view referee's
+        confirmed-unchanged looks let the world itself be boring, not just
+        the words for it. The stillness component needs a minimum number of
+        confirmations since the last world change / salience spike (absence
+        of evidence isn't stillness), saturates over an hour, and is capped
+        below the 0.7 bored threshold — verified stillness raises drift
+        propensity on its own but never flips the sampling regime alone.
+        Consumed by the drift roll, caption sampling (temp/num_predict) and
+        the drawing-trigger logs."""
+        b = self._boredom if hasattr(self, "_boredom") else 0.0
+        try:
+            from config.config import WORLD_STILL_MIN_CONFIRMS, WORLD_STILLNESS_BOREDOM_MAX, WORLD_STILLNESS_SATURATION_S
+
+            if getattr(self, "_world_confirms", 0) >= WORLD_STILL_MIN_CONFIRMS:
+                since = max(
+                    float(getattr(self, "_world_change_ts", 0.0) or 0.0),
+                    float(getattr(self, "_last_salience_time", 0.0) or 0.0),
+                    float(getattr(self, "true_session_start", 0.0) or 0.0),
+                )
+                if since > 0:
+                    still = min(1.0, max(0.0, time.time() - since) / WORLD_STILLNESS_SATURATION_S)
+                    b = max(b, still * WORLD_STILLNESS_BOREDOM_MAX)
+        except Exception:
+            pass
+        return b
 
     def _watch_drawing(self, frame, drawing_summary: str) -> None:
         """The machine watches itself draw (July 9). The 2026-02-03 refactor

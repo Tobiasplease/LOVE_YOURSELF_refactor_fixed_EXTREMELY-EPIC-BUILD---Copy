@@ -370,15 +370,18 @@ def get_reorientation_line(agent) -> str:
 
 def unchanged_duration_s(agent, now: float | None = None) -> float:
     """Seconds since the last episodic change — arrivals, departures, drawings,
-    the newest new-concept sighting — floored at session start so it never
-    claims unwatched time. Consumed by the B4 fact line (the drift turn, which
-    used to read this clock as the story beat, rolls on boredom instead)."""
+    world-verified view changes (Sep 3: the pose-view referee's world_changed
+    events give this clock the perceptual backing it lacked — it was
+    episodic-only and rightly distrusted), the newest new-concept sighting —
+    floored at session start so it never claims unwatched time. Consumed by
+    the B4 fact line (the drift turn, which used to read this clock as the
+    story beat, rolls on boredom instead)."""
     now = now or time.time()
     anchors = [float(getattr(agent, "true_session_start", now) or now)]
     try:
         from utils.episodic_log import episodic_log
 
-        for etype in ("person_arrived", "person_left", "drew"):
+        for etype in ("person_arrived", "person_left", "drew", "world_changed"):
             e = episodic_log.get_last_event(etype)
             if e:
                 anchors.append(float(e.get("timestamp", 0) or 0))
@@ -1030,6 +1033,19 @@ def get_introspective_context(agent=None) -> str:
 _PERSON_WORDS = ("person", "someone", "man", "woman", "people", "figure", "visitor")
 
 
+def _same_spot_verified(label) -> bool:
+    """Code-attested position stability for the familiarity line. Fails
+    closed: no registry match or no recent anchor re-sighting -> False, and
+    the caller falls back to the softer phrasing."""
+    try:
+        from config.config import WORLD_SAME_SPOT_WINDOW_S
+        from perception.spatial_registry import spatial_registry
+
+        return spatial_registry.verified_recently_matching(label, WORLD_SAME_SPOT_WINDOW_S)
+    except Exception:
+        return False
+
+
 def get_familiarity_line(agent) -> str:
     """One line of concept recognition from the previous caption's matched concepts.
 
@@ -1087,7 +1103,11 @@ def get_familiarity_line(agent) -> str:
 
     if pick.get("is_new"):
         line = f"Something you haven't noticed before: {label_lower}."
-    elif times >= 10 and sessions >= 2:
+    elif times >= 10 and sessions >= 2 and _same_spot_verified(label):
+        # "still in the same spot" is now a code-attested fact (Sep 3): the
+        # registry re-sighted a matching term near its stored anchor within
+        # WORLD_SAME_SPOT_WINDOW_S. Unverified falls to the softer line —
+        # prompts must not claim positions the code can't vouch for.
         line = f"The {label_lower}, still in the same spot."
     elif times >= 3:
         line = f"You've noticed the {label_lower} a few times now."

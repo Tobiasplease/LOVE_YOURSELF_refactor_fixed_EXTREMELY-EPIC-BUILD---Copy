@@ -94,7 +94,6 @@ Platform-specific overrides in `config/gpu-peon/`, `config/impostor-bot-win/`, `
   - `drawing_state.py`: Drawing state helpers
   - `caption_display.py`: Display formatting for captions
   - `nlp.py`: spaCy singleton (consumed by perception/vocab_promotion)
-  - `view_orientation.py`: Camera orientation helpers
   - `progress_bar.py`, `error_tracking.py`: Dev utilities
 - **labs/warp-fix-lab/**: Experimental drawing warp correction scripts (not integrated)
 

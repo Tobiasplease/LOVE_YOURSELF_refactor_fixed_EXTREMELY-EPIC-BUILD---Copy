@@ -98,10 +98,14 @@ camera frame (~30fps)
   │    snapshot: face?, person?, count, track_id, pan/tilt, person_angle, ego_motion
   └─ captioner._process_frame                             [captioner/captioner.py]
        ├─ _assess_scene → salience verdict (FIRST)        [captioner/captioner.py]
-       │    scene motion OR arrival OR eye-contact onset OR VIEW REPLACEMENT → _salience_hot
-       │    view replacement (July 26): servo still + frame mostly different vs last cycle
-       │    (WORLD_VIEW_DIFF_THRESHOLD) = the world changed — bumped camera, swapped scene;
-       │    named event line; motion-tripped hot cycles also get a named event now (react-vacuum fix)
+       │    scene motion OR arrival OR eye-contact onset OR WORLD CHANGE → _salience_hot
+       │    world change (Sep 3, supersedes July 26 single-slot view replacement): per-pose
+       │    64px references (vision/pose_view_memory.py, WORLD_POSE_* knobs) — same-pose
+       │    change (bumped camera/lights-out) AND change found on RETURNING to a view
+       │    ("It's different here from when you last looked this way"); world_changed →
+       │    episodic log (new unchanged-clock anchor); confirmed-unchanged looks →
+       │    world-verified stillness → boredom (capped 0.6); saccade/ego frames never
+       │    compared; stale refs re-baseline silently. Test: debug/test_world_anchor.py
        ├─ build_simple_caption_prompt  → USER PROMPT      [captioner/prompts.py]
        │    salience hot → interior lines stripped (present only)
        ├─ get_monologue_system_prompt  → SYSTEM PROMPT    [captioner/prompts.py]
@@ -313,11 +317,11 @@ moment gets the present only (north-star principle 6).
 | presence line — now from a STICKY UNCERTAIN BELIEF, not episodic events: "Someone's just come in." / "Someone's been here N minutes." / "Someone's here, just out of your view for a second." / "You can't see anyone right now, but someone was here a moment ago — they may still be." | `captioner._presence_believed/_presence_seen_now/_presence_since/_presence_last_seen`, set in `_assess_scene`; belief decays after `PRESENCE_BELIEF_DECAY_SECONDS`=240 | NEW June 28 — replaced discrete arrive/leave framing. The machine sees someone only when its gaze lands on them; the old "Someone just arrived / just walked in" re-fired every detection regain → perpetual fresh-arrival → salience permanently hot → interiority stripped every cycle (the run that produced this rewrite). Belief persists through gaps; only the OFF→ON edge is an arrival (spikes salience once). Out-of-view state states the machine's real uncertainty so it can WONDER instead of narrating an arrival |
 | "They've come and gone N times." | episodic pairs (debounced 90s) | ok |
 | [💭] drift turn (no prompt line — a whole-cycle preemption) | **THE DRIFT TURN (Sep 3 — interiority as population, not residue; rework of the Sep 2 story beat, build-queue #1)**: any quiet cycle can become a drift turn — EYES OPEN (artist's ruling, probe-verified same day: the blind variant narrated phantom present-tense perception — invented visitor action, "the foam finger in my hand" — while the sighted arm stayed honest and drifted on top of the present; debug/probe_drift_image_ab.py, DRIFT_SEND_IMAGE=false is the blind A/B arm), the frame + the stream as seed (ask lands after the image, closest to generation — the ordering law), the one deliberately HOT slot (DRIFT_TEMP 0.95; the cold distiller stays cold). Chosen per cycle by a roll, never a clock: p = DRIFT_BASE_P (0.05) × (1 + DRIFT_BOREDOM_GAIN (2.0) × boredom) → 5% calm, ~10-15% in measured quiet runs (boredom medians 0.58/0.98). The loneliness clocks are DELETED — STORY_BEAT_AFTER_S 2700s / MIN_GAP 3600s gated the daydream on solitude that doesn't occur under the no-overnight doctrine (it fired once, ever); the material-seeded deep variant (want + episodic lines) lives in git history (Sep 2) pending the artist's fork ruling (separate deep organ vs boredom-scaled depth). Never on hot salience, never while the arm draws (the frame says "between drawings" — it must not lie), never before first caption or with <2 stream entries. Output enters the STREAM via `drift.stream-frame` (BARE since the Sep 3 register audit — associative thought self-marks by form; if dream content starts reading as scene truth, a minimal marker there is the retreat lever). **FIREWALL**: drift output never reaches observe()/add_caption/hour_log/recent_captions — invention can never become a familiar concept, a compressed fact, or reflection material. Registry drift.system/drift.ask/drift.stream-frame + a declared `drift_turn` pass, panel-editable. Watch [💭] in logs (action=drift_turn, `stored` flag); measure the thought-shaped stream share with `debug/drift_share.py` (target ~15-20%; kernels alone were ~2%). Test: debug/test_drift_turn.py | NEW — first population-dosed interiority organ; watch the share and the conflation law |
-| [interior] "Nothing has happened for {duration}." | **B4 unchanged-ness fact (Aug 31)** — boredom's text channel: `prompts.get_unchanged_line`, registry `caption.unchanged`. Duration since the last episodic change (person_arrived / person_left / drew — the drew events' first reader — plus the newest new-concept sighting, floored at session start so it never claims unwatched time). Fires after `UNCHANGED_FACT_AFTER_S` (1200s) of stillness, re-doses at most every `UNCHANGED_FACT_MIN_GAP_S` (600s); a live event displaces it. FACT ONLY — no scripted affect; whether it reads as tedium, peace, or an itch is the machine's business (no-content-priors). The scalar boredom's temp nudge is unchanged and separate | NEW — watch for the line in quiet-stretch prompts; the register it provokes is the B4 experiment |
+| [interior] "Nothing has happened for {duration}." | **B4 unchanged-ness fact (Aug 31)** — boredom's text channel: `prompts.get_unchanged_line`, registry `caption.unchanged`. Duration since the last episodic change (person_arrived / person_left / drew — the drew events' first reader — plus world_changed (Sep 3: the pose-view referee's events give this clock the perceptual backing it lacked) and the newest new-concept sighting, floored at session start so it never claims unwatched time). Fires after `UNCHANGED_FACT_AFTER_S` (1200s) of stillness, re-doses at most every `UNCHANGED_FACT_MIN_GAP_S` (600s); a live event displaces it. FACT ONLY — no scripted affect; whether it reads as tedium, peace, or an itch is the machine's business (no-content-priors). The scalar boredom's temp nudge is unchanged and separate | NEW — watch for the line in quiet-stretch prompts; the register it provokes is the B4 experiment |
 | "You went for a closer look at the {label} — what you see now is just it, up close." | close-look beat (Aug 28, registry `caption.close-look`): fresh revisit glance + settled crop during it; the cycle's IMAGE is the upscaled crop, not the room. Paced by `CLOSE_LOOK_MIN_INTERVAL_S` (300s); never on salience/eye-contact/inward cycles; suppresses the glance-onset note for its glance (one channel per fact) | NEW — see Phase 5 in the open-vocab section |
 | [interior] introspective ctx — **ARC LINE Aug 22**: "My last drawings: X — drawn twice in a row, the latest about an hour ago. Before that: Y; earlier, Z." | drawing_memory.get_arc_line, executed only. Subjects come clean now: store-time distill (`_condense_subject`, one extractive call per drawing — the old `[:120]` cut kept the intent's wind-up and lost the reveal, so the line spoke "The subject is not the light bulb — that is too loud. It…"); render-time `_subject_phrase` rescues legacy entries (scaffold + negation-rhetoric strip, comfy-depiction fallback). Consecutive repeats folded via `_same_motif` (content-word overlap ≥0.5) into words — "drawn twice in a row" — so fixation is VISIBLE as a fact. Facts only: what, how many, order, age; any "why do I keep drawing this" is the machine's to conclude (no content priors — the elicitation is the door) | NEW — replaces the July 11 intent-phrase list ("My last drawings were of: <90-char truncations>") |
 | [interior] core facts line | core_facts place/drawings — **OCCASIONAL July 26** (the June 28 brief's #1 voice fix): injected when the inventory changes or every 6th quiet caption, not per call. Per-call injection made every caption re-describe the same list, and the model re-voiced it ("scattered dust, pale floorboards" → "the dust on the floorboards settles" — the unearned-ephemera awakening) | ok |
-| [interior] familiarity ("That pink shelf again...") | ChromaDB concept matches, every ~3rd caption | ok; concept near-dups sprawl a bit |
+| [interior] familiarity ("That pink shelf again...") | ChromaDB concept matches, every ~3rd caption. **"Still in the same spot" is code-attested since Sep 3**: requires a registry re-sighting near the stored anchor within WORLD_SAME_SPOT_WINDOW_S, else the softer "a few times now" line ships | ok; concept near-dups sprawl a bit |
 | [interior] reflection echo (`A thought you had earlier today: "…"`) | ChromaDB reflections, relevance-matched, every ~4th caption when no familiarity line | NEW — verify via REFLECTION log entries + echo in prompts |
 | drawing/paper state | state_manager | ok |
 | felt-state delta | compression | ok |
@@ -513,11 +517,19 @@ under-visited pan bucket ("look around"). Arrival triggers the existing
 stillness logic → stillness settles the gaze → detector fires on settle → the
 anchor sharpens: look→arrive→see is one loop with no new choreography. Person
 tracking outranks everything, untouched. Console: `[👁️] Glance (revisit):
-pink shelf → ...`. Structured consumers:
-`get_self_motion()` (efference signal, surfaced as `info["self_motion"]` in
-`_assess_scene` — NO prompt consumer yet, deliberately; "I was turning"
-framing is a separate prompt-tree step). Test:
+pink shelf → ...`. (STALE CLAIM REMOVED Sep 3: `get_self_motion()` /
+`info["self_motion"]` was documented here but never existed in code.) Test:
 `debug/test_spatial_registry.py` (angle math, EMA, policy split).
+**ANCHOR VERIFICATION (Sep 3, world-anchor build):** a detector re-sighting
+within WORLD_ANCHOR_CONFIRM_DEG (10°) of the stored anchor stamps
+`last_verified_ts` on the entry — position stability, not mere existence; a
+far sighting moves the EMA but verifies nothing. Consumed by
+`verified_recently_matching(label, window)` → the familiarity line's "still
+in the same spot" now REQUIRES a verification within WORLD_SAME_SPOT_WINDOW_S
+(900s), else the softer "a few times now" line ships (prompts must not claim
+positions the code can't vouch for). Passive in-view misses deliberately do
+NOT count against entries — CPU detector recall is noisy; deliberate revisit
+glances keep sole miss authority (the absence ladder above).
 
 **Phase 4 — cognizant glances (Aug 17): thought↔gaze closed both ways, plus
 discernment.** Three couplings on top of Phase 3:
