@@ -871,7 +871,7 @@ def get_reflection_echo_line(agent) -> str:
         # kernel and keep the label behavior (purple-era containment); the
         # refrain/parrot gates catch any verbatim re-say downstream.
         if kernel:
-            return f"Something you worked out {_age_phrase(m.get('timestamp', 0))}: {kernel.rstrip('.')}."
+            return f"From {_age_phrase(m.get('timestamp', 0))}: {kernel.rstrip('.')}."
         return f"Something that was on your mind {_age_phrase(m.get('timestamp', 0))}: {subject}."
     return ""
 
@@ -1088,9 +1088,9 @@ def get_familiarity_line(agent) -> str:
     if pick.get("is_new"):
         line = f"Something you haven't noticed before: {label_lower}."
     elif times >= 10 and sessions >= 2:
-        line = f"That {label_lower} again — it's always there."
+        line = f"The {label_lower}, still in the same spot."
     elif times >= 3:
-        line = f"The {label_lower} — you've noticed it a few times now."
+        line = f"You've noticed the {label_lower} a few times now."
     else:
         return ""
 
@@ -1538,7 +1538,7 @@ def build_memory_mode_prompt(agent) -> tuple:
                 # I've counted 2411 times"). The ledger keeps exact counts
                 # for gating; the voice gets words (artist's call, July 9).
                 if times >= 200:
-                    how_often = "countless times"
+                    how_often = "hundreds of times"
                 elif times >= 30:
                     how_often = "again and again"
                 elif times >= 10:
@@ -1564,7 +1564,7 @@ def build_memory_mode_prompt(agent) -> tuple:
                     except Exception:
                         pass
                     if horizon:
-                        since = ", there for as long as you can remember"
+                        since = ", there since before you started keeping track"
                     elif days >= 45:
                         since = ", first noticed months back"
                     elif days >= 21:
@@ -1848,7 +1848,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
                     facts = want_ledger.current_facts()
                     if facts and (facts["age_s"] >= WANT_ARC_TAIL_AFTER_S or facts["refusals"] > 0):
-                        refused_clause = f", and been refused {facts['refusals']} times" if facts["refusals"] > 0 else ""
+                        refused_clause = f"; {facts['refusals']} tries came to nothing" if facts["refusals"] > 0 else ""
                         desire_line += P("caption.desire-arc-tail").format(
                             duration=casual_time_string(facts["age_s"] / 60.0), refused_clause=refused_clause
                         )

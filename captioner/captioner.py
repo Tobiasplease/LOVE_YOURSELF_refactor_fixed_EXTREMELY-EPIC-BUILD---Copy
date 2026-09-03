@@ -1834,7 +1834,10 @@ class Captioner(MemoryMixin):
                             if _detox:
                                 video_prompt = user_prompt
                             else:
-                                video_prompt = f"You're seeing the last {duration:.0f} seconds.{motion_line}\n{user_prompt}"
+                                # Camera-narration wrapper removed Sep 3 (register
+                                # audit: a tone-driver riding every video call; the
+                                # inter-frame time markers now carry the structure).
+                                video_prompt = f"{motion_line.strip()}\n{user_prompt}" if motion_line.strip() else user_prompt
 
                             def _generate(_opts):
                                 return query_model_video(

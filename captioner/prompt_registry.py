@@ -216,8 +216,8 @@ FRAGMENTS = {
     },
     "story.stream-frame": {
         "title": "Story beat — stream frame",
-        "text": "A daydream, while nothing moved: {text}",
-        "note": "The temporal frame baked into the STORED stream entry (memory/present conflation law: every channel needs framing). Future cycles can carry the daydream forward, but it can never read as scene truth.",
+        "text": "{text}",
+        "note": "Went BARE Sep 3 (register audit — 'A daydream, while nothing moved:' was exactly the ephemeral-poetic cadence poisoning the voice; artist: as little baked phrasing as possible). Associative thought self-marks by form. WATCH: if dream content starts reading as scene truth in later captions, restore a minimal marker here — that is the retreat lever.",
         "used_by": ["story_beat"],
         "placeholders": ["text"],
     },
@@ -229,13 +229,13 @@ FRAGMENTS = {
     },
     "caption.no-paper": {
         "title": "No paper",
-        "text": "There is no paper on the desk — you can't draw until a sheet is put down.",
+        "text": "No paper on the desk — nothing to draw on.",
         "note": "Dead wiring until Aug 20: paper_present was never set. Now fed by the central paper check (state_manager.paper_state), TTL-gated by PAPER_STATE_TTL_S.",
         "used_by": ["caption", "caption_blind"],
     },
     "caption.paper-drawn": {
         "title": "Paper already drawn on",
-        "text": "The sheet on the desk already carries a drawing — you can't draw until a blank one replaces it.",
+        "text": "There's already a drawing on the sheet — you can't draw until a blank one replaces it.",
         "note": "Three-state paper check (Aug 20): the vlm check distinguishes a drawn-on sheet from a blank one; only blank allows drawing.",
         "used_by": ["caption", "caption_blind"],
     },
@@ -248,7 +248,7 @@ FRAGMENTS = {
     },
     "caption.desire-arc-tail": {
         "title": "Desire arc tail (B3)",
-        "text": " You've wanted this {duration}{refused_clause}.",
+        "text": " You've wanted this for {duration}{refused_clause}.",
         "note": "B3 curdling surface: appended to the desire line only when the want is old (WANT_ARC_TAIL_AFTER_S) or has been refused. Facts only — age and refusal count; what that feels like is the machine's to say. refused_clause is ', and been refused {n} times' or empty.",
         "used_by": ["caption", "caption_blind"],
         "placeholders": ["duration", "refused_clause"],
@@ -269,7 +269,7 @@ FRAGMENTS = {
     # --- Memory mode ------------------------------------------------------
     "memory.surface-frame": {
         "title": "Memory surfaces (frame)",
-        "text": "A memory surfaces — something from before, not happening now:",
+        "text": "From before, not now:",
         "note": "Temporal framing is load-bearing: unmarked memory injections read as present-tense scene truth and override live perception (the recurring core conflation issue).",
         "used_by": ["memory"],
     },
