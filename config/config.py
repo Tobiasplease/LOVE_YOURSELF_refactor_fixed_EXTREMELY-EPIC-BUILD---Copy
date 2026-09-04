@@ -1048,6 +1048,15 @@ PRESENCE_REARRIVAL_WINDOW_S = float(os.getenv("PRESENCE_REARRIVAL_WINDOW_S", 180
 # frame before an empty look may tick the decay.
 PRESENCE_ABSENCE_LOOK_TOLERANCE = float(os.getenv("PRESENCE_ABSENCE_LOOK_TOLERANCE", 18.0))
 
+# Sep 4 evening — presence stickiness (docs/presence-stickiness-sep4.md). Once the
+# belief has VERIFIED a departure, the stream window still carries the person for
+# many entries and the model continues them in the present tense (ablation: the
+# stream is the belief; a standing time-stamped absence fact fixes the tense).
+# The fact rides only while the belief is OFF and the recent stored stream still
+# mentions a person — self-limiting, it stops when the stream stops.
+ABSENCE_STANDING_ENABLED = os.getenv("ABSENCE_STANDING_ENABLED", "true").lower() == "true"
+ABSENCE_STANDING_TAIL = int(os.getenv("ABSENCE_STANDING_TAIL", 8))  # stored stream entries scanned for a person mention
+
 # Session re-ID (Aug 5, layer 2 of the false-arrival fix): person crops are
 # embedded into a rolling session gallery; when the presence belief has lapsed
 # and someone is detected, a match against recent sightings means the same

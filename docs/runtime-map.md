@@ -434,6 +434,17 @@ every pixel ~10px. Roles now:
   episodic person_arrived. Re-detection after a glance away is the SAME visit,
   so it no longer spikes salience. Only a genuine empty→occupied transition
   (after PRESENCE_BELIEF_DECAY_SECONDS of no sighting) counts.
+- STANDING ABSENCE FACT (Sep 4 evening, docs/presence-stickiness-sep4.md): the
+  one standing line the delta doctrine admits. `build_standing_absence_line`
+  rides `caption.absence-standing` ("He left a few minutes ago; the room's been
+  empty since.") in the world's turn while the belief is OFF and any of the last
+  ABSENCE_STANDING_TAIL=8 stored stream entries mention a person; yields to the
+  edge line on the departure cycle; the same line prefixes the blind inward beat
+  (same builder) and the drift ask (the inverse of drift.presence). Why: with
+  verified absence working the machine still said "still hunched in the grey
+  hoodie" for 15 min — the stream window is the belief (replay ablation: scrub
+  him from the stream → 0/5; add this fact → 0/5 present tense, mentions go past
+  tense). Onset/stop logged as `absence_standing` debug events.
 - pixel diff: only decides whether sending video is worth considering
 - ego_motion flag (servo delta >2°/frame): breathing sway (~1-1.2°) + gaze
   nudges flag frames OFTEN — that's expected; only used to pick steady

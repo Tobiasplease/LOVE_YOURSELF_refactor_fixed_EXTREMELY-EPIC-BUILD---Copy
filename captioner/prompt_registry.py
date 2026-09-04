@@ -265,6 +265,13 @@ FRAGMENTS = {
         "used_by": ["drift_turn"],
         "placeholders": ["who"],
     },
+    "caption.absence-standing": {
+        "title": "Standing absence fact (belief off, stream still carries them)",
+        "text": "{who} left {when}; the room's been empty since.",
+        "note": "Presence stickiness (Sep 4 evening, docs/presence-stickiness-sep4.md): with verified absence working, the machine still said 'the man in the grey hoodie is still hunched' for 15 min — the 24-entry stream is in-context evidence and the departure is a one-shot DELTA line. Replay ablation: stream scrubbed of him → 0/5 present-tense; this fact added → 0/5 present-tense, mentions go past tense ('since he left', 'until he comes back'). Rides in the world's turn only while the presence belief is OFF and any of the last ABSENCE_STANDING_TAIL stored stream entries mention a person (pronoun regex on the machine's own words — structure, not content); skipped on the edge cycle itself. Same line for caption, the blind inward beat and drift (drift.presence covers only belief ON). {who} follows the singular regime; {when} = 'just now' / 'a few minutes ago' from the belief's drop time. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind", "drift_turn"],
+        "placeholders": ["who", "when"],
+    },
     "caption.investigate": {
         "title": "Investigate glance — the familiar stranger",
         "text": "You're looking at the {label} — you've seen it many times without ever being sure of it.",

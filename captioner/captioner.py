@@ -312,6 +312,15 @@ class Captioner(MemoryMixin):
                 if not in_frame:
                     who = "He" if getattr(self, "_presence_singular_regime", True) else "Someone"
                     ask = P("drift.presence").format(who=who) + "\n" + ask
+            else:
+                # Sep 4 evening — the inverse hole: belief OFF, stream still
+                # carrying them; drift was re-seeding "he's still hunched" into
+                # the stream AND the reverie ledger with no counter-fact.
+                from captioner.prompts import build_standing_absence_line
+
+                absence_line = build_standing_absence_line(self)
+                if absence_line:
+                    ask = absence_line + "\n" + ask
         except Exception:
             pass
         if LORE_ENABLED:

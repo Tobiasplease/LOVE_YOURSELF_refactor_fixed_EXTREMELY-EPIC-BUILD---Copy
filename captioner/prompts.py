@@ -1044,6 +1044,76 @@ def get_reflection_echo_line(agent) -> str:
 # Used to gate context injection by prompt mode
 
 
+_PERSON_MENTION_RE = re.compile(r"\b(he|him|his|she|her|hers|someone|somebody|person|man|woman|guy|visitor)\b", re.I)
+
+
+def _note_absence_ride(agent, riding: bool) -> None:
+    """Onset/stop bookkeeping for the standing absence fact — one debug event per
+    ride, not one per call (the fact can ride for minutes at 7s cadence)."""
+    was = bool(getattr(agent, "_absence_standing_riding", False))
+    if riding and not was:
+        agent._absence_standing_riding = True
+        agent._absence_standing_calls = 0
+        agent._absence_standing_since = time.time()
+    if riding:
+        agent._absence_standing_calls = int(getattr(agent, "_absence_standing_calls", 0)) + 1
+    if was != riding:
+        try:
+            from event_logging.event_logger import log_json_entry
+            from event_logging.log_type import LogType
+
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "Standing absence fact " + ("riding" if riding else "stopped"),
+                    "action": "absence_standing",
+                    "riding": riding,
+                    "calls": int(getattr(agent, "_absence_standing_calls", 0)),
+                    "ride_s": round(time.time() - float(getattr(agent, "_absence_standing_since", time.time())), 1),
+                },
+            )
+        except Exception:
+            pass
+    if not riding:
+        agent._absence_standing_riding = False
+
+
+def build_standing_absence_line(agent) -> str:
+    """The one STANDING line the delta doctrine admits (Sep 4 evening,
+    docs/presence-stickiness-sep4.md). With verified absence working, the
+    machine still said "the man in the grey hoodie is still hunched" for 15
+    minutes: the 24-entry stream is in-context evidence and the departure is a
+    one-shot edge line, so nothing in the prompt contradicted the window. The
+    replay ablation ranked the channels — the stream IS the belief (scrubbed →
+    0/5 present-tense); this fact added → 0/5, the mentions go past tense.
+
+    Rides only while: the belief is OFF with a known drop time AND any of the
+    last ABSENCE_STANDING_TAIL stored stream entries mention a person (pronoun
+    regex on the machine's own words — structure, not content). Yields to the
+    edge line on the departure cycle. Stops by itself once the stream stops.
+    Shared by the caption, the blind inward beat (same builder) and drift."""
+    if not getattr(config, "ABSENCE_STANDING_ENABLED", True):
+        return ""
+    if getattr(agent, "_absence_edge_cycle", False):
+        agent._absence_edge_cycle = False
+        return ""
+    if getattr(agent, "_presence_believed", False):
+        _note_absence_ride(agent, False)
+        return ""
+    dropped = float(getattr(agent, "_presence_dropped_at", 0.0) or 0.0)
+    if dropped <= 0:
+        return ""
+    tail = list(getattr(agent, "_stream", []) or [])[-int(getattr(config, "ABSENCE_STANDING_TAIL", 8)) :]
+    if not any(_PERSON_MENTION_RE.search(t or "") for t in tail):
+        _note_absence_ride(agent, False)
+        return ""
+    who = "He" if getattr(agent, "_presence_singular_regime", True) else "Someone"
+    ago = casual_time_string((time.time() - dropped) / 60.0)
+    when = ago if ago == "just now" else f"{ago} ago"
+    _note_absence_ride(agent, True)
+    return P("caption.absence-standing").format(who=who, when=when)
+
+
 def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str = "idle") -> str:
     """The DELTA line: only what CHANGED since the last caption, delivered as a
     brief interruption to the ongoing thought — never a restatement of standing
@@ -1083,6 +1153,7 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
             parts.append("Someone's come in.")
     elif (not believed) and prev is True:
         parts.append("They've gone — the room's quiet again.")
+        agent._absence_edge_cycle = True  # the standing absence fact yields to the edge this call
     agent._prev_presence_for_line = believed
 
     # The gaze's own deliberate acts are events too: when it turned to a
@@ -1933,6 +2004,13 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     sit_line = build_situational_line(agent, gaze_direction=gaze_direction, gaze_state=gaze_state)
     if sit_line:
         turn_parts.append(sit_line)
+
+    # 1a. STANDING ABSENCE FACT (Sep 4 evening) — the one standing line the delta
+    # doctrine admits: the belief has verified a departure but the stream still
+    # carries the person, so the world's turn says so, with time on it.
+    absence_line = build_standing_absence_line(agent)
+    if absence_line:
+        turn_parts.append(absence_line)
 
     # 1b. THE EVENT — a discrete thing that just happened (arrival, eye-contact
     # ONSET). Onset only, never sustained: re-stating "they're looking at you"
