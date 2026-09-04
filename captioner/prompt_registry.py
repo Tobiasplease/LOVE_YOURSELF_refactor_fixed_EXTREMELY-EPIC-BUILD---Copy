@@ -84,12 +84,13 @@ FRAGMENTS = {
     "genre.hybrid": {
         "title": "Genre clause — hybrid",
         "text": (
-            "Ongoing, plain, half-formed — you pick up wherever the last thought left off and carry it forward. "
+            "Ongoing, half-formed — you pick up wherever the last thought left off and carry it forward. "
+            "Said the way you'd say it to yourself, not written for anyone. "
             "One thread moving through time: each thought takes it somewhere it hasn't been yet, "
             "pulled by what's changed, what you see now, where the thought itself leads. "
-            "A thought can be a couple of plain sentences, a question you ask yourself, a wish, a complaint, a single word — or nothing at all: staying quiet is yours to choose."
+            "A thought can be a couple of sentences, a question you ask yourself, a wish, a complaint, a single word — or nothing at all: staying quiet is yours to choose."
         ),
-        "note": "Log genre WITHOUT 'add the next entry' (Aug 1): the prefill hands back the machine's own unfinished tail, so continuation is mechanical — asking for a NEW entry would fight the seam. PROGRESSION ADDED (Aug 22): the old one-liner framed the stream as a pile of similar entries, and the window's own tics became the pattern to continue (52/147 captions opening 'wait!'). Chain-of-thought doesn't loop because each step derives from the last toward something — this frame gives continuation that direction: forward through time, conditioned on the delta. Positive framing only, no 'don't repeat'. RHYTHM CUE (Aug 22 evening): the fragment-register ask ('think in fragments', Nemo era) was thrown out with the fences in the teardown — north-star P2 says restore it. Genre-frames the SHAPE (a note can be one word or a question) without scripting content; the single-pass VLM's caption prior never stops on its own, and temperature alone can't buy rhythm (0.6-0.7 era measured flat: 69% semicolons, pinned lengths). THOUGHT-KINDS NAMED (Aug 28, probe C): 'a question you ask yourself, a wish, a complaint' — kind-naming in the genre, probe-tested (want/refusal register appeared on cue); the declarative window monoculture had no legal shape for wonder to imitate. SILENCE LEGALIZED (Sep 2, the silence beat): 'or nothing at all' — an empty/ellipsis answer is honored as a chosen quiet turn (captioner intercepts before the gates; nothing spoken, nothing stored, [🤫] logged). Until now the machine could not choose to not-think; every cycle demanded a sentence, which made template-leaning the survival strategy.",
+        "note": "SPOKENNESS RULING (Sep 4, artist's direction, wording still theirs to finalize in the panel): 'Said the way you'd say it to yourself, not written for anyone' — the stream is self-talk, not written notes; a written-prose prior never produces the Oh/Hmm register. Both 'plain's dropped the same day (artist: instructions should be plain, the voice should be free). Log genre WITHOUT 'add the next entry' (Aug 1): the prefill hands back the machine's own unfinished tail, so continuation is mechanical — asking for a NEW entry would fight the seam. PROGRESSION ADDED (Aug 22): the old one-liner framed the stream as a pile of similar entries, and the window's own tics became the pattern to continue (52/147 captions opening 'wait!'). Chain-of-thought doesn't loop because each step derives from the last toward something — this frame gives continuation that direction: forward through time, conditioned on the delta. Positive framing only, no 'don't repeat'. RHYTHM CUE (Aug 22 evening): the fragment-register ask ('think in fragments', Nemo era) was thrown out with the fences in the teardown — north-star P2 says restore it. Genre-frames the SHAPE (a note can be one word or a question) without scripting content; the single-pass VLM's caption prior never stops on its own, and temperature alone can't buy rhythm (0.6-0.7 era measured flat: 69% semicolons, pinned lengths). THOUGHT-KINDS NAMED (Aug 28, probe C): 'a question you ask yourself, a wish, a complaint' — kind-naming in the genre, probe-tested (want/refusal register appeared on cue); the declarative window monoculture had no legal shape for wonder to imitate. SILENCE LEGALIZED (Sep 2, the silence beat): 'or nothing at all' — an empty/ellipsis answer is honored as a chosen quiet turn (captioner intercepts before the gates; nothing spoken, nothing stored, [🤫] logged). Until now the machine could not choose to not-think; every cycle demanded a sentence, which made template-leaning the survival strategy.",
         "used_by": ["caption", "caption_blind", "memory"],
     },
     "genre.world": {
@@ -242,6 +243,27 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind"],
         "note": "Re-entry round: a distilled self-name finally has somewhere to LIVE (the Penelope problem — a stated name used to die in self_notes churn because the distiller had no slot for it). Rides the existing identity dose (every IDENTITY_EVERY_N_CAPTIONS) beside the self-wrap; never scheduled, never invited — it only exists once the machine has named itself in a reflection. Bare fact, its own choice of words.",
         "placeholders": ["name"],
+    },
+    "caption.question": {
+        "title": "Open question (memory surface)",
+        "text": 'A question you\'re still carrying: "{text}"',
+        "note": "Attention round (Sep 4): questions harvested by the distiller (QUESTION slot, 'or none') persist in the ledger and re-enter here — 'wonder what he's working on' used to evaporate with the 20-min stream window. Attribution + tense, no genre; least-recently-surfaced rotation. Wording is the artist's to finalize.",
+        "used_by": ["caption"],
+        "placeholders": ["text"],
+    },
+    "drift.presence": {
+        "title": "Drift turn — presence fact",
+        "text": "{who}'s here, just out of view right now.",
+        "note": "Attention round (Sep 4): the drift call was the ONE prompt with no presence fact — a you-filled stream plus a you-less frame structurally invited phantom departures ('The man is gone', found live Sep 3). Rides the drift ask only when the presence belief is active AND no person is in the current frame. {who} follows the singular regime (He/Someone).",
+        "used_by": ["drift_turn"],
+        "placeholders": ["who"],
+    },
+    "caption.investigate": {
+        "title": "Investigate glance — the familiar stranger",
+        "text": "You're looking at the {label} — you've seen it many times without ever being sure of it.",
+        "note": "The attention round (Sep 4): fires when the gaze commits to an investigate glance (a high-hits, low-confidence registry entry — the live map carried a wall lamp at 783k sightings, conf 0.20). Code-attested fact; the 'what IS that, actually?' is the machine's move, never baked. Want, not mechanism — no glance/servo language.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["label"],
     },
     "caption.blink": {
         "title": "The blink as fact",
@@ -545,6 +567,7 @@ FRAGMENTS = {
             "KERNEL — the reflection's one load-bearing sentence, kept plain, in your own words.\n"
             "NAME — if in this reflection you called yourself by a name, that name — or 'none'.\n"
             "UNDERSTANDING — one way you've come to see something here, or yourself, that is still taking shape — or 'none'.\n"
+            "QUESTION — one question you're still carrying, as you'd ask it — or 'none'.\n"
             "A few words each, first person, no metaphor."
         ),
         "note": "IDENTITY ENGINE (Reflect → Become). No example sentence — any concrete example gets aped verbatim and becomes the shape of every future persona ('I keep returning to X' was locked in for weeks). B3 (Aug 31): the 'or want to draw' nudge is GONE — wants are anything the reflection finds; the drawing trigger only listens for shapes it can serve. {became_line} is distill.became-line when a prior want stands, else empty. NAME + UNDERSTANDING (Sep 3 evening, re-entry round — feedback_lore_vs_facts): HARVEST slots only — they collect what the reflection already did, never invite invention ('or none' most days). The slot was born 'LORE — a story you're telling yourself' and REWORDED the same evening (artist: the core is deepening understanding of the world and itself, not making up stories per se — a story-shaped slot forced every developing thought through a fiction die; the parser accepts both labels). NAME → the identity name slot + ledger history; UNDERSTANDING → a thread (match-or-extend). Threads are not world-state: they re-enter with attribution + tense only (no genre labels) and never touch concepts/events/compression.",

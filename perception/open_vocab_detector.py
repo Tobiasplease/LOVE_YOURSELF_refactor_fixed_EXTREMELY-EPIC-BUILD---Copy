@@ -356,12 +356,28 @@ class OpenVocabDetectorThread(threading.Thread):
                 from vision.gaze import get_glance_info
 
                 gi = get_glance_info()
-                if calm and gi and gi["kind"] == "revisit":
+                if calm and gi and gi["kind"] in ("revisit", "investigate"):
                     anchor = spatial_registry.get_anchor(gi["label"])
                     if anchor and abs(pan - anchor[0]) < SPATIAL_REGISTRY_HFOV / 3 and abs(tilt - anchor[1]) < SPATIAL_REGISTRY_VFOV / 3:
                         outcome = spatial_registry.note_glance_result(gi["label"], gi["label"] in terms_now)
                         if outcome and outcome != "seen":
                             print(f"[OpenVocab] Glance check '{gi['label']}': {outcome}")
+                        try:
+                            from event_logging.event_logger import log_json_entry
+                            from event_logging.log_type import LogType
+
+                            log_json_entry(
+                                LogType.DEBUG,
+                                {
+                                    "message": f"Glance check '{gi['label']}': {outcome}",
+                                    "action": "glance_check",
+                                    "kind": gi["kind"],
+                                    "term": gi["label"],
+                                    "outcome": outcome,
+                                },
+                            )
+                        except Exception:
+                            pass
             except Exception:
                 pass
             try:

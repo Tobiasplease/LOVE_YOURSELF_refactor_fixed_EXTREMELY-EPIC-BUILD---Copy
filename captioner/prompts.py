@@ -1045,6 +1045,12 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         if gi and gi["kind"] == "revisit" and gi["started"] != getattr(agent, "_last_glance_noted", None):
             agent._last_glance_noted = gi["started"]
             parts.append(f"Turned to look where the {gi['label']} should be.")
+        elif gi and gi["kind"] == "investigate" and gi["started"] != getattr(agent, "_last_glance_noted", None):
+            # the attention round (Sep 4): the familiar-stranger fact — code-
+            # attested (thousands of sightings, detector never sure). The
+            # wondering it invites is the machine's own; want, not mechanism.
+            agent._last_glance_noted = gi["started"]
+            parts.append(P("caption.investigate").format(label=gi["label"]))
     except Exception:
         pass
 
@@ -1164,6 +1170,30 @@ def get_lore_line(agent) -> str:
         pick = threads[rr % len(threads)]
         agent._lore_thread_rr = rr + 1
         return P("caption.lore").format(text=pick["text"])
+    except Exception:
+        return ""
+
+
+def get_question_line(agent) -> str:
+    """An open question's re-entry (Sep 4, attention round) — wonders finally
+    outlive the stream window. Fifth source in the memory-surface rotation,
+    own pacing; least-recently-surfaced first. The question is the machine's
+    own words; whether to chase, answer, or drop it stays its move."""
+    try:
+        from config.config import LORE_ENABLED, QUESTION_LINE_EVERY_N
+
+        if not LORE_ENABLED:
+            return ""
+        counter = getattr(agent, "_question_line_counter", 0) + 1
+        agent._question_line_counter = counter
+        if counter % max(QUESTION_LINE_EVERY_N, 1) != 0:
+            return ""
+        from utils.lore_ledger import lore_ledger
+
+        q = lore_ledger.pick_question()
+        if not q:
+            return ""
+        return P("caption.question").format(text=q["text"])
     except Exception:
         return ""
 
@@ -1951,6 +1981,7 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             ("drawing_echo", get_drawing_echo_line),
             ("reflection_echo", get_reflection_echo_line),
             ("lore", get_lore_line),
+            ("question", get_question_line),
         ]
         rr = int(getattr(agent, "_memory_surface_rr", 0) or 0)
         n_src = len(sources)

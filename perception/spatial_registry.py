@@ -136,13 +136,35 @@ class SpatialRegistry:
         """A place worth looking: usually the known object gone longest
         unchecked (staleness-weighted, recent discoveries boosted, and a term
         the monologue just spoke of pulls hardest — thought leads gaze),
-        sometimes an under-visited stretch of the room (explore). Returns
+        sometimes an under-visited stretch of the room (explore), and
+        sometimes — the attention round (Sep 4) — a FAMILIAR STRANGER: a
+        thing seen thousands of times that the detector never got sure of
+        (the live map carried a wall lamp at 783k sightings, conf 0.20).
+        "What is that, actually?" was never askable; the lottery only ever
+        redistributed attention among the already-settled. Returns
         {pan, tilt, term|None, kind} or None if the map is empty."""
+        from config.config import INVESTIGATE_CONF_CEILING, INVESTIGATE_MIN_HITS, INVESTIGATE_WEIGHT
+
         now = time.time()
         with self.lock:
             entries = [(t, dict(e)) for t, e in self.entries.items()]
         if not entries or random.random() < explore_weight:
             return self._explore_target(entries)
+        strangers = [
+            (t, e)
+            for t, e in entries
+            if e.get("conf", 1.0) <= INVESTIGATE_CONF_CEILING
+            and e.get("hits", 0) >= INVESTIGATE_MIN_HITS
+            and now - e.get("last_investigated_ts", 0.0) > 900.0
+        ]
+        if strangers and random.random() < INVESTIGATE_WEIGHT:
+            # least-sure first, weighted — uncertainty is the pull
+            weights = [(INVESTIGATE_CONF_CEILING + 0.05 - e.get("conf", 0.0)) for _, e in strangers]
+            term, e = random.choices(strangers, weights=weights)[0]
+            with self.lock:
+                if term in self.entries:
+                    self.entries[term]["last_investigated_ts"] = now
+            return {"pan": self._clamp_pan(e["pan"]), "tilt": self._clamp_tilt(e["tilt"]), "term": term, "kind": "investigate"}
         weights = []
         for t, e in entries:
             staleness = min(now - e["last_seen"], 3600.0) + 30.0

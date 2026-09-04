@@ -1040,7 +1040,13 @@ PRESENCE_BELIEF_DECAY_SECONDS = 240
 # record, no salience spike. A confirmed departure is only RECORDED once
 # the absence outlasts the same window (backdated to when they vanished).
 PRESENCE_REARRIVAL_WINDOW_S = float(os.getenv("PRESENCE_REARRIVAL_WINDOW_S", 1800))
-PRESENCE_ABSENCE_LOOK_TOLERANCE = 30.0  # deg; gaze within this of last-seen pan AND tilt = "looking there", decay may tick
+# TIGHTENED 30→18 (Sep 4, attention round): 30° was the full frame half-width
+# (HFOV 60), so a person at the frame EDGE — where the skeleton gate rightly
+# refuses partial bodies — counted as looked-for-and-absent, and the belief
+# died on evidence never collected ("The man is gone" after a few degrees of
+# turn, the day-one complaint). 18° keeps last-seen comfortably inside the
+# frame before an empty look may tick the decay.
+PRESENCE_ABSENCE_LOOK_TOLERANCE = float(os.getenv("PRESENCE_ABSENCE_LOOK_TOLERANCE", 18.0))
 
 # Session re-ID (Aug 5, layer 2 of the false-arrival fix): person crops are
 # embedded into a rolling session gallery; when the presence belief has lapsed
@@ -1148,6 +1154,24 @@ DRIFT_SEND_IMAGE = os.getenv("DRIFT_SEND_IMAGE", "true").lower() in ("true", "1"
 # as a dosed arc-line, the identity dose carries the name, and ~1/3 of
 # drifts open from an alive thread (the deep-story fork resolved: the
 # material-seeded variant is now the lore-seeded variant).
+# The attention round (Sep 4 — docs/attention-round-sep4.md). Investigate
+# glances: the gaze sometimes commits to a FAMILIAR STRANGER — a registry
+# entry with many sightings the detector never got sure of (wall lamp: 783k
+# hits, conf 0.20) — instead of redistributing attention among the settled.
+# The cycle then carries the attested fact ("seen it many times without ever
+# being sure of it") and the close look accepts the glance; what-is-that is
+# the machine's move. Per-term 15-min cooldown lives in the registry.
+INVESTIGATE_WEIGHT = float(os.getenv("INVESTIGATE_WEIGHT", 0.25))
+INVESTIGATE_CONF_CEILING = float(os.getenv("INVESTIGATE_CONF_CEILING", 0.35))
+INVESTIGATE_MIN_HITS = int(os.getenv("INVESTIGATE_MIN_HITS", 500))
+# Open questions: the distiller harvests a question the reflection is still
+# carrying ("or none" — harvest, never invitation); questions persist in the
+# lore ledger and re-enter as a dosed line in the memory-surface rotation.
+# Wonders finally outlive the stream window ("wonder what he's working on"
+# used to evaporate in 20 minutes).
+QUESTION_LINE_EVERY_N = int(os.getenv("QUESTION_LINE_EVERY_N", 5))
+QUESTIONS_MAX = 8
+
 # The emotional arc channel (Sep 4 — feeling gets the want-ledger treatment,
 # third application of the proven shape). Every mood read joins a session
 # trajectory (felt_history); the arc line states the trajectory as FACT in

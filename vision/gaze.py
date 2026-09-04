@@ -705,6 +705,18 @@ def _update_registry_glance(now):
     _glance_kind = pick["kind"]
     _glance_started = now
     print(f"[👁️] Glance ({pick['kind']}): {_glance_label} → pan={pick['pan']:.0f}° tilt={pick['tilt']:.0f}°")
+    try:
+        # Glance choices were console-only — the selector was random AND
+        # unaccountable (Sep 3 audit); now every choice is a logged fact
+        from event_logging.event_logger import log_json_entry
+        from event_logging.log_type import LogType
+
+        log_json_entry(
+            LogType.DEBUG,
+            {"message": f"Glance ({pick['kind']}): {_glance_label}", "action": "glance_start", "kind": pick["kind"], "term": pick["term"]},
+        )
+    except Exception:
+        pass
     return _glance_target
 
 

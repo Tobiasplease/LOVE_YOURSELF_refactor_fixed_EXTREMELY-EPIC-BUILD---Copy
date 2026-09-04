@@ -299,6 +299,21 @@ class Captioner(MemoryMixin):
         # instead of restarting from the room every time. The seed rides as
         # its own telling ("You've been imagining"), never as scene truth.
         ask = P("drift.ask")
+        # PRESENCE FACT (Sep 4, attention round): the drift was the one call
+        # with no presence line — a you-filled stream + a you-less frame
+        # structurally invited phantom departures. One fact, only when the
+        # belief is active and the frame is person-empty.
+        try:
+            if getattr(self, "_presence_believed", False):
+                from captioner.frame_buffer import frame_buffer
+
+                recent = frame_buffer.get_recent_with_metadata(seconds=6, max_frames=1)
+                in_frame = bool(recent and (recent[-1].get("detection") or {}).get("person"))
+                if not in_frame:
+                    who = "He" if getattr(self, "_presence_singular_regime", True) else "Someone"
+                    ask = P("drift.presence").format(who=who) + "\n" + ask
+        except Exception:
+            pass
         if LORE_ENABLED:
             try:
                 import random as _r
@@ -1389,7 +1404,9 @@ class Captioner(MemoryMixin):
             from vision.gaze import get_last_glance
 
             g = get_last_glance()
-            if not g or g["kind"] != "revisit" or now - g["started"] > CLOSE_LOOK_MAX_AGE_S:
+            # investigate glances (Sep 4, attention round) earn the crop too —
+            # "what is that, actually?" deserves the close look most of all
+            if not g or g["kind"] not in ("revisit", "investigate") or now - g["started"] > CLOSE_LOOK_MAX_AGE_S:
                 return None
             from perception.open_vocab_detector import get_detector
 

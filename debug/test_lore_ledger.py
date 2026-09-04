@@ -83,19 +83,23 @@ def test_distill_harvest():
 
     parse = ContextCompressionEngine._parse_distillation
     r = parse(
-        None, "TRAIT: I stall.\nBELIEF: none\nWANT: to draw\nKERNEL: I saw it plain.\nNAME: Penelope\nUNDERSTANDING: The finger is a lighthouse."
+        None,
+        "TRAIT: I stall.\nBELIEF: none\nWANT: to draw\nKERNEL: I saw it plain.\nNAME: Penelope\n"
+        "UNDERSTANDING: The finger is a lighthouse.\nQUESTION: What does he build all day?",
     )
-    trait, belief, want, kernel, became, name, lore = r
+    trait, belief, want, kernel, became, name, lore, question = r
     check("name parsed", name == "Penelope")
     check("understanding parsed", lore == "The finger is a lighthouse.")
+    check("question parsed", question == "What does he build all day?")
     check("legacy LORE label still parses", parse(None, "LORE: old label")[6] == "old label")
     check("none stays empty", belief == "")
-    r2 = parse(None, "TRAIT: none\nNAME: none\nLORE: none")
-    check("all-none harvest is empty", r2[5] == "" and r2[6] == "")
+    r2 = parse(None, "TRAIT: none\nNAME: none\nLORE: none\nQUESTION: none")
+    check("all-none harvest is empty", r2[5] == "" and r2[6] == "" and r2[7] == "")
     txt = FRAGMENTS["distill.user"]["text"]
     check("template carries NAME slot", "NAME —" in txt)
     check("template carries UNDERSTANDING slot", "UNDERSTANDING —" in txt)
-    check("slots are harvest-only ('or none')", txt.count("or 'none'") >= 2)
+    check("template carries QUESTION slot", "QUESTION —" in txt)
+    check("slots are harvest-only ('or none')", txt.count("or 'none'") >= 3)
 
 
 def test_drift_integration():

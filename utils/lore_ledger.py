@@ -45,7 +45,7 @@ class LoreLedger:
     def __init__(self, state_path: str = None):
         self._lock = threading.Lock()
         self.state_path = state_path or _LEDGER_PATH
-        self._data = {"reveries": [], "threads": [], "name": None, "name_history": []}
+        self._data = {"reveries": [], "threads": [], "name": None, "name_history": [], "questions": []}
         self._load()
 
     def _load(self):
@@ -133,6 +133,53 @@ class LoreLedger:
             if not alive:
                 return None
             pick = min(alive, key=lambda t: t.get("last_surfaced_ts", 0.0))
+            pick["times_surfaced"] = pick.get("times_surfaced", 0) + 1
+            pick["last_surfaced_ts"] = time.time()
+            self._save()
+            return dict(pick)
+
+    # -- open questions (Sep 4, attention round) -------------------------
+
+    def note_question(self, text: str) -> bool:
+        """A question the reflection is still carrying — harvested by the
+        distiller, never invited. Near-duplicates refresh the standing one;
+        the store caps at QUESTIONS_MAX with the oldest fading."""
+        from config.config import QUESTIONS_MAX
+
+        text = (text or "").strip()
+        if len(text) < 8 or "?" not in text:
+            return False
+        now = time.time()
+        new_words = _content_words(text)
+        with self._lock:
+            qs = self._data.setdefault("questions", [])
+            for q in qs:
+                if q.get("status") == "open":
+                    old_words = _content_words(q.get("text", ""))
+                    if old_words and len(new_words & old_words) / max(1, len(new_words | old_words)) >= 0.4:
+                        q["last_ts"] = now
+                        q["times_affirmed"] = q.get("times_affirmed", 0) + 1
+                        self._save()
+                        return True
+            qs.append({"text": text[:220], "first_ts": now, "last_ts": now, "times_affirmed": 0, "times_surfaced": 0, "status": "open"})
+            open_qs = [q for q in qs if q.get("status") == "open"]
+            if len(open_qs) > QUESTIONS_MAX:
+                min(open_qs, key=lambda q: q.get("last_ts", 0))["status"] = "faded"
+            self._save()
+            return True
+
+    def open_questions(self, n: int = 8):
+        with self._lock:
+            qs = [dict(q) for q in self._data.get("questions", []) if q.get("status") == "open"]
+        return sorted(qs, key=lambda q: -q.get("last_ts", 0))[:n]
+
+    def pick_question(self):
+        """Least-recently surfaced open question, for the re-entry line."""
+        with self._lock:
+            qs = [q for q in self._data.get("questions", []) if q.get("status") == "open"]
+            if not qs:
+                return None
+            pick = min(qs, key=lambda q: q.get("last_surfaced_ts", 0.0))
             pick["times_surfaced"] = pick.get("times_surfaced", 0) + 1
             pick["last_surfaced_ts"] = time.time()
             self._save()

@@ -705,7 +705,7 @@ class ContextCompressionEngine:
             )
             if not response or not isinstance(response, str):
                 return None
-            trait, belief, want, kernel, became, name, lore = self._parse_distillation(response)
+            trait, belief, want, kernel, became, name, lore, question = self._parse_distillation(response)
             now = time.time()
             changed = []
             if trait and self._valid_self_fact(trait):
@@ -745,7 +745,7 @@ class ContextCompressionEngine:
             try:
                 from config.config import LORE_ENABLED
 
-                if LORE_ENABLED and (name or lore):
+                if LORE_ENABLED and (name or lore or question):
                     from utils.lore_ledger import lore_ledger
 
                     if name and lore_ledger.note_name(name):
@@ -755,6 +755,8 @@ class ContextCompressionEngine:
                         outcome = lore_ledger.note_lore(lore)
                         if outcome:
                             changed.append(f"lore[{outcome}]={lore[:60]}")
+                    if question and lore_ledger.note_question(question):
+                        changed.append(f"question={question[:60]}")
             except Exception:
                 pass
             if changed:
@@ -773,10 +775,10 @@ class ContextCompressionEngine:
             return None
 
     def _parse_distillation(self, response: str) -> tuple:
-        """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL / NAME / LORE; strips any leaked label; 'none'/blank → empty."""
+        """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL / NAME / LORE / QUESTION; strips any leaked label; 'none'/blank → empty."""
         import re
 
-        trait = belief = want = kernel = became = name = lore = ""
+        trait = belief = want = kernel = became = name = lore = question = ""
 
         def _val(line: str, label_re: str) -> str:
             v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
@@ -799,7 +801,9 @@ class ContextCompressionEngine:
                 name = _val(line, r"^name\b[\s:：—–\-]*")
             elif low.startswith(("understanding", "lore")):
                 lore = _val(line, r"^(?:understanding|lore)\b[\s:：—–\-]*")
-        return trait, belief, want, kernel, became, name, lore
+            elif low.startswith("question"):
+                question = _val(line, r"^question\b[\s:：—–\-]*")
+        return trait, belief, want, kernel, became, name, lore, question
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).
