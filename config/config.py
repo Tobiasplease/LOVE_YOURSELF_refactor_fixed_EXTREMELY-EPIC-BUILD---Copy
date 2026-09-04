@@ -1164,7 +1164,9 @@ DRIFT_SEND_IMAGE = os.getenv("DRIFT_SEND_IMAGE", "true").lower() in ("true", "1"
 # = cooler/shorter, stirred = hotter/more room). Both A/B-revertable.
 FELT_FRAME_ENABLED = os.getenv("FELT_FRAME_ENABLED", "true").lower() in ("true", "1", "yes")
 FELT_SAMPLING_ENABLED = os.getenv("FELT_SAMPLING_ENABLED", "true").lower() in ("true", "1", "yes")
-AROUSAL_TEMP_SPAN = float(os.getenv("AROUSAL_TEMP_SPAN", 0.2))  # temp swing across arousal 0->1 (±0.1 around the base)
+AROUSAL_TEMP_SPAN = float(
+    os.getenv("AROUSAL_TEMP_SPAN", 0.35)
+)  # temp swing across arousal 0->1 (±0.175 — widened Sep 4 late: ±0.1 was a whisper; drained ~0.72, stirred ~1.0 capped)
 
 # The attention round (Sep 4 — docs/attention-round-sep4.md). Investigate
 # glances: the gaze sometimes commits to a FAMILIAR STRANGER — a registry
