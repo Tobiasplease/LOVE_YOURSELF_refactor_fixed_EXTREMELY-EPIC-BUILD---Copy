@@ -194,9 +194,13 @@ class DrawingMemory:
         vocabularies in one call, and the machine argued with the number
         ("31 feels wrong"). A ticking integer in a recurring line gets
         stolen for whatever story wants a number."""
-        from captioner.prompts import casual_time_string
+        from captioner.prompts import _drawing_age_phrase
 
-        phrase = casual_time_string(elapsed_s / 60)
+        # Same day-scale word ladder as the system age line (Sep 4): "about
+        # 23 hours" in the arc bred the identical number-fixation the ladder
+        # was built to kill — and the two channels must share one vocabulary
+        # (the seventeen-days law's own point).
+        phrase = _drawing_age_phrase(elapsed_s)
         return phrase if phrase == "just now" else f"{phrase} ago"
 
     @staticmethod

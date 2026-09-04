@@ -1238,6 +1238,11 @@ BASE_VOICE_DETOX = False
 # is happening, stretches when nothing has happened for a while
 CAPTION_INTERVAL_LIVE = 4  # cadence while salience is hot (motion, arrival, fresh eye contact)
 CAPTION_INTERVAL_QUIET = 12  # cadence after a long quiet stretch
+# REST (Sep 4): a real pause. Fires only when the quiet is WORLD-VERIFIED
+# (pose-referee confirms, WORLD_STILL_MIN_CONFIRMS) and the body reads
+# drained (arousal < 0.25) — thought slows when nothing pulls and nothing
+# stirs. Salience snaps back to 4s instantly. The feed finally breathes.
+CAPTION_INTERVAL_REST = float(os.getenv("CAPTION_INTERVAL_REST", 28))
 CAPTION_QUIET_AFTER = 120  # seconds without salience before the cadence stretches
 
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale

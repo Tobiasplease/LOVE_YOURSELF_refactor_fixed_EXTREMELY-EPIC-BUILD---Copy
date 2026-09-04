@@ -1375,6 +1375,23 @@ class Captioner(MemoryMixin):
         if hot:
             return CAPTION_INTERVAL_LIVE
         if now - self._last_salience_time > CAPTION_QUIET_AFTER:
+            # REST (Sep 4, artist: "no actual pauses, no discernible pacing").
+            # When the quiet is world-verified AND the body reads drained, the
+            # cadence stretches toward a real pause — thought slows when
+            # nothing pulls and nothing stirs. Any salience event snaps it
+            # back instantly (the hot path above never rests). Honest silence
+            # in the FEED, not just short thoughts.
+            try:
+                from config.config import CAPTION_INTERVAL_REST, WORLD_STILL_MIN_CONFIRMS
+
+                if CAPTION_INTERVAL_REST > CAPTION_INTERVAL_QUIET and getattr(self, "_world_confirms", 0) >= WORLD_STILL_MIN_CONFIRMS:
+                    from captioner.context_compression import context_compressor as _cc
+
+                    _read = _cc.get_last_mood_read()
+                    if _read and float(_read.get("arousal", 0.5)) < 0.25:
+                        return CAPTION_INTERVAL_REST
+            except Exception:
+                pass
             return CAPTION_INTERVAL_QUIET
         return CAPTION_INTERVAL
 
