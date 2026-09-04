@@ -1761,6 +1761,29 @@ class Captioner(MemoryMixin):
                         # without buying gibberish where it is sharp.
                         _is_bored = self.boredom > 0.7
 
+                        # THE BODY REACHES THE VOICE (Sep 4, dynamic-frame
+                        # build): arousal has been computed every cycle since
+                        # July and never touched the voice — the mood engine
+                        # fed servo and breathing while the words stayed
+                        # emotionally decoupled. Drained speaks cooler and
+                        # shorter; stirred gets heat and room. Bounded small
+                        # (±half AROUSAL_TEMP_SPAN) and capped at 1.0 — above
+                        # it Qwen drifts into CJK.
+                        _arousal_adj = 0.0
+                        _arousal = None
+                        try:
+                            from config.config import AROUSAL_TEMP_SPAN, FELT_SAMPLING_ENABLED
+
+                            if FELT_SAMPLING_ENABLED:
+                                from captioner.context_compression import context_compressor as _cc2
+
+                                _read = _cc2.get_last_mood_read()
+                                if _read:
+                                    _arousal = float(_read.get("arousal", 0.35))
+                                    _arousal_adj = AROUSAL_TEMP_SPAN * (_arousal - 0.5)
+                        except Exception:
+                            _arousal_adj = 0.0
+
                         # LENGTH RHYTHM (Aug 28): the model almost never stops
                         # on its own (70% of 640cb96e's caption responses ended
                         # at the cap), so the cap IS the length — and one
@@ -1781,9 +1804,16 @@ class Captioner(MemoryMixin):
                             _num_predict = 110
                         else:
                             _num_predict = 80
+                        if _arousal is not None and _num_predict >= 80:
+                            # stirred gets room, drained runs short — never
+                            # touching the deliberate small beats
+                            if _arousal > 0.6:
+                                _num_predict += 25
+                            elif _arousal < 0.25:
+                                _num_predict = max(50, _num_predict - 25)
 
                         gen_options = {
-                            "temperature": (CAPTION_TEMP_BORED if _is_bored else CAPTION_TEMP),
+                            "temperature": min(1.0, max(0.6, (CAPTION_TEMP_BORED if _is_bored else CAPTION_TEMP) + _arousal_adj)),
                             "top_p": CAPTION_TOP_P,
                             "min_p": CAPTION_MIN_P,
                             # 1.0 since Aug 28 (CAPTION_REPEAT_PENALTY): the

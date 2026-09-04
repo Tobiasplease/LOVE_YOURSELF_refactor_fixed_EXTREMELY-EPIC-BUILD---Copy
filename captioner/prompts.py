@@ -133,11 +133,29 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # elicitation stays; it carries no stored content.
     detox = bool(getattr(config, "BASE_VOICE_DETOX", False))
 
-    # Felt-state rides ONLY in the user turn (felt_delta) since Aug 22 — it
-    # appeared here too ("Right now: {felt}.") and the same model-written
-    # phrase twice per call read as emphasis (P2: one channel per fact) and
-    # anchored metaphor loops ("heavy ink threatens to spill" colonized six
-    # consecutive stream entries).
+    # THE DYNAMIC FRAME (Sep 4, artist's diagnosis: "something in the system
+    # is constraining the basin"). The register audit stripped stance
+    # REPETITION and took stance VARIATION with it — every call carried the
+    # identical stance-free frame, and a model given no tonal signal regresses
+    # to its modal register ("act angry" works because it's FRAME-level). The
+    # felt state returns to the frame, dynamically, in the machine's OWN
+    # lease-gated words — the old "You are an (angry) drawing machine" made
+    # doctrine-safe: it varies with real state, so it can't wallpaper. P2
+    # holds: the user turn now carries only the CHANGE ("X, then Y"), a
+    # different fact than the standing stance. Aug 22's double-channel scar
+    # (both channels, same phrase, every call) stays fixed by the split.
+    if not detox:
+        try:
+            from config.config import FELT_FRAME_ENABLED
+
+            if FELT_FRAME_ENABLED:
+                from captioner.context_compression import context_compressor as _cc
+
+                _felt = (_cc.get_felt_state() or "").strip()
+                if _felt:
+                    base += P("monologue.felt-frame").format(felt=_felt)
+        except Exception:
+            pass
 
     # Time since the pen last touched paper — always present, even under
     # detox (it's event provenance, not model-generated text). This is how
@@ -2019,10 +2037,14 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
             from captioner.context_compression import context_compressor
 
             prev_felt, curr_felt = context_compressor.get_felt_state_delta()
+            from config.config import FELT_FRAME_ENABLED as _ffe
+
             if curr_felt:
                 if prev_felt and prev_felt != curr_felt:
+                    # the CHANGE is the user-turn's fact; the standing stance
+                    # lives in the frame now (Sep 4 dynamic-frame split, P2)
                     prompt_parts.append(f"{prev_felt}, then {curr_felt}.")
-                else:
+                elif not _ffe:
                     prompt_parts.append(f"{curr_felt}.")
         except Exception:
             pass

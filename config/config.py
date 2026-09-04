@@ -1154,6 +1154,18 @@ DRIFT_SEND_IMAGE = os.getenv("DRIFT_SEND_IMAGE", "true").lower() in ("true", "1"
 # as a dosed arc-line, the identity dose carries the name, and ~1/3 of
 # drifts open from an alive thread (the deep-story fork resolved: the
 # material-seeded variant is now the lore-seeded variant).
+# THE DYNAMIC FRAME (Sep 4 evening — the artist's diagnosis: the basin was
+# our stance-free architecture, not the model's weights. "Act angry" works
+# because it's frame-level; every call here carried an identical stance-free
+# frame, so the model regressed to its modal register. The register audit
+# killed stance REPETITION and took stance VARIATION with it.) Two returns:
+# the felt phrase (machine's own words, lease-gated) rides the SYSTEM frame
+# and changes with real state; arousal reaches the voice's sampling (drained
+# = cooler/shorter, stirred = hotter/more room). Both A/B-revertable.
+FELT_FRAME_ENABLED = os.getenv("FELT_FRAME_ENABLED", "true").lower() in ("true", "1", "yes")
+FELT_SAMPLING_ENABLED = os.getenv("FELT_SAMPLING_ENABLED", "true").lower() in ("true", "1", "yes")
+AROUSAL_TEMP_SPAN = float(os.getenv("AROUSAL_TEMP_SPAN", 0.2))  # temp swing across arousal 0->1 (±0.1 around the base)
+
 # The attention round (Sep 4 — docs/attention-round-sep4.md). Investigate
 # glances: the gaze sometimes commits to a FAMILIAR STRANGER — a registry
 # entry with many sightings the detector never got sure of (wall lamp: 783k

@@ -74,6 +74,13 @@ FRAGMENTS = {
         "note": "Moved OUT of the situation frames Aug 28 (artist's call: the inner voice shouldn't recite the drawing manual every caption) and INTO the drawing chain's stocktake + intent system prompts, where it carries two scars: medium truth at the intent stage (Aug 15: a finger rendered RED because intent had never been told — body color-words beat the render's b/w anchor) and the fine-tipped/thin-line bias (Aug 17: thick-marker renders made worm-maze DSV; --thin can't split fused fat strokes). The render call has its own fuller spec.",
         "used_by": ["drawing_review", "drawing_intent"],
     },
+    "monologue.felt-frame": {
+        "title": "Felt state — the dynamic frame",
+        "text": ' Right now, in your own words from a moment ago: "{felt}."',
+        "note": "THE DYNAMIC FRAME (Sep 4, artist's diagnosis — the basin was our stance-free architecture, not the model: 'act angry' works because it's frame-level). The felt phrase returns to the SYSTEM frame where register is set — the old dynamic 'You are an (angry) drawing machine' made doctrine-safe: the words are the machine's own (mood read, lease-gated so a phrase can't renew itself), and they change with real state, so no wallpaper. The user turn keeps only the transition fact ('X, then Y'). Aug 22's scar was BOTH channels carrying the SAME phrase every call — the split fixes that, not the frame placement. FELT_FRAME_ENABLED=false reverts to fact-line-only. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["felt"],
+    },
     "monologue.pen-parked": {
         "title": "Pen parked (between drawings)",
         "text": "You are between drawings at the moment — the pen is parked, touching nothing. ",

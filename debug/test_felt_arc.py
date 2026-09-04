@@ -116,9 +116,42 @@ def test_reflection_diet():
         cc.felt_history = saved
 
 
+def test_dynamic_frame():
+    print("\n[4] the dynamic frame + body-coupled sampling")
+    import config.config as cfg
+    from captioner.context_compression import context_compressor as cc
+    from captioner.prompt_registry import P
+
+    line = P("monologue.felt-frame").format(felt="ready to answer")
+    check("frame slot renders own words", "ready to answer" in line and "your own words" in line, line)
+
+    saved = cc.get_felt_state
+    try:
+        cc.get_felt_state = lambda: "stuck and heavy"
+        from captioner.prompts import get_monologue_system_prompt
+
+        agent = None
+        sp = get_monologue_system_prompt("observational", agent=agent)
+        check("felt rides the system frame", "stuck and heavy" in sp, sp[-140:])
+        cfg.FELT_FRAME_ENABLED = False
+        sp2 = get_monologue_system_prompt("observational", agent=agent)
+        check("A/B lever reverts the frame", "stuck and heavy" not in sp2)
+    finally:
+        cc.get_felt_state = saved
+        cfg.FELT_FRAME_ENABLED = True
+
+    span = cfg.AROUSAL_TEMP_SPAN
+    check("arousal swing bounded", 0.0 < span <= 0.3, str(span))
+    adj_hot = span * (0.9 - 0.5)
+    adj_cold = span * (0.1 - 0.5)
+    check("stirred warms, drained cools", adj_hot > 0 > adj_cold)
+    check("cap respects the CJK ceiling", min(1.0, max(0.6, 0.9 + adj_hot)) <= 1.0)
+
+
 if __name__ == "__main__":
     test_history_cap()
     test_arc_line()
     test_reflection_diet()
+    test_dynamic_frame()
     print(f"\n{'ALL PASS' if FAIL == 0 else f'{FAIL} FAILURES'}")
     sys.exit(1 if FAIL else 0)
