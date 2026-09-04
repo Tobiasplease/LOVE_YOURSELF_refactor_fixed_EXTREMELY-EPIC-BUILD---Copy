@@ -309,14 +309,20 @@ poll(async () => {
 
 /* cameras -------------------------------------------------------------- */
 const CAMS = { pov: "/machine/cam/pov", annotated: "/machine/cam/pov/annotated", room: "/api/roomcam.mjpg" };
+let currentCam = "";
 function setCam(name) {
+  currentCam = name;
   const img = $("#camView");
+  img.style.display = name ? "block" : "none";
   img.src = name && CAMS[name] ? CAMS[name] + "?t=" + Date.now() : "";
   document.querySelectorAll(".camsel").forEach(b => b.classList.toggle("on", b.dataset.cam === name));
-  $("#camNote").textContent = name ? "streaming: " + name + (name !== "room" ? " (via machine — blank if offline)" : "") : "no stream active";
+  $("#camNote").textContent = name ? "streaming: " + name + (name !== "room" ? " (via machine — needs the machine RUNNING)" : "") : "no stream active";
 }
 document.querySelectorAll(".camsel").forEach(b => b.onclick = () => setCam(b.dataset.cam));
-$("#camView").onerror = () => { $("#camNote").textContent = "stream unavailable — machine offline? retry via the source buttons"; };
+$("#camView").onerror = () => { if (!currentCam) return;
+  $("#camView").style.display = "none";
+  $("#camNote").textContent = "■ STREAM UNAVAILABLE — is the machine running? tap a source to retry"; };
+$("#camView").onload = () => { $("#camView").style.display = "block"; };
 document.addEventListener("visibilitychange", () => { if (document.hidden) setCam(""); });
 
 /* drawings ------------------------------------------------------------- */

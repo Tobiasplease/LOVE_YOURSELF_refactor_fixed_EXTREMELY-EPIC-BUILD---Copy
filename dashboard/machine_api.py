@@ -144,19 +144,21 @@ def start_machine_api(refs: dict, port: int = None):
                 self.wfile.write(body)
 
             def do_GET(self):
+                # route on the bare path — the frontend appends ?t= cache-busters
+                route = self.path.split("?", 1)[0]
                 try:
-                    if self.path == "/state":
+                    if route == "/state":
                         return self._json(_snapshot(refs))
-                    if self.path == "/mode":
+                    if route == "/mode":
                         kin = None
                         try:
                             kin = refs["kinetic_bus"].status().get("state") if refs.get("kinetic_bus") else None
                         except Exception:
                             pass
                         return self._json({**runtime_mode.mode(), "kinetic_state": kin})
-                    if self.path == "/cam/pov":
+                    if route == "/cam/pov":
                         return self._mjpeg_clean()
-                    if self.path == "/cam/pov/annotated":
+                    if route == "/cam/pov/annotated":
                         return self._mjpeg_annotated()
                 except (BrokenPipeError, ConnectionResetError):
                     return
@@ -168,7 +170,7 @@ def start_machine_api(refs: dict, port: int = None):
                 return self._json({"error": "unknown endpoint"}, 404)
 
             def do_POST(self):
-                if self.path == "/shutdown":
+                if self.path.split("?", 1)[0] == "/shutdown":
                     self._json({"ok": True, "message": "SIGINT sent — graceful shutdown"})
                     try:
                         self.wfile.flush()
