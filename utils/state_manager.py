@@ -92,6 +92,11 @@ class StateManager:
                 "captioner": {
                     "current_mood": captioner.current_mood,
                     "last_caption": captioner.last_caption,
+                    # Presence anchor (Sep 4 evening): the last VERIFIED departure
+                    # survives a restart so the standing absence fact can say
+                    # "He left half an hour ago" instead of going silent.
+                    "presence_dropped_at": float(getattr(captioner, "_presence_dropped_at", 0.0) or 0.0),
+                    "presence_believed": bool(getattr(captioner, "_presence_believed", False)),
                     # Stream tail (Sep 4): the last few thoughts WITH their
                     # timestamps, so a blink resume can splice real recent
                     # context instead of a single tail entry — one thought
@@ -205,6 +210,14 @@ class StateManager:
             # Stream tail (Sep 4) — real recent thoughts + timestamps for the
             # blink splice; _try_blink_resume gates each entry at the mouth
             captioner.prior_session_stream_tail = cap_state.get("stream_tail", []) or []
+            # Presence anchor (Sep 4 evening): carry the last verified departure
+            # across the restart — only when the saved belief was OFF, so the
+            # anchor is the latest presence event on record.
+            try:
+                if not cap_state.get("presence_believed", False) and float(cap_state.get("presence_dropped_at", 0) or 0) > 0:
+                    captioner._presence_dropped_at = float(cap_state["presence_dropped_at"])
+            except Exception:
+                pass
 
             # DEBUG: Print awakening context directly
             gap_hours = captioner.last_session_gap / 3600

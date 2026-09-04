@@ -1101,17 +1101,25 @@ def build_standing_absence_line(agent) -> str:
         _note_absence_ride(agent, False)
         return ""
     dropped = float(getattr(agent, "_presence_dropped_at", 0.0) or 0.0)
-    if dropped <= 0:
-        return ""
+    session_s = time.time() - float(getattr(agent, "true_session_start", 0.0) or time.time())
+    if dropped <= 0 and session_s < float(getattr(config, "ABSENCE_SESSION_MIN_S", 90)):
+        return ""  # fresh boot: the detector gets its say before any standing claim
     tail = list(getattr(agent, "_stream", []) or [])[-int(getattr(config, "ABSENCE_STANDING_TAIL", 8)) :]
     if not any(_PERSON_MENTION_RE.search(t or "") for t in tail):
         _note_absence_ride(agent, False)
         return ""
-    who = "He" if getattr(agent, "_presence_singular_regime", True) else "Someone"
-    ago = casual_time_string((time.time() - dropped) / 60.0)
-    when = ago if ago == "just now" else f"{ago} ago"
     _note_absence_ride(agent, True)
-    return P("caption.absence-standing").format(who=who, when=when)
+    if dropped > 0:
+        who = "He" if getattr(agent, "_presence_singular_regime", True) else "Someone"
+        ago = casual_time_string((time.time() - dropped) / 60.0)
+        when = ago if ago == "just now" else f"{ago} ago"
+        return P("caption.absence-standing").format(who=who, when=when)
+    # No departure on record this session (nobody verified present since boot,
+    # or the drop predates the restart and was not carried over): the truthful
+    # standing fact is scoped to the session itself.
+    ago = casual_time_string(session_s / 60.0)
+    when = ago if ago == "just now" else f"{ago} ago"
+    return P("caption.absence-standing-session").format(when=when)
 
 
 def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str = "idle") -> str:

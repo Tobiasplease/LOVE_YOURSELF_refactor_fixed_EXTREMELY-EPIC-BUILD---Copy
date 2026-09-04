@@ -31,8 +31,9 @@ class A:
     pass
 
 
-def agent(believed, dropped_ago, stream, regime=True):
+def agent(believed, dropped_ago, stream, regime=True, session_s=600):
     a = A()
+    a.true_session_start = time.time() - session_s
     a._presence_believed = believed
     a._presence_dropped_at = (time.time() - dropped_ago) if dropped_ago is not None else 0.0
     a._stream = collections.deque(stream)
@@ -46,7 +47,10 @@ check(
     "silent: stream without a person mention ('they' about shelves does not count)", build_standing_absence_line(agent(False, 5 * 60, NO_HIM)) == ""
 )
 check("silent: belief still on", build_standing_absence_line(agent(True, 5 * 60, HIM)) == "")
-check("silent: drop time unknown", build_standing_absence_line(agent(False, None, HIM)) == "")
+line = build_standing_absence_line(agent(False, None, HIM))
+check("fallback: no drop on record, 10 min into the session", line == "No one's been in the room since you woke up, about 10 minutes ago.", line)
+check("silent: no drop on record, 30 s into the session (detector settle)", build_standing_absence_line(agent(False, None, HIM, session_s=30)) == "")
+check("silent: no drop on record, stream without a person", build_standing_absence_line(agent(False, None, NO_HIM)) == "")
 check("silent: only mention is beyond the scanned tail", build_standing_absence_line(agent(False, 5 * 60, HIM[:1] + NO_HIM * 5)) == "")
 check("rides: mention inside the tail", build_standing_absence_line(agent(False, 5 * 60, NO_HIM * 3 + HIM[:1])) != "")
 line = build_standing_absence_line(agent(False, 30, HIM))
@@ -74,6 +78,8 @@ check("bookkeeping: stopped when the stream stopped mentioning him", not a._abse
 frag = FRAGMENTS.get("caption.absence-standing") or {}
 check("registry: placeholders who/when", sorted(frag.get("placeholders", [])) == ["when", "who"])
 check("registry: used by caption, caption_blind, drift_turn", set(frag.get("used_by", [])) >= {"caption", "caption_blind", "drift_turn"})
+frag2 = FRAGMENTS.get("caption.absence-standing-session") or {}
+check("registry: session key placeholders when", frag2.get("placeholders") == ["when"])
 check("registry: P() renders", "left" in P("caption.absence-standing").format(who="He", when="just now"))
 
 print(f"\n{'ALL PASS' if not fails else f'{fails} FAILED'}")

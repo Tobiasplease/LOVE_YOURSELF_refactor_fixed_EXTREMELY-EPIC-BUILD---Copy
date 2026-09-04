@@ -272,6 +272,13 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind", "drift_turn"],
         "placeholders": ["who", "when"],
     },
+    "caption.absence-standing-session": {
+        "title": "Standing absence fact — nobody on record this session",
+        "text": "No one's been in the room since you woke up, {when}.",
+        "note": "Companion to caption.absence-standing for the case with NO departure on record: a fresh boot where the belief has never been ON (the drop time did not survive the restart, or nobody has come in). Found live Sep 4 20:03 — two minutes into a CLEAN window the sighted caption said 'His head is down, chin almost touching his chest' (the mannequin head at desk height reads as a seated person to the VLM alone) and the departure-anchored fact had nothing to anchor to. Rides under the same gate (belief OFF + recent stream mentions a person) once ABSENCE_SESSION_MIN_S has passed since boot, so the detector has had its say. Scoped to the session, so it is true by the belief's own record whatever happened before the restart. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind", "drift_turn"],
+        "placeholders": ["when"],
+    },
     "caption.investigate": {
         "title": "Investigate glance — the familiar stranger",
         "text": "You're looking at the {label} — you've seen it many times without ever being sure of it.",
