@@ -2948,6 +2948,10 @@ class Captioner(MemoryMixin):
                 spliced += 1
             if tail and not spliced:
                 print("[🌅] No prior thought survived the gates — blinking awake with an empty stream")
+            # The blink as fact (Sep 4): the outage gets said, not smoothed
+            # over — prompts.get_blink_line states it for the first stretch
+            self._blink_gap_s = gap
+            self._blink_resume_ts = time.time()
             print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
             self._blink_resumed = True
             return True

@@ -341,6 +341,26 @@ def part_of_day_string(hour: int) -> str:
     return "late at night"
 
 
+def get_blink_line(agent) -> str:
+    """The blink as fact (Sep 4). A short restart is still an outage — the
+    machine should meet it cognizantly, not have continuity presented as
+    nothing-happened. Bare fact for the first BLINK_NOTE_WINDOW_S of the
+    session: measured duration in casual words ('a moment' under ~90s).
+    What it makes of the lapse — sleep, absence, wondering where it was —
+    is its own business."""
+    try:
+        from config.config import BLINK_NOTE_WINDOW_S
+
+        gap = float(getattr(agent, "_blink_gap_s", 0.0) or 0.0)
+        resumed = float(getattr(agent, "_blink_resume_ts", 0.0) or 0.0)
+        if not gap or not resumed or time.time() - resumed > BLINK_NOTE_WINDOW_S:
+            return ""
+        duration = "a moment" if gap < 90 else casual_time_string(gap / 60.0)
+        return P("caption.blink").format(duration=duration)
+    except Exception:
+        return ""
+
+
 def get_reorientation_line(agent) -> str:
     """Standing fact for the first stretch of a session after a real off-gap.
 
@@ -1853,6 +1873,16 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         reorient_line = get_reorientation_line(agent)
         if reorient_line:
             turn_parts.append(reorient_line)
+
+    # 1c'. THE BLINK AS FACT (Sep 4, artist's ruling: "it should be as
+    # cognizant as possible of any outage"). Short restarts used to splice
+    # the stream silently — continuity presented as nothing-happened. Now
+    # the first prompts after a blink state the outage bare: the duration is
+    # ours (measured), the "where was I?" is the machine's to have.
+    if not live:
+        blink_line = get_blink_line(agent)
+        if blink_line:
+            turn_parts.append(blink_line)
 
     # 1d. UNCHANGED-NESS AS FACT (B4, Aug 31) — how long since anything
     # happened, stated plainly when the stillness is long enough to be a

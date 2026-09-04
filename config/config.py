@@ -976,6 +976,11 @@ ANTI_ECHO_RETRY_TEMP_BUMP = 0.15
 # and instead RESUMES: the prior session's last thought seeds the stream and
 # document mode continues it. Real absences still get the rich awakening.
 AWAKENING_MIN_GAP_S = int(os.getenv("AWAKENING_MIN_GAP_S", 600))
+# The blink as fact (Sep 4, artist): even a short outage is registered — the
+# first prompts after a blink resume carry "You were off for {duration} —
+# you've just come back on" (bare measured fact; what the machine makes of
+# the lapse is its own). Window = how long the fact rides after the resume.
+BLINK_NOTE_WINDOW_S = float(os.getenv("BLINK_NOTE_WINDOW_S", 90))
 
 # A night is not a blink either: after an off-gap of at least
 # REORIENT_MIN_GAP_S, the prompt carries the gap and the (possibly new) day
@@ -1257,6 +1262,16 @@ YOLO_INTERVAL_IDLE = 1.5  # detection cadence with nobody around — fast enough
 YOLO_INTERVAL_TRACKING = 0.1  # cadence while a person is present — keeps bbox fresh under camera motion
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
+
+# === ROOM CAM (dashboard) ===
+# Second USB webcam owned by dashboard/server.py (NOT machine.py) for the
+# remote room view. Use a /dev/v4l/by-id/... path, never a bare index —
+# indices drift on replug. Empty string = no room cam (dashboard shows a
+# placeholder). MJPG fourcc is forced to keep two cams within USB bandwidth.
+CAMERA_2_DEVICE = os.getenv("CAMERA_2_DEVICE", "")
+CAMERA_2_WIDTH = int(os.getenv("CAMERA_2_WIDTH", "640"))
+CAMERA_2_HEIGHT = int(os.getenv("CAMERA_2_HEIGHT", "480"))
+CAMERA_2_FPS = int(os.getenv("CAMERA_2_FPS", "15"))
 
 # === CAMERA RESOLUTION ===
 CAMERA_WIDTH = 1280  # 720p for smooth 30fps live feed

@@ -76,6 +76,24 @@ def main():
     c4._try_blink_resume()
     check("gated-out tail -> empty stream, still a blink", len(c4._stream) == 0)
 
+    print("\n[3] the blink as fact")
+    from captioner.prompts import get_blink_line
+
+    c5 = shell(gap=300, tail=[{"text": "The lamp is still on.", "ts": now - 400}])
+    c5._try_blink_resume()
+    line = get_blink_line(c5)
+    check("blink line states the measured lapse", "off for" in line and "minutes" in line, line)
+
+    c6 = shell(gap=45, tail=[{"text": "The lamp is still on.", "ts": now - 50}])
+    c6._try_blink_resume()
+    check("tiny gap reads as 'a moment'", "a moment" in get_blink_line(c6), get_blink_line(c6))
+
+    c6._blink_resume_ts = now - 9999
+    check("the fact expires with the window", get_blink_line(c6) == "")
+
+    c7 = shell(gap=300)
+    check("no blink -> no line", get_blink_line(c7) == "")
+
     print(f"\n{'ALL PASS' if FAIL == 0 else f'{FAIL} FAILURES'}")
     sys.exit(1 if FAIL else 0)
 

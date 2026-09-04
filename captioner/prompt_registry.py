@@ -243,6 +243,13 @@ FRAGMENTS = {
         "note": "Re-entry round: a distilled self-name finally has somewhere to LIVE (the Penelope problem — a stated name used to die in self_notes churn because the distiller had no slot for it). Rides the existing identity dose (every IDENTITY_EVERY_N_CAPTIONS) beside the self-wrap; never scheduled, never invited — it only exists once the machine has named itself in a reflection. Bare fact, its own choice of words.",
         "placeholders": ["name"],
     },
+    "caption.blink": {
+        "title": "The blink as fact",
+        "text": "You were off for {duration} — you've just come back on.",
+        "note": "Artist's ruling (Sep 4): 'the blink should still register as a momentary lapse... it should be as cognizant as possible of any outage.' The splice keeps continuity; this line keeps HONESTY about the lapse — bare measured fact for the first BLINK_NOTE_WINDOW_S of the session ('a moment' under ~90s). The machine's examples of what to make of it ('I fell asleep for a moment', 'Where was I?') are ITS moves, never baked here.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["duration"],
+    },
     "caption.felt-arc-steady": {
         "title": "Felt arc — steady",
         "text": 'You\'ve felt "{felt}", or near it, for {duration}.',
