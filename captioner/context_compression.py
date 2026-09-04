@@ -1187,6 +1187,20 @@ class ContextCompressionEngine:
             "felt": felt,
             "timestamp": time.time(),
         }
+        # FELT HISTORY (Sep 4, the emotional-arc channel): every read joins a
+        # session-scoped trajectory — the raw material for the arc line and
+        # the reflection's felt-diet. The identity engine had distilled
+        # thousands of reflections without ever reading how a day FELT.
+        try:
+            from config.config import FELT_HISTORY_MAX
+
+            hist = getattr(self, "felt_history", None)
+            if hist is None:
+                hist = self.felt_history = []
+            hist.append(dict(self.last_mood_read))
+            del hist[:-FELT_HISTORY_MAX]
+        except Exception:
+            pass
         if felt:
             self._last_accepted_felt = {"words": self._content_words(felt), "timestamp": time.time()}
             self.set_felt_state(felt)

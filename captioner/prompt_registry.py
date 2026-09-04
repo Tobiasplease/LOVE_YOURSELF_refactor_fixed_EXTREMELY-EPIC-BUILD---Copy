@@ -243,6 +243,20 @@ FRAGMENTS = {
         "note": "Re-entry round: a distilled self-name finally has somewhere to LIVE (the Penelope problem — a stated name used to die in self_notes churn because the distiller had no slot for it). Rides the existing identity dose (every IDENTITY_EVERY_N_CAPTIONS) beside the self-wrap; never scheduled, never invited — it only exists once the machine has named itself in a reflection. Bare fact, its own choice of words.",
         "placeholders": ["name"],
     },
+    "caption.felt-arc-steady": {
+        "title": "Felt arc — steady",
+        "text": 'You\'ve felt "{felt}", or near it, for {duration}.',
+        "note": "The emotional arc as fact (Sep 4). {felt} is the machine's OWN phrase from its mood reads — never our word for a feeling; {duration} is the measured hold of the current tenor (valence-class streak). Same doctrine as B4's unchanged line: fact in, meaning out. Dosed FELT_ARC_MIN_GAP_S; a live moment displaces it. Wording is the artist's to finalize.",
+        "used_by": ["caption"],
+        "placeholders": ["felt", "duration"],
+    },
+    "caption.felt-arc-turn": {
+        "title": "Felt arc — the turn",
+        "text": 'Earlier you felt "{old}". More recently: "{new}".',
+        "note": "Fires once when the felt tenor changes after holding ≥20 min — both phrases the machine's own. The before/after is the smallest honest arc statement; what turned it is the machine's to conclude. Wording is the artist's to finalize.",
+        "used_by": ["caption"],
+        "placeholders": ["old", "new"],
+    },
     "caption.unchanged": {
         "title": "Unchanged-ness (B4)",
         "text": "Nothing has happened for {duration}.",

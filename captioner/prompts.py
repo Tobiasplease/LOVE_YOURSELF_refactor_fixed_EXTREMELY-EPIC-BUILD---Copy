@@ -400,6 +400,62 @@ def unchanged_duration_s(agent, now: float | None = None) -> float:
     return now - max(anchors)
 
 
+def _valence_class(v: float) -> str:
+    return "pleasant" if v > 0.15 else ("unpleasant" if v < -0.15 else "neutral")
+
+
+def get_felt_arc_line(agent) -> str:
+    """The emotional arc as FACT (Sep 4) — the trajectory the mood reads
+    already trace, finally speakable. Two variants, both in the machine's OWN
+    felt words: a TURN ("Earlier you felt X. More recently: Y") fires once
+    when the tenor changes after holding; STEADY ("You've felt X, or near it,
+    for {duration}") states a long hold. No scripted affect — what the arc
+    means is the machine's business. Dosed by FELT_ARC_MIN_GAP_S; quiet
+    cycles only (caller gates on live)."""
+    try:
+        from config.config import FELT_ARC_AFTER_S, FELT_ARC_ENABLED, FELT_ARC_MIN_GAP_S
+
+        if not FELT_ARC_ENABLED:
+            return ""
+        from captioner.context_compression import context_compressor
+
+        hist = getattr(context_compressor, "felt_history", None) or []
+        if len(hist) < 3:
+            return ""
+        now = time.time()
+        if now - getattr(agent, "_felt_arc_last_ts", 0.0) < FELT_ARC_MIN_GAP_S:
+            return ""
+
+        cls = [_valence_class(h.get("valence", 0.0)) for h in hist]
+        cur = cls[-1]
+        i = len(hist) - 1
+        while i > 0 and cls[i - 1] == cur:
+            i -= 1
+        streak, prior = hist[i:], hist[:i]
+
+        def newest_felt(reads):
+            for h in reversed(reads):
+                if h.get("felt"):
+                    return h["felt"]
+            return ""
+
+        # TURN: fresh streak after a prior tenor that held ≥20 min, both named
+        if prior and len(streak) <= 2 and (prior[-1]["timestamp"] - prior[0]["timestamp"]) >= 1200:
+            old, new = newest_felt(prior), newest_felt(streak)
+            if old and new and old.lower() != new.lower():
+                agent._felt_arc_last_ts = now
+                return P("caption.felt-arc-turn").format(old=old, new=new)
+        # STEADY: the tenor has held a long while
+        held_s = now - streak[0]["timestamp"]
+        felt = newest_felt(streak)
+        if felt and held_s >= FELT_ARC_AFTER_S:
+            agent._felt_arc_last_ts = now
+            return P("caption.felt-arc-steady").format(felt=felt, duration=casual_time_string(held_s / 60.0))
+    except Exception:
+        pass
+    return ""
+
+
 def get_unchanged_line(agent) -> str:
     """Unchanged-ness as FACT (B4, Aug 31) — the boredom scalar's text channel.
 
@@ -621,6 +677,15 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     journal = data.get("journal") or []
     if journal:
         parts.append("From your diary:\n" + "\n".join(f"- {e.get('date', '')}: {e.get('summary', '')}" for e in journal))
+
+    # THE FELT ARC (Sep 4): how the feeling moved, in the machine's own felt
+    # words — the one record the identity engine had never been shown.
+    felt_arc = data.get("felt_arc") or []
+    if felt_arc:
+        parts.append(
+            "How the feeling has moved lately, oldest first — your own words for it at the time:\n"
+            + "\n".join(f"- ({_age_phrase(h.get('ts', 0))}) \"{h.get('felt', '')}\"" for h in felt_arc)
+        )
 
     # THE REVERIE BLOCK (Sep 3 evening, re-entry round): imagination finally
     # reaches the loom. Framed unmistakably as invention — the conflation law
@@ -1798,6 +1863,14 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         unchanged_line = get_unchanged_line(agent)
         if unchanged_line:
             turn_parts.append(unchanged_line)
+
+    # 1e. THE FELT ARC AS FACT (Sep 4) — the trajectory of the mood reads,
+    # in the machine's own felt words: a turn once when the tenor changes, a
+    # duration when it holds. Same doctrine as B4: fact in, meaning out.
+    if not live and not detox:
+        felt_arc_line = get_felt_arc_line(agent)
+        if felt_arc_line:
+            turn_parts.append(felt_arc_line)
 
     # 2. MODE-GATED CONTEXT
     if not detox and mode in MODE_CONTEXTS:

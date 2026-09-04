@@ -1143,6 +1143,19 @@ DRIFT_SEND_IMAGE = os.getenv("DRIFT_SEND_IMAGE", "true").lower() in ("true", "1"
 # as a dosed arc-line, the identity dose carries the name, and ~1/3 of
 # drifts open from an alive thread (the deep-story fork resolved: the
 # material-seeded variant is now the lore-seeded variant).
+# The emotional arc channel (Sep 4 — feeling gets the want-ledger treatment,
+# third application of the proven shape). Every mood read joins a session
+# trajectory (felt_history); the arc line states the trajectory as FACT in
+# the machine's OWN felt words — "You've felt X, or near it, for an hour" /
+# "Earlier you felt X. More recently: Y" — never a scripted affect. Dosed
+# like the unchanged fact; a live moment displaces it. The reflection's
+# yourself/time organs receive the day's trajectory, so the identity engine
+# finally distills from days it actually FELT (it never had before).
+FELT_ARC_ENABLED = os.getenv("FELT_ARC_ENABLED", "true").lower() in ("true", "1", "yes")
+FELT_HISTORY_MAX = 120
+FELT_ARC_AFTER_S = float(os.getenv("FELT_ARC_AFTER_S", 3600))  # steady variant: same tenor held this long
+FELT_ARC_MIN_GAP_S = float(os.getenv("FELT_ARC_MIN_GAP_S", 1800))
+
 LORE_ENABLED = os.getenv("LORE_ENABLED", "true").lower() in ("true", "1", "yes")
 LORE_REVERIES_MAX = 40
 LORE_THREADS_MAX = 6

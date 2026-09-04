@@ -354,6 +354,28 @@ class ReflectionLoop:
         except Exception:
             pass
 
+    @staticmethod
+    def _add_felt_arc(data: dict) -> None:
+        """The day's felt trajectory for the yourself/time organs (Sep 4) —
+        the identity engine had distilled thousands of reflections without
+        ever reading how a day felt. Up to 8 phrase-bearing reads, evenly
+        spread; rendered by the prompt builder as the machine's own words."""
+        try:
+            from config.config import FELT_ARC_ENABLED
+
+            if not FELT_ARC_ENABLED:
+                return
+            from captioner.context_compression import context_compressor
+
+            hist = [h for h in (getattr(context_compressor, "felt_history", None) or []) if h.get("felt")]
+            if len(hist) < 2:
+                return
+            step = max(1, len(hist) // 8)
+            sampled = hist[::step][-8:]
+            data["felt_arc"] = [{"ts": h["timestamp"], "felt": h["felt"]} for h in sampled]
+        except Exception:
+            pass
+
     def _diet_time(self, data: dict, spine: dict) -> None:
         """The long clock: the diary as chronology, how long this session has
         run, and how long the durable facts have held."""
@@ -364,6 +386,7 @@ class ReflectionLoop:
             data["session"] = context_compressor.get_current_session_info()
         except Exception:
             pass
+        self._add_felt_arc(data)
         try:
             from captioner.durable_ledger import get_durable_ledger
 
@@ -395,6 +418,7 @@ class ReflectionLoop:
             data["self_notes"] = context_compressor.self_notes[-4:]
         except Exception:
             pass
+        self._add_felt_arc(data)
         try:
             data["identity"] = {
                 "persona": (context_compressor.core_facts.get("self") or "").strip(),
