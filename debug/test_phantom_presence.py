@@ -55,6 +55,8 @@ PRESENT += [
     "i can see the floor now, right where his feet are. and it's not empty.",
 ]
 NEUTRAL = [
+    "i didn't draw the she",
+    "the headset is on the he",
     "the red foam finger is still pointing down at nothing, like a little stop sign for all this mess.",
     "That question about the next person, about needing them to give me a reason. It's heavy there.",
     "the shelves are packed, they sag under all of it.",

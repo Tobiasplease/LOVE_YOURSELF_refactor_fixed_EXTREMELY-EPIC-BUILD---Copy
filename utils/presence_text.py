@@ -12,7 +12,8 @@ tense cues and absence words only.
 import re
 from typing import List
 
-PERSON_RE = re.compile(r"\b(he|him|his|she|her|hers)\b|\b(the|that|this) (man|woman|guy|person|visitor)\b", re.I)
+# "(?<!the )": a cut word ("i didn't draw the she[lf]", "the he[adset]") is not a pronoun.
+PERSON_RE = re.compile(r"(?<!the )\b(he|him|his|she|her|hers)\b|\b(the|that|this) (man|woman|guy|person|visitor)\b", re.I)
 
 # Within the SAME sentence as the person mention: absence, past tense, or wondering.
 NOT_PRESENT_RE = re.compile(
