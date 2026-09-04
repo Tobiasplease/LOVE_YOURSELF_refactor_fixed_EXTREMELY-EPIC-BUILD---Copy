@@ -763,6 +763,10 @@ class ContextCompressionEngine:
                 self.introspective_state["last_introspection"] = now
                 self._save_identity()
                 print(f"[🪞] Distilled from reflection ({subject}): " + " | ".join(changed))
+                log_json_entry(
+                    LogType.COMPRESSION,
+                    {"message": "Distilled from reflection", "action": "distilled", "subject": subject, "changed": changed},
+                )
             # Echo kernel (July 30): the reflection's one load-bearing sentence,
             # returned to the caller so it can ride the stored entry's metadata
             # and surface through the echo line as a re-thinkable clause instead
