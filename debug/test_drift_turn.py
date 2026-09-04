@@ -102,11 +102,22 @@ def test_salience_guard():
 
 def test_run_drift_turn():
     print("\n[3] _run_drift_turn mechanics")
+    import tempfile
+
     import captioner.captioner as cap_mod
     import config.config as cfg
     import utils.caption_display as disp_mod
     import utils.inference as inf_mod
+    import utils.lore_ledger as ll_mod
     from captioner.prompt_registry import P
+    from utils.lore_ledger import LoreLedger
+
+    # ISOLATION (Sep 4): the drift turn now writes reveries and rolls the
+    # lore seed — a test run must never touch the LIVE ledger (17 fake
+    # reveries once leaked in) nor flake on the seed roll.
+    saved_ledger, saved_seed_p = ll_mod.lore_ledger, cfg.LORE_SEED_P
+    ll_mod.lore_ledger = LoreLedger(state_path=os.path.join(tempfile.mkdtemp(), "lore.json"))
+    cfg.LORE_SEED_P = 0.0
 
     calls, logs, displayed = [], [], []
 
@@ -178,6 +189,7 @@ def test_run_drift_turn():
     finally:
         cfg.DRIFT_SEND_IMAGE = saved_flag
         inf_mod.query_model, cap_mod.log_json_entry, disp_mod.send_caption_to_display = saved
+        ll_mod.lore_ledger, cfg.LORE_SEED_P = saved_ledger, saved_seed_p
 
 
 def test_firewall():
