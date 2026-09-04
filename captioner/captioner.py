@@ -903,6 +903,20 @@ class Captioner(MemoryMixin):
     # executes — and inference is paused then, so a caption claiming an act of
     # marking is always false. Thinking/wanting/remembering drawing is its
     # inner life and stays untouched; only the phantom ACT is gated.
+    # Phantom PRESENCE (Sep 4 evening, docs/presence-stickiness-sep4.md): a
+    # present-tense third-person claim while the adjudicated belief says nobody
+    # is here. The stream is the belief — storing these is how "the man in the
+    # grey hoodie" outlived the artist's departure by 15 minutes (the mannequin
+    # head at desk height re-seeds him on a clean window, then the window
+    # teaches itself). Absence-marked mentions ("since he left", "he was") are
+    # memory and pass; the standing absence fact invites exactly those.
+    _PHANTOM_PERSON_RE = re.compile(r"\b(he|him|his|she|her|hers)\b|\bthe (man|woman|guy|person|visitor)\b", re.I)
+    _ABSENCE_MARK_RE = re.compile(
+        r"\b(gone|left|leaves|leaving|empty|no one|nobody|not here|isn.t here|wasn.t|weren.t|was|were|used to|since|before|earlier|ago|remember|came back|come back|comes back|whether|if)\b"
+        r"|\b(he|she|they)\s+(?:\w+ed|had|did|went|came|sat|stood|took|said|typed|kept|got)\b"  # plain past tense is memory too
+        r"|\b(he|she|they)'d\b",
+        re.I,
+    )
     _PHANTOM_DRAWING_RE = re.compile(
         r"\b(?:"
         r"(?:i am|i'm|i’m) (?:drawing|tracing|sketching|inking)"
@@ -1238,6 +1252,19 @@ class Captioner(MemoryMixin):
         # A claimed act of marking while the pen is parked is always false.
         if self._PHANTOM_DRAWING_RE.search(caption) and not self._drawing_now():
             return "phantom_drawing"
+        # Phantom presence: third-person present tense with the belief OFF —
+        # spoken (the artist reads the feed), never stored. See _ECHO_REASONS.
+        try:
+            from config.config import PHANTOM_PRESENCE_GATE
+        except Exception:
+            PHANTOM_PRESENCE_GATE = True
+        if (
+            PHANTOM_PRESENCE_GATE
+            and not getattr(self, "_presence_believed", False)
+            and self._PHANTOM_PERSON_RE.search(caption)
+            and not self._ABSENCE_MARK_RE.search(caption)
+        ):
+            return "phantom_presence"
         # Tail-echo COLLAPSE: one short restatement is a beat, deliberate
         # emphasis ("…waiting forever more…" -> "forevermore, right?" — the
         # artist reads this as rhythm and it stays). But when the PREVIOUS
@@ -1278,7 +1305,7 @@ class Captioner(MemoryMixin):
     # mouth gate burned 72 cycles fighting the consequence of its own
     # storage). Shape-class rejections (meta, parroting, salad, CJK) stay
     # unspeakable — they'd break the fiction if displayed.
-    _ECHO_REASONS = frozenset({"template_echo", "refrain_echo", "tail_echo", "number_chain"})
+    _ECHO_REASONS = frozenset({"template_echo", "refrain_echo", "tail_echo", "number_chain", "phantom_presence"})
 
     def _note_unstored_cycle(self, reason: str, preview: str) -> None:
         """A cycle ended without the stream growing (echo spoken-not-stored,
@@ -2409,8 +2436,12 @@ class Captioner(MemoryMixin):
                 from config import config as _cfg
 
                 _live_log = _os.path.join(_cfg.MOOD_SNAPSHOT_FOLDER, "live_captions.txt")
+                # Feed marker (Sep 4 evening): the dashboard feed is the MOUTH,
+                # not the memory — spoken-not-stored lines carry a prefix so the
+                # artist can tell a gated line from one the stream kept.
+                _kept = getattr(self, "_stream_store_ok", True)
                 with open(_live_log, "a", encoding="utf-8") as _f:
-                    _f.write(caption.replace("\n", " ") + "\n")
+                    _f.write(("" if _kept else "[not kept] ") + caption.replace("\n", " ") + "\n")
             except Exception:
                 pass
         else:

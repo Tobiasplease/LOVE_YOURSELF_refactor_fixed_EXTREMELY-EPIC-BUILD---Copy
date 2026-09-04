@@ -279,6 +279,13 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind", "drift_turn"],
         "placeholders": ["when"],
     },
+    "caption.desire-absent-tail": {
+        "title": "Want tail — its person has left",
+        "text": " They've left since.",
+        "note": "Presence stickiness (Sep 4 evening): 'To stop waiting for the person to leave so I can begin' rode as Preoccupied-with for 35 minutes across the departure — a want whose premise is a person had no world-check, and the caption right after each dose said 'still hunched'. Appended to caption.desire-wrap only when the want mentions a person (pronoun/noun regex on the machine's own words) and the belief has verified a departure. A distill re-forms the want in its own time; this covers the gap.",
+        "used_by": ["caption"],
+        "placeholders": [],
+    },
     "caption.investigate": {
         "title": "Investigate glance — the familiar stranger",
         "text": "You're looking at the {label} — you've seen it many times without ever being sure of it.",

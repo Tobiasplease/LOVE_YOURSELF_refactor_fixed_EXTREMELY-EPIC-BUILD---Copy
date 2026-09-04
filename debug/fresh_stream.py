@@ -1,4 +1,4 @@
-"""One-shot: clear the stream tail + last caption from system_state.json so
+"""One-shot: clear the stream tail + last caption + recent_memory from system_state.json so
 the next boot starts the register flywheel CLEAN (Sep 4 — the old-register
 tail otherwise splices into every restart and re-teaches itself).
 
@@ -33,5 +33,7 @@ cap = state.get("captioner", {})
 had = len(cap.get("stream_tail", []) or [])
 cap["stream_tail"] = []
 cap["last_caption"] = ""
+had_mem = len(cap.get("recent_memory", []) or [])
+cap["recent_memory"] = []  # memory mode's caption thread splices from it — same in-context seed (Sep 4 evening)
 json.dump(state, open(STATE, "w"), indent=2, ensure_ascii=False)
-print(f"cleared: {had} tail entries + last_caption. Next boot seeds the stream fresh.")
+print(f"cleared: {had} tail entries + last_caption + {had_mem} recent_memory entries. Next boot seeds the stream fresh.")

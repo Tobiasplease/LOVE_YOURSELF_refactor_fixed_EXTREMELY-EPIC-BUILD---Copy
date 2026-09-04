@@ -1792,7 +1792,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
     return final_result
 
 
-def determine_prompt_mode(gaze_state: str, gaze_direction: str, person_present: bool) -> str:
+def determine_prompt_mode(gaze_state: str, gaze_direction: str, person_present: bool, believed: Optional[bool] = None) -> str:
     """Determine prompt mode based on situational context.
 
     Modes:
@@ -1817,7 +1817,16 @@ def determine_prompt_mode(gaze_state: str, gaze_direction: str, person_present: 
     # Priority 2: A person is present — relational mode
     # gaze_state can be "aware" (just detected), "tracking" (actively following),
     # or person_present=True from YOLO detection. Any of these triggers relational.
-    if person_present or gaze_state in ("tracking", "aware"):
+    # Sep 4 evening: the ADJUDICATED belief is the arbiter. Raw YOLO hits and the
+    # gaze module's aware/tracking states both fire on the studio's mannequin
+    # heads — the face bypass was closed for the belief (5300147) but still
+    # routed the prompt relationally (live: relational captions minutes after
+    # verified absence). No belief → no relational mode. `believed=None` keeps
+    # the legacy path for callers without a belief system.
+    if believed is not None:
+        if believed:
+            return "relational"
+    elif person_present or gaze_state in ("tracking", "aware"):
         return "relational"
 
     # Default: Introspective — the model decides its own emotional response
@@ -1983,7 +1992,12 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     elif is_awakening:
         mode = "awakening"
     else:
-        mode = determine_prompt_mode(gaze_state=gaze_state, gaze_direction=gaze_direction, person_present=person_present)
+        mode = determine_prompt_mode(
+            gaze_state=gaze_state,
+            gaze_direction=gaze_direction,
+            person_present=person_present,
+            believed=getattr(agent, "_presence_believed", None),
+        )
     if not config.PRINT_CLEAN_CAPTIONS:
         print(f"[MODE] {mode} (gaze={gaze_state})")
 
@@ -2201,6 +2215,18 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
                         desire_line += P("caption.desire-arc-tail").format(
                             duration=casual_time_string(facts["age_s"] / 60.0), refused_clause=refused_clause
                         )
+                except Exception:
+                    pass
+                # Sep 4 evening: a want whose premise is a person outlived the
+                # departure by 35 min. Once the belief has verified absence,
+                # the tail says so (structure only: pronoun/noun regex).
+                try:
+                    if (
+                        not getattr(agent, "_presence_believed", False)
+                        and float(getattr(agent, "_presence_dropped_at", 0.0) or 0.0) > 0
+                        and _PERSON_MENTION_RE.search(desire)
+                    ):
+                        desire_line += P("caption.desire-absent-tail")
                 except Exception:
                     pass
                 prompt_parts.append(desire_line)

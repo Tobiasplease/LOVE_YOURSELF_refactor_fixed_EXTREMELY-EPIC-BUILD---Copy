@@ -445,6 +445,36 @@ every pixel ~10px. Roles now:
   hoodie" for 15 min — the stream window is the belief (replay ablation: scrub
   him from the stream → 0/5; add this fact → 0/5 present tense, mentions go past
   tense). Onset/stop logged as `absence_standing` debug events.
+  Companion `caption.absence-standing-session` ("No one's been in the room
+  since you woke up, about 10 minutes ago.") covers a boot with no departure
+  on record (ABSENCE_SESSION_MIN_S=90 settle); `_presence_dropped_at` is
+  persisted by state_manager (restored only when the saved belief was OFF).
+- PHANTOM PRESENCE GATE (Sep 4 evening): `_caption_reject_reason` returns
+  `phantom_presence` for a present-tense third-person claim while the belief
+  is OFF (`_PHANTOM_PERSON_RE` minus `_ABSENCE_MARK_RE`); echo-class → spoken,
+  never stored, for captions, blind beats (rejected outright there), drift
+  (also keeps it out of the reverie ledger) and the blink splice.
+  PHANTOM_PRESENCE_GATE to disable. Why: the mannequin head at desk height
+  re-seeded "His head is down, chin almost touching his chest" two minutes
+  into a CLEAN window; the stream then teaches itself.
+- RELATIONAL MODE needs the BELIEF (Sep 4 evening): `determine_prompt_mode`
+  takes `believed=agent._presence_believed`; raw YOLO hits and the gaze
+  module's aware/tracking states no longer route the prompt relationally on
+  their own (both fire on the mannequin faces — relational captions were
+  logged minutes after verified absence). `believed=None` keeps the legacy
+  path for callers without a belief system.
+- WANT TAIL (Sep 4 evening): `caption.desire-absent-tail` (" They've left
+  since.") appends to the Preoccupied-with line when the want mentions a
+  person and the belief has verified a departure.
+- FEED MARKER (Sep 4 evening): live_captions.txt lines that the stream did
+  not keep (`_stream_store_ok` False — every echo-class reason incl.
+  phantom_presence) carry a "[not kept] " prefix; the dashboard feed is the
+  mouth, the stream is the memory.
+- CLEAN BOOT tooling: debug/fresh_stream.py now also clears recent_memory
+  (memory mode's caption thread splices from it);
+  debug/scrub_phantom_presence.py removes present-tense third-person
+  reveries from the lore ledger (dry run by default, --apply between stop
+  and start).
 - pixel diff: only decides whether sending video is worth considering
 - ego_motion flag (servo delta >2°/frame): breathing sway (~1-1.2°) + gaze
   nudges flag frames OFTEN — that's expected; only used to pick steady

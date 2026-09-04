@@ -1,5 +1,7 @@
 # Presence stickiness after departure — diagnosis + build spec (Sep 4 2026, evening)
 
+**Status: BUILT Sep 4 evening (see "Built" at the end); artist ruling: build now, restart when done.** Original header:
+
 **Status: DIAGNOSED, NOT BUILT.** Artist verdict: "spot on", long-standing issue,
 fixes below judged solid. Nothing here has landed in runtime code; the overnight
 low-energy run (ca06ddfc, Qwen3.8-27B) is untouched. Build on the next session,
@@ -118,3 +120,39 @@ debug/probe_presence_frame.py, debug/probe_presence_frames2.py,
 debug/probe_presence_ablation.py (inputs in /tmp/probe_sys.txt,
 /tmp/probe_user.txt, /tmp/probe_stream.json — regenerate from the event log
 for another call). Untracked as of writing.
+
+## Built (Sep 4 evening, commits 075fbfd → this one)
+
+Live finding after the first fresh-stream restart (run 433e323b): two minutes
+into a CLEAN window the sighted caption said "His head is down, chin almost
+touching his chest, staring at the screen" (frame: the mannequin head at desk
+height among clutter + the small red object) — mechanism 2 re-seeding exactly
+as the probes predicted — and relational-mode captions had been logged after
+verified absence in the earlier run (raw YOLO / gaze aware-tracking routed the
+prompt relationally; both fire on the mannequin faces).
+
+1. `build_standing_absence_line` + `caption.absence-standing` (departure
+   anchored) + `caption.absence-standing-session` (no departure on record;
+   ABSENCE_SESSION_MIN_S settle); `_presence_dropped_at` persisted across
+   restarts (state_manager; restored only when the saved belief was OFF).
+   Rides for caption, blind beat, drift. Onset/stop logged `absence_standing`.
+2. `phantom_presence` storage gate (echo-class: spoken, not stored) — a
+   present-tense third-person claim with the belief OFF; absence-marked
+   mentions pass. Blocks the stream, the blind beat, drift AND the reverie
+   ledger. PHANTOM_PRESENCE_GATE to disable.
+3. Relational mode requires the adjudicated belief (`determine_prompt_mode`
+   `believed=`).
+4. `caption.desire-absent-tail` on person-premised wants after a verified
+   departure.
+5. Feed marker "[not kept] " on spoken-not-stored lines in live_captions.txt.
+6. Clean-boot tooling: fresh_stream.py also clears recent_memory;
+   scrub_phantom_presence.py removes present-tense third-person reveries.
+
+Not built: a mannequin-specific line (the gate + the fact cover it; physical
+fix still cheapest); the optional stitched-recitation echo widening.
+
+Tests: debug/test_absence_standing.py (20), debug/test_phantom_presence.py (23).
+Verify live: after a departure, `absence_standing` onset within a minute of
+the first him-caption; `echo_spoken_not_stored` with reason `phantom_presence`
+on mannequin-gaze captions; NO `relational` caption mode while the dashboard
+shows person=absent.

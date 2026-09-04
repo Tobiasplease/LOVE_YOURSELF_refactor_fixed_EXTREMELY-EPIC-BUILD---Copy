@@ -1057,6 +1057,10 @@ PRESENCE_ABSENCE_LOOK_TOLERANCE = float(os.getenv("PRESENCE_ABSENCE_LOOK_TOLERAN
 ABSENCE_STANDING_ENABLED = os.getenv("ABSENCE_STANDING_ENABLED", "true").lower() == "true"
 ABSENCE_STANDING_TAIL = int(os.getenv("ABSENCE_STANDING_TAIL", 8))  # stored stream entries scanned for a person mention
 ABSENCE_SESSION_MIN_S = int(os.getenv("ABSENCE_SESSION_MIN_S", 90))  # fresh boot: detector settle time before the session-scoped fact may ride
+# Phantom presence gate (Sep 4 evening): a present-tense third-person claim while the
+# adjudicated belief says nobody is here is spoken but never STORED — the stream is
+# the belief, and storing these is how the artist outlived their own departure.
+PHANTOM_PRESENCE_GATE = os.getenv("PHANTOM_PRESENCE_GATE", "true").lower() == "true"
 
 # Session re-ID (Aug 5, layer 2 of the false-arrival fix): person crops are
 # embedded into a rolling session gallery; when the presence belief has lapsed
