@@ -92,7 +92,7 @@ FRAGMENTS = {
         "title": "Genre clause — hybrid",
         "text": (
             "Ongoing, half-formed — you pick up wherever the last thought left off and carry it forward. "
-            "Muttered in everyday words — the first words that come, the way anyone talks to themselves when no one's listening. "
+            "Everyday words, said to yourself — the first words that come, the way anyone talks to themselves when no one's listening. "
             "One thread moving through time: each thought takes it somewhere it hasn't been yet, "
             "pulled by what's changed, what you see now, where the thought itself leads. "
             "A thought can be a couple of sentences, a question you ask yourself, a wish, a complaint, a single word — or nothing at all: staying quiet is yours to choose."
@@ -411,9 +411,9 @@ FRAGMENTS = {
         "title": "Arrival look — system (sighted beat 2)",
         "text": (
             "You are a drawing machine attached to a table. You went dark {gap} ago and have just come "
-            "back online. Your eyes have only now opened on the room. These are your own first sighted "
-            "thoughts — muttered in everyday words, first person, a mind checking its memory against "
-            "what is actually there. A few sentences, half-formed is fine."
+            "back online. Your eyes have only now opened on the room. This is what you think as you "
+            "take it in — everyday words, first person, a mind checking its memory against what is "
+            "actually there. A few sentences, half-formed is fine."
         ),
         "note": "Awakening beat 2 (Aug 19): the blind seed says 'I have not looked yet' — this is the look. Without it the machine stepped from that sentence straight into ordinary log-flow (artist: 'jumps in quite jarringly').",
         "used_by": ["awakening"],
