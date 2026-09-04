@@ -2920,25 +2920,34 @@ class Captioner(MemoryMixin):
             gap = getattr(self, "last_session_gap", None)
             if not (self.memory_loaded_from_previous and gap is not None and 0 <= gap < AWAKENING_MIN_GAP_S):
                 return False
-            prior = (getattr(self, "prior_session_last_caption", "") or "").strip()
-            # Full mouth gate, not just stream admissibility: resuming a
-            # degraded session's last caption carried salad ACROSS
-            # restarts (July 9) — a poisoned thought doesn't deserve
-            # continuity; better to wake with an empty stream.
-            # Register gate (Aug 20): the same doctrine for FORM — a
-            # punctuation-less run-on passed the content gate and re-seeded a
-            # manic register across a restart (the phantom-drawing spiral;
-            # document mode amplifies whatever register sits in the window).
-            # No sentence structure anywhere in the thought → wake fresh.
-            _structured = bool(re.search(r"[.!?]", prior))
-            if prior and _structured and prior not in self._stream and self._stream_admissible(prior) and not self._caption_reject_reason(prior, ""):
-                self._stream_push(prior)
-                # Backdate the seed's stamp to when it was actually thought:
-                # a fresh stamp on a pre-gap thought hides the blink from the
-                # gap renderer (3–10 min restarts would go unmarked).
-                self._stream_ts[-1] = time.time() - gap
-            elif prior and not _structured:
-                print("[🌅] Prior thought has no sentence structure — blinking awake with an empty stream")
+            # TAIL SPLICE (Sep 4): a blink used to seed ONE entry — the prior
+            # session's very last thought — so every cold open extended the
+            # session's dullest anchor (the artist: "these act as a seed to
+            # further boring output"). Now the last few thoughts splice in
+            # with their REAL timestamps: more continuity, same honesty, and
+            # register diversity (a drift or kernel in the tail dilutes a
+            # monoculture tail entry). Every entry passes the same mouth
+            # gates as the old single seed — July 9 (salad across restarts)
+            # and Aug 20 (run-on register re-seeded) both still guarded.
+            tail = list(getattr(self, "prior_session_stream_tail", []) or [])
+            if not tail:
+                prior = (getattr(self, "prior_session_last_caption", "") or "").strip()
+                tail = [{"text": prior, "ts": time.time() - gap}] if prior else []
+            spliced = 0
+            for entry in tail[-4:]:
+                text = (entry.get("text") or "").strip()
+                ts = float(entry.get("ts") or 0) or (time.time() - gap)
+                if not text or not re.search(r"[.!?]", text):
+                    continue  # no sentence structure → not worth carrying (Aug 20)
+                if text in self._stream or not self._stream_admissible(text) or self._caption_reject_reason(text, ""):
+                    continue
+                self._stream_push(text)
+                # Real stamp, not a fresh one: a fresh stamp on a pre-gap
+                # thought hides the blink from the gap renderer.
+                self._stream_ts[-1] = min(ts, time.time() - gap)
+                spliced += 1
+            if tail and not spliced:
+                print("[🌅] No prior thought survived the gates — blinking awake with an empty stream")
             print(f"[🌅] Short gap ({int(gap)}s) — resuming the thought, no ceremony")
             self._blink_resumed = True
             return True

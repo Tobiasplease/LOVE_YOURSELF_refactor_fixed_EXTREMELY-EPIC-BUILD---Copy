@@ -92,6 +92,14 @@ class StateManager:
                 "captioner": {
                     "current_mood": captioner.current_mood,
                     "last_caption": captioner.last_caption,
+                    # Stream tail (Sep 4): the last few thoughts WITH their
+                    # timestamps, so a blink resume can splice real recent
+                    # context instead of a single tail entry — one thought
+                    # seeded every cold open with the session's dullest anchor
+                    "stream_tail": [
+                        {"text": t, "ts": ts}
+                        for t, ts in list(zip(list(getattr(captioner, "_stream", [])), list(getattr(captioner, "_stream_ts", []))))[-4:]
+                    ],
                     # Memory system (motif tracking removed — now handled by ChromaDB)
                     # Temporal spine (timeline/day_stones/known_people/
                     # primary_person/self_model dropped Aug 30 2026 — dead
@@ -194,6 +202,9 @@ class StateManager:
             prior_caption = cap_state.get("last_caption", "")
             if prior_caption and len(prior_caption) > 5:
                 captioner.prior_session_last_caption = prior_caption
+            # Stream tail (Sep 4) — real recent thoughts + timestamps for the
+            # blink splice; _try_blink_resume gates each entry at the mouth
+            captioner.prior_session_stream_tail = cap_state.get("stream_tail", []) or []
 
             # DEBUG: Print awakening context directly
             gap_hours = captioner.last_session_gap / 3600
