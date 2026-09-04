@@ -196,6 +196,21 @@ def test_flow_provenance():
     check("small shift measured", r["valid"] and r["reason"] is None, str(r))
 
 
+def test_motion_line_attestation():
+    print("\n[7] motion lines claim only what was measured")
+    import inspect
+
+    from captioner.captioner import Captioner
+
+    src = inspect.getsource(Captioner._process_frame)
+    check("stillness claims gated on valid flow frames", "_room_measured_still" in src and "flow_valid_frames" in src)
+    check("bare sweep line exists (no room claim)", '" The view changed because you were looking around."' in src)
+    check("unmeasurable windows claim nothing", 'motion_line = ""' in src)
+    check("'Someone' requires person signals", "scene_motion and person_present_in_window" in src)
+    src2 = inspect.getsource(Captioner._assess_scene)
+    check("_assess_scene exports flow_valid_frames", '"flow_valid_frames"' in src2)
+
+
 if __name__ == "__main__":
     test_pose_view_memory()
     test_registry_verification()
@@ -203,5 +218,6 @@ if __name__ == "__main__":
     test_unchanged_clock()
     test_boredom_blend()
     test_flow_provenance()
+    test_motion_line_attestation()
     print(f"\n{'ALL PASS' if FAIL == 0 else f'{FAIL} FAILURES'}")
     sys.exit(1 if FAIL else 0)

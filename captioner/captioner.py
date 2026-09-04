@@ -505,6 +505,10 @@ class Captioner(MemoryMixin):
             flow_available = len(residuals) > 0
             flow_motion = sum(1 for r in residuals if r > SCENE_MOTION_RESIDUAL_THRESHOLD) >= SCENE_MOTION_MIN_FRAMES
             info["max_residual"] = max(residuals) if residuals else 0.0
+            # How many frames the flow could actually MEASURE (Sep 4): a
+            # stillness claim needs valid measurements, not their absence —
+            # saccade windows return invalid and can attest nothing.
+            info["flow_valid_frames"] = len(residuals)
 
             # Person movement in world coordinates (camera sway is compensated;
             # pixel diff can't separate scene motion from camera motion)
@@ -1948,16 +1952,34 @@ class Captioner(MemoryMixin):
                             person_frames = sum(1 for f in send_meta if f.get("detection", {}).get("person"))
                             total = len(send_meta)
 
-                            # Motion framing from the person-angle signal. Stillness is
-                            # stated explicitly: it licenses "nothing new" thoughts.
-                            if scene_motion:
+                            # Motion framing — every clause gated by what was
+                            # MEASURED (Sep 4, artist's catch: "the room itself
+                            # is still" fired on saccade windows where the flow
+                            # returned invalid and stillness was unmeasurable —
+                            # an unattested world-claim; the camera moving does
+                            # not mean the room held still). Stillness claims
+                            # need valid flow frames below threshold; a sweep
+                            # with no measurement states only the sweep. And
+                            # "Someone" only when person signals fired — flow
+                            # alone can be a curtain.
+                            from config.config import SCENE_MOTION_MIN_FRAMES as _smf
+                            from config.config import SCENE_MOTION_RESIDUAL_THRESHOLD as _smt
+
+                            _room_measured_still = scene.get("flow_valid_frames", 0) >= _smf and scene["max_residual"] <= _smt
+                            if scene_motion and person_present_in_window:
                                 motion_line = " Someone is moving in the room."
+                            elif scene_motion:
+                                motion_line = " Something is moving in the room."
                             elif person_present_in_window:
                                 motion_line = " They're staying still."
+                            elif ego_count >= 2 and _room_measured_still:
+                                motion_line = " The view changed because you were looking around — the room itself held still."
                             elif ego_count >= 2:
-                                motion_line = " The view changed because you were looking around — the room itself is still."
-                            else:
+                                motion_line = " The view changed because you were looking around."
+                            elif _room_measured_still:
                                 motion_line = " The room is still."
+                            else:
+                                motion_line = ""  # nothing attestable — claim nothing
 
                             print(
                                 f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}"
