@@ -1044,7 +1044,7 @@ def get_reflection_echo_line(agent) -> str:
 # Used to gate context injection by prompt mode
 
 
-_PERSON_MENTION_RE = re.compile(r"\b(he|him|his|she|her|hers|someone|somebody|person|man|woman|guy|visitor)\b", re.I)
+from utils.presence_text import PERSON_RE as _PERSON_MENTION_RE, is_phantom_presence  # noqa: E402
 
 
 def _note_absence_ride(agent, riding: bool) -> None:
@@ -1105,7 +1105,7 @@ def build_standing_absence_line(agent) -> str:
     if dropped <= 0 and session_s < float(getattr(config, "ABSENCE_SESSION_MIN_S", 90)):
         return ""  # fresh boot: the detector gets its say before any standing claim
     tail = list(getattr(agent, "_stream", []) or [])[-int(getattr(config, "ABSENCE_STANDING_TAIL", 8)) :]
-    if not any(_PERSON_MENTION_RE.search(t or "") for t in tail):
+    if not any(is_phantom_presence(t or "") for t in tail):  # present-tense claims only (Sep 5: "someone"/"person" kept it riding 60% of calls)
         _note_absence_ride(agent, False)
         return ""
     _note_absence_ride(agent, True)

@@ -34,6 +34,7 @@ from config.config import (
 )
 from drawing.drawing import DrawingController
 from event_logging.event_logger import log_json_entry
+from utils import presence_text as _presence_text
 from event_logging.log_type import LogType
 from event_logging.run_manager import get_run_image_path
 from perception.vocab_promotion import vocab_promoter
@@ -721,6 +722,17 @@ class Captioner(MemoryMixin):
                 resumed = recently_present if _reid is None else (_reid is True)
                 self._presence_believed = True
                 arrival = not resumed  # OFF->ON edge — the only genuine arrival
+                if arrival:
+                    # Sep 5: the episodic arrival is written HERE, on the adjudicated
+                    # belief's edge. vision/gaze.py wrote it on the face tracker's
+                    # first sighting of each session — mannequin faces and every
+                    # restart minted a visitor (7 on Sep 4, none of them departures).
+                    try:
+                        from utils.episodic_log import episodic_log
+
+                        episodic_log.record("person_arrived", "someone arrived")
+                    except Exception:
+                        pass
                 # For the presence line: the single-occupant prior. Measured
                 # Aug 10: CLIP cross-outfit similarity sits BELOW cross-person,
                 # so appearance cannot say "same man, new jacket" — but when
@@ -786,6 +798,16 @@ class Captioner(MemoryMixin):
             if self._absence_watch_s > PRESENCE_BELIEF_DECAY_SECONDS or getattr(self, "_absence_episodes", 0) >= 3:
                 self._presence_believed = False  # looked, repeatedly, nobody there — they really left
                 self._presence_dropped_at = now  # anchors the resumption prior on the next sighting
+                # Sep 5: the departure reaches the episodic record — nothing ever
+                # wrote person_left, so the visitor reflection read every arrival
+                # as "someone arrived and you never saw them go" (six phantom
+                # visitors on Sep 4). Backdated by the empty-look time.
+                try:
+                    from utils.episodic_log import episodic_log
+
+                    episodic_log.record("person_left", "they left", timestamp=now - float(getattr(self, "_absence_watch_s", 0.0) or 0.0))
+                except Exception:
+                    pass
                 self._absence_watch_s = 0.0
                 self._absence_episodes = 0
                 self._absence_episode_s = 0.0
@@ -906,17 +928,11 @@ class Captioner(MemoryMixin):
     # Phantom PRESENCE (Sep 4 evening, docs/presence-stickiness-sep4.md): a
     # present-tense third-person claim while the adjudicated belief says nobody
     # is here. The stream is the belief — storing these is how "the man in the
-    # grey hoodie" outlived the artist's departure by 15 minutes (the mannequin
-    # head at desk height re-seeds him on a clean window, then the window
-    # teaches itself). Absence-marked mentions ("since he left", "he was") are
-    # memory and pass; the standing absence fact invites exactly those.
-    _PHANTOM_PERSON_RE = re.compile(r"\b(he|him|his|she|her|hers)\b|\bthe (man|woman|guy|person|visitor)\b", re.I)
-    _ABSENCE_MARK_RE = re.compile(
-        r"\b(gone|left|leaves|leaving|empty|no one|nobody|not here|isn.t here|wasn.t|weren.t|was|were|used to|since|before|earlier|ago|remember|came back|come back|comes back|whether|if)\b"
-        r"|\b(he|she|they)\s+(?:\w+ed|had|did|went|came|sat|stood|took|said|typed|kept|got)\b"  # plain past tense is memory too
-        r"|\b(he|she|they)'d\b",
-        re.I,
-    )
+    # grey hoodie" outlived the artist's departure by 15 minutes. Judged per
+    # sentence in utils/presence_text.py (Sep 5: a stray "was"/"if"/"turned to
+    # the left" anywhere in a 50-word caption used to exempt the whole claim).
+    _PHANTOM_PERSON_RE = _presence_text.PERSON_RE
+    _ABSENCE_MARK_RE = _presence_text.NOT_PRESENT_RE
     _PHANTOM_DRAWING_RE = re.compile(
         r"\b(?:"
         r"(?:i am|i'm|i’m) (?:drawing|tracing|sketching|inking)"
@@ -1258,12 +1274,7 @@ class Captioner(MemoryMixin):
             from config.config import PHANTOM_PRESENCE_GATE
         except Exception:
             PHANTOM_PRESENCE_GATE = True
-        if (
-            PHANTOM_PRESENCE_GATE
-            and not getattr(self, "_presence_believed", False)
-            and self._PHANTOM_PERSON_RE.search(caption)
-            and not self._ABSENCE_MARK_RE.search(caption)
-        ):
+        if PHANTOM_PRESENCE_GATE and not getattr(self, "_presence_believed", False) and _presence_text.is_phantom_presence(caption):
             return "phantom_presence"
         # Tail-echo COLLAPSE: one short restatement is a beat, deliberate
         # emphasis ("…waiting forever more…" -> "forevermore, right?" — the

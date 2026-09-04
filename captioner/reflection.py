@@ -299,6 +299,10 @@ class ReflectionLoop:
                 minutes = max(1, int(p.get("duration_seconds", 0) / 60))
                 if p.get("end"):
                     spans.append(f"someone was here about {minutes} minutes, starting {log.format_ago(time.time() - start)}")
+                elif start < float(getattr(self.agent, "true_session_start", 0.0) or 0.0):
+                    # Sep 5: an arrival left open by an earlier run is not "never saw
+                    # them go" — the machine was off. Say only what is known.
+                    spans.append(f"someone came by {log.format_ago(time.time() - start)}")
                 else:
                     spans.append(f"someone arrived {log.format_ago(time.time() - start)} and you never saw them go")
             if spans:

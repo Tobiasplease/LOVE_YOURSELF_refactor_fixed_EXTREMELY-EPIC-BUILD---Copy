@@ -218,6 +218,20 @@ class StateManager:
                     captioner._presence_dropped_at = float(cap_state["presence_dropped_at"])
             except Exception:
                 pass
+            # Sep 5: close an arrival the previous run left open — a restart is not
+            # "you never saw them go". Departure = the saved drop time when the
+            # belief was OFF, else the save time (the machine stopped seeing then).
+            try:
+                from utils.episodic_log import episodic_log
+
+                last_arr = episodic_log.get_last_event("person_arrived")
+                last_left = episodic_log.get_last_event("person_left")
+                if last_arr and (not last_left or last_left.get("timestamp", 0) < last_arr.get("timestamp", 0)):
+                    dropped = float(cap_state.get("presence_dropped_at", 0) or 0)
+                    ts = dropped if (not cap_state.get("presence_believed", False) and dropped > last_arr["timestamp"]) else float(save_time)
+                    episodic_log.record("person_left", "they left", timestamp=max(ts, last_arr["timestamp"] + 1.0))
+            except Exception:
+                pass
 
             # DEBUG: Print awakening context directly
             gap_hours = captioner.last_session_gap / 3600

@@ -156,3 +156,29 @@ Verify live: after a departure, `absence_standing` onset within a minute of
 the first him-caption; `echo_spoken_not_stored` with reason `phantom_presence`
 on mannequin-gaze captions; NO `relational` caption mode while the dashboard
 shows person=absent.
+
+## Sep 5 overnight audit (01:00–01:40) — what the first 3 hours showed
+
+Runs dc964ddd (22:20–23:30) and 2bbb616a (23:36→): the phantom person is
+largely gone (him-mentions 8%, phantom_presence gated ×5/run, relational 0),
+BUT three regressions/holes surfaced and were fixed (this commit):
+
+1. The absence fact rode 34% then 60% of caption calls — trigger words
+   "someone"/"person"/"her" in the tail, and the fact's own "No one's been in
+   the room" seeded more of them. Now: present-tense claims only.
+2. The gate exempted whole captions on a stray "was", "if" or "turned to the
+   left". Now sentence-level in utils/presence_text.py; wondering ("maybe
+   he's still there") passes by design.
+3. The visitor reflection was fed "someone arrived 5.1 h ago and you never
+   saw them go" ×5 → "The visitors don't move; they accumulate. Six of them
+   now" → identity. Cause: gaze.py wrote person_arrived on the face
+   tracker's first sighting per session (mannequin faces, every restart) and
+   NOTHING ever wrote person_left. Now: arrival on the belief's ON edge,
+   departure on the verified OFF edge, open pair closed at restore.
+
+Voice verdict for the artist (same audit): NOT noticeably different yet —
+refrains ("the red thing is still there, pointing down" ×14, "i made that
+because" ×13), content diet of 6 objects, deflation template 20%, zero
+exclamations, and every 20-min distill re-deriving the same avoidance TRAIT
+(all 6 lore threads = one idea). That is a separate round: the reflection →
+distill monoculture and a static night room, not presence.

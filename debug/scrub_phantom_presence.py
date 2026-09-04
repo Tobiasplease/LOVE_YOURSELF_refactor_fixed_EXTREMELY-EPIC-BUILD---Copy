@@ -18,16 +18,15 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from captioner.captioner import Captioner  # noqa: E402
+from utils.presence_text import is_phantom_presence  # noqa: E402
 from config.config import MOOD_SNAPSHOT_FOLDER  # noqa: E402
 
-PERSON, ABSENT = Captioner._PHANTOM_PERSON_RE, Captioner._ABSENCE_MARK_RE
 apply = "--apply" in sys.argv
 LORE = os.path.join(MOOD_SNAPSHOT_FOLDER, "lore_ledger.json")
 
 
 def phantom(text: str) -> bool:
-    return bool(PERSON.search(text or "")) and not ABSENT.search(text or "")
+    return is_phantom_presence(text or "")
 
 
 if apply and subprocess.run(["pgrep", "-f", "python machine.py"], capture_output=True).stdout.strip():

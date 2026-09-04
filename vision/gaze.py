@@ -1137,15 +1137,16 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             # as an arrival; one record per continuous sighting.
             try:
                 from config.config import PRESENCE_REARRIVAL_WINDOW_S
-                from utils.episodic_log import episodic_log
 
                 genuine_new_arrival = (
                     _sighting_gap_s is None or _sighting_gap_s > PRESENCE_REARRIVAL_WINDOW_S
                 ) and not _arrival_recorded_this_sighting
                 if genuine_new_arrival:
-                    episodic_log.record("person_arrived", "someone arrived")
+                    # Sep 5: the episodic person_arrived moved to the captioner's
+                    # adjudicated belief edge — this tracker sees mannequin faces
+                    # and minted a visitor on every restart (7 on Sep 4).
                     _arrival_recorded_this_sighting = True
-                    print("[👤] Genuine new arrival recorded")
+                    print("[👤] Genuine new sighting (episodic arrival is the belief's call)")
                 else:
                     print(f"[👤] Re-detected (not a new arrival)")
             except Exception:

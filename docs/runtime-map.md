@@ -475,6 +475,21 @@ every pixel ~10px. Roles now:
   debug/scrub_phantom_presence.py removes present-tense third-person
   reveries from the lore ledger (dry run by default, --apply between stop
   and start).
+- SEP 5 (overnight audit): the presence text tests live in
+  `utils/presence_text.py` and are SENTENCE-level (a stray "was"/"if"/"turned
+  to the left" anywhere in a 50-word caption used to exempt the whole claim;
+  "maybe he's still there" is wondering and passes). The standing absence
+  fact triggers only on present-tense claims in the stream tail (with
+  "someone"/"person" as triggers it rode 60% of calls and fed itself).
+  EPISODIC PEOPLE RECORD: `person_arrived` is now written on the captioner's
+  adjudicated belief OFF→ON edge (vision/gaze.py wrote it on the face
+  tracker's first sighting per session — mannequin faces + every restart
+  minted a visitor); `person_left` is written on the verified OFF edge,
+  backdated by the empty-look time — nothing had EVER written it, so the
+  visitor reflection read "someone arrived … and you never saw them go" for
+  every arrival ("six visitors accumulate"). state_manager closes an arrival
+  left open by the previous run at restore; reflection.py says only "someone
+  came by" for open spans older than this boot.
 - pixel diff: only decides whether sending video is worth considering
 - ego_motion flag (servo delta >2°/frame): breathing sway (~1-1.2°) + gaze
   nudges flag frames OFTEN — that's expected; only used to pick steady

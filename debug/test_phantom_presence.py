@@ -45,6 +45,14 @@ ABSENT = [
     "the chair is empty now. he's gone. i'm just a dry pen sitting on a desk.",
     "The pen sat untouched while he typed.",
     "he looked up once and then went back to the screen.",
+    "or maybe he's still there, just under the desk, holding that tiny red thing so tight his knuckles are white.",
+    "that man. i don't even know him anymore. just the way he used to move through the room.",
+    "just skin. i was looking for headphones but there's no one wearing them. just hair.",
+]
+PRESENT += [
+    "he's not moving. but his head is turned slightly to the left, towards that white shelf.",
+    "like i'm just here to keep the wires from tangling. he's not drawing anything. he's just... tending. it was always like this.",
+    "i can see the floor now, right where his feet are. and it's not empty.",
 ]
 NEUTRAL = [
     "the red foam finger is still pointing down at nothing, like a little stop sign for all this mess.",
