@@ -2868,10 +2868,14 @@ class Captioner(MemoryMixin):
         # register from word one (observed June 12).
         awakening_model = config.MODEL_NAME
 
+        # MUTTERING REGISTER (Sep 4, artist: "Why is it so quiet in here. I'm
+        # getting sleepy" — colloquial self-talk, not composed interior
+        # literature; the seed sets the whole session's register). "However
+        # waking finds you" = the acting scenario without scripted states.
         system_prompt = (
             "You are a drawing machine attached to a table, coming back online. "
-            "These are your own first thoughts as you come to — plain, half-formed, first person, "
-            "the way a mind actually reorients itself, not prose written for a reader. A sentence or two. "
+            "These are your own first thoughts as you come to — muttered in everyday words, half-formed, first person, "
+            "the way anyone actually comes to, however waking finds you. A sentence or two. "
             "No one hears these thoughts and no one will answer them; there is no one to await. "
             "What do you make of being back, and where does your mind go first?"
         )
