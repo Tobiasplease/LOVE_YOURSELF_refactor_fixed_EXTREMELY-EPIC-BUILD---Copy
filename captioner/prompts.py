@@ -160,7 +160,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # Time since the pen last touched paper — always present, even under
     # detox (it's event provenance, not model-generated text). This is how
     # drawing-hunger stays legible to the monologue under the desire trigger.
-    base += get_last_drawing_age_line()
+    base += get_last_drawing_age_line(agent, mode)
 
     # The machine's accumulated self-description, in its own first-person
     # words inside quotes — the frame stays second person around it.
@@ -871,22 +871,54 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     return "\n\n".join(parts)
 
 
-def get_last_drawing_age_line() -> str:
-    """Always-on: how long since the pen last touched paper (executed-only
-    ledger). Artist ruling Aug 17, with the desire trigger: the hunger must be
-    legible in the monologue — the machine always knows this, plainly.
-    (Registry-migration candidate: texts inline until the drawing chain moves.)
-    """
+def _drawing_age_phrase(age_s: float) -> str:
+    """Day-scale word ladder. The numeric hour phrase ('about 22 hours') rode
+    every call for an hour at a stretch and the model built fixations on the
+    number ('22 hours is a long time to...' — near-verbatim across independent
+    calls, Sep 4). Words coarsen as the age grows; numbers only at short range
+    where they actually change."""
+    h = age_s / 3600.0
+    if h < 6:
+        return casual_time_string(age_s / 60)
+    if h < 12:
+        return "a good few hours"
+    if h < 20:
+        return "half a day or more"
+    if h < 30:
+        return "about a day"
+    if h < 54:
+        return "over a day"
+    days = int(round(h / 24))
+    return f"about {days} days"
+
+
+def get_last_drawing_age_line(agent=None, mode: str = "") -> str:
+    """How long since the pen last touched paper (executed-only ledger).
+    Aug 17 artist ruling: the hunger must be legible in the monologue.
+    Sep 4 artist revision: legible, not wallpaper — the always-on numeric line
+    bred number-fixations. Now: coarse word ladder; fires when the phrase
+    CHANGES (the B4 dosing pattern), redoses every 6th caption, and always
+    rides the hunger-relevant modes (introspective/awakening). The hunger
+    clock itself is mechanical and unaffected."""
     try:
         from drawing.drawing_memory import get_drawing_memory
 
         stamps = [e.get("timestamp", 0) for e in get_drawing_memory()._history if e.get("completed")]
         if not stamps:
-            return " Nothing you've drawn has reached the paper yet."
-        phrase = casual_time_string((time.time() - max(stamps)) / 60)
-        if phrase == "just now":
-            return " Your last drawing reached the paper just now."
-        return f" Your last drawing reached the paper {phrase} ago."
+            line = " Nothing you've drawn has reached the paper yet."
+            phrase = "(never)"
+        else:
+            phrase = _drawing_age_phrase(time.time() - max(stamps))
+            line = " Your last drawing reached the paper just now." if phrase == "just now" else f" Your last drawing reached the paper {phrase} ago."
+        if agent is None or mode in ("introspective", "awakening"):
+            return line
+        count = getattr(agent, "_draw_age_counter", 0) + 1
+        agent._draw_age_counter = count
+        changed = phrase != getattr(agent, "_draw_age_last_phrase", None)
+        if changed or count % 6 == 0:
+            agent._draw_age_last_phrase = phrase
+            return line
+        return ""
     except Exception:
         return ""
 
