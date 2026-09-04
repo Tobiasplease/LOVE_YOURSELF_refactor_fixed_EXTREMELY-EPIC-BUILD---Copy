@@ -1304,7 +1304,7 @@ CAMERA_INDEX = 0  # or whichever index your camera uses
 # remote room view. Use a /dev/v4l/by-id/... path, never a bare index —
 # indices drift on replug. Empty string = no room cam (dashboard shows a
 # placeholder). MJPG fourcc is forced to keep two cams within USB bandwidth.
-CAMERA_2_DEVICE = os.getenv("CAMERA_2_DEVICE", "")
+CAMERA_2_DEVICE = os.getenv("CAMERA_2_DEVICE", "/dev/v4l/by-id/usb-XIFT_Web_Camera_20241217.1817-video-index0")
 CAMERA_2_WIDTH = int(os.getenv("CAMERA_2_WIDTH", "640"))
 CAMERA_2_HEIGHT = int(os.getenv("CAMERA_2_HEIGHT", "480"))
 CAMERA_2_FPS = int(os.getenv("CAMERA_2_FPS", "15"))
