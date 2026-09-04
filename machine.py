@@ -71,6 +71,7 @@ from perception.object_detection import ObjectDetectionThread
 from perception.person_detection_state import get_person_detection_state
 from reactivity.camera_reactive import CameraReactivityEngine
 from safety.aruco_detector import get_aruco_detector
+from utils import runtime_mode
 from utils.continuity import describe_duration
 from utils.error_tracking import get_failure_tracker
 from utils.state_manager import state_manager
@@ -444,6 +445,15 @@ def graceful_cleanup():
             print("[SUCCESS] Session state saved successfully" if success else "[ERROR] Failed to save session state")
         except Exception as e:
             print(f"[ERROR] Error saving session state: {e}")
+
+    # Captioner shutdown: awakening-continuity save, reflection-loop stop,
+    # closing journal entry. Must run while the process is still healthy.
+    if _global_captioner:
+        try:
+            _global_captioner.shutdown()
+            print("[SUCCESS] Captioner shutdown complete (session time + journal saved)")
+        except Exception as e:
+            print(f"[ERROR] Error in captioner shutdown: {e}")
 
     # Log session end
     if _global_start_time and _global_run_id:
@@ -1209,6 +1219,13 @@ threading.Thread(target=_freeze_watchdog, daemon=True, name="freeze-watchdog").s
 # completes. (Previously each piece fired wherever its init happened to
 # sit, minutes apart — uArm first, arm solo, senses, homing last.)
 def _awakening():
+    # LOW ENERGY: the opening play and gantry homing are both actuation —
+    # and the supervisor loop re-runs this on every crash-restart, so an
+    # unattended low-energy run must not wave the uArm or fire $H each time.
+    # (The kinetic bus parks itself; see kinetic_bus._enter_low_energy.)
+    if runtime_mode.low_energy():
+        debug_print("LOW ENERGY — awakening skipped (uArm play + gantry homing parked)", "INIT")
+        return
     try:
         if _uarm_awakening_play is not None:
             threading.Thread(target=_uarm_awakening_play, daemon=True, name="UArmAwakeningPlay").start()
@@ -1241,6 +1258,26 @@ def _awakening():
 
 threading.Thread(target=_awakening, daemon=True, name="awakening").start()
 
+# Dashboard in-process API (127.0.0.1:8801) — live state + POV streams,
+# reached through the sidecar's /machine/* proxy (dashboard/server.py :8800).
+# Everything else the dashboard shows comes from files; only live objects
+# need this thread. Its failure must never stop the machine.
+try:
+    from dashboard.machine_api import start_machine_api
+
+    start_machine_api(
+        {
+            "captioner": captioner,
+            "mood_engine": mood_engine,
+            "kinetic_bus": kinetic_bus,
+            "start_time": _global_start_time,
+        }
+    )
+except Exception as _e:
+    debug_print(f"Dashboard machine API not started: {_e}", "ERROR")
+
+_low_e = _low_e_prev = False
+
 try:
     debug_print("Entering main camera processing loop", "MAIN")
     while True:
@@ -1249,6 +1286,20 @@ try:
         if shutdown_in_progress:
             print("[SHUTDOWN] Shutdown signal received - breaking main loop")
             break
+
+        # LOW ENERGY (dashboard toggle): lung writes stop (the breathing
+        # STATE keeps evolving — update_lung_position just gets no servo),
+        # pan/tilt gaze stays live. One mid-range park write on entry.
+        _low_e = runtime_mode.low_energy()
+        if _low_e and not _low_e_prev and servos:
+            try:
+                from config.config import LUNG_MAX, LUNG_MIN
+
+                servos.set_lung_position(int((LUNG_MIN + LUNG_MAX) / 2), force=True)
+                debug_print("LOW ENERGY — lung parked mid-range (pan/tilt gaze stays live)", "SERVO")
+            except Exception as e:
+                debug_print(f"Lung park failed: {e}", "ERROR")
+        _low_e_prev = _low_e
 
         debug_print("Reading camera frame", "MAIN")
         ret, frame = cap.read()
@@ -1594,7 +1645,7 @@ try:
             last_breath_direction=last_breath_direction,
             pause_start_time=pause_start_time,
             pause_duration=PAUSE_DURATION,
-            servo_controller=servos,
+            servo_controller=(None if _low_e else servos),
         )
 
         if USE_SERVO and servos:

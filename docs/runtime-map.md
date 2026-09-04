@@ -1544,3 +1544,62 @@ them for dead code, and do not expect machine.py to reach them:
 - `labs/warp-fix-lab/` — experimental warp correction scripts, not integrated
 - `debug/` — 103 standalone test/calibration scripts (all verified to import
   only symbols that still exist, July 2026)
+
+## Dashboard + runtime modes (Sep 4 2026)
+
+Remote browser dashboard (GoldSrc-console styled, phone-friendly, offline —
+no CDN anywhere). Two tiers, one browser origin; Tailscale is the access
+control (no auth built):
+
+```
+phone ── :8800  dashboard/server.py     SIDECAR, always-on, own tmux session
+                 │   UI (index.html) · start/stop (wraps start_impostor.sh /
+                 │   stop_machine.sh) · health probes (llama/comfy/GPU/disk) ·
+                 │   caption SSE (tails live_captions.txt) · history (tail-reads
+                 │   newest run logs) · ComfyUI gallery · drawing ledger ·
+                 │   room cam (CAMERA_2_DEVICE, sidecar-owned) · mode toggle
+                 └── /machine/* proxy → 127.0.0.1:8801  dashboard/machine_api.py
+                         IN-PROCESS daemon thread (machine.py, pre-main-loop):
+                         /state live snapshot · POV MJPEG (clean = frame_buffer
+                         JPEGs; annotated = shared frame + own encode) ·
+                         POST /shutdown = SIGINT to self = the RESTART button
+```
+
+- launch: `dashboard/start_dashboard.sh` (tmux `impostor-dashboard`, restart
+  loop — it must outlive machine crashes); stop: `dashboard/stop_dashboard.sh`.
+  STOP button = sidecar runs stop_machine.sh (STOP file + SIGINT); RESTART =
+  `/machine/shutdown` (SIGINT only, supervisor relaunches).
+- the sidecar works with the machine DOWN — that's its job. Machine panels
+  grey out on the proxy's 503.
+- room cam: `CAMERA_2_DEVICE` (config.py, env-overridable) must be a
+  `/dev/v4l/by-id/...` path, never an index; MJPG fourcc forced (USB
+  bandwidth); placeholder frame when absent; machine.py never touches it.
+
+**Runtime modes** — `event_log/runtime_mode.json` via `utils/runtime_mode.py`
+(mtime-cached poll; the filesystem is the bus, prompt_overrides pattern).
+Persists across restarts by construction. `low_energy` gates (gaze pan/tilt,
+lightbulb, LCD, camera, and the whole LLM loop all stay LIVE):
+
+1. lung — machine.py main loop passes `servo_controller=None` to
+   `update_lung_position` (breathing STATE keeps evolving, writes stop);
+   one mid-range park write on the rising edge.
+2. left arm — `kinetic_bus._enter_low_energy` (supervisor tick): stops
+   gens/choreographies, eases to channel neutrals once (~3s), then ZERO
+   writes; `status()["state"]` reads `"low_energy"`. A genuinely-moving
+   safety clearing (homing choreography playing / paper / startle) keeps
+   the body until its hold releases, then the supervisor re-parks. Exit
+   re-picks a bundle ≤2s and re-homes the gantry (tuck fires).
+3. drawing — `should_draw()` returns False with
+   `last_block_reason="low_energy"` (throttled DECISION entry every 10min);
+   drive NOT ticked (level frozen in drawing_drive.json). This transitively
+   blocks ALL paper checks (every check site is downstream of the trigger).
+   Reserved: a `digital_only` mode key would gate
+   `image_monitor._process_png_to_gcode` instead.
+4. awakening — machine.py `_awakening()` returns early: no uArm opening
+   play, no gantry homing (matters on supervisor crash-restarts).
+
+Bundled fix (same date): `graceful_cleanup()` now calls
+`Captioner.shutdown()` — it previously had zero callers, so every shutdown
+silently skipped the awakening-continuity save and the closing journal entry.
+
+Gate check without hardware: `debug/test_low_energy_gates.py`.

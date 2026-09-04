@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOVE YOURSELF — OVERSIGHT TERMINAL</title>
+<style>
+/* ------------------------------------------------------------------ theme
+   GoldSrc-era lab console: amber on dark olive, VGUI bevels, scanlines.
+   No external requests ever — offline exhibition doctrine. */
+:root{
+  --bg:#0e0f0a; --panel:#1a1c12; --panel2:#15170e; --well:#0a0b06;
+  --amber:#e8a020; --amber-hi:#ffc040; --amber-dim:#8a6614; --text:#c8a860;
+  --green:#5fae32; --red:#c03828; --cyan:#4fa0a0; --grey:#5a5c48;
+  --bevel-lt:#3a3c28; --bevel-dk:#000;
+}
+@font-face{font-family:"ConsoleLocal";src:local("Consolas"),local("Liberation Mono"),local("DejaVu Sans Mono");}
+/* drop a WOFF2 into dashboard/fonts/ and add a src url(...) above to rebrand */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--text);font-family:"ConsoleLocal","Consolas","Liberation Mono","DejaVu Sans Mono",monospace;
+  font-size:14px;line-height:1.45;overflow-x:hidden;}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
+  background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.14) 2px 3px),
+  radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.35) 100%);}
+.bevel{border:2px solid;border-color:var(--bevel-lt) var(--bevel-dk) var(--bevel-dk) var(--bevel-lt);background:var(--panel);}
+.well{border:2px solid;border-color:var(--bevel-dk) var(--bevel-lt) var(--bevel-lt) var(--bevel-dk);background:var(--well);}
+h1,h2,.tab,button{text-transform:uppercase;letter-spacing:.12em;}
+h2{color:var(--amber);font-size:12px;padding:4px 8px;background:var(--panel2);
+  border-bottom:1px solid var(--bevel-dk);}
+
+/* header ----------------------------------------------------------------- */
+header{position:sticky;top:0;z-index:50;background:var(--bg);padding:8px 8px 4px;}
+.masthead{display:flex;align-items:baseline;gap:12px;padding:6px 10px;}
+.masthead h1{color:var(--amber);font-size:16px;text-shadow:0 0 8px rgba(232,160,32,.45);}
+.masthead small{color:var(--amber-dim);font-size:10px;letter-spacing:.2em;}
+.ctlrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;margin-top:4px;}
+.led{display:inline-block;width:10px;height:10px;border-radius:50%;background:#333;vertical-align:-1px;margin-right:6px;}
+.led.on{background:var(--green);box-shadow:0 0 8px var(--green);}
+.led.off{background:var(--red);box-shadow:0 0 8px var(--red);}
+.led.warn{background:var(--amber);box-shadow:0 0 8px var(--amber);}
+#machineWord{color:var(--amber-hi);font-weight:bold;min-width:9ch;}
+button{background:var(--panel);color:var(--amber);border:2px solid;
+  border-color:var(--bevel-lt) var(--bevel-dk) var(--bevel-dk) var(--bevel-lt);
+  font:inherit;font-size:12px;padding:8px 14px;cursor:pointer;}
+button:hover{color:var(--amber-hi);text-shadow:0 0 6px rgba(255,192,64,.6);}
+button:active{border-color:var(--bevel-dk) var(--bevel-lt) var(--bevel-lt) var(--bevel-dk);}
+button:disabled{color:var(--grey);cursor:default;text-shadow:none;}
+button.danger{color:var(--red);}
+button.latch.on{color:#111;background:var(--amber);border-color:var(--amber-hi) var(--amber-dim) var(--amber-dim) var(--amber-hi);
+  text-shadow:none;box-shadow:0 0 12px rgba(232,160,32,.5);}
+.spacer{flex:1;}
+
+/* tabs ------------------------------------------------------------------- */
+nav{display:flex;gap:6px;padding:6px 10px 0;}
+.tab{background:none;border:none;color:var(--amber-dim);padding:6px 10px;font-size:13px;cursor:pointer;}
+.tab:hover{color:var(--amber);}
+.tab.active{color:var(--amber-hi);text-shadow:0 0 8px rgba(255,192,64,.5);}
+.tab.active::before{content:"▸ ";}
+main{padding:8px;display:grid;gap:8px;max-width:1200px;margin:0 auto;}
+section{display:none;}section.active{display:block;}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:8px;}
+.stack{display:grid;gap:8px;}
+
+/* feed ------------------------------------------------------------------- */
+#feedWell{height:56vh;overflow-y:auto;padding:10px;font-size:13.5px;}
+#feedWell p{margin-bottom:9px;color:var(--text);}
+#feedWell p.drawing{color:var(--green);}
+#feedWell p.drawing_done{color:var(--green);font-weight:bold;}
+#feedWell p.drawing_failed{color:var(--red);}
+#feedWell p.reflection{color:var(--cyan);}
+#cursor{display:inline-block;width:9px;height:15px;background:var(--amber);animation:blink 1s steps(1) infinite;vertical-align:-2px;}
+@keyframes blink{50%{opacity:0;}}
+.statgrid{display:grid;gap:2px;padding:8px;font-size:12.5px;}
+.statgrid div{display:flex;justify-content:space-between;gap:8px;}
+.statgrid b{color:var(--amber);font-weight:normal;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;}
+.meter{height:10px;position:relative;margin:2px 0 6px;}
+.meter i{position:absolute;inset:2px auto 2px 2px;background:var(--amber);box-shadow:0 0 6px rgba(232,160,32,.5);}
+.offline-stamp{display:none;padding:24px;text-align:center;color:var(--red);letter-spacing:.25em;font-size:15px;}
+.offline .offline-stamp{display:block;}
+.offline .hide-when-off{display:none !important;}
+
+/* cameras ---------------------------------------------------------------- */
+#camView{width:100%;min-height:240px;background:#000;display:block;}
+.cambar{display:flex;gap:6px;padding:6px;flex-wrap:wrap;}
+.camnote{padding:4px 8px;font-size:11.5px;color:var(--amber-dim);}
+
+/* drawings --------------------------------------------------------------- */
+#latestImg{width:100%;background:#000;display:block;min-height:180px;}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;padding:6px;}
+.thumbs img{width:100%;aspect-ratio:1;object-fit:cover;cursor:pointer;border:1px solid var(--bevel-dk);}
+.thumbs img:hover{border-color:var(--amber);}
+.ledger{padding:6px;font-size:12.5px;max-height:40vh;overflow-y:auto;}
+.ledger li{list-style:none;padding:5px 4px;border-bottom:1px dashed #2a2c1a;}
+.ledger .ok{color:var(--green);}.ledger .no{color:var(--red);}
+
+/* history ---------------------------------------------------------------- */
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:6px;}
+.chip{font-size:11px;padding:4px 8px;}
+.chip.on{color:#111;background:var(--amber);}
+#histList{max-height:60vh;overflow-y:auto;padding:8px;font-size:12.5px;}
+#histList p{margin-bottom:8px;}
+#histList .ts{color:var(--grey);margin-right:6px;}
+#histList .t-reflection{color:var(--cyan);}
+#histList .t-decision{color:var(--amber-dim);}
+#histList .t-comfy_prompt,#histList .t-new_drawing{color:var(--green);}
+
+/* system ----------------------------------------------------------------- */
+.sysgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;}
+.sysrows{padding:8px;font-size:12.5px;}
+.sysrows div{display:flex;justify-content:space-between;padding:2px 0;}
+.sysrows b{color:var(--amber);font-weight:normal;}
+
+/* mobile ----------------------------------------------------------------- */
+@media (max-width:700px){
+  .grid2{grid-template-columns:1fr;}
+  nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg);z-index:60;
+    border-top:2px solid var(--bevel-lt);justify-content:space-around;padding:4px 0;}
+  main{padding-bottom:56px;}
+  #feedWell{height:44vh;}
+  .masthead small{display:none;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="masthead bevel">
+    <h1>LOVE YOURSELF</h1>
+    <small>OVERSIGHT TERMINAL — PROPRIETARY RUNTIME CONTROL — AUTHORIZED PERSONNEL ONLY</small>
+  </div>
+  <div class="ctlrow bevel">
+    <span><span id="machineLed" class="led"></span><span id="machineWord">PROBING…</span></span>
+    <span class="spacer"></span>
+    <button id="btnLowE" class="latch">LOW ENERGY</button>
+    <button id="btnStart">START</button>
+    <button id="btnStop" class="danger">STOP</button>
+    <button id="btnRestart">RESTART</button>
+  </div>
+  <nav>
+    <button class="tab active" data-tab="feed">Feed</button>
+    <button class="tab" data-tab="cameras">Cameras</button>
+    <button class="tab" data-tab="drawings">Drawings</button>
+    <button class="tab" data-tab="history">History</button>
+    <button class="tab" data-tab="system">System</button>
+  </nav>
+</header>
+
+<main>
+
+<section id="tab-feed" class="active">
+  <div class="grid2">
+    <div class="bevel"><h2>Live Feed</h2>
+      <div id="feedWell" class="well"><p id="feedTail"><span id="cursor"></span></p></div>
+    </div>
+    <div class="bevel" id="statePanel"><h2>Current State</h2>
+      <div class="offline-stamp">■ MACHINE OFFLINE ■</div>
+      <div class="statgrid hide-when-off" id="stateGrid"></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-cameras">
+  <div class="bevel"><h2>Visual Monitor</h2>
+    <div class="cambar">
+      <button data-cam="pov" class="camsel">Machine POV</button>
+      <button data-cam="annotated" class="camsel">Annotated</button>
+      <button data-cam="room" class="camsel">Room</button>
+      <button data-cam="" class="camsel">Blank</button>
+    </div>
+    <img id="camView" alt="">
+    <div class="camnote" id="camNote">select a source — streams stop when switched away</div>
+  </div>
+</section>
+
+<section id="tab-drawings">
+  <div class="grid2">
+    <div class="bevel"><h2>Latest Output</h2><img id="latestImg" alt=""><div class="camnote" id="latestName"></div></div>
+    <div class="bevel"><h2>Drawing Ledger</h2><ul class="ledger well" id="ledgerList"></ul></div>
+  </div>
+  <div class="bevel" style="margin-top:8px"><h2>Gallery</h2>
+    <div class="thumbs" id="thumbGrid"></div>
+    <div class="cambar"><button id="btnMoreImgs">More</button></div>
+  </div>
+</section>
+
+<section id="tab-history">
+  <div class="bevel"><h2>Archive</h2>
+    <div class="chips" id="typeChips">
+      <button class="chip on" data-t="caption">captions</button>
+      <button class="chip on" data-t="reflection">reflections</button>
+      <button class="chip" data-t="decision">triggers</button>
+      <button class="chip" data-t="comfy_prompt">drawing prompts</button>
+    </div>
+    <div id="histList" class="well"></div>
+    <div class="cambar"><button id="btnOlder">Older</button><span class="camnote" id="histNote"></span></div>
+  </div>
+</section>
+
+<section id="tab-system">
+  <div class="sysgrid">
+    <div class="bevel"><h2>Services</h2><div class="sysrows" id="svcRows"></div></div>
+    <div class="bevel"><h2>Resources</h2><div class="sysrows" id="resRows"></div></div>
+    <div class="bevel" id="gatePanel"><h2>Runtime Mode</h2><div class="sysrows" id="gateRows"></div></div>
+    <div class="bevel" id="failPanel"><h2>Component Heartbeats</h2><div class="sysrows" id="failRows"></div></div>
+  </div>
+</section>
+
+</main>
+
+<script>
+"use strict";
+/* helpers ------------------------------------------------------------- */
+const $ = s => document.querySelector(s);
+const el = (t, cls, txt) => { const e = document.createElement(t); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+const j = async (url, opts) => { const r = await fetch(url, opts); if (!r.ok) throw Object.assign(new Error("http " + r.status), { status: r.status }); return r.json(); };
+const post = (url, body) => j(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+const ago = ts => { if (!ts) return "—"; const s = Math.max(0, (Date.now() / 1000 - ts) | 0);
+  return s < 60 ? s + "s" : s < 3600 ? (s / 60 | 0) + "m" : s < 86400 ? (s / 3600 | 0) + "h" : (s / 86400 | 0) + "d"; };
+const hhmm = ts => ts ? new Date(ts * 1000).toTimeString().slice(0, 5) : "—";
+
+function poll(fn, ms) { /* run now + every ms, paused while tab hidden */
+  let t; const tick = async () => { if (!document.hidden) { try { await fn(); } catch (e) {} } t = setTimeout(tick, ms); };
+  tick(); document.addEventListener("visibilitychange", () => { if (!document.hidden) { clearTimeout(t); tick(); } });
+}
+
+/* tabs ---------------------------------------------------------------- */
+let activeTab = "feed";
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  activeTab = b.dataset.tab;
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll("main section").forEach(s => s.classList.toggle("active", s.id === "tab-" + activeTab));
+  if (activeTab !== "cameras") setCam("");           // kill streams when leaving
+  if (activeTab === "drawings") loadDrawings();
+  if (activeTab === "history") { if (!histLoaded) loadHistory(true); }
+});
+
+/* header: status + lifecycle ------------------------------------------ */
+let lastStatus = null;
+poll(async () => {
+  const s = await j("/api/status").catch(() => null);
+  lastStatus = s;
+  const led = $("#machineLed"), word = $("#machineWord");
+  if (!s) { led.className = "led"; word.textContent = "NO LINK"; return; }
+  if (s.pid_alive && s.api_ok) { led.className = "led on"; word.textContent = "RUNNING"; }
+  else if (s.pid_alive) { led.className = "led warn"; word.textContent = "BOOTING"; }
+  else if (s.tmux_session && !s.stop_file) { led.className = "led warn"; word.textContent = "RESTARTING"; }
+  else { led.className = "led off"; word.textContent = "OFFLINE"; }
+  $("#btnStart").disabled = s.pid_alive;
+  $("#btnStop").disabled = !s.pid_alive && !s.tmux_session;
+  $("#btnRestart").disabled = !s.pid_alive;
+  $("#btnLowE").classList.toggle("on", !!s.low_energy);
+}, 3000);
+
+$("#btnStart").onclick = async () => { if (!confirm("START the machine?")) return;
+  try { await post("/api/machine/start"); } catch (e) { alert("start: " + e.message); } };
+$("#btnStop").onclick = async () => { if (!confirm("STOP the machine? (graceful — state saves, supervisor ends)")) return;
+  try { await post("/api/machine/stop"); } catch (e) { alert("stop: " + e.message); } };
+$("#btnRestart").onclick = async () => { if (!confirm("RESTART the machine? (graceful shutdown, supervisor relaunches)")) return;
+  try { await post("/machine/shutdown"); } catch (e) { alert("restart: " + e.message); } };
+$("#btnLowE").onclick = async () => {
+  const on = !$("#btnLowE").classList.contains("on");
+  if (!confirm(on ? "Engage LOW ENERGY? (gaze only — lung, arm and drawing park)" : "Disengage LOW ENERGY? (full actuation resumes, gantry re-homes)")) return;
+  try { $("#btnLowE").classList.toggle("on", (await post("/api/mode", { low_energy: on })).low_energy); }
+  catch (e) { alert("mode: " + e.message); }
+};
+
+/* feed: SSE captions --------------------------------------------------- */
+function startSSE() {
+  const es = new EventSource("/api/captions/stream");
+  es.onmessage = ev => {
+    let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    const p = el("p", d.kind, d.text);
+    const well = $("#feedWell"), tail = $("#feedTail");
+    well.insertBefore(p, tail);
+    while (well.children.length > 220) well.removeChild(well.firstChild);
+    well.scrollTop = well.scrollHeight;
+  };
+  es.onerror = () => {}; // EventSource auto-reconnects (retry: 3000)
+}
+startSSE();
+
+/* feed: state strip ---------------------------------------------------- */
+const meter = v => { const m = el("div", "meter well"); const i = el("i"); i.style.width = Math.round(100 * Math.max(0, Math.min(1, v))) + "%"; m.appendChild(i); return m; };
+poll(async () => {
+  if (activeTab !== "feed" && activeTab !== "system") return;
+  let st = null;
+  try { st = await j("/machine/state"); } catch (e) { }
+  $("#statePanel").classList.toggle("offline", !st);
+  renderGates(st);
+  if (!st) return;
+  const gdiv = $("#stateGrid"); gdiv.textContent = "";
+  const row = (k, v) => { const d = el("div"); d.appendChild(el("span", "", k)); d.appendChild(el("b", "", v == null ? "—" : String(v))); gdiv.appendChild(d); };
+  row("emotion", st.emotion);
+  row("mood", st.mood == null ? null : st.mood.toFixed(2)); if (st.mood != null) gdiv.appendChild(meter(st.mood));
+  row("boredom", st.boredom == null ? null : st.boredom.toFixed(2)); if (st.boredom != null) gdiv.appendChild(meter(st.boredom));
+  row("drive", st.drive_level == null ? null : st.drive_level.toFixed(2)); if (st.drive_level != null) gdiv.appendChild(meter(st.drive_level / 1.2));
+  row("draw block", st.draw_block_reason);
+  row("paper", st.drawing && (st.drawing.paper_state || (st.drawing.paper_present ? "present" : "absent")));
+  row("drawing", st.drawing && (st.drawing.is_executing_cnc ? "EXECUTING" : st.drawing.is_generating ? "GENERATING" : "idle"));
+  row("gaze", st.gaze && st.gaze.description);
+  row("person", st.person && st.person.person_state);
+  row("kinetic", st.kinetic && st.kinetic.state || (st.kinetic ? "idle" : null));
+  row("desire", st.desire);
+  row("belief", st.belief);
+  row("last caption", ago(st.caption_ts) + " ago");
+  row("uptime", ago((Date.now() / 1000) - (st.uptime_s || 0)));
+}, 2500);
+
+/* cameras -------------------------------------------------------------- */
+const CAMS = { pov: "/machine/cam/pov", annotated: "/machine/cam/pov/annotated", room: "/api/roomcam.mjpg" };
+function setCam(name) {
+  const img = $("#camView");
+  img.src = name && CAMS[name] ? CAMS[name] + "?t=" + Date.now() : "";
+  document.querySelectorAll(".camsel").forEach(b => b.classList.toggle("on", b.dataset.cam === name));
+  $("#camNote").textContent = name ? "streaming: " + name + (name !== "room" ? " (via machine — blank if offline)" : "") : "no stream active";
+}
+document.querySelectorAll(".camsel").forEach(b => b.onclick = () => setCam(b.dataset.cam));
+$("#camView").onerror = () => { $("#camNote").textContent = "stream unavailable — machine offline? retry via the source buttons"; };
+document.addEventListener("visibilitychange", () => { if (document.hidden) setCam(""); });
+
+/* drawings ------------------------------------------------------------- */
+let imgsBefore = 0;
+async function loadDrawings(more) {
+  try {
+    const q = more && imgsBefore ? "?limit=24&before=" + imgsBefore : "?limit=24";
+    const d = await j("/api/comfy/list" + q);
+    if (!more) $("#thumbGrid").textContent = "";
+    (d.images || []).forEach((im, i) => {
+      if (!more && i === 0) { $("#latestImg").src = "/api/comfy/img?name=" + encodeURIComponent(im.name); $("#latestName").textContent = im.name + " — " + ago(im.mtime) + " ago"; }
+      const t = el("img"); t.loading = "lazy"; t.src = "/api/comfy/img?thumb=1&name=" + encodeURIComponent(im.name);
+      t.onclick = () => { $("#latestImg").src = "/api/comfy/img?name=" + encodeURIComponent(im.name); $("#latestName").textContent = im.name + " — " + ago(im.mtime) + " ago"; window.scrollTo({ top: 0, behavior: "smooth" }); };
+      $("#thumbGrid").appendChild(t);
+      imgsBefore = im.mtime;
+    });
+    const led = await j("/api/drawings");
+    const ul = $("#ledgerList"); ul.textContent = "";
+    const entries = (led.ledger && (led.ledger.drawings || led.ledger)) || [];
+    (Array.isArray(entries) ? entries.slice().reverse() : []).forEach(en => {
+      const li = el("li");
+      li.appendChild(el("span", en.completed === false ? "no" : "ok", en.completed === false ? "✗ " : "✓ "));
+      li.appendChild(el("span", "", (en.compressed_summary || en.summary || "(untitled)") + " — " + ago(en.timestamp) + " ago"));
+      ul.appendChild(li);
+    });
+  } catch (e) { $("#latestName").textContent = "gallery unavailable: " + e.message; }
+}
+$("#btnMoreImgs").onclick = () => loadDrawings(true);
+
+/* history -------------------------------------------------------------- */
+let histLoaded = false, histBefore = 0;
+document.querySelectorAll("#typeChips .chip").forEach(c => c.onclick = () => { c.classList.toggle("on"); loadHistory(true); });
+async function loadHistory(reset) {
+  histLoaded = true;
+  const types = [...document.querySelectorAll("#typeChips .chip.on")].map(c => c.dataset.t).join(",");
+  if (reset) { histBefore = 0; $("#histList").textContent = ""; }
+  try {
+    const d = await j("/api/history?runs=3&limit=80&types=" + types + (histBefore ? "&before=" + histBefore : ""));
+    (d.entries || []).forEach(e => {
+      const p = el("p", "t-" + e.type);
+      p.appendChild(el("span", "ts", hhmm(e.timestamp) + " [" + (e.run_id || "?") + "]"));
+      let txt = e.caption || e.reflection || e.prompt || e.message || "";
+      if (e.type === "decision") txt = (e.will_draw ? "DRAW" : "wait") + " — " + (e.reason || "") + (e.desire ? " · wants: " + e.desire : "");
+      p.appendChild(document.createTextNode(txt));
+      $("#histList").appendChild(p);
+      histBefore = e.timestamp;
+    });
+    $("#histNote").textContent = (d.entries || []).length ? "" : "no further entries";
+  } catch (e) { $("#histNote").textContent = "history unavailable: " + e.message; }
+}
+$("#btnOlder").onclick = () => loadHistory(false);
+
+/* system --------------------------------------------------------------- */
+const LEDROW = (label, ok, extra) => { const d = el("div"); const s = el("span"); s.appendChild(el("span", "led " + (ok == null ? "" : ok ? "on" : "off"))); s.appendChild(document.createTextNode(label)); d.appendChild(s); d.appendChild(el("b", "", extra || (ok ? "OK" : "DOWN"))); return d; };
+poll(async () => {
+  if (activeTab !== "system") return;
+  const h = await j("/api/health").catch(() => null);
+  const s = lastStatus;
+  const svc = $("#svcRows"); svc.textContent = "";
+  if (h) {
+    svc.appendChild(LEDROW("llama-server", h.llama));
+    svc.appendChild(LEDROW("comfyui", h.comfy));
+    svc.appendChild(LEDROW("machine api", s && s.api_ok));
+    svc.appendChild(LEDROW("sidecar", true, ago((Date.now() / 1000) - h.sidecar_uptime_s) + " up"));
+    if (s) svc.appendChild(LEDROW("STOP file", !s.stop_file, s.stop_file ? "SET" : "clear"));
+  }
+  const res = $("#resRows"); res.textContent = "";
+  if (h) {
+    const r = (k, v) => { const d = el("div"); d.appendChild(el("span", "", k)); d.appendChild(el("b", "", v)); res.appendChild(d); };
+    if (h.vram_used_mb != null) { r("vram", (h.vram_used_mb / 1024).toFixed(1) + " / " + (h.vram_total_mb / 1024).toFixed(1) + " GB"); res.appendChild(meter(h.vram_used_mb / h.vram_total_mb)); }
+    if (h.gpu_util != null) { r("gpu util", h.gpu_util + "%"); res.appendChild(meter(h.gpu_util / 100)); }
+    if (h.disk) { r("disk free", h.disk.free_gb + " / " + h.disk.total_gb + " GB"); }
+  }
+}, 5000);
+
+function renderGates(st) {
+  const g = $("#gateRows"); g.textContent = "";
+  const low = st ? st.low_energy : (lastStatus && lastStatus.low_energy);
+  const r = (k, v) => { const d = el("div"); d.appendChild(el("span", "", k)); d.appendChild(el("b", "", v == null ? "—" : String(v))); g.appendChild(d); };
+  r("low energy", low ? "ENGAGED" : "off");
+  if (st) {
+    r("kinetic state", st.kinetic ? (st.kinetic.state || "idle") : "no bus");
+    r("draw block", st.draw_block_reason || "none");
+    r("gaze", "always live");
+  } else r("machine", "offline — file flag only");
+  const f = $("#failRows"); f.textContent = "";
+  if (st && st.failures) Object.entries(st.failures).forEach(([name, v]) =>
+    f.appendChild(LEDROW(name, v.ago_s < 120, v.ago_s + "s ago · " + v.errors + " err")));
+}
+</script>
+</body>
+</html>

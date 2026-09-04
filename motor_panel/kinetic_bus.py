@@ -131,6 +131,18 @@ DRAWING_STATE = "drawing"
 STARTLE_STATE = "startle"  # recorded startle pose — interrupts, never mood-picked
 HOMING_STATE = "homing"  # tucked-clear pose while the gantry homes — interrupts, never mood-picked
 PAPER_STATE = "paper"  # get-clear move while the camera inspects the paper — interrupts, never mood-picked
+LOW_ENERGY_STATE = "low_energy"  # dashboard park — deliberately NOT in STATES: it must never match a session bundle
+
+
+def _low_energy_flag() -> bool:
+    """Poll the persisted dashboard mode; the lab (panel.py) runs without
+    the repo context, so absence of the module just means 'off'."""
+    try:
+        from utils import runtime_mode
+
+        return runtime_mode.low_energy()
+    except Exception:
+        return False
 INTERRUPT_STATES = (STARTLE_STATE, HOMING_STATE, PAPER_STATE)
 STATES = [DRAWING_STATE, STARTLE_STATE, HOMING_STATE, PAPER_STATE] + EMOTIONS
 OWNED_CHANNELS = {"finger0", "finger1", "finger2", "finger3", "elbow", "shoulder", "wrist"}
@@ -526,6 +538,19 @@ class KineticBus:
         last_slow = 0.0
         while self._running:
             now = time.time()
+            le = _low_energy_flag()
+            # A clearing that is genuinely MOVING keeps the body (collision
+            # avoidance beats stillness); the awakening still-hold (HOMING
+            # with nothing playing) parks immediately — with the machine's
+            # awakening gated under low energy, no homing is coming.
+            busy_clearing = now < self._hold_until and (bool(self._home_players) or self._active_state in (STARTLE_STATE, PAPER_STATE))
+            if le and self._active_state != LOW_ENERGY_STATE and not busy_clearing:
+                self._enter_low_energy()
+            elif not le and self._active_state == LOW_ENERGY_STATE:
+                self._exit_low_energy()
+            if self._active_state == LOW_ENERGY_STATE:
+                time.sleep(self.SUPERVISOR_TICK)
+                continue  # parked: no lean, no startle-watch, no bundle choice, zero writes
             self._watch_person(now)
             self._update_lean()  # the lean current settles/releases at tick rate
             if self._active_state == HOMING_STATE:
@@ -534,6 +559,41 @@ class KineticBus:
                 last_slow = now
                 self._update_bundle(now)
             time.sleep(self.SUPERVISOR_TICK)
+
+    def _enter_low_energy(self):
+        """LOW ENERGY (dashboard toggle, event_log/runtime_mode.json): stop
+        the temperament, ease to neutral once, then hold with ZERO writes —
+        stillness is the park, servo wear is the point. Gaze (machine.py
+        pan/tilt) stays live elsewhere; the gantry steps aside pen-up."""
+        self._home_token = object()  # supersede any homing ramp/playback...
+        self._startle_token = object()  # ...and any relative flinch
+        for p in self._home_players:
+            p.stop()
+        self._home_players = []
+        self._stop_gens()
+        self._resume_bundle = None
+        self._active_bundle = None
+        self._active_state = LOW_ENERGY_STATE
+        ease = 3.0
+        self._hold_until = time.time() + ease + 2.0  # claim the body so the ramp survives (_ease_to_pose checks the hold)
+        pose = {}
+        if self.device is not None:
+            pose = {c: float(ch.neutral) for c, ch in self.device.channels.items() if c in self.owned}
+        if pose:
+            self._ease_to_pose(pose, ease, still_valid=lambda: self._active_state == LOW_ENERGY_STATE)
+        self.gantry_release()
+        self.log("LOW ENERGY — body parked at neutral (gaze stays live)")
+
+    def _exit_low_energy(self):
+        """Toggle off: the next bundle pick (≤2s) crossfades in from the
+        live pose; the gantry rejoins via connect+home — the tuck
+        choreography fires with it — threaded because it blocks."""
+        self._hold_until = 0.0
+        self._active_state = None
+        self._bundle_since = 0.0
+        if self.gantry is not None:
+            threading.Thread(target=self.gantry_acquire, daemon=True, name="le-gantry-acquire").start()
+        self.log("LOW ENERGY off — temperament resumes, gantry re-homing")
 
     def _desired_state(self) -> str:
         if self.get_emotion is not None:

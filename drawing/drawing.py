@@ -193,6 +193,29 @@ class DrawingController:
 
         if BASE_VOICE_DETOX:
             return False
+        # LOW ENERGY (dashboard toggle, event_log/runtime_mode.json): no
+        # conception, no ComfyUI, no CNC — and transitively no paper checks
+        # (every check site is downstream of this trigger). The drive is NOT
+        # ticked: the level stays frozen in drawing_drive.json and resumes
+        # charging when the mode lifts. Reserved variant: a "digital_only"
+        # mode key would instead gate image_monitor._process_png_to_gcode
+        # and let this pass.
+        from utils.runtime_mode import low_energy
+
+        if low_energy():
+            self.last_block_reason = "low_energy"
+            if time.time() - getattr(self, "_last_low_e_log", 0.0) > 600:
+                self._last_low_e_log = time.time()
+                self._log_trigger_decision(
+                    mode=self.TRIGGER_MODE,
+                    verdict=False,
+                    reason="low_energy",
+                    shadow=self.desire_shadow_verdict(),
+                    mood=mood,
+                    boredom=boredom,
+                    time_since=time.time() - self.last_drawing_time,
+                )
+            return False
         from config.config import DRAWING_MIN_INTERVAL
 
         time_since = time.time() - self.last_drawing_time
