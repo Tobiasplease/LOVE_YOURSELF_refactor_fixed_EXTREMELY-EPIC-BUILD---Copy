@@ -562,11 +562,24 @@ def graceful_cleanup():
     print("[SUCCESS] Graceful shutdown completed")
 
 
+def _bounded_exit(code: int = 0, grace_s: float = 8.0) -> None:
+    """sys.exit only unwinds the MAIN thread. Sep 5 01:15: after a completed
+    graceful_cleanup the caption worker kept the interpreter alive — captioning
+    on with the logger closed, the tmux supervisor never saw an exit, and the
+    stop script's SIGINT had to be followed by SIGKILL. The dashboard STOP and
+    RESTART both ride this path, so the exit must be bounded: cleanup runs, then
+    the process is gone within grace_s no matter which thread is still busy."""
+    t = threading.Timer(grace_s, lambda: os._exit(code))
+    t.daemon = True
+    t.start()
+    sys.exit(code)
+
+
 def signal_handler(signum, signal_frame):
     """Handle interrupt signals."""
     print(f"\n[🔄] Received signal {signum}")
     graceful_cleanup()
-    sys.exit(0)
+    _bounded_exit(0)
 
 
 # Register signal handlers
@@ -1785,4 +1798,4 @@ try:
             reset_camera_controls()
 except KeyboardInterrupt:
     graceful_cleanup()
-    sys.exit(0)
+    _bounded_exit(0)
