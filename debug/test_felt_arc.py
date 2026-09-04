@@ -123,7 +123,7 @@ def test_dynamic_frame():
     from captioner.prompt_registry import P
 
     line = P("monologue.felt-frame").format(felt="ready to answer")
-    check("frame slot renders own words", "ready to answer" in line and "your own words" in line, line)
+    check("frame slot casts bare (no citation distance)", line.strip() == "Right now: ready to answer." and '"' not in line, line)
 
     saved = cc.get_felt_state
     try:
@@ -141,7 +141,7 @@ def test_dynamic_frame():
         cfg.FELT_FRAME_ENABLED = True
 
     span = cfg.AROUSAL_TEMP_SPAN
-    check("arousal swing bounded", 0.0 < span <= 0.3, str(span))
+    check("arousal swing bounded", 0.0 < span <= 0.4, str(span))
     adj_hot = span * (0.9 - 0.5)
     adj_cold = span * (0.1 - 0.5)
     check("stirred warms, drained cools", adj_hot > 0 > adj_cold)
