@@ -687,6 +687,32 @@ def _update_registry_glance(now):
         _glance_active = False
         _glance_last_end = now
         return None
+    # PRESENCE CHECK (Sep 4, verified absence): the belief system asked the
+    # gaze to go look where the person was last seen. Jumps the idle-glance
+    # interval — it's purposeful, and it only fires when tracking is idle
+    # (the person is lost) — but respects an active glance above.
+    try:
+        from perception.person_detection_state import get_person_detection_state
+
+        _chk = get_person_detection_state().pop_absence_check()
+    except Exception:
+        _chk = None
+    if _chk:
+        _glance_active = True
+        _glance_until = now + GAZE_GLANCE_DWELL * 1.2
+        _glance_target = (_chk["pan"], _chk["tilt"])
+        _glance_label = "where they were"
+        _glance_kind = "check"
+        _glance_started = now
+        print(f"[👁️] Glance (check): where they were → pan={_chk['pan']:.0f}° tilt={_chk['tilt']:.0f}°")
+        try:
+            from event_logging.event_logger import log_json_entry
+            from event_logging.log_type import LogType
+
+            log_json_entry(LogType.DEBUG, {"message": "Glance (check): where they were", "action": "glance_start", "kind": "check", "term": None})
+        except Exception:
+            pass
+        return _glance_target
     if now - _glance_last_end < GAZE_GLANCE_INTERVAL * random.uniform(0.6, 1.4):
         return None
     try:

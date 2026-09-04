@@ -1095,6 +1095,9 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         if gi and gi["kind"] == "revisit" and gi["started"] != getattr(agent, "_last_glance_noted", None):
             agent._last_glance_noted = gi["started"]
             parts.append(f"Turned to look where the {gi['label']} should be.")
+        elif gi and gi["kind"] == "check" and gi["started"] != getattr(agent, "_last_glance_noted", None):
+            agent._last_glance_noted = gi["started"]
+            parts.append("Turned to look where they were.")
         elif gi and gi["kind"] == "investigate" and gi["started"] != getattr(agent, "_last_glance_noted", None):
             # the attention round (Sep 4): the familiar-stranger fact — code-
             # attested (thousands of sightings, detector never sure). The

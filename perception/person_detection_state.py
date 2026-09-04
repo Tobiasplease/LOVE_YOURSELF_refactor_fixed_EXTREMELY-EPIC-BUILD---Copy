@@ -186,6 +186,20 @@ class PersonDetectionState:
         """Check if camera has scanned enough zones to confirm departure."""
         return len(self.scan_zones_visited) >= self.min_zones_for_departure
 
+    def request_absence_check(self) -> None:
+        """The belief system asks the gaze to go look where the person was
+        last seen (Sep 4, verified absence): decay only ticks on looks that
+        could actually see the spot, so the looks must happen deliberately."""
+        self._absence_check_requested = True
+
+    def pop_absence_check(self):
+        """One pending check target {pan, tilt} for the glance driver, or None."""
+        if getattr(self, "_absence_check_requested", False) and self.last_seen_servo_pan is not None and self.last_seen_servo_tilt is not None:
+            self._absence_check_requested = False
+            return {"pan": float(self.last_seen_servo_pan), "tilt": float(self.last_seen_servo_tilt)}
+        self._absence_check_requested = False
+        return None
+
     def is_looking_at_last_known_location(self, tolerance: float = 25.0) -> bool:
         """Check if camera is pointing near where person was last seen."""
         if self.last_seen_servo_pan is None or self.current_servo_pan is None:

@@ -642,11 +642,15 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
         seen_now = bool(info["person_present_in_window"] or info["eye_contact"] or gaze_engaged or info.get("face_close"))
-        try:
-            face_in_window = any(f.get("detection", {}).get("face") for f in recent_meta)
-        except Exception:
-            face_in_window = False
-        face_evidence = bool(info["eye_contact"] or info.get("face_close") or face_in_window)
+        # Bare face_in_window DROPPED from face evidence (Sep 4, artist's
+        # mannequin hypothesis confirmed): the studio's heads/casts hit the
+        # face DNN, and a distant face with no body and no closeness is their
+        # exact signature — each hit refreshed the belief and reset the
+        # absence watch, bypassing the adjudicator ("faces are already
+        # persons"). eye_contact requires a body (June fix); face_close is
+        # the legitimate walk-up case (body out of frame at close range).
+        # A real distant face co-occurs with a YOLO body, so little is lost.
+        face_evidence = bool(info["eye_contact"] or info.get("face_close"))
         # Body schema: a "person" with no face in view that matches the own-arm
         # gallery is the machine's own body, not company. Face evidence always
         # wins — the veto never fires against an actual face.
@@ -685,6 +689,8 @@ class Captioner(MemoryMixin):
         resumed = False
         if seen_now:
             self._absence_watch_s = 0.0
+            self._absence_episodes = 0
+            self._absence_episode_s = 0.0
             if not self._presence_believed:
                 # Resumption prior (Aug 31): re-ID is off (CLIP can't tell
                 # outfits apart), so matches_recent() returned None and every
@@ -746,10 +752,34 @@ class Captioner(MemoryMixin):
                 looking = True  # fail open: degrade to the old wall-clock decay
             if looking:
                 self._absence_watch_s += dt
-            if self._absence_watch_s > PRESENCE_BELIEF_DECAY_SECONDS:
+                self._absence_episode_s = getattr(self, "_absence_episode_s", 0.0) + dt
+            else:
+                # A look-episode just ended. A sustained empty look at the
+                # spot counts ONCE (the registry's absence-ladder pattern,
+                # applied to people — Sep 4, after the 18° tightening made
+                # the 240s accumulated-watch effectively unreachable and the
+                # belief immortal: "still talking about me as if I was there").
+                if getattr(self, "_absence_episode_s", 0.0) >= 4.0 and now - getattr(self, "_absence_episode_last_ts", 0.0) > 15.0:
+                    self._absence_episodes = getattr(self, "_absence_episodes", 0) + 1
+                    self._absence_episode_last_ts = now
+                self._absence_episode_s = 0.0
+                # The gaze isn't where they were — ask it to go CHECK
+                # (throttled). Verified absence needs looks that can see
+                # the spot; at 18° they must be deliberate, not incidental.
+                if now - getattr(self, "_absence_check_req_ts", 0.0) > 60.0:
+                    self._absence_check_req_ts = now
+                    try:
+                        from perception.person_detection_state import get_person_detection_state as _gpds
+
+                        _gpds().request_absence_check()
+                    except Exception:
+                        pass
+            if self._absence_watch_s > PRESENCE_BELIEF_DECAY_SECONDS or getattr(self, "_absence_episodes", 0) >= 3:
                 self._presence_believed = False  # looked, repeatedly, nobody there — they really left
                 self._presence_dropped_at = now  # anchors the resumption prior on the next sighting
                 self._absence_watch_s = 0.0
+                self._absence_episodes = 0
+                self._absence_episode_s = 0.0
                 try:
                     from perception.presence_adjudicator import presence_adjudicator
 
