@@ -64,6 +64,24 @@ def analyze(path):
 
     anaphors = sum(1 for c in caps if ANAPHORA.match(c))
 
+    # Frame-level templates (Sep 4) — the survival strategies that live above
+    # the token layer, where DRY and the presence penalty can't see them.
+    # The deflation frame ("is just a") collapsed under presence_penalty 0.6;
+    # the register moved UP a level into reframing/redemption shapes. Track,
+    # don't gate (P7 — no shape gates; content-diet is the durable fix).
+    import re as _re
+
+    deflation = sum(1 for c in caps if _re.search(r"\bis just\b|\bit'?s just\b|\bwas just\b|\bjust a \b", c, _re.I))
+    pivot = sum(
+        1
+        for c in caps
+        if _re.search(r"(isn'?t|wasn'?t|aren'?t|weren'?t|never)\s+[^.;]{0,45}[—;,-]\s*(it'?s|they'?re|more like|it was|but)", c, _re.I)
+    )
+    transform = sum(1 for c in caps if _re.search(r"stopped being|started becoming|no longer \w+ but", c, _re.I))
+    proof_tic = sum(1 for c in caps if _re.search(r"proof that|evidence that|reminder that", c, _re.I))
+    bangs = sum(c.count("!") for c in caps)
+    questions = sum(c.count("?") for c in caps)
+
     surfaces = sum(1 for e in calls if any(m in str(e.get("prompt", "")) for m in SURFACE_MARKERS))
     modes = {}
     for e in calls:
@@ -79,6 +97,13 @@ def analyze(path):
         "opening_repetition_pct": round(100 * open_rep / (n - 1), 1),
         "near_duplicate_pct": round(100 * neardup / (n - 1), 1),
         "anaphoric_opening_pct": round(100 * anaphors / n, 1),
+        "frame_templates_pct": {
+            "deflation_just": round(100 * deflation / n, 1),
+            "negation_pivot": round(100 * pivot / n, 1),
+            "transformation": round(100 * transform / n, 1),
+            "proof_tic": round(100 * proof_tic / n, 1),
+        },
+        "tone": {"exclamations": bangs, "questions": questions},
         "memory_surface_lines": surfaces,
         "stream_mode_calls": modes,
         "anti_echo": {"retries": gate_retries, "skips": gate_skips},
