@@ -3028,9 +3028,11 @@ class Captioner(MemoryMixin):
             try:
                 # Sep 5 (persona baseline): the day begins from the consolidated
                 # paragraph, not from the last caption alone.
+                from captioner.prompt_registry import P as _P
+
                 _bp = context_compressor.get_baseline_paragraph()
                 if _bp:
-                    identity_parts.append(P("awakening.baseline-wrap").format(text=_bp[:600]).rstrip("\n"))
+                    identity_parts.append(_P("awakening.baseline-wrap").format(text=_bp[:600]).rstrip("\n"))
             except Exception:
                 pass
             if identity_parts:

@@ -508,6 +508,34 @@ every pixel ~10px. Roles now:
     stored in machine_identity.json (`baseline_paragraph`,
     `last_consolidation`), read by the awakening (`awakening.baseline-wrap`)
     and every reflection.
+- AGENCY ROUND (Sep 5, after the time-and-loop round — docs/agency-round-sep5.md):
+  - CAPTION BUDGETS: CAPTION_NUM_PREDICT=38 (one or two sentences; was 80),
+    short beat 30% at 14 tokens, inward/close-look 70; a fresh window at the
+    switch (the window teaches whatever length it holds).
+  - WANTS resolve through what they are about (North Star Principle 4
+    amended): the distill's became-line carries a RESOLVED slot; the want
+    ledger records kinds understood / let go / met / drawn / faded /
+    abandoned (replaced without resolution, counted); resolved wants are said
+    back once (caption.desire-resolved-wrap / -letgo-wrap), a met want once
+    (caption.desire-met-tail, on a real belief ON edge while the want named a
+    person); the reflection reads endings with kinds + the abandonment count.
+    Nothing routes a want toward drawing.
+  - BODY AS FACTS: caption.body-hold at head-hold thresholds
+    (BODY_HOLD_THRESHOLDS_MIN, HEAD_HOLD_TOL_DEG), caption.body-parked /
+    -unparked at the low-energy edges; logged `body_line`.
+  - DECISION LOOP: caption.decide asks LOOK / EXPECT every DECIDE_EVERY_N
+    quiet captions (no glance active/pending, not live, not awakening);
+    `_extract_decision` strips the lines before the gate (never shown/stored);
+    `utils/chosen_glance.resolve_target` → registry term (content-word
+    overlap) / direction relative to the head / stay; `vision/gaze.py`
+    executes kind="chosen" (outranks the lottery); `build_situational_line`
+    states caption.chosen-look at onset and caption.expect-check after
+    DECIDE_SETTLE_S from the referee's verdict (`_last_view_verdict`).
+    Logged: `decision`, `glance_start` kind=chosen, `expect_check`.
+  - NOT BUILT: one interior line by relevance (the reflection echo already
+    queries ChromaDB by the last caption; the other four memory surfaces
+    still rotate — calling them all for scoring would fire their side
+    effects); the room ROOM-baseline re-entry.
 - CLEAN BOOT tooling: debug/fresh_stream.py now also clears recent_memory
   (memory mode's caption thread splices from it);
   debug/scrub_phantom_presence.py removes present-tense third-person
