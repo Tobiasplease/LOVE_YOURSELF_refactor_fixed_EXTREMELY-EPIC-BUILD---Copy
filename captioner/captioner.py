@@ -380,7 +380,15 @@ class Captioner(MemoryMixin):
         storage law, and joins the stream as its own short thought. The
         trajectory is what teaches the window to move."""
         from captioner.prompt_registry import P
-        from config.config import DRIFT_TEMP, MODEL_NAME, MOOD_SNAPSHOT_FOLDER, WANDER_ENABLED, WANDER_HOP_NUM_PREDICT, WANDER_HOPS
+        from config.config import (
+            DRIFT_TEMP,
+            MODEL_NAME,
+            MOOD_SNAPSHOT_FOLDER,
+            WANDER_ENABLED,
+            WANDER_HOP_HISTORY,
+            WANDER_HOP_NUM_PREDICT,
+            WANDER_HOPS,
+        )
         from utils.inference import is_failed_response, query_model
 
         if not WANDER_ENABLED or WANDER_HOPS <= 1 or not seed:
@@ -403,7 +411,7 @@ class Captioner(MemoryMixin):
                     log_dir=MOOD_SNAPSHOT_FOLDER,
                     options={"temperature": DRIFT_TEMP, "num_predict": WANDER_HOP_NUM_PREDICT},
                     prompt_type="wander_hop",
-                    history=self._stream_history(),
+                    history=self._stream_history()[-WANDER_HOP_HISTORY:],  # a hop travels light (first live chain: the full log pulled it back)
                 )
             except Exception:
                 break
@@ -428,7 +436,7 @@ class Captioner(MemoryMixin):
         from captioner.prompt_registry import P
         from config.config import LORE_ENABLED
 
-        text = self._trim_to_boundary(self._strip_list_shape(text)).strip()
+        text = self._trim_to_boundary(self._strip_list_shape(self._strip_leaked_stamps(text))).strip()
         if not text:
             return None
         # SAME STORAGE LAW AS ANY CAPTION (Sep 3 evening, first live half-hour:

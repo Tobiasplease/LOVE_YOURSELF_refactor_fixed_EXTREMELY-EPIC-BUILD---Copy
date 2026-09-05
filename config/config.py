@@ -1177,6 +1177,7 @@ DRIFT_SEND_IMAGE = os.getenv("DRIFT_SEND_IMAGE", "true").lower() in ("true", "1"
 WANDER_ENABLED = os.getenv("WANDER_ENABLED", "true").lower() in ("true", "1", "yes")
 WANDER_HOPS = int(os.getenv("WANDER_HOPS", 3))  # the drift + this many further hops minus one
 WANDER_HOP_NUM_PREDICT = int(os.getenv("WANDER_HOP_NUM_PREDICT", 70))
+WANDER_HOP_HISTORY = int(os.getenv("WANDER_HOP_HISTORY", 4))  # stream lines a hop sees — the seed is in the ask; twenty room lines pulled it back
 WANDER_AFTER_LOOP_MULT = float(os.getenv("WANDER_AFTER_LOOP_MULT", 3.0))  # drift odds × this right after a loop notice
 WANDER_AFTER_LOOP_S = float(os.getenv("WANDER_AFTER_LOOP_S", 180))
 NAME_INVITE_EVERY_S = float(os.getenv("NAME_INVITE_EVERY_S", 86400))  # the yourself-reflection invites a name once a day while none stands
