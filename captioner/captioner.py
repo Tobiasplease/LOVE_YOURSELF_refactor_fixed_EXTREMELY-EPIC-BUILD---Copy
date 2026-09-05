@@ -1792,7 +1792,9 @@ class Captioner(MemoryMixin):
         gate_ctx = f"{call['system']}\n{call['life']}\n{call['user']}"
         self._stream_store_ok = True
         reason = self._caption_reject_reason(caption, gate_ctx)
-        if reason in self._ECHO_REASONS:
+        if not reason and mind.is_recall(caption, call, now):
+            reason = "recall_echo"  # an old line reproduced — spoken, not kept
+        if reason in self._ECHO_REASONS or reason == "recall_echo":
             self._stream_store_ok = False
             self._last_gate_reason = reason
             self._note_unstored_cycle(reason, caption[:60])
@@ -2944,6 +2946,7 @@ class Captioner(MemoryMixin):
                     "tail_echo": "repeats itself",
                     "number_chain": "number chain",
                     "phantom_presence": "nobody is there",
+                    "recall_echo": "repeats an old thought",
                 }.get(getattr(self, "_last_gate_reason", ""), "not kept")
                 with open(_live_log, "a", encoding="utf-8") as _f:
                     _f.write(("" if _kept else f"[not kept — {_why}] ") + caption.replace("\n", " ") + "\n")

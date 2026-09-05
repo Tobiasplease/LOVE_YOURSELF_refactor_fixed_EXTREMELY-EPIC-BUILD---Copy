@@ -264,6 +264,18 @@ check("a past thought can surface as a memory", mem is not None and "white heads
 rf = open("captioner/reflection.py", encoding="utf-8").read()
 check("reflection kernels enter the thread", 'absorb(kernel.strip(), "reflection"' in rf)
 
+print("\n[7c] recall gate")
+m, M = fresh_mind()
+m.absorb("The pen is just sitting there, touching nothing, like my hands in the last sketch.", "think", "c", now - 3 * 3600)
+m.absorb("The chair is empty tonight.", "think", "c", now - 60)
+check("verbatim old line is recall", m.is_recall("But I don't have paper. The pen is just sitting there, touching nothing, like my hands in the last sketch.", None, now))
+check("continuing a current turn is not recall", not m.is_recall("The chair is empty tonight, and I keep looking at it anyway.", None, now))
+check("a fresh thought is not recall", not m.is_recall("Rain would sound like fingers on the skylight.", None, now))
+call = {"memory": {"text": "Those two white heads on the shelf keep their blank faces turned away from me."}, "life": ""}
+check("parroting the surfaced memory is recall", m.is_recall("Those two white heads on the shelf keep their blank faces turned away from me again.", call, now))
+src = open("captioner/captioner.py", encoding="utf-8").read()
+check("captioner treats recall_echo as spoken-not-stored", 'reason == "recall_echo"' in src and '"recall_echo": "repeats an old thought"' in src)
+
 print("\n[8] mode gates in the other organs (source-level)")
 src = open("captioner/captioner.py", encoding="utf-8").read()
 check("captioner routes through _mind_generate", "if self._mind_on():" in src and "def _mind_generate" in src)

@@ -530,6 +530,33 @@ class Mind:
         except Exception:
             return []
 
+    @staticmethod
+    def _grams(text: str, n: int = 6) -> set:
+        w = _WORD_RE.findall((text or "").lower())
+        return {tuple(w[i : i + n]) for i in range(len(w) - n + 1)}
+
+    def is_recall(self, text: str, call: Optional[dict] = None, now: Optional[float] = None) -> bool:
+        """A thought that reproduces a line it was shown (a quoted past thought,
+        a surfaced memory, a position) or any older thread entry, six words in a
+        row — recall dressed as a new thought (Sep 6 00:31/00:35: two verbatim
+        copies of 22:01 and 22:57 lines quoted in the life block). Turns in the
+        current conversation are exempt: continuing them is the point."""
+        g = self._grams(text)
+        if not g:
+            return False
+        now = now or time.time()
+        turn_texts = {e.get("text") for e in self.recent_turns(now)}
+        sources = []
+        if call:
+            m = call.get("memory")
+            if m:
+                sources.append(m.get("text", ""))
+            sources.append(call.get("life", ""))
+        for e in self.thread:
+            if e.get("text") not in turn_texts:
+                sources.append(e.get("text", ""))
+        return any(g & self._grams(src) for src in sources if src)
+
     def note_look(self, now: float) -> None:
         """A look happened, stored or not — the look timer advances either way
         (Sep 5 23:25–23:39: gated looks left the timer stale, so every phantom
