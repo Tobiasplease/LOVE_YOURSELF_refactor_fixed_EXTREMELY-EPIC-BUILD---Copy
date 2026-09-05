@@ -236,11 +236,13 @@ class Mind:
     def has_session(self, session_start: float) -> bool:
         return any(e.get("ts", 0) >= session_start for e in self.thread)
 
-    def absorb(self, text: str, kind: str, cue: str, now: Optional[float] = None) -> dict:
+    def absorb(self, text: str, kind: str, cue: str, now: Optional[float] = None, uneventful: bool = False) -> dict:
         now = now or time.time()
         text = (text or "").strip()
         subject = self.subject_of(text)
         entry = {"ts": now, "kind": kind, "cue": (cue or "").strip(), "text": text, "subject": subject}
+        if kind == "look" and uneventful:
+            entry["uneventful"] = True
         self.thread.append(entry)
         if len(self.thread) > int(config.MIND_THREAD_MAX):
             self.thread = self.thread[-int(config.MIND_THREAD_MAX) :]
@@ -259,6 +261,13 @@ class Mind:
         last = self.thread[-1]
         if now - last.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
             return ""
+        if last.get("kind") == "look" and last.get("uneventful"):
+            # an uneventful glance is not a new thought — the chain continues from the last one (Sep 6 01:00)
+            for e in reversed(self.thread[:-1]):
+                if now - e.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
+                    break
+                if e.get("kind") in ("think", "reflection", "wake", "memory"):
+                    return last_sentence(e.get("text", ""))[:200]
         return last_sentence(last.get("text", ""))[:200]
 
     def recent_turns(self, now: Optional[float] = None) -> List[dict]:
@@ -454,24 +463,25 @@ class Mind:
                 lines.append(P("mind.life-want").format(age=casual_time_string(facts["age_s"] / 60.0), want=want.rstrip(".") + "."))
         except Exception:
             pass
-        try:
-            from utils.lore_ledger import lore_ledger
-
-            qs = [(q.get("text") or q.get("words") or "").strip() for q in lore_ledger.open_questions(2)]
-            qs = [q for q in qs if q]
-            if qs:
-                lines.append(P("mind.life-questions").format(questions=" ".join(qs)))
-        except Exception:
-            pass
         name = self._name()
         if name:
             lines.append(P("mind.life-name").format(name=name))
-        belief = self._belief()
-        if belief and len(belief) > 8:
-            lines.append(P("mind.life-belief").format(belief=belief.rstrip(".")))
-        last_subject = (self.thread[-1].get("subject") if self.thread else "") or ""
-        for subject, text in self.fresh_positions(now, exclude=last_subject):
-            lines.append(P("mind.life-position").format(subject=subject, text=text))
+        if getattr(config, "MIND_LIFE_FULL", False):
+            try:
+                from utils.lore_ledger import lore_ledger
+
+                qs = [(q.get("text") or q.get("words") or "").strip() for q in lore_ledger.open_questions(2)]
+                qs = [q for q in qs if q]
+                if qs:
+                    lines.append(P("mind.life-questions").format(questions=" ".join(qs)))
+            except Exception:
+                pass
+            belief = self._belief()
+            if belief and len(belief) > 8:
+                lines.append(P("mind.life-belief").format(belief=belief.rstrip(".")))
+            last_subject = (self.thread[-1].get("subject") if self.thread else "") or ""
+            for subject, text in self.fresh_positions(now, exclude=last_subject):
+                lines.append(P("mind.life-position").format(subject=subject, text=text))
         chosen: set = set()
         believed = bool(getattr(agent, "_presence_believed", False))
         for _ in range(int(config.MIND_PAST_THOUGHTS)):
@@ -710,8 +720,10 @@ class Mind:
         believed = bool(getattr(agent, "_presence_believed", False))
         someone = P("mind.someone") if believed else ""
         memory = None
+        uneventful = False
         if kind == "look":
             event = getattr(agent, "_salience_event", None)
+            uneventful = not event and not believed and getattr(agent, "_last_view_verdict", None) == "unchanged"
             if event:
                 cue = P("mind.cue-look-event").format(clock=clock(now), event=str(event).strip(), someone=someone)
             else:
@@ -762,4 +774,4 @@ class Mind:
             user = cue
         else:
             user = f"{life}\n\n{cue}".strip()
-        return {"system": system, "turns": turns, "user": user, "image": img_path if kind == "look" else None, "cue": cue, "memory": memory, "life": life}
+        return {"system": system, "turns": turns, "user": user, "image": img_path if kind == "look" else None, "cue": cue, "memory": memory, "life": life, "uneventful": uneventful}

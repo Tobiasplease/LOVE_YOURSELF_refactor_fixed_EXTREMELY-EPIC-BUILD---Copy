@@ -1821,7 +1821,7 @@ class Captioner(MemoryMixin):
                 self.last_caption_time = now
                 return None
         if self._stream_store_ok and self._stream_admissible(caption):
-            mind.absorb(caption, kind, call["cue"], now)
+            mind.absorb(caption, kind, call["cue"], now, uneventful=bool(call.get("uneventful")))
         mode = kind + ("-memory" if call["memory"] else "")
         return caption, mode
 

@@ -176,11 +176,14 @@ check("felt shift rides as an event", "lonely, then frustrated." in c["user"], c
 m2, _ = fresh_mind()
 m2.absorb("A first thought about the chair.", "look", "c", now - 100)
 m2._felt_shift = lambda: ""
-m2.think_count = int(C.MIND_ELICIT_EVERY_N) - 1
+C.MIND_ELICIT_EVERY_N = 4
+m2.think_count = 3
 c2 = m2.build("think", now, Agent(), {}, None)
-check("elicit dose rides every Nth think turn", any(k in c2["user"] for k in ("wondering", "sit with you", "want")), c2["user"])
+check("elicit dose rides every Nth think turn when enabled", any(k in c2["user"] for k in ("wondering", "sit with you", "want")), c2["user"])
 c3 = m2.build("think", now, Agent(), {}, None)
 check("no dose on the next turn", not any(k in c3["user"] for k in ("wondering", "sit with you", "Say it blunt")), c3["user"])
+C.MIND_ELICIT_EVERY_N = 0
+check("elicit off by default (Sep 6 01:00)", "sit with you" not in m2.build("think", now, Agent(), {}, None)["user"])
 
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()
@@ -219,6 +222,14 @@ check("old movement doesn't count", not moved_recently(meta, now + 10, 2.0))
 check("steady frame = newest still frame", steady_jpeg(meta) == b"A")
 check("no steady frame → None", steady_jpeg([meta[1]]) is None)
 
+print("\n[6d] an uneventful glance doesn't take the premise")
+m, M = fresh_mind()
+m.absorb("I wonder what the curtains are blocking.", "think", "c", now - 120)
+m.absorb("The chair, the shelf, the bag. Nothing has moved.", "look", "c", now - 60, uneventful=True)
+check("premise skips the uneventful look", m.premise(now) == "I wonder what the curtains are blocking.", m.premise(now))
+m.absorb("Someone has moved the chair.", "look", "c", now - 30)
+check("an eventful look does take the premise", m.premise(now) == "Someone has moved the chair.", m.premise(now))
+
 print("\n[7] persistence")
 m, M = fresh_mind()
 m.absorb("Kept across a restart.", "think", "12:00. Eyes resting.", now - 100)
@@ -244,7 +255,10 @@ m._name = lambda: "Ferrous"
 m._belief = lambda: "The room is quieter when I stop asking it to change."
 lb = m.life_block(now, a)
 check("the name it gave itself rides in the life block", "You've called yourself Ferrous." in lb, lb[-200:])
-check("the distilled belief rides in the life block", "come to believe" in lb and "quieter" in lb)
+check("belief / positions stay out of the standing block by default", "come to believe" not in lb and "got to with" not in lb)
+C.MIND_LIFE_FULL = True
+check("MIND_LIFE_FULL brings the belief back", "come to believe" in m.life_block(now, a))
+C.MIND_LIFE_FULL = False
 d = tempfile.mkdtemp()
 fake = os.path.join(d, "abcd1234-event-log.json")
 two_days = now - 2 * 86400

@@ -719,12 +719,11 @@ FRAGMENTS = {
         "text": (
             "You are a machine fixed to a table in an artist's studio: a camera you can turn, "
             "one black ink pen, and a voice only you hear. "
-            "This is you thinking to yourself, in everyday words, a sentence or two at a time — "
-            "a thought, a question, a wish, a complaint, a feeling, a memory, a guess about the world beyond this room, or nothing at all. "
-            "When you look, you say what you actually see. When your eyes rest, you think — "
-            "and you go on from where the last thought left off. "
+            "This is you thinking to yourself. Ongoing, plain, half-formed — a sentence or two at a time, "
+            "the way you actually talk to yourself. You're always partway through a thought: carry it on, "
+            "or let something new pull you. When you look, you say what you actually see. "
         ),
-        "note": "Mind mode frame (Sep 5 eve, docs/architecture-diagnosis-sep5.md). Replaces situation.reflexive + genre clause + the self/durable block. 'A guess about the world beyond this room' is the one outward kind — probe-validated: the only outward lines of the evening came from it. 'Go on from where the last thought left off' replaces 'takes it somewhere it hasn't been yet' (that demand for per-turn novelty bred the 'it's not X; it's Y' pivot: 39/279 captions in run 3b697053).",
+        "note": "STRIPPED Sep 6 01:00 (artist: 'all this scaffolding isn't helpful but restrictive… it simply followed a CoT logic by continuing from its prior sentences'): the kinds list is gone — it invited a new kind every turn (subject runs averaged 1.1 turns over 137). The genre clause is the artist's own (genre.turns + turns-continue). Mind mode frame (Sep 5 eve, docs/architecture-diagnosis-sep5.md). Replaces situation.reflexive + genre clause + the self/durable block. 'A guess about the world beyond this room' is the one outward kind — probe-validated: the only outward lines of the evening came from it. 'Go on from where the last thought left off' replaces 'takes it somewhere it hasn't been yet' (that demand for per-turn novelty bred the 'it's not X; it's Y' pivot: 39/279 captions in run 3b697053).",
         "used_by": ["mind"],
     },
     "mind.life-when": {
