@@ -57,7 +57,15 @@ def phantom_sentences(text: str) -> List[str]:
     """The sentences that CLAIM a third person in the present tense. A question
     ("Is someone sitting there?") is wondering, not a claim — never gated
     (Sep 5 23:37: the machine asked exactly that about a dark shape, honestly)."""
-    return [s for s in sentences(text) if PERSON_RE.search(s) and not NOT_PRESENT_RE.search(s) and not s.rstrip().endswith("?")]
+    return [s for s in sentences(text) if PERSON_RE.search(s) and not NOT_PRESENT_RE.search(s) and not _is_question(s)]
+
+
+_Q_TAIL_RE = re.compile(r"\?\s*(?:\w+[.!]?\s*){0,3}$")
+
+
+def _is_question(s: str) -> bool:
+    """Ends with '?', or a '?' followed by a word or three ('Is he back? No')."""
+    return bool(_Q_TAIL_RE.search(s.rstrip()))
 
 
 def is_phantom_presence(text: str) -> bool:
