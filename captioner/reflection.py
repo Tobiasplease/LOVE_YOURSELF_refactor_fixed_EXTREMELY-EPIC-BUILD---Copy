@@ -595,6 +595,14 @@ class ReflectionLoop:
                     )
                 if kernel and not _kernel_reject and 20 < len(kernel) < 220 and self.agent._stream_admissible(kernel):
                     self.agent._stream_push(kernel.strip())
+                    try:
+                        _mind = getattr(self.agent, "mind", None)
+                        if _mind is not None and self.agent._mind_on():
+                            from captioner.prompt_registry import P as _P
+
+                            _mind.absorb(kernel.strip(), "reflection", _P("mind.cue-reflection").format(clock=time.strftime("%H:%M")), time.time())
+                    except Exception:
+                        pass
                     log_json_entry(
                         LogType.DEBUG,
                         {"message": "Reflection kernel admitted to stream", "action": "kernel_to_stream", "kernel": kernel[:160]},

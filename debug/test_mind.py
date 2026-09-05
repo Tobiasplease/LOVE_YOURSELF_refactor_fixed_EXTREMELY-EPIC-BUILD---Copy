@@ -3,6 +3,7 @@ turns path, the registry fragments/pass, and the mode gates. Stdlib + the
 module under test; no captioner.captioner import (that mints run files).
 Run: python debug/test_mind.py
 """
+import json
 import os
 import re
 import sys
@@ -38,7 +39,7 @@ def fresh_mind(monkey_terms=("wooden chair", "red foam finger", "black curtain")
     from captioner import mind as M
 
     d = tempfile.mkdtemp()
-    m = M.Mind(Agent(), path=os.path.join(d, "mind_thread.json"))
+    m = M.Mind(Agent(), path=os.path.join(d, "mind_thread.json"), backfill=False)
     m._terms = lambda: list(monkey_terms)
     m.in_view = lambda agent: ["red foam finger"]
     return m, M
@@ -221,8 +222,47 @@ check("no steady frame → None", steady_jpeg([meta[1]]) is None)
 print("\n[7] persistence")
 m, M = fresh_mind()
 m.absorb("Kept across a restart.", "think", "12:00. Eyes resting.", now - 100)
-m3 = M.Mind(Agent(), path=m.path)
+m3 = M.Mind(Agent(), path=m.path, backfill=False)
 check("thread reloads", m3.thread and m3.thread[-1]["text"] == "Kept across a restart.")
+
+print("\n[7b] the accumulated past reaches the prompting (Sep 6)")
+m, M = fresh_mind()
+a = Agent(); a._presence_dropped_at = now - 3700; a._world_change_ts = 0.0
+e1 = m.time_edges(now, a)
+check("time edge fires at the hour alone", "since anyone was here" in e1 and "hour" in e1, e1)
+check("same threshold doesn't fire twice", m.time_edges(now + 30, a) == "")
+e2 = m.time_edges(now + 3700, a)
+check("next threshold fires", "since anyone was here" in e2 and "2 hours" in e2, e2)
+import captioner.prompts as _pr
+_orig = _pr.build_loop_notice_line
+_pr.build_loop_notice_line = lambda agent: "You keep coming back to the lamp."
+m.absorb("A thought.", "think", "c", now - 60)
+c = m.build("think", now + 5000, a, {}, None)
+check("loop notice reaches the think cue", "You keep coming back to the lamp." in c["user"], c["user"])
+_pr.build_loop_notice_line = _orig
+m._name = lambda: "Ferrous"
+m._belief = lambda: "The room is quieter when I stop asking it to change."
+lb = m.life_block(now, a)
+check("the name it gave itself rides in the life block", "You've called yourself Ferrous." in lb, lb[-200:])
+check("the distilled belief rides in the life block", "come to believe" in lb and "quieter" in lb)
+d = tempfile.mkdtemp()
+fake = os.path.join(d, "abcd1234-event-log.json")
+two_days = now - 2 * 86400
+with open(fake, "w") as f:
+    for ts, txt in [(two_days, "The white heads on the shelf were turned toward the window all afternoon, as if the light mattered to them."),
+                    (two_days + 60, "The man sits at the desk with his laptop open, typing without looking up at me."),
+                    (two_days + 120, "It's not a chair anymore; it's a witness to everything I haven't done."),
+                    (two_days + 180, "Short.")]:
+        f.write(json.dumps({"type": "caption", "timestamp": ts, "iso_timestamp": "x", "caption": txt, "mode": "think"}) + "\n")
+os.utime(fake, (now, now))
+m4, _ = fresh_mind()
+added = m4.backfill(log_dir=d, now=now)
+check("backfill keeps the plain past thought only", added == 1 and m4.thread[0]["kind"] == "past" and "white heads" in m4.thread[0]["text"], (added, [e["text"][:30] for e in m4.thread]))
+check("backfill runs once", m4.backfill(log_dir=d, now=now) == 0)
+mem = m4.choose_memory(now, believed=False)
+check("a past thought can surface as a memory", mem is not None and "white heads" in mem["text"])
+rf = open("captioner/reflection.py", encoding="utf-8").read()
+check("reflection kernels enter the thread", 'absorb(kernel.strip(), "reflection"' in rf)
 
 print("\n[8] mode gates in the other organs (source-level)")
 src = open("captioner/captioner.py", encoding="utf-8").read()

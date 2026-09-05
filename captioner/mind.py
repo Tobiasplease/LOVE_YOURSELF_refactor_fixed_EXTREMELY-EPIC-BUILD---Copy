@@ -42,7 +42,7 @@ _STOP = set(
     "have has had do does did not no yes so if because while very more most some any all each".split()
 )
 _SENT_END_RE = re.compile(r"(?<=[.!?…])\s+")
-_KEEP_KINDS = ("look", "think", "memory", "wake")
+_KEEP_KINDS = ("look", "think", "memory", "wake", "past", "reflection")
 
 
 def clock(ts: float) -> str:
@@ -135,7 +135,7 @@ def last_sentence(text: str) -> str:
 
 
 class Mind:
-    def __init__(self, agent=None, path: Optional[str] = None):
+    def __init__(self, agent=None, path: Optional[str] = None, backfill: bool = True):
         self.agent = agent
         self.path = path or os.path.join(config.MOOD_SNAPSHOT_FOLDER, "mind_thread.json")
         self.thread: List[dict] = []
@@ -145,7 +145,15 @@ class Mind:
         self.pending_notice: Optional[Tuple[str, int]] = None
         self._last_believed: Optional[bool] = None
         self._last_felt: str = ""
+        self._edges: Dict[str, list] = {}
         self._load()
+        if backfill:
+            try:
+                n_added = self.backfill()
+                if n_added:
+                    print(f"[MIND] backfilled {n_added} past thoughts from earlier days")
+            except Exception:
+                pass
 
     # ---- persistence -----------------------------------------------------
     def _load(self) -> None:
@@ -155,6 +163,7 @@ class Mind:
             self.thread = list(d.get("thread") or [])[-int(config.MIND_THREAD_MAX) :]
             self.positions = dict(d.get("positions") or {})
             self.last_look_ts = float(d.get("last_look_ts") or 0.0)
+            self._edges = dict(d.get("edges") or {})
         except Exception:
             self.thread, self.positions = [], {}
 
@@ -162,10 +171,66 @@ class Mind:
         try:
             tmp = self.path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({"thread": self.thread[-int(config.MIND_THREAD_MAX) :], "positions": self.positions, "last_look_ts": self.last_look_ts}, f, indent=1)
+                json.dump(
+                    {"thread": self.thread[-int(config.MIND_THREAD_MAX) :], "positions": self.positions, "last_look_ts": self.last_look_ts, "edges": self._edges},
+                    f,
+                    indent=1,
+                )
             os.replace(tmp, self.path)
         except Exception:
             pass
+
+    # ---- its own past, days deep -----------------------------------------------
+    def backfill(self, log_dir: Optional[str] = None, days: int = 4, per_day: int = 40, now: Optional[float] = None) -> int:
+        """Seed the thread with kept thoughts from earlier days' event logs so
+        memories can surface from nights ago, not only from tonight (Sep 6:
+        'the accumulated info must reach back to the prompting'). Runs once —
+        skipped when the thread already reaches back more than a day. The
+        same filters as memory choice apply: no phantom presence, no reframe."""
+        import glob
+
+        now = now or time.time()
+        if any(now - e.get("ts", 0) > 86400 for e in self.thread):
+            return 0
+        log_dir = log_dir or config.MOOD_SNAPSHOT_FOLDER
+        try:
+            from utils.presence_text import is_phantom_presence
+        except Exception:
+            is_phantom_presence = lambda t: False  # noqa: E731
+        by_day: Dict[str, list] = {}
+        for path in glob.glob(os.path.join(log_dir, "*-event-log.json")):
+            try:
+                if now - os.path.getmtime(path) > days * 86400:
+                    continue
+                with open(path, encoding="utf-8") as f:
+                    for line in f:
+                        if '"type": "caption"' not in line or '"caption":' not in line:
+                            continue
+                        try:
+                            r = json.loads(line)
+                        except Exception:
+                            continue
+                        t = (r.get("caption") or "").strip()
+                        ts = float(r.get("timestamp", 0))
+                        if len(t) < 40 or now - ts < 3600 or r.get("mode") in ("awakening", "error") or r.get("duplicate"):
+                            continue
+                        if _NEG_FRAME_RE.search(t) or is_phantom_presence(t) or re.match(r"\s*\d\d?:\d\d", t):
+                            continue
+                        by_day.setdefault(time.strftime("%Y-%m-%d", time.localtime(ts)), []).append((ts, t))
+            except Exception:
+                continue
+        added = 0
+        for day, items in by_day.items():
+            items.sort()
+            step = max(1, len(items) // per_day)
+            for ts, t in items[::step][:per_day]:
+                self.thread.append({"ts": ts, "kind": "past", "cue": "", "text": t[:400], "subject": ""})
+                added += 1
+        if added:
+            self.thread.sort(key=lambda e: e.get("ts", 0))
+            self.thread = self.thread[-int(config.MIND_THREAD_MAX) :]
+            self._save()
+        return added
 
     # ---- the thread --------------------------------------------------------
     def has_session(self, session_start: float) -> bool:
@@ -398,6 +463,12 @@ class Mind:
                 lines.append(P("mind.life-questions").format(questions=" ".join(qs)))
         except Exception:
             pass
+        name = self._name()
+        if name:
+            lines.append(P("mind.life-name").format(name=name))
+        belief = self._belief()
+        if belief and len(belief) > 8:
+            lines.append(P("mind.life-belief").format(belief=belief.rstrip(".")))
         last_subject = (self.thread[-1].get("subject") if self.thread else "") or ""
         for subject, text in self.fresh_positions(now, exclude=last_subject):
             lines.append(P("mind.life-position").format(subject=subject, text=text))
@@ -465,6 +536,83 @@ class Mind:
         was followed by a second look a minute later)."""
         self.last_look_ts = now
         self._save()
+
+    def thread_start(self, now: float) -> float:
+        """Start of the continuous chain of thought (gaps under MIND_TURN_MAX_AGE_S)."""
+        start = 0.0
+        last = now
+        for e in reversed(self.thread):
+            ts = float(e.get("ts", 0))
+            if e.get("kind") == "past" or last - ts > int(config.MIND_TURN_MAX_AGE_S):
+                break
+            start, last = ts, ts
+        return start
+
+    def time_edges(self, now: float, agent) -> str:
+        """Time as an event: one line when a duration threshold is crossed —
+        since anyone was here, since the room last changed, since the chain of
+        thought began. Each threshold fires once per anchor."""
+        from captioner.prompts import casual_time_string
+
+        thresholds = sorted(int(x) for x in getattr(config, "DURATION_EDGE_THRESHOLDS_MIN", [30, 60, 120, 240, 480]))
+        anchors = []
+        if not getattr(agent, "_presence_believed", False):
+            left = 0.0
+            try:
+                from utils.episodic_log import episodic_log
+
+                ev = episodic_log.get_last_event("person_left")
+                left = float(ev.get("timestamp", 0)) if ev else 0.0
+            except Exception:
+                pass
+            left = max(left, float(getattr(agent, "_presence_dropped_at", 0.0) or 0.0))
+            if left:
+                anchors.append(("alone", left, "mind.edge-alone"))
+        still = float(getattr(agent, "_world_change_ts", 0.0) or 0.0)
+        if still:
+            anchors.append(("still", still, "mind.edge-still"))
+        start = self.thread_start(now)
+        if start:
+            anchors.append(("awake", start, "mind.edge-awake"))
+        for name, anchor, frag in anchors:
+            mins = (now - anchor) / 60.0
+            crossed = [t for t in thresholds if mins >= t]
+            if not crossed:
+                continue
+            top = crossed[-1]
+            prev = self._edges.get(name) or [0.0, 0]
+            if abs(float(prev[0]) - anchor) > 60 or int(prev[1]) < top:
+                self._edges[name] = [anchor, top]
+                self._save()
+                return P(frag).format(duration=casual_time_string(mins).capitalize() if frag == "mind.edge-alone" else casual_time_string(mins))
+        return ""
+
+    def _loop_line(self, agent) -> str:
+        """Its own repetition, named — the loop notice (gate hits / the
+        compressor's REPEATING slot) reaches the cue in mind mode too."""
+        try:
+            from captioner.prompts import build_loop_notice_line
+
+            line = (build_loop_notice_line(agent) or "").strip()
+            return (" " + line) if line else ""
+        except Exception:
+            return ""
+
+    def _name(self) -> str:
+        try:
+            from utils.lore_ledger import lore_ledger
+
+            return (lore_ledger.current_name() or "").strip()
+        except Exception:
+            return ""
+
+    def _belief(self) -> str:
+        try:
+            from captioner.context_compression import context_compressor
+
+            return (context_compressor.get_current_belief() or "").strip()
+        except Exception:
+            return ""
 
     def _felt_shift(self) -> str:
         """The felt loop as an event: rides once when the compressor's felt word changes."""
@@ -561,6 +709,8 @@ class Mind:
                     cue += P("mind.cue-premise").format(premise=prem)
         if kind == "think":
             cue += self._felt_shift()
+            cue += self.time_edges(now, agent)
+            cue += self._loop_line(agent)
             if not memory:
                 cue += self._elicit_dose()
         if self.thread and now - self.thread[-1].get("ts", now) >= float(config.STREAM_GAP_MARK_SECONDS):
