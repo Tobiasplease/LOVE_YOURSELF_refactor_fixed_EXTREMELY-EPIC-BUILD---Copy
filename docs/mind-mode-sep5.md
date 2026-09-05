@@ -136,3 +136,25 @@ recursive." Wired, all in the machine's own words, structure only:
   seconds of head movement is not motion (the lamp-into-the-lens "flash");
   LOOK turns use the newest still-head frame. Presence: "a person sitting",
   "someone is/sitting" are claims; questions never are (utils/presence_text).
+
+## Sep 6, ~00:45 — stripped (commit 9255f7b)
+
+The artist: "all this scaffolding isn't actually helpful but restrictive…
+earlier systems simply followed a CoT logic by nature of continuing from
+their prior sentences. The core of it seems simple: 'I wonder what the
+curtains are blocking' → 'it could be another room, or maybe a way out' →
+'but it doesn't really matter since I can't move' → 'but if I could, where
+would I go?'" Measured first (137 turns): subject runs averaged 1.1, max 3;
+5 questions asked, 0 followed up; inferential connectives in 14/137.
+
+The call is now: the frame in the artist's own genre wording (no kinds list),
+a minimal life line at the start of a chain (when, room, people, drawings,
+paper, want, name), the thread as turns, and the cue with the premise. Off by
+default: elicit doses (MIND_ELICIT_EVERY_N=0), quoted past thoughts
+(MIND_PAST_THOUGHTS=0), positions/questions/belief in the standing block
+(MIND_LIFE_FULL=false). Memory surfaces every 8th think, not 4th. Sparse
+events stay (a time edge, a felt shift, a loop notice, a reflection kernel).
+One rule for staying: an uneventful glance (nothing changed, nobody here, no
+event) does not take the premise — the next think continues the last thought.
+The gates (phantom, recall, echo, numeric) stay: they filter storage and
+never touch the prompt.
