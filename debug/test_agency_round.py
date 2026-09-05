@@ -141,6 +141,15 @@ gz.physics_state.pan, gz.physics_state.tilt = 90.0, 100.0
 t = chosen_glance.resolve_target("over to the left")
 check("LOOK direction → relative target", t and t["how"] == "direction" and t["pan"] < 90.0, t)
 check("LOOK nonsense → unresolved", chosen_glance.resolve_target("the moon") is None)
+spatial_registry.get_entries = lambda: {"white desk": {"pan": 80.0, "tilt": 70.0}, "red foam finger": {"pan": 100.0, "tilt": 110.0}}
+t = chosen_glance.resolve_target("the blank sheet of paper directly in front of the pen")
+check("LOOK at the paper → the paper zone (built-in place)", t and t["how"] == "place" and t["label"] == "paper", t)
+t = chosen_glance.resolve_target("up at that hole in the ceiling")
+check("LOOK at the ceiling → tilt up (built-in place)", t and t["how"] == "place" and t["label"] == "ceiling", t)
+t = chosen_glance.resolve_target("the corner behind the desk where the shadows pool")
+check("a single shared word is only a weak match", t and t["how"] == "registry-weak", t)
+t = chosen_glance.resolve_target("the white desk")
+check("full-term match is a strong registry match", t and t["how"] == "registry" and t["label"] == "white desk", t)
 spatial_registry.get_entries = _orig_entries
 
 req = chosen_glance.request("the red finger", "still pointing down", {"pan": 100.0, "tilt": 110.0, "label": "red foam finger", "how": "registry"})

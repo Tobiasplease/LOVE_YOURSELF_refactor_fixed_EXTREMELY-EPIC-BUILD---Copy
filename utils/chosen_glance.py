@@ -60,31 +60,63 @@ def _content_words(text: str) -> set:
     return {w for w in re.findall(r"[a-z']+", (text or "").lower()) if w not in _STOP and len(w) > 2}
 
 
+_PAPER_WORDS = re.compile(r"\b(paper|sheet|page|pen|nib|under the pen|in front of the pen|the drawing)\b", re.I)
+_CEILING_WORDS = re.compile(r"\b(ceiling|overhead|above me|the hole up there)\b", re.I)
+_FLOOR_WORDS = re.compile(r"\b(floor|floorboards|the ground|under the desk)\b", re.I)
+
+
 def resolve_target(look_text: str) -> Optional[dict]:
-    """→ {"pan", "tilt", "label", "how"} | {"how": "stay"} | None (unresolved)."""
+    """→ {"pan", "tilt", "label", "how"} | {"how": "stay"} | None (unresolved).
+
+    Order: stay → built-in places the body knows (the paper zone, the ceiling,
+    the floor) → a remembered object from the spatial registry, scored by how
+    much of the TERM the machine's words cover (so "desk" alone no longer wins
+    "white desk" for every look that mentions a desk) → a plain direction."""
     text = (look_text or "").strip().strip("\"'.")
     if not text:
         return None
     if _STAY.match(text):
         return {"how": "stay"}
     words = _content_words(text)
-    # 1. a remembered object: best content-word overlap with a registry term
+    from config.config import PAN_MAX, PAN_MIN, TILT_MAX, TILT_MIN
+
+    best, best_score, best_shared = None, 0.0, 0
+    try:
+        if _PAPER_WORDS.search(text):
+            from config.config import PAPER_DETECTION_GAZE_PAN, PAPER_DETECTION_GAZE_TILT
+
+            return {"pan": float(PAPER_DETECTION_GAZE_PAN), "tilt": float(PAPER_DETECTION_GAZE_TILT), "label": "paper", "how": "place"}
+        if _CEILING_WORDS.search(text):
+            from vision.gaze import physics_state
+
+            return {"pan": float(physics_state.pan), "tilt": float(TILT_MAX) - 5.0, "label": "ceiling", "how": "place"}
+        if _FLOOR_WORDS.search(text):
+            from vision.gaze import physics_state
+
+            return {"pan": float(physics_state.pan), "tilt": float(TILT_MIN) + 5.0, "label": "floor", "how": "place"}
+    except Exception:
+        pass
+    # a remembered object: score = shared content words / words in the term
     try:
         from perception.spatial_registry import spatial_registry
 
-        best, best_n = None, 0
         for term, e in spatial_registry.get_entries().items():
-            n = len(words & _content_words(term))
-            if n > best_n:
-                best, best_n = (term, e), n
-        if best and best_n >= 1:
+            tw = _content_words(term)
+            if not tw:
+                continue
+            shared = len(words & tw)
+            if not shared:
+                continue
+            score = shared / len(tw)
+            if (score, shared) > (best_score, best_shared):
+                best, best_score, best_shared = (term, e), score, shared
+        if best and (best_score >= 1.0 or best_shared >= 2):
             term, e = best
             return {"pan": float(e["pan"]), "tilt": float(e["tilt"]), "label": term, "how": "registry"}
     except Exception:
         pass
-    # 2. a plain direction, relative to where the head is now
+    # a plain direction, relative to where the head is now
     try:
-        from config.config import PAN_MAX, PAN_MIN, TILT_MAX, TILT_MIN
         from vision.gaze import physics_state
 
         pan, tilt = float(physics_state.pan), float(physics_state.tilt)
@@ -106,6 +138,13 @@ def resolve_target(look_text: str) -> Optional[dict]:
                 "label": " ".join(hit),
                 "how": "direction",
             }
+    except Exception:
+        pass
+    # last resort: a weak registry match (one shared word) beats nothing
+    try:
+        if best and best_shared >= 1:
+            term, e = best
+            return {"pan": float(e["pan"]), "tilt": float(e["tilt"]), "label": term, "how": "registry-weak"}
     except Exception:
         pass
     return None
