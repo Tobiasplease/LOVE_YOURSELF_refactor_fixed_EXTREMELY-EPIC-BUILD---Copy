@@ -1712,7 +1712,7 @@ class Captioner(MemoryMixin):
             _scale = 1.0
         _num = int(_cfg.MIND_NUM_PREDICT * _scale)
         if _random.random() < float(_cfg.MIND_SHORT_BEAT_P):
-            _num = int(_cfg.CAPTION_SHORT_BEAT_TOKENS)
+            _num = int(_cfg.MIND_SHORT_BEAT_TOKENS)
         opts = {
             "temperature": min(1.0, max(0.6, _cfg.CAPTION_TEMP_BORED if self.boredom > 0.7 else _cfg.CAPTION_TEMP)),
             "top_p": _cfg.CAPTION_TOP_P,
