@@ -1490,6 +1490,11 @@ ENABLE_EARLY_PAPER_CHECK = True
 PAPER_GLANCE_ENABLED = os.getenv("PAPER_GLANCE_ENABLED", "true").lower() == "true"
 PAPER_GLANCE_FIRST_AFTER_S = float(os.getenv("PAPER_GLANCE_FIRST_AFTER_S", 120))
 PAPER_GLANCE_EVERY_S = float(os.getenv("PAPER_GLANCE_EVERY_S", 1800))
+# DRAWING LINE (Sep 5, artist: "does it need this context every turn? maybe not"):
+# the executed-drawings line is condensed, named as drawings, and dosed.
+DRAWING_LINE_EVERY_N = int(os.getenv("DRAWING_LINE_EVERY_N", 8))
+DRAWING_LINE_AFTER_DRAW_S = float(os.getenv("DRAWING_LINE_AFTER_DRAW_S", 900))
+DRAWING_LINE_TITLE_CHARS = int(os.getenv("DRAWING_LINE_TITLE_CHARS", 45))
 # Use the same tilt as drawing lock for detection (aligns view)
 
 # === LCD CAPTION DISPLAY ===

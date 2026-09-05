@@ -1539,6 +1539,34 @@ def get_workspace_context(agent=None) -> str:
     return " ".join(fragments)
 
 
+def _drawing_line_due(agent) -> bool:
+    """When the drawing history rides (Sep 5): the first captions after a boot
+    (orientation), within DRAWING_LINE_AFTER_DRAW_S of a drawing (the arc just
+    moved), whenever the standing want is drawing-directed (relevant), and
+    otherwise every DRAWING_LINE_EVERY_N-th time this context is built. The
+    drawing arc matters; it does not need to be the first line of every thought."""
+    try:
+        from config.config import DRAWING_LINE_AFTER_DRAW_S, DRAWING_LINE_EVERY_N
+    except Exception:
+        return True
+    if agent is None:
+        return True
+    n = int(getattr(agent, "_drawing_line_counter", 0) or 0) + 1
+    agent._drawing_line_counter = n
+    if int(getattr(agent, "_caption_count", 0) or 0) <= 2:
+        return True
+    try:
+        drawing = getattr(agent, "drawing", None)
+        if drawing is not None:
+            if time.time() - float(getattr(drawing, "last_drawing_time", 0.0) or 0.0) < DRAWING_LINE_AFTER_DRAW_S:
+                return True
+            if bool((drawing.desire_shadow_verdict() or {}).get("drawing_directed")):
+                return True
+    except Exception:
+        pass
+    return DRAWING_LINE_EVERY_N <= 0 or n % DRAWING_LINE_EVERY_N == 0
+
+
 def get_introspective_context(agent=None) -> str:
     """Introspective mode: drawing history + long-term memories for reflection."""
     if not agent:
@@ -1552,12 +1580,17 @@ def get_introspective_context(agent=None) -> str:
     # any wondering about the pattern is the machine's to have, not ours to
     # script. Replaces the old "My last drawings were of: <90-char intent
     # truncations>" list, which spoke scaffolding with the subjects cut away.
+    # Sep 5 (artist): condensed, named as drawings, and DOSED — it rode every
+    # caption as a scene-shaped sentence ("The man at the desk, hunching over a
+    # small red thing") and the voice re-projected it onto the mannequin head.
     try:
+        from config.config import DRAWING_LINE_TITLE_CHARS
         from drawing.drawing_memory import get_drawing_memory
 
-        arc = _sanitize_context(get_drawing_memory().get_arc_line(max_count=5))
-        if arc and len(arc.strip()) > 5:
-            fragments.append(arc.strip())
+        if _drawing_line_due(agent):
+            arc = _sanitize_context(get_drawing_memory().get_arc_line_named(max_count=5, title_chars=DRAWING_LINE_TITLE_CHARS))
+            if arc and len(arc.strip()) > 5:
+                fragments.append(arc.strip())
     except Exception:
         pass
 

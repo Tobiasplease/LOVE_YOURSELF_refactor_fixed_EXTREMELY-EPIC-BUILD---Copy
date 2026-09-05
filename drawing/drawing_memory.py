@@ -217,6 +217,47 @@ class DrawingMemory:
             return False
         return len(wa & wb) / min(len(wa), len(wb)) >= 0.5
 
+    def _executed_subjects(self, max_count: int = 5, title_chars: int = 60):
+        """(subjects newest-first, stamps) of executed drawings, titles cut at title_chars."""
+        import time as _t
+
+        executed = [d for d in self._history if d.get("completed", False)][:max_count]
+        subjects, stamps = [], []
+        for e in executed:
+            s = self._subject_phrase(e)
+            if not s or s.startswith("[WARNING]") or s.startswith("[ERROR]"):
+                continue
+            if len(s) > title_chars:
+                s = s[:title_chars].rsplit(" ", 1)[0] + "…"
+            subjects.append(s.rstrip("."))
+            stamps.append(e.get("timestamp", _t.time()))
+        return subjects, stamps
+
+    def get_arc_line_named(self, max_count: int = 5, title_chars: int = 45) -> str:
+        """Sep 5 (artist: 'condensed and properly named as a drawing'): the same
+        facts as get_arc_line — newest with its age, a repeat run folded, two
+        older — but as titled DRAWINGS in quotes, so a subject like "the man at
+        the desk" reads as a picture it made and not as the scene in front of
+        it (the caption re-projected that title onto the mannequin head)."""
+        import time as _t
+
+        subjects, stamps = self._executed_subjects(max_count, title_chars)
+        if not subjects:
+            return ""
+        run = 1
+        while run < len(subjects) and self._same_motif(subjects[0], subjects[run]):
+            run += 1
+        age = self._casual_age(_t.time() - stamps[0])
+        counts = {2: "twice", 3: "three times", 4: "four times", 5: "five times"}
+        if run >= 2:
+            head = f'Your last drawings, {age}: "{subjects[0]}", drawn {counts.get(run, "again and again")} in a row.'
+        else:
+            head = f'Your last drawing, {age}: "{subjects[0]}".'
+        older = subjects[run : run + 2]
+        if older:
+            head += " Before it: " + "; ".join(f'"{o}"' for o in older) + "."
+        return head
+
     def get_arc_line(self, max_count: int = 5) -> str:
         """The executed body of work as ONE compact first-person account
         (artist's ask, Aug 22): newest subject with its age, consecutive
