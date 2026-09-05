@@ -1561,11 +1561,23 @@ class Captioner(MemoryMixin):
                         from config.config import CAPTION_INTERVAL_REST_MAX
 
                         _still_s = max(0.0, now - float(getattr(self, "_world_change_ts", 0.0) or getattr(self, "true_session_start", now)))
-                        return min(CAPTION_INTERVAL_REST_MAX, CAPTION_INTERVAL_REST * (1 + int(_still_s // 3600)))
+                        from utils import felt_loop as _fl
+
+                        return min(CAPTION_INTERVAL_REST_MAX, CAPTION_INTERVAL_REST * (1 + int(_still_s // 3600))) * _fl.cadence_mult()
             except Exception:
                 pass
-            return CAPTION_INTERVAL_QUIET
-        return CAPTION_INTERVAL
+            return CAPTION_INTERVAL_QUIET * self._felt_cadence_mult()
+        return CAPTION_INTERVAL * self._felt_cadence_mult()
+
+    @staticmethod
+    def _felt_cadence_mult() -> float:
+        """Sep 5 (felt loop): drained slows the cadence, charged quickens it."""
+        try:
+            from utils import felt_loop as _fl
+
+            return _fl.cadence_mult()
+        except Exception:
+            return 1.0
 
     @staticmethod
     def _write_face_context_crop(frame: np.ndarray, face_box, img_path: str) -> Optional[str]:
@@ -2020,12 +2032,23 @@ class Captioner(MemoryMixin):
                         # Sep 5 (agency round): one or two sentences at most — the
                         # window teaches whatever length it holds, and 80 tokens
                         # taught a paragraph. Inward/close-look keep a little more room.
+                        # Sep 5 (felt loop): the felt state sets the manner
+                        # mechanically — drained → shorter and more short beats,
+                        # charged → more room and fewer.
+                        try:
+                            from utils import felt_loop as _fl
+
+                            _felt_read = _fl._read()
+                            _felt_scale = _fl.budget_scale(_felt_read)
+                            _felt_short = _fl.short_beat_delta(_felt_read)
+                        except Exception:
+                            _felt_scale, _felt_short = 1.0, 0.0
                         if inward or close_look:
-                            _num_predict = CAPTION_NUM_PREDICT_INWARD
-                        elif _random.random() < CAPTION_SHORT_BEAT_P:
+                            _num_predict = int(CAPTION_NUM_PREDICT_INWARD * _felt_scale)
+                        elif _random.random() < CAPTION_SHORT_BEAT_P + _felt_short:
                             _num_predict = CAPTION_SHORT_BEAT_TOKENS
                         else:
-                            _num_predict = CAPTION_NUM_PREDICT
+                            _num_predict = max(16, int(CAPTION_NUM_PREDICT * _felt_scale))
                         if getattr(self, "_decision_asked", False):
                             from config.config import DECIDE_EXTRA_TOKENS
 

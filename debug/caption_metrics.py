@@ -110,6 +110,58 @@ def analyze(path):
     }
 
 
+def felt_groups(entries):
+    """Sep 5 (felt loop): does the felt state direct the manner? Captions
+    grouped by the latest compression's ENERGY / PLEASANTNESS at caption
+    time — words, punctuation density, question / exclamation / ellipsis
+    share, short thoughts — plus the most common felt phrases."""
+    import re as _re
+    from collections import Counter, defaultdict
+
+    reads = []
+    for e in entries:
+        if e.get("type") == "llm_api_call" and e.get("prompt_type") == "compression":
+            r = e.get("response") or ""
+            en = _re.search(r"ENERGY\s*[:—-]\s*(\w+)", r, _re.I)
+            pl = _re.search(r"PLEASANTNESS\s*[:—-]\s*(\w+)", r, _re.I)
+            fe = _re.search(r"FELT\s*[:—-]\s*(.+)", r, _re.I)
+            reads.append(
+                (
+                    e.get("timestamp", 0),
+                    (en.group(1).lower() if en else "?"),
+                    (pl.group(1).lower() if pl else "?"),
+                    (fe.group(1).strip()[:40] if fe else ""),
+                )
+            )
+    reads.sort()
+    caps = [(e.get("timestamp", 0), e.get("caption", "")) for e in entries if e.get("type") == "caption" and e.get("caption")]
+    groups = defaultdict(list)
+    i = 0
+    for ts, c in caps:
+        while i + 1 < len(reads) and reads[i + 1][0] <= ts:
+            i += 1
+        if reads and reads[i][0] <= ts:
+            groups[reads[i][1]].append(c)
+            groups["valence:" + reads[i][2]].append(c)
+
+    def _stats(cs):
+        w = sum(len(_re.findall(r"[a-z']+", c.lower())) for c in cs) or 1
+        marks = sum(len(_re.findall(r"[.!?…]", c)) for c in cs)
+        return {
+            "n": len(cs),
+            "words": round(w / len(cs), 1),
+            "marks_per_100w": round(100 * marks / w, 1),
+            "questions_pct": round(100 * sum(1 for c in cs if "?" in c) / len(cs)),
+            "exclam_pct": round(100 * sum(1 for c in cs if "!" in c) / len(cs)),
+            "ellipsis_pct": round(100 * sum(1 for c in cs if "…" in c or "..." in c) / len(cs)),
+            "short_pct": round(100 * sum(1 for c in cs if len(_re.findall(r"[a-z']+", c.lower())) <= 12) / len(cs)),
+        }
+
+    out = {k: _stats(v) for k, v in groups.items() if len(v) >= 5}
+    out["felt_phrases"] = Counter(r[3] for r in reads if r[3]).most_common(8)
+    return out
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -117,6 +169,10 @@ def main():
         args = [max(logs, key=os.path.getmtime)]
     for path in args:
         r = analyze(path)
+        try:
+            r["by_felt"] = felt_groups(load(path))
+        except Exception as _e:
+            r["by_felt"] = {"error": str(_e)[:80]}
         print(json.dumps(r, indent=2))
 
 

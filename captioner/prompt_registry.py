@@ -664,7 +664,7 @@ FRAGMENTS = {
             'EVENT: one plain past-tense sentence, if something HAPPENED worth remembering — someone arrived or left, something changed or was made. Or "none".\n'
             "PLEASANTNESS: unpleasant, neutral or pleasant\n"
             "ENERGY: drained, settled, stirred or charged\n"
-            "FELT: how it feels right now, 2-6 plain words\n"
+            "FELT: how do you feel right now, in a word or two — the way you'd answer if someone asked\n"
             'REPEATING: if the thoughts above keep circling one phrase or one idea, name it in a few words — or "none"'
         ),
         "note": "The memory diff — every 8 captions. Writes: baseline room, self-notes, events, mood/felt-state. Everything this pass keeps comes back into future prompts; everything it invents contaminates them.",

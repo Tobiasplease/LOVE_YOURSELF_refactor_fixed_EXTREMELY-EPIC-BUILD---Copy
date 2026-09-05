@@ -1300,6 +1300,22 @@ DECIDE_EXTRA_TOKENS = int(os.getenv("DECIDE_EXTRA_TOKENS", 30))  # room for the 
 DECIDE_SETTLE_S = float(os.getenv("DECIDE_SETTLE_S", 2.5))  # after the glance starts, before the check
 CHOSEN_GLANCE_DWELL_MULT = float(os.getenv("CHOSEN_GLANCE_DWELL_MULT", 1.4))
 
+# FELT LOOP (Sep 5, artist: the felt words were tactile — "warm, blurry" — because the
+# ask said "how IT feels"; and they never directed the cadence: drained vs stirred
+# captions differed by nothing but a little length). The ask now asks how YOU feel;
+# and the felt state drives the manner mechanically, without words: arousal →
+# cadence interval, token budget and short-beat odds; valence → which kind of
+# thought the quiet elicitation invites. Measured per run by caption_metrics
+# ("by_felt"). Temperature already followed arousal (AROUSAL_TEMP_SPAN).
+FELT_LOOP_ENABLED = os.getenv("FELT_LOOP_ENABLED", "true").lower() == "true"
+FELT_CADENCE_MULT_DRAINED = float(os.getenv("FELT_CADENCE_MULT_DRAINED", 1.6))  # quiet interval × this at arousal 0.1
+FELT_CADENCE_MULT_CHARGED = float(os.getenv("FELT_CADENCE_MULT_CHARGED", 0.6))  # … at arousal 0.8
+FELT_BUDGET_SCALE_DRAINED = float(os.getenv("FELT_BUDGET_SCALE_DRAINED", 0.7))
+FELT_BUDGET_SCALE_CHARGED = float(os.getenv("FELT_BUDGET_SCALE_CHARGED", 1.4))
+FELT_SHORT_BEAT_DELTA_DRAINED = float(os.getenv("FELT_SHORT_BEAT_DELTA_DRAINED", 0.15))
+FELT_SHORT_BEAT_DELTA_CHARGED = float(os.getenv("FELT_SHORT_BEAT_DELTA_CHARGED", -0.10))
+FELT_VALENCE_LEAN = float(os.getenv("FELT_VALENCE_LEAN", 0.25))  # |valence| beyond this leans the quiet elicitation kind
+
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet
 REFLECTION_NUM_PREDICT = 320  # was 600 (padded to the brim, purple survey), then 220; raised for the dream (July 12) — the reflection now digests the raw hour of thought, which earns more room than a summary-of-summaries did. Brevity pressure IS register pressure; watch for padding at 320.

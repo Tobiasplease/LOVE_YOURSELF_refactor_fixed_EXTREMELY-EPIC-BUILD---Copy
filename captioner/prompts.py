@@ -280,6 +280,19 @@ def _quiet_elicit_dose(agent) -> str:
         kinds = ("elicit.quiet-wonder", "elicit.quiet-feel", "elicit.quiet-want")
         rr = int(getattr(agent, "_quiet_elicit_rr", 0) or 0)
         agent._quiet_elicit_rr = rr + 1
+        # Sep 5 (felt loop): the valence leans the KIND — unpleasant invites the
+        # feeling, pleasant the wish; the middle rotates as before. Kind-naming,
+        # the probe-tested pattern; no words are added.
+        try:
+            from utils import felt_loop as _fl
+
+            lean = _fl.elicit_lean()
+        except Exception:
+            lean = None
+        if lean == "feel":
+            return P("elicit.quiet-feel", default="")
+        if lean == "want":
+            return P("elicit.quiet-want", default="")
         return P(kinds[rr % len(kinds)], default="")
     except Exception:
         return ""
