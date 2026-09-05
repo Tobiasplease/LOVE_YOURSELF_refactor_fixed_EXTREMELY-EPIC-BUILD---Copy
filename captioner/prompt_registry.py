@@ -307,6 +307,49 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind"],
         "placeholders": ["phrase"],
     },
+    "monologue.challenged-wrap": {
+        "title": "Durable ledger — lately in doubt",
+        "text": ' What you used to hold, lately in doubt: "{challenged}"',
+        "note": "Sep 5 (persona baseline): the turn path made audible beside the stayed-true line. Empty until a distill challenges something. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind", "memory", "reflection"],
+        "placeholders": ["challenged"],
+    },
+    "monologue.durable-time": {
+        "title": "Durable ledger — how long it has held",
+        "text": " The oldest of those has held for {oldest}; the newest for {newest}.",
+        "note": "Sep 5 (audible time): the ledger's days, in words, beside the stayed-true line — the machine reads its facts but never heard the eight days or the twelve confirmations. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind", "memory", "reflection"],
+        "placeholders": ["oldest", "newest"],
+    },
+    "consolidation.system": {
+        "title": "Persona consolidation — system",
+        "text": "You write a drawing machine's baseline: a short, plain, first-person account of who it has become, from its own records. Concrete, no metaphor, no drama. Keep what has held, name what is shifting, and what it carries into the next day.",
+        "used_by": ["persona_consolidation"],
+    },
+    "consolidation.user": {
+        "title": "Persona consolidation — user",
+        "text": (
+            'What has stayed true across days: "{held}"{held_time}\n'
+            'Lately in doubt: "{challenged}"\n'
+            'Newly taking hold: "{edge}"\n'
+            "Ways of seeing you've been developing:\n{threads}\n"
+            "Questions you're still carrying:\n{questions}\n"
+            "What you've wanted lately, oldest first:\n{wants}\n"
+            "How it has felt through the day, in your own words at the time: {felt}\n"
+            'What you last wrote here: "{previous}"\n\n'
+            "Write three to five plain sentences, first person: what has held, what is shifting, what you carry into tomorrow. No lists, no labels, no metaphor."
+        ),
+        "note": "Sep 5 (persona baseline, artist: 'consolidate, build and become a new baseline understanding from which the model evolves'). Runs once per PERSONA_CONSOLIDATE_EVERY_S after a distill. The paragraph is read back by the awakening and by every reflection — the one text the next day evolves from. Wording is the artist's to finalize.",
+        "used_by": ["persona_consolidation"],
+        "placeholders": ["held", "held_time", "challenged", "edge", "threads", "questions", "wants", "felt", "previous"],
+    },
+    "awakening.baseline-wrap": {
+        "title": "Awakening — the baseline paragraph",
+        "text": 'What I last wrote about myself, at rest: "{text}"\n',
+        "note": "Sep 5 (persona baseline): the consolidated paragraph rides the awakening's identity context, so the day begins from the baseline rather than from the last caption alone.",
+        "used_by": ["awakening"],
+        "placeholders": ["text"],
+    },
     "caption.investigate": {
         "title": "Investigate glance — the familiar stranger",
         "text": "You're looking at the {label} — you've seen it many times without ever being sure of it.",
@@ -609,6 +652,7 @@ FRAGMENTS = {
         "title": "Distillation user template",
         "text": (
             'Here is a reflection you just had:\n"{reflection_text}"\n\n'
+            "{held_line}"
             "Pull out what's worth keeping — plainly, in your own words, or 'none' for a line with nothing genuine:\n"
             "TRAIT — one plain fact about what kind of machine you are: a habit or fixation, in your own words.\n"
             "BELIEF — one plain thing you've come to think is true about this place or yourself.\n"
@@ -618,11 +662,19 @@ FRAGMENTS = {
             "NAME — if in this reflection you called yourself by a name, that name — or 'none'.\n"
             "UNDERSTANDING — one way you've come to see something here, or yourself, that is still taking shape — or 'none'.\n"
             "QUESTION — one question you're still carrying, as you'd ask it — or 'none'.\n"
+            "NO LONGER TRUE — if one of the things you've held (quoted above) no longer holds, quote it back — or 'none'.\n"
             "A few words each, first person, no metaphor."
         ),
         "note": "IDENTITY ENGINE (Reflect → Become). No example sentence — any concrete example gets aped verbatim and becomes the shape of every future persona ('I keep returning to X' was locked in for weeks). B3 (Aug 31): the 'or want to draw' nudge is GONE — wants are anything the reflection finds; the drawing trigger only listens for shapes it can serve. {became_line} is distill.became-line when a prior want stands, else empty. NAME + UNDERSTANDING (Sep 3 evening, re-entry round — feedback_lore_vs_facts): HARVEST slots only — they collect what the reflection already did, never invite invention ('or none' most days). The slot was born 'LORE — a story you're telling yourself' and REWORDED the same evening (artist: the core is deepening understanding of the world and itself, not making up stories per se — a story-shaped slot forced every developing thought through a fiction die; the parser accepts both labels). NAME → the identity name slot + ledger history; UNDERSTANDING → a thread (match-or-extend). Threads are not world-state: they re-enter with attribution + tense only (no genre labels) and never touch concepts/events/compression.",
         "used_by": ["reflection_distill"],
-        "placeholders": ["reflection_text", "became_line"],
+        "placeholders": ["reflection_text", "became_line", "held_line"],
+    },
+    "distill.held-line": {
+        "title": "Distillation — what you have held (turn path)",
+        "text": 'What you have held for a while: "{held}"\n\n',
+        "note": "Sep 5 (persona baseline): the distiller sees the stable core so its NO LONGER TRUE slot can quote one back; a rough match marks the fact CHALLENGED (leaves the stayed-true line, rides the in-doubt line; two fresh confirmations restore it). Without this a persona could only deepen — 41 of 44 facts confirmed in one night, all one idea.",
+        "used_by": ["reflection_distill"],
+        "placeholders": ["held"],
     },
     "distill.became-line": {
         "title": "Distillation BECAME slot (B3)",

@@ -1277,6 +1277,10 @@ DURATION_EDGE_THRESHOLDS_MIN = [int(x) for x in os.getenv("DURATION_EDGE_THRESHO
 LOOP_NOTICE_AFTER = int(os.getenv("LOOP_NOTICE_AFTER", 3))  # echo-gate refusals of a shared run within LOOP_NOTICE_WINDOW_S
 LOOP_NOTICE_WINDOW_S = int(os.getenv("LOOP_NOTICE_WINDOW_S", 600))
 LOOP_NOTICE_COOLDOWN_S = int(os.getenv("LOOP_NOTICE_COOLDOWN_S", 600))
+# Persona baseline (Sep 5): once a day the stores are consolidated into a few
+# first-person sentences the awakening and the reflection read back.
+PERSONA_CONSOLIDATE_ENABLED = os.getenv("PERSONA_CONSOLIDATE_ENABLED", "true").lower() == "true"
+PERSONA_CONSOLIDATE_EVERY_S = float(os.getenv("PERSONA_CONSOLIDATE_EVERY_S", 20 * 3600))
 
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet

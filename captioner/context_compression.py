@@ -679,6 +679,119 @@ class ContextCompressionEngine:
         t_padded = " " + (text or "").lower() + " "
         return any(w in t_padded for w in ContextCompressionEngine._SELF_REGISTER_POISON)
 
+    def maybe_consolidate_persona(self, model: str = None) -> Optional[str]:
+        """Once a day (PERSONA_CONSOLIDATE_EVERY_S): the consolidate → build →
+        evolve loop applied to the SELF (Sep 5, artist: "baseline" = the
+        accumulating persona). The stores are piles — 44 durable facts, 48
+        threads, 30 self-notes, three lineages — and nothing ever wrote them
+        into one small text the next day evolves from. This does: stable +
+        challenged facts with how long they've held, the threads with their
+        affirmation counts, the open questions, the want lineage, the felt
+        arc, and the previous baseline — into a few plain first-person
+        sentences, stored as the baseline paragraph the awakening and the
+        reflection read back."""
+        from config.config import PERSONA_CONSOLIDATE_ENABLED, PERSONA_CONSOLIDATE_EVERY_S
+
+        if not PERSONA_CONSOLIDATE_ENABLED:
+            return None
+        last = float(self.introspective_state.get("last_consolidation", 0.0) or 0.0)
+        if time.time() - last < PERSONA_CONSOLIDATE_EVERY_S:
+            return None
+        return self.consolidate_persona(model)
+
+    def consolidate_persona(self, model: str = None) -> Optional[str]:
+        from utils.inference import query_model
+
+        try:
+            from captioner.durable_ledger import get_durable_ledger as _gdl
+
+            ledger = _gdl()
+            held = ledger.render(600)
+            spans = ledger.held_spans()
+            challenged = ledger.render_challenged(240)
+            edge = ledger.render_evolving_edge(240)
+        except Exception:
+            held, spans, challenged, edge = "", {}, "", ""
+        threads_txt = ""
+        questions_txt = ""
+        try:
+            from utils.lore_ledger import lore_ledger
+
+            th = lore_ledger.alive_threads(6)
+            if th:
+                threads_txt = "\n".join(
+                    f"- {t.get('text', '')[:160]}"
+                    + (f" (you've come back to this {self._times_words(t.get('times_affirmed', 0))})" if t.get("times_affirmed", 0) >= 1 else "")
+                    for t in th
+                )
+            qs = lore_ledger.open_questions(4)
+            if qs:
+                questions_txt = "\n".join(f"- {q.get('text', '')[:160]}" for q in qs)
+        except Exception:
+            pass
+        wants_txt = ""
+        try:
+            hist = (self.get_full_identity() or {}).get("desire_history") or []
+            wants_txt = "\n".join(f"- {h.get('desire', '')[:120]}" for h in hist[-3:] if h.get("desire"))
+        except Exception:
+            pass
+        felt_txt = ""
+        try:
+            hist = list(getattr(self, "felt_history", []) or [])
+            recent = [h for h in hist if time.time() - float(h.get("ts", 0)) < 86400]
+            step = max(1, len(recent) // 5)
+            felt_txt = ", ".join(h.get("felt", "") for h in recent[::step][:6] if h.get("felt"))
+        except Exception:
+            pass
+        prev = (self.introspective_state.get("baseline_paragraph") or {}).get("text", "")
+        held_time = ""
+        if spans:
+            held_time = f" The oldest of these has held for {spans.get('oldest')}, the newest for {spans.get('newest')}."
+        prompt = P("consolidation.user").format(
+            held=held or "(nothing yet)",
+            held_time=held_time,
+            challenged=challenged or "none",
+            edge=edge or "none",
+            threads=threads_txt or "- none",
+            questions=questions_txt or "- none",
+            wants=wants_txt or "- none",
+            felt=felt_txt or "(no record)",
+            previous=prev or "(none yet)",
+        )
+        response = query_model(
+            prompt=prompt,
+            model=model or getattr(config, "MODEL_NAME", None),
+            image=None,
+            system_prompt=P("consolidation.system"),
+            options={"temperature": 0.4, "num_predict": 220},
+            prompt_type="persona_consolidation",
+        )
+        text = (response or "").strip().strip('"')
+        if not text or len(text) < 40:
+            self.introspective_state["last_consolidation"] = time.time()  # don't hammer on a bad day
+            self._save_identity()
+            return None
+        text = " ".join(text.split())[:900]
+        self.introspective_state["baseline_paragraph"] = {"text": text, "ts": time.time()}
+        self.introspective_state["last_consolidation"] = time.time()
+        self._save_identity()
+        log_json_entry(
+            LogType.INFO,
+            {"message": "Persona baseline consolidated", "action": "persona_consolidated", "baseline": text[:400]},
+            print_message=f"[🧬] baseline: {text[:100]}",
+        )
+        return text
+
+    @staticmethod
+    def _times_words(n: int) -> str:
+        return {0: "once", 1: "twice", 2: "three times"}.get(int(n), "several times" if n < 8 else "many times")
+
+    def get_baseline_paragraph(self, max_age_s: float = 3 * 86400) -> str:
+        bp = self.introspective_state.get("baseline_paragraph") or {}
+        if bp.get("text") and time.time() - float(bp.get("ts", 0)) < max_age_s:
+            return bp["text"]
+        return ""
+
     def distill_reflection(self, reflection_text: str, subject: str = "", model: str = None) -> Optional[str]:
         """IDENTITY ENGINE (north-star Reflect → Become). Distill a long-form
         reflection into a few PLAIN ledger takeaways and write them: a self-trait
@@ -695,7 +808,16 @@ class ContextCompressionEngine:
             # slot — what the old want turned into, in the machine's own words.
             prior_want = (self.introspective_state.get("current_desire") or "").strip()
             became_line = P("distill.became-line").format(prior_want=prior_want[:200]) if prior_want else ""
-            prompt = P("distill.user").format(reflection_text=reflection_text[:1500], became_line=became_line)
+            held_line = ""
+            try:
+                from captioner.durable_ledger import get_durable_ledger as _gdl
+
+                _held = _gdl().render(320)
+                if _held:
+                    held_line = P("distill.held-line").format(held=_held)
+            except Exception:
+                held_line = ""
+            prompt = P("distill.user").format(reflection_text=reflection_text[:1500], became_line=became_line, held_line=held_line)
             response = query_model(
                 prompt=prompt,
                 model=model,
@@ -706,9 +828,22 @@ class ContextCompressionEngine:
             )
             if not response or not isinstance(response, str):
                 return None
-            trait, belief, want, kernel, became, name, lore, question = self._parse_distillation(response)
-            now = time.time()
             changed = []
+            trait, belief, want, kernel, became, name, lore, question, no_longer = self._parse_distillation(response)
+            if no_longer:
+                # Sep 5: the turn path — a held fact the machine says no longer holds
+                try:
+                    from captioner.durable_ledger import get_durable_ledger as _gdl
+
+                    _ch = _gdl().challenge(no_longer)
+                    if _ch:
+                        changed.append(f"challenged={_ch}")
+                        log_json_entry(
+                            LogType.DEBUG, {"message": "Durable fact challenged", "action": "fact_challenged", "fact": _ch[:160]}, print_message=None
+                        )
+                except Exception:
+                    pass
+            now = time.time()
             if trait and self._valid_self_fact(trait):
                 self.core_facts["self"] = trait
                 changed.append(f"self={trait}")
@@ -780,10 +915,10 @@ class ContextCompressionEngine:
             return None
 
     def _parse_distillation(self, response: str) -> tuple:
-        """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL / NAME / LORE / QUESTION; strips any leaked label; 'none'/blank → empty."""
+        """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL / NAME / LORE / QUESTION / NO LONGER TRUE; strips any leaked label; 'none'/blank → empty."""
         import re
 
-        trait = belief = want = kernel = became = name = lore = question = ""
+        trait = belief = want = kernel = became = name = lore = question = no_longer = ""
 
         def _val(line: str, label_re: str) -> str:
             v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
@@ -808,7 +943,9 @@ class ContextCompressionEngine:
                 lore = _val(line, r"^(?:understanding|lore)\b[\s:：—–\-]*")
             elif low.startswith("question"):
                 question = _val(line, r"^question\b[\s:：—–\-]*")
-        return trait, belief, want, kernel, became, name, lore, question
+            elif low.startswith("no longer"):
+                no_longer = _val(line, r"^no longer(?: true)?\b[\s:：—–\-]*")
+        return trait, belief, want, kernel, became, name, lore, question, no_longer
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).
@@ -954,6 +1091,8 @@ class ContextCompressionEngine:
                 "events": self.events,
                 "desire_history": desire_history,
                 "belief_history": belief_history,
+                "baseline_paragraph": self.introspective_state.get("baseline_paragraph") or {},
+                "last_consolidation": self.introspective_state.get("last_consolidation", 0.0),
                 "last_updated": now,
             }
 
@@ -981,6 +1120,8 @@ class ContextCompressionEngine:
             self.introspective_state["desire_since"] = data.get("desire_since", 0.0)
             self.introspective_state["last_spent_desire"] = data.get("last_spent_desire") or None
             self.introspective_state["current_belief"] = data.get("current_belief", "")
+            self.introspective_state["baseline_paragraph"] = data.get("baseline_paragraph") or {}
+            self.introspective_state["last_consolidation"] = data.get("last_consolidation", 0.0)
             self.introspective_state["last_introspection"] = data.get("last_updated", 0.0)
 
             # Restore core facts. The persona ('self') is gated on load too,

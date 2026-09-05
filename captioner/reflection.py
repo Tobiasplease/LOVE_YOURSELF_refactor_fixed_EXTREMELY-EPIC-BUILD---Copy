@@ -422,6 +422,20 @@ class ReflectionLoop:
             data["self_notes"] = context_compressor.self_notes[-4:]
         except Exception:
             pass
+        # Sep 5 (time-and-loop round): the reflection remembers its own
+        # conclusions — the alive threads with how often it has come back to
+        # them, and the baseline paragraph it last wrote. A distill that
+        # re-derives the same understanding now does so knowingly.
+        try:
+            from utils.lore_ledger import lore_ledger
+
+            data["threads"] = lore_ledger.alive_threads(6)
+        except Exception:
+            pass
+        try:
+            data["baseline_paragraph"] = context_compressor.get_baseline_paragraph()
+        except Exception:
+            pass
         self._add_felt_arc(data)
         try:
             data["identity"] = {
@@ -525,6 +539,10 @@ class ReflectionLoop:
             from captioner.context_compression import context_compressor
 
             kernel = context_compressor.distill_reflection(text, subject, model=config.MODEL_NAME)
+            try:
+                context_compressor.maybe_consolidate_persona(model=config.MODEL_NAME)  # once a day (Sep 5)
+            except Exception:
+                pass
             # Echo kernel (July 30): ride the stored entry so the echo line can
             # surface a re-thinkable clause instead of a bare subject label.
             if kernel and refl_id:

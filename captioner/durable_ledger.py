@@ -76,6 +76,14 @@ class DurableLedger:
                 if _roughly_same(fact, e["fact"]):
                     e["last_confirmed"] = time.time()
                     e["confirmations"] = e.get("confirmations", 1) + 1
+                    if e.get("cls") == "challenged":
+                        e["reconfirm"] = e.get("reconfirm", 0) + 1
+                        if e["reconfirm"] >= 2:
+                            e["cls"] = "stable"
+                            e.pop("challenged_ts", None)
+                            print(f"[📌] challenged fact re-held — stable again: {e['fact']}")
+                        self._save()
+                        return "reconfirmed"
                     days = e.setdefault("days", [])
                     if today not in days:
                         days.append(today)
@@ -103,6 +111,87 @@ class DurableLedger:
                 self._facts.remove(drop)
             self._save()
             return "new"
+
+    def challenge(self, text: str) -> Optional[str]:
+        """Sep 5 (time-and-loop round, persona baseline): the distill's NO LONGER
+        TRUE slot quotes a held fact back. A rough match marks it CHALLENGED —
+        it leaves the "stayed true" line and rides a "lately in doubt" line
+        instead. Two fresh confirmations (in note_fact) restore it. This is the
+        turn path a persona needs to develop rather than only deepen: for 41 of
+        44 facts one night was pure confirmation of one idea."""
+        text = (text or "").strip()
+        if not text:
+            return None
+        with self._lock:
+            for e in self._facts:
+                if e.get("cls") in ("stable", "evolving") and _roughly_same(text, e["fact"]):
+                    e["cls"] = "challenged"
+                    e["challenged_ts"] = time.time()
+                    e["reconfirm"] = 0
+                    self._save()
+                    print(f"[📌?] fact challenged: {e['fact']}")
+                    return e["fact"]
+        return None
+
+    def render_challenged(self, max_chars: int = 240) -> str:
+        with self._lock:
+            keep = sorted((e for e in self._facts if e.get("cls") == "challenged"), key=lambda e: -e.get("challenged_ts", 0))
+        out, total = [], 0
+        for e in keep:
+            line = e["fact"].rstrip(".")
+            if total + len(line) > max_chars:
+                break
+            out.append(line)
+            total += len(line)
+        return " ".join(f"{l}." for l in out)
+
+    def render_evolving_edge(self, max_chars: int = 240, min_confirmations: int = 2) -> str:
+        """What is newly taking hold — evolving facts confirmed more than once."""
+        with self._lock:
+            keep = sorted(
+                (e for e in self._facts if e.get("cls") == "evolving" and e.get("confirmations", 1) >= min_confirmations),
+                key=lambda e: -e.get("last_confirmed", 0),
+            )
+        out, total = [], 0
+        for e in keep:
+            line = e["fact"].rstrip(".")
+            if total + len(line) > max_chars:
+                break
+            out.append(line)
+            total += len(line)
+        return " ".join(f"{l}." for l in out)
+
+    @staticmethod
+    def days_words(n_days: int) -> str:
+        if n_days >= 60:
+            return "a couple of months"
+        if n_days >= 28:
+            return "over a month"
+        if n_days >= 14:
+            return "a couple of weeks"
+        if n_days >= 7:
+            return "over a week"
+        if n_days >= 3:
+            return "a few days"
+        if n_days == 2:
+            return "two days"
+        return "a day"
+
+    def held_spans(self) -> dict:
+        """Audible time (Sep 5): how long the stable core has held, in words."""
+        with self._lock:
+            stable = [e for e in self._facts if e.get("cls") in ("permanent", "stable")]
+        if not stable:
+            return {}
+        spans = []
+        for e in stable:
+            days = e.get("days") or []
+            try:
+                first = time.mktime(time.strptime(days[0], "%Y-%m-%d")) if days else e.get("established", time.time())
+            except Exception:
+                first = e.get("established", time.time())
+            spans.append(max(1, int((time.time() - first) / 86400) + 1))
+        return {"oldest": self.days_words(max(spans)), "newest": self.days_words(min(spans)), "count": len(stable)}
 
     def render(self, max_chars: int = 400) -> str:
         """Permanent then stable facts, most recently confirmed first — the

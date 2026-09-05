@@ -2948,6 +2948,14 @@ class Captioner(MemoryMixin):
                     identity_parts.append(f"I call myself {_name}.")
             except Exception:
                 pass
+            try:
+                # Sep 5 (persona baseline): the day begins from the consolidated
+                # paragraph, not from the last caption alone.
+                _bp = context_compressor.get_baseline_paragraph()
+                if _bp:
+                    identity_parts.append(P("awakening.baseline-wrap").format(text=_bp[:600]).rstrip("\n"))
+            except Exception:
+                pass
             if identity_parts:
                 identity_context = "\n".join(identity_parts) + "\n"
         except Exception:

@@ -190,9 +190,24 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
         try:
             from captioner.durable_ledger import get_durable_ledger
 
-            durable = get_durable_ledger().render()
+            _ledger = get_durable_ledger()
+            durable = _ledger.render()
             if durable:
                 base += P("monologue.durable-wrap").format(durable=durable)
+                # Sep 5 (audible time + the turn path): how long the core has
+                # held, and what is lately in doubt — beside the stayed-true line.
+                try:
+                    _spans = _ledger.held_spans()
+                    if _spans and _spans.get("count", 0) >= 2 and _spans.get("oldest") != _spans.get("newest"):
+                        base += P("monologue.durable-time").format(oldest=_spans["oldest"], newest=_spans["newest"])
+                except Exception:
+                    pass
+            try:
+                _challenged = _ledger.render_challenged()
+                if _challenged:
+                    base += P("monologue.challenged-wrap").format(challenged=_challenged)
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -636,9 +651,24 @@ def get_reflection_system_prompt(subject: str = "") -> str:
         try:
             from captioner.durable_ledger import get_durable_ledger
 
-            durable = get_durable_ledger().render()
+            _ledger = get_durable_ledger()
+            durable = _ledger.render()
             if durable:
                 base += P("monologue.durable-wrap").format(durable=durable)
+                # Sep 5 (audible time + the turn path): how long the core has
+                # held, and what is lately in doubt — beside the stayed-true line.
+                try:
+                    _spans = _ledger.held_spans()
+                    if _spans and _spans.get("count", 0) >= 2 and _spans.get("oldest") != _spans.get("newest"):
+                        base += P("monologue.durable-time").format(oldest=_spans["oldest"], newest=_spans["newest"])
+                except Exception:
+                    pass
+            try:
+                _challenged = _ledger.render_challenged()
+                if _challenged:
+                    base += P("monologue.challenged-wrap").format(challenged=_challenged)
+            except Exception:
+                pass
         except Exception:
             pass
     return base
@@ -729,6 +759,19 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     # reaches the loom. Framed unmistakably as invention — the conflation law
     # holds at this seam like every other — so the reflection can weave its
     # own fictions into durable lore without them ever posing as observation.
+    threads = data.get("threads") or []
+    if threads:
+
+        def _times(n):
+            return {0: "once", 1: "twice", 2: "three times"}.get(int(n), "several times" if n < 8 else "many times")
+
+        parts.append(
+            "Ways of seeing you've been developing, and how often you've come back to each:\n"
+            + "\n".join(f"- \"{(t.get('text', '') or '')[:180]}\" ({_times(t.get('times_affirmed', 0))})" for t in threads)
+        )
+    baseline_paragraph = (data.get("baseline_paragraph") or "").strip()
+    if baseline_paragraph:
+        parts.append(f'What you last wrote about yourself, at rest: "{baseline_paragraph[:700]}"')
     reveries = data.get("reveries") or []
     if reveries:
         parts.append(
