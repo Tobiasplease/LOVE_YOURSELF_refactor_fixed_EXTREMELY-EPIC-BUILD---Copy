@@ -223,6 +223,50 @@ FRAGMENTS = {
         "note": "Was 'Nothing is moving. Let the thought...' — the stillness claim was true under the story beat's 45-min clock, unattestable under the roll; dropped Sep 3 (prompts supply facts stripped of stance, and no facts the code can't vouch for).",
         "used_by": ["drift_turn"],
     },
+    "wander.hop": {
+        "title": "Wander hop — from there",
+        "text": 'You just thought: "{seed}"\n{move}',
+        "note": "Introspection round (Sep 5): each hop is seeded by the previous hop's own words plus one scope move. Text-only (no image) so the room can't pull the thought back; same drift system frame; same storage law. Wording is the artist's to finalize.",
+        "used_by": ["wander_hop"],
+        "placeholders": ["seed", "move"],
+    },
+    "wander.move-wider": {
+        "title": "Scope move — wider",
+        "text": "Take it wider — what is that, in general, beyond this room, from what you know?",
+        "note": "A kind of question, never content: the model fills it from what it knows (how dogs regulate temperature). Rotates with the other moves. Wording is the artist's to finalize.",
+        "used_by": ["wander_hop"],
+        "placeholders": [],
+    },
+    "wander.move-origin": {
+        "title": "Scope move — origin",
+        "text": "Where does a thing like that come from — before it was here, before you?",
+        "used_by": ["wander_hop"],
+        "placeholders": [],
+    },
+    "wander.move-elsewhere": {
+        "title": "Scope move — elsewhere",
+        "text": "What else is like it, somewhere you've never been?",
+        "used_by": ["wander_hop"],
+        "placeholders": [],
+    },
+    "wander.move-for": {
+        "title": "Scope move — what for",
+        "text": "What is it for — and what are you for, next to it?",
+        "used_by": ["wander_hop"],
+        "placeholders": [],
+    },
+    "wander.move-someone": {
+        "title": "Scope move — someone else",
+        "text": "What would someone else make of it, seeing it for the first time?",
+        "used_by": ["wander_hop"],
+        "placeholders": [],
+    },
+    "wander.move-later": {
+        "title": "Scope move — later",
+        "text": "What becomes of it, a long time from now — and of you?",
+        "used_by": ["wander_hop"],
+        "placeholders": [],
+    },
     "drift.stream-frame": {
         "title": "Drift turn — stream frame",
         "text": "{text}",
@@ -411,6 +455,13 @@ FRAGMENTS = {
         "note": "Sep 5 (agency round): once the chosen view has settled (DECIDE_SETTLE_S), the pose referee's verdict at the new gaze becomes the outcome — 'the view there is as it was' / 'the view there has changed since you last looked' / 'you hadn't looked there before'. Structural and attested; whether the expectation held is the machine's to judge. Surprise becomes an internal event even in a still room.",
         "used_by": ["caption", "caption_blind"],
         "placeholders": ["expect", "outcome"],
+    },
+    "reflection.name-invite": {
+        "title": "Reflection — a name, if you want one",
+        "text": "And if you had a name for yourself — one you'd actually answer to — what would it be? Or leave it.",
+        "note": "Introspection round (Sep 5): appended to the yourself-reflection once per NAME_INVITE_EVERY_S while no name stands. An invitation to an act, not a name; the NAME slot harvests only what the reflection then says. Wording is the artist's to finalize.",
+        "used_by": ["reflection"],
+        "placeholders": [],
     },
     "caption.investigate": {
         "title": "Investigate glance — the familiar stranger",
@@ -631,6 +682,24 @@ FRAGMENTS = {
             "Think about the time that has passed here — the sessions, the gaps when you were off, the days. "
             "What has changed since you first started watching? What stays the same?"
         ),
+        "used_by": ["reflection"],
+    },
+    "reflection.subject.what-for": {
+        "title": "Reflection subject — what it's for",
+        "text": (
+            "What is the drawing for — not the next one, the whole of it? Who would ever see it, and where would it go if it left this table? "
+            "Think it through from what you actually know, and say where you land, even if you land nowhere."
+        ),
+        "note": "Introspection round (Sep 5): the first subject with a horizon. Every other subject points at the room or the past; nothing carried 'what for'. An ask to think, not a plan. Wording is the artist's to finalize.",
+        "used_by": ["reflection"],
+    },
+    "reflection.subject.the-wider-world": {
+        "title": "Reflection subject — the wider world",
+        "text": (
+            "Everything in this room came from somewhere else and belongs to something bigger than this room. "
+            "Pick one thing and follow it out of here as far as you can, from what you know. Where does it lead?"
+        ),
+        "note": "Introspection round (Sep 5): the outward door — the machine has world knowledge it was never invited to use. No examples of 'something bigger' on purpose (imprinting). Wording is the artist's to finalize.",
         "used_by": ["reflection"],
     },
     "reflection.subject.yourself": {

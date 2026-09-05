@@ -300,7 +300,13 @@ def _quiet_elicit_dose(agent) -> str:
 
 def _identity_due(agent, mode: str) -> bool:
     """Dosing gate for self-knowledge + durable-ledger injection (Aug 22)."""
-    if mode in ("introspective", "awakening"):
+    if mode == "awakening":
+        return True
+    # Sep 5 (introspection round): introspective is the DEFAULT mode, so the
+    # self-suspicious core ("I invent obstacles…") rode nearly every caption —
+    # a persona that reads itself every twelve seconds has no room to become
+    # anyone else. Dosed like the other modes unless the switch is off.
+    if mode == "introspective" and not bool(getattr(config, "IDENTITY_DOSE_ALL_MODES", True)):
         return True
     n = int(getattr(config, "IDENTITY_EVERY_N_CAPTIONS", 6))
     if n <= 0:
@@ -623,6 +629,11 @@ _REFLECTION_SUBJECT_IDS = [
     ("the drawings", "reflection.subject.the-drawings"),
     ("time passing", "reflection.subject.time-passing"),
     ("yourself", "reflection.subject.yourself"),
+    # Sep 5 (introspection round): two subjects with a horizon — every other
+    # subject points at the room or the past; nothing carried "what for" or
+    # "out there".
+    ("what it's for", "reflection.subject.what-for"),
+    ("the wider world", "reflection.subject.the-wider-world"),
 ]
 
 

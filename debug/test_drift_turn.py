@@ -134,7 +134,14 @@ def test_run_drift_turn():
         cfg.DRIFT_SEND_IMAGE = True
         c = make_shell(stream_entries=3)
         before = len(c._stream)
-        c._run_drift_turn(time.time(), "/tmp/fake_frame.jpg")
+        import config.config as _cfg
+
+        _saved_wander = _cfg.WANDER_ENABLED
+        _cfg.WANDER_ENABLED = False  # Sep 5: the wander adds hops by design; this section tests the single drift hop
+        try:
+            c._run_drift_turn(time.time(), "/tmp/fake_frame.jpg")
+        finally:
+            _cfg.WANDER_ENABLED = _saved_wander
 
         check("exactly one model call", len(calls) == 1)
         if calls:

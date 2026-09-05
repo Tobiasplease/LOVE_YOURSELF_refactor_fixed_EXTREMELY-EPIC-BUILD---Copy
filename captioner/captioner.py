@@ -287,6 +287,16 @@ class Captioner(MemoryMixin):
                 # hot inventive turn mid-execution is phantom-stroke bait
                 return False
             p = DRIFT_BASE_P * (1.0 + DRIFT_BOREDOM_GAIN * self.boredom)
+            # Sep 5 (introspection round): "if I loop, I catch myself and that
+            # becomes a new thought" — a fresh loop notice raises the odds of
+            # stepping out.
+            try:
+                from config.config import WANDER_AFTER_LOOP_MULT, WANDER_AFTER_LOOP_S
+
+                if time.time() - float(getattr(self, "_loop_noticed_at", 0.0) or 0.0) < WANDER_AFTER_LOOP_S:
+                    p *= WANDER_AFTER_LOOP_MULT
+            except Exception:
+                pass
             return random.random() < p
         except Exception:
             return False
@@ -354,9 +364,73 @@ class Captioner(MemoryMixin):
             return
         if is_failed_response(text) or not text or len(text.strip()) < 8:
             return
+        stored = self._absorb_drift_text(text, ask, now)
+        if stored:
+            self._wander(stored)
+
+    def _wander(self, seed: str) -> None:
+        """WANDER (Sep 5, introspection round). The artist's early system went
+        from the dog, to wanting to play with it, to how dogs regulate their
+        temperature, to how technology and art connect — a chain of scope moves,
+        each hop seeded by the last. The drift was one hop from the room, with
+        the room's image and twenty room-bound lines pulling it back. A wander
+        chains WANDER_HOPS: each hop is text-only, seeded by the previous hop's
+        own words plus a rotating SCOPE MOVE (wider / origin / elsewhere / for /
+        someone / later — kinds of question, never content), passes the same
+        storage law, and joins the stream as its own short thought. The
+        trajectory is what teaches the window to move."""
+        from captioner.prompt_registry import P
+        from config.config import DRIFT_TEMP, MODEL_NAME, MOOD_SNAPSHOT_FOLDER, WANDER_ENABLED, WANDER_HOP_NUM_PREDICT, WANDER_HOPS
+        from utils.inference import is_failed_response, query_model
+
+        if not WANDER_ENABLED or WANDER_HOPS <= 1 or not seed:
+            return
+        moves = ["wander.move-wider", "wander.move-origin", "wander.move-elsewhere", "wander.move-for", "wander.move-someone", "wander.move-later"]
+        rr = int(getattr(self, "_wander_move_rr", 0) or 0)
+        hops = 0
+        for k in range(WANDER_HOPS - 1):
+            if self._is_currently_drawing() or getattr(self, "_salience_hot", False):
+                break  # the world interrupts a wander
+            move = P(moves[(rr + k) % len(moves)], default="")
+            ask = P("wander.hop").format(seed=seed[-220:], move=move)
+            try:
+                text = query_model(
+                    prompt=ask,
+                    model=MODEL_NAME,
+                    image=None,
+                    system_prompt=P("drift.system"),
+                    timeout=60,
+                    log_dir=MOOD_SNAPSHOT_FOLDER,
+                    options={"temperature": DRIFT_TEMP, "num_predict": WANDER_HOP_NUM_PREDICT},
+                    prompt_type="wander_hop",
+                    history=self._stream_history(),
+                )
+            except Exception:
+                break
+            if is_failed_response(text) or not text or len(text.strip()) < 8:
+                break
+            stored = self._absorb_drift_text(text, ask, time.time())
+            if not stored:
+                break
+            seed = stored
+            hops += 1
+        self._wander_move_rr = rr + max(1, hops)
+        if hops:
+            log_json_entry(
+                LogType.DEBUG, {"message": f"Wander: {hops} hop(s)", "action": "wander", "hops": hops}, print_message=f"[🌀] wandered {hops} hop(s)"
+            )
+
+    def _absorb_drift_text(self, text: str, ask: str, now: float):
+        """The drift's storage law, shared by the drift turn and the wander hops
+        (Sep 5): trim, gate (echo-class → spoken not stored; shape-class →
+        skipped), remember clean daydreams as reveries, display, store. Returns
+        the text when it was STORED, else None."""
+        from captioner.prompt_registry import P
+        from config.config import LORE_ENABLED
+
         text = self._trim_to_boundary(self._strip_list_shape(text)).strip()
         if not text:
-            return
+            return None
         # SAME STORAGE LAW AS ANY CAPTION (Sep 3 evening, first live half-hour:
         # "a faint pulse against his dark hoodie" recurred verbatim in 3 of 7
         # drifts — the refrain physics don't care which organ wrote the entry,
@@ -384,7 +458,7 @@ class Captioner(MemoryMixin):
                 print_message=f"[💭🚫] drift skipped ({reason})",
             )
             self.last_caption_time = now
-            return
+            return None
         framed = P("drift.stream-frame").format(text=text)
         stored = reason is None and self._stream_admissible(text)
         log_json_entry(
@@ -403,6 +477,7 @@ class Captioner(MemoryMixin):
         if stored:
             self._stream_push(framed)
         self.last_caption_time = now
+        return text if stored else None
 
     def _stream_history(self) -> list:
         """The stream as the model sees it. World shape: timestamped log lines

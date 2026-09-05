@@ -1170,6 +1170,17 @@ DRIFT_NUM_PREDICT = int(os.getenv("DRIFT_NUM_PREDICT", 120))
 # the present and drifted on top of it. The ask lands after the image, so
 # generation still answers the ask. False = the blind A/B arm.
 DRIFT_SEND_IMAGE = os.getenv("DRIFT_SEND_IMAGE", "true").lower() in ("true", "1", "yes")
+# INTROSPECTION ROUND (Sep 5, artist: "step out of its immediate patterns, think in a
+# wider scope, question and wonder — the early system went from the dog to how dogs
+# regulate temperature to how art and technology connect"). The drift becomes a
+# WANDER: hops seeded by the last hop's own words plus a rotating scope move.
+WANDER_ENABLED = os.getenv("WANDER_ENABLED", "true").lower() in ("true", "1", "yes")
+WANDER_HOPS = int(os.getenv("WANDER_HOPS", 3))  # the drift + this many further hops minus one
+WANDER_HOP_NUM_PREDICT = int(os.getenv("WANDER_HOP_NUM_PREDICT", 70))
+WANDER_AFTER_LOOP_MULT = float(os.getenv("WANDER_AFTER_LOOP_MULT", 3.0))  # drift odds × this right after a loop notice
+WANDER_AFTER_LOOP_S = float(os.getenv("WANDER_AFTER_LOOP_S", 180))
+NAME_INVITE_EVERY_S = float(os.getenv("NAME_INVITE_EVERY_S", 86400))  # the yourself-reflection invites a name once a day while none stands
+IDENTITY_DOSE_ALL_MODES = os.getenv("IDENTITY_DOSE_ALL_MODES", "true").lower() in ("true", "1", "yes")  # introspective dosed every N like other modes
 
 # The lore ledger (Sep 3 evening — the re-entry round, docs/re-entry-round-
 # sep3.md). Artist ruling: inventive self-fiction was never the issue —

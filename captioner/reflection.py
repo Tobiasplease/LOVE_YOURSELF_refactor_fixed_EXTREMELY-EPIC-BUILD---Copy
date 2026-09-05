@@ -467,6 +467,22 @@ class ReflectionLoop:
 
         self._drawings_cache = None  # fresh gather per cycle
         subject, question = self._next_subject()
+        # Sep 5 (introspection round): once a day, when the subject is itself and
+        # no name stands, the question invites the act of naming — the NAME slot
+        # only ever harvested a name the reflection used on its own, which is
+        # never. An invitation, not a name; "or leave it" keeps it a choice.
+        if subject == "yourself":
+            try:
+                from captioner.prompt_registry import P as _P
+                from config.config import NAME_INVITE_EVERY_S
+                from utils.lore_ledger import lore_ledger as _ll
+
+                _last = float(getattr(self, "_name_invited_at", 0.0) or 0.0)
+                if NAME_INVITE_EVERY_S > 0 and not _ll.current_name() and time.time() - _last > NAME_INVITE_EVERY_S:
+                    self._name_invited_at = time.time()
+                    question = question.rstrip() + " " + _P("reflection.name-invite", default="")
+            except Exception:
+                pass
         data = self._gather_context(subject, spine)
         prompt = build_reflection_loop_prompt(question, data)
         system_prompt = get_reflection_system_prompt(subject)
