@@ -59,7 +59,23 @@ never made lived in the stream for five minutes and became a self-note.
   `LOOP_NOTICE_COOLDOWN_S`, in the world's turn, never stored.
 
 ### C. Persona baseline
-(see below — filled in as built)
+- **The turn path:** the distill sees what it has held (`distill.held-line`)
+  and gets a NO LONGER TRUE slot; a rough match marks the fact CHALLENGED —
+  it leaves "what has stayed true" and rides "what you used to hold, lately
+  in doubt" (`monologue.challenged-wrap`); two fresh confirmations restore it.
+- **Audible time:** `monologue.durable-time` — how long the oldest and newest
+  stable facts have held, in words. `render_evolving_edge()` = what is newly
+  taking hold (used by consolidation).
+- **The reflection remembers itself:** alive threads with how often it has
+  come back to each ("twice", "several times"), and the baseline paragraph.
+- **Daily consolidation** (`maybe_consolidate_persona`, once per
+  PERSONA_CONSOLIDATE_EVERY_S after a distill): held + in-doubt + newly-held
+  facts, threads with counts, open questions, the want lineage, the day's
+  felt arc, the previous baseline → three to five plain first-person
+  sentences, stored as `baseline_paragraph`; the awakening and every
+  reflection read it back. The consolidate → build → evolve loop, for the self.
+
+Tests: debug/test_persona_baseline.py (27).
 
 ## Verify live
 - `duration_edge` debug events at 30/60/120 min of stillness; the caption after
@@ -72,4 +88,9 @@ never made lived in the stream for five minutes and became a self-note.
 - cadence under stillness: 28 → 56 → 84 → 112 s by hour.
 - self-note rejections logged with reason "phantom act or presence".
 
-Tests: debug/test_time_and_loop.py.
+Also verify: `fact_challenged` after a distill's NO LONGER TRUE; the
+"lately in doubt" line in the system prompt; `persona_consolidated` once per
+day and the paragraph in the next awakening; whether the 20-min distills stop
+re-deriving one trait once they can see their own threads and counts.
+
+Tests: debug/test_time_and_loop.py (33), debug/test_persona_baseline.py (27).

@@ -470,6 +470,44 @@ every pixel ~10px. Roles now:
   not keep (`_stream_store_ok` False — every echo-class reason incl.
   phantom_presence) carry a "[not kept] " prefix; the dashboard feed is the
   mouth, the stream is the memory.
+- TIME-AND-LOOP ROUND (Sep 5, docs/time-and-loop-round-sep5.md — artist:
+  "nothing happening in a room overnight is an event"; "if I loop I catch
+  myself and that becomes a new thought"; "baseline" = the accumulating
+  persona). LIVE WIRING:
+  - DURATION EDGE: `build_situational_line` fires `caption.duration-edge`
+    ("Nothing in the room has changed for {duration}.") once per threshold
+    (DURATION_EDGE_THRESHOLDS_MIN 30/60/120/240/480) per world-verified
+    unchanged span; clock anchor = max(referee `_world_change_ts`,
+    `_presence_dropped_at`, boot); silent while someone is believed present;
+    logged `duration_edge`.
+  - REST LADDER: `_current_caption_interval` REST rung × (1 + unchanged
+    hours), capped CAPTION_INTERVAL_REST_MAX=120 s.
+  - LOOP NOTICE: every echo-class refusal records its shared run
+    (`_note_loop_hit`); `build_loop_notice_line` quotes it back after
+    LOOP_NOTICE_AFTER=3 refusals in LOOP_NOTICE_WINDOW_S (`caption.loop-fact`),
+    or the compressor's new REPEATING slot names the circling
+    (`caption.loop-notice`, outranks); once per LOOP_NOTICE_COOLDOWN_S, in
+    the world's turn, never stored; logged `loop_notice`.
+  - PHANTOM MARKS: claimed STATES of the paper ("speck of ink on the white
+    paper", "that dot on the paper", "the pen is pressing into the fiber")
+    → `phantom_drawing`; reflection kernels pass the mouth gate
+    (`kernel_rejected`).
+  - ADJUDICATOR: veto is gaze-aware (ENTITY_VETO_GAZE_TOL_DEG); a person
+    verdict closed by verified absence within PRESENCE_FALSE_ARRIVAL_WINDOW_S
+    with the shape still in the candidate box is RETRACTED to a thing
+    (decision `presence_adjudication` verdict "retracted").
+  - SELF-NOTES: a marking act or a third-person present is refused
+    (`_note_is_phantom_act`, reason "phantom act or presence").
+  - PERSONA BASELINE: durable ledger `challenge()` (distill NO LONGER TRUE
+    slot, `fact_challenged`) → cls "challenged" rides
+    `monologue.challenged-wrap`; two fresh confirmations restore;
+    `monologue.durable-time` says how long the core has held; the
+    reflection sees its alive threads with affirmation counts and the
+    baseline paragraph; `maybe_consolidate_persona` runs once per
+    PERSONA_CONSOLIDATE_EVERY_S (20 h) after a distill → `persona_consolidated`,
+    stored in machine_identity.json (`baseline_paragraph`,
+    `last_consolidation`), read by the awakening (`awakening.baseline-wrap`)
+    and every reflection.
 - CLEAN BOOT tooling: debug/fresh_stream.py now also clears recent_memory
   (memory mode's caption thread splices from it);
   debug/scrub_phantom_presence.py removes present-tense third-person
