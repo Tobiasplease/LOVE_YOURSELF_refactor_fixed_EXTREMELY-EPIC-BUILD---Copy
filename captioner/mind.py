@@ -144,6 +144,7 @@ class Mind:
         self.think_count = 0
         self.pending_notice: Optional[Tuple[str, int]] = None
         self._last_believed: Optional[bool] = None
+        self._last_felt: str = ""
         self._load()
 
     # ---- persistence -----------------------------------------------------
@@ -465,6 +466,40 @@ class Mind:
         self.last_look_ts = now
         self._save()
 
+    def _felt_shift(self) -> str:
+        """The felt loop as an event: rides once when the compressor's felt word changes."""
+        try:
+            from captioner.context_compression import context_compressor as _cc
+
+            curr = (_cc.get_felt_state() or "").strip()
+        except Exception:
+            curr = ""
+        prev, self._last_felt = self._last_felt, curr
+        if curr and prev and curr != prev:
+            return P("mind.felt-shift").format(prev=prev, curr=curr)
+        return ""
+
+    def _elicit_dose(self) -> str:
+        """Every MIND_ELICIT_EVERY_N-th think turn, one elicit line — the kind
+        leaning by the felt loop's valence (feel when low, want when high),
+        otherwise rotating wonder / feel / want. The artist's existing lines."""
+        n = int(getattr(config, "MIND_ELICIT_EVERY_N", 0) or 0)
+        if n <= 0 or self.think_count % n != 0:
+            return ""
+        lean = None
+        try:
+            from utils import felt_loop
+
+            lean = felt_loop.elicit_lean()
+        except Exception:
+            pass
+        if lean == "feel":
+            return P("elicit.quiet-feel", default="")
+        if lean == "want":
+            return P("elicit.quiet-want", default="")
+        kinds = ("elicit.quiet-wonder", "elicit.quiet-feel", "elicit.quiet-want")
+        return P(kinds[(self.think_count // n) % 3], default="")
+
     def _seen_this_session(self, terms: List[str], agent) -> bool:
         """Seen within the thread's own window (not the process session — a
         restart must not make the room new again)."""
@@ -524,6 +559,10 @@ class Mind:
                 prem = self.premise(now)
                 if prem:
                     cue += P("mind.cue-premise").format(premise=prem)
+        if kind == "think":
+            cue += self._felt_shift()
+            if not memory:
+                cue += self._elicit_dose()
         if self.thread and now - self.thread[-1].get("ts", now) >= float(config.STREAM_GAP_MARK_SECONDS):
             from captioner.prompts import casual_time_string
 

@@ -1726,17 +1726,29 @@ class Captioner(MemoryMixin):
             for _t in call["turns"]:
                 print(f"  [{_t['role']}] {_t['content'][:110].replace(chr(10), ' / ')}")
         print(f"USER:\n{call['user']}\n{'='*80}\n")
+        _scale, _short_delta, _arousal_adj = 1.0, 0.0, 0.0
         try:
             from utils import felt_loop as _fl
 
-            _scale = float(_fl.budget_scale(_fl._read()))
+            _fr = _fl._read()
+            _scale = float(_fl.budget_scale(_fr))
+            _short_delta = float(_fl.short_beat_delta(_fr))  # the felt loop's cadence hooks (Sep 4) — dropped in the first mind build, restored Sep 6
         except Exception:
-            _scale = 1.0
+            pass
+        try:
+            if _cfg.FELT_SAMPLING_ENABLED:
+                from captioner.context_compression import context_compressor as _cc2
+
+                _read = _cc2.get_last_mood_read()
+                if _read:
+                    _arousal_adj = float(_cfg.AROUSAL_TEMP_SPAN) * (float(_read.get("arousal", 0.5)) - 0.5)
+        except Exception:
+            _arousal_adj = 0.0
         _num = int(_cfg.MIND_NUM_PREDICT * _scale)
-        if _random.random() < float(_cfg.MIND_SHORT_BEAT_P):
+        if _random.random() < float(_cfg.MIND_SHORT_BEAT_P) + _short_delta:
             _num = int(_cfg.MIND_SHORT_BEAT_TOKENS)
         opts = {
-            "temperature": min(1.0, max(0.6, _cfg.CAPTION_TEMP_BORED if self.boredom > 0.7 else _cfg.CAPTION_TEMP)),
+            "temperature": min(1.0, max(0.6, (_cfg.CAPTION_TEMP_BORED if self.boredom > 0.7 else _cfg.CAPTION_TEMP) + _arousal_adj)),
             "top_p": _cfg.CAPTION_TOP_P,
             "min_p": _cfg.CAPTION_MIN_P,
             "repeat_penalty": _cfg.CAPTION_REPEAT_PENALTY,

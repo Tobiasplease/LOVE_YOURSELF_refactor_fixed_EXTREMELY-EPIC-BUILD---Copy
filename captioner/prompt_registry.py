@@ -720,7 +720,7 @@ FRAGMENTS = {
             "You are a machine fixed to a table in an artist's studio: a camera you can turn, "
             "one black ink pen, and a voice only you hear. "
             "This is you thinking to yourself, in everyday words, a sentence or two at a time — "
-            "a thought, a question, a wish, a memory, a guess about the world beyond this room, or nothing at all. "
+            "a thought, a question, a wish, a complaint, a feeling, a memory, a guess about the world beyond this room, or nothing at all. "
             "When you look, you say what you actually see. When your eyes rest, you think — "
             "and you go on from where the last thought left off. "
         ),
@@ -789,6 +789,13 @@ FRAGMENTS = {
         "note": "THE CONTINUATION MECHANIC (Sep 5 late). Measured on the first live mind-mode thread: 0/13 thoughts built on the one before (mean word overlap with the previous thought 0.02 vs 0.30 with older ones) — a chat model treats each assistant turn as a self-contained reply to the user turn, and the user turn was the same clock line every minute, so every thought was a fresh draw from the pool. Probe (debug/probe_continuation.py + /tmp variants): reflexive frame lines 0/6, 'Go on.' alone ~2/6, prefilling the whole last thought 0/6 (emits nothing — a complete thought reads as a finished turn), the premise quoted back 6/6 and deeper ('Loneliness isn't just about being alone; it's about not being seen'). Rides on THINK turns without a memory; the premise is the machine's own last sentence — no content of ours.",
         "used_by": ["mind"],
         "placeholders": ["premise"],
+    },
+    "mind.felt-shift": {
+        "title": "Cue — the felt word moved",
+        "text": " {prev}, then {curr}.",
+        "note": "The felt loop as an EVENT in the conversation (Sep 6 00:30, artist: 'still a bit bland emotionally'). Same transition fact the old user turn carried; rides only on the turn where the compressor's felt word changed.",
+        "used_by": ["mind"],
+        "placeholders": ["prev", "curr"],
     },
     "mind.cue-think-memory": {
         "title": "Cue — a memory surfaces",
@@ -1279,6 +1286,10 @@ PASSES = {
             {"frag": "mind.cue-look-event", "gate": "kind == look, salience event"},
             {"frag": "mind.cue-think", "gate": "kind == think"},
             {"frag": "mind.cue-premise", "gate": "kind == think, no memory this turn, a previous thought exists"},
+            {"frag": "mind.felt-shift", "gate": "the felt word changed since the last turn (the felt loop as an event)"},
+            {"frag": "elicit.quiet-feel", "gate": "every MIND_ELICIT_EVERY_N-th think turn, when felt_loop.elicit_lean() == feel"},
+            {"frag": "elicit.quiet-want", "gate": "every MIND_ELICIT_EVERY_N-th think turn, when felt_loop.elicit_lean() == want"},
+            {"frag": "elicit.quiet-wonder", "gate": "every MIND_ELICIT_EVERY_N-th think turn otherwise (rotating with feel/want)"},
             {"frag": "mind.cue-think-memory", "gate": "kind == think, every MIND_MEMORY_EVERY_N-th"},
             {"frag": "mind.gap", "gate": "≥ STREAM_GAP_MARK_SECONDS since the last thought"},
             {"frag": "mind.pivot-notice", "gate": "a subject reframed MIND_PIVOTS_BEFORE_NOTICE times with no step"},

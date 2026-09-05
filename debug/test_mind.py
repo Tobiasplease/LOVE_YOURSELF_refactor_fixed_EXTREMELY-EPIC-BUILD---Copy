@@ -164,6 +164,23 @@ m.think_count = int(C.MIND_MEMORY_EVERY_N) - 1
 c = m.build("think", now, a, {}, None)
 check("every Nth think turn surfaces a memory", c["memory"] is not None and "comes back" in c["user"], c["user"])
 
+print("\n[5b] the felt loop in the conversation")
+m, M = fresh_mind()
+m.absorb("A first thought about the chair.", "look", "c", now - 100)
+m._last_felt = "lonely"
+import captioner.mind as _mm
+_mm.Mind._felt_shift = lambda self: (P_shift := R.P("mind.felt-shift").format(prev="lonely", curr="frustrated"))
+c = m.build("think", now, Agent(), {}, None)
+check("felt shift rides as an event", "lonely, then frustrated." in c["user"], c["user"])
+m2, _ = fresh_mind()
+m2.absorb("A first thought about the chair.", "look", "c", now - 100)
+m2._felt_shift = lambda: ""
+m2.think_count = int(C.MIND_ELICIT_EVERY_N) - 1
+c2 = m2.build("think", now, Agent(), {}, None)
+check("elicit dose rides every Nth think turn", any(k in c2["user"] for k in ("wondering", "sit with you", "want")), c2["user"])
+c3 = m2.build("think", now, Agent(), {}, None)
+check("no dose on the next turn", not any(k in c3["user"] for k in ("wondering", "sit with you", "Say it blunt")), c3["user"])
+
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()
 a = Agent()
