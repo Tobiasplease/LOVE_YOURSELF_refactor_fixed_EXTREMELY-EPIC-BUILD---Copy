@@ -36,7 +36,7 @@ def fake_check(camera, servos, captioner=None):
 
 
 pd.check_paper_before_drawing = fake_check
-state_manager.camera = object()
+type(state_manager).camera = property(lambda self: object())  # the real property has no setter
 state_manager.paper_state, state_manager.last_paper_check_ts = "", 0.0
 cap = object.__new__(Captioner)
 cap.true_session_start = time.time() - 600
