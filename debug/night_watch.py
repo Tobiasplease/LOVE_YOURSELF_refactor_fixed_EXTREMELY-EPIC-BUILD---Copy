@@ -104,6 +104,16 @@ gated = collections.Counter(d.get("reason") for d in entries if d.get("action") 
 out["gate_reasons"] = dict(gated)
 him = [c for c in caps if PERSON.search(c["caption"])]
 gated_prev = {(d.get("caption_preview") or "")[:40] for d in entries if d.get("action") == "echo_spoken_not_stored"}
+# the gate logs the pre-trim text; match by time too (a gate event within 6 s of the caption)
+_gate_ts = [
+    d.get("timestamp", 0) for d in entries if d.get("action") == "echo_spoken_not_stored" or (d.get("action") == "drift_turn" and not d.get("stored"))
+]
+
+
+def _gated(c):
+    return c["caption"][:40] in gated_prev or any(abs(c.get("timestamp", 0) - t) <= 6 for t in _gate_ts)
+
+
 # belief timeline from the prompt edges: ON after an arrival line, OFF after a departure line
 belief_on_spans = []
 _on = None
@@ -131,7 +141,7 @@ except Exception:  # pragma: no cover
 out["him_kept"] = [
     (c["iso_timestamp"][11:19], c["caption"][:110])
     for c in him
-    if c["caption"][:40] not in gated_prev and not believed_at(c.get("timestamp", 0)) and _phantom(c["caption"])
+    if not _gated(c) and not believed_at(c.get("timestamp", 0)) and _phantom(c["caption"])
 ][-5:]
 edges = []
 for d in calls:
