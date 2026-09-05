@@ -255,14 +255,16 @@ class Mind:
             ts = float((meta or {}).get("ts", 0))
             if dist > maxd or now - ts < min_age or doc in turn_texts:
                 continue
-            if now - float(self._recalled.get(rid, 0)) < cool:
+            key = " ".join(_WORD_RE.findall(doc.lower()))[:160]  # the same sentence under many ids cools as one
+            if now - float(self._recalled.get(key, 0)) < cool:
                 continue
             if _NEG_FRAME_RE.search(doc) or (not believed and PERSON_RE and PERSON_RE.search(doc)):
                 continue
-            self._recalled[rid] = now
+            self._recalled[key] = now
             if len(self._recalled) > 500:
                 for k in sorted(self._recalled, key=self._recalled.get)[:-500]:
                     self._recalled.pop(k, None)
+            self._save()  # a gated thought absorbs nothing — the cooldown must survive on its own
             return {"ts": ts, "text": doc, "kind": (meta or {}).get("kind", ""), "distance": float(dist)}
         return None
 
