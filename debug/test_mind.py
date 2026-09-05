@@ -192,6 +192,15 @@ m.note_look(now)
 check("note_look sets last_look_ts", m.last_look_ts == now)
 check("no second look right after a gated one", m.next_kind(now + 60, {}, Agent()) == "think")
 
+print("\n[6c] motion settle + steady frame")
+from captioner.mind import moved_recently, steady_jpeg
+meta = [{"timestamp": now - 5, "jpeg": b"A", "detection": {"ego_motion": False}}, {"timestamp": now - 1, "jpeg": b"B", "detection": {"ego_motion": True}}]
+check("moved within the settle window", moved_recently(meta, now, 2.0))
+check("settle window 0 disables", not moved_recently(meta, now, 0))
+check("old movement doesn't count", not moved_recently(meta, now + 10, 2.0))
+check("steady frame = newest still frame", steady_jpeg(meta) == b"A")
+check("no steady frame → None", steady_jpeg([meta[1]]) is None)
+
 print("\n[7] persistence")
 m, M = fresh_mind()
 m.absorb("Kept across a restart.", "think", "12:00. Eyes resting.", now - 100)

@@ -113,6 +113,22 @@ def title_of(desc: str, max_words: int = 9) -> str:
     return " ".join(words).strip(" ,")
 
 
+def moved_recently(recent_meta: list, now: float, settle_s: float) -> bool:
+    """Did the head move within settle_s of now? (frame_buffer flags ego_motion
+    per frame; the flare/exposure settling that follows a pan is not motion.)"""
+    if settle_s <= 0:
+        return False
+    return any(f.get("detection", {}).get("ego_motion") and now - float(f.get("timestamp", 0)) <= settle_s for f in recent_meta or [])
+
+
+def steady_jpeg(recent_meta: list):
+    """The newest frame captured with the head still, or None."""
+    for f in reversed(recent_meta or []):
+        if not f.get("detection", {}).get("ego_motion") and f.get("jpeg"):
+            return f["jpeg"]
+    return None
+
+
 def last_sentence(text: str) -> str:
     parts = [p.strip() for p in _SENT_END_RE.split((text or "").strip()) if p.strip()]
     return parts[-1] if parts else (text or "").strip()

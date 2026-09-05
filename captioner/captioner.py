@@ -948,6 +948,14 @@ class Captioner(MemoryMixin):
         # must be free to think about itself and its work while someone is
         # quietly in the room (north-star principles 6 + 7).
         strong_motion = info["max_residual"] > SALIENCE_MOTION_RESIDUAL
+        try:
+            from captioner.mind import moved_recently as _moved
+            from config.config import MOTION_SETTLE_S as _settle
+
+            if strong_motion and _moved(info.get("recent_meta") or [], time.time(), _settle):
+                strong_motion = False  # Sep 6 00:xx: a pan into the lamp read as "something moved" three times in 20 min
+        except Exception:
+            pass
         # ONSET only (July 27): level-based motion kept salience hot for every
         # cycle of a person moving around — perpetual react, interiority
         # stripped the whole visit, and the first world run read as a string
@@ -1696,6 +1704,20 @@ class Captioner(MemoryMixin):
         if not mind.has_session(self.true_session_start) and self.last_caption and len(self.last_caption) > 5:
             mind.absorb(self.last_caption, "wake", _P("mind.cue-wake").format(clock=time.strftime("%H:%M", time.localtime(now))), now)
         kind = mind.next_kind(now, scene, self)
+        if kind == "look":
+            try:
+                from captioner.mind import moved_recently as _moved
+                from captioner.mind import steady_jpeg as _steady
+                from config.config import MOTION_SETTLE_S as _settle
+
+                _meta = scene.get("recent_meta") or []
+                if _meta and _meta[-1].get("detection", {}).get("ego_motion") or _moved(_meta, now, _settle):
+                    _jpg = _steady(_meta)
+                    if _jpg:
+                        with open(img_path, "wb") as _f:
+                            _f.write(_jpg)  # look with a still head, not a mid-pan smear (23:52: "someone crouching" was the blur)
+            except Exception:
+                pass
         call = mind.build(kind, now, self, scene, img_path)
         print(f"\n{'='*80}\n[MIND] {_cfg.MODEL_NAME} ({kind}{' + memory' if call['memory'] else ''})\n{'='*80}")
         print(f"SYSTEM: {call['system']}\n")

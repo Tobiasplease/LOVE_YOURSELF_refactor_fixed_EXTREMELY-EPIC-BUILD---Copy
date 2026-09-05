@@ -1545,3 +1545,4 @@ MIND_ROOM_TERMS = int(os.getenv("MIND_ROOM_TERMS", 8))  # registry terms named i
 MIND_VIEW_TOL_PAN = float(os.getenv("MIND_VIEW_TOL_PAN", 30))  # registry terms within this of the gaze are "in view" for the LOOK cue
 MIND_VIEW_TOL_TILT = float(os.getenv("MIND_VIEW_TOL_TILT", 25))
 MIND_VIEW_TERMS = int(os.getenv("MIND_VIEW_TERMS", 4))  # ranked by the machine's own familiarity (hits), not detector confidence — the mannequin head has conf≈0 and was dropped
+MOTION_SETTLE_S = float(os.getenv("MOTION_SETTLE_S", 2.0))  # after the head moves, flow residual doesn't count as motion for this long (exposure/flare settling read as "something moved"; 0 disables)
