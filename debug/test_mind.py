@@ -161,9 +161,11 @@ check("reframe excluded", pick and "isn't a curtain" not in pick["text"], pick)
 check("fresh thought excluded", pick and "Too fresh" not in pick["text"], pick)
 picks = {m.choose_memory(now, believed=True)["text"] for _ in range(12)}
 check("person memory allowed when believed", any("He sat" in t for t in picks), picks)
-m.think_count = int(C.MIND_MEMORY_EVERY_N) - 1
+C.MIND_MEMORY_EVERY_N = 4
+m.think_count = 3
 c = m.build("think", now, a, {}, None)
-check("every Nth think turn surfaces a memory", c["memory"] is not None and "comes back" in c["user"], c["user"])
+check("scheduled surfacing still works when enabled", c["memory"] is not None and "comes back" in c["user"], c["user"])
+C.MIND_MEMORY_EVERY_N = 0
 
 print("\n[5b] the felt loop in the conversation")
 m, M = fresh_mind()
@@ -184,6 +186,39 @@ c3 = m2.build("think", now, Agent(), {}, None)
 check("no dose on the next turn", not any(k in c3["user"] for k in ("wondering", "sit with you", "Say it blunt")), c3["user"])
 C.MIND_ELICIT_EVERY_N = 0
 check("elicit off by default (Sep 6 01:00)", "sit with you" not in m2.build("think", now, Agent(), {}, None)["user"])
+
+print("\n[5c] recall by association, continuity quote")
+class FakeIndex:
+    def __init__(self): self.docs = {}
+    def count(self): return len(self.docs)
+    def upsert(self, ids, documents, metadatas):
+        for i, d, m in zip(ids, documents, metadatas): self.docs[i] = (d, m)
+    def query(self, query_texts, n_results, include):
+        from captioner.mind import content_words as cw
+        q = cw(query_texts[0]); scored = []
+        for i, (d, m) in self.docs.items():
+            w = cw(d); j = len(q & w) / max(1, len(q | w)); scored.append((1 - j, i, d, m))
+        scored.sort(); top = scored[:n_results]
+        return {"ids": [[t[1] for t in top]], "documents": [[t[2] for t in top]], "metadatas": [[t[3] for t in top]], "distances": [[t[0] for t in top]]}
+m, M = fresh_mind(); m._index = FakeIndex()
+m.absorb("I wonder what the black curtain is blocking — another room, or a way out.", "think", "c", now - 5 * 3600)
+m.absorb("The stuffed monkey on the desk has a face like it knows something.", "think", "c", now - 4 * 3600)
+m.absorb("The curtain again. It hides the window, I think.", "think", "c", now - 30)
+C.MIND_RECALL_MAX_DIST = 0.9
+r = m.recall_similar("The curtain again. It hides the window, I think.", now)
+check("association recalls the related old thought", r is not None and "blocking" in r["text"], r)
+check("cooldown: not again within the hour", m.recall_similar("The curtain again. It hides the window, I think.", now + 60) is None)
+C.MIND_RECALL_MAX_DIST = 0.2
+check("nothing close enough → nothing surfaces", m.recall_similar("Rain on the skylight.", now + 7200) is None)
+C.MIND_RECALL_MAX_DIST = 0.5
+c = m.build("think", now, Agent(), {}, None)
+check("premise and recall ride in the same cue", "You were on" in c["user"], c["user"])
+m2, _ = fresh_mind(); m2._index = FakeIndex()
+m2.absorb("Last night ended on the lamp.", "think", "c", now - 5 * 3600)
+m2.absorb("A new chain starts here.", "think", "c", now - 100)
+lb = m2.life_block(now, Agent())
+check("the previous chain's last thought rides as continuity", "you'd got to" in lb and "ended on the lamp" in lb, lb[-160:])
+check("indexed on absorb", m2._index.count() == 2)
 
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()

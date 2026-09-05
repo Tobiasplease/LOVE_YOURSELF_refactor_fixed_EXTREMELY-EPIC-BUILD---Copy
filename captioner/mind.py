@@ -146,6 +146,8 @@ class Mind:
         self._last_believed: Optional[bool] = None
         self._last_felt: str = ""
         self._edges: Dict[str, list] = {}
+        self._recalled: Dict[str, float] = {}
+        self._index = None  # the "thoughts" ChromaDB collection (lazy); tests inject a fake
         self._load()
         if backfill:
             try:
@@ -164,6 +166,7 @@ class Mind:
             self.positions = dict(d.get("positions") or {})
             self.last_look_ts = float(d.get("last_look_ts") or 0.0)
             self._edges = dict(d.get("edges") or {})
+            self._recalled = dict(d.get("recalled") or {})
         except Exception:
             self.thread, self.positions = [], {}
 
@@ -172,13 +175,109 @@ class Mind:
             tmp = self.path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(
-                    {"thread": self.thread[-int(config.MIND_THREAD_MAX) :], "positions": self.positions, "last_look_ts": self.last_look_ts, "edges": self._edges},
+                    {
+                        "thread": self.thread[-int(config.MIND_THREAD_MAX) :],
+                        "positions": self.positions,
+                        "last_look_ts": self.last_look_ts,
+                        "edges": self._edges,
+                        "recalled": self._recalled,
+                    },
                     f,
                     indent=1,
                 )
             os.replace(tmp, self.path)
         except Exception:
             pass
+
+    # ---- recall by association (ChromaDB "thoughts") ------------------------------
+    def index(self):
+        if self._index is None and getattr(config, "MIND_RECALL_ENABLED", True):
+            try:
+                from captioner.semantic_memory import get_semantic_memory
+
+                self._index = get_semantic_memory()._client.get_or_create_collection(name="thoughts", metadata={"hnsw:space": "cosine"})
+                if self._index.count() == 0 and self.thread:
+                    self.reindex()
+            except Exception:
+                self._index = False
+        return self._index or None
+
+    @staticmethod
+    def _tid(entry: dict) -> str:
+        return f"t{int(float(entry.get('ts', 0)))}"
+
+    def _index_add(self, entries: List[dict]) -> None:
+        idx = self.index()
+        if not idx:
+            return
+        entries = [e for e in entries if e.get("text") and e.get("kind") in _KEEP_KINDS]
+        if not entries:
+            return
+        try:
+            idx.upsert(
+                ids=[self._tid(e) for e in entries],
+                documents=[e["text"][:600] for e in entries],
+                metadatas=[{"ts": float(e.get("ts", 0)), "kind": e.get("kind", "")} for e in entries],
+            )
+        except Exception:
+            pass
+
+    def reindex(self) -> int:
+        entries = [e for e in self.thread if e.get("text") and e.get("kind") in _KEEP_KINDS]
+        for i in range(0, len(entries), 200):
+            self._index_add(entries[i : i + 200])
+        return len(entries)
+
+    def recall_similar(self, query: str, now: float, believed: bool = False) -> Optional[dict]:
+        """The past thought nearest to the current one — surfaces by
+        association, never by schedule. Old enough, close enough, not in the
+        turns, not recalled within the cooldown, never person-tinged while the
+        room is believed empty."""
+        idx = self.index()
+        if not idx or not (query or "").strip():
+            return None
+        try:
+            n = min(8, idx.count())
+            if n <= 0:
+                return None
+            res = idx.query(query_texts=[query[:400]], n_results=n, include=["documents", "metadatas", "distances"])
+        except Exception:
+            return None
+        turn_texts = {e.get("text") for e in self.recent_turns(now)}
+        min_age = int(config.MIND_MEMORY_MIN_AGE_S)
+        cool = int(config.MIND_RECALL_COOLDOWN_S)
+        maxd = float(config.MIND_RECALL_MAX_DIST)
+        try:
+            from utils.presence_text import PERSON_RE
+        except Exception:
+            PERSON_RE = None  # noqa: N806
+        for rid, doc, meta, dist in zip(res["ids"][0], res["documents"][0], res["metadatas"][0], res["distances"][0]):
+            ts = float((meta or {}).get("ts", 0))
+            if dist > maxd or now - ts < min_age or doc in turn_texts:
+                continue
+            if now - float(self._recalled.get(rid, 0)) < cool:
+                continue
+            if _NEG_FRAME_RE.search(doc) or (not believed and PERSON_RE and PERSON_RE.search(doc)):
+                continue
+            self._recalled[rid] = now
+            if len(self._recalled) > 500:
+                for k in sorted(self._recalled, key=self._recalled.get)[:-500]:
+                    self._recalled.pop(k, None)
+            return {"ts": ts, "text": doc, "kind": (meta or {}).get("kind", ""), "distance": float(dist)}
+        return None
+
+    def before_chain(self, now: float) -> Optional[dict]:
+        """The last thought of the previous chain — quoted in the life block as continuity."""
+        start = self.thread_start(now)
+        if not start:
+            return None
+        for e in reversed(self.thread):
+            ts = float(e.get("ts", 0))
+            if ts < start and e.get("kind") in ("think", "look", "reflection", "wake") and e.get("text"):
+                if now - ts <= int(config.MIND_LIFE_BEFORE_MAX_AGE_S):
+                    return e
+                return None
+        return None
 
     # ---- its own past, days deep -----------------------------------------------
     def backfill(self, log_dir: Optional[str] = None, days: int = 4, per_day: int = 40, now: Optional[float] = None) -> int:
@@ -230,6 +329,7 @@ class Mind:
             self.thread.sort(key=lambda e: e.get("ts", 0))
             self.thread = self.thread[-int(config.MIND_THREAD_MAX) :]
             self._save()
+            self._index_add([e for e in self.thread if e.get("kind") == "past"])
         return added
 
     # ---- the thread --------------------------------------------------------
@@ -250,6 +350,7 @@ class Mind:
             self.last_look_ts = now
         self._update_position(subject, text, now)
         self._save()
+        self._index_add([entry])
         return entry
 
     def premise(self, now: Optional[float] = None) -> str:
@@ -466,6 +567,9 @@ class Mind:
         name = self._name()
         if name:
             lines.append(P("mind.life-name").format(name=name))
+        before = self.before_chain(now)
+        if before:
+            lines.append(P("mind.life-before").format(when=when_words(now - float(before["ts"])), text=before["text"][:220]))
         if getattr(config, "MIND_LIFE_FULL", False):
             try:
                 from utils.lore_ledger import lore_ledger
@@ -738,7 +842,7 @@ class Mind:
             self.think_count += 1
             n = int(config.MIND_MEMORY_EVERY_N)
             if n > 0 and self.think_count % n == 0:
-                memory = self.choose_memory(now, believed=believed)
+                memory = self.choose_memory(now, believed=believed)  # scheduled fallback (off by default)
             if memory:
                 cue = P("mind.cue-think-memory").format(clock=clock(now), when=when_words(now - memory["ts"]), memory=memory["text"][:220])
             else:
@@ -746,6 +850,10 @@ class Mind:
                 prem = self.premise(now)
                 if prem:
                     cue += P("mind.cue-premise").format(premise=prem)
+                    memory = self.recall_similar(prem, now, believed=believed)
+                    if memory:
+                        cue += P("mind.cue-recall").format(when=when_words(now - memory["ts"]), memory=memory["text"][:220])
+                        print(f"[MIND] recall by association (d={memory.get('distance', 0):.2f}, {when_words(now - memory['ts'])}): {memory['text'][:70]}")
         if kind == "think":
             cue += self._felt_shift()
             cue += self.time_edges(now, agent)
