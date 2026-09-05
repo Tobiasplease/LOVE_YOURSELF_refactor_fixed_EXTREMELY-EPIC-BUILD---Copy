@@ -98,6 +98,11 @@ look = m.build("look", now, a, {}, "/tmp/x.jpg")
 check("look turn carries the frame", look["image"] == "/tmp/x.jpg")
 check("look cue names what's in view", "red foam finger" in look["user"], look["user"])
 check("look cue reports unchanged", "Nothing has changed" in look["user"], look["user"])
+a_new = Agent(); a_new._last_view_verdict = "new"
+m._seen_this_session = lambda terms, agent: True
+check("'haven't looked this way' withheld when the things in view were seen this session", "haven't looked" not in m.build("look", now, a_new, {}, "/tmp/x.jpg")["user"])
+m._seen_this_session = lambda terms, agent: False
+check("'haven't looked this way' only for a first sighting", "haven't looked" in m.build("look", now, a_new, {}, "/tmp/x.jpg")["user"])
 a2 = Agent()
 a2._presence_believed = True
 look2 = m.build("look", now, a2, {}, "/tmp/x.jpg")

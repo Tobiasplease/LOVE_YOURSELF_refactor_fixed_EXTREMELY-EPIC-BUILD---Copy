@@ -411,6 +411,16 @@ class Mind:
         except Exception:
             return []
 
+    def _seen_this_session(self, terms: List[str], agent) -> bool:
+        try:
+            from perception.spatial_registry import spatial_registry
+
+            entries = spatial_registry.get_entries() or {}
+            start = float(getattr(agent, "true_session_start", 0.0) or 0.0)
+            return any(float((entries.get(t) or {}).get("last_seen", 0)) >= start for t in terms)
+        except Exception:
+            return True
+
     # ---- the call ----------------------------------------------------------------
     def build(self, kind: str, now: float, agent, scene: Optional[dict], img_path: Optional[str]) -> dict:
         system = P("mind.system")
@@ -442,9 +452,9 @@ class Mind:
                 terms = self.in_view(agent)
                 where = P("mind.where").format(terms=" and the ".join(terms[:2])) if terms else ""
                 verdict = getattr(agent, "_last_view_verdict", None)
-                change = {"unchanged": P("mind.change-none"), "changed": P("mind.change-yes"), "new": P("mind.change-new"), "baselined": P("mind.change-new")}.get(
-                    verdict or "", ""
-                )
+                change = {"unchanged": P("mind.change-none"), "changed": P("mind.change-yes")}.get(verdict or "", "")
+                if verdict in ("new", "baselined") and not self._seen_this_session(terms, agent):
+                    change = P("mind.change-new")  # honest only when nothing in view was seen this session (the referee keys by gaze cell)
                 cue = P("mind.cue-look").format(clock=clock(now), where=where, change=change, someone=someone)
         else:
             self.think_count += 1
