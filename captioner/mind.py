@@ -195,7 +195,36 @@ class Mind:
             return []
 
     def subject_of(self, text: str) -> str:
-        """The registry term the thought is about (the machine's own vocabulary), else ''."""
+        """The registry term the thought is about (the machine's own vocabulary);
+        failing that, a recurring abstract noun — the lemma that this thought
+        shares with one of the last three (so a fixation on 'silence' or
+        'absence' is tracked for positions and pivots, not only room objects)."""
+        term = self._registry_subject(text)
+        if term:
+            return term
+        return self._recurring_noun(text)
+
+    def _recurring_noun(self, text: str) -> str:
+        try:
+            from utils.nlp import nlp
+
+            def nouns(t):
+                return [tok.lemma_.lower() for tok in nlp(t or "") if tok.pos_ in ("NOUN", "PROPN") and len(tok.lemma_) > 3 and tok.lemma_.lower() not in _STOP]
+
+            here = nouns(text)
+            if not here:
+                return ""
+            prior = set()
+            for e in self.thread[-3:]:
+                prior |= set(nouns(e.get("text", "")))
+            shared = [n for n in here if n in prior]
+            if not shared:
+                return ""
+            return max(set(shared), key=shared.count)
+        except Exception:
+            return ""
+
+    def _registry_subject(self, text: str) -> str:
         stems = {re.sub(r"'s?$", "", w).rstrip("s") for w in _WORD_RE.findall((text or "").lower())}
         low = (text or "").lower()
         best, best_score = "", 0

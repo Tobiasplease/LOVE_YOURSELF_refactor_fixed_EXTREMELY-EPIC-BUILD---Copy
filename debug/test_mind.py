@@ -135,6 +135,17 @@ check("a step (new words) resets pivots", m.positions["wooden chair"]["pivots"] 
 pos = m.fresh_positions(t0 + 320)
 check("position = last sentence of the newest thought", pos and pos[0][0] == "wooden chair" and "bolted" in pos[0][1], pos)
 
+print("\n[4b] abstract fixations are tracked too")
+m, M = fresh_mind()
+t0 = now - 300
+m.absorb("Can I record the absence of noise? The silence has a texture.", "think", "c", t0)
+m.absorb("The silence isn't empty; it's a shape.", "think", "c", t0 + 60)
+check("recurring abstract noun becomes the subject", m.thread[-1]["subject"] == "silence", m.thread[-1]["subject"])
+m.absorb("It's not silence, it's a blur I can't outline.", "think", "c", t0 + 120)
+m.absorb("Silence is no longer a shape; it's a ghost of noise.", "think", "c", t0 + 180)
+check("pivots counted on the abstract subject", m.pending_notice is not None and m.pending_notice[0] == "silence", (m.pending_notice, m.positions.get("silence")))
+check("a room object still wins when named", m.subject_of("The wooden chair holds the silence.") == "wooden chair")
+
 print("\n[5] memory surfacing is chosen")
 m, M = fresh_mind()
 m.absorb("He sat there for an hour without moving.", "look", "c", now - 5000)
