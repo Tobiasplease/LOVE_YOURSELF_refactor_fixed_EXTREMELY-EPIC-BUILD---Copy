@@ -1508,15 +1508,23 @@ class Captioner(MemoryMixin):
         # so the window never held a short entry to imitate and the register
         # homogenized long. Only actual number-garbage and bare symbols die:
         # any digit-bearing stub, or fewer than two letters total.
+        # Sep 5 (artist: "2x4s", "3D print", "100%" are legit things to say):
+        # only COUNTING stubs die — two or more bare number tokens with almost
+        # no letters ("5... 4... 3...", "24/7... 12..."), or a bare-symbol line.
+        # One number is a thought ("100%.", "2x4s.", "3D printed plastic.").
         alpha = sum(1 for ch in caption if ch.isalpha())
-        if alpha < 2 or (alpha < 8 and any(ch.isdigit() for ch in caption)):
+        number_tokens = len(re.findall(r"(?<![A-Za-z])\d+(?:[.:/,]\d+)*%?(?![A-Za-z])", caption))
+        if (alpha < 2 and number_tokens != 1) or (alpha < 8 and number_tokens >= 2):
             return "numeric_fragment"
         if self._is_word_salad(caption):
             return "word_salad"
         # Number-chain: the document continues numeric progressions ("497
         # days" -> "498 days" -> countdowns). One number-led thought may live
         # in the window; a second one on its heels is recitation, not thought.
-        if re.match(r"\s*\d", caption) and any(re.match(r"\s*\d", past) for past in self._stream):
+        # Sep 5: a chain is a BARE number opening right after a bare-number
+        # opening ("497 days" -> "498 days"); "2x4s", "3D", "100%" are words.
+        _bare_num = re.compile(r"^\s*\d+(?:[.:,]\d+)*(?=[\s.…—–-]|$)")
+        if _bare_num.match(caption) and self._stream and _bare_num.match(list(self._stream)[-1] or ""):
             return "number_chain"
         # A claimed act of marking while the pen is parked is always false.
         if self._PHANTOM_DRAWING_RE.search(caption) and not self._drawing_now():

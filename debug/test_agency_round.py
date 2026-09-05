@@ -124,6 +124,16 @@ check(
     cap._strip_leaked_stamps("Drywall. 14:38 It's just drywall. 14:39. The air isn't thick.") == "Drywall. It's just drywall. The air isn't thick.",
     cap._strip_leaked_stamps("Drywall. 14:38 It's just drywall. 14:39. The air isn't thick."),
 )
+for t in ["2x4s and plywood.", "3D printed plastic.", "100%.", "It's 3D printed plastic. Nothing to judge.", "20 minutes and nothing moved."]:
+    check(f"numbers as words pass: {t[:22]}", gate(t) == "PASS", gate(t))
+check("counting stub still dies", gate("5... 4... 3...") == "numeric_fragment", gate("5... 4... 3..."))
+_c = object.__new__(Captioner)
+_c._stream = deque(["497 days."], maxlen=24)
+_c._stream_ts = deque([0.0], maxlen=24)
+_c._presence_believed = False
+check("bare number after a bare number → number chain", _c._caption_reject_reason("498 days.", "") == "number_chain")
+_c._stream = deque(["the lamp is on."], maxlen=24)
+check("bare number after words → passes", (_c._caption_reject_reason("498 days.", "") or "PASS") == "PASS")
 check("leading stamp stripped", cap._strip_leaked_stamps("14:39 — It's just the light.") == "It's just the light.")
 check("a time inside a sentence survives", cap._strip_leaked_stamps("it was 14:38 when the light changed.") == "it was 14:38 when the light changed.")
 check("no decision → untouched", clean == "nothing moved." and dec is None)
