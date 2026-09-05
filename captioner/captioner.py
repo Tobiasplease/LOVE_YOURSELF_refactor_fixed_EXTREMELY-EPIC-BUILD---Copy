@@ -2097,6 +2097,12 @@ class Captioner(MemoryMixin):
                         # the seam-conditional elicitation opens the door — a
                         # fresh question instead of a frozen continuation.
                         _fresh_start = bool(self._salience_hot) or getattr(self, "_skip_streak", 0) >= 2
+                        # Sep 5 (agency round): an ASK cycle runs seam-less too — with
+                        # the prefill the model continued its own clause straight past
+                        # LOOK / EXPECT (first live cycles: 0 of 2 answered). Finishing
+                        # a thought and deciding is a fresh turn, not a continuation.
+                        if getattr(self, "_decision_asked", False):
+                            _fresh_start = True
 
                         # Video decision from the salience assessment: pixel diff only
                         # decides whether sending video frames is worthwhile (scene
