@@ -220,7 +220,10 @@ class Mind:
             shared = [n for n in here if n in prior]
             if not shared:
                 return ""
-            return max(set(shared), key=shared.count)
+            prev = (self.thread[-1].get("subject") if self.thread else "") or ""
+            if prev and (prev in shared or set(here) & set(nouns(self.thread[-1].get("text", "")))):
+                return prev  # continuity: a reframe renames the thing; the chain keeps its subject
+            return max(dict.fromkeys(shared), key=lambda n: (shared.count(n), -here.index(n)))
         except Exception:
             return ""
 
@@ -249,7 +252,7 @@ class Mind:
         ttl = int(config.MIND_POSITION_TTL_S)
         if pos and now - float(pos.get("last_ts", 0)) < ttl:
             new_words = content_words(text) - content_words(pos.get("text", "")) - set(subject.lower().split())
-            if _NEG_FRAME_RE.search(text) and len(new_words) < 4:
+            if _NEG_FRAME_RE.search(text) and len(new_words) < 6:  # a reframe with little new material
                 pos["pivots"] = int(pos.get("pivots", 0)) + 1
             else:
                 pos["pivots"] = 0
