@@ -843,7 +843,7 @@ STREAM_BREAK_SECONDS = 7200
 # had momentum (aliveness); world had grounding but answered a static room
 # forty times an hour (flat) and its delta framing elicited fake-delta tropes
 # ("the light feels different now"). A/B directly against the world runs.
-STREAM_MODE = os.getenv("STREAM_MODE", "hybrid")
+STREAM_MODE = os.getenv("STREAM_MODE", "mind")  # "mind" (Sep 5 eve, the conversation shape) | "hybrid" (stamped log + seam, Aug 1–Sep 5)
 
 # HYBRID seam size (Aug 1): how many chars of the machine's latest thought are
 # handed back as the continuation prefill in STREAM_MODE="hybrid". Short on
@@ -1518,3 +1518,26 @@ GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 
 # 5. Additional devices can be added here
 # CUSTOM_DEVICE_PORT = "/dev/ttyUSB5"
+
+# ── MIND MODE (Sep 5 evening; docs/architecture-diagnosis-sep5.md, docs/mind-mode-sep5.md) ──
+# The mind is a conversation with itself over a life, not a log of its own
+# stamped sentences. STREAM_MODE == "mind" routes the caption cycle through
+# captioner/mind.py: LOOK turns (frame + what changed + what's known to be in
+# view) and THINK turns (no frame; the clock as the only new input; now and
+# then one chosen, dated memory). The self-indictment channel is retired in
+# this mode: no NEW ABOUT ME self-notes, no trait promotion, no self/durable
+# block in the frame.
+MIND_TURNS = int(os.getenv("MIND_TURNS", 6))  # prior thoughts riding as real turns
+MIND_TURN_MAX_AGE_S = int(os.getenv("MIND_TURN_MAX_AGE_S", 7200))  # older thoughts leave the turns (the life block still remembers)
+MIND_THINK_INTERVAL_S = float(os.getenv("MIND_THINK_INTERVAL_S", 60))  # cadence at rest, × felt_loop.cadence_mult
+MIND_LOOK_EVERY_S = float(os.getenv("MIND_LOOK_EVERY_S", 300))  # a periodic look when nothing pulls
+MIND_LOOK_MIN_GAP_S = float(os.getenv("MIND_LOOK_MIN_GAP_S", 20))
+MIND_MEMORY_EVERY_N = int(os.getenv("MIND_MEMORY_EVERY_N", 4))  # every Nth think turn, one dated memory surfaces
+MIND_MEMORY_MIN_AGE_S = int(os.getenv("MIND_MEMORY_MIN_AGE_S", 3600))
+MIND_NUM_PREDICT = int(os.getenv("MIND_NUM_PREDICT", 60))  # a sentence or two
+MIND_SHORT_BEAT_P = float(os.getenv("MIND_SHORT_BEAT_P", 0.2))
+MIND_PIVOTS_BEFORE_NOTICE = int(os.getenv("MIND_PIVOTS_BEFORE_NOTICE", 3))  # reframes of one subject with no step → the machine hears it
+MIND_POSITION_TTL_S = int(os.getenv("MIND_POSITION_TTL_S", 1800))  # a subject's position rides in the life block while this fresh
+MIND_PAST_THOUGHTS = int(os.getenv("MIND_PAST_THOUGHTS", 2))  # dated past thoughts in the life block
+MIND_THREAD_MAX = int(os.getenv("MIND_THREAD_MAX", 4000))  # persisted thread length (event_log/mind_thread.json)
+MIND_ROOM_TERMS = int(os.getenv("MIND_ROOM_TERMS", 8))  # registry terms named in the life block

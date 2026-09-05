@@ -71,6 +71,8 @@ def _monologue_clause() -> str:
         from config.config import STREAM_MODE
     except ImportError:
         STREAM_MODE = "turns"
+    if STREAM_MODE == "mind":
+        return ""  # mind.system carries its own genre (Sep 5 eve)
     if STREAM_MODE == "hybrid":
         return P("genre.hybrid")
     if STREAM_MODE == "world":
@@ -169,7 +171,7 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # elicits invented critics, which the distiller then re-confirms off the
     # machine's own echo. Introspective/awakening beats always carry it;
     # other modes see it every IDENTITY_EVERY_N_CAPTIONS.
-    if not detox and _identity_due(agent, mode):
+    if not detox and _identity_due(agent, mode) and getattr(config, "STREAM_MODE", "") != "mind":
         try:
             from captioner.context_compression import context_compressor
 

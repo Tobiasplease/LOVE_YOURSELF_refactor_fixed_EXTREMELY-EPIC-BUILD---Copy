@@ -1,0 +1,98 @@
+# Mind mode — the conversation shape (built Sep 5, evening)
+
+Follows docs/architecture-diagnosis-sep5.md. The artist: "This sounds really
+good. Let's build it." Plus the refinement that shaped the deepening mechanic:
+"A fixation is fine if it deepens or evolves, which it doesn't right now. Just
+endless repetitions of 'I used to think the curtains were ___ but now they
+are ___'."
+
+## What changed (STREAM_MODE = "mind", the new default)
+
+**The call.** `captioner/mind.py` (`Mind.build`) assembles the conversation;
+`captioner/captioner.py::_mind_generate` runs it. Shape:
+
+```
+system   mind.system + pen-parked fence + felt frame ("Right now: {felt}.")
+user     LIFE block + the oldest cue            ← first user turn only
+assistant thought
+user     cue  ("18:41. Eyes resting.")
+assistant thought
+…        (last MIND_TURNS=6 thoughts, ≤ MIND_TURN_MAX_AGE_S=2h old)
+user     current cue (+ the frame on LOOK turns)
+```
+
+No stamped log, no seam prefill (`utils/llama_server.py` gained a `turns`
+path; `query_model(turns=...)`). The clock lives in the cues, never inside
+the machine's content; a gap ≥ STREAM_GAP_MARK_SECONDS is said in words.
+
+**Two turn kinds** (`Mind.next_kind`): LOOK when the first turn of a session,
+salience hot, the view changed, a presence-belief edge, a chosen glance is
+pending, or MIND_LOOK_EVERY_S (300 s) since the last look; otherwise THINK.
+LOOK carries the frame and a cue built from what the registry knows is in
+view (`Mind.in_view`, ±25° pan / ±20° tilt), the referee's verdict (nothing
+changed / something changed / first look this way), the salience event when
+there is one, and "Someone is here." only while the adjudicated belief is ON.
+THINK carries no frame; every MIND_MEMORY_EVERY_N-th (4) think turn one chosen
+memory surfaces.
+
+**The life block** (`Mind.life_block`, mind.life-*): when (clock, weekday,
+daypart, first boot month, today's waking), the room as known (registry terms,
+most-seen first), people today (episodic arrival/left pairs), drawings (count,
+last title, age), no-paper fact, the standing want, questions carried, fresh
+positions, MIND_PAST_THOUGHTS dated past thoughts.
+
+**Deepening.** A thought's subject is the registry term it is about
+(`subject_of`, head noun required). Its last sentence becomes the subject's
+POSITION and rides in the life block ("Where you'd got to with X: …") while
+fresh (MIND_POSITION_TTL_S). A thought on the same subject that carries the
+reframe shape (it's not / isn't / no longer / used to) with fewer than four
+new content words is a PIVOT; a thought with new words is a STEP and resets.
+MIND_PIVOTS_BEFORE_NOTICE (3) pivots → the next think cue carries
+mind.pivot-notice, once.
+
+**Memory surfacing** (`choose_memory`): candidates ≥ MIND_MEMORY_MIN_AGE_S old,
+never a reframe, never person-tinged (utils/presence_text.PERSON_RE) while the
+room is believed empty, ranked by novelty against the last six thoughts, one
+of the top six at random.
+
+**Cadence** (`Mind.interval`): CAPTION_INTERVAL_LIVE while hot, else
+MIND_THINK_INTERVAL_S (60 s) × felt_loop.cadence_mult.
+
+**Retired in this mode.** Drift, wander, inward beats, memory mode, the
+decision ask (LOOK/EXPECT), the situational/status lines — all superseded by
+THINK/LOOK turns. The trait factory: no NEW ABOUT ME self-notes
+(`_absorb_self_note`), no TRAIT promotion to core_facts/durable, no persona
+consolidation, no self/durable block in any frame. The compressor still runs
+on the stream (ROOM/EVENT/felt/pleasantness/energy feed the felt loop and the
+reflection); reflection still runs and its BELIEF/WANT/QUESTION/NAME slots
+still land in the ledgers — as the machine's words, quoted rarely.
+
+**Stores re-seeded** (`debug/reseed_stores.py`, run once at the 21:37
+restart): durable_ledger, want_ledger, lore_ledger, machine_identity,
+effigy_memory, last_caption archived to event_log/archive-20260905-2137/.
+Kept: episodic_events (the life), lifetime_state, spatial_registry,
+presence_arrivals. The thread persists in event_log/mind_thread.json.
+
+**Still live and unchanged.** Presence adjudication, verified absence, the
+phantom_presence storage gate, numeric/echo gates, loop-hit counting, the
+feed marker, paper glance, chosen-glance execution, low-energy mode, the
+awakening (absorbed into the thread as the "You wake." turn).
+
+## Knobs (config/config.py, MIND_*)
+MIND_TURNS 6 · MIND_TURN_MAX_AGE_S 7200 · MIND_THINK_INTERVAL_S 60 ·
+MIND_LOOK_EVERY_S 300 · MIND_LOOK_MIN_GAP_S 20 · MIND_MEMORY_EVERY_N 4 ·
+MIND_MEMORY_MIN_AGE_S 3600 · MIND_NUM_PREDICT 60 · MIND_SHORT_BEAT_P 0.2 ·
+MIND_PIVOTS_BEFORE_NOTICE 3 · MIND_POSITION_TTL_S 1800 · MIND_PAST_THOUGHTS 2 ·
+MIND_THREAD_MAX 4000 · MIND_ROOM_TERMS 8. `STREAM_MODE=hybrid` restores the
+old shape untouched (legacy suites pass in both modes).
+
+## Tests
+debug/test_mind.py (54 checks): registry + pass, llama-server turns path,
+conversation assembly, positions/pivots, chosen memories, turn kind + cadence,
+persistence, mode gates in the other organs.
+
+## Open
+- Reflection over a day (spine still = last 75 min of hour_log).
+- Reflection kernels are not yet absorbed into the thread.
+- The decision loop (LOOK/EXPECT → chosen glance) is dormant in mind mode.
+- Wordings (mind.*) are the artist's to finalize in the panel.

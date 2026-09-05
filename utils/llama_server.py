@@ -297,8 +297,12 @@ def _document_prefill(history: Optional[List[str]]) -> str:
     return " ".join(p for p in parts if p) + " "
 
 
-def _append_stream_and_user(messages: list, history: Optional[List[str]], user_message: dict, react: bool = False) -> str:
+def _append_stream_and_user(messages: list, history: Optional[List[str]], user_message: dict, react: bool = False, turns: Optional[List[dict]] = None) -> str:
     """Append the stream + current user message per STREAM_MODE.
+
+    turns (Sep 5, mind mode): the thread as REAL alternating turns — the
+    world's cues as user messages, the machine's thoughts as assistant
+    messages — followed by the current cue. No prefill, no stamped log.
 
     "document": user message first, then the monologue-so-far as ONE trailing
     assistant message — llama-server continues it (assistant prefill; the
@@ -337,6 +341,13 @@ def _append_stream_and_user(messages: list, history: Optional[List[str]], user_m
 
     Returns the prefill text ("" in world/turns/react modes) for seam cleaning + logging.
     """
+    if turns is not None:
+        for t in turns:
+            c = (t.get("content") or "").strip()
+            if c:
+                messages.append({"role": t.get("role", "assistant"), "content": c})
+        messages.append(user_message)
+        return ""
     if _stream_mode() == "hybrid":
         lines = [p for p in ((h or "").strip() for h in history or []) if p]
         prefill = ""
@@ -668,9 +679,13 @@ def query_llama_server(
     prior_assistant_turn: Optional[str] = None,
     history: Optional[List[str]] = None,
     react: bool = False,
+    turns: Optional[List[dict]] = None,
 ) -> str:
     """
     Query llama-server with a prompt and optional image.
+
+    turns (Sep 5): mind mode — the thread as real user/assistant turns; when
+    given, the history/prefill machinery is bypassed.
 
     history: prior outputs of the same voice, included as the model's own
     assistant turns — each call then CONTINUES a visible stream of thought
@@ -733,7 +748,9 @@ def query_llama_server(
     # In document mode, prior_assistant_turn doubles as the stream when no
     # history was passed (memory-mode calls) — continuity either way.
     effective_history = history or ([prior_assistant_turn] if prior_assistant_turn else None)
-    prefill = _append_stream_and_user(messages, effective_history, user_message, react=react)
+    if turns is not None:
+        effective_history = [t.get("content", "") for t in turns if t.get("role") == "assistant"]  # the log's history_len
+    prefill = _append_stream_and_user(messages, effective_history, user_message, react=react, turns=turns)
 
     # Build payload
     payload = {

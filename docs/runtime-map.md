@@ -1750,3 +1750,17 @@ Bundled fix (same date): `graceful_cleanup()` now calls
 silently skipped the awakening-continuity save and the closing journal entry.
 
 Gate check without hardware: `debug/test_low_energy_gates.py`.
+
+## Mind mode (Sep 5 evening) — STREAM_MODE = "mind" (default)
+See docs/mind-mode-sep5.md. `captioner/mind.py` (`Mind`): the caption cycle
+becomes a conversation — LOOK / THINK turns over a LIFE block; the last
+MIND_TURNS thoughts ride as real user-cue/assistant-thought pairs
+(`utils/llama_server.py` `turns=` path, no prefill, no stamped log); the
+clock is the cue; positions + pivots (deepening) and chosen memory surfacing
+live in the same module; the thread persists in event_log/mind_thread.json.
+`captioner.py::_mind_generate` is the single entry (branch at the top of the
+regular-caption path in `_process_frame`); `_current_caption_interval` defers
+to `Mind.interval`. Retired in this mode: drift/wander/inward/memory-mode/
+decision ask, NEW ABOUT ME self-notes, trait promotion, persona
+consolidation, the self/durable frame block. Stores re-seeded 21:37 Sep 5
+(`debug/reseed_stores.py`, archive in event_log/archive-20260905-2137/).

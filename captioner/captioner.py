@@ -1665,7 +1665,131 @@ class Captioner(MemoryMixin):
         except Exception:
             pass  # consolidation is an optimization, never a failure mode
 
+    @staticmethod
+    def _mind_on() -> bool:
+        try:
+            from config.config import STREAM_MODE
+
+            return STREAM_MODE == "mind"
+        except Exception:
+            return False
+
+    def _mind_generate(self, now: float, img_path: str, frame, reactivity_data, person_present: bool):
+        """One turn of the mind (Sep 5 eve, captioner/mind.py): decide LOOK or
+        THINK, build the conversation, generate, gate, absorb. Returns
+        (caption, mode) or None when nothing is said this cycle. The storage
+        tail of _process_frame (display, log, feed marker, observe, stream
+        push for the compressor/reflection, vocab) runs on the return."""
+        import random as _random
+
+        from captioner.prompt_registry import P as _P
+        from config import config as _cfg
+        from utils.inference import is_failed_response as _ifr
+        from utils.inference import query_model
+
+        if getattr(self, "mind", None) is None:
+            from captioner.mind import Mind
+
+            self.mind = Mind(self)
+        mind = self.mind
+        scene = self._assess_scene()  # referee, presence belief, salience — the senses still report
+        if not mind.has_session(self.true_session_start) and self.last_caption and len(self.last_caption) > 5:
+            mind.absorb(self.last_caption, "wake", _P("mind.cue-wake").format(clock=time.strftime("%H:%M", time.localtime(now))), now)
+        kind = mind.next_kind(now, scene, self)
+        call = mind.build(kind, now, self, scene, img_path)
+        print(f"\n{'='*80}\n[MIND] {_cfg.MODEL_NAME} ({kind}{' + memory' if call['memory'] else ''})\n{'='*80}")
+        print(f"SYSTEM: {call['system']}\n")
+        if call["turns"]:
+            print("TURNS (oldest→newest):")
+            for _t in call["turns"]:
+                print(f"  [{_t['role']}] {_t['content'][:110].replace(chr(10), ' / ')}")
+        print(f"USER:\n{call['user']}\n{'='*80}\n")
+        try:
+            from utils import felt_loop as _fl
+
+            _scale = float(_fl.budget_scale(_fl._read()))
+        except Exception:
+            _scale = 1.0
+        _num = int(_cfg.MIND_NUM_PREDICT * _scale)
+        if _random.random() < float(_cfg.MIND_SHORT_BEAT_P):
+            _num = int(_cfg.CAPTION_SHORT_BEAT_TOKENS)
+        opts = {
+            "temperature": min(1.0, max(0.6, _cfg.CAPTION_TEMP_BORED if self.boredom > 0.7 else _cfg.CAPTION_TEMP)),
+            "top_p": _cfg.CAPTION_TOP_P,
+            "min_p": _cfg.CAPTION_MIN_P,
+            "repeat_penalty": _cfg.CAPTION_REPEAT_PENALTY,
+            "dry_multiplier": 0.85,
+            "dry_base": 1.75,
+            "dry_allowed_length": 3,
+            "dry_penalty_last_n": _cfg.CAPTION_DRY_LAST_N,
+            "num_predict": max(12, _num),
+            "num_ctx": 4096,
+            "seed": _random.randint(1, 1000000),
+        }
+        if _cfg.CAPTION_PRESENCE_PENALTY > 0:
+            opts["presence_penalty"] = _cfg.CAPTION_PRESENCE_PENALTY
+
+        def _generate(_o):
+            return query_model(
+                prompt=call["user"],
+                model=_cfg.MODEL_NAME,
+                image=call["image"],
+                system_prompt=call["system"],
+                timeout=60,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                options=_o,
+                prompt_type="caption",
+                turns=call["turns"],
+            )
+
+        caption = self._strip_leaked_stamps(self._trim_to_boundary(self._strip_list_shape(_generate(opts))))
+        _bare = (caption or "").strip()
+        if self.first_caption_done and not _ifr(caption) and (not _bare or all(c in ".…·-— " for c in _bare)):
+            self._note_unstored_cycle("chosen_silence", _bare or "(empty)")
+            log_json_entry(
+                LogType.CAPTION,
+                {"message": "Chose silence", "action": "chosen_silence", "silent": True, "raw": _bare[:20], "mind_kind": kind},
+                print_message=f"[🤫] chose silence (streak {self._skip_streak})",
+            )
+            self.last_caption_time = now
+            return None
+        gate_ctx = f"{call['system']}\n{call['life']}\n{call['user']}"
+        self._stream_store_ok = True
+        reason = self._caption_reject_reason(caption, gate_ctx)
+        if reason in self._ECHO_REASONS:
+            self._stream_store_ok = False
+            self._last_gate_reason = reason
+            self._note_unstored_cycle(reason, caption[:60])
+            self._note_loop_hit(caption, reason)
+            log_json_entry(
+                LogType.DEBUG,
+                {"message": f"Echo caption spoken, not stored ({reason})", "action": "echo_spoken_not_stored", "reason": reason, "caption_preview": caption[:60]},
+                print_message=f"[🔂] {reason} — spoken, but kept out of the thread (streak {self._skip_streak})",
+            )
+        elif reason:
+            hot = dict(opts)
+            hot["temperature"] = min(1.0, float(hot.get("temperature", 0.8)) + float(_cfg.ANTI_ECHO_RETRY_TEMP_BUMP))
+            retry = self._strip_leaked_stamps(self._trim_to_boundary(self._strip_list_shape(_generate(hot))))
+            retry_reason = self._caption_reject_reason(retry, gate_ctx)
+            if retry and not retry_reason:
+                caption = retry
+            else:
+                self._note_unstored_cycle(retry_reason or reason, (retry or caption)[:60])
+                log_json_entry(
+                    LogType.DEBUG,
+                    {"message": f"Caption skipped: {retry_reason or reason} persisted after retry", "action": "anti_echo_skip", "reason": retry_reason or reason},
+                    print_message=f"[🔇] {retry_reason or reason} persisted — staying quiet this cycle (streak {self._skip_streak})",
+                )
+                self.last_caption_time = now
+                return None
+        if self._stream_store_ok and self._stream_admissible(caption):
+            mind.absorb(caption, kind, call["cue"], now)
+        mode = kind + ("-memory" if call["memory"] else "")
+        return caption, mode
+
     def _current_caption_interval(self, now: float) -> float:
+        if self._mind_on() and getattr(self, "mind", None) is not None:
+            return self.mind.interval(now, self)
         """Attention breathes: tight when something is happening, stretched
         when nothing has happened for a while. A fresh arrival snaps the
         cadence back immediately, even mid-stretch."""
@@ -1931,7 +2055,16 @@ class Captioner(MemoryMixin):
                 is_memory_mode_time = (not _detox) and time_since_memory > 240  # 4 minutes
 
                 try:
-                    if is_memory_mode_time:
+                    if self._mind_on():
+                        # MIND MODE (Sep 5 eve): the conversation shape. LOOK / THINK
+                        # turns over a life block; drift, wander, inward beats, memory
+                        # mode and the decision ask are all superseded by THINK turns.
+                        _res = self._mind_generate(now, img_path, frame, reactivity_data, person_present)
+                        if _res is None:
+                            loading_stop.set()
+                            return None
+                        caption, caption_mode = _res
+                    elif is_memory_mode_time:
                         # Memory mode: pull actual caption text from long-term memory
                         from captioner.prompts import build_memory_mode_prompt, get_monologue_system_prompt
 

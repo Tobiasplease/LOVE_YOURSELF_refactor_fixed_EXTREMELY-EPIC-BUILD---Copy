@@ -47,6 +47,7 @@ def query_model(
     prior_assistant_turn: Optional[str] = None,
     history: Optional[List[str]] = None,
     react: bool = False,
+    turns: Optional[List[dict]] = None,
 ) -> str:
     """
     Query llama-server with a prompt and optional image.
@@ -77,6 +78,7 @@ def query_model(
         prior_assistant_turn=prior_assistant_turn,
         history=history,
         react=react,
+        turns=turns,
     )
 
 

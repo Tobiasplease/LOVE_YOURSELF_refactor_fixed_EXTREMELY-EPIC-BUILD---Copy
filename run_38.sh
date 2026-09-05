@@ -54,6 +54,6 @@ export CAPTION_MIN_P="${CAPTION_MIN_P:-0.05}"
 export STREAM_WINDOW=24
 export STREAM_CONSOLIDATE_CHARS=12000
 
-export STREAM_MODE="${STREAM_MODE:-hybrid}"
+export STREAM_MODE="${STREAM_MODE:-mind}"  # mind (Sep 5 eve) — STREAM_MODE=hybrid ./run_38.sh for the old shape
 
 exec python machine.py "$@"

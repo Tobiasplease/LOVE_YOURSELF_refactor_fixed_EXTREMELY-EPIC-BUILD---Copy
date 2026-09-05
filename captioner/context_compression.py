@@ -680,6 +680,8 @@ class ContextCompressionEngine:
         return any(w in t_padded for w in ContextCompressionEngine._SELF_REGISTER_POISON)
 
     def maybe_consolidate_persona(self, model: str = None) -> Optional[str]:
+        if getattr(config, "STREAM_MODE", "") == "mind":
+            return None  # mind mode: the persona is not distilled from the log
         """Once a day (PERSONA_CONSOLIDATE_EVERY_S): the consolidate → build →
         evolve loop applied to the SELF (Sep 5, artist: "baseline" = the
         accumulating persona). The stores are piles — 44 durable facts, 48
@@ -886,7 +888,7 @@ class ContextCompressionEngine:
                 except Exception:
                     pass
             now = time.time()
-            if trait and self._valid_self_fact(trait):
+            if trait and self._valid_self_fact(trait) and getattr(config, "STREAM_MODE", "") != "mind":
                 self.core_facts["self"] = trait
                 changed.append(f"self={trait}")
                 try:
@@ -1297,6 +1299,8 @@ class ContextCompressionEngine:
             return False
 
     def _absorb_self_note(self, note: str) -> None:
+        if getattr(config, "STREAM_MODE", "") == "mind":
+            return  # mind mode (Sep 5 eve): no self-notes — the trait factory is retired
         """Append a NEW self-fact to the self-notes ledger — the channel that
         lets a life event ("My name is Penelope") survive past the stream.
 
