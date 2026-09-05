@@ -545,6 +545,22 @@ every pixel ~10px. Roles now:
   rotation). Temperature already followed arousal. FELT_LOOP_ENABLED.
   Measured per run: `debug/caption_metrics.py … "by_felt"`. The frame line
   monologue.felt-frame ("Right now: {felt}.") is unchanged — the artist's.
+- INTROSPECTION ROUND (Sep 5 evening — docs/introspection-round-sep5.md):
+  - WANDER: `_run_drift_turn` → `_absorb_drift_text` (the drift's storage law
+    as a helper) → `_wander(seed)`: WANDER_HOPS−1 further hops, text-only,
+    `wander.hop` = the previous hop's words + a rotating scope move
+    (`wander.move-wider/-origin/-elsewhere/-for/-someone/-later`), same
+    storage law, each hop its own stream entry; logged `wander` (prompt_type
+    `wander_hop`). Interrupted by salience or drawing.
+  - LOOP → WANDER: `_drift_due` × WANDER_AFTER_LOOP_MULT within
+    WANDER_AFTER_LOOP_S of a loop notice.
+  - REFLECTION SUBJECTS: + "what it's for" (`reflection.subject.what-for`),
+    + "the wider world" (`reflection.subject.the-wider-world`) — 7 in rotation.
+  - NAME INVITE: `reflection.name-invite` appended to the yourself-reflection
+    once per NAME_INVITE_EVERY_S while `lore_ledger.current_name()` is empty.
+  - IDENTITY DOSE: `_identity_due` doses introspective every
+    IDENTITY_EVERY_N_CAPTIONS like other modes (IDENTITY_DOSE_ALL_MODES);
+    awakening still every call.
 - CLEAN BOOT tooling: debug/fresh_stream.py now also clears recent_memory
   (memory mode's caption thread splices from it);
   debug/scrub_phantom_presence.py removes present-tense third-person
