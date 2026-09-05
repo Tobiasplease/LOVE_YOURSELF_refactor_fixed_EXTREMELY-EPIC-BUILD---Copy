@@ -536,6 +536,15 @@ every pixel ~10px. Roles now:
     queries ChromaDB by the last caption; the other four memory surfaces
     still rotate — calling them all for scoring would fire their side
     effects); the room ROOM-baseline re-entry.
+- FELT LOOP (Sep 5 late afternoon): the compressor's FELT slot asks "how do
+  you feel right now" (was "how it feels" → tactile room-words). The felt
+  state drives the MANNER mechanically (utils/felt_loop.py): arousal →
+  quiet/rest cadence ×1.6 (drained) … ×0.6 (charged), token budget ×0.7 …
+  ×1.4, short-beat odds +0.15 … −0.10; valence → the quiet elicitation's kind
+  (≤ −FELT_VALENCE_LEAN: elicit.quiet-feel; ≥ +: elicit.quiet-want; middle:
+  rotation). Temperature already followed arousal. FELT_LOOP_ENABLED.
+  Measured per run: `debug/caption_metrics.py … "by_felt"`. The frame line
+  monologue.felt-frame ("Right now: {felt}.") is unchanged — the artist's.
 - CLEAN BOOT tooling: debug/fresh_stream.py now also clears recent_memory
   (memory mode's caption thread splices from it);
   debug/scrub_phantom_presence.py removes present-tense third-person
