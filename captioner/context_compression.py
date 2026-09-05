@@ -1217,7 +1217,16 @@ class ContextCompressionEngine:
             ("felt", "felt"),
             ("repeating", "repeating"),
         )
+        # Sep 5: the model sometimes runs two labels onto one line
+        # ("FELT: dense, waiting REPEATING: empty") — split before any label
+        # that appears mid-line so no slot swallows the next.
+        import re as _re
+
+        _label_split = _re.compile(r"\s+(?=(?:ROOM|NEW ABOUT ME|EVENT|PLEASANTNESS|ENERGY|FELT|REPEATING)\s*[:：—–-])", _re.I)
+        lines = []
         for raw in response.strip().split("\n"):
+            lines.extend(_label_split.split(raw))
+        for raw in lines:
             line = raw.strip().lstrip("•-* ").strip()
             low = line.lower()
             for label, key in labels:
