@@ -1211,21 +1211,31 @@ class Captioner(MemoryMixin):
             entries = entries[:-1]
         return entries
 
-    _DECISION_LINE_RE = re.compile(r"^\s*[\-\*•]?\s*(look|expect)\s*[:：—–\-]\s*(.+?)\s*$", re.I)
+    _DECISION_SPAN_RE = re.compile(
+        r"(?:^|(?<=\s))(?:\d\d:\d\d\s*[—–-]\s*)?(LOOK|EXPECT)\s*[:：—–\-]\s*(.+?)(?=\s+(?:\d\d:\d\d\s*[—–-]\s*)?(?:LOOK|EXPECT)\s*[:：—–\-]|\s*$)",
+        re.I,
+    )
 
     def _extract_decision(self, text: str):
-        """Sep 5 (agency round): split the private LOOK / EXPECT lines off the
-        caption. Returns (clean_caption, {look, expect} | None). The lines never
-        reach the gate, the display or the stream."""
+        """Sep 5 (agency round): split the private LOOK / EXPECT spans off the
+        caption — each on its own line, both on one line, or clock-stamped by
+        the model ("14:20 — LOOK — the door"). Returns (clean_caption,
+        {look, expect} | None). The spans never reach the gate, the display
+        or the stream (a leaked pair taught the window the format in the
+        first live minutes)."""
         if not text:
             return text, None
         kept, decision = [], {}
         for raw in text.split("\n"):
-            m = self._DECISION_LINE_RE.match(raw)
-            if m:
-                decision[m.group(1).lower()] = m.group(2).strip().strip("\"'")
-            else:
+            hits = list(self._DECISION_SPAN_RE.finditer(raw))
+            if not hits:
                 kept.append(raw)
+                continue
+            for m in hits:
+                decision[m.group(1).lower()] = m.group(2).strip().strip("\"'").rstrip(".")
+            rest = self._DECISION_SPAN_RE.sub("", raw).strip(" —–-:")
+            if rest.strip():
+                kept.append(rest)
         if not decision:
             return text, None
         return "\n".join(kept).strip(), decision
@@ -2344,6 +2354,9 @@ class Captioner(MemoryMixin):
                                 print_message=f"[🔁] Rejected ({reason}), retrying: {caption[:60]}...",
                             )
                             retry = self._trim_to_boundary(self._strip_list_shape(_generate(hot_opts)))
+                            retry, _d2 = self._extract_decision(retry)  # Sep 5: the retry answers the ask too
+                            if _d2 and not _decision:
+                                self._act_on_decision(_d2)
                             retry_reason = self._caption_reject_reason(retry, _gate_ctx)
                             if retry and not retry_reason:
                                 caption = retry

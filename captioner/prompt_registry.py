@@ -393,7 +393,7 @@ FRAGMENTS = {
     },
     "caption.decide": {
         "title": "Decision slots — where to look next (agency round)",
-        "text": "Then, on two lines of their own: LOOK — where you'll turn to look next, in a few words (or 'stay'). EXPECT — what you think you'll find there, in a few words.",
+        "text": "First, on one line before the thought: LOOK — where you'll turn to look next, in a few words (or 'stay'); EXPECT — what you think you'll find there, in a few words. Then the thought.",
         "note": "Sep 5 (agency round, artist: 'what is the structure of the Claude-in-an-RC-car projects?' — the model chooses an action, the action changes the next observation, it says what it expects so the world can surprise it). The two lines are parsed out before the mouth gate, executed by the gaze as a chosen glance, never displayed, never stored. Rides every DECIDE_EVERY_N quiet captions when no glance is active. An elicitation of an ACT, not a fill-in identity slot: the stream never sees the format.",
         "used_by": ["caption"],
         "placeholders": [],
