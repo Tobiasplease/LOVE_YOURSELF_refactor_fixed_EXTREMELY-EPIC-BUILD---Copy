@@ -1247,7 +1247,9 @@ class Captioner(MemoryMixin):
                 return
             if now - float(getattr(self, "true_session_start", now) or now) < PAPER_GLANCE_FIRST_AFTER_S:
                 return
-            if now - float(state_manager.last_paper_check_ts or 0.0) < PAPER_GLANCE_EVERY_S:
+            _since = now - float(state_manager.last_paper_check_ts or 0.0)
+            _every = 300.0 if getattr(state_manager, "paper_state", "") == "unclear" else PAPER_GLANCE_EVERY_S  # an unclear read is retried sooner
+            if _since < _every:
                 return
             if now - float(getattr(self, "_last_paper_glance_attempt", 0.0) or 0.0) < 300:
                 return  # a failed check must not hammer
