@@ -1542,3 +1542,6 @@ MIND_POSITION_TTL_S = int(os.getenv("MIND_POSITION_TTL_S", 1800))  # a subject's
 MIND_PAST_THOUGHTS = int(os.getenv("MIND_PAST_THOUGHTS", 2))  # dated past thoughts in the life block
 MIND_THREAD_MAX = int(os.getenv("MIND_THREAD_MAX", 4000))  # persisted thread length (event_log/mind_thread.json)
 MIND_ROOM_TERMS = int(os.getenv("MIND_ROOM_TERMS", 8))  # registry terms named in the life block
+MIND_VIEW_TOL_PAN = float(os.getenv("MIND_VIEW_TOL_PAN", 30))  # registry terms within this of the gaze are "in view" for the LOOK cue
+MIND_VIEW_TOL_TILT = float(os.getenv("MIND_VIEW_TOL_TILT", 25))
+MIND_VIEW_TERMS = int(os.getenv("MIND_VIEW_TERMS", 4))  # ranked by the machine's own familiarity (hits), not detector confidence — the mannequin head has conf≈0 and was dropped

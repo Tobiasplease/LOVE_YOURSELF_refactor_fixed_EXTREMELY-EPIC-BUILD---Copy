@@ -13,7 +13,12 @@ import re
 from typing import List
 
 # "(?<!the )": a cut word ("i didn't draw the she[lf]", "the he[adset]") is not a pronoun.
-PERSON_RE = re.compile(r"(?<!the )\b(he|him|his|she|her|hers)\b|\b(the|that|this) (man|woman|guy|person|visitor)\b", re.I)
+PERSON_RE = re.compile(
+    r"(?<!the )\b(he|him|his|she|her|hers)\b"
+    r"|\b(the|that|this|a|an|some|one) (man|woman|guy|person|visitor)\b"
+    r"|\bsomeone('s| is| sits| stands| sitting| standing| leaning| hunched| working| reading| looking)\b",
+    re.I,
+)  # Sep 5 23:19: "I see a person sitting in that wooden chair. They're looking down…" (the mannequin head at the desk) slipped through on "a person"
 
 # Within the SAME sentence as the person mention: absence, past tense, or wondering.
 NOT_PRESENT_RE = re.compile(

@@ -435,11 +435,10 @@ class Mind:
             g = get_gaze_state()
             pan, tilt = float(g.get("pan", 90)), float(g.get("tilt", 90))
             entries = spatial_registry.get_entries() or {}
-            near = [
-                (k, v) for k, v in entries.items() if abs(float(v.get("pan", 999)) - pan) <= 25 and abs(float(v.get("tilt", 999)) - tilt) <= 20
-            ]
-            near.sort(key=lambda kv: -(float(kv[1].get("conf", 0)) * (1 + float(kv[1].get("hits", 0)) ** 0.5)))
-            return [k for k, _ in near[:3]]
+            tp, tt = float(config.MIND_VIEW_TOL_PAN), float(config.MIND_VIEW_TOL_TILT)
+            near = [(k, v) for k, v in entries.items() if abs(float(v.get("pan", 999)) - pan) <= tp and abs(float(v.get("tilt", 999)) - tilt) <= tt]
+            near.sort(key=lambda kv: -float(kv[1].get("hits", 0)))  # familiarity, not detector confidence
+            return [k for k, _ in near[: int(config.MIND_VIEW_TERMS)]]
         except Exception:
             return []
 
@@ -482,7 +481,7 @@ class Mind:
                 cue = P("mind.cue-look-event").format(clock=clock(now), event=str(event).strip(), someone=someone)
             else:
                 terms = self.in_view(agent)
-                where = P("mind.where").format(terms=" and the ".join(terms[:2])) if terms else ""
+                where = P("mind.where").format(terms=", the ".join(terms[:-1]) + " and the " + terms[-1] if len(terms) > 1 else terms[0]) if terms else ""
                 verdict = getattr(agent, "_last_view_verdict", None)
                 change = {"unchanged": P("mind.change-none"), "changed": P("mind.change-yes")}.get(verdict or "", "")
                 if verdict in ("new", "baselined") and not self._seen_this_session(terms, agent):
