@@ -19,14 +19,15 @@ PERSON_RE = re.compile(r"(?<!the )\b(he|him|his|she|her|hers)\b|\b(the|that|this
 NOT_PRESENT_RE = re.compile(
     r"\b(gone|empty|no one|nobody|not here|isn.t here|used to|since|before|earlier|ago|anymore|remember|came back|come back|comes back|yesterday)\b"
     r"|\blast (night|time|week)\b"
-    r"|\b(he|she|they|him|her)('d|'s been| was| were| had| has been| did| went| came| sat| stood| took| said| typed| kept| got| left| looked| moved| walked| stopped| turned| leaned| stayed|\s+\w+ed)\b"
+    r"|\b(he|she|they|him|her)('d| was| were| had| did| went| came| sat| stood| took| said| typed| kept| got| left| looked| moved| walked| stopped| turned| leaned| stayed|\s+\w+ed)\b"  # NOT "'s been": "he's been sitting there" is present
     r"|\b(if|whether|maybe|perhaps|when|wonder|wondering|unless|imagine|imagining|pretend|pretending)\s+(he|she|they|him|her)\b"
     r"|\b(he|she|they)('s| is| are| has| have)?\s+(gone|left|not here|missing)\b"
     r"|\bwhere (he|she|they) (was|were|sat|stood|used)\b",
     re.I,
 )
 
-_SENT_RE = re.compile(r"(?<=[.!?…])\s+|\n+")
+# Clause boundaries too: "He's been sitting there, or maybe he just arrived" is a claim AND a wondering — judge them apart.
+_SENT_RE = re.compile(r"(?<=[.!?…])\s+|\n+|,\s+or\s+(?=maybe|perhaps)|;\s+|\s+—\s+")
 
 
 def sentences(text: str) -> List[str]:

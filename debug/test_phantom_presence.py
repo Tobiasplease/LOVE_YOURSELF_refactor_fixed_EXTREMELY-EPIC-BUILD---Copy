@@ -53,6 +53,7 @@ PRESENT += [
     "he's not moving. but his head is turned slightly to the left, towards that white shelf.",
     "like i'm just here to keep the wires from tangling. he's not drawing anything. he's just... tending. it was always like this.",
     "i can see the floor now, right where his feet are. and it's not empty.",
+    "He's been sitting there for a while, or maybe he just arrived and forgot where he put his attention.",
 ]
 NEUTRAL = [
     "i didn't draw the she",
