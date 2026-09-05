@@ -540,7 +540,26 @@ class ReflectionLoop:
             # reflection, ~20+ min apart); the standard admission gate holds
             # register; length bounds mirror the blink-seed check.
             try:
-                if kernel and 20 < len(kernel) < 220 and self.agent._stream_admissible(kernel):
+                # Sep 5: kernels pass the same mouth gate as captions — "The only
+                # change was the pen touching the paper" entered the stream on
+                # admissibility alone while the pen was parked.
+                _kernel_reject = None
+                try:
+                    _kernel_reject = self.agent._caption_reject_reason(kernel, "") if kernel else None
+                except Exception:
+                    _kernel_reject = None
+                if _kernel_reject:
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {
+                            "message": f"Reflection kernel kept out of the stream ({_kernel_reject})",
+                            "action": "kernel_rejected",
+                            "reason": _kernel_reject,
+                            "kernel": kernel[:160],
+                        },
+                        print_message=f"[🪞🚫] kernel kept out ({_kernel_reject}): {kernel[:60]}",
+                    )
+                if kernel and not _kernel_reject and 20 < len(kernel) < 220 and self.agent._stream_admissible(kernel):
                     self.agent._stream_push(kernel.strip())
                     log_json_entry(
                         LogType.DEBUG,

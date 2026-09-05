@@ -950,6 +950,16 @@ class Captioner(MemoryMixin):
         # stroke should follow") carries a modal and stays free.
         r"|i begin (?:drawing|to draw)\b"
         r"|\b(?:first|second|third|fourth|fifth|next|another) stroke (?:follows|arcs|lands|curves|cuts|traces|glides|moves|begins|sweeps)"
+        # Sep 5 (overnight audit): a claimed STATE of the paper is the same lie
+        # as a claimed act — "a tiny black speck of ink on the white paper",
+        # "that dot on the paper, it's an anchor", "the pen is pressing into
+        # the fiber" all rode the stream for five minutes with the pen parked.
+        r"|\b(?:dot|dots|speck|specks|mark|marks|line|lines|smudge|drop|drops|blot) of (?:ink|graphite)\b"
+        r"|\bink on the (?:white |blank )?(?:paper|page|sheet)\b"
+        r"|\b(?:dot|mark|line|speck|stroke) (?:i|i've|i’ve) (?:made|left|drew|put) on the (?:paper|page|sheet)\b"
+        r"|\b(?:pen|nib|pencil|tip) (?:is |was |keeps )?(?:pressing|biting|digging|sinking|scratching|dragging) (?:into|down into|against) (?:the )?(?:paper|page|sheet|fiber|fibre|grain)\b"
+        r"|\b(?:tip|nib) is biting\b"
+        r"|\b(?:dot|speck|blot) on the (?:white |blank )?(?:paper|page|sheet)\b"
         r")\b",
         re.IGNORECASE,
     )
@@ -1180,6 +1190,37 @@ class Captioner(MemoryMixin):
         if self._prefill_mode() and entries:
             entries = entries[:-1]
         return entries
+
+    def _shared_run_with_stream(self, caption: str) -> str:
+        """The first _REFRAIN_NGRAM_WORDS-word run this caption shares with the
+        comparable stream tail — the machine's own words, for the loop notice."""
+        n = self._REFRAIN_NGRAM_WORDS
+        words = self._norm_words(caption)
+        if len(words) < n:
+            return ""
+        shingles = {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
+        from config.config import ANTI_ECHO_COMPARE_TAIL
+
+        for past in self._comparable_stream()[-ANTI_ECHO_COMPARE_TAIL:]:
+            pw = self._norm_words(past)
+            for i in range(len(pw) - n + 1):
+                run = " ".join(pw[i : i + n])
+                if run in shingles:
+                    return run
+        return ""
+
+    def _note_loop_hit(self, caption: str, reason: str) -> None:
+        """Sep 5 (time-and-loop round): an echo-class refusal is evidence of a
+        loop. Record the shared run so the prompt can tell the machine — a
+        person alone catches themselves because they hear themselves; the
+        gates used to delete exactly that evidence."""
+        try:
+            phrase = self._shared_run_with_stream(caption) or " ".join(self._norm_words(caption)[:5])
+            hits = list(getattr(self, "_loop_hits", None) or [])
+            hits.append((time.time(), phrase, reason))
+            self._loop_hits = hits[-60:]
+        except Exception:
+            pass
 
     def _refrain_of_stream(self, caption: str) -> bool:
         """True when the caption shares a run of _REFRAIN_NGRAM_WORDS
@@ -1436,7 +1477,15 @@ class Captioner(MemoryMixin):
 
                     _read = _cc.get_last_mood_read()
                     if _read and float(_read.get("arousal", 0.5)) < 0.25:
-                        return CAPTION_INTERVAL_REST
+                        # Sep 5 (time-and-loop round): rest deepens with the
+                        # unchanged span — 28s in the first hour of stillness,
+                        # then a rung per hour up to CAPTION_INTERVAL_REST_MAX.
+                        # 2653 captions in one still night taught the window
+                        # its own chant faster than anything could vary it.
+                        from config.config import CAPTION_INTERVAL_REST_MAX
+
+                        _still_s = max(0.0, now - float(getattr(self, "_world_change_ts", 0.0) or getattr(self, "true_session_start", now)))
+                        return min(CAPTION_INTERVAL_REST_MAX, CAPTION_INTERVAL_REST * (1 + int(_still_s // 3600)))
             except Exception:
                 pass
             return CAPTION_INTERVAL_QUIET
@@ -2189,6 +2238,7 @@ class Captioner(MemoryMixin):
                                 return None
                             self._stream_store_ok = False
                             self._note_unstored_cycle(reason, caption[:60])
+                            self._note_loop_hit(caption, reason)  # Sep 5: the loop becomes a fact it can hear
                             log_json_entry(
                                 LogType.DEBUG,
                                 {

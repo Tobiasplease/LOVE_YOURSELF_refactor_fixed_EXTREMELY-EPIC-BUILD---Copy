@@ -1057,6 +1057,12 @@ PRESENCE_ABSENCE_LOOK_TOLERANCE = float(os.getenv("PRESENCE_ABSENCE_LOOK_TOLERAN
 ABSENCE_STANDING_ENABLED = os.getenv("ABSENCE_STANDING_ENABLED", "true").lower() == "true"
 ABSENCE_STANDING_TAIL = int(os.getenv("ABSENCE_STANDING_TAIL", 8))  # stored stream entries scanned for a person mention
 ABSENCE_SESSION_MIN_S = int(os.getenv("ABSENCE_SESSION_MIN_S", 90))  # fresh boot: detector settle time before the session-scoped fact may ride
+# Adjudicator false arrivals (Sep 5: "a man lying down" = the black bundle on the top
+# shelf, twice; "a person looking at a desk" = the mannequin head): a person verdict
+# that verified absence closes within this window is retracted to a thing at that
+# gaze + box, so the veto fires next time instead of re-asking.
+PRESENCE_FALSE_ARRIVAL_WINDOW_S = float(os.getenv("PRESENCE_FALSE_ARRIVAL_WINDOW_S", 240))
+ENTITY_VETO_GAZE_TOL_DEG = float(os.getenv("ENTITY_VETO_GAZE_TOL_DEG", 12.0))
 # Phantom presence gate (Sep 4 evening): a present-tense third-person claim while the
 # adjudicated belief says nobody is here is spoken but never STORED — the stream is
 # the belief, and storing these is how the artist outlived their own departure.
@@ -1260,6 +1266,17 @@ CAPTION_INTERVAL_QUIET = 12  # cadence after a long quiet stretch
 # stirs. Salience snaps back to 4s instantly. The feed finally breathes.
 CAPTION_INTERVAL_REST = float(os.getenv("CAPTION_INTERVAL_REST", 28))
 CAPTION_QUIET_AFTER = 120  # seconds without salience before the cadence stretches
+CAPTION_INTERVAL_REST_MAX = float(os.getenv("CAPTION_INTERVAL_REST_MAX", 120))  # rest deepens one rung per unchanged hour (Sep 5)
+
+# TIME-AND-LOOP ROUND (Sep 5, docs/time-and-loop-round-sep5.md): a still room is
+# not an absence of events — the passage of time is one, and catching yourself
+# looping is another. Duration edges fire once per threshold of world-verified
+# stillness; loop notices ride when the echo gates have refused the same run
+# several times, or when the compressor names a circling phrase.
+DURATION_EDGE_THRESHOLDS_MIN = [int(x) for x in os.getenv("DURATION_EDGE_THRESHOLDS_MIN", "30,60,120,240,480").split(",")]
+LOOP_NOTICE_AFTER = int(os.getenv("LOOP_NOTICE_AFTER", 3))  # echo-gate refusals of a shared run within LOOP_NOTICE_WINDOW_S
+LOOP_NOTICE_WINDOW_S = int(os.getenv("LOOP_NOTICE_WINDOW_S", 600))
+LOOP_NOTICE_COOLDOWN_S = int(os.getenv("LOOP_NOTICE_COOLDOWN_S", 600))
 
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet

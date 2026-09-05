@@ -130,16 +130,90 @@ class PresenceAdjudicatorThread(threading.Thread):
             return "person"
         nb = self._current_candidate_box()
         if nb is not None:
+            pan, tilt = self._gaze_now()
             with self.lock:
                 for e in self._entities:
-                    if e["verdict"] == "thing" and now - e["ts"] < ENTITY_VETO_TTL_S and self._iou(nb, e["box"]) >= 0.5:
+                    if (
+                        e["verdict"] == "thing"
+                        and now - e["ts"] < ENTITY_VETO_TTL_S
+                        and self._iou(nb, e["box"]) >= 0.5
+                        and self._same_gaze(e, pan, tilt)  # Sep 5: a box only means something at the gaze it was seen from
+                    ):
                         return "thing"
         self._request()
         return None
 
+    @staticmethod
+    def _gaze_now():
+        try:
+            from vision.gaze import physics_state
+
+            return physics_state.pan, physics_state.tilt
+        except Exception:
+            return None, None
+
+    @staticmethod
+    def _same_gaze(entity, pan, tilt) -> bool:
+        ep, et = entity.get("pan"), entity.get("tilt")
+        if ep is None or et is None or pan is None or tilt is None:
+            return True  # no gaze on record: box-only match, as before
+        from config.config import ENTITY_VETO_GAZE_TOL_DEG
+
+        return abs(float(ep) - float(pan)) <= ENTITY_VETO_GAZE_TOL_DEG and abs(float(et) - float(tilt)) <= ENTITY_VETO_GAZE_TOL_DEG
+
     def notify_presence_dropped(self):
-        """Presence belief fell — the adjudicated-person grace ends with it."""
+        """Presence belief fell — the adjudicated-person grace ends with it.
+
+        Sep 5 (three false arrivals in one morning: the black bundle on the top
+        shelf twice — "a man lying down", "a person in a black shirt lying
+        down" — and the mannequin head once): a person verdict that verified
+        absence closes within PRESENCE_FALSE_ARRIVAL_WINDOW_S, while the same
+        shape is STILL in the candidate box, was furniture. Retract it to a
+        thing at that gaze + box so the veto fires next time instead of asking
+        the same question of the same shelf. A real visitor who leaves is not
+        in the box any more, so they are never retracted."""
         self._person_until = 0.0
+        try:
+            from config.config import PRESENCE_FALSE_ARRIVAL_WINDOW_S
+        except Exception:
+            PRESENCE_FALSE_ARRIVAL_WINDOW_S = 240.0
+        now = time.time()
+        nb = self._current_candidate_box()
+        retracted = []
+        with self.lock:
+            for e in self._entities:
+                if (
+                    e.get("verdict") == "person"
+                    and now - e.get("ts", 0) < PRESENCE_FALSE_ARRIVAL_WINDOW_S
+                    and nb is not None
+                    and self._iou(nb, e["box"]) >= 0.5
+                ):
+                    e["verdict"] = "thing"
+                    e["retracted"] = True
+                    e["desc"] = "(retracted: absence verified within minutes, shape still there) " + e.get("desc", "")
+                    e["ts"] = now
+                    retracted.append(e)
+            if retracted:
+                self._save_locked()
+        for e in retracted:
+            print(f"[Adjudicator] retracted person verdict → thing: {e['desc'][:90]}")
+            try:
+                from event_logging.event_logger import log_json_entry
+                from event_logging.log_type import LogType
+
+                log_json_entry(
+                    LogType.DECISION,
+                    {
+                        "event": "presence_adjudication",
+                        "verdict": "retracted",
+                        "description": e["desc"][:160],
+                        "pan": e.get("pan"),
+                        "tilt": e.get("tilt"),
+                    },
+                    print_message=None,
+                )
+            except Exception:
+                pass
 
     # ---- internals ----
     def _request(self):

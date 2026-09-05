@@ -345,6 +345,7 @@ class ContextCompressionEngine:
                 self._absorb_self_note(parsed.get("self_note", ""))
                 self._absorb_event(parsed.get("event", ""))
                 self._absorb_mood(parsed)
+                self._absorb_loop_notice(parsed.get("repeating", ""))
 
                 if understanding:
                     # Update session duration tracking (not environment change - this is a static space)
@@ -1065,7 +1066,7 @@ class ContextCompressionEngine:
 
     def _parse_memory_response(self, response: str) -> dict:
         """Parse the labeled lines of the memory-diff call (July 12)."""
-        out = {"room": "", "self_note": "", "event": "", "pleasantness": "", "energy": "", "felt": ""}
+        out = {"room": "", "self_note": "", "event": "", "pleasantness": "", "energy": "", "felt": "", "repeating": ""}
         labels = (
             ("room", "room"),
             ("new about me", "self_note"),
@@ -1073,6 +1074,7 @@ class ContextCompressionEngine:
             ("pleasantness", "pleasantness"),
             ("energy", "energy"),
             ("felt", "felt"),
+            ("repeating", "repeating"),
         )
         for raw in response.strip().split("\n"):
             line = raw.strip().lstrip("•-* ").strip()
@@ -1084,6 +1086,21 @@ class ContextCompressionEngine:
                         out[key] = val
                     break
         return out
+
+    @staticmethod
+    def _note_is_phantom_act(note: str) -> bool:
+        try:
+            from captioner.captioner import Captioner
+            from utils import presence_text
+
+            if presence_text.is_phantom_presence(note):
+                return True
+            from utils.state_manager import state_manager
+
+            drawing_now = bool(getattr(state_manager, "is_executing_cnc", False) or getattr(state_manager, "is_generating_drawing", False))
+            return bool(Captioner._PHANTOM_DRAWING_RE.search(note)) and not drawing_now
+        except Exception:
+            return False
 
     def _absorb_self_note(self, note: str) -> None:
         """Append a NEW self-fact to the self-notes ledger — the channel that
@@ -1109,6 +1126,13 @@ class ContextCompressionEngine:
             reason = "poison register"
         elif note.lower().startswith(("i want", "i wanted")):
             reason = "want (distill owns those)"
+        elif self._note_is_phantom_act(note):
+            # Sep 5: "I mark my presence with quick dots rather than lines" —
+            # the ink-dot fiction became a self-note within the hour, and a
+            # self-note is two confirmations from a durable fact. Structure
+            # only: a claimed act of marking with the pen parked, or a
+            # present-tense third person, is not a fact about oneself.
+            reason = "phantom act or presence"
         else:
             for prior in [self.core_facts.get("self", "")] + [n.get("note", "") for n in self.self_notes[-5:]]:
                 if prior and self._roughly_same(note, prior):
@@ -1145,6 +1169,17 @@ class ContextCompressionEngine:
         window_start = min((c.get("timestamp", 0) for c in self.recent_captions), default=time.time() - 120)
         marks = getattr(self, "_perception_events", [])
         return any(ts >= window_start - 30 for ts in marks)
+
+    def _absorb_loop_notice(self, phrase: str) -> None:
+        """REPEATING slot (Sep 5, time-and-loop round): the machine naming what
+        its recent thoughts keep circling. Kept as one pending notice (phrase,
+        ts, spoken) that the caption prompt quotes back once; overwritten by
+        the next non-none answer. Its own words — never a category we offered."""
+        phrase = (phrase or "").strip().strip("\"'").rstrip(".").strip()
+        if not phrase or len(phrase.split()) > 16:
+            return
+        self.introspective_state["loop_notice"] = {"phrase": phrase[:120], "ts": time.time(), "spoken": False}
+        print(f"[🔁] repeating, by its own account: {phrase[:80]}")
 
     def _absorb_event(self, event: str) -> None:
         """Append a happening to the events ledger — episodic memory that

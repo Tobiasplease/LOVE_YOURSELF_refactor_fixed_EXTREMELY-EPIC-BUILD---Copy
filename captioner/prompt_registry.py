@@ -286,6 +286,27 @@ FRAGMENTS = {
         "used_by": ["caption"],
         "placeholders": [],
     },
+    "caption.duration-edge": {
+        "title": "Duration edge (time-and-loop round)",
+        "text": "Nothing in the room has changed for {duration}.",
+        "note": "Sep 5 (docs/time-and-loop-round-sep5.md, artist: 'nothing happening in a room overnight is an event'). Fires ONCE per threshold (DURATION_EDGE_THRESHOLDS_MIN) per world-verified unchanged span — an edge like an arrival, so the delta doctrine holds. The clock resets on a referee world_changed, a presence edge, or a boot; it does not run while someone is believed present. {duration} in words (casual_time_string). Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["duration"],
+    },
+    "caption.loop-fact": {
+        "title": "Loop fact — the gates heard a repeat (time-and-loop round)",
+        "text": 'You\'ve said "{phrase}" several times in the last little while.',
+        "note": "Sep 5: the echo gates refused 625 lines in one night and the machine never learned it had repeated itself — the evidence a person uses to catch their own loop was exactly what we deleted. After LOOP_NOTICE_AFTER refusals of a shared run inside LOOP_NOTICE_WINDOW_S, the run is quoted back (its own words) once per LOOP_NOTICE_COOLDOWN_S, in the world's turn. The noticing is the seed of the next thought; the machine decides what to do with it. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["phrase"],
+    },
+    "caption.loop-notice": {
+        "title": "Loop notice — the compressor named the circling (time-and-loop round)",
+        "text": "You keep coming back to {phrase}.",
+        "note": "Sep 5: the compressor's REPEATING slot answered in the machine's own words, quoted back once. Outranks the gate-count source when both are pending. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["phrase"],
+    },
     "caption.investigate": {
         "title": "Investigate glance — the familiar stranger",
         "text": "You're looking at the {label} — you've seen it many times without ever being sure of it.",
@@ -538,7 +559,8 @@ FRAGMENTS = {
             'EVENT: one plain past-tense sentence, if something HAPPENED worth remembering — someone arrived or left, something changed or was made. Or "none".\n'
             "PLEASANTNESS: unpleasant, neutral or pleasant\n"
             "ENERGY: drained, settled, stirred or charged\n"
-            "FELT: how it feels right now, 2-6 plain words"
+            "FELT: how it feels right now, 2-6 plain words\n"
+            'REPEATING: if the thoughts above keep circling one phrase or one idea, name it in a few words — or "none"'
         ),
         "note": "The memory diff — every 8 captions. Writes: baseline room, self-notes, events, mood/felt-state. Everything this pass keeps comes back into future prompts; everything it invents contaminates them.",
         "used_by": ["compression"],

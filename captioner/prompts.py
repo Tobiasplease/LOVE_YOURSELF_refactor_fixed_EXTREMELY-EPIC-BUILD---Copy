@@ -1122,6 +1122,52 @@ def build_standing_absence_line(agent) -> str:
     return P("caption.absence-standing-session").format(when=when)
 
 
+def build_loop_notice_line(agent) -> str:
+    """LOOP NOTICE (Sep 5, time-and-loop round). Two sources, both the machine's
+    own words: (1) the echo gates — when they have refused the same shared run
+    LOOP_NOTICE_AFTER times inside LOOP_NOTICE_WINDOW_S, the run is quoted
+    back; (2) the compressor's REPEATING slot — the machine naming what it is
+    circling. A person alone catches themselves looping and that noticing is
+    the next thought; the gates used to delete the evidence silently. Dosed by
+    LOOP_NOTICE_COOLDOWN_S; the notice enters the world's turn, never the
+    stream itself."""
+    try:
+        from config.config import LOOP_NOTICE_AFTER, LOOP_NOTICE_COOLDOWN_S, LOOP_NOTICE_WINDOW_S
+    except Exception:
+        return ""
+    now = time.time()
+    if now - float(getattr(agent, "_loop_noticed_at", 0.0) or 0.0) < LOOP_NOTICE_COOLDOWN_S:
+        return ""
+    line = ""
+    # source 2 first: the machine's own naming outranks the gate's count
+    try:
+        from captioner.context_compression import context_compressor
+
+        notice = context_compressor.introspective_state.get("loop_notice") or {}
+        if notice.get("phrase") and not notice.get("spoken") and now - float(notice.get("ts", 0)) < LOOP_NOTICE_WINDOW_S:
+            notice["spoken"] = True
+            line = P("caption.loop-notice").format(phrase=notice["phrase"])
+    except Exception:
+        pass
+    if not line:
+        hits = [h for h in (getattr(agent, "_loop_hits", None) or []) if now - h[0] < LOOP_NOTICE_WINDOW_S]
+        if len(hits) >= LOOP_NOTICE_AFTER:
+            phrases = [h[1] for h in hits if h[1]]
+            if phrases:
+                phrase = max(set(phrases), key=phrases.count)
+                line = P("caption.loop-fact").format(phrase=phrase)
+    if line:
+        agent._loop_noticed_at = now
+        try:
+            from event_logging.event_logger import log_json_entry
+            from event_logging.log_type import LogType
+
+            log_json_entry(LogType.DEBUG, {"message": "Loop notice", "action": "loop_notice", "line": line[:160]}, print_message=f"[🔁] {line[:90]}")
+        except Exception:
+            pass
+    return line
+
+
 def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str = "idle") -> str:
     """The DELTA line: only what CHANGED since the last caption, delivered as a
     brief interruption to the ongoing thought — never a restatement of standing
@@ -1205,6 +1251,43 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
     elif now - last_drift > 300 and not parts:
         parts.append("A while's passed.")
         agent._last_time_drift = now
+
+    # DURATION EDGE (Sep 5, time-and-loop round): world-verified stillness
+    # crossing a threshold IS an event — the passage of time is not nothing.
+    # Fires once per threshold per unchanged span; any change (referee, a
+    # presence edge) resets the clock and re-arms the thresholds.
+    try:
+        from config.config import DURATION_EDGE_THRESHOLDS_MIN
+
+        _now = _time.time()
+        _anchor = max(
+            float(getattr(agent, "_world_change_ts", 0.0) or 0.0),
+            float(getattr(agent, "_presence_dropped_at", 0.0) or 0.0),
+            float(getattr(agent, "true_session_start", 0.0) or 0.0),
+        )
+        if _anchor > 0 and not getattr(agent, "_presence_believed", False):
+            if getattr(agent, "_duration_edge_anchor", None) != _anchor:
+                agent._duration_edge_anchor = _anchor
+                agent._duration_edges_fired = set()
+            _still_min = (_now - _anchor) / 60.0
+            _due = [mm for mm in DURATION_EDGE_THRESHOLDS_MIN if _still_min >= mm and mm not in agent._duration_edges_fired]
+            if _due:
+                _m = max(_due)
+                agent._duration_edges_fired.update(x for x in DURATION_EDGE_THRESHOLDS_MIN if x <= _m)
+                parts.append(P("caption.duration-edge").format(duration=casual_time_string(float(_m))))
+                try:
+                    from event_logging.event_logger import log_json_entry
+                    from event_logging.log_type import LogType
+
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {"message": "Duration edge", "action": "duration_edge", "minutes": _m},
+                        print_message=f"[⏳] nothing has changed for {casual_time_string(float(_m))}",
+                    )
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
     return " ".join(parts)
 
@@ -2033,6 +2116,12 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     absence_line = build_standing_absence_line(agent)
     if absence_line:
         turn_parts.append(absence_line)
+
+    # 1b. LOOP NOTICE (Sep 5) — the machine hears itself repeating; the
+    # noticing is the next thought's seed.
+    loop_line = build_loop_notice_line(agent)
+    if loop_line:
+        turn_parts.append(loop_line)
 
     # 1b. THE EVENT — a discrete thing that just happened (arrival, eye-contact
     # ONSET). Onset only, never sustained: re-stating "they're looking at you"
