@@ -658,6 +658,7 @@ class Mind:
         g = self._grams(text)
         if not g:
             return False
+        g8 = self._grams(text, 8)
         now = now or time.time()
         turn_texts = {e.get("text") for e in self.recent_turns(now)}
         sources = []
@@ -669,7 +670,13 @@ class Mind:
         for e in self.thread:
             if e.get("text") not in turn_texts:
                 sources.append(e.get("text", ""))
-        return any(g & self._grams(src) for src in sources if src)
+        for src in sources:
+            if not src:
+                continue
+            shared = len(g & self._grams(src))
+            if shared and (shared / len(g) >= 0.5 or (g8 & self._grams(src, 8))):
+                return True  # half the thought, or eight words in a row — a copy, not a shared phrase
+        return False
 
     def note_look(self, now: float) -> None:
         """A look happened, stored or not — the look timer advances either way

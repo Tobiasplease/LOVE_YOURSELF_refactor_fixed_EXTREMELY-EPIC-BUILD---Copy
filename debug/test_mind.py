@@ -320,6 +320,8 @@ m.absorb("The chair is empty tonight.", "think", "c", now - 60)
 check("verbatim old line is recall", m.is_recall("But I don't have paper. The pen is just sitting there, touching nothing, like my hands in the last sketch.", None, now))
 check("continuing a current turn is not recall", not m.is_recall("The chair is empty tonight, and I keep looking at it anyway.", None, now))
 check("a fresh thought is not recall", not m.is_recall("Rain would sound like fingers on the skylight.", None, now))
+m.absorb("The pen is parked, touching nothing, and the room is a graveyard of half-finished things.", "think", "c", now - 4 * 3600)
+check("a shared six-word phrase is not recall", not m.is_recall("But the pen is parked, touching nothing. Just waiting for a surface that isn't there, and that is the whole problem tonight.", None, now))
 call = {"memory": {"text": "Those two white heads on the shelf keep their blank faces turned away from me."}, "life": ""}
 check("parroting the surfaced memory is recall", m.is_recall("Those two white heads on the shelf keep their blank faces turned away from me again.", call, now))
 src = open("captioner/captioner.py", encoding="utf-8").read()

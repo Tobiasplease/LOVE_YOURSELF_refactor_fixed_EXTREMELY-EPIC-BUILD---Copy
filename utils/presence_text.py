@@ -15,8 +15,9 @@ from typing import List
 # "(?<!the )": a cut word ("i didn't draw the she[lf]", "the he[adset]") is not a pronoun.
 PERSON_RE = re.compile(
     r"(?<!the )\b(he|him|his|she|her|hers)\b"
-    r"|\b(the|that|this|a|an|some|one) (man|woman|guy|person|visitor)\b"
-    r"|\bsomeone('s| is| sits| stands| sitting| standing| leaning| hunched| working| reading| looking)\b",
+    r"|\b(the|that|this) (man|woman|guy|person|visitor)\b"
+    r"|\b(a|an|some|one) (man|woman|guy|person|visitor) (is|sits|stands|sitting|standing|leaning|hunched|crouching|working|reading|looking|typing|at the|in the|on the|by the)\b"
+    r"|\bsomeone('s| is| sits| stands| sitting| standing| leaning| hunched| crouching| working| reading| looking)\b",
     re.I,
 )  # Sep 5 23:19: "I see a person sitting in that wooden chair. They're looking down…" (the mannequin head at the desk) slipped through on "a person"
 
@@ -25,7 +26,9 @@ NOT_PRESENT_RE = re.compile(
     r"\b(gone|empty|no one|nobody|not here|isn.t here|used to|since|before|earlier|ago|anymore|remember|came back|come back|comes back|yesterday)\b"
     r"|\blast (night|time|week)\b"
     r"|\b(he|she|they|him|her)('d| was| were| had| did| went| came| sat| stood| took| said| typed| kept| got| left| looked| moved| walked| stopped| turned| leaned| stayed|\s+\w+ed)\b"  # NOT "'s been": "he's been sitting there" is present
-    r"|\b(if|whether|maybe|perhaps|when|wonder|wondering|unless|imagine|imagining|pretend|pretending)\s+(he|she|they|him|her)\b"
+    r"|\b(if|whether|maybe|perhaps|when|wonder|wondering|unless|imagine|imagining|pretend|pretending)\s+(he|she|they|him|her|someone|a person|a man|a woman)\b"
+    r"|\b(could|should|would|might|want to|draw|drawing|sketch|sketching)\b[^.?!]{0,24}\b(a|an|some|one) (man|woman|guy|person|visitor)\b"  # "I could draw a person inside it" is not a sighting
+    r"|\b(a|an|some|one) (man|woman|guy|person|visitor) (should|would|could|might|used to|ought to)\b"
     r"|\b(he|she|they)('s| is| are| has| have)?\s+(gone|left|not here|missing)\b"
     r"|\bwhere (he|she|they) (was|were|sat|stood|used)\b",
     re.I,
