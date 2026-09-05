@@ -1212,6 +1212,9 @@ class Captioner(MemoryMixin):
         return entries
 
     _DECISION_SPAN_RE = re.compile(
+        r"(?:^|(?<=\s))(?:\d\d:\d\d\s*[—–-]\s*)?(LOOK|EXPECT)\s*[:：—–\-]\s*([^.;!?\n]+?)(?=\s*[.;!?](?:\s|$)|\s+(?:\d\d:\d\d\s*[—–-]\s*)?(?:LOOK|EXPECT)\s*[:：—–\-]|\s*$)[.;]?",
+        re.I,
+    )
         r"(?:^|(?<=\s))(?:\d\d:\d\d\s*[—–-]\s*)?(LOOK|EXPECT)\s*[:：—–\-]\s*(.+?)(?=\s+(?:\d\d:\d\d\s*[—–-]\s*)?(?:LOOK|EXPECT)\s*[:：—–\-]|\s*$)",
         re.I,
     )
