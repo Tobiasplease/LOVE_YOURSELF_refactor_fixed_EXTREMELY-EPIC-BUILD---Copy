@@ -1217,6 +1217,16 @@ class Captioner(MemoryMixin):
         re.I,
     )
 
+    _LEAKED_STAMP_RE = re.compile(r"(?:(?<=^)|(?<=[.!?…]\s)|(?<=\n))\d\d:\d\d\.?\s*[—–-]?\s*")
+
+    def _strip_leaked_stamps(self, text: str) -> str:
+        """A bare HH:MM at the start of a sentence is the stream's log format
+        leaking into speech, not something the machine meant to say."""
+        if not text:
+            return text
+        out = self._LEAKED_STAMP_RE.sub("", text)
+        return " ".join(out.split()) if out.strip() else out
+
     def _extract_decision(self, text: str):
         """Sep 5 (agency round): split the private LOOK / EXPECT spans off the
         caption — each on its own line, both on one line, or clock-stamped by
@@ -2303,6 +2313,9 @@ class Captioner(MemoryMixin):
                         # stuck-breaker remains a natural floor against
                         # wall-to-wall silence. Failures stay failures —
                         # is_failed_response guards the branch.
+                        # Sep 5: the history's clock stamps leak into speech ("Drywall.
+                        # 14:38 It's just drywall") — a rendering artifact, not a thought.
+                        caption = self._strip_leaked_stamps(caption)
                         # Sep 5 (agency round): the decision lines come off first.
                         caption, _decision = self._extract_decision(caption)
                         if _decision:
@@ -2349,6 +2362,7 @@ class Captioner(MemoryMixin):
                                 self.last_caption_time = now
                                 return None
                             self._stream_store_ok = False
+                            self._last_gate_reason = reason  # the feed marker says why (Sep 5)
                             self._note_unstored_cycle(reason, caption[:60])
                             self._note_loop_hit(caption, reason)  # Sep 5: the loop becomes a fact it can hear
                             log_json_entry(
@@ -2621,8 +2635,15 @@ class Captioner(MemoryMixin):
                 # not the memory — spoken-not-stored lines carry a prefix so the
                 # artist can tell a gated line from one the stream kept.
                 _kept = getattr(self, "_stream_store_ok", True)
+                _why = {
+                    "refrain_echo": "repeats itself",
+                    "template_echo": "same opening again",
+                    "tail_echo": "repeats itself",
+                    "number_chain": "number chain",
+                    "phantom_presence": "nobody is there",
+                }.get(getattr(self, "_last_gate_reason", ""), "not kept")
                 with open(_live_log, "a", encoding="utf-8") as _f:
-                    _f.write(("" if _kept else "[not kept] ") + caption.replace("\n", " ") + "\n")
+                    _f.write(("" if _kept else f"[not kept — {_why}] ") + caption.replace("\n", " ") + "\n")
             except Exception:
                 pass
         else:

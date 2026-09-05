@@ -119,6 +119,13 @@ check(
     (clean, dec),
 )
 clean, dec = cap._extract_decision("nothing moved.")
+check(
+    "leaked stamps stripped",
+    cap._strip_leaked_stamps("Drywall. 14:38 It's just drywall. 14:39. The air isn't thick.") == "Drywall. It's just drywall. The air isn't thick.",
+    cap._strip_leaked_stamps("Drywall. 14:38 It's just drywall. 14:39. The air isn't thick."),
+)
+check("leading stamp stripped", cap._strip_leaked_stamps("14:39 — It's just the light.") == "It's just the light.")
+check("a time inside a sentence survives", cap._strip_leaked_stamps("it was 14:38 when the light changed.") == "it was 14:38 when the light changed.")
 check("no decision → untouched", clean == "nothing moved." and dec is None)
 clean, dec = cap._extract_decision("the pen is parked.\nlook: stay\nexpect: the same")
 check("lowercase colon form parses", dec and dec["look"] == "stay")
