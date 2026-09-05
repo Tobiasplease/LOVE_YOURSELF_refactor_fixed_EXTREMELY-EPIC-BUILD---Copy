@@ -2,7 +2,7 @@
 
 This is the reference for every prompting and architecture decision.
 When a change is proposed, it must serve this document. When a prompt is
-edited, it must follow the principles below. Last revised: June 2026.
+edited, it must follow the principles below. Last revised: Sep 2026 (Principle 4 amended; the rest June 2026).
 
 ## The ambition (the sentence we tell people)
 
@@ -100,17 +100,29 @@ central: the act is *react to what you see*, not *describe a film of it*.
 ## Principle 4 — Desire is an arc, not weather
 
 A desire persists until it resolves or is abandoned — it does not
-regenerate from scratch every ten minutes. The machine's one real power is
-drawing; the arc must close through it:
+regenerate from scratch every twenty minutes. A want closes through
+whatever it is about, and only the machine decides what that is:
 
-    desire → drawing intent → drawing happens (or fails)
-       ↑                                        ↓
-       └────────── reflection on the outcome ───┘
+    want → pursuit (looking, thinking it through, waiting for someone,
+           drawing — when the want itself points there)
+      ↑                                        ↓
+      └──── resolution, in its own words ──────┘
+            understood · met · drawn · let go
+            (a want merely replaced is abandoned, and counted)
+
+Wants are never routed to the drawing system. The drawing trigger may
+consume a want only when the machine's own words aimed it at drawing;
+nothing in any prompt nudges a want toward the pen. "Who am I, where am
+I" resolves by thinking it through; "I want someone to look up" resolves
+by a person; both are as real as a drawing. (Amended Sep 5 2026 — the
+original closed every arc through drawing, and 32 wants formed in one
+night ended only by being superseded.)
 
 Satisfaction, frustration, repetition — these are where preferences,
 artistic vision, and fears come from. Fears are not scripted; they are
-what a reflection cycle finds when a desire keeps failing. The "no paper
-for days" state is not an error condition — it is biographical material.
+what a reflection cycle finds when a want keeps failing to resolve. The
+"no paper for days" state is not an error condition — it is biographical
+material, and so is a question that stays open for a week.
 
 ## Principle 5 — Use the whole model
 
