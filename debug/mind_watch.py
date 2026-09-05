@@ -30,12 +30,16 @@ cues = [(c.get("prompt") or "").split("\n")[-1] for c in calls]
 notices = sum(1 for u in cues if "turned" in u and "over" in u)
 gaps = [b["timestamp"] - a["timestamp"] for a, b in zip(caps, caps[1:])]
 texts = [c["caption"] for c in caps]
+CONT = re.compile(r"^(maybe|or |but |and |it |it’s|it's|they |still|then |no,|yes,|that |which |so )", re.I)
+def _cw(t):
+    return {w for w in re.findall(r"[a-z']+", t.lower()) if len(w) > 3}
+builds = sum(1 for a, b in zip(texts, texts[1:]) if len(_cw(a) & _cw(b)) / max(1, len(_cw(b))) >= 0.15 or CONT.match(b.strip()))
 words = [w for t in texts for w in re.findall(r"[a-z']+", t.lower())]
 print(f"run {os.path.basename(log)[:8]} | last {MIN:.0f} min | thoughts {len(caps)} ({dict(kinds)}, {mem} with a memory) | "
       f"cadence {sum(gaps)/len(gaps):.0f}s avg" if gaps else f"run {os.path.basename(log)[:8]} | last {MIN:.0f} min | thoughts {len(caps)}")
 print(f"gates {len(gates)} {dict(collections.Counter(g.get('reason') or g.get('action') for g in gates))} | pivot notices {notices} | "
       f"reframe share {sum(bool(REFRAME.search(t)) for t in texts)}/{len(texts)} | person-tinged {sum(bool(PERSON.search(t)) for t in texts)} | "
-      f"wonder/outward {sum(bool(WONDER.search(t)) for t in texts)} | words/thought {len(words)/max(1,len(texts)):.0f} | errors {len(errs)}")
+      f"builds-on-previous {builds}/{max(0,len(texts)-1)} | wonder/outward {sum(bool(WONDER.search(t)) for t in texts)} | words/thought {len(words)/max(1,len(texts)):.0f} | errors {len(errs)}")
 try:
     d = json.load(open("event_log/mind_thread.json"))
     pos = sorted(d.get("positions", {}).items(), key=lambda kv: -kv[1].get("last_ts", 0))[:4]

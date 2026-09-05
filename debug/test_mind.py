@@ -92,6 +92,8 @@ check("first cue follows the life block", "17:50. You wake." in call["turns"][0]
 check("no stamps inside assistant content", not any(re.match(r"\s*\d\d:\d\d\s*[—–-]", t["content"]) for t in call["turns"] if t["role"] == "assistant"))
 check("think turn carries no image", call["image"] is None)
 check("current cue has the clock", re.match(r"\d\d:\d\d\. ", call["user"]) is not None, call["user"][:30])
+check("think cue quotes its own last sentence as the premise", 'You were on: "Maybe empty is just what a chair is most of the time."' in call["user"], call["user"])
+check("premise absent when the thread is stale", "You were on" not in fresh_mind()[0].build("think", now, a, {}, None)["user"])
 look = m.build("look", now, a, {}, "/tmp/x.jpg")
 check("look turn carries the frame", look["image"] == "/tmp/x.jpg")
 check("look cue names what's in view", "red foam finger" in look["user"], look["user"])

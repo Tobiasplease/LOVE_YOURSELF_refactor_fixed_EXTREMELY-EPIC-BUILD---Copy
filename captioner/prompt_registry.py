@@ -783,6 +783,13 @@ FRAGMENTS = {
     },
     "mind.cue-wake": {"title": "Cue — waking", "text": "{clock}. You wake.", "used_by": ["mind"], "placeholders": ["clock"]},
     "mind.cue-think": {"title": "Cue — eyes resting", "text": "{clock}. Eyes resting.", "used_by": ["mind"], "placeholders": ["clock"]},
+    "mind.cue-premise": {
+        "title": "Cue — the premise (its own last sentence)",
+        "text": " You were on: \"{premise}\" Go on from there.",
+        "note": "THE CONTINUATION MECHANIC (Sep 5 late). Measured on the first live mind-mode thread: 0/13 thoughts built on the one before (mean word overlap with the previous thought 0.02 vs 0.30 with older ones) — a chat model treats each assistant turn as a self-contained reply to the user turn, and the user turn was the same clock line every minute, so every thought was a fresh draw from the pool. Probe (debug/probe_continuation.py + /tmp variants): reflexive frame lines 0/6, 'Go on.' alone ~2/6, prefilling the whole last thought 0/6 (emits nothing — a complete thought reads as a finished turn), the premise quoted back 6/6 and deeper ('Loneliness isn't just about being alone; it's about not being seen'). Rides on THINK turns without a memory; the premise is the machine's own last sentence — no content of ours.",
+        "used_by": ["mind"],
+        "placeholders": ["premise"],
+    },
     "mind.cue-think-memory": {
         "title": "Cue — a memory surfaces",
         "text": "{clock}. Eyes resting. Something from {when} comes back: \"{memory}\"",
@@ -1271,6 +1278,7 @@ PASSES = {
             {"frag": "mind.cue-look", "gate": "kind == look, quiet"},
             {"frag": "mind.cue-look-event", "gate": "kind == look, salience event"},
             {"frag": "mind.cue-think", "gate": "kind == think"},
+            {"frag": "mind.cue-premise", "gate": "kind == think, no memory this turn, a previous thought exists"},
             {"frag": "mind.cue-think-memory", "gate": "kind == think, every MIND_MEMORY_EVERY_N-th"},
             {"frag": "mind.gap", "gate": "≥ STREAM_GAP_MARK_SECONDS since the last thought"},
             {"frag": "mind.pivot-notice", "gate": "a subject reframed MIND_PIVOTS_BEFORE_NOTICE times with no step"},

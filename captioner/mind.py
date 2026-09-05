@@ -168,6 +168,17 @@ class Mind:
         self._save()
         return entry
 
+    def premise(self, now: Optional[float] = None) -> str:
+        """The machine's own last sentence, quoted back as the thing to go on
+        from (the continuation mechanic — see mind.cue-premise)."""
+        now = now or time.time()
+        if not self.thread:
+            return ""
+        last = self.thread[-1]
+        if now - last.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
+            return ""
+        return last_sentence(last.get("text", ""))[:200]
+
     def recent_turns(self, now: Optional[float] = None) -> List[dict]:
         now = now or time.time()
         fresh = [e for e in self.thread if now - e.get("ts", 0) <= int(config.MIND_TURN_MAX_AGE_S) and e.get("text")]
@@ -444,6 +455,9 @@ class Mind:
                 cue = P("mind.cue-think-memory").format(clock=clock(now), when=when_words(now - memory["ts"]), memory=memory["text"][:220])
             else:
                 cue = P("mind.cue-think").format(clock=clock(now))
+                prem = self.premise(now)
+                if prem:
+                    cue += P("mind.cue-premise").format(premise=prem)
         if self.thread and now - self.thread[-1].get("ts", now) >= float(config.STREAM_GAP_MARK_SECONDS):
             from captioner.prompts import casual_time_string
 
