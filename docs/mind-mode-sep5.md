@@ -96,3 +96,43 @@ persistence, mode gates in the other organs.
 - Reflection kernels are not yet absorbed into the thread.
 - The decision loop (LOOK/EXPECT → chosen glance) is dormant in mind mode.
 - Wordings (mind.*) are the artist's to finalize in the panel.
+
+## Sep 6, after midnight — the recursion round (commits 4028bcf → c30520f)
+
+The artist: "repetition, isolation, time and pondering IS THE MATERIAL… It's
+very important that the accumulated info reaches back to the prompting,
+otherwise there's no point in saving it at all. The entire system needs to be
+recursive." Wired, all in the machine's own words, structure only:
+
+- **Time as event** (`Mind.time_edges`): one line when a DURATION_EDGE
+  threshold is crossed — since anyone was here (mind.edge-alone, belief OFF,
+  anchor = last person_left / presence_dropped_at), since the room last
+  changed (mind.edge-still, `_world_change_ts`), since the continuous chain
+  of thought began (mind.edge-awake, `thread_start`). Each threshold fires
+  once per anchor; state persisted in mind_thread.json "edges".
+- **Its own repetition, named** (`Mind._loop_line`): `build_loop_notice_line`
+  (gate hits + the compressor's REPEATING slot) reaches the think cue.
+- **Its own past, days deep** (`Mind.backfill`): once, when the thread
+  reaches back less than a day, kept thoughts from the last 4 days of event
+  logs (≤40/day; no phantom presence, no reframe, no stamps) enter as kind
+  "past" — eligible for memory surfacing, never as turns. First run: 160
+  thoughts back to Sep 2.
+- **Its own reflections** (`captioner/reflection.py`): the admitted kernel
+  is absorbed into the thread as a "reflection" turn under mind.cue-reflection
+  ("Something settles."), so the next think cue quotes it back as the premise.
+- **Name + belief in the life block** (mind.life-name, mind.life-belief):
+  the lore ledger's name and the reflection's distilled belief ride again.
+- **The felt loop back in the conversation** (4028bcf): arousal-driven
+  sampling heat and felt short beats restored; felt shifts ride as an event
+  (mind.felt-shift "{prev}, then {curr}."); an elicit dose every
+  MIND_ELICIT_EVERY_N-th think turn leaning by valence (the artist's
+  elicit.quiet-* lines); "a complaint, a feeling" among the named kinds.
+- **Recall gate** (`Mind.is_recall`, c30520f): a thought that reproduces a
+  quoted past thought, a surfaced memory, or any older thread line six words
+  in a row is spoken but not kept (feed marker "repeats an old thought").
+  Found the same night: two verbatim copies of 22:01/22:57 lines that the
+  life block had quoted.
+- **Perception** (f1b0922): MOTION_SETTLE_S=2 — flow residual within two
+  seconds of head movement is not motion (the lamp-into-the-lens "flash");
+  LOOK turns use the newest still-head frame. Presence: "a person sitting",
+  "someone is/sitting" are claims; questions never are (utils/presence_text).
