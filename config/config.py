@@ -1290,6 +1290,15 @@ PERSONA_CONSOLIDATE_EVERY_S = float(os.getenv("PERSONA_CONSOLIDATE_EVERY_S", 20 
 # Body as facts (Sep 5, agency round): the machine's own posture, not a borrowed one.
 BODY_HOLD_THRESHOLDS_MIN = [int(x) for x in os.getenv("BODY_HOLD_THRESHOLDS_MIN", "3,10,30,60").split(",")]
 HEAD_HOLD_TOL_DEG = float(os.getenv("HEAD_HOLD_TOL_DEG", 20.0))
+# DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the
+# caption ends with LOOK / EXPECT in the machine's own words; LOOK is executed
+# by the gaze as a "chosen" glance, the next turn states the consequence and,
+# once the view settles, whether the expectation held (pose referee).
+DECIDE_ENABLED = os.getenv("DECIDE_ENABLED", "true").lower() == "true"
+DECIDE_EVERY_N = int(os.getenv("DECIDE_EVERY_N", 3))  # quiet captions between asks
+DECIDE_EXTRA_TOKENS = int(os.getenv("DECIDE_EXTRA_TOKENS", 26))  # room for the two lines
+DECIDE_SETTLE_S = float(os.getenv("DECIDE_SETTLE_S", 2.5))  # after the glance starts, before the check
+CHOSEN_GLANCE_DWELL_MULT = float(os.getenv("CHOSEN_GLANCE_DWELL_MULT", 1.4))
 
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet

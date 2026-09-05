@@ -391,6 +391,27 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind"],
         "placeholders": [],
     },
+    "caption.decide": {
+        "title": "Decision slots — where to look next (agency round)",
+        "text": "Then, on two lines of their own: LOOK — where you'll turn to look next, in a few words (or 'stay'). EXPECT — what you think you'll find there, in a few words.",
+        "note": "Sep 5 (agency round, artist: 'what is the structure of the Claude-in-an-RC-car projects?' — the model chooses an action, the action changes the next observation, it says what it expects so the world can surprise it). The two lines are parsed out before the mouth gate, executed by the gaze as a chosen glance, never displayed, never stored. Rides every DECIDE_EVERY_N quiet captions when no glance is active. An elicitation of an ACT, not a fill-in identity slot: the stream never sees the format.",
+        "used_by": ["caption"],
+        "placeholders": [],
+    },
+    "caption.chosen-look": {
+        "title": "Chosen look — the consequence",
+        "text": "You turned to look at the {label}.",
+        "note": "Sep 5 (agency round): the gaze executed the machine's own LOOK; the world's turn states it as a fact, once at onset. {label} is the registry term or the machine's own words.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["label"],
+    },
+    "caption.expect-check": {
+        "title": "Expectation check — was it as you thought",
+        "text": "You expected {expect}; {outcome}.",
+        "note": "Sep 5 (agency round): once the chosen view has settled (DECIDE_SETTLE_S), the pose referee's verdict at the new gaze becomes the outcome — 'the view there is as it was' / 'the view there has changed since you last looked' / 'you hadn't looked there before'. Structural and attested; whether the expectation held is the machine's to judge. Surprise becomes an internal event even in a still room.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["expect", "outcome"],
+    },
     "caption.investigate": {
         "title": "Investigate glance — the familiar stranger",
         "text": "You're looking at the {label} — you've seen it many times without ever being sure of it.",

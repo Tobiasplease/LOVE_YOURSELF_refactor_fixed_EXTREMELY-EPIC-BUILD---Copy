@@ -713,6 +713,35 @@ def _update_registry_glance(now):
         except Exception:
             pass
         return _glance_target
+    # CHOSEN glance (Sep 5, agency round): the machine's own LOOK, decided in
+    # the caption, outranks the lottery and ignores the idle interval.
+    try:
+        from utils import chosen_glance as _cg
+
+        _req = _cg.pop()
+    except Exception:
+        _req = None
+    if _req:
+        from config.config import CHOSEN_GLANCE_DWELL_MULT
+
+        _glance_active = True
+        _glance_until = now + GAZE_GLANCE_DWELL * CHOSEN_GLANCE_DWELL_MULT
+        _glance_target = (_req["pan"], _req["tilt"])
+        _glance_label = _req.get("label") or "there"
+        _glance_kind = "chosen"
+        _glance_started = now
+        _cg.mark_started(now)
+        print(f"[👁️] Glance (chosen): {_glance_label} → pan={_req['pan']:.0f}° tilt={_req['tilt']:.0f}°")
+        try:
+            from event_logging.event_logger import log_json_entry
+            from event_logging.log_type import LogType
+
+            log_json_entry(
+                LogType.DEBUG, {"message": f"Glance (chosen): {_glance_label}", "action": "glance_start", "kind": "chosen", "term": _glance_label}
+            )
+        except Exception:
+            pass
+        return _glance_target
     if now - _glance_last_end < GAZE_GLANCE_INTERVAL * random.uniform(0.6, 1.4):
         return None
     try:

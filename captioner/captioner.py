@@ -589,6 +589,7 @@ class Captioner(MemoryMixin):
                             self._pose_views = PoseViewMemory()
                         verdict = self._pose_views.observe(_cv2.resize(img, (64, 64)), last_det.get("pan"), last_det.get("tilt"), time.time())
                         counts[verdict["status"]] = counts.get(verdict["status"], 0) + 1
+                        self._last_view_verdict = verdict["status"]  # Sep 5: the expectation check reads this
                         if verdict["status"] == "changed":
                             view_changed = True
                             world_change_away_s = float(verdict.get("away_s", 0.0))
@@ -1209,6 +1210,51 @@ class Captioner(MemoryMixin):
         if self._prefill_mode() and entries:
             entries = entries[:-1]
         return entries
+
+    _DECISION_LINE_RE = re.compile(r"^\s*[\-\*•]?\s*(look|expect)\s*[:：—–\-]\s*(.+?)\s*$", re.I)
+
+    def _extract_decision(self, text: str):
+        """Sep 5 (agency round): split the private LOOK / EXPECT lines off the
+        caption. Returns (clean_caption, {look, expect} | None). The lines never
+        reach the gate, the display or the stream."""
+        if not text:
+            return text, None
+        kept, decision = [], {}
+        for raw in text.split("\n"):
+            m = self._DECISION_LINE_RE.match(raw)
+            if m:
+                decision[m.group(1).lower()] = m.group(2).strip().strip("\"'")
+            else:
+                kept.append(raw)
+        if not decision:
+            return text, None
+        return "\n".join(kept).strip(), decision
+
+    def _act_on_decision(self, decision: dict) -> None:
+        """Resolve LOOK to a gaze target and hand it to the gaze driver."""
+        look = (decision or {}).get("look", "")
+        expect = (decision or {}).get("expect", "")
+        try:
+            from utils import chosen_glance
+
+            target = chosen_glance.resolve_target(look) if look else None
+            how = (target or {}).get("how") if target else "unresolved"
+            if target and how not in ("stay", None):
+                chosen_glance.request(look, expect, target)
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": f"Decision: look {how}",
+                    "action": "decision",
+                    "look": look[:120],
+                    "expect": expect[:160],
+                    "how": how,
+                    "label": (target or {}).get("label"),
+                },
+                print_message=f"[👁️→] look: {look[:50]} ({how})" + (f" | expect: {expect[:50]}" if expect else ""),
+            )
+        except Exception:
+            pass
 
     def _shared_run_with_stream(self, caption: str) -> str:
         """The first _REFRAIN_NGRAM_WORDS-word run this caption shares with the
@@ -1969,6 +2015,10 @@ class Captioner(MemoryMixin):
                             _num_predict = CAPTION_SHORT_BEAT_TOKENS
                         else:
                             _num_predict = CAPTION_NUM_PREDICT
+                        if getattr(self, "_decision_asked", False):
+                            from config.config import DECIDE_EXTRA_TOKENS
+
+                            _num_predict += DECIDE_EXTRA_TOKENS  # room for the LOOK / EXPECT lines
                         if _arousal is not None and _num_predict >= 80:
                             # stirred gets room, drained runs short — never
                             # touching the deliberate small beats
@@ -2213,6 +2263,10 @@ class Captioner(MemoryMixin):
                         # stuck-breaker remains a natural floor against
                         # wall-to-wall silence. Failures stay failures —
                         # is_failed_response guards the branch.
+                        # Sep 5 (agency round): the decision lines come off first.
+                        caption, _decision = self._extract_decision(caption)
+                        if _decision:
+                            self._act_on_decision(_decision)
                         from utils.inference import is_failed_response as _ifr
 
                         _bare = (caption or "").strip()

@@ -1184,6 +1184,39 @@ def build_standing_absence_line(agent) -> str:
     return P("caption.absence-standing-session").format(when=when)
 
 
+def build_decision_ask(agent, live: bool, is_awakening: bool) -> str:
+    """DECISION SLOTS (Sep 5, agency round). On quiet cycles, every
+    DECIDE_EVERY_N captions, when no glance is active and none is pending,
+    the world's turn ends by asking where the machine will look next and what
+    it expects — its choice, its words. The captioner strips the two lines,
+    resolves LOOK to a target and hands it to the gaze; the consequence and
+    the expectation check come back as facts on later turns."""
+    try:
+        from config.config import DECIDE_ENABLED, DECIDE_EVERY_N
+    except Exception:
+        return ""
+    agent._decision_asked = False
+    if not DECIDE_ENABLED or live or is_awakening:
+        return ""
+    try:
+        from utils import chosen_glance
+        from utils.state_manager import state_manager
+        from vision.gaze import get_glance_info
+
+        if get_glance_info() is not None or chosen_glance.pending():
+            return ""
+        if getattr(state_manager, "is_executing_cnc", False) or getattr(state_manager, "is_generating_drawing", False):
+            return ""
+    except Exception:
+        return ""
+    n = int(getattr(agent, "_decide_counter", 0) or 0) + 1
+    agent._decide_counter = n
+    if n % DECIDE_EVERY_N != 0:
+        return ""
+    agent._decision_asked = True
+    return P("caption.decide")
+
+
 def build_body_line(agent) -> str:
     """BODY AS FACTS (Sep 5, agency round). The voice borrowed a human body —
     knuckles, wrists, blood — because its own was invisible to it. Two facts,
@@ -1338,6 +1371,43 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         elif gi and gi["kind"] == "check" and gi["started"] != getattr(agent, "_last_glance_noted", None):
             agent._last_glance_noted = gi["started"]
             parts.append("Turned to look where they were.")
+        elif gi and gi["kind"] == "chosen" and gi["started"] != getattr(agent, "_last_glance_noted", None):
+            agent._last_glance_noted = gi["started"]
+            parts.append(P("caption.chosen-look").format(label=gi["label"]))
+    except Exception:
+        pass
+    # EXPECTATION CHECK (Sep 5, agency round): the chosen view has settled —
+    # the referee's verdict at the new gaze becomes the outcome, once.
+    try:
+        from config.config import DECIDE_SETTLE_S
+        from utils import chosen_glance
+
+        cur = chosen_glance.current()
+        if cur and cur.get("started") and not cur.get("checked") and _time.time() - cur["started"] >= DECIDE_SETTLE_S:
+            cur["checked"] = True
+            verdict = getattr(agent, "_last_view_verdict", None)
+            outcome = {"unchanged": "the view there is as it was", "changed": "the view there has changed since you last looked"}.get(
+                verdict, "you hadn't looked there before"
+            )
+            if cur.get("expect"):
+                parts.append(P("caption.expect-check").format(expect=cur["expect"].rstrip("."), outcome=outcome))
+                try:
+                    from event_logging.event_logger import log_json_entry
+                    from event_logging.log_type import LogType
+
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {
+                            "message": "Expectation check",
+                            "action": "expect_check",
+                            "expect": cur["expect"][:120],
+                            "verdict": verdict,
+                            "label": cur.get("label"),
+                        },
+                        print_message=f"[🎯] expected {cur['expect'][:50]} → {outcome}",
+                    )
+                except Exception:
+                    pass
         elif gi and gi["kind"] == "investigate" and gi["started"] != getattr(agent, "_last_glance_noted", None):
             # the attention round (Sep 4): the familiar-stranger fact — code-
             # attested (thousands of sightings, detector never sure). The
@@ -2482,6 +2552,13 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
     # Assemble: classic shapes lead with the world's turn; world shape ends
     # with it, so the next tokens answer the present, not the memory lines.
+    # LAST in the world's turn (Sep 5, agency round): the decision ask.
+    try:
+        _ask = build_decision_ask(agent, live, is_awakening)
+        if _ask:
+            turn_parts.append(_ask)
+    except Exception:
+        pass
     prompt_parts = (prompt_parts + turn_parts) if world_shape else (turn_parts + prompt_parts)
 
     # Structural guard: never inject the same line twice (a duplicated context
