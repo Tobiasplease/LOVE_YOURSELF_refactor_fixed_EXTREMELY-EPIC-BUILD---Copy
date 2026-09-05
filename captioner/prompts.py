@@ -1386,9 +1386,12 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         if cur and cur.get("started") and not cur.get("checked") and _time.time() - cur["started"] >= DECIDE_SETTLE_S:
             cur["checked"] = True
             verdict = getattr(agent, "_last_view_verdict", None)
-            outcome = {"unchanged": "the view there is as it was", "changed": "the view there has changed since you last looked"}.get(
-                verdict, "you hadn't looked there before"
-            )
+            outcome = {
+                "unchanged": "the view there is as it was",
+                "changed": "the view there has changed since you last looked",
+                "baselined": "you hadn't looked there before",
+                "new": "you hadn't looked there before",
+            }.get(verdict, "you hadn't looked there before")
             if cur.get("expect"):
                 parts.append(P("caption.expect-check").format(expect=cur["expect"].rstrip("."), outcome=outcome))
                 try:

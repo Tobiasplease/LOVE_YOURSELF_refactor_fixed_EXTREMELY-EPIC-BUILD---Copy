@@ -122,6 +122,15 @@ clean, dec = cap._extract_decision("nothing moved.")
 check("no decision → untouched", clean == "nothing moved." and dec is None)
 clean, dec = cap._extract_decision("the pen is parked.\nlook: stay\nexpect: the same")
 check("lowercase colon form parses", dec and dec["look"] == "stay")
+clean, dec = cap._extract_decision("LOOK — the black curtain gap; EXPECT — stillness. It's just fabric.")
+check("one-line form: both spans found", dec and dec["look"].startswith("the black curtain gap") and dec["expect"] == "stillness", (clean, dec))
+check("one-line form: thought survives, labels gone", "fabric" in clean and "LOOK" not in clean and "EXPECT" not in clean, clean)
+clean, dec = cap._extract_decision("14:20 — LOOK — the door\n14:20 — EXPECT — still closed\nit's just the lampshade.")
+check(
+    "clock-stamped lines parse",
+    dec and dec["look"] == "the door" and dec["expect"] == "still closed" and clean == "it's just the lampshade.",
+    (clean, dec),
+)
 
 _orig_entries = spatial_registry.get_entries
 spatial_registry.get_entries = lambda: {"red foam finger": {"pan": 100.0, "tilt": 110.0}, "black curtain": {"pan": 120.0, "tilt": 95.0}}
