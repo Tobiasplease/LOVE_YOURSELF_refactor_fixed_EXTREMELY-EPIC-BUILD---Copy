@@ -442,12 +442,21 @@ class Mind:
         except Exception:
             return []
 
+    def note_look(self, now: float) -> None:
+        """A look happened, stored or not — the look timer advances either way
+        (Sep 5 23:25–23:39: gated looks left the timer stale, so every phantom
+        was followed by a second look a minute later)."""
+        self.last_look_ts = now
+        self._save()
+
     def _seen_this_session(self, terms: List[str], agent) -> bool:
+        """Seen within the thread's own window (not the process session — a
+        restart must not make the room new again)."""
         try:
             from perception.spatial_registry import spatial_registry
 
             entries = spatial_registry.get_entries() or {}
-            start = float(getattr(agent, "true_session_start", 0.0) or 0.0)
+            start = time.time() - int(config.MIND_TURN_MAX_AGE_S)
             return any(float((entries.get(t) or {}).get("last_seen", 0)) >= start for t in terms)
         except Exception:
             return True

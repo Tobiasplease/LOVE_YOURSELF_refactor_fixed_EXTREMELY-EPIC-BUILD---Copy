@@ -1743,6 +1743,8 @@ class Captioner(MemoryMixin):
             )
 
         caption = self._strip_leaked_stamps(self._trim_to_boundary(self._strip_list_shape(_generate(opts))))
+        if kind == "look":
+            mind.note_look(now)  # the look happened whether or not what it said is kept
         _bare = (caption or "").strip()
         if self.first_caption_done and not _ifr(caption) and (not _bare or all(c in ".…·-— " for c in _bare)):
             self._note_unstored_cycle("chosen_silence", _bare or "(empty)")

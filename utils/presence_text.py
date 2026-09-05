@@ -54,8 +54,10 @@ def sentences(text: str) -> List[str]:
 
 
 def phantom_sentences(text: str) -> List[str]:
-    """The sentences that claim a third person in the present tense."""
-    return [s for s in sentences(text) if PERSON_RE.search(s) and not NOT_PRESENT_RE.search(s)]
+    """The sentences that CLAIM a third person in the present tense. A question
+    ("Is someone sitting there?") is wondering, not a claim — never gated
+    (Sep 5 23:37: the machine asked exactly that about a dark shape, honestly)."""
+    return [s for s in sentences(text) if PERSON_RE.search(s) and not NOT_PRESENT_RE.search(s) and not s.rstrip().endswith("?")]
 
 
 def is_phantom_presence(text: str) -> bool:

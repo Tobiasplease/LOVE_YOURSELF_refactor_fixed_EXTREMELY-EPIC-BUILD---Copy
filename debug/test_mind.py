@@ -185,6 +185,13 @@ check("rest interval ≈ MIND_THINK_INTERVAL_S × felt", 20 <= m.interval(now, A
 a._salience_hot = True
 check("hot interval = CAPTION_INTERVAL_LIVE", m.interval(now, a) == float(C.CAPTION_INTERVAL_LIVE))
 
+print("\n[6b] the look timer advances even when the look is not kept")
+m, M = fresh_mind()
+m.last_look_ts = now - 1000
+m.note_look(now)
+check("note_look sets last_look_ts", m.last_look_ts == now)
+check("no second look right after a gated one", m.next_kind(now + 60, {}, Agent()) == "think")
+
 print("\n[7] persistence")
 m, M = fresh_mind()
 m.absorb("Kept across a restart.", "think", "12:00. Eyes resting.", now - 100)
