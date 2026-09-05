@@ -75,9 +75,10 @@ acts = collections.Counter(d.get("action") for d in entries if d.get("action"))
 # --- health
 pid = subprocess.run(["pgrep", "-f", "python machin[e].py"], capture_output=True, text=True).stdout.split()
 out["process"] = {"pids": pid, "runs_touched": [r[1][11:19] + " " + os.path.basename(r[0])[:8] for r in runs]}
-out["restarts"] = [
-    d["iso_timestamp"][11:19] for d in entries if d.get("type") in ("run_metadata", "session_start") and d.get("type") == "run_metadata"
-]
+# A real boot writes session_start; a debug script importing the captioner only mints run_metadata (clutter, not a restart).
+_booted = {d["_run"] for d in entries if d.get("type") == "session_start"}
+out["restarts"] = [d["iso_timestamp"][11:19] for d in entries if d.get("type") == "run_metadata" and d["_run"] in _booted]
+out["empty_run_files"] = sum(1 for d in entries if d.get("type") == "run_metadata" and d["_run"] not in _booted)
 out["errors"] = [(d["iso_timestamp"][11:19], (d.get("message") or "")[:100]) for d in entries if d.get("type") == "error"][-5:]
 try:
     mode = json.load(open(os.path.join(EV, "runtime_mode.json")))
@@ -148,9 +149,12 @@ out["relational_captions"] = sum(1 for c in caps if c.get("mode") == "relational
 out["motion_events"] = sum(1 for d in calls if "Something is moving in the room" in (d.get("prompt") or ""))
 try:
     pane = subprocess.run(["tmux", "capture-pane", "-p", "-t", "impostor-system", "-S", "-2000"], capture_output=True, text=True, timeout=10).stdout
+    _tb_blocks = pane.split("Traceback (most recent call last)")[1:]
+    _noise = ("ConnectionResetError", "BrokenPipeError", "ConnectionAbortedError")
     out["console"] = {
         "skeleton_rejects": pane.count("rejected by skeleton gate"),
-        "tracebacks": pane.count("Traceback"),
+        "tracebacks": sum(1 for b in _tb_blocks if not any(n in b[:1500] for n in _noise)),
+        "feed_disconnects": sum(1 for b in _tb_blocks if any(n in b[:1500] for n in _noise)),
         "supervisor_restarts": pane.count("=== starting machine"),
     }
 except Exception:
@@ -260,7 +264,7 @@ out["flags"] = flags
 md = [f"\n## {now_iso[11:16]}  (since {since[11:16]})", ""]
 md.append("**Flags:** " + ("; ".join(flags) if flags else "none"))
 md.append(
-    f"- process {out['process']['pids']} runs {out['process']['runs_touched']} low_energy={out.get('low_energy')} clock_offset={out.get('clock_offset_s')}s"
+    f"- process {out['process']['pids']} runs {out['process']['runs_touched']} empty-run-files {out.get('empty_run_files')} low_energy={out.get('low_energy')} clock_offset={out.get('clock_offset_s')}s"
 )
 md.append(
     f"- captions {out['captions']} cadence {out.get('cadence_s')}s last {out.get('last_caption')} modes {out.get('modes')} draw {dict(out['draw_decisions'])}"
