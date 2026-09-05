@@ -82,7 +82,8 @@ class WantLedger:
                 return
             if cur:
                 cur["ended_at"] = now
-                cur["outcome"] = (became or "").strip() or "superseded"
+                cur["outcome"] = (became or "").strip() or "abandoned"
+                cur["kind"] = "became" if (became or "").strip() else "abandoned"  # Sep 5: replaced without resolution = abandoned, and counted
             self._entries.append(
                 {
                     "text": text.strip()[:300],
@@ -104,7 +105,34 @@ class WantLedger:
             if cur:
                 cur["ended_at"] = time.time()
                 cur["outcome"] = (became or "").strip() or "faded"
+                cur["kind"] = "drawn" if (became or "").lower().startswith(("drawn", "spent by drawing")) else "faded"
                 self._save()
+
+    def note_resolved(self, kind: str, words: str) -> None:
+        """Sep 5 (agency round — artist: a want closes through whatever it is
+        about, never routed to drawing). The distiller's RESOLVED slot, in the
+        machine's own words: kind is 'understood' (thought through) or 'let go'."""
+        with self._lock:
+            cur = self._current()
+            if cur:
+                cur["ended_at"] = time.time()
+                cur["outcome"] = (words or "").strip() or kind
+                cur["kind"] = kind
+                self._save()
+
+    def note_met(self) -> None:
+        """A real arrival while this want was about a person."""
+        with self._lock:
+            cur = self._current()
+            if cur and not cur.get("met"):
+                cur["met"] = True
+                cur["met_at"] = time.time()
+                self._save()
+
+    def abandoned_count(self, n: int = 10) -> int:
+        with self._lock:
+            done = [e for e in self._entries if e.get("ended_at") is not None][-n:]
+        return sum(1 for e in done if e.get("kind") == "abandoned")
 
     def note_refusal(self) -> None:
         """Pursuit was blocked (paper gate, hardware) while this want lived."""
@@ -139,6 +167,7 @@ class WantLedger:
                 "affirmed": int(cur.get("affirmed", 0)),
                 "refusals": int(cur.get("refusals", 0)),
                 "acted": bool(cur.get("acted", False)),
+                "met": bool(cur.get("met", False)),
             }
 
     def recently_resolved(self, n: int = 3) -> List[Dict]:
@@ -148,7 +177,8 @@ class WantLedger:
         return [
             {
                 "text": e["text"],
-                "outcome": e.get("outcome") or "superseded",
+                "outcome": e.get("outcome") or "abandoned",
+                "kind": e.get("kind") or ("became" if e.get("outcome") not in (None, "superseded", "faded") else "abandoned"),
                 "lived_s": (e.get("ended_at") or 0) - (e.get("formed_at") or 0),
                 "refusals": int(e.get("refusals", 0)),
                 "acted": bool(e.get("acted", False)),

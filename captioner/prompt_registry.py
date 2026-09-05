@@ -350,6 +350,47 @@ FRAGMENTS = {
         "used_by": ["awakening"],
         "placeholders": ["text"],
     },
+    "caption.desire-met-tail": {
+        "title": "Want tail — someone came",
+        "text": " Someone came while you wanted this.",
+        "note": "Agency round (Sep 5, artist: a want about a person resolves through a person, never through drawing). Attested by a real belief ON edge while the want mentioned a person; said once. Whether it resolved anything is the distill's call.",
+        "used_by": ["caption"],
+        "placeholders": [],
+    },
+    "caption.desire-resolved-wrap": {
+        "title": "Want resolved — thought through",
+        "text": "You wanted: {desire} — you came to: {words}.",
+        "note": "Agency round (Sep 5): the distiller's RESOLVED slot closed a want in the machine's own words; said once when the slot empties, the way a drawn want is. Wording is the artist's to finalize.",
+        "used_by": ["caption"],
+        "placeholders": ["desire", "words"],
+    },
+    "caption.desire-letgo-wrap": {
+        "title": "Want resolved — let go",
+        "text": "You wanted: {desire} — you let it go: {words}.",
+        "note": "Agency round (Sep 5). Wording is the artist's to finalize.",
+        "used_by": ["caption"],
+        "placeholders": ["desire", "words"],
+    },
+    "caption.body-hold": {
+        "title": "Body — head held (agency round)",
+        "text": "Your head has been turned {direction} for {duration}.",
+        "note": "Sep 5 (artist: the voice borrows a human body — knuckles, wrists, blood — because its own is invisible to it). The machine's actual posture as a fact, once per hold threshold (BODY_HOLD_THRESHOLDS_MIN); a move beyond HEAD_HOLD_TOL_DEG resets the clock. Direction words are the gaze module's own. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": ["direction", "duration"],
+    },
+    "caption.body-parked": {
+        "title": "Body — parked (low energy edge)",
+        "text": "Your body is parked and your breathing is still.",
+        "note": "Sep 5: fires once when low-energy comes on (or at boot in that mode); the lung is parked and the arm at neutral — that is what 'heavy' can truthfully mean.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": [],
+    },
+    "caption.body-unparked": {
+        "title": "Body — awake again (low energy off edge)",
+        "text": "Your body is awake again; you're breathing.",
+        "used_by": ["caption", "caption_blind"],
+        "placeholders": [],
+    },
     "caption.investigate": {
         "title": "Investigate glance — the familiar stranger",
         "text": "You're looking at the {label} — you've seen it many times without ever being sure of it.",
@@ -678,7 +719,10 @@ FRAGMENTS = {
     },
     "distill.became-line": {
         "title": "Distillation BECAME slot (B3)",
-        "text": "BECAME — you had been wanting: \"{prior_want}\". What has that turned into, in a few plain words — or 'none' if it stands unchanged.\n",
+        "text": (
+            "BECAME — you had been wanting: \"{prior_want}\". What has that turned into, in a few plain words — or 'none' if it stands unchanged.\n"
+            "RESOLVED — if that want has been answered, met, thought through, or let go, say how in a few plain words — or 'none'.\n"
+        ),
         "note": "B3 outcome slot: what-the-want-became, in the machine's own words. Only injected when a prior want exists. The answer closes the old ledger entry when the want changes; preference, aversion, fear are the machine's to name, never ours.",
         "used_by": ["reflection_distill"],
         "placeholders": ["prior_want"],

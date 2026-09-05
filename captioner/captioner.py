@@ -20,6 +20,8 @@ from config.config import (
     CAPTION_MIN_P,
     CAPTION_QUIET_AFTER,
     CAPTION_REPEAT_PENALTY,
+    CAPTION_NUM_PREDICT,
+    CAPTION_NUM_PREDICT_INWARD,
     CAPTION_SHORT_BEAT_P,
     CAPTION_SHORT_BEAT_TOKENS,
     CAPTION_TEMP,
@@ -722,6 +724,23 @@ class Captioner(MemoryMixin):
                 resumed = recently_present if _reid is None else (_reid is True)
                 self._presence_believed = True
                 arrival = not resumed  # OFF->ON edge — the only genuine arrival
+                if arrival:
+                    # Sep 5 (agency round): a want about a person is MET by a real
+                    # arrival — a fact the ledger keeps and the prompt says once;
+                    # whether it resolves anything is the next distill's call.
+                    try:
+                        from captioner.context_compression import context_compressor as _cc
+                        from utils import presence_text as _pt
+                        from utils.want_ledger import want_ledger as _wl
+
+                        _w = _cc.get_current_desire() or ""
+                        if _w and (
+                            _pt.PERSON_RE.search(_w) or re.search(r"\b(someone|anyone|somebody|people|person|visitor|company|them)\b", _w, re.I)
+                        ):
+                            _wl.note_met()
+                            _cc.introspective_state["want_met"] = {"ts": time.time(), "spoken": False}
+                    except Exception:
+                        pass
                 if arrival:
                     # Sep 5: the episodic arrival is written HERE, on the adjudicated
                     # belief's edge. vision/gaze.py wrote it on the face tracker's
@@ -1739,7 +1758,7 @@ class Captioner(MemoryMixin):
                             system_prompt=memory_system,
                             timeout=60,
                             log_dir=MOOD_SNAPSHOT_FOLDER,
-                            options={"temperature": CAPTION_TEMP, "top_p": CAPTION_TOP_P, "min_p": CAPTION_MIN_P, "num_predict": 80},
+                            options={"temperature": CAPTION_TEMP, "top_p": CAPTION_TOP_P, "min_p": CAPTION_MIN_P, "num_predict": CAPTION_NUM_PREDICT},
                             prompt_type="memory",
                             history=self._stream_history(),
                         )
@@ -1941,16 +1960,15 @@ class Captioner(MemoryMixin):
                         # small budget on a sentence end, so it reads as a
                         # small complete thought, not an amputation. Inward
                         # and close-look beats keep their fixed room.
-                        if inward:
-                            _num_predict = 150
-                        elif close_look:
-                            _num_predict = 120
+                        # Sep 5 (agency round): one or two sentences at most — the
+                        # window teaches whatever length it holds, and 80 tokens
+                        # taught a paragraph. Inward/close-look keep a little more room.
+                        if inward or close_look:
+                            _num_predict = CAPTION_NUM_PREDICT_INWARD
                         elif _random.random() < CAPTION_SHORT_BEAT_P:
                             _num_predict = CAPTION_SHORT_BEAT_TOKENS
-                        elif _is_bored:
-                            _num_predict = 110
                         else:
-                            _num_predict = 80
+                            _num_predict = CAPTION_NUM_PREDICT
                         if _arousal is not None and _num_predict >= 80:
                             # stirred gets room, drained runs short — never
                             # touching the deliberate small beats
@@ -2392,7 +2410,12 @@ class Captioner(MemoryMixin):
                                 system_prompt=get_monologue_system_prompt("introspective", agent=self),
                                 timeout=60,
                                 log_dir=MOOD_SNAPSHOT_FOLDER,
-                                options={"temperature": CAPTION_TEMP, "top_p": CAPTION_TOP_P, "min_p": CAPTION_MIN_P, "num_predict": 80},
+                                options={
+                                    "temperature": CAPTION_TEMP,
+                                    "top_p": CAPTION_TOP_P,
+                                    "min_p": CAPTION_MIN_P,
+                                    "num_predict": CAPTION_NUM_PREDICT,
+                                },
                                 prompt_type="caption_blind",
                                 history=self._stream_history(),
                             )

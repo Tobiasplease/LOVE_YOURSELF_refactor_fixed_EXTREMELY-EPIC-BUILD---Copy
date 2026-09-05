@@ -913,8 +913,14 @@ CAPTION_DRY_LAST_N = int(os.getenv("CAPTION_DRY_LAST_N", 384))
 # at 0.3 the first live run over-seeded the window with staccato and the
 # register flipped to fragment-chanting ("stressed-out haiku", artist's
 # read) — rhythm wants a minority beat, not a near-third.
-CAPTION_SHORT_BEAT_P = float(os.getenv("CAPTION_SHORT_BEAT_P", 0.2))
-CAPTION_SHORT_BEAT_TOKENS = int(os.getenv("CAPTION_SHORT_BEAT_TOKENS", 40))
+# AGENCY ROUND (Sep 5, artist: "one or two sentences per caption at most; earlier
+# systems could do a single word or '…'"): the 80-token default trimmed to ~55 words
+# and the window taught that length back (mean 59 words; 5 of 109 captions under two
+# sentences; zero one-word thoughts). Budgets now shape a thought, not a paragraph.
+CAPTION_NUM_PREDICT = int(os.getenv("CAPTION_NUM_PREDICT", 38))  # one or two sentences
+CAPTION_NUM_PREDICT_INWARD = int(os.getenv("CAPTION_NUM_PREDICT_INWARD", 70))  # inward / close-look beats
+CAPTION_SHORT_BEAT_P = float(os.getenv("CAPTION_SHORT_BEAT_P", 0.3))
+CAPTION_SHORT_BEAT_TOKENS = int(os.getenv("CAPTION_SHORT_BEAT_TOKENS", 14))  # a word or a short clause
 
 # Drawing calls get a real timeout (Aug 2). query_model defaults to 30s — a
 # 9B-era number. The drawing INTENT prompt is the largest in the system (stream
@@ -1281,6 +1287,9 @@ LOOP_NOTICE_COOLDOWN_S = int(os.getenv("LOOP_NOTICE_COOLDOWN_S", 600))
 # first-person sentences the awakening and the reflection read back.
 PERSONA_CONSOLIDATE_ENABLED = os.getenv("PERSONA_CONSOLIDATE_ENABLED", "true").lower() == "true"
 PERSONA_CONSOLIDATE_EVERY_S = float(os.getenv("PERSONA_CONSOLIDATE_EVERY_S", 20 * 3600))
+# Body as facts (Sep 5, agency round): the machine's own posture, not a borrowed one.
+BODY_HOLD_THRESHOLDS_MIN = [int(x) for x in os.getenv("BODY_HOLD_THRESHOLDS_MIN", "3,10,30,60").split(",")]
+HEAD_HOLD_TOL_DEG = float(os.getenv("HEAD_HOLD_TOL_DEG", 20.0))
 
 # Reflection loop (captioner/reflection.py) — the minutes-to-hours timescale
 REFLECTION_LOOP_INTERVAL = 1200  # seconds between long-form reflections (~20 min); fires when the scene is quiet

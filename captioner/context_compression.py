@@ -829,7 +829,49 @@ class ContextCompressionEngine:
             if not response or not isinstance(response, str):
                 return None
             changed = []
-            trait, belief, want, kernel, became, name, lore, question, no_longer = self._parse_distillation(response)
+            trait, belief, want, kernel, became, name, lore, question, no_longer, resolved = self._parse_distillation(response)
+            if resolved and prior_want:
+                # Sep 5 (agency round): a want closes through whatever it was
+                # about — thought through, or let go — in the machine's words.
+                # Never routed to drawing. Handled BEFORE the new want opens.
+                try:
+                    import re as _re
+
+                    from utils.want_ledger import want_ledger as _wl
+
+                    _kind = (
+                        "let go"
+                        if _re.search(
+                            r"\b(let (it |that )?go|gave up|give up|dropped it|stopped wanting|no longer want|done wanting)\b", resolved, _re.I
+                        )
+                        else "understood"
+                    )
+                    _wl.note_resolved(_kind, resolved)
+                    self.introspective_state["last_resolved_want"] = {
+                        "desire": prior_want,
+                        "words": resolved,
+                        "kind": _kind,
+                        "ts": time.time(),
+                        "spoken": False,
+                    }
+                    if not want or self._roughly_same(want, prior_want):
+                        want = ""  # resolved and nothing new: the slot empties — a want that ended stays ended
+                        self.introspective_state["current_desire"] = ""
+                        self.introspective_state["desire_injection_count"] = 0
+                    changed.append(f"resolved={_kind}")
+                    log_json_entry(
+                        LogType.DEBUG,
+                        {
+                            "message": f"Want resolved ({_kind})",
+                            "action": "want_resolved",
+                            "kind": _kind,
+                            "want": prior_want[:120],
+                            "words": resolved[:160],
+                        },
+                        print_message=f"[✔] want {_kind}: {resolved[:70]}",
+                    )
+                except Exception:
+                    pass
             if no_longer:
                 # Sep 5: the turn path — a held fact the machine says no longer holds
                 try:
@@ -918,7 +960,7 @@ class ContextCompressionEngine:
         """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL / NAME / LORE / QUESTION / NO LONGER TRUE; strips any leaked label; 'none'/blank → empty."""
         import re
 
-        trait = belief = want = kernel = became = name = lore = question = no_longer = ""
+        trait = belief = want = kernel = became = name = lore = question = no_longer = resolved = ""
 
         def _val(line: str, label_re: str) -> str:
             v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
@@ -945,7 +987,9 @@ class ContextCompressionEngine:
                 question = _val(line, r"^question\b[\s:：—–\-]*")
             elif low.startswith("no longer"):
                 no_longer = _val(line, r"^no longer(?: true)?\b[\s:：—–\-]*")
-        return trait, belief, want, kernel, became, name, lore, question, no_longer
+            elif low.startswith("resolved"):
+                resolved = _val(line, r"^resolved\b[\s:：—–\-]*")
+        return trait, belief, want, kernel, became, name, lore, question, no_longer, resolved
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).

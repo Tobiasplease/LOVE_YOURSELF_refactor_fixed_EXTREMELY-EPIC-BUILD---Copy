@@ -57,7 +57,7 @@ check("evolving edge after 2", "red foam finger" in led.render_evolving_edge())
 # distill parser: 9th slot
 resp = "TRAIT — I wait.\nBELIEF — The room is neutral.\nWANT — To draw.\nBECAME — none\nKERNEL — I sat.\nNAME — none\nUNDERSTANDING — Stillness is a choice.\nQUESTION — none\nNO LONGER TRUE — I invent external obstacles to avoid starting work."
 out = context_compressor._parse_distillation(resp)
-check("parser returns nine slots", len(out) == 9)
+check("parser returns ten slots", len(out) == 10)
 check("NO LONGER TRUE parsed", out[8] == "I invent external obstacles to avoid starting work.", out[8])
 check(
     "distill prompt carries held line + slot",

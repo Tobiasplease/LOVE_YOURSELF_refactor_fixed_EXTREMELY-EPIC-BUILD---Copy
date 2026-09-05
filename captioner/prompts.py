@@ -860,7 +860,26 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
 
             resolved = _wl.recently_resolved(2)
             for r in resolved:
-                id_lines.append(f'- a want that ended: "{r["text"]}" — {r["outcome"]}')
+                _k = r.get("kind") or ""
+                _how = {
+                    "understood": "you thought it through",
+                    "let go": "you let it go",
+                    "drawn": "it became a drawing",
+                    "abandoned": "it was replaced without being resolved",
+                    "faded": "it faded",
+                    "became": "it became",
+                }.get(_k, _k)
+                id_lines.append(
+                    f'- a want that ended: "{r["text"]}" — {_how}: {r["outcome"]}'
+                    if _k not in ("abandoned", "faded")
+                    else f'- a want that ended: "{r["text"]}" — {_how}'
+                )
+            try:
+                _ab = _wl.abandoned_count(10)
+                if _ab >= 3:
+                    id_lines.append(f"- of your last ten wants, {_ab} were replaced without being resolved")
+            except Exception:
+                pass
         except Exception:
             pass
         parts.append("Where your own ledger stands — your words, from before:\n" + "\n".join(id_lines))
@@ -1163,6 +1182,59 @@ def build_standing_absence_line(agent) -> str:
     ago = casual_time_string(session_s / 60.0)
     when = ago if ago == "just now" else f"{ago} ago"
     return P("caption.absence-standing-session").format(when=when)
+
+
+def build_body_line(agent) -> str:
+    """BODY AS FACTS (Sep 5, agency round). The voice borrowed a human body —
+    knuckles, wrists, blood — because its own was invisible to it. Two facts,
+    code-attested, as edges: the head held in one direction past a threshold
+    (BODY_HOLD_THRESHOLDS_MIN; a move beyond HEAD_HOLD_TOL_DEG resets), and
+    the body parked / awake when low-energy toggles. Direction words are the
+    gaze module's own."""
+    parts = []
+    now = time.time()
+    try:
+        from utils import runtime_mode
+
+        parked = bool(runtime_mode.low_energy())
+        prev = getattr(agent, "_body_parked_noted", None)
+        if prev is None:
+            agent._body_parked_noted = parked
+            if parked:
+                parts.append(P("caption.body-parked"))
+        elif prev != parked:
+            agent._body_parked_noted = parked
+            parts.append(P("caption.body-parked") if parked else P("caption.body-unparked"))
+    except Exception:
+        pass
+    try:
+        from config.config import BODY_HOLD_THRESHOLDS_MIN, HEAD_HOLD_TOL_DEG
+        from vision.gaze import get_gaze_description, physics_state
+
+        pan, tilt = float(physics_state.pan), float(physics_state.tilt)
+        hold = getattr(agent, "_head_hold", None)
+        if hold is None or abs(pan - hold["pan"]) > HEAD_HOLD_TOL_DEG or abs(tilt - hold["tilt"]) > HEAD_HOLD_TOL_DEG:
+            agent._head_hold = {"pan": pan, "tilt": tilt, "since": now, "fired": set()}
+        else:
+            held_min = (now - hold["since"]) / 60.0
+            due = [m for m in BODY_HOLD_THRESHOLDS_MIN if held_min >= m and m not in hold["fired"]]
+            if due:
+                m = max(due)
+                hold["fired"].update(x for x in BODY_HOLD_THRESHOLDS_MIN if x <= m)
+                direction = (get_gaze_description() or "ahead").replace("looking ", "").replace("straight ", "")
+                parts.append(P("caption.body-hold").format(direction=direction, duration=casual_time_string(float(m))))
+    except Exception:
+        pass
+    line = " ".join(p for p in parts if p)
+    if line:
+        try:
+            from event_logging.event_logger import log_json_entry
+            from event_logging.log_type import LogType
+
+            log_json_entry(LogType.DEBUG, {"message": "Body line", "action": "body_line", "line": line[:160]}, print_message=f"[🦾] {line[:90]}")
+        except Exception:
+            pass
+    return line
 
 
 def build_loop_notice_line(agent) -> str:
@@ -2166,6 +2238,11 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
     if loop_line:
         turn_parts.append(loop_line)
 
+    # 1c. THE BODY (Sep 5) — its own posture as a fact, at edges.
+    body_line = build_body_line(agent)
+    if body_line:
+        turn_parts.append(body_line)
+
     # 1b. THE EVENT — a discrete thing that just happened (arrival, eye-contact
     # ONSET). Onset only, never sustained: re-stating "they're looking at you"
     # every call re-anchored the model into re-describing instead of continuing.
@@ -2361,9 +2438,25 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
                         desire_line += P("caption.desire-absent-tail")
                 except Exception:
                     pass
+                # Sep 5 (agency round): a want about a person was MET by a real arrival — said once.
+                try:
+                    _met = context_compressor.introspective_state.get("want_met") or {}
+                    if _met and not _met.get("spoken") and time.time() - float(_met.get("ts", 0)) < 7200:
+                        _met["spoken"] = True
+                        desire_line += P("caption.desire-met-tail")
+                except Exception:
+                    pass
                 prompt_parts.append(desire_line)
                 context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
             elif not desire:
+                # Sep 5 (agency round): a want that closed by being thought through
+                # or let go is said back once, the way a drawn one is.
+                _res = context_compressor.introspective_state.get("last_resolved_want") or {}
+                if _res.get("desire") and not _res.get("spoken") and time.time() - float(_res.get("ts", 0)) < 7200:
+                    _res["spoken"] = True
+                    _wrap = "caption.desire-letgo-wrap" if _res.get("kind") == "let go" else "caption.desire-resolved-wrap"
+                    prompt_parts.append(P(_wrap).format(desire=(_res.get("desire") or "").rstrip("."), words=(_res.get("words") or "").rstrip(".")))
+                    context_compressor.introspective_state["desire_injection_count"] = inj_count + 1
                 # Desire arc: the emptied slot right after an executed drawing
                 # is a real state — surface it briefly (same 3-caption cap).
                 spent = context_compressor.introspective_state.get("last_spent_desire") or {}
