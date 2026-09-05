@@ -124,6 +124,16 @@ check(
     cap._strip_leaked_stamps("Drywall. 14:38 It's just drywall. 14:39. The air isn't thick.") == "Drywall. It's just drywall. The air isn't thick.",
     cap._strip_leaked_stamps("Drywall. 14:38 It's just drywall. 14:39. The air isn't thick."),
 )
+
+
+def gate(text, believed=False):
+    _g = object.__new__(Captioner)
+    _g._stream = deque(maxlen=24)
+    _g._stream_ts = deque(maxlen=24)
+    _g._presence_believed = believed
+    return _g._caption_reject_reason(_g._strip_list_shape(text), "") or "PASS"
+
+
 for t in ["2x4s and plywood.", "3D printed plastic.", "100%.", "It's 3D printed plastic. Nothing to judge.", "20 minutes and nothing moved."]:
     check(f"numbers as words pass: {t[:22]}", gate(t) == "PASS", gate(t))
 check("counting stub still dies", gate("5... 4... 3...") == "numeric_fragment", gate("5... 4... 3..."))
