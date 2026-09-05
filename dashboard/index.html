@@ -296,7 +296,7 @@ poll(async () => {
   row("boredom", st.boredom == null ? null : st.boredom.toFixed(2)); if (st.boredom != null) gdiv.appendChild(meter(st.boredom));
   row("drive", st.drive_level == null ? null : st.drive_level.toFixed(2)); if (st.drive_level != null) gdiv.appendChild(meter(st.drive_level / 1.2));
   row("draw block", st.draw_block_reason);
-  row("paper", st.drawing && (st.drawing.paper_state || (st.drawing.paper_present ? "present" : "absent")));
+  row("paper", st.drawing && (st.drawing.paper_state || "unchecked"));  // Sep 5: the boot default used to read "present" with no sheet on the desk
   row("drawing", st.drawing && (st.drawing.is_executing_cnc ? "EXECUTING" : st.drawing.is_generating ? "GENERATING" : "idle"));
   row("gaze", st.gaze && st.gaze.description);
   row("person", st.person && st.person.person_state);

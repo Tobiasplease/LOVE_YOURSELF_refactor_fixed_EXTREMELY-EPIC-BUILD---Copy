@@ -1227,6 +1227,47 @@ class Captioner(MemoryMixin):
         out = self._LEAKED_STAMP_RE.sub("", text)
         return " ".join(out.split()) if out.strip() else out
 
+    def _maybe_paper_glance(self, now: float) -> None:
+        """PAPER GLANCE (Sep 5). The sheet was checked only on the way to a
+        drawing, so in low-energy nothing ever checked it: the dashboard showed
+        the boot default "present" with no paper on the desk, and with no
+        verdict the voice imagined a blank sheet. A gaze-only look at the table
+        (camera + ArUco/VLM — no CNC) after PAPER_GLANCE_FIRST_AFTER_S and every
+        PAPER_GLANCE_EVERY_S while quiet and alone. The verdict is the same state
+        the drawing path and the 'No paper' line read."""
+        try:
+            from config.config import ENABLE_PAPER_DETECTION, PAPER_GLANCE_ENABLED, PAPER_GLANCE_EVERY_S, PAPER_GLANCE_FIRST_AFTER_S
+            from utils.state_manager import state_manager
+
+            if not (PAPER_GLANCE_ENABLED and ENABLE_PAPER_DETECTION) or state_manager.camera is None:
+                return
+            if getattr(self, "_salience_hot", False) or getattr(self, "_presence_believed", False):
+                return
+            if getattr(state_manager, "is_generating_drawing", False) or getattr(state_manager, "is_executing_cnc", False):
+                return
+            if now - float(getattr(self, "true_session_start", now) or now) < PAPER_GLANCE_FIRST_AFTER_S:
+                return
+            if now - float(state_manager.last_paper_check_ts or 0.0) < PAPER_GLANCE_EVERY_S:
+                return
+            if now - float(getattr(self, "_last_paper_glance_attempt", 0.0) or 0.0) < 300:
+                return  # a failed check must not hammer
+            self._last_paper_glance_attempt = now
+            from safety.paper_detection import check_paper_before_drawing
+
+            check_paper_before_drawing(state_manager.camera, state_manager.servos, None)
+            log_json_entry(
+                LogType.DEBUG,
+                {
+                    "message": "Paper glance",
+                    "action": "paper_glance",
+                    "paper_state": state_manager.paper_state,
+                    "method": getattr(state_manager, "last_paper_check_reason", ""),
+                },
+                print_message=f"[📄] paper glance: {state_manager.paper_state or 'unclear'}",
+            )
+        except Exception:
+            pass
+
     def _extract_decision(self, text: str):
         """Sep 5 (agency round): split the private LOOK / EXPECT spans off the
         caption — each on its own line, both on one line, or clock-stamped by
@@ -2755,6 +2796,7 @@ class Captioner(MemoryMixin):
             print(f"  Current boredom: {self.boredom:.3f}")
 
         # Evaluate whether to draw based on internal state
+        self._maybe_paper_glance(time.time())  # Sep 5: the sheet is checked even when no drawing is coming
         should_draw = self.drawing.should_draw(mood=self.current_mood, boredom=self.boredom, reflection=getattr(self, "last_reflection", None))
 
         if not should_draw:

@@ -1469,6 +1469,15 @@ ENABLE_POST_HOME_PAPER_CHECK = True
 # Early paper check: run ArUco check BEFORE ComfyUI generation to save resources
 # This is in addition to the post-home check (double verification)
 ENABLE_EARLY_PAPER_CHECK = True
+# PAPER GLANCE (Sep 5): the sheet was checked only on the way to a drawing, so in
+# low-energy nothing ever checked it — the dashboard showed the boot default
+# "present" with no paper on the desk and the voice imagined a blank sheet. A
+# gaze-only look at the table (camera + ArUco/VLM, no CNC) shortly after boot and
+# every PAPER_GLANCE_EVERY_S while quiet; the verdict is what the drawing path and
+# the "No paper" line already read, and it now survives a restart.
+PAPER_GLANCE_ENABLED = os.getenv("PAPER_GLANCE_ENABLED", "true").lower() == "true"
+PAPER_GLANCE_FIRST_AFTER_S = float(os.getenv("PAPER_GLANCE_FIRST_AFTER_S", 120))
+PAPER_GLANCE_EVERY_S = float(os.getenv("PAPER_GLANCE_EVERY_S", 1800))
 # Use the same tilt as drawing lock for detection (aligns view)
 
 # === LCD CAPTION DISPLAY ===

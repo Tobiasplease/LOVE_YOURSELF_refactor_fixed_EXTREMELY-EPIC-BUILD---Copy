@@ -88,6 +88,13 @@ class StateManager:
                     "session_duration": time.time() - captioner.true_session_start,
                     "version": "1.0",
                 },
+                # Workspace (Sep 5): the last paper verdict survives a restart — the
+                # TTL (PAPER_STATE_TTL_S) still decides whether it is fresh enough.
+                "workspace": {
+                    "paper_state": self.paper_state,
+                    "last_paper_check_ts": self.last_paper_check_ts,
+                    "last_paper_check_reason": getattr(self, "last_paper_check_reason", ""),
+                },
                 # Captioner/Memory state
                 "captioner": {
                     "current_mood": captioner.current_mood,
@@ -178,6 +185,15 @@ class StateManager:
         """Apply loaded state to captioner instance."""
         try:
             cap_state = state["captioner"]
+            try:
+                ws = state.get("workspace") or {}
+                if ws.get("paper_state") and float(ws.get("last_paper_check_ts", 0) or 0) > 0:
+                    self.paper_state = ws["paper_state"]
+                    self.last_paper_check_ts = float(ws["last_paper_check_ts"])
+                    self.last_paper_check_reason = ws.get("last_paper_check_reason", "")
+                    self.paper_present = self.paper_state == "blank_paper"
+            except Exception:
+                pass
 
             # Restore mood and state
             captioner.current_mood = cap_state.get("current_mood", 0.5)
