@@ -258,6 +258,17 @@ m2.thread.append({"ts": now - 8000, "kind": "think", "cue": "", "text": "Two thi
 m2.reconcile_index()
 check("in-batch duplicate ids are dropped rather than failing the batch", fi.count() == 5, fi.count())
 
+print("\n[5d] recursive tone at frame level")
+from captioner.context_compression import context_compressor as _cc
+parsed = _cc._parse_memory_response("ROOM: none\nPLEASANTNESS: unpleasant\nENERGY: stirred\nFELT: frustrated\nTONE: clipped, impatient, circling\nREPEATING: none")
+check("parser reads TONE", parsed.get("tone") == "clipped, impatient, circling", parsed)
+_cc._absorb_mood(parsed)
+check("tone stored with the read", _cc.get_tone() == "clipped, impatient, circling", getattr(_cc, "last_mood_read", None))
+_cc.set_felt_state("frustrated")
+m, M = fresh_mind()
+call = m.build("think", now, Agent(), {}, None)
+check("frame carries the felt word and the tone", "Right now: frustrated." in call["system"] and "Your voice right now: clipped, impatient, circling." in call["system"], call["system"][-160:])
+
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()
 a = Agent()

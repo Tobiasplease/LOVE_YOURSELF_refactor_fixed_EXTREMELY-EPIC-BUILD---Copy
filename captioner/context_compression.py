@@ -1254,7 +1254,7 @@ class ContextCompressionEngine:
 
     def _parse_memory_response(self, response: str) -> dict:
         """Parse the labeled lines of the memory-diff call (July 12)."""
-        out = {"room": "", "self_note": "", "event": "", "pleasantness": "", "energy": "", "felt": "", "repeating": ""}
+        out = {"room": "", "self_note": "", "event": "", "pleasantness": "", "energy": "", "felt": "", "tone": "", "repeating": ""}
         labels = (
             ("room", "room"),
             ("new about me", "self_note"),
@@ -1262,6 +1262,7 @@ class ContextCompressionEngine:
             ("pleasantness", "pleasantness"),
             ("energy", "energy"),
             ("felt", "felt"),
+            ("tone", "tone"),
             ("repeating", "repeating"),
         )
         # Sep 5: the model sometimes runs two labels onto one line
@@ -1269,7 +1270,7 @@ class ContextCompressionEngine:
         # that appears mid-line so no slot swallows the next.
         import re as _re
 
-        _label_split = _re.compile(r"\s+(?=(?:ROOM|NEW ABOUT ME|EVENT|PLEASANTNESS|ENERGY|FELT|REPEATING)\s*[:：—–-])", _re.I)
+        _label_split = _re.compile(r"\s+(?=(?:ROOM|NEW ABOUT ME|EVENT|PLEASANTNESS|ENERGY|FELT|TONE|REPEATING)\s*[:：—–-])", _re.I)
         lines = []
         for raw in response.strip().split("\n"):
             lines.extend(_label_split.split(raw))
@@ -1423,10 +1424,14 @@ class ContextCompressionEngine:
         held = self._felt_phrase_held_reason(felt) if felt else ""
         if held:
             felt = ""
+        tone = parsed.get("tone", "").strip().strip("\"'").rstrip(".").strip()
+        if not (tone and 1 <= len(tone.split()) <= 8) or self._none_like(tone):
+            tone = ""
         self.last_mood_read = {
             "valence": valence if valence is not None else 0.0,
             "arousal": arousal if arousal is not None else 0.35,
             "felt": felt,
+            "tone": tone,  # the recursive read of the MANNER (Sep 6): how the last thoughts sound, the machine's words — rides at frame level
             "timestamp": time.time(),
         }
         # FELT HISTORY (Sep 4, the emotional-arc channel): every read joins a
@@ -1574,6 +1579,13 @@ class ContextCompressionEngine:
             if prev and prev.strip().lower() != text.lower():
                 self.previous_felt_state = prev
         self.last_sentiment_analysis = {"sentiment_text": text, "timestamp": time.time()}
+
+    def get_tone(self, max_age_seconds: int = 600) -> str:
+        """The read's description of how the last thoughts sound, or '' if stale."""
+        read = getattr(self, "last_mood_read", None) or {}
+        if read.get("tone") and time.time() - read.get("timestamp", 0) <= max_age_seconds:
+            return str(read["tone"]).strip()
+        return ""
 
     def get_felt_state(self, max_age_seconds: int = 600) -> str:
         """Get the raw felt-state phrase (no formatting), or empty if stale.

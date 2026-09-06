@@ -81,6 +81,13 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind"],
         "placeholders": ["felt"],
     },
+    "monologue.tone-frame": {
+        "title": "Tone — the recursive read of the manner",
+        "text": " Your voice right now: {tone}.",
+        "note": "RECURSIVE SENTIMENT AS TONE (Sep 6 12:00, artist: 'length and rate is a really poor way of conveying emotion as opposed to actual tone and cadence… it will read its own output, determine the emotional cadence, and feed that back'). The compressor reads how the last thoughts SOUND (TONE, its own words); this rides at frame level, where register is set, so the next thoughts are written in it. Text in, text out — the cadence map is secondary now. Wording is the artist's to finalize.",
+        "used_by": ["mind"],
+        "placeholders": ["tone"],
+    },
     "monologue.felt-held": {
         "title": "Felt state — how long it has held",
         "text": " It's been like this for {duration}.",
@@ -920,6 +927,7 @@ FRAGMENTS = {
             "ENERGY: drained, settled, stirred or charged\n"
             "Where you are: {situation}\n"
             "FELT: how do you feel right now, in a word or two — the way you'd answer if someone asked\n"
+            "TONE: how those last thoughts SOUND — the manner of them, in a few words, the way you'd describe a voice\n"
             'REPEATING: if the thoughts above keep circling one phrase or one idea, name it in a few words — or "none"'
         ),
         "note": "The memory diff — every 8 captions. Writes: baseline room, self-notes, events, mood/felt-state. Everything this pass keeps comes back into future prompts; everything it invents contaminates them.",

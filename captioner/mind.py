@@ -999,6 +999,12 @@ class Mind:
                             system += P("monologue.felt-held").format(duration=casual_time_string(held / 60.0))
                     except Exception:
                         pass
+                try:
+                    tone = (_cc.get_tone() or "").strip()
+                    if tone:
+                        system += P("monologue.tone-frame").format(tone=tone)  # the recursive read of the manner, at frame level
+                except Exception:
+                    pass
         except Exception:
             pass
 
