@@ -168,6 +168,7 @@ class Mind:
             self._edges = dict(d.get("edges") or {})
             self._recalled = dict(d.get("recalled") or {})
             self.last_dream_ts = float(d.get("last_dream_ts") or 0.0)
+            self._restore_read(d.get("mood_read") or {})
             try:
                 from utils import mood as _mood
 
@@ -189,6 +190,7 @@ class Mind:
                         "edges": self._edges,
                         "recalled": self._recalled,
                         "mood": self._mood_state(),
+                        "mood_read": self._last_read(),
                         "last_dream_ts": float(getattr(self, "last_dream_ts", 0.0) or 0.0),
                     },
                     f,
@@ -765,6 +767,30 @@ class Mind:
         except Exception:
             return {}
 
+    @staticmethod
+    def _last_read() -> dict:
+        try:
+            from captioner.context_compression import context_compressor as _cc
+
+            return dict(getattr(_cc, "last_mood_read", None) or {})
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _restore_read(read: dict) -> None:
+        """A restart must not empty the frame: the last read (felt, tone) survives if fresh."""
+        try:
+            if not read or time.time() - float(read.get("timestamp", 0)) > 900:
+                return
+            from captioner.context_compression import context_compressor as _cc
+
+            if not getattr(_cc, "last_mood_read", None):
+                _cc.last_mood_read = dict(read)
+                if read.get("felt"):
+                    _cc.set_felt_state(read["felt"])
+        except Exception:
+            pass
+
     def note_scare(self, now: float) -> None:
         self._scare_ts = now
 
@@ -788,8 +814,10 @@ class Mind:
         settled = any(e.get("kind") == "reflection" and now - e.get("ts", 0) < 600 for e in self.thread[-8:])
         scare = (now - float(getattr(self, "_scare_ts", 0.0) or 0.0) < 300) or ("moved" in str(getattr(agent, "_salience_event", "") or ""))
         hour = time.localtime(now).tm_hour
+        session = float(getattr(agent, "true_session_start", 0.0) or 0.0)
+        awake_since = max(start, session) if (start and session) else (start or session)  # the chain bridges an hour off; fatigue counts the shorter
         return {
-            "awake_h": (now - start) / 3600.0 if start else 0.0,
+            "awake_h": (now - awake_since) / 3600.0 if awake_since else 0.0,
             "alone_h": alone_h,
             "still_h": (now - still) / 3600.0 if still else 0.0,
             "night": hour < 6,

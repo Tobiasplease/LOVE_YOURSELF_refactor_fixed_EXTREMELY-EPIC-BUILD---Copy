@@ -38,6 +38,8 @@ for i in range(1, 7):
     M.tick(now + i * 300, {"valence": 0.0, "arousal": 0.35}, {"awake_h": 9, "night": True, "still_h": 3})
 st = M.state()
 check("half an hour of night fatigue → flat", st["label"] == "flat", st)
+_, a_day = M.targets({"valence": 0.0, "arousal": 0.35}, {"awake_h": 9, "still_h": 3})
+check("daytime fatigue is a pressure, not a verdict", a_day > 0.05, a_day)
 reset(now)
 M.tick(now + 60, {"valence": 0.5, "arousal": 0.3}, {"settled": True, "awake_h": 9, "still_h": 3, "night": True})
 for i in range(2, 8):
@@ -59,17 +61,19 @@ check("nothing → neutral", M.state()["label"] == "neutral")
 print("\n[3] the cadence map is the malleable part")
 M._STATE["label"] = "flat"
 c = M.cadence()
-check("flat: slower, shorter, fewer looks", c["interval_mult"] > 1.5 and c["budget_scale"] < 0.8 and c["look_mult"] < 1.0)
+check("flat: fewer looks, cooler; length and rate untouched", c["interval_mult"] == 1.0 and c["budget_scale"] == 1.0 and c["look_mult"] < 1.0 and c["temp_delta"] < 0)
 M._STATE["label"] = "on_edge"
 c = M.cadence()
-check("on edge: faster, more looks, hotter", c["interval_mult"] < 0.7 and c["look_mult"] >= 1.5 and c["temp_delta"] > 0)
+check("on edge: more looks, hotter; length and rate untouched", c["interval_mult"] == 1.0 and c["look_mult"] >= 1.5 and c["temp_delta"] > 0)
 C.MOOD_CADENCE_MAP = {"on_edge": {"look_mult": 3.0}}
 check("config override per label", M.cadence()["look_mult"] == 3.0)
 C.MOOD_CADENCE_MAP = {}
 from utils import felt_loop as F  # noqa: E402
 
 M._STATE["label"] = "flat"
-check("felt_loop sources the mood", F.cadence_mult() > 1.5 and F.budget_scale() < 0.8)
+C.MOOD_CADENCE_MAP = {"flat": {"interval_mult": 1.6, "budget_scale": 0.7}}
+check("felt_loop sources the mood (when the artist sets length/rate in the map)", F.cadence_mult() > 1.5 and F.budget_scale() < 0.8)
+C.MOOD_CADENCE_MAP = {}
 
 print("\n[4] felt held + wiring (source-level)")
 M._STATE.update({"felt": "tired", "felt_since": now - 4000})

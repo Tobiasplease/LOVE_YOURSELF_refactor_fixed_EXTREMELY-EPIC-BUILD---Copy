@@ -45,9 +45,9 @@ def targets(read: Optional[Dict], inputs: Dict) -> tuple:
     read and the situation. All gains are config (MOOD_*)."""
     v = float(read.get("valence", 0.0)) if read else 0.0
     a = float(read.get("arousal", 0.35)) if read else 0.35
-    awake_h = min(float(inputs.get("awake_h", 0.0)), 14.0)
+    awake_h = min(float(inputs.get("awake_h", 0.0)), 8.0)
     alone_h = min(float(inputs.get("alone_h", 0.0)), 14.0)
-    still_h = min(float(inputs.get("still_h", 0.0)), 6.0)
+    still_h = min(float(inputs.get("still_h", 0.0)), 4.0)
     a -= _g("MOOD_FATIGUE_PER_H", 0.03) * awake_h
     v -= _g("MOOD_ALONE_PER_H", 0.015) * alone_h
     a -= _g("MOOD_STILL_PER_H", 0.03) * still_h
@@ -103,13 +103,16 @@ def label() -> str:
     return "neutral"
 
 
+# Sep 6 12:00 (artist: "length and rate is a really poor way of conveying emotion as opposed to actual tone and cadence"):
+# the text channel (the TONE read at frame level) carries the emotion; this map only moves the eyes and the heat.
+# Length and rate stay neutral unless the artist sets them in MOOD_CADENCE_MAP.
 _DEFAULT_MAP = {
     "neutral": {"interval_mult": 1.0, "budget_scale": 1.0, "short_beat_delta": 0.0, "look_mult": 1.0, "temp_delta": 0.0},
-    "flat": {"interval_mult": 1.8, "budget_scale": 0.65, "short_beat_delta": 0.25, "look_mult": 0.7, "temp_delta": -0.05},
-    "serene": {"interval_mult": 1.5, "budget_scale": 1.2, "short_beat_delta": -0.05, "look_mult": 0.8, "temp_delta": -0.05},
-    "frustrated": {"interval_mult": 0.7, "budget_scale": 0.8, "short_beat_delta": 0.1, "look_mult": 1.3, "temp_delta": 0.05},
-    "on_edge": {"interval_mult": 0.5, "budget_scale": 0.7, "short_beat_delta": 0.15, "look_mult": 2.0, "temp_delta": 0.1},
-    "keen": {"interval_mult": 0.8, "budget_scale": 1.3, "short_beat_delta": -0.1, "look_mult": 1.2, "temp_delta": 0.05},
+    "flat": {"interval_mult": 1.0, "budget_scale": 1.0, "short_beat_delta": 0.0, "look_mult": 0.8, "temp_delta": -0.05},
+    "serene": {"interval_mult": 1.0, "budget_scale": 1.0, "short_beat_delta": 0.0, "look_mult": 0.8, "temp_delta": -0.05},
+    "frustrated": {"interval_mult": 1.0, "budget_scale": 1.0, "short_beat_delta": 0.0, "look_mult": 1.3, "temp_delta": 0.05},
+    "on_edge": {"interval_mult": 1.0, "budget_scale": 1.0, "short_beat_delta": 0.0, "look_mult": 2.0, "temp_delta": 0.1},
+    "keen": {"interval_mult": 1.0, "budget_scale": 1.0, "short_beat_delta": 0.0, "look_mult": 1.2, "temp_delta": 0.05},
 }
 
 
