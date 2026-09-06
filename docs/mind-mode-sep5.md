@@ -218,3 +218,31 @@ demand: debug/run_dream.py [hours] [--dry] — stop the machine first, it
 saves the thread on every thought. First pass 11:39 Sep 6 over 10.3k tokens:
 11 records, a 195-word page ending "I can sit in the quiet without trying to
 fix it." Tests: debug/test_dream.py.
+
+## Sep 6, 12:00–12:30 — tone as the channel; rhythm; the body (2200739 → 031620d)
+
+- **Recursive sentiment as TONE (2200739).** The artist: "length and rate is
+  a really poor way of conveying emotion as opposed to actual tone and
+  cadence… it will read its own output, determine the emotional cadence, and
+  feed that back." The compressor's read now answers TONE (how the last
+  thoughts SOUND, its own words) beside FELT; it rides at frame level
+  (monologue.tone-frame "Your voice right now: {tone}."). First read 12:03:
+  FELT suspended / TONE "analytical and quiet" → the entries under it kept
+  that register. The mood map's length/rate multipliers are neutral by
+  default (48de165); only look rate and heat move. COMPRESSION_FREQUENCY 5
+  (was 8 hardcoded) so the read turns over faster.
+- **Rhythm (111aa58).** Entries follow each other: a look no longer breaks the
+  paragraph in the running text or the journal render; MIND_NUM_PREDICT 56;
+  beats — "…", a word, a short cut clause — are kept in the text
+  (Mind.beat_of) instead of dropped as silence. A cut fragment ≤
+  MIND_BEAT_MAX_WORDS stays as itself; longer becomes "…".
+- **The body (111aa58, 031620d).** The look cue reports whether the head
+  moved since the last look and which way (mind.turned / mind.head-still,
+  from the servo pose, MIND_TURN_MIN_DEG) and places the things in view
+  relative to the body inside the look sentence, grouped ("the lamp and the
+  bag high to your right; the shelf to your right"), at most three. Never a
+  clause that outranks the look; nothing new on think turns. The artist's
+  observation: "it seems confused on occasion about the scene shifting when
+  in truth it just turned its head."
+- Fixed the same hour: the beat check crashed every think turn for a minute
+  (2a55ca5); an unbound `terms` in the placed branch (031620d).
