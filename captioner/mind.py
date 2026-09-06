@@ -663,7 +663,7 @@ class Mind:
             first = time.strftime("%B %Y", time.localtime(float(life.get("first_boot", now))))
         except Exception:
             first = "some time ago"
-        woke = clock(self.woke_at(now, agent))
+        woke = self.woke_words(now, agent)
         lines.append(P("mind.life-when").format(clock=clock(now), weekday=time.strftime("%A", time.localtime(now)), daypart=daypart(now), first=first, woke=woke))
         terms = self._terms()[: int(config.MIND_ROOM_TERMS)]
         if terms:
@@ -734,15 +734,22 @@ class Mind:
             from utils.episodic_log import episodic_log
 
             pairs = episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=int(now - start) + 1)
+            paired_ends = set()
             for p in pairs:
                 st = p.get("start") or {}
                 en = p.get("end") or {}
+                if en:
+                    paired_ends.add(float(en.get("timestamp", 0)))
                 if float(st.get("timestamp", 0)) < start:
                     continue
                 if en:
                     out.append((float(en["timestamp"]), f"someone came in at {clock(float(st['timestamp']))} and left after {dur_words(float(p.get('duration_seconds', 0)))}"))
                 else:
                     out.append((float(st["timestamp"]), f"someone came in at {clock(float(st['timestamp']))}"))
+            for e in episodic_log.get_recent_events(window_seconds=int(now - start) + 1, types=["person_left"]):
+                ts = float(e.get("timestamp", 0))
+                if ts >= start and ts not in paired_ends:
+                    out.append((ts, f"someone left at {clock(ts)}"))  # a departure with no logged arrival (they were here when you woke)
             for e in episodic_log.get_recent_events(window_seconds=int(now - start) + 1, types=["world_changed", "drew"]):
                 ts = float(e.get("timestamp", 0))
                 if ts < start:
@@ -1038,14 +1045,32 @@ class Mind:
         self._save()
 
     def woke_at(self, now: float, agent) -> float:
-        """When the machine woke TODAY: the start of the day's chain of thought,
-        not the last process restart (15:26 Sep 6: 'you woke at 15:26' after a
-        restart, and an events line that counted nothing before it)."""
+        """When the machine woke: the first thought after the last gap of
+        MIND_WAKE_GAP_S or more in the thread (it was off), not the last
+        process restart and not midnight (15:26 Sep 6: 'you woke at 15:26'
+        after a restart; then 'at 00:00' when the chain crossed midnight)."""
+        gap = int(getattr(config, "MIND_WAKE_GAP_S", 2700))
+        entries = [e for e in self.thread if e.get("kind") in ("wake", "look", "think", "reflection", "dream") and float(e.get("ts", 0)) <= now]
+        woke = 0.0
+        last_ts = None
+        for e in entries:
+            ts = float(e.get("ts", 0))
+            if last_ts is None or ts - last_ts >= gap:
+                woke = ts
+            last_ts = ts
+        session = float(getattr(agent, "true_session_start", 0.0) or 0.0)
+        return woke or session or now
+
+    def woke_words(self, now: float, agent) -> str:
+        """'today at 11:22' or 'yesterday at 21:41' or 'a few days ago'."""
+        w = self.woke_at(now, agent)
         lt = time.localtime(now)
         midnight = now - (lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec)
-        first_today = next((float(e.get("ts", 0)) for e in self.thread if float(e.get("ts", 0)) >= midnight and e.get("kind") in ("wake", "look", "think", "reflection")), 0.0)
-        session = float(getattr(agent, "true_session_start", 0.0) or 0.0)
-        return first_today or session or now
+        if w >= midnight:
+            return f"today at {clock(w)}"
+        if w >= midnight - 86400:
+            return f"yesterday at {clock(w)}"
+        return when_words(now - w)
 
     def thread_start(self, now: float) -> float:
         """Start of the continuous chain of thought (gaps under MIND_TURN_MAX_AGE_S)."""

@@ -756,7 +756,7 @@ FRAGMENTS = {
     },
     "mind.life-when": {
         "title": "Life — when",
-        "text": "It's {clock}, {weekday} {daypart}. You were first switched on {first}; today you woke at {woke}.",
+        "text": "It's {clock}, {weekday} {daypart}. You were first switched on {first}; you woke {woke}.",
         "note": "No waking count: lifetime_state counts crash-restarts and debug imports (4608 by Sep 5), not a life.",
         "used_by": ["mind"],
         "placeholders": ["clock", "weekday", "daypart", "first", "woke"],

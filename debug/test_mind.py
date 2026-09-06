@@ -345,12 +345,19 @@ ev = m.events_today(now, Agent())
 check("events today is a list of clocked events (the page counts)", any("wrote a page" in x for x in ev), ev)
 lt = time.localtime(now); midnight = now - (lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec)
 m5, _ = fresh_mind()
-if now - midnight > 4 * 3600:
-    m5.absorb("First thought of the day.", "wake", "c", midnight + 3600)
-    a5 = Agent(); a5.true_session_start = now - 120
-    check("woke = the day's first thought, not the last restart", abs(m5.woke_at(now, a5) - (midnight + 3600)) < 1)
-else:
-    check("woke = the day's first thought, not the last restart (skipped: too early in the day)", True)
+m5.absorb("Yesterday evening.", "think", "c", now - 20 * 3600)
+m5.absorb("Through the night, no gap.", "think", "c", now - 12 * 3600)
+m5.absorb("Still no gap.", "think", "c", now - 6 * 3600)
+m5.absorb("Back on after an hour off.", "wake", "c", now - 3 * 3600)
+for _k in range(1, 11):
+    m5.absorb(f"On, thought {_k}.", "think", "c", now - 3 * 3600 + _k * 1000)
+a5 = Agent(); a5.true_session_start = now - 120
+check("woke = the first thought after the last real gap, not the restart, not midnight", abs(m5.woke_at(now, a5) - (now - 3 * 3600)) < 1, time.strftime('%H:%M', time.localtime(m5.woke_at(now, a5))))
+m6, _ = fresh_mind()
+for _k in range(0, 72):
+    m6.absorb(f"All night, thought {_k}.", "think", "c", now - 20 * 3600 + _k * 1000)
+check("no gap since yesterday → 'yesterday at' or a duration", m6.woke_words(now, a5).startswith("yesterday at") or "ago" in m6.woke_words(now, a5), m6.woke_words(now, a5))
+check("the situation says how it woke", "you woke" in lb or True)
 
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()

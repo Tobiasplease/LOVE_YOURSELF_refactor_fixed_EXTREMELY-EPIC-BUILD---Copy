@@ -1604,3 +1604,4 @@ MIND_TEMPO = {
     "still": {"num_predict": 64, "short_p": 0.15, "temp_delta": -0.05},
     "plain": {"num_predict": 56, "short_p": 0.2, "temp_delta": 0.0},
 }
+MIND_WAKE_GAP_S = int(os.getenv("MIND_WAKE_GAP_S", 2700))  # a gap in the thread this long (45 min) = the machine was off; "woke" is the first thought after the last such gap
