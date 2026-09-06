@@ -229,6 +229,14 @@ class FakeIndexGet(FakeIndex):
     def get(self, include=None): return {"ids": list(self.docs.keys())}
 fi = FakeIndexGet(); fi.docs = dict(m2._index.docs); m2._index = fi
 check("reconcile adds what the index lacks", m2.reconcile_index() == 1 and fi.count() == 3)
+m2.thread.append({"ts": now - 9000, "kind": "look", "cue": "", "text": "A look in the same second as the older thought.", "subject": ""})
+m2.thread.append({"ts": now - 9000, "kind": "past", "cue": "", "text": "A duplicate id within one batch.", "subject": ""})
+n_added = m2.reconcile_index()
+check("same-second entries of different kinds both index; a repeat of an existing id is not re-added", n_added == 1 and fi.count() == 4, (n_added, fi.count()))
+m2.thread.append({"ts": now - 8000, "kind": "think", "cue": "", "text": "Two thinks in one second, first.", "subject": ""})
+m2.thread.append({"ts": now - 8000, "kind": "think", "cue": "", "text": "Two thinks in one second, second.", "subject": ""})
+m2.reconcile_index()
+check("in-batch duplicate ids are dropped rather than failing the batch", fi.count() == 5, fi.count())
 
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()

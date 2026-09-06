@@ -216,7 +216,7 @@ class Mind:
             have = set(idx.get(include=[])["ids"]) if idx.count() else set()
         except Exception:
             have = set()
-        missing = [e for e in self.thread if e.get("text") and e.get("kind") in _KEEP_KINDS and self._tid(e) not in have]
+        missing = [e for e in self.thread if e.get("text") and e.get("kind") in _KEEP_KINDS and self._tid(e) not in have and self._tid_old(e) not in have]
         for i in range(0, len(missing), 200):
             self._index_add(missing[i : i + 200])
         if missing:
@@ -225,13 +225,20 @@ class Mind:
 
     @staticmethod
     def _tid(entry: dict) -> str:
-        return f"t{int(float(entry.get('ts', 0)))}"
+        """Index id: second + kind initial (a look and a think can share a second)."""
+        return f"t{int(float(entry.get('ts', 0)))}{(entry.get('kind') or 'x')[0]}"
+
+    @staticmethod
+    def _tid_old(entry: dict) -> str:
+        return f"t{int(float(entry.get('ts', 0)))}"  # ids written before 03:10 Sep 6 — still count as present
 
     def _index_add(self, entries: List[dict]) -> None:
         idx = self.index()
         if not idx:
             return
         entries = [e for e in entries if e.get("text") and e.get("kind") in _KEEP_KINDS]
+        seen: set = set()
+        entries = [e for e in entries if not (self._tid(e) in seen or seen.add(self._tid(e)))]  # one id per batch
         if not entries:
             return
         try:
