@@ -784,9 +784,41 @@ class Mind:
                 items.append(f"{when_words(now - ts)}, the night's page ended — {last_sentence(e['text'])[:200]}")
         return items[-max_items:]
 
+    def person_since(self, now: float) -> str:
+        try:
+            from utils.episodic_log import episodic_log
+
+            ev = episodic_log.get_last_event("person_arrived")
+            return clock(float(ev["timestamp"])) if ev else "a moment ago"
+        except Exception:
+            return "a moment ago"
+
+    def person_history(self, now: float) -> str:
+        """Visits over the last days and what the machine has come to know of people — its own words."""
+        parts = []
+        try:
+            from utils.episodic_log import episodic_log
+
+            pairs = [p for p in episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=72 * 3600) if p.get("end")]
+            if pairs:
+                typical = dur_words(sorted(float(p.get("duration_seconds", 0)) for p in pairs)[len(pairs) // 2])
+                times = {1: "once", 2: "twice", 3: "three times"}.get(len(pairs), "several times")
+                parts.append(f"They've been by {times} in the last few days, usually for {typical}.")
+        except Exception:
+            pass
+        try:
+            from captioner.context_compression import context_compressor
+
+            ppl = (context_compressor.core_facts.get("people") or "").strip()
+            if len(ppl) > 8:
+                parts.append(f'What you know of them: "{ppl[:220]}"')
+        except Exception:
+            pass
+        return (" " + " ".join(parts)) if parts else ""
+
     def _people_line(self, now: float, agent) -> str:
         if getattr(agent, "_presence_believed", False):
-            return P("mind.life-people-now")
+            return P("mind.life-people-now").format(since=self.person_since(now), history=self.person_history(now))
         try:
             from utils.episodic_log import episodic_log
 
@@ -1275,7 +1307,19 @@ class Mind:
             pass
 
         believed = bool(getattr(agent, "_presence_believed", False))
-        someone = P("mind.someone") if believed else ""
+        someone = ""
+        lead = ""
+        if believed:
+            seen = ""
+            try:
+                from perception.presence_adjudicator import presence_adjudicator as _pa
+
+                d = (getattr(_pa, "last_person_desc", "") or "").strip().rstrip(".")
+                if d and now - float(getattr(_pa, "last_person_ts", 0.0) or 0.0) < 900:
+                    seen = " — " + (d[0].lower() + d[1:])
+            except Exception:
+                pass
+            lead = P("mind.someone-here").format(since=self.person_since(now), seen=seen)  # the person leads the cue
         memory = None
         uneventful = False
         if kind == "look":
@@ -1327,9 +1371,9 @@ class Mind:
                     if memory:
                         cue += P("mind.cue-recall").format(when=when_words(now - memory["ts"]), memory=memory["text"][:220])
                         print(f"[MIND] recall by association (d={memory.get('distance', 0):.2f}, {when_words(now - memory['ts'])}): {memory['text'][:70]}")
+        if lead:
+            cue = re.sub(r"^(\d\d:\d\d\.)", r"\1" + lead.replace("\\", "\\\\"), cue, count=1) if re.match(r"^\d\d:\d\d\.", cue) else lead.strip() + " " + cue
         if kind == "think":
-            if believed:
-                cue += someone  # the person is in the room on think turns too, not only when the eyes are open
             cue += self._felt_shift()
             cue += self._tone_notice()
             cue += self.time_edges(now, agent)

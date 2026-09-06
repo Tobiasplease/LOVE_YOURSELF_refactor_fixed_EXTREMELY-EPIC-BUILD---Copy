@@ -301,6 +301,8 @@ class PresenceAdjudicatorThread(threading.Thread):
                 {"event": "presence_adjudication", "verdict": verdict or "none", "description": desc},
                 print_message=None,
             )
+            if verdict == "person":
+                self.last_person_desc, self.last_person_ts = (desc or "")[:160], time.time()  # what the machine saw of them (mind mode, Sep 6)
         except Exception:
             pass
 

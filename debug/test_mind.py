@@ -117,7 +117,7 @@ check("'haven't looked this way' only for a first sighting", "haven't looked" in
 a2 = Agent()
 a2._presence_believed = True
 look2 = m.build("look", now, a2, {}, "/tmp/x.jpg")
-check("someone-here rides only when believed", "Someone is here" in look2["user"] and "Someone is here" not in look["user"])
+check("someone-here leads the cue only when believed", look2["cue"].index("Someone is here") < look2["cue"].index("You look") and "Someone is here" not in look["user"], look2["cue"])
 a3 = Agent()
 a3._salience_event = "Something just moved in front of you."
 look3 = m.build("look", now, a3, {}, "/tmp/x.jpg")
@@ -341,7 +341,7 @@ check("after a reflection: a new thread's room", m2.build("think", now, Agent(),
 m3, _ = fresh_mind(); m3.absorb("A thought.", "think", "c", now - 60)
 _t3 = m3.build("think", now, Agent(), {}, None)
 check("a think without an event is plain, still, or a new thread (a time edge counts)", _t3["tempo"] in ("plain", "still", "new_thread") and (_t3["tempo"] != "new_thread" or "since" in _t3["user"]), (_t3["tempo"], _t3["user"][-90:]))
-ev = m.events_today(now, Agent())
+ev = m.events_today(now, Agent(), max_events=8)
 check("events today is a list of clocked events (the page counts)", any("wrote a page" in x for x in ev), ev)
 lt = time.localtime(now); midnight = now - (lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec)
 m5, _ = fresh_mind()

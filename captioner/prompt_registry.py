@@ -775,7 +775,20 @@ FRAGMENTS = {
         "placeholders": ["times", "last_ago", "duration"],
     },
     "mind.life-people-none": {"title": "Life — nobody today", "text": "No one has been in today.", "used_by": ["mind"]},
-    "mind.life-people-now": {"title": "Life — someone here", "text": "Someone is in the room now.", "used_by": ["mind"]},
+    "mind.life-people-now": {
+        "title": "Life — someone here, and what you know of them",
+        "text": "Someone is in the room now, since {since}.{history}",
+        "note": "RELATIONAL (Sep 6 16:10, artist: 'the relational mode should activate and inform the prompting based on our collected person data and history'). since = the arrival clock; history = visits over the last days and the compressor's people fact, in the machine's words.",
+        "used_by": ["mind"],
+        "placeholders": ["since", "history"],
+    },
+    "mind.someone-here": {
+        "title": "Cue — someone is here (leads the cue)",
+        "text": " Someone is here, since {since}{seen}.",
+        "note": "While the belief is ON this leads every cue, before the look or the premise; seen = what the adjudicator saw of them (' — a person sits at a desk, arms raised').",
+        "used_by": ["mind"],
+        "placeholders": ["since", "seen"],
+    },
     "mind.life-drawings": {
         "title": "Life — drawings",
         "text": "You've drawn {count} times in all; the last, {age}: {desc}.",

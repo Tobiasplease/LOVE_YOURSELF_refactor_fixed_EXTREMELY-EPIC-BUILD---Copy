@@ -1803,7 +1803,7 @@ class Captioner(MemoryMixin):
         if kind == "look":
             mind.note_look(now)  # the look happened whether or not what it said is kept
         _bare = (caption or "").strip()
-        _beat = mind.beat_of(_raw) if (self.first_caption_done and not _ifr(_raw) and kind == "think") else None
+        _beat = mind.beat_of(_raw) if (self.first_caption_done and not _ifr(_raw) and (kind == "think" or not (_raw or "").strip() or all(c in ".…·-— " for c in (_raw or "").strip()))) else None  # a silent look prints "…" too
         if _beat is not None and (len(_beat) <= 3 or not self._caption_reject_reason(_beat, "")):
             # a beat: a word, a clause, or "…" — kept in the text as rhythm, not dropped as silence (Sep 6 12:20)
             mind.absorb(_beat, kind, call["cue"], now)
