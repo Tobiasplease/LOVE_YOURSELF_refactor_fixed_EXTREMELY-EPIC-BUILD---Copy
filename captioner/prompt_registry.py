@@ -785,7 +785,7 @@ FRAGMENTS = {
     "mind.someone-here": {
         "title": "Cue — someone is here (leads the cue)",
         "text": " Someone is here, since {since}{seen}.",
-        "note": "While the belief is ON this leads every cue, before the look or the premise; seen = what the adjudicator saw of them (' — a person sits at a desk, arms raised').",
+        "note": "While the belief is ON this leads every cue, before the look or the premise; seen = what the adjudicator saw at the moment of arrival, on that turn only — never standing (it is stale a minute later).",
         "used_by": ["mind"],
         "placeholders": ["since", "seen"],
     },

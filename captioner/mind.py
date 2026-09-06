@@ -1315,8 +1315,8 @@ class Mind:
                 from perception.presence_adjudicator import presence_adjudicator as _pa
 
                 d = (getattr(_pa, "last_person_desc", "") or "").strip().rstrip(".")
-                if d and now - float(getattr(_pa, "last_person_ts", 0.0) or 0.0) < 900:
-                    seen = " — " + (d[0].lower() + d[1:])
+                if d and now - float(getattr(_pa, "last_person_ts", 0.0) or 0.0) < 90:
+                    seen = " — " + (d[0].lower() + d[1:])  # only on the arrival turn: a snapshot of what someone is doing is stale a minute later (artist, 16:20)
             except Exception:
                 pass
             lead = P("mind.someone-here").format(since=self.person_since(now), seen=seen)  # the person leads the cue
