@@ -1800,7 +1800,7 @@ class Captioner(MemoryMixin):
             mind.note_look(now)  # the look happened whether or not what it said is kept
         _bare = (caption or "").strip()
         _beat = mind.beat_of(_raw) if (self.first_caption_done and not _ifr(_raw) and kind == "think") else None
-        if _beat is not None and not self._caption_reject_reason(_beat, "") if len(_beat) > 3 else _beat is not None:
+        if _beat is not None and (len(_beat) <= 3 or not self._caption_reject_reason(_beat, "")):
             # a beat: a word, a clause, or "…" — kept in the text as rhythm, not dropped as silence (Sep 6 12:20)
             mind.absorb(_beat, kind, call["cue"], now)
             log_json_entry(LogType.CAPTION, {"caption": _beat, "mode": "beat", "mood": self.current_mood, "beat": True}, print_message=_beat)
