@@ -1665,4 +1665,4 @@ class ContextCompressionEngine:
 
 
 # Global instance - compress every 8 captions (~80s) instead of every 3 (~30s)
-context_compressor = ContextCompressionEngine(compression_frequency=8)
+context_compressor = ContextCompressionEngine(compression_frequency=int(getattr(config, "COMPRESSION_FREQUENCY", 8)))
