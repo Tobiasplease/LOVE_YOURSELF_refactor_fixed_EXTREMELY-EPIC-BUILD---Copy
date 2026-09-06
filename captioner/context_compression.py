@@ -6,6 +6,7 @@ Prevents repetition by building understanding that carries forward.
 """
 
 import json
+import re
 import os
 import queue
 import threading
@@ -1425,7 +1426,8 @@ class ContextCompressionEngine:
         if held:
             felt = ""
         tone = parsed.get("tone", "").strip().strip("\"'").rstrip(".").strip()
-        if not (tone and 1 <= len(tone.split()) <= 8) or self._none_like(tone):
+        # a voice is a few words; "precise definition of physical states" is a content pattern and, fed back, a directive (12:40 Sep 6 spiral)
+        if not (tone and 1 <= len(tone.split()) <= 4) or self._none_like(tone) or re.search(r"\b(of|from|with|about|on|to)\b", tone.lower()):
             tone = ""
         self.last_mood_read = {
             "valence": valence if valence is not None else 0.0,

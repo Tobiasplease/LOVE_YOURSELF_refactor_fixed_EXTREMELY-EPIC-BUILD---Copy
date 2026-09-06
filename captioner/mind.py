@@ -419,7 +419,23 @@ class Mind:
                     break
                 if e.get("kind") in ("think", "reflection", "wake", "memory"):
                     return last_sentence(e.get("text", ""))[:200]
-        return last_sentence(last.get("text", ""))[:200]
+        prem = last_sentence(last.get("text", ""))[:200]
+        if len(prem.split()) <= 3:
+            # a one-word premise + "go on" reads as "define it" (12:36 Sep 6: "Scattering." → "Scattering is a loss of coherence.");
+            # a beat carries the two sentences before it, so there is a thought to continue
+            parts = [p for p in _SENT_END_RE.split((last.get("text") or "").strip()) if p.strip()]
+            tail = " ".join(parts[-3:]) if len(parts) > 1 else ""
+            if len(tail.split()) <= 4:
+                for e in reversed(self.thread[:-1]):
+                    if now - e.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
+                        break
+                    if e.get("kind") in ("think", "look", "reflection", "wake", "memory") and e.get("text"):
+                        prev = [p for p in _SENT_END_RE.split(e["text"].strip()) if p.strip()]
+                        tail = (" ".join(prev[-2:]) + " " + prem).strip()
+                        break
+            if tail:
+                prem = tail[-240:]
+        return prem
 
     def recent_turns(self, now: Optional[float] = None) -> List[dict]:
         now = now or time.time()
@@ -1014,6 +1030,27 @@ class Mind:
         except Exception:
             return ""
 
+    def _tone_locked(self, tone: str) -> bool:
+        """Has one word run through the last three tone reads? Then the standing
+        line would only deepen the groove: it leaves the frame, and the cue
+        says it back once (mind.tone-held)."""
+        hist = list(getattr(self, "_tone_hist", []) or [])
+        if not hist or hist[-1] != tone:
+            hist.append(tone)
+            self._tone_hist = hist[-3:]
+        words = [set(w for w in _WORD_RE.findall(t.lower()) if len(w) > 3) for t in self._tone_hist]
+        locked = len(words) >= 3 and bool(words[0] & words[1] & words[2])
+        if locked and not getattr(self, "_tone_notice_pending", False) and getattr(self, "_tone_noticed_for", "") != tone:
+            self._tone_notice_pending = True
+            self._tone_noticed_for = tone
+        return locked
+
+    def _tone_notice(self) -> str:
+        if getattr(self, "_tone_notice_pending", False):
+            self._tone_notice_pending = False
+            return P("mind.tone-held").format(tone=getattr(self, "_tone_noticed_for", ""))
+        return ""
+
     def _felt_shift(self) -> str:
         """The felt loop as an event: rides once when the compressor's felt word changes."""
         try:
@@ -1090,7 +1127,7 @@ class Mind:
                         pass
                 try:
                     tone = (_cc.get_tone() or "").strip()
-                    if tone:
+                    if tone and not self._tone_locked(tone):
                         system += P("monologue.tone-frame").format(tone=tone)  # the recursive read of the manner, at frame level
                 except Exception:
                     pass
@@ -1151,6 +1188,7 @@ class Mind:
                         print(f"[MIND] recall by association (d={memory.get('distance', 0):.2f}, {when_words(now - memory['ts'])}): {memory['text'][:70]}")
         if kind == "think":
             cue += self._felt_shift()
+            cue += self._tone_notice()
             cue += self.time_edges(now, agent)
             cue += self._loop_line(agent)
             if not memory:
