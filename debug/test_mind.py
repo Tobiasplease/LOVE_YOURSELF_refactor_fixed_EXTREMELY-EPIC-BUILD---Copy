@@ -320,7 +320,7 @@ check("pages replace the record of lines", "The last hour, as you wrote it:" in 
 sysr = get_reflection_system_prompt("the room")
 check("the reflection frame is the page's voice", "step back from the page" in sysr and "stepped back from the stream" not in sysr, sysr[-160:])
 rf = open("captioner/reflection.py", encoding="utf-8").read()
-check("the whole reflection enters the thread", 'absorb(text[:1500], "reflection"' in rf and 'data["pages"] = _Mind.running_text' in rf)
+check("the whole reflection enters the thread, whole sentences", 'absorb(_page, "reflection"' in rf and 'data["pages"] = _Mind.running_text' in rf)
 
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()
@@ -438,7 +438,7 @@ check("backfill runs once", m4.backfill(log_dir=d, now=now) == 0)
 mem = m4.choose_memory(now, believed=False)
 check("a past thought can surface as a memory", mem is not None and "white heads" in mem["text"])
 rf = open("captioner/reflection.py", encoding="utf-8").read()
-check("reflection kernels enter the thread", 'absorb(kernel.strip(), "reflection"' in rf)
+check("the kernel no longer doubles into the thread (it rides the stream)", 'the kernel only rides the stream' in rf and 'absorb(kernel.strip(), "reflection"' not in rf)
 
 print("\n[7c] recall gate")
 m, M = fresh_mind()

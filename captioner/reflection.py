@@ -549,7 +549,11 @@ class ReflectionLoop:
                 if _mind is not None and self.agent._mind_on():
                     from captioner.prompt_registry import P as _P
 
-                    _mind.absorb(text[:1500], "reflection", _P("mind.cue-reflection").format(clock=time.strftime("%H:%M")), time.time())  # the page gets the whole paragraph (Sep 6)
+                    _page = text[:1500]
+                    _cut = max(_page.rfind("."), _page.rfind("!"), _page.rfind("?"), _page.rfind("…"))
+                    if _cut > 40:
+                        _page = _page[: _cut + 1]  # the budget cuts mid-sentence; the page keeps whole sentences
+                    _mind.absorb(_page, "reflection", _P("mind.cue-reflection").format(clock=time.strftime("%H:%M")), time.time())  # the page gets the whole paragraph (Sep 6)
             except Exception:
                 pass
         except Exception as e:
