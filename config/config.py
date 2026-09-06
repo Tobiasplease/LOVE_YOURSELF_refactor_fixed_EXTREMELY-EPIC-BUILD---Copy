@@ -1552,3 +1552,4 @@ MIND_RECALL_ENABLED = os.getenv("MIND_RECALL_ENABLED", "true").lower() in ("true
 MIND_RECALL_MAX_DIST = float(os.getenv("MIND_RECALL_MAX_DIST", 0.5))  # cosine distance ceiling for a past thought to surface
 MIND_RECALL_COOLDOWN_S = int(os.getenv("MIND_RECALL_COOLDOWN_S", 3600))  # a memory surfaces at most once an hour
 MIND_LIFE_BEFORE_MAX_AGE_S = int(os.getenv("MIND_LIFE_BEFORE_MAX_AGE_S", 2 * 86400))  # continuity quote: the last thought of the previous chain, if this recent
+MIND_INDEX_RETRY_S = float(os.getenv("MIND_INDEX_RETRY_S", 60))  # the thoughts index never latches to "failed"

@@ -191,16 +191,37 @@ class Mind:
 
     # ---- recall by association (ChromaDB "thoughts") ------------------------------
     def index(self):
-        if self._index is None and getattr(config, "MIND_RECALL_ENABLED", True):
+        """The "thoughts" collection. A failure never latches: retried after
+        MIND_INDEX_RETRY_S (03:05 Sep 6: 304 of 404 entries were missing —
+        one early error had switched indexing off for whole runs). On first
+        success the index is reconciled against the thread."""
+        if self._index is None and getattr(config, "MIND_RECALL_ENABLED", True) and time.time() >= getattr(self, "_index_retry_at", 0.0):
             try:
                 from captioner.semantic_memory import get_semantic_memory
 
                 self._index = get_semantic_memory()._client.get_or_create_collection(name="thoughts", metadata={"hnsw:space": "cosine"})
-                if self._index.count() == 0 and self.thread:
-                    self.reindex()
-            except Exception:
-                self._index = False
+                self.reconcile_index()
+            except Exception as e:  # noqa: BLE001
+                self._index = None
+                self._index_retry_at = time.time() + float(getattr(config, "MIND_INDEX_RETRY_S", 60))
+                print(f"[MIND] thoughts index unavailable ({e}); retrying in a minute")
         return self._index or None
+
+    def reconcile_index(self) -> int:
+        """Add every eligible thread entry the index doesn't hold yet."""
+        idx = self._index
+        if not idx:
+            return 0
+        try:
+            have = set(idx.get(include=[])["ids"]) if idx.count() else set()
+        except Exception:
+            have = set()
+        missing = [e for e in self.thread if e.get("text") and e.get("kind") in _KEEP_KINDS and self._tid(e) not in have]
+        for i in range(0, len(missing), 200):
+            self._index_add(missing[i : i + 200])
+        if missing:
+            print(f"[MIND] thoughts index reconciled: +{len(missing)} (now {idx.count()})")
+        return len(missing)
 
     @staticmethod
     def _tid(entry: dict) -> str:
@@ -219,8 +240,8 @@ class Mind:
                 documents=[e["text"][:600] for e in entries],
                 metadatas=[{"ts": float(e.get("ts", 0)), "kind": e.get("kind", "")} for e in entries],
             )
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            print(f"[MIND] thoughts index write failed ({e})")
 
     def reindex(self) -> int:
         entries = [e for e in self.thread if e.get("text") and e.get("kind") in _KEEP_KINDS]

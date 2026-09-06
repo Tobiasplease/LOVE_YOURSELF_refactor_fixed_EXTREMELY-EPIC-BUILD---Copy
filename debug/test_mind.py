@@ -224,6 +224,11 @@ m2.absorb("A new chain starts here.", "think", "c", now - 100)
 lb = m2.life_block(now, Agent())
 check("the previous chain's last thought rides as continuity", "you'd got to" in lb and "ended on the lamp" in lb, lb[-160:])
 check("indexed on absorb", m2._index.count() == 2)
+m2.thread.append({"ts": now - 9000, "kind": "past", "cue": "", "text": "An older thought that never reached the index.", "subject": ""})
+class FakeIndexGet(FakeIndex):
+    def get(self, include=None): return {"ids": list(self.docs.keys())}
+fi = FakeIndexGet(); fi.docs = dict(m2._index.docs); m2._index = fi
+check("reconcile adds what the index lacks", m2.reconcile_index() == 1 and fi.count() == 3)
 
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()
