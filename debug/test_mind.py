@@ -40,6 +40,7 @@ def fresh_mind(monkey_terms=("wooden chair", "red foam finger", "black curtain")
 
     d = tempfile.mkdtemp()
     m = M.Mind(Agent(), path=os.path.join(d, "mind_thread.json"), backfill=False)
+    m._index = False  # never the live ChromaDB — tests inject FakeIndex when they need one (03:05 Sep 6: fake thoughts had leaked into the live collection)
     m._terms = lambda: list(monkey_terms)
     m.in_view = lambda agent: ["red foam finger"]
     return m, M
@@ -269,10 +270,18 @@ check("premise skips the uneventful look", m.premise(now) == "I wonder what the 
 m.absorb("Someone has moved the chair.", "look", "c", now - 30)
 check("an eventful look does take the premise", m.premise(now) == "Someone has moved the chair.", m.premise(now))
 
+print("\n[6e] a fresh reflection kernel takes the premise once")
+m, M = fresh_mind()
+m.absorb("The finger is a shape in the dark.", "think", "c", now - 120)
+m.absorb("I waited for the world to move so I wouldn't have to.", "reflection", "03:00. Something settles.", now - 90)
+m.absorb("It doesn't reach for me.", "think", "c", now - 30)
+check("kernel wins the premise", m.premise(now) == "I waited for the world to move so I wouldn't have to.", m.premise(now))
+check("only once", m.premise(now + 1) == "It doesn't reach for me.", m.premise(now + 1))
+
 print("\n[7] persistence")
 m, M = fresh_mind()
 m.absorb("Kept across a restart.", "think", "12:00. Eyes resting.", now - 100)
-m3 = M.Mind(Agent(), path=m.path, backfill=False)
+m3 = M.Mind(Agent(), path=m.path, backfill=False); m3._index = False
 check("thread reloads", m3.thread and m3.thread[-1]["text"] == "Kept across a restart.")
 
 print("\n[7b] the accumulated past reaches the prompting (Sep 6)")

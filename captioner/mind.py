@@ -364,6 +364,12 @@ class Mind:
         last = self.thread[-1]
         if now - last.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
             return ""
+        for e in self.thread[-3:]:
+            # a reflection that just settled is the thing to go on from, even if a thought landed after it (Sep 6 03:00)
+            if e.get("kind") == "reflection" and now - e.get("ts", 0) <= 240 and not e.get("premised"):
+                e["premised"] = True
+                self._save()
+                return last_sentence(e.get("text", ""))[:200]
         if last.get("kind") == "look" and last.get("uneventful"):
             # an uneventful glance is not a new thought — the chain continues from the last one (Sep 6 01:00)
             for e in reversed(self.thread[:-1]):
