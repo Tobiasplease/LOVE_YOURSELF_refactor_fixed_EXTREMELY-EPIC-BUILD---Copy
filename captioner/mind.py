@@ -1144,8 +1144,10 @@ class Mind:
                         pass
                 try:
                     tone = (_cc.get_tone() or "").strip()
-                    if tone and not self._tone_locked(tone):
-                        system += P("monologue.tone-frame").format(tone=tone)  # the recursive read of the manner, at frame level
+                    if tone and self._tone_locked(tone):
+                        pass  # the read still feeds the noticing (mind.tone-held) even with the standing line off
+                    elif tone and getattr(config, "MIND_TONE_FRAME", False):
+                        system += P("monologue.tone-frame").format(tone=tone)
                 except Exception:
                     pass
         except Exception:
@@ -1161,7 +1163,7 @@ class Mind:
             if event:
                 cue = P("mind.cue-look-event").format(clock=clock(now), event=str(event).strip(), someone=someone)
             else:
-                placed = self.in_view_placed(agent)[:3]
+                placed = self.in_view_placed(agent)[: int(getattr(config, "MIND_VIEW_NAMED", 2))]
                 terms = [t for t, _ in placed] if placed else self.in_view(agent)
                 if placed:
                     groups: Dict[str, List[str]] = {}

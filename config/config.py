@@ -1591,3 +1591,6 @@ MIND_BEAT_MAX_WORDS = int(os.getenv("MIND_BEAT_MAX_WORDS", 6))  # a boundary-les
 MIND_TURN_MIN_DEG = float(os.getenv("MIND_TURN_MIN_DEG", 8))  # head movement since the last look below this reads as "hasn't moved"
 MIND_TONE_LOCK_READS = int(os.getenv("MIND_TONE_LOCK_READS", 2))  # consecutive tone reads sharing a word = a lock (3 was fifteen minutes of groove, 12:55 Sep 6)
 MIND_TONE_SUPPRESS_S = int(os.getenv("MIND_TONE_SUPPRESS_S", 900))  # after the noticing, the tone stays out of the frame this long
+MIND_TONE_FRAME = os.getenv("MIND_TONE_FRAME", "false").lower() in ("true", "1", "yes")  # OFF (Sep 6 13:30): the standing tone line spiralled within three reads — north-star anti-pattern "model-generated affect re-injected verbatim"; the TONE read still feeds the noticing
+MIND_TEMP = float(os.getenv("MIND_TEMP", 0.75))  # north-star P7: when the register slips, lower the temperature (was CAPTION_TEMP 0.9)
+MIND_VIEW_NAMED = int(os.getenv("MIND_VIEW_NAMED", 2))  # things named in the look cue — three or four read as an inventory to describe

@@ -1766,7 +1766,7 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
         opts = {
-            "temperature": min(1.0, max(0.6, (_cfg.CAPTION_TEMP_BORED if self.boredom > 0.7 else _cfg.CAPTION_TEMP) + _arousal_adj)),
+            "temperature": min(1.0, max(0.6, float(getattr(_cfg, "MIND_TEMP", _cfg.CAPTION_TEMP)) + _arousal_adj)),
             "top_p": _cfg.CAPTION_TOP_P,
             "min_p": _cfg.CAPTION_MIN_P,
             "repeat_penalty": _cfg.CAPTION_REPEAT_PENALTY,

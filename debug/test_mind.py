@@ -267,7 +267,10 @@ check("tone stored with the read", _cc.get_tone() == "clipped, impatient, circli
 _cc.set_felt_state("frustrated")
 m, M = fresh_mind()
 call = m.build("think", now, Agent(), {}, None)
-check("frame carries the felt word and the tone", "Right now: frustrated." in call["system"] and "Your voice right now: clipped, impatient, circling." in call["system"], call["system"][-160:])
+check("frame carries the felt word; the standing tone line is off by default", "Right now: frustrated." in call["system"] and "Your voice right now" not in call["system"], call["system"][-160:])
+C.MIND_TONE_FRAME = True
+check("the tone line is one config flag away", "Your voice right now: clipped, impatient, circling." in m.build("think", now, Agent(), {}, None)["system"])
+C.MIND_TONE_FRAME = False
 
 print("\n[5e] the tone loop has a counter-force")
 m, M = fresh_mind()
@@ -327,7 +330,7 @@ check("head hasn't moved", "hasn't moved" in m.turn_report((122.0, 131.0)))
 m.in_view = lambda agent: ["red foam finger", "black cloth bag", "wooden chair"]
 m.in_view_placed = lambda agent: [("red foam finger", "high to your right"), ("black cloth bag", "high to your right"), ("wooden chair", "low to your left")]
 lk = m.build("look", now, Agent(), {}, "/tmp/x.jpg")
-check("look cue: placement grouped inside the look sentence", "You look at the red foam finger and the black cloth bag high to your right; the wooden chair low to your left." in lk["user"], lk["user"])
+check("look cue: at most two things, placed, inside the look sentence", "You look at the red foam finger and the black cloth bag high to your right." in lk["cue"] and "wooden chair" not in lk["cue"], lk["cue"])
 check("beats: '…' kept", M.Mind.beat_of("...") == "…" and M.Mind.beat_of("") == "…")
 check("beats: a short fragment kept as itself", M.Mind.beat_of("The pen is still") == "The pen is still")
 check("beats: a long cut fragment becomes …", M.Mind.beat_of("The pen is still sitting there on the desk waiting for a hand that") == "…")
