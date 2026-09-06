@@ -440,7 +440,8 @@ class Mind:
             if not t or e.get("kind") in ("record", "past"):
                 continue
             ts = float(e.get("ts", 0))
-            if not paras or (last_ts is not None and (ts - last_ts >= 180 or e.get("kind") in ("look", "reflection", "wake", "dream"))):
+            if not paras or (last_ts is not None and (ts - last_ts >= 180 or e.get("kind") in ("reflection", "wake", "dream"))):
+                # a look does NOT break the paragraph (Sep 6 12:20): entries follow each other; only a gap or a settling does
                 paras.append([])
             paras[-1].append(t)
             last_ts = ts
@@ -706,6 +707,47 @@ class Mind:
         except Exception:
             return ""
 
+    # ---- the body: direction words in the gaze code's own convention -----------------
+    @staticmethod
+    def _dir_words(pan: float, tilt: float, pan_center: float = 90.0, tilt_center: float = 107.5, thr: float = 8.0) -> str:
+        h = "left" if pan - pan_center < -thr else ("right" if pan - pan_center > thr else "")
+        v = "down" if tilt - tilt_center < -thr else ("up" if tilt - tilt_center > thr else "")
+        return f"{v}-{h}" if v and h else (v or h or "ahead")
+
+    @staticmethod
+    def placement_words(pan: float, tilt: float, thr: float = 8.0) -> str:
+        """Where a thing sits relative to the body: 'high to your right', 'low ahead', 'to your left'."""
+        h = "to your left" if pan - 90.0 < -thr else ("to your right" if pan - 90.0 > thr else "ahead")
+        v = "low" if tilt - 107.5 < -thr else ("high" if tilt - 107.5 > thr else "")
+        return f"{v} {h}".strip()
+
+    def turn_report(self, pose: Optional[tuple]) -> str:
+        """Since the last look: turned which way, or not at all. A sense report, one clause."""
+        if not pose:
+            return ""
+        last = getattr(self, "_last_look_pose", None)
+        self._last_look_pose = pose
+        if not last:
+            return ""
+        dp, dt = float(pose[0]) - float(last[0]), float(pose[1]) - float(last[1])
+        thr = float(getattr(config, "MIND_TURN_MIN_DEG", 8))
+        if abs(dp) < thr and abs(dt) < thr:
+            return P("mind.head-still")
+        h = "to your left" if dp < -thr else ("to your right" if dp > thr else "")
+        v = "up" if dt > thr else ("down" if dt < -thr else "")
+        direction = " and ".join(x for x in (h, v) if x)
+        return P("mind.turned").format(direction=direction)
+
+    def in_view_placed(self, agent) -> List[tuple]:
+        """(term, placement words) for the things in view, most familiar first."""
+        try:
+            from perception.spatial_registry import spatial_registry
+
+            entries = spatial_registry.get_entries() or {}
+            return [(t, self.placement_words(float(entries[t].get("pan", 90)), float(entries[t].get("tilt", 107.5)))) for t in self.in_view(agent) if t in entries]
+        except Exception:
+            return []
+
     # ---- what a look lands on --------------------------------------------------
     def in_view(self, agent) -> List[str]:
         try:
@@ -868,6 +910,25 @@ class Mind:
             return st
         except Exception:
             return {}
+
+    @staticmethod
+    def beat_of(raw: str) -> Optional[str]:
+        """Rhythm (Sep 6, artist: 'some captions should be a single word or even just …'):
+        an all-punctuation reply, or a short boundary-less fragment, is kept as a
+        beat in the text instead of being dropped as silence. Returns the beat
+        text, or None when the reply is a normal thought."""
+        t = (raw or "").strip()
+        if not t:
+            return "…"
+        if all(c in ".…·-— " for c in t):
+            return "…"
+        has_end = any(c in t for c in ".!?…")
+        words = t.split()
+        if not has_end and len(words) <= int(getattr(config, "MIND_BEAT_MAX_WORDS", 6)):
+            return t
+        if not has_end:
+            return "…"
+        return None
 
     def note_look(self, now: float) -> None:
         """A look happened, stored or not — the look timer advances either way
@@ -1053,6 +1114,17 @@ class Mind:
                 if verdict in ("new", "baselined") and not self._seen_this_session(terms, agent):
                     change = P("mind.change-new")  # honest only when nothing in view was seen this session (the referee keys by gaze cell)
                 cue = P("mind.cue-look").format(clock=clock(now), where=where, change=change, someone=someone)
+            try:
+                from vision.gaze import get_gaze_state
+
+                g = get_gaze_state()
+                pose = (float(g.get("pan", 90)), float(g.get("tilt", 107.5)))
+            except Exception:
+                pose = None
+            cue += self.turn_report(pose)
+            placed = self.in_view_placed(agent)
+            if placed:
+                cue += P("mind.placement").format(placements=", ".join(f"the {t} {w}" for t, w in placed[:3]))
         else:
             self.think_count += 1
             n = int(config.MIND_MEMORY_EVERY_N)

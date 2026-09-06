@@ -99,7 +99,7 @@ roles = [t["role"] for t in call["turns"]]
 check("text shape: life, then ONE running text", roles == ["user", "assistant"], roles)
 body = call["turns"][1]["content"]
 check("text shape: no cues, no stamps in the text", "You wake" not in body and "Eyes resting" not in body and not re.search(r"\d\d:\d\d", body))
-check("text shape: a look starts a new paragraph", "\n\nThe chair is empty" in body, body)
+check("text shape: a look does NOT break the paragraph (entries follow each other)", "\n\nThe chair is empty" not in body and "The chair is empty" in body, body)
 check("text shape: the cue is the user turn", call["user"].startswith(time.strftime("%H:%M", time.localtime(now))))
 check("think turn carries no image", call["image"] is None)
 check("current cue has the clock", re.match(r"\d\d:\d\d\. ", call["user"]) is not None, call["user"][:30])
@@ -289,6 +289,23 @@ check("belief edge → look", m.next_kind(now, {}, a) == "look")
 check("rest interval ≈ MIND_THINK_INTERVAL_S × felt", 20 <= m.interval(now, Agent()) <= 200, m.interval(now, Agent()))
 a._salience_hot = True
 check("hot interval = CAPTION_INTERVAL_LIVE", m.interval(now, a) == float(C.CAPTION_INTERVAL_LIVE))
+
+print("\n[6a] the body in the look cue")
+m, M = fresh_mind()
+check("placement words: high to your right", M.Mind.placement_words(125, 125) == "high to your right")
+check("placement words: low ahead", M.Mind.placement_words(90, 80) == "low ahead")
+check("placement words: to your left", M.Mind.placement_words(60, 107) == "to your left")
+check("first look: no turn report", m.turn_report((90.0, 107.5)) == "")
+check("turned to the right and up", "turned to your right and up" in m.turn_report((120.0, 130.0)))
+check("head hasn't moved", "hasn't moved" in m.turn_report((122.0, 131.0)))
+m.in_view = lambda agent: ["red foam finger"]
+m.in_view_placed = lambda agent: [("red foam finger", "high to your right")]
+lk = m.build("look", now, Agent(), {}, "/tmp/x.jpg")
+check("look cue: the look first, the body after", lk["user"].index("You look") < lk["user"].index("the red foam finger high to your right"), lk["user"])
+check("beats: '…' kept", M.Mind.beat_of("...") == "…" and M.Mind.beat_of("") == "…")
+check("beats: a short fragment kept as itself", M.Mind.beat_of("The pen is still") == "The pen is still")
+check("beats: a long cut fragment becomes …", M.Mind.beat_of("The pen is still sitting there on the desk waiting for a hand that") == "…")
+check("a whole thought is not a beat", M.Mind.beat_of("The pen is still. It waits.") is None)
 
 print("\n[6b] the look timer advances even when the look is not kept")
 m, M = fresh_mind()

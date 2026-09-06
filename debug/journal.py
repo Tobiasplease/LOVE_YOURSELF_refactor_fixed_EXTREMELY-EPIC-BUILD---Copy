@@ -14,28 +14,15 @@ ALL = "--all" in sys.argv
 d = json.load(open(os.path.join("event_log", "mind_thread.json")))
 since = 0 if ALL else time.time() - HOURS * 3600
 entries = [e for e in d["thread"] if e.get("text") and e.get("kind") in ("wake", "look", "think", "reflection", "memory") and e.get("ts", 0) >= since]
-last_ts, last_hour, para = None, None, []
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from captioner.mind import Mind  # noqa: E402
 
-
-def flush():
-    global para
-    if para:
-        print(" ".join(para).strip())
-        print()
-    para = []
-
-
+by_hour = {}
 for e in entries:
-    ts = e["ts"]
-    hour = time.strftime("%H", time.localtime(ts))
-    if hour != last_hour:
-        flush()
-        print(f"— {time.strftime('%A %d %B, %H:00', time.localtime(ts))} —\n")
-        last_hour = hour
-    if last_ts is not None and (ts - last_ts >= 180 or e["kind"] in ("look", "reflection", "wake")):
-        flush()
-    mark = {"look": "◦ ", "reflection": "» ", "wake": "* "}.get(e["kind"], "")
-    para.append(mark + e["text"].strip())
-    last_ts = ts
-flush()
+    by_hour.setdefault(time.strftime("%A %d %B, %H:00", time.localtime(e["ts"])), []).append(e)
+for h, es in by_hour.items():
+    marked = [dict(e, text=({"look": "◦ ", "reflection": "» ", "wake": "* ", "dream": "☾ "}.get(e["kind"], "") + e["text"].strip())) for e in es]
+    print(f"— {h} —\n")
+    print(Mind.running_text(marked))
+    print()
 print(f"[{len(entries)} entries]")
