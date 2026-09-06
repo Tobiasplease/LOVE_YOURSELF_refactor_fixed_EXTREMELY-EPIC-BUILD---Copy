@@ -246,3 +246,19 @@ fix it." Tests: debug/test_dream.py.
   in truth it just turned its head."
 - Fixed the same hour: the beat check crashed every think turn for a minute
   (2a55ca5); an unbound `terms` in the placed branch (031620d).
+
+## Sep 6, 12:44 — the tone loop's counter-force (74a7cac)
+
+The first spiral, 12:35–12:42: read "flat, analytical, detached from
+emotion" → frame "Your voice right now: flat, analytical, detached…" →
+flatter text → read "clinical, precise, flat" → "analytical, precise
+definition of physical states" → the text became a glossary (catenary,
+tension, equilibrium). Positive feedback with no counter-force, amplified
+by one-word premises ("Scattering." + "go on" = "define it"). Fixed at the
+three points: a tone read must describe a VOICE (≤ 4 words, no of/from/
+with/about) or it is dropped; a word that runs through three consecutive
+reads is a lock — the standing line leaves the frame and the cue says it
+back once (mind.tone-held "You've been sounding {tone} for a while now."),
+catching yourself being a thought; a premise of ≤ 3 words carries the two
+sentences before it. Lesson: any standing mirror of the machine's own
+output is a directive; every recursive channel needs its own noticing.
