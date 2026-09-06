@@ -1773,3 +1773,10 @@ sources `mood.cadence()` (interval, budget, short beats, look rate, heat)
 when MOOD_ENABLED; `Mind.next_kind` applies look_mult; `_mind_generate`
 applies temp_delta; the compressor's FELT ask carries `situation_line`; the
 frame adds monologue.felt-held. Persisted in mind_thread.json "mood".
+
+## Dream pass (Sep 6) — captioner/dream.py
+Nightly (DREAM_HOUR..DREAM_HOUR_END, still + alone), from `_mind_generate`:
+the day's thread as pages (≤ DREAM_MAX_TOKENS) → dream.records (→ "record"
+entries + thoughts index) and dream.page (→ a "dream" thread entry).
+`last_dream_ts` persisted in mind_thread.json. debug/run_dream.py runs it
+on demand (machine stopped).

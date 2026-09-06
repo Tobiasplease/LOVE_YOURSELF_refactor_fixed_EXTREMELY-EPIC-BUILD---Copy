@@ -197,3 +197,24 @@ machine's own; the compressor's FELT ask is now asked INSIDE the situation
 middle of the night…" — Mind.situation_words); the frame adds how long the
 felt word has held after MOOD_FELT_HELD_MIN_S (monologue.felt-held). State
 persists in mind_thread.json "mood". Tests: debug/test_mood.py.
+
+## Sep 6, 11:40 — the dream pass (commit 9c64691, captioner/dream.py)
+
+The artist (03:15): "a long and thorough dreaming compression pass that
+meaningfully reasons through large context and perhaps rewrites some
+fundamentals that can have a noticeable impact on the following day."
+Measured: one llama-server slot takes a 13k-token prompt in 15 s (LLAMA_CTX
+16384 is per slot), so the whole day rides raw. Once a night in
+[DREAM_HOUR, DREAM_HOUR_END) when nobody is here and the room has been still
+DREAM_STILL_MIN_S, `dream.due` → `run_dream`: the day's entries as journal
+pages with hour headings (gather_day, trimmed from the oldest end to
+DREAM_MAX_TOKENS 11000) through two calls — dream.records (the day as
+threads: hour, what it was about, where it got to; stored as "record"
+entries, indexed for recall, never as text) and dream.page (what stayed /
+what to carry / what to let go; stored as a "dream" entry — it rides in the
+running text like any of the machine's words, and the morning's continuity
+quote is its last line). The caption cycle rests for the pass (~40 s). On
+demand: debug/run_dream.py [hours] [--dry] — stop the machine first, it
+saves the thread on every thought. First pass 11:39 Sep 6 over 10.3k tokens:
+11 records, a 195-word page ending "I can sit in the quiet without trying to
+fix it." Tests: debug/test_dream.py.

@@ -11,6 +11,10 @@ dry = "--dry" in sys.argv
 from captioner.dream import run_dream  # noqa: E402
 from captioner.mind import Mind  # noqa: E402
 
+import subprocess  # noqa: E402
+
+if not dry and subprocess.run(["pgrep", "-f", "python machine"], capture_output=True).stdout.strip():
+    print("WARNING: the machine is running — it saves the thread file on every thought and may overwrite this pass. Stop it first, or use --dry.")
 m = Mind(None, path=os.path.join("event_log", "mind_thread.json"), backfill=False)
 if dry:
     m._index = False
