@@ -733,8 +733,9 @@ class Mind:
             if not src:
                 continue
             shared = len(g & self._grams(src))
-            if shared and (shared / len(g) >= 0.5 or (g8 & self._grams(src, 8))):
-                return True  # half the thought, or eight words in a row — a copy, not a shared phrase
+            ratio = shared / len(g)
+            if shared and (ratio >= 0.5 or (ratio >= 0.25 and g8 & self._grams(src, 8))):
+                return True  # half the thought, or a quarter plus eight words in a row — a copy, not a phrase the room keeps producing
         return False
 
     def note_look(self, now: float) -> None:

@@ -368,6 +368,11 @@ check("continuing a current turn is not recall", not m.is_recall("The chair is e
 check("a fresh thought is not recall", not m.is_recall("Rain would sound like fingers on the skylight.", None, now))
 m.absorb("The pen is parked, touching nothing, and the room is a graveyard of half-finished things.", "think", "c", now - 4 * 3600)
 check("a shared six-word phrase is not recall", not m.is_recall("But the pen is parked, touching nothing. Just waiting for a surface that isn't there, and that is the whole problem tonight.", None, now))
+m.absorb("I'm looking at the red foam finger on the wall and seeing it point at the empty space where someone should be.", "past", "", now - 2 * 86400)
+para = ("I'm looking at the red foam finger on the wall now. It's pointing up, but it looks a bit deflated, like someone held it for too long and let go. "
+        "The white lampshade in the foreground is taking up most of my view, soft and cream, and the chair behind it has not moved since the morning light came in.")
+check("a paragraph reusing one eight-word phrase is not recall", not m.is_recall(para, None, now))
+check("a short thought that is mostly a copy is recall", m.is_recall("I'm looking at the red foam finger on the wall and seeing it point at the empty space.", None, now))
 call = {"memory": {"text": "Those two white heads on the shelf keep their blank faces turned away from me."}, "life": ""}
 check("parroting the surfaced memory is recall", m.is_recall("Those two white heads on the shelf keep their blank faces turned away from me again.", call, now))
 src = open("captioner/captioner.py", encoding="utf-8").read()
