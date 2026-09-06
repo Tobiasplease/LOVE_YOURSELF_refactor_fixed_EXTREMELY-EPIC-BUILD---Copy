@@ -158,3 +158,20 @@ One rule for staying: an uneventful glance (nothing changed, nobody here, no
 event) does not take the premise — the next think continues the last thought.
 The gates (phantom, recall, echo, numeric) stay: they filter storage and
 never touch the prompt.
+
+## Sep 6, 11:20 — the journal shape (commit 167996b)
+
+The artist, morning: "I found it frequently devolved into singular isolated
+sentences again. My goal is for the collected output to read as a continuous
+text… pages of what looks like an actual journal." Probed
+(debug/probe_journal_shapes.py, machine off, the night's last 8 thoughts, N=6,
+gap confound removed): turns + premise (the live shape) → 0/6 continued, 13
+words, standalone lines; the thread as ONE running text + premise cue → every
+sample continued by eye, ~56 words, no clock narration; running text + a bare
+clock cue → the model narrated the number every time ("Ten nineteen. That
+sounds like a coordinate"). Shipped MIND_SHAPE="text": [system] [user: life]
+[assistant: running text — paragraphs, a break at ≥3 min gaps, looks,
+reflections; no cues, no stamps] [user: cue]. The world's cues are ephemeral;
+only the machine's own text persists. MIND_TEXT_ENTRIES=10, MIND_NUM_PREDICT
+80. debug/journal.py renders mind_thread.json as pages with the same
+paragraph rule. MIND_SHAPE=turns restores the Sep 5 shape.
