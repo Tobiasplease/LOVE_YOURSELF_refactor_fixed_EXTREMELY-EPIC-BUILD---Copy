@@ -262,3 +262,26 @@ back once (mind.tone-held "You've been sounding {tone} for a while now."),
 catching yourself being a thought; a premise of ≤ 3 words carries the two
 sentences before it. Lesson: any standing mirror of the machine's own
 output is a directive; every recursive channel needs its own noticing.
+
+## Sep 6, 14:45–14:50 — the gate stall; the reflection as a page (8996f75, 5fd0519)
+
+- **Gate stall.** 14:37–14:40: the premise "A black stick in the dark." was
+  restated by the model at the top of each reply, the refrain gate refused
+  the reply as an echo, the entry was not kept, so the premise never moved
+  and the next turn produced the same opening — four times, until a look
+  moved it. Now a reply that restates the quoted premise is stripped to its
+  continuation before gating; a spoken-not-kept thought still moves the
+  premise (Mind.note_spoken); two refusals in a row give one turn with no
+  premise so the context changes.
+- **The reflection as a page** (artist: "dense and verbose and complicated,
+  not much of a story arc"). In mind mode the reflection reads the last 75
+  minutes AS PAGES (reflection.pages, Mind.running_text) instead of "the
+  record of your actual thoughts" as a list — the list invited
+  analysis-of-a-record — with the page's own frame (mind.system +
+  reflection.page), at MIND_REFLECTION_NUM_PREDICT 180, and its WHOLE text
+  enters the thread as a paragraph (the kernel only rides the stream now).
+  The distill (want / question / name / belief) is unchanged — it produced
+  "The Pause" and the want at 12:50.
+- Earlier the same afternoon (371de8d): the standing tone line OFF, MIND_TEMP
+  0.75, the look cue names ≤ 2 things — subtraction per north-star P7 and
+  the anti-pattern list, after the tone spiral.
