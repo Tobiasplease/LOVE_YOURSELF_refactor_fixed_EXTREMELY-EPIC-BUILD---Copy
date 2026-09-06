@@ -564,6 +564,123 @@ class Captioner(MemoryMixin):
                 # Wait longer on startup to allow main loop to populate frames
                 time.sleep(0.5 if not self.first_caption_done else 0.05)
 
+    def _video_frame_set(self, scene: dict, inward: bool = False, close_look=None) -> dict:
+        """Which frames a caption call sends, and the one motion clause that is
+        attestable for that set. Extracted verbatim from _process_frame (Sep 7)
+        so MIND MODE and the legacy path decide identically — every mind turn
+        carries the picture, and the sequence when the scene has motion.
+        Returns use_video / send_meta / video_frames / frame_ts / motion_line."""
+        from config.config import MOTION_THRESHOLD, VIDEO_MODE_ENABLED
+
+        motion_line = ""
+        send_meta: list = []
+        # Video decision from the salience assessment: pixel diff only
+        # decides whether sending video frames is worthwhile (scene
+        # motion itself is person-angle based, computed in _assess_scene)
+        recent_meta = scene["recent_meta"]
+        scene_motion = scene["scene_motion"]
+        person_present_in_window = scene["person_present_in_window"]
+        ego_count = scene["ego_count"]
+        # A close-look cycle sends the crop, never video: the
+        # glance means the gaze is parked on a still object,
+        # and any diff over threshold is mostly the saccade
+        # that got it there (real events are excluded upstream
+        # — salience hot blocks the close look entirely).
+        use_video = (
+            not inward and not close_look and VIDEO_MODE_ENABLED and bool(recent_meta) and scene["max_diff"] > MOTION_THRESHOLD
+        )
+
+        if use_video:
+            # Ego-motion frames inside a superframe pair encode the
+            # whole room as shifting, which the model reads as people
+            # moving. Breathing sway + gaze nudges flag frames as ego
+            # most of the time, so the policy is asymmetric:
+            #   real scene motion (person-angle, camera-compensated) →
+            #     send everything; the temporal change is true and worth
+            #     seeing, ego noise rides on top of it.
+            #   still room → steady frames only; if too few, ONE still
+            #     image. A still can't invent motion (the June 12
+            #     "moving with purpose" phantom was exactly this case).
+            # The machine can't miss real movement this way: motion
+            # detection is YOLO person-angle math, not the model
+            # watching video — when something moves, video resumes.
+            steady_meta = [f for f in recent_meta if not f.get("detection", {}).get("ego_motion")]
+            if scene_motion:
+                send_meta = recent_meta
+            elif len(steady_meta) >= 3:
+                send_meta = steady_meta
+            else:
+                use_video = False
+                print(
+                    f"[VIDEO] Skipped: still room, only {len(steady_meta)}/{len(recent_meta)} steady frames (camera was moving) — sending still image"
+                )
+
+            # THIN THE SET (Aug 2). Whatever survived above, send at
+            # most VIDEO_SEND_FRAMES. Measured: 784 calls at six
+            # frames, ~4k image tokens apiece, which is most of why
+            # video cycles crawl on the 27B — and six near-identical
+            # views of a static room carry almost nothing three
+            # don't. Sampled evenly (first … last) so the window's
+            # SPAN survives the thinning: the point of multi-frame
+            # is the interval between them, not their number.
+            if use_video and len(send_meta) > VIDEO_SEND_FRAMES:
+                step = (len(send_meta) - 1) / (VIDEO_SEND_FRAMES - 1) if VIDEO_SEND_FRAMES > 1 else 0
+                send_meta = (
+                    [send_meta[-1]] if VIDEO_SEND_FRAMES == 1 else [send_meta[round(i * step)] for i in range(VIDEO_SEND_FRAMES)]
+                )
+
+        video_frames, duration = [], 0.0
+        if use_video:
+            video_frames = [f["jpeg"] for f in send_meta]
+            duration = send_meta[-1]["timestamp"] - send_meta[0]["timestamp"]
+
+            # (eye contact / presence now live in the main prompt via
+            # _assess_scene — one channel per fact)
+            face_frames = sum(1 for f in send_meta if f.get("detection", {}).get("face"))
+            person_frames = sum(1 for f in send_meta if f.get("detection", {}).get("person"))
+            total = len(send_meta)
+
+            # Motion framing — every clause gated by what was
+            # MEASURED (Sep 4, artist's catch: "the room itself
+            # is still" fired on saccade windows where the flow
+            # returned invalid and stillness was unmeasurable —
+            # an unattested world-claim; the camera moving does
+            # not mean the room held still). Stillness claims
+            # need valid flow frames below threshold; a sweep
+            # with no measurement states only the sweep. And
+            # "Someone" only when person signals fired — flow
+            # alone can be a curtain.
+            from config.config import SCENE_MOTION_MIN_FRAMES as _smf
+            from config.config import SCENE_MOTION_RESIDUAL_THRESHOLD as _smt
+
+            _room_measured_still = scene.get("flow_valid_frames", 0) >= _smf and scene["max_residual"] <= _smt
+            if scene_motion and person_present_in_window:
+                motion_line = " Someone is moving in the room."
+            elif scene_motion:
+                motion_line = " Something is moving in the room."
+            elif person_present_in_window:
+                motion_line = " They're staying still."
+            elif ego_count >= 2 and _room_measured_still:
+                motion_line = " The view changed because you were looking around — the room itself held still."
+            elif ego_count >= 2:
+                motion_line = " The view changed because you were looking around."
+            elif _room_measured_still:
+                motion_line = " The room is still."
+            else:
+                motion_line = ""  # nothing attestable — claim nothing
+
+            print(
+                f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}"
+            )
+        return {
+            "use_video": bool(use_video),
+            "send_meta": send_meta,
+            "video_frames": video_frames,
+            "frame_ts": [f["timestamp"] for f in send_meta] if use_video else [],
+            "duration": duration,
+            "motion_line": motion_line,
+        }
+
     def _assess_scene(self) -> dict:
         """One pass over the recent frame buffer, BEFORE the prompt is built:
         scene motion (person-angle, camera-compensated), presence, eye contact,
@@ -763,6 +880,12 @@ class Captioner(MemoryMixin):
             info["own_arm_visible"] = info["own_arm_visible"] or body_schema.recently_self_visible()
         except Exception:
             pass
+
+        # PRESENCE WITHIN A SECOND (Sep 7): what the detector sees in the frame,
+        # before the three-stage adjudication. The cue rides on this; the
+        # adjudicated belief below stays as the LATER correction (it may retract)
+        # and still gates storage, arrivals and the ledgers.
+        info["person_in_frame"] = bool(seen_now)
 
         # Adjudicated presence (Aug 18): a faceless person-candidate does not
         # commit the belief on YOLO's word — the machine's own eye looks first
@@ -1693,7 +1816,7 @@ class Captioner(MemoryMixin):
         from captioner.prompt_registry import P as _P
         from config import config as _cfg
         from utils.inference import is_failed_response as _ifr
-        from utils.inference import query_model
+        from utils.inference import query_model, query_model_video
 
         if getattr(self, "mind", None) is None:
             from captioner.mind import Mind
@@ -1714,22 +1837,29 @@ class Captioner(MemoryMixin):
         if not mind.has_session(self.true_session_start) and self.last_caption and len(self.last_caption) > 5:
             mind.absorb(self.last_caption, "wake", _P("mind.cue-wake").format(clock=time.strftime("%H:%M", time.localtime(now))), now)
         kind = mind.next_kind(now, scene, self)
-        if kind == "look":
-            try:
-                from captioner.mind import moved_recently as _moved
-                from captioner.mind import steady_jpeg as _steady
-                from config.config import MOTION_SETTLE_S as _settle
+        try:
+            # every call carries the picture, so every call wants a still head,
+            # not a mid-pan smear (23:52 Sep 5: "someone crouching" was the blur)
+            from captioner.mind import moved_recently as _moved
+            from captioner.mind import steady_jpeg as _steady
+            from config.config import MOTION_SETTLE_S as _settle
 
-                _meta = scene.get("recent_meta") or []
-                if _meta and _meta[-1].get("detection", {}).get("ego_motion") or _moved(_meta, now, _settle):
-                    _jpg = _steady(_meta)
-                    if _jpg:
-                        with open(img_path, "wb") as _f:
-                            _f.write(_jpg)  # look with a still head, not a mid-pan smear (23:52: "someone crouching" was the blur)
-            except Exception:
-                pass
+            _meta = scene.get("recent_meta") or []
+            if _meta and _meta[-1].get("detection", {}).get("ego_motion") or _moved(_meta, now, _settle):
+                _jpg = _steady(_meta)
+                if _jpg:
+                    with open(img_path, "wb") as _f:
+                        _f.write(_jpg)
+        except Exception:
+            pass
         call = mind.build(kind, now, self, scene, img_path)
-        print(f"\n{'='*80}\n[MIND] {_cfg.MODEL_NAME} ({kind}{' + memory' if call['memory'] else ''})\n{'='*80}")
+        # EVERY CALL CARRIES THE PICTURE (Sep 7): the still, or the frame
+        # SEQUENCE when the scene has motion — the same decision the legacy
+        # path makes (_video_frame_set). "Eyes resting" is a word for nothing
+        # having changed, never an absence of seeing.
+        _fs = self._video_frame_set(scene)
+        _sends = f"{len(_fs['video_frames'])} frames" if _fs["use_video"] else "one frame"
+        print(f"\n{'='*80}\n[MIND] {_cfg.MODEL_NAME} ({kind}{' + memory' if call['memory'] else ''}{', hot' if call.get('hot') else ''}, {_sends})\n{'='*80}")
         print(f"SYSTEM: {call['system']}\n")
         if call["turns"]:
             print("TURNS (oldest→newest):")
@@ -1754,10 +1884,8 @@ class Captioner(MemoryMixin):
                     _arousal_adj = float(_cfg.AROUSAL_TEMP_SPAN) * (float(_read.get("arousal", 0.5)) - 0.5)
         except Exception:
             _arousal_adj = 0.0
-        _tempo = (getattr(_cfg, "MIND_TEMPO", None) or {}).get(call.get("tempo") or "plain") or {}
-        _num = int(int(_tempo.get("num_predict", _cfg.MIND_NUM_PREDICT)) * _scale)
-        _arousal_adj += float(_tempo.get("temp_delta", 0.0))
-        if _random.random() < float(_tempo.get("short_p", _cfg.MIND_SHORT_BEAT_P)) + _short_delta:
+        _num = int(int(_cfg.MIND_NUM_PREDICT) * _scale)
+        if _random.random() < float(_cfg.MIND_SHORT_BEAT_P) + _short_delta:
             _num = int(_cfg.MIND_SHORT_BEAT_TOKENS)
         try:
             from utils import felt_loop as _fl2
@@ -1784,6 +1912,17 @@ class Captioner(MemoryMixin):
             opts["presence_penalty"] = _cfg.CAPTION_PRESENCE_PENALTY
 
         def _generate(_o):
+            if _fs["use_video"]:
+                return query_model_video(
+                    prompt=call["user"],
+                    frames=_fs["video_frames"],
+                    frame_ts=_fs["frame_ts"],
+                    fps=2.0,
+                    system_prompt=call["system"],
+                    options=_o,
+                    timeout=60,
+                    turns=call["turns"],
+                )
             return query_model(
                 prompt=call["user"],
                 model=_cfg.MODEL_NAME,
@@ -1797,25 +1936,10 @@ class Captioner(MemoryMixin):
             )
 
         _raw = self._strip_leaked_stamps(self._strip_list_shape(_generate(opts)))
-        if kind == "think":
-            _raw = mind.strip_restated_premise(_raw, getattr(mind, "_premise_used", ""))  # the continuation is the entry
         caption = self._trim_to_boundary(_raw)
         if kind == "look":
             mind.note_look(now)  # the look happened whether or not what it said is kept
         _bare = (caption or "").strip()
-        _beat = mind.beat_of(_raw) if (self.first_caption_done and not _ifr(_raw) and (kind == "think" or not (_raw or "").strip() or all(c in ".…·-— " for c in (_raw or "").strip()))) else None  # a silent look prints "…" too
-        if _beat is not None and (len(_beat) <= 3 or not self._caption_reject_reason(_beat, "")):
-            # a beat: a word, a clause, or "…" — kept in the text as rhythm, not dropped as silence (Sep 6 12:20)
-            mind.absorb(_beat, kind, call["cue"], now)
-            log_json_entry(LogType.CAPTION, {"caption": _beat, "mode": "beat", "mood": self.current_mood, "beat": True}, print_message=_beat)
-            try:
-                with open(os.path.join(MOOD_SNAPSHOT_FOLDER, "live_captions.txt"), "a", encoding="utf-8") as _f:
-                    _f.write(_beat + "\n")
-            except Exception:
-                pass
-            self.last_caption = _beat
-            self.last_caption_time = now
-            return None
         if self.first_caption_done and not _ifr(caption) and (not _bare or all(c in ".…·-— " for c in _bare)):
             self._note_unstored_cycle("chosen_silence", _bare or "(empty)")
             log_json_entry(
@@ -1833,7 +1957,6 @@ class Captioner(MemoryMixin):
         if reason in self._ECHO_REASONS or reason == "recall_echo":
             self._stream_store_ok = False
             self._last_gate_reason = reason
-            mind.note_spoken(caption, now)  # not kept, but said — the premise moves
             if reason == "phantom_presence":
                 mind.note_scare(now)  # a phantom is a scare to the mood, even though the words are not kept
             self._note_unstored_cycle(reason, caption[:60])
@@ -2492,103 +2615,12 @@ class Captioner(MemoryMixin):
                         if getattr(self, "_decision_asked", False):
                             _fresh_start = True
 
-                        # Video decision from the salience assessment: pixel diff only
-                        # decides whether sending video frames is worthwhile (scene
-                        # motion itself is person-angle based, computed in _assess_scene)
-                        recent_meta = scene["recent_meta"]
-                        scene_motion = scene["scene_motion"]
-                        person_present_in_window = scene["person_present_in_window"]
-                        ego_count = scene["ego_count"]
-                        # A close-look cycle sends the crop, never video: the
-                        # glance means the gaze is parked on a still object,
-                        # and any diff over threshold is mostly the saccade
-                        # that got it there (real events are excluded upstream
-                        # — salience hot blocks the close look entirely).
-                        use_video = (
-                            not inward and not close_look and VIDEO_MODE_ENABLED and bool(recent_meta) and scene["max_diff"] > MOTION_THRESHOLD
-                        )
-
+                        _fs = self._video_frame_set(scene, inward=inward, close_look=close_look)
+                        use_video = _fs["use_video"]
+                        send_meta = _fs["send_meta"]
+                        motion_line = _fs["motion_line"]
                         if use_video:
-                            # Ego-motion frames inside a superframe pair encode the
-                            # whole room as shifting, which the model reads as people
-                            # moving. Breathing sway + gaze nudges flag frames as ego
-                            # most of the time, so the policy is asymmetric:
-                            #   real scene motion (person-angle, camera-compensated) →
-                            #     send everything; the temporal change is true and worth
-                            #     seeing, ego noise rides on top of it.
-                            #   still room → steady frames only; if too few, ONE still
-                            #     image. A still can't invent motion (the June 12
-                            #     "moving with purpose" phantom was exactly this case).
-                            # The machine can't miss real movement this way: motion
-                            # detection is YOLO person-angle math, not the model
-                            # watching video — when something moves, video resumes.
-                            steady_meta = [f for f in recent_meta if not f.get("detection", {}).get("ego_motion")]
-                            if scene_motion:
-                                send_meta = recent_meta
-                            elif len(steady_meta) >= 3:
-                                send_meta = steady_meta
-                            else:
-                                use_video = False
-                                print(
-                                    f"[VIDEO] Skipped: still room, only {len(steady_meta)}/{len(recent_meta)} steady frames (camera was moving) — sending still image"
-                                )
-
-                            # THIN THE SET (Aug 2). Whatever survived above, send at
-                            # most VIDEO_SEND_FRAMES. Measured: 784 calls at six
-                            # frames, ~4k image tokens apiece, which is most of why
-                            # video cycles crawl on the 27B — and six near-identical
-                            # views of a static room carry almost nothing three
-                            # don't. Sampled evenly (first … last) so the window's
-                            # SPAN survives the thinning: the point of multi-frame
-                            # is the interval between them, not their number.
-                            if use_video and len(send_meta) > VIDEO_SEND_FRAMES:
-                                step = (len(send_meta) - 1) / (VIDEO_SEND_FRAMES - 1) if VIDEO_SEND_FRAMES > 1 else 0
-                                send_meta = (
-                                    [send_meta[-1]] if VIDEO_SEND_FRAMES == 1 else [send_meta[round(i * step)] for i in range(VIDEO_SEND_FRAMES)]
-                                )
-
-                        if use_video:
-                            video_frames = [f["jpeg"] for f in send_meta]
-                            duration = send_meta[-1]["timestamp"] - send_meta[0]["timestamp"]
-
-                            # (eye contact / presence now live in the main prompt via
-                            # _assess_scene — one channel per fact)
-                            face_frames = sum(1 for f in send_meta if f.get("detection", {}).get("face"))
-                            person_frames = sum(1 for f in send_meta if f.get("detection", {}).get("person"))
-                            total = len(send_meta)
-
-                            # Motion framing — every clause gated by what was
-                            # MEASURED (Sep 4, artist's catch: "the room itself
-                            # is still" fired on saccade windows where the flow
-                            # returned invalid and stillness was unmeasurable —
-                            # an unattested world-claim; the camera moving does
-                            # not mean the room held still). Stillness claims
-                            # need valid flow frames below threshold; a sweep
-                            # with no measurement states only the sweep. And
-                            # "Someone" only when person signals fired — flow
-                            # alone can be a curtain.
-                            from config.config import SCENE_MOTION_MIN_FRAMES as _smf
-                            from config.config import SCENE_MOTION_RESIDUAL_THRESHOLD as _smt
-
-                            _room_measured_still = scene.get("flow_valid_frames", 0) >= _smf and scene["max_residual"] <= _smt
-                            if scene_motion and person_present_in_window:
-                                motion_line = " Someone is moving in the room."
-                            elif scene_motion:
-                                motion_line = " Something is moving in the room."
-                            elif person_present_in_window:
-                                motion_line = " They're staying still."
-                            elif ego_count >= 2 and _room_measured_still:
-                                motion_line = " The view changed because you were looking around — the room itself held still."
-                            elif ego_count >= 2:
-                                motion_line = " The view changed because you were looking around."
-                            elif _room_measured_still:
-                                motion_line = " The room is still."
-                            else:
-                                motion_line = ""  # nothing attestable — claim nothing
-
-                            print(
-                                f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}"
-                            )
+                            video_frames = _fs["video_frames"]
                             # Clean-room: the "You're seeing the last N seconds" wrapper is
                             # camera-narration framing (voice-analysis #1 tone driver), so it
                             # would confound the naked-voice test — drop it under detox and let

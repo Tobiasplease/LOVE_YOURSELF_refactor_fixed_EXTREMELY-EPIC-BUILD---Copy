@@ -50,10 +50,14 @@ for e in th:
     turns.append({"role": "assistant", "content": e["text"]})
 running = "\n\n".join(e["text"] for e in th)
 prem = last_sentence(last)
+# The quote-back premise left the registry on Sep 7 (the running text carries the
+# continuation now). This probe measured it against the journal shape, so the
+# wording it measured stays here, in the probe.
+_PREMISE = ' You were on: "{premise}" Go on from there.'
 shapes = {
-    "A turns + premise (live)": lambda: chat([{"role": "system", "content": system}] + turns + [{"role": "user", "content": f"{clock}. Eyes resting." + P("mind.cue-premise").format(premise=prem)}]),
+    "A turns + premise (live)": lambda: chat([{"role": "system", "content": system}] + turns + [{"role": "user", "content": f"{clock}. Eyes resting." + _PREMISE.format(premise=prem)}]),
     "B running text + clock": lambda: chat([{"role": "system", "content": system}, {"role": "assistant", "content": running}, {"role": "user", "content": f"{clock}."}]),
-    "C running text + premise": lambda: chat([{"role": "system", "content": system}, {"role": "assistant", "content": running}, {"role": "user", "content": f"{clock}. Eyes resting." + P("mind.cue-premise").format(premise=prem)}]),
+    "C running text + premise": lambda: chat([{"role": "system", "content": system}, {"role": "assistant", "content": running}, {"role": "user", "content": f"{clock}. Eyes resting." + _PREMISE.format(premise=prem)}]),
     "D turns + paragraph premise": lambda: chat([{"role": "system", "content": system}] + turns + [{"role": "user", "content": f"{clock}. Eyes resting. You were on: \"{th[-2]['text']} {last}\" Go on from there."}]),
     "E running text as prefill": lambda: chat([{"role": "system", "content": system}, {"role": "user", "content": f"{clock}."}], prefill=running + "\n\n"),
 }

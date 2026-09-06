@@ -7,19 +7,28 @@ log's failure theme; every store the same theme in five formats. No organ
 bolted on could widen it, because every organ wrote into the same log.
 
 This module replaces the log with a conversation:
-  - the last few thoughts ride as REAL assistant turns; the world speaks in
-    user turns; the clock is the cue ("18:41. Eyes resting.");
-  - two turn kinds — LOOK (frame + what changed + what's known to be in view)
-    and THINK (no frame; wondering is legal, seeing is not);
+  - the last stretch of the machine's own text rides WHOLE (the running text,
+    MIND_TEXT_ENTRIES) — that is where continuation comes from; the world
+    speaks in the cue, and the clock lives there ("18:41. Eyes resting.");
+  - EVERY CALL CARRIES THE PICTURE (Sep 7): LOOK and THINK differ in what the
+    cue says, never in whether the frame is there. "Eyes resting" is a word
+    for nothing having changed, not an absence of seeing;
   - a compact LIFE block opens the conversation instead of a status board:
     when, the room as known, people today, drawings, the want, questions,
-    where recent threads got to, a couple of dated past thoughts;
+    where recent threads got to, a couple of dated past thoughts — everything
+    from the past marked as past;
+  - salience arbitrates (north-star P6): when a moment is hot — an arrival, a
+    departure, motion, eye contact — the interior lines are stripped and the
+    call is the present; when it is still, they ride;
+  - a person the DETECTOR sees is a person for the cue; the adjudicator is a
+    later correction, not a gate on the critical path;
   - the deepening mechanic: a subject's last conclusion is its POSITION and
-    rides as a premise; the reframe move ("it's not X; it's Y") on one subject
-    with no new words counts as a PIVOT, and after N pivots the machine hears
-    it (mind.pivot-notice);
-  - memories surface by choice: old enough, novel against the recent thread,
-    never a reframe, never person-tinged while the room is believed empty.
+    rides in the life block; the reframe move ("it's not X; it's Y") on one
+    subject with no new words counts as a PIVOT, and after N pivots the
+    machine hears it (mind.pivot-notice);
+  - memories surface by association only, and only while it is quiet: old
+    enough, close enough, never a reframe, never person-tinged while the room
+    is believed empty.
 
 Wordings live in captioner/prompt_registry.py (mind.*) — the artist's to
 finalize. Structure only here: kinds are named, contents never.
@@ -387,8 +396,6 @@ class Mind:
         entry = {"ts": now, "kind": kind, "cue": (cue or "").strip(), "text": text, "subject": subject}
         if kind == "look" and uneventful:
             entry["uneventful"] = True
-        self._gate_streak = 0
-        self._spoken_tail = None
         self.thread.append(entry)
         if len(self.thread) > int(config.MIND_THREAD_MAX):
             self.thread = self.thread[-int(config.MIND_THREAD_MAX) :]
@@ -399,73 +406,18 @@ class Mind:
         self._index_add([entry])
         return entry
 
-    def note_spoken(self, text: str, now: float) -> None:
-        """A thought that was spoken but not kept still moves the premise —
-        otherwise the next turn gets the identical context and says the
-        identical thing (14:37–14:40 Sep 6: four "A black stick in the dark"
-        openings in a row, each gated, the premise never moving)."""
-        self._spoken_tail = (last_sentence(text)[:200], now)
-        self._gate_streak = int(getattr(self, "_gate_streak", 0) or 0) + 1
-
-    def strip_restated_premise(self, text: str, premise: str) -> str:
-        """The model often opens by restating the quoted premise; the
-        continuation is the entry, the restatement is not."""
-        t = (text or "").strip()
-        pz = (premise or "").strip().rstrip(".!?…").strip()
-        if not pz or len(pz.split()) < 3:
-            return t
-        head = t[: len(pz) + 3].lower()
-        if head.startswith(pz.lower()):
-            rest = t[len(pz):].lstrip(" .!?…,;:—–-")
-            if len(rest.split()) >= 3:
-                return rest[0].upper() + rest[1:] if rest[0].islower() else rest
-        return t
-
-    def premise(self, now: Optional[float] = None) -> str:
-        """The machine's own last sentence, quoted back as the thing to go on
-        from (the continuation mechanic — see mind.cue-premise)."""
+    def last_written(self, now: Optional[float] = None) -> str:
+        """The last sentence the machine actually wrote — the query for recall
+        by association. It is NOT quoted back into the prompt (the quote-back
+        premise came out Sep 7): continuation comes from the running text
+        being there whole."""
         now = now or time.time()
-        if int(getattr(self, "_gate_streak", 0) or 0) >= 2:
-            self._gate_streak = 0
-            return ""  # two refusals in a row: one turn with no premise, so the context changes
-        spoken = getattr(self, "_spoken_tail", None)
-        if spoken and (not self.thread or spoken[1] > float(self.thread[-1].get("ts", 0))) and now - spoken[1] < 600:
-            return spoken[0]
-        if not self.thread:
-            return ""
-        last = self.thread[-1]
-        if now - last.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
-            return ""
-        for e in self.thread[-3:]:
-            # a reflection that just settled is the thing to go on from, even if a thought landed after it (Sep 6 03:00)
-            if e.get("kind") == "reflection" and now - e.get("ts", 0) <= 240 and not e.get("premised"):
-                e["premised"] = True
-                self._save()
+        for e in reversed(self.thread):
+            if now - e.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
+                break
+            if e.get("text") and e.get("kind") not in ("record", "past"):
                 return last_sentence(e.get("text", ""))[:200]
-        if last.get("kind") == "look" and last.get("uneventful"):
-            # an uneventful glance is not a new thought — the chain continues from the last one (Sep 6 01:00)
-            for e in reversed(self.thread[:-1]):
-                if now - e.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
-                    break
-                if e.get("kind") in ("think", "reflection", "wake", "memory"):
-                    return last_sentence(e.get("text", ""))[:200]
-        prem = last_sentence(last.get("text", ""))[:200]
-        if len(prem.split()) <= 3:
-            # a one-word premise + "go on" reads as "define it" (12:36 Sep 6: "Scattering." → "Scattering is a loss of coherence.");
-            # a beat carries the two sentences before it, so there is a thought to continue
-            parts = [p for p in _SENT_END_RE.split((last.get("text") or "").strip()) if p.strip()]
-            tail = " ".join(parts[-3:]) if len(parts) > 1 else ""
-            if len(tail.split()) <= 4:
-                for e in reversed(self.thread[:-1]):
-                    if now - e.get("ts", 0) > int(config.MIND_TURN_MAX_AGE_S):
-                        break
-                    if e.get("kind") in ("think", "look", "reflection", "wake", "memory") and e.get("text"):
-                        prev = [p for p in _SENT_END_RE.split(e["text"].strip()) if p.strip()]
-                        tail = (" ".join(prev[-2:]) + " " + prem).strip()
-                        break
-            if tail:
-                prem = tail[-240:]
-        return prem
+        return ""
 
     def recent_turns(self, now: Optional[float] = None) -> List[dict]:
         now = now or time.time()
@@ -613,7 +565,7 @@ class Mind:
     # ---- turn kind + cadence -------------------------------------------------
     def next_kind(self, now: float, scene: Optional[dict], agent) -> str:
         hot = bool(getattr(agent, "_salience_hot", False))
-        believed = bool(getattr(agent, "_presence_believed", False))
+        believed = bool(getattr(agent, "_presence_believed", False)) or bool((scene or {}).get("person_in_frame"))  # the detector's word is enough for the cue (Sep 7)
         edge = (self._last_believed is None and believed) or (self._last_believed is not None and believed != self._last_believed)  # a belief restored at boot is an edge too (15:56 Sep 6)
         self._last_believed = believed
         since_look = now - self.last_look_ts
@@ -659,7 +611,11 @@ class Mind:
         return base
 
     # ---- the life block ------------------------------------------------------
-    def life_block(self, now: float, agent) -> str:
+    def life_block(self, now: float, agent, hot: bool = False) -> str:
+        """The present facts that are true now, plus what it carries. hot
+        (north-star P6): a live event strips the interior lines — past quotes,
+        positions, questions, settled beliefs, the previous chain's ending —
+        so the call is the present. The facts stay in both cases."""
         lines = []
         try:
             with open(os.path.join(config.MOOD_SNAPSHOT_FOLDER, "lifetime_state.json"), encoding="utf-8") as f:
@@ -699,10 +655,10 @@ class Mind:
         events = self.events_today(now, agent)
         if events:
             lines.append(P("mind.life-events").format(events="; ".join(events)))
-        before = self.before_chain(now)
+        before = None if hot else self.before_chain(now)
         if before:
             lines.append(P("mind.life-before").format(when=when_words(now - float(before["ts"])), text=before["text"][:220]))
-        if getattr(config, "MIND_LIFE_FULL", False):
+        if getattr(config, "MIND_LIFE_FULL", False) and not hot:
             try:
                 from utils.lore_ledger import lore_ledger
 
@@ -720,7 +676,7 @@ class Mind:
                 lines.append(P("mind.life-position").format(subject=subject, text=text))
         chosen: set = set()
         believed = bool(getattr(agent, "_presence_believed", False))
-        for _ in range(int(config.MIND_PAST_THOUGHTS)):
+        for _ in range(0 if hot else int(config.MIND_PAST_THOUGHTS)):
             m = self.choose_memory(now, believed=believed, exclude=chosen)
             if not m:
                 break
@@ -792,6 +748,22 @@ class Mind:
             return clock(float(ev["timestamp"])) if ev else "a moment ago"
         except Exception:
             return "a moment ago"
+
+    def _alone_words(self, now: float, agent) -> str:
+        """How long the room was empty before this arrival, in words."""
+        from captioner.prompts import casual_time_string
+
+        left = float(getattr(agent, "_presence_dropped_at", 0.0) or 0.0)
+        try:
+            from utils.episodic_log import episodic_log
+
+            ev = episodic_log.get_last_event("person_left")
+            left = max(left, float(ev.get("timestamp", 0)) if ev else 0.0)
+        except Exception:
+            pass
+        if not left:
+            left = self.thread_start(now) or now
+        return casual_time_string(max(0.0, now - left) / 60.0)
 
     def person_history(self, now: float) -> str:
         """Visits over the last days and what the machine has come to know of people — its own words."""
@@ -1054,25 +1026,6 @@ class Mind:
         except Exception:
             return {}
 
-    @staticmethod
-    def beat_of(raw: str) -> Optional[str]:
-        """Rhythm (Sep 6, artist: 'some captions should be a single word or even just …'):
-        an all-punctuation reply, or a short boundary-less fragment, is kept as a
-        beat in the text instead of being dropped as silence. Returns the beat
-        text, or None when the reply is a normal thought."""
-        t = (raw or "").strip()
-        if not t:
-            return "…"
-        if all(c in ".…·-— " for c in t):
-            return "…"
-        has_end = any(c in t for c in ".!?…")
-        words = t.split()
-        if not has_end and len(words) <= int(getattr(config, "MIND_BEAT_MAX_WORDS", 6)):
-            return t
-        if not has_end:
-            return "…"
-        return None
-
     def note_look(self, now: float) -> None:
         """A look happened, stored or not — the look timer advances either way
         (Sep 5 23:25–23:39: gated looks left the timer stale, so every phantom
@@ -1307,9 +1260,23 @@ class Mind:
             pass
 
         believed = bool(getattr(agent, "_presence_believed", False))
+        # PRESENCE WITHIN A SECOND (Sep 7): a person the detector sees in the
+        # frame is a person for the purpose of the cue. The three-stage
+        # adjudication and the storage gates stay as a LATER correction (they
+        # may retract) — they are off the critical path of what the machine is
+        # told is in front of it.
+        in_frame = bool((scene or {}).get("person_in_frame"))
+        here = believed or in_frame
+        hot = bool(getattr(agent, "_salience_hot", False)) or bool(getattr(agent, "_salience_event", None))
+        was_here = getattr(self, "_last_here", None)
+        edge_in = here and was_here is False
+        edge_out = (not here) and was_here is True
+        self._last_here = here
+        if edge_in or edge_out:
+            hot = True
         someone = ""
         lead = ""
-        if believed:
+        if here:
             seen = ""
             try:
                 from perception.presence_adjudicator import presence_adjudicator as _pa
@@ -1320,6 +1287,8 @@ class Mind:
             except Exception:
                 pass
             lead = P("mind.someone-here").format(since=self.person_since(now), seen=seen)  # the person leads the cue
+        if not getattr(config, "MIND_HOT_STRIPS_INTERIOR", True):
+            hot = False
         memory = None
         uneventful = False
         if kind == "look":
@@ -1356,32 +1325,26 @@ class Mind:
             cue += self.turn_report(pose)
         else:
             self.think_count += 1
-            n = int(config.MIND_MEMORY_EVERY_N)
+            n = 0 if hot else int(config.MIND_MEMORY_EVERY_N)
             if n > 0 and self.think_count % n == 0:
                 memory = self.choose_memory(now, believed=believed)  # scheduled fallback (off by default)
             if memory:
                 cue = P("mind.cue-think-memory").format(clock=clock(now), when=when_words(now - memory["ts"]), memory=memory["text"][:220])
             else:
                 cue = P("mind.cue-think").format(clock=clock(now))
-                prem = self.premise(now)
-                if believed:
-                    try:
-                        from utils.episodic_log import episodic_log as _el
-
-                        _arr = _el.get_last_event("person_arrived")
-                        if _arr and now - float(_arr.get("timestamp", 0)) < int(getattr(config, "MIND_PERSON_FRESH_S", 600)):
-                            prem = ""  # a person after days alone outranks the thread (Sep 6 16:15)
-                    except Exception:
-                        pass
-                self._premise_used = prem
-                if prem:
-                    cue += P("mind.cue-premise").format(premise=prem)
-                    memory = self.recall_similar(prem, now, believed=believed)
+                tail = self.last_written(now)
+                if tail and not hot:
+                    # memory only by association, and only while the moment is quiet
+                    memory = self.recall_similar(tail, now, believed=here)
                     if memory:
                         cue += P("mind.cue-recall").format(when=when_words(now - memory["ts"]), memory=memory["text"][:220])
                         print(f"[MIND] recall by association (d={memory.get('distance', 0):.2f}, {when_words(now - memory['ts'])}): {memory['text'][:70]}")
         if lead:
             cue = re.sub(r"^(\d\d:\d\d\.)", r"\1" + lead.replace("\\", "\\\\"), cue, count=1) if re.match(r"^\d\d:\d\d\.", cue) else lead.strip() + " " + cue
+        if edge_in:
+            cue += P("mind.arrived").format(alone=self._alone_words(now, agent))
+        elif edge_out:
+            cue += P("mind.left")
         if kind == "think":
             cue += self._felt_shift()
             cue += self._tone_notice()
@@ -1398,23 +1361,9 @@ class Mind:
             self.pending_notice = None
             cue += P("mind.pivot-notice").format(subject=subject, n=n_piv)
 
-        # TEMPO FOLLOWS THE EVENT (Sep 6): what just happened sets the room, the heat and the odds of a beat
-        tempo = "plain"
-        if kind == "look" and (getattr(agent, "_salience_event", None) or believed != getattr(self, "_last_believed_for_tempo", believed) or now - float(getattr(self, "_scare_ts", 0.0) or 0.0) < 120):
-            tempo = "surprise"
-        elif memory or (self.thread and self.thread[-1].get("kind") in ("reflection", "dream")) or ("since" in cue and ("anyone" in cue or "awake" in cue or "changed for" in cue)):
-            tempo = "new_thread"
-        else:
-            try:
-                sit = self.situation(now, agent)
-                if sit.get("still_h", 0) >= 1 and not sit.get("presence") and not sit.get("scare"):
-                    tempo = "still"
-            except Exception:
-                pass
-        self._last_believed_for_tempo = believed
         prior = self.recent_turns(now)
         turns: List[dict] = []
-        life = self.life_block(now, agent)
+        life = self.life_block(now, agent, hot=hot)
         if prior and getattr(config, "MIND_SHAPE", "text") == "text":
             # the journal shape: the world's cues are ephemeral; only the machine's own text persists, as pages
             turns.append({"role": "user", "content": life})
@@ -1430,4 +1379,7 @@ class Mind:
             user = cue
         else:
             user = f"{life}\n\n{cue}".strip()
-        return {"system": system, "turns": turns, "user": user, "image": img_path if kind == "look" else None, "cue": cue, "memory": memory, "life": life, "uneventful": uneventful, "tempo": tempo}
+        # EVERY CALL CARRIES THE PICTURE (Sep 7): the LOOK/THINK split is a
+        # difference of cue, never an absence of the frame. captioner._mind_generate
+        # decides still vs. sequence with the same code the pre-mind path used.
+        return {"system": system, "turns": turns, "user": user, "image": img_path, "cue": cue, "memory": memory, "life": life, "uneventful": uneventful, "hot": hot}

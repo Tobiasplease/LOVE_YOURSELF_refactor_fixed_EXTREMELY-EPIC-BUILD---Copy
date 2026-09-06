@@ -94,6 +94,7 @@ def query_model_video(
     history: Optional[List[str]] = None,
     react: bool = False,
     frame_ts: Optional[List[float]] = None,
+    turns: Optional[List[dict]] = None,
 ) -> str:
     """Query with multiple video frames (super-frame or multi-image mode)."""
     from utils.llama_server import query_llama_server_video
@@ -110,6 +111,7 @@ def query_model_video(
         history=history,
         react=react,
         frame_ts=frame_ts,
+        turns=turns,
     )
 
 

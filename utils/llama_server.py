@@ -889,6 +889,7 @@ def _query_multi_image(
     history: Optional[List[str]] = None,
     react: bool = False,
     frame_ts: Optional[List[float]] = None,
+    turns: Optional[List[dict]] = None,
 ) -> str:
     """Plain multi-image mode: send each frame as a separate image_url in the content array.
     The model sees them as independent images but can still infer temporal change.
@@ -926,7 +927,7 @@ def _query_multi_image(
     user_content.append({"type": "text", "text": prompt})
 
     # The stream: prior captions, per STREAM_MODE (document prefill or turn-pairs)
-    prefill = _append_stream_and_user(messages, history, {"role": "user", "content": user_content}, react=react)
+    prefill = _append_stream_and_user(messages, history, {"role": "user", "content": user_content}, react=react, turns=turns)
 
     payload = {
         "messages": messages,
@@ -1009,6 +1010,7 @@ def _query_superframe(
     show_progress: bool = SHOW_PROGRESS,
     history: Optional[List[str]] = None,
     react: bool = False,
+    turns: Optional[List[dict]] = None,
 ) -> str:
     """Super-frame mode: Conv3D paired frames + M-RoPE temporal encoding.
     Genuine temporal perception — the model sees continuous motion.
@@ -1060,8 +1062,8 @@ def _query_superframe(
     messages = []
     if system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt})
-    # The stream: prior captions, per STREAM_MODE (document prefill or turn-pairs)
-    prefill = _append_stream_and_user(messages, history, user_message, react=react)
+    # The stream: prior captions, per STREAM_MODE (document prefill, turn-pairs, or the mind's turns)
+    prefill = _append_stream_and_user(messages, history, user_message, react=react, turns=turns)
 
     payload = {
         "messages": messages,
@@ -1157,9 +1159,14 @@ def query_llama_server_video(
     history: Optional[List[str]] = None,
     react: bool = False,
     frame_ts: Optional[List[float]] = None,
+    turns: Optional[List[dict]] = None,
 ) -> str:
     """
     Query llama-server with multiple video frames.
+
+    turns (Sep 7): mind mode — the thread as real user/assistant turns, exactly
+    as the single-image path takes them, so a mind turn with motion in the room
+    sends the SEQUENCE without losing the conversation.
 
     Routes to either:
     - "multi": Plain multi-image (separate image_url entries, ~1200 vision tokens)
@@ -1206,6 +1213,7 @@ def query_llama_server_video(
                         timeout=timeout,
                         show_progress=show_progress,
                         skip_generation_wait=True,
+                        turns=turns,
                     )
                 return "[WARNING] llama-server unavailable"
 
@@ -1225,6 +1233,7 @@ def query_llama_server_video(
                     timeout=timeout,
                     history=history,
                     react=react,
+                    turns=turns,
                 )
             except ImportError:
                 print("[llama-server] llama-video not installed, falling back to multi-image mode")
@@ -1245,6 +1254,7 @@ def query_llama_server_video(
                     history=history,
                     react=react,
                     frame_ts=frame_ts,
+                    turns=turns,
                 )
             except Exception as e:
                 error_msg = str(e)
@@ -1279,6 +1289,7 @@ def query_llama_server_video(
                 timeout=timeout,
                 show_progress=show_progress,
                 skip_generation_wait=True,
+                turns=turns,
             )
         return "[WARNING] No frames provided"
     finally:

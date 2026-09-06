@@ -1536,7 +1536,7 @@ MIND_MEMORY_EVERY_N = int(os.getenv("MIND_MEMORY_EVERY_N", 0))  # scheduled surf
 MIND_MEMORY_MIN_AGE_S = int(os.getenv("MIND_MEMORY_MIN_AGE_S", 3600))
 MIND_NUM_PREDICT = int(os.getenv("MIND_NUM_PREDICT", 56))  # Sep 6 12:20, artist: entries should FOLLOW each other, not each be a paragraph; the running text carries the continuity
 MIND_SHORT_BEAT_P = float(os.getenv("MIND_SHORT_BEAT_P", 0.2))  # rhythm: a word, a clause, or "…" now and then (artist, Sep 6: "some captions should be a single word or even just …")
-MIND_SHORT_BEAT_TOKENS = int(os.getenv("MIND_SHORT_BEAT_TOKENS", 12))  # a word or a clause; a cut fragment ≤ MIND_BEAT_MAX_WORDS is kept as a beat, longer becomes "…"
+MIND_SHORT_BEAT_TOKENS = int(os.getenv("MIND_SHORT_BEAT_TOKENS", 12))  # a short budget now and then — a word or a clause instead of a paragraph
 MIND_PIVOTS_BEFORE_NOTICE = int(os.getenv("MIND_PIVOTS_BEFORE_NOTICE", 3))  # reframes of one subject with no step → the machine hears it
 MIND_POSITION_TTL_S = int(os.getenv("MIND_POSITION_TTL_S", 1800))  # a subject's position rides in the life block while this fresh
 MIND_PAST_THOUGHTS = int(os.getenv("MIND_PAST_THOUGHTS", 0))  # Sep 6 01:00: quoted past thoughts in the standing block bred parroting and pulled the thread  # dated past thoughts in the life block
@@ -1555,7 +1555,7 @@ MIND_LIFE_BEFORE_MAX_AGE_S = int(os.getenv("MIND_LIFE_BEFORE_MAX_AGE_S", 2 * 864
 MIND_INDEX_RETRY_S = float(os.getenv("MIND_INDEX_RETRY_S", 60))  # the thoughts index never latches to "failed"
 MIND_RECALL_MIN_GAP_S = int(os.getenv("MIND_RECALL_MIN_GAP_S", 480))  # at most one recall per this many seconds — a cap, not a schedule
 MIND_SHAPE = os.getenv("MIND_SHAPE", "text")  # "text": the thread rides as ONE running text (journal pages) + the cue; "turns": user-cue/assistant-thought pairs (Sep 5 shape)
-MIND_TEXT_ENTRIES = int(os.getenv("MIND_TEXT_ENTRIES", 10))  # entries in the running text (≤ MIND_TURN_MAX_AGE_S old)
+MIND_TEXT_ENTRIES = int(os.getenv("MIND_TEXT_ENTRIES", 30))  # Sep 7: continuation comes from the last stretch of its own text being there WHOLE (the quoted premise is gone)  # entries in the running text (≤ MIND_TURN_MAX_AGE_S old)
 
 # ── MOOD WITH DYNAMICS (Sep 6, utils/mood.py) ──
 MOOD_ENABLED = os.getenv("MOOD_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -1587,7 +1587,6 @@ DREAM_NUM_PREDICT_RECORDS = int(os.getenv("DREAM_NUM_PREDICT_RECORDS", 500))
 DREAM_NUM_PREDICT_PAGE = int(os.getenv("DREAM_NUM_PREDICT_PAGE", 420))
 DREAM_TEMPERATURE = float(os.getenv("DREAM_TEMPERATURE", 0.7))
 COMPRESSION_FREQUENCY = int(os.getenv("COMPRESSION_FREQUENCY", 5))  # the memory diff + mood/tone read every N kept thoughts (was 8, hardcoded) — the tone loop turns over faster (Sep 6 12:00)
-MIND_BEAT_MAX_WORDS = int(os.getenv("MIND_BEAT_MAX_WORDS", 6))  # a boundary-less fragment this short is a beat; longer is "…"
 MIND_TURN_MIN_DEG = float(os.getenv("MIND_TURN_MIN_DEG", 8))  # head movement since the last look below this reads as "hasn't moved"
 MIND_TONE_LOCK_READS = int(os.getenv("MIND_TONE_LOCK_READS", 2))  # consecutive tone reads sharing a word = a lock (3 was fifteen minutes of groove, 12:55 Sep 6)
 MIND_TONE_SUPPRESS_S = int(os.getenv("MIND_TONE_SUPPRESS_S", 900))  # after the noticing, the tone stays out of the frame this long
@@ -1596,15 +1595,7 @@ MIND_TEMP = float(os.getenv("MIND_TEMP", 0.75))  # north-star P7: when the regis
 MIND_VIEW_NAMED = int(os.getenv("MIND_VIEW_NAMED", 2))  # things named in the look cue — three or four read as an inventory to describe
 MIND_REFLECTION_NUM_PREDICT = int(os.getenv("MIND_REFLECTION_NUM_PREDICT", 180))  # the reflection as a page (~120 words) in mind mode; REFLECTION_NUM_PREDICT (320) elsewhere
 
-# ── TEMPO FOLLOWS THE EVENT (Sep 6 15:20; artist: "a surprise, or sinking into tiresome despair, or a new thought thread should all have different tempos") ──
-# Keyed by what just happened, never by a mood word: a surprise is short and hot, a new thread gets room, stillness sinks, plain is plain.
-MIND_TEMPO = {
-    "surprise": {"num_predict": 28, "short_p": 0.5, "temp_delta": 0.10},
-    "new_thread": {"num_predict": 96, "short_p": 0.0, "temp_delta": 0.05},
-    "still": {"num_predict": 64, "short_p": 0.15, "temp_delta": -0.05},
-    "plain": {"num_predict": 56, "short_p": 0.2, "temp_delta": 0.0},
-}
 MIND_WAKE_GAP_S = int(os.getenv("MIND_WAKE_GAP_S", 2700))  # a gap in the thread this long (45 min) = the machine was off; "woke" is the first thought after the last such gap
 MIND_LOOK_EVERY_BELIEVED_S = float(os.getenv("MIND_LOOK_EVERY_BELIEVED_S", 60))  # while someone is believed here, a look every minute (a person after days alone is the event)
 MIND_INTERVAL_BELIEVED_MULT = float(os.getenv("MIND_INTERVAL_BELIEVED_MULT", 0.6))
-MIND_PERSON_FRESH_S = int(os.getenv("MIND_PERSON_FRESH_S", 600))  # for this long after an arrival the premise yields: the person is the only thing to go on from
+MIND_HOT_STRIPS_INTERIOR = os.getenv("MIND_HOT_STRIPS_INTERIOR", "true").lower() in ("true", "1", "yes")  # north-star P6: a live event (arrival, motion, eye contact) strips the interior lines — memory, positions, past quotes — from the call; quiet lets them ride

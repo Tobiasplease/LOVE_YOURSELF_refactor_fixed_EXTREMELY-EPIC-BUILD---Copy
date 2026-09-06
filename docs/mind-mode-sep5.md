@@ -310,3 +310,67 @@ tempos"); "little to no references to memory… 'this morning this happened'".
   in at 09:02 and left after a minute or two; the view changed at 12:47; you
   wrote a page this morning" (Mind.events_today, ≤3). Recall is framed as
   remembering (mind.cue-recall "You remember, from {when}: …").
+
+## Sep 7 — every frame
+
+The diagnosis: the LOOK/THINK split had become an absence of the picture.
+Most turns were THINK turns, and a THINK turn sent no frame at all — so for
+minutes at a time the machine was writing about a room it could not currently
+see, from memory, while the turn-split patches (the quote-back premise, the
+gate-streak rule, the beat rule, the tempo table) accumulated to hold the
+thread together across that blindness.
+
+**Every call carries the picture.** `Mind.build` returns the frame on every
+turn, and `_mind_generate` decides still-vs-sequence with the SAME code the
+pre-mind path used: `_video_frame_set` (extracted verbatim from
+`_process_frame`, Sep 7) — the frame sequence when the scene has motion, one
+steady still otherwise. `query_model_video` / `query_llama_server_video` /
+`_query_multi_image` / `_query_superframe` now take `turns`, so a sequence
+call keeps the conversation. LOOK and THINK now differ only in what the cue
+says; "Eyes resting" is a word for nothing having changed, never for not
+seeing.
+
+**Everything else rides alongside, weighted by salience** (north-star P6).
+The frame (mind.system), the felt word and how long it has held, the last
+stretch of its own text WHOLE (MIND_TEXT_ENTRIES 10 → 30), memory by
+association only, and the live facts. When the moment is hot — a salience
+event, an arrival, a departure — `hot=True` strips the interior lines from the
+call: no recall, no scheduled memory, no past quotes, no positions, no
+questions, no settled belief, no previous-chain ending. When it is still, they
+all ride. Off switch: MIND_HOT_STRIPS_INTERIOR.
+
+**Presence within a second.** `_assess_scene` publishes
+`info["person_in_frame"]` — what the detector sees, taken BEFORE the
+three-stage adjudication. The cue rides on that: "Someone is here" the moment
+a person is in the frame. The adjudicator and the storage gates stay exactly
+as they were, as a LATER correction that may retract; they are simply off the
+critical path of the cue. Arrivals and departures are said once, at the edge,
+as events: mind.arrived ("Someone's just come in — the first in about 3
+hours.") and mind.left ("They've gone.").
+
+**Removed** (the turn-split patches): mind.cue-premise + `Mind.premise` +
+`strip_restated_premise` + `note_spoken` + the gate-streak rule; the beat rule
+(`Mind.beat_of` and its branch in `_mind_generate`, MIND_BEAT_MAX_WORDS); the
+tempo table (MIND_TEMPO) and MIND_PERSON_FRESH_S. Continuation comes from the
+running text being there whole. Kept and untouched: the running text's
+paragraph rule, the life block, time edges, the loop notice, the felt shift,
+recall by association (now keyed on `Mind.last_written`, the last sentence it
+actually wrote, which is never quoted into the prompt), the mood module, the
+reflection and dream passes, and the phantom / recall / echo / numeric storage
+gates.
+
+**Memory is always marked as memory.** Audited every mind.* fragment that
+carries past material: mind.life-belief ("Something you settled earlier: …",
+was the present-tense "What you've come to believe"), mind.life-questions
+("Questions you've been carrying"), mind.life-room ("What you know of the
+room, from looking before" — the registry is memory, not sight),
+mind.life-past ("You remember, from {when}, thinking: …"), mind.life-before
+("Before the gap, …"). mind.cue-recall, mind.cue-think-memory,
+mind.life-events, mind.life-position, mind.life-drawings, mind.life-people-*
+already carried their framing. The present comes only from the picture and the
+live facts.
+
+Tests: debug/test_mind.py (new section [7d]; the premise / beat / tempo checks
+are replaced by checks that they are gone, and by the picture, salience-strip,
+frame-level presence and memory-framing checks). test_mood, test_dream,
+test_phantom_presence unchanged and green.
