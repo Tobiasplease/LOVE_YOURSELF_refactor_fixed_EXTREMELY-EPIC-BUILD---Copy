@@ -1594,3 +1594,4 @@ MIND_TONE_SUPPRESS_S = int(os.getenv("MIND_TONE_SUPPRESS_S", 900))  # after the 
 MIND_TONE_FRAME = os.getenv("MIND_TONE_FRAME", "false").lower() in ("true", "1", "yes")  # OFF (Sep 6 13:30): the standing tone line spiralled within three reads — north-star anti-pattern "model-generated affect re-injected verbatim"; the TONE read still feeds the noticing
 MIND_TEMP = float(os.getenv("MIND_TEMP", 0.75))  # north-star P7: when the register slips, lower the temperature (was CAPTION_TEMP 0.9)
 MIND_VIEW_NAMED = int(os.getenv("MIND_VIEW_NAMED", 2))  # things named in the look cue — three or four read as an inventory to describe
+MIND_REFLECTION_NUM_PREDICT = int(os.getenv("MIND_REFLECTION_NUM_PREDICT", 180))  # the reflection as a page (~120 words) in mind mode; REFLECTION_NUM_PREDICT (320) elsewhere

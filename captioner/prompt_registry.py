@@ -856,6 +856,21 @@ FRAGMENTS = {
         "used_by": ["mind"],
         "placeholders": ["when", "text"],
     },
+    "reflection.page": {
+        "title": "Reflection — a page, not an essay",
+        "text": (
+            " Every so often you step back from the page for a minute and think one thing through, in the same voice, "
+            "as a paragraph on the same page: the one thought that's actually moving, not a survey of everything."
+        ),
+        "note": "Sep 6 14:50, artist: the reflection is 'dense and verbose and complicated, not much of a story arc'. In mind mode the reflection reads the last hour AS PAGES (Mind.running_text) instead of 'the record of your actual thoughts' as a list — the list invited analysis-of-a-record ('the record shows', 'the evidence suggests') — and its whole text enters the thread as a paragraph, not only an extracted kernel. Shorter: MIND_REFLECTION_NUM_PREDICT. The distill (want / question / name / belief) is unchanged.",
+        "used_by": ["reflection"],
+    },
+    "reflection.pages": {
+        "title": "Reflection — the last hour as you wrote it",
+        "text": "The last hour, as you wrote it:\n\n{pages}",
+        "used_by": ["reflection"],
+        "placeholders": ["pages"],
+    },
     "mind.cue-think-memory": {
         "title": "Cue — a memory surfaces",
         "text": "{clock}. Eyes resting. Something from {when} comes back: \"{memory}\"",

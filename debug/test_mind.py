@@ -313,6 +313,15 @@ check("a restated premise is stripped", m.strip_restated_premise("A black stick 
 check("no restatement: untouched", m.strip_restated_premise("Or maybe it means the light isn't on.", "A black stick in the dark.") == "Or maybe it means the light isn't on.")
 check("a restatement with nothing after it is kept as is", m.strip_restated_premise("A black stick in the dark.", "A black stick in the dark.") == "A black stick in the dark.")
 
+print("\n[5g] the reflection as a page (mind mode)")
+from captioner.prompts import build_reflection_loop_prompt, get_reflection_system_prompt
+pr = build_reflection_loop_prompt("What is it for?", {"hour": ["a line", "another line"], "pages": "The pen is a black stick in the dark.\n\nOr maybe it just means the light is off."})
+check("pages replace the record of lines", "The last hour, as you wrote it:" in pr and "record of your actual thoughts" not in pr, pr[:120])
+sysr = get_reflection_system_prompt("the room")
+check("the reflection frame is the page's voice", "step back from the page" in sysr and "stepped back from the stream" not in sysr, sysr[-160:])
+rf = open("captioner/reflection.py", encoding="utf-8").read()
+check("the whole reflection enters the thread", 'absorb(text[:1500], "reflection"' in rf and 'data["pages"] = _Mind.running_text' in rf)
+
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()
 a = Agent()

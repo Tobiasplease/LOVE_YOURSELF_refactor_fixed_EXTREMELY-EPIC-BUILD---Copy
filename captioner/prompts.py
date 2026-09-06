@@ -658,7 +658,10 @@ def get_reflection_system_prompt(subject: str = "") -> str:
     at the top of all five. The self-line belongs to `yourself`; the cross-day
     ledger to the two subjects whose material it actually is.
     """
-    base = P("situation.reflexive") + P("reflection.frame")
+    if getattr(config, "STREAM_MODE", "") == "mind":
+        base = P("mind.system") + P("reflection.page")  # the same voice as the page (Sep 6)
+    else:
+        base = P("situation.reflexive") + P("reflection.frame")
     if subject == "yourself":
         try:
             from captioner.context_compression import context_compressor
@@ -740,7 +743,10 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     # whether anything ever answered. That last one is how the architecture
     # lets it LEARN it needs no permission, instead of being fenced into it.
     hour = data.get("hour") or []
-    if hour:
+    pages = (data.get("pages") or "").strip()
+    if pages:
+        parts.append(P("reflection.pages").format(pages=pages))  # mind mode (Sep 6): the hour as pages, not a list of lines
+    elif hour:
         parts.append(
             "The record of your actual thoughts from the last stretch, oldest first — as you had them, not summarized:\n"
             + "\n".join(f"- {t}" for t in hour)

@@ -484,6 +484,16 @@ class ReflectionLoop:
             except Exception:
                 pass
         data = self._gather_context(subject, spine)
+        try:
+            _mind = getattr(self.agent, "mind", None)
+            if _mind is not None and self.agent._mind_on():
+                from captioner.mind import Mind as _Mind
+
+                _cut = time.time() - 75 * 60
+                _entries = [e for e in _mind.thread if e.get("text") and e.get("kind") in ("wake", "look", "think", "reflection", "memory", "dream") and e.get("ts", 0) > _cut]
+                data["pages"] = _Mind.running_text(_entries)
+        except Exception:
+            pass
         prompt = build_reflection_loop_prompt(question, data)
         system_prompt = get_reflection_system_prompt(subject)
 
@@ -496,7 +506,7 @@ class ReflectionLoop:
             options={
                 "temperature": REFLECTION_TEMPERATURE,
                 "top_p": 0.9,
-                "num_predict": REFLECTION_NUM_PREDICT,
+                "num_predict": int(getattr(config, "MIND_REFLECTION_NUM_PREDICT", REFLECTION_NUM_PREDICT)) if data.get("pages") else REFLECTION_NUM_PREDICT,
             },
             prompt_type="reflection",
         )
@@ -534,6 +544,14 @@ class ReflectionLoop:
         refl_id = None
         try:
             refl_id = get_semantic_memory().store_reflection_entry(text, subject)
+            try:
+                _mind = getattr(self.agent, "mind", None)
+                if _mind is not None and self.agent._mind_on():
+                    from captioner.prompt_registry import P as _P
+
+                    _mind.absorb(text[:1500], "reflection", _P("mind.cue-reflection").format(clock=time.strftime("%H:%M")), time.time())  # the page gets the whole paragraph (Sep 6)
+            except Exception:
+                pass
         except Exception as e:
             print(f"[REFLECT] ChromaDB store failed: {e}")
 
@@ -595,14 +613,7 @@ class ReflectionLoop:
                     )
                 if kernel and not _kernel_reject and 20 < len(kernel) < 220 and self.agent._stream_admissible(kernel):
                     self.agent._stream_push(kernel.strip())
-                    try:
-                        _mind = getattr(self.agent, "mind", None)
-                        if _mind is not None and self.agent._mind_on():
-                            from captioner.prompt_registry import P as _P
-
-                            _mind.absorb(kernel.strip(), "reflection", _P("mind.cue-reflection").format(clock=time.strftime("%H:%M")), time.time())
-                    except Exception:
-                        pass
+                    pass  # in mind mode the WHOLE reflection entered the thread above; the kernel only rides the stream
                     log_json_entry(
                         LogType.DEBUG,
                         {"message": "Reflection kernel admitted to stream", "action": "kernel_to_stream", "kernel": kernel[:160]},
