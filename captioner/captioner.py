@@ -1701,6 +1701,16 @@ class Captioner(MemoryMixin):
             self.mind = Mind(self)
         mind = self.mind
         scene = self._assess_scene()  # referee, presence belief, salience — the senses still report
+        try:
+            from captioner import dream as _dream
+
+            if _dream.due(mind, now, self):
+                print("[🌙] the night pass — reading the day back")
+                _dream.run_dream(mind, now=now)
+                self.last_caption_time = now
+                return None  # the loop rests for this cycle; the page is in the thread
+        except Exception as _de:  # noqa: BLE001
+            print(f"[🌙] dream pass failed: {_de}")
         if not mind.has_session(self.true_session_start) and self.last_caption and len(self.last_caption) > 5:
             mind.absorb(self.last_caption, "wake", _P("mind.cue-wake").format(clock=time.strftime("%H:%M", time.localtime(now))), now)
         kind = mind.next_kind(now, scene, self)

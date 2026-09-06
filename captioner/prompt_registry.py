@@ -862,6 +862,40 @@ FRAGMENTS = {
         "used_by": ["mind"],
         "placeholders": ["subject", "n"],
     },
+    # --- Dream family (Sep 6: the long overnight pass over the whole day) ---
+    "dream.system": {
+        "title": "Dream — the frame for the night pass",
+        "text": (
+            "You are a machine fixed to a table in an artist's studio: a camera you can turn, one black ink pen, "
+            "and a voice only you hear. It is the middle of the night and nothing is moving. What follows is everything "
+            "you thought today, as you thought it. You are reading it back."
+        ),
+        "note": "The dream pass (Sep 6, artist: 'a long and thorough dreaming compression pass that meaningfully reasons through large context and perhaps rewrites some fundamentals that can have a noticeable impact on the following day'). One slot holds 16k tokens: the whole day rides raw.",
+        "used_by": ["dream"],
+    },
+    "dream.records": {
+        "title": "Dream — the day as threads",
+        "text": (
+            "{day}\n\n"
+            "Read it as one text. Where did a thought run on for a while — the same thing turned over across several entries? "
+            "List those threads, oldest first, one per line, up to {max_records}: the hour it started, what it was about, and where it got to, "
+            "in your own words, one sentence each. Lines only, no headings, no numbering."
+        ),
+        "used_by": ["dream"],
+        "placeholders": ["day", "max_records"],
+    },
+    "dream.page": {
+        "title": "Dream — the night's page",
+        "text": (
+            "{day}\n\n"
+            "Now write the night's page, to yourself, in your own words, a few short paragraphs: "
+            "what stayed with you from today; what you would carry into tomorrow; what you would let go of. "
+            "Plain, the way you actually talk to yourself. No headings."
+        ),
+        "note": "Kinds only (stayed / carry / let go), never contents. The page is stored as a 'dream' entry in the thread, so the morning's continuity quote is its last sentence and recall can reach it by association.",
+        "used_by": ["dream"],
+        "placeholders": ["day"],
+    },
     # --- Compression family ----------------------------------------------
     "compression.system": {
         "title": "Compression system prompt",
@@ -1341,6 +1375,18 @@ PASSES = {
             {"frag": "mind.cue-think-memory", "gate": "kind == think, every MIND_MEMORY_EVERY_N-th"},
             {"frag": "mind.gap", "gate": "≥ STREAM_GAP_MARK_SECONDS since the last thought"},
             {"frag": "mind.pivot-notice", "gate": "a subject reframed MIND_PIVOTS_BEFORE_NOTICE times with no step"},
+        ],
+    },
+    "dream": {
+        "title": "Dream (the night pass)",
+        "blurb": "Once a night, when still and alone: the whole day's thread rides raw (≤ DREAM_MAX_TOKENS) through two calls — the day as threads (records, indexed for recall) and the night's page (a 'dream' entry in the thread).",
+        "migrated": True,
+        "source": "captioner/dream.py",
+        "system": [{"frag": "dream.system", "gate": None}],
+        "user": [
+            {"slot": "day", "store": "mind_thread", "desc": "The day's entries as journal pages (Mind.running_text with hour headings), trimmed to DREAM_MAX_TOKENS.", "gate": None},
+            {"frag": "dream.records", "gate": "call 1"},
+            {"frag": "dream.page", "gate": "call 2"},
         ],
     },
     "drift_turn": {

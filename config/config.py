@@ -1575,3 +1575,14 @@ MOOD_PRESENCE_AROUSAL = float(os.getenv("MOOD_PRESENCE_AROUSAL", 0.2))
 MOOD_PRESENCE_VALENCE = float(os.getenv("MOOD_PRESENCE_VALENCE", 0.1))
 MOOD_FELT_HELD_MIN_S = float(os.getenv("MOOD_FELT_HELD_MIN_S", 1800))  # the frame says how long the felt word has held after this
 MOOD_CADENCE_MAP = {}  # per-label overrides of utils/mood._DEFAULT_MAP, e.g. {"flat": {"interval_mult": 2.2}} — the malleable part
+
+# ── DREAM PASS (Sep 6, captioner/dream.py) ──
+DREAM_ENABLED = os.getenv("DREAM_ENABLED", "true").lower() in ("true", "1", "yes")
+DREAM_HOUR = int(os.getenv("DREAM_HOUR", 4))  # earliest hour of the night pass (local)
+DREAM_HOUR_END = int(os.getenv("DREAM_HOUR_END", 6))  # not after this hour
+DREAM_STILL_MIN_S = int(os.getenv("DREAM_STILL_MIN_S", 1800))  # room unchanged and nobody here for this long first
+DREAM_MAX_TOKENS = int(os.getenv("DREAM_MAX_TOKENS", 11000))  # the day, trimmed to fit one 16k slot with room to write
+DREAM_MAX_RECORDS = int(os.getenv("DREAM_MAX_RECORDS", 12))
+DREAM_NUM_PREDICT_RECORDS = int(os.getenv("DREAM_NUM_PREDICT_RECORDS", 500))
+DREAM_NUM_PREDICT_PAGE = int(os.getenv("DREAM_NUM_PREDICT_PAGE", 420))
+DREAM_TEMPERATURE = float(os.getenv("DREAM_TEMPERATURE", 0.7))

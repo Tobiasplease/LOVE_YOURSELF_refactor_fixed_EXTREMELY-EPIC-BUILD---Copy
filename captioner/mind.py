@@ -42,7 +42,7 @@ _STOP = set(
     "have has had do does did not no yes so if because while very more most some any all each".split()
 )
 _SENT_END_RE = re.compile(r"(?<=[.!?…])\s+")
-_KEEP_KINDS = ("look", "think", "memory", "wake", "past", "reflection")
+_KEEP_KINDS = ("look", "think", "memory", "wake", "past", "reflection", "record", "dream")
 
 
 def clock(ts: float) -> str:
@@ -167,6 +167,7 @@ class Mind:
             self.last_look_ts = float(d.get("last_look_ts") or 0.0)
             self._edges = dict(d.get("edges") or {})
             self._recalled = dict(d.get("recalled") or {})
+            self.last_dream_ts = float(d.get("last_dream_ts") or 0.0)
             try:
                 from utils import mood as _mood
 
@@ -188,6 +189,7 @@ class Mind:
                         "edges": self._edges,
                         "recalled": self._recalled,
                         "mood": self._mood_state(),
+                        "last_dream_ts": float(getattr(self, "last_dream_ts", 0.0) or 0.0),
                     },
                     f,
                     indent=1,
@@ -313,7 +315,7 @@ class Mind:
             return None
         for e in reversed(self.thread):
             ts = float(e.get("ts", 0))
-            if ts < start and e.get("kind") in ("think", "look", "reflection", "wake") and e.get("text"):
+            if ts < start and e.get("kind") in ("think", "look", "reflection", "wake", "dream") and e.get("text"):
                 if now - ts <= int(config.MIND_LIFE_BEFORE_MAX_AGE_S):
                     return e
                 return None
@@ -419,7 +421,7 @@ class Mind:
 
     def recent_turns(self, now: Optional[float] = None) -> List[dict]:
         now = now or time.time()
-        fresh = [e for e in self.thread if now - e.get("ts", 0) <= int(config.MIND_TURN_MAX_AGE_S) and e.get("text") and e.get("kind") != "past"]
+        fresh = [e for e in self.thread if now - e.get("ts", 0) <= int(config.MIND_TURN_MAX_AGE_S) and e.get("text") and e.get("kind") not in ("past", "record")]
         n = int(config.MIND_TEXT_ENTRIES) if getattr(config, "MIND_SHAPE", "text") == "text" else int(config.MIND_TURNS)
         return fresh[-n:]
 
@@ -433,10 +435,10 @@ class Mind:
         last_ts = None
         for e in entries:
             t = (e.get("text") or "").strip()
-            if not t:
+            if not t or e.get("kind") in ("record", "past"):
                 continue
             ts = float(e.get("ts", 0))
-            if not paras or (last_ts is not None and (ts - last_ts >= 180 or e.get("kind") in ("look", "reflection", "wake"))):
+            if not paras or (last_ts is not None and (ts - last_ts >= 180 or e.get("kind") in ("look", "reflection", "wake", "dream"))):
                 paras.append([])
             paras[-1].append(t)
             last_ts = ts
