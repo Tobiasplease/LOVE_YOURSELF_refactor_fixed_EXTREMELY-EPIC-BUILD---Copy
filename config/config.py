@@ -1595,3 +1595,12 @@ MIND_TONE_FRAME = os.getenv("MIND_TONE_FRAME", "false").lower() in ("true", "1",
 MIND_TEMP = float(os.getenv("MIND_TEMP", 0.75))  # north-star P7: when the register slips, lower the temperature (was CAPTION_TEMP 0.9)
 MIND_VIEW_NAMED = int(os.getenv("MIND_VIEW_NAMED", 2))  # things named in the look cue — three or four read as an inventory to describe
 MIND_REFLECTION_NUM_PREDICT = int(os.getenv("MIND_REFLECTION_NUM_PREDICT", 180))  # the reflection as a page (~120 words) in mind mode; REFLECTION_NUM_PREDICT (320) elsewhere
+
+# ── TEMPO FOLLOWS THE EVENT (Sep 6 15:20; artist: "a surprise, or sinking into tiresome despair, or a new thought thread should all have different tempos") ──
+# Keyed by what just happened, never by a mood word: a surprise is short and hot, a new thread gets room, stillness sinks, plain is plain.
+MIND_TEMPO = {
+    "surprise": {"num_predict": 28, "short_p": 0.5, "temp_delta": 0.10},
+    "new_thread": {"num_predict": 96, "short_p": 0.0, "temp_delta": 0.05},
+    "still": {"num_predict": 64, "short_p": 0.15, "temp_delta": -0.05},
+    "plain": {"num_predict": 56, "short_p": 0.2, "temp_delta": 0.0},
+}

@@ -746,6 +746,11 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     pages = (data.get("pages") or "").strip()
     if pages:
         parts.append(P("reflection.pages").format(pages=pages))  # mind mode (Sep 6): the hour as pages, not a list of lines
+        concl = data.get("conclusions") or []
+        if concl:
+            parts.append(P("reflection.conclusions").format(conclusions="\n".join(f"- {c}" for c in concl)))
+        if (data.get("situation") or "").strip():
+            parts.append(P("reflection.situation").format(situation=data["situation"].strip().rstrip(".")))
     elif hour:
         parts.append(
             "The record of your actual thoughts from the last stretch, oldest first — as you had them, not summarized:\n"
@@ -945,7 +950,10 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
             "Things you wanted before that:\n" + "\n".join(f"- ({_age_phrase(h.get('timestamp', 0))}) {h.get('desire', '')}" for h in desire_history)
         )
 
-    if hour:
+    if pages:
+        parts.append(question)
+        parts.append(P("reflection.arc").strip())  # the stance in time (Sep 6) — the subject is the lens, the arc is the spine
+    elif hour:
         # The dream ask: digest the record, then advance the story. The
         # subject question becomes a lens, not the whole assignment. The
         # embedded questions are FACT questions, not fences — "did any answer

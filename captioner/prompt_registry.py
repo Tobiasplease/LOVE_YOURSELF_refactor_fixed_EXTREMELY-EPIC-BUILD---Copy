@@ -844,7 +844,7 @@ FRAGMENTS = {
     "mind.life-belief": {"title": "Life — what it has come to believe", "text": "What you've come to believe: \"{belief}\"", "used_by": ["mind"], "placeholders": ["belief"]},
     "mind.cue-recall": {
         "title": "Cue — a past thought comes back by association",
-        "text": " Something from {when} comes back: \"{memory}\"",
+        "text": " You remember, from {when}: \"{memory}\"",
         "note": "RECALL BY ASSOCIATION (Sep 6 01:00, artist: 'it should surface more dynamically through chromaDB… otherwise it just invents a memory sentence like a clock word every eight turns'). The premise is queried against the thoughts collection; rides only when a past thought is within MIND_RECALL_MAX_DIST, older than MIND_MEMORY_MIN_AGE_S, not in the turns, not recalled within MIND_RECALL_COOLDOWN_S. Follows the premise in the same cue.",
         "used_by": ["mind"],
         "placeholders": ["when", "memory"],
@@ -864,6 +864,32 @@ FRAGMENTS = {
         ),
         "note": "Sep 6 14:50, artist: the reflection is 'dense and verbose and complicated, not much of a story arc'. In mind mode the reflection reads the last hour AS PAGES (Mind.running_text) instead of 'the record of your actual thoughts' as a list — the list invited analysis-of-a-record ('the record shows', 'the evidence suggests') — and its whole text enters the thread as a paragraph, not only an extracted kernel. Shorter: MIND_REFLECTION_NUM_PREDICT. The distill (want / question / name / belief) is unchanged.",
         "used_by": ["reflection"],
+    },
+    "reflection.conclusions": {
+        "title": "Reflection — what you settled earlier today, in order",
+        "text": "Earlier today you settled, in order:\n{conclusions}",
+        "note": "THE TIME SPINE (Sep 6 15:20, artist: the reflection should be 'looking back and seeing one's development through time… establishing what has been said and concluded and how to proceed'). Each reflection's last sentence, with its clock, and last night's page ending. The reflection used to see only how earlier reflections BEGAN.",
+        "used_by": ["reflection"],
+        "placeholders": ["conclusions"],
+    },
+    "reflection.situation": {
+        "title": "Reflection — where you are in time",
+        "text": "Where you are: {situation}.",
+        "used_by": ["reflection"],
+        "placeholders": ["situation"],
+    },
+    "reflection.arc": {
+        "title": "Reflection — the stance in time",
+        "text": " Look back along the day as you go: where you were an hour ago, what you've settled since you woke, what's still open — and what you'd do next.",
+        "note": "Kinds only. Appended after the subject question; the subject stays the lens, the arc is the spine.",
+        "used_by": ["reflection"],
+    },
+    "mind.life-events": {
+        "title": "Life — what has happened since you woke",
+        "text": "Since you woke: {events}.",
+        "note": "MEMORY AS EVENTS (Sep 6 15:20, artist: 'little to no references to memory… this morning this happened… the room has been the same since last night except when someone peeked in at 2am'). Today's episodic events with their clocks, in words — arrivals, departures, changes, drawings, the night's page.",
+        "used_by": ["mind"],
+        "placeholders": ["events"],
     },
     "reflection.pages": {
         "title": "Reflection — the last hour as you wrote it",

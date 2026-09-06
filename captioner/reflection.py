@@ -492,6 +492,11 @@ class ReflectionLoop:
                 _cut = time.time() - 75 * 60
                 _entries = [e for e in _mind.thread if e.get("text") and e.get("kind") in ("wake", "look", "think", "reflection", "memory", "dream") and e.get("ts", 0) > _cut]
                 data["pages"] = _Mind.running_text(_entries)
+                data["conclusions"] = _mind.conclusions_today(time.time())
+                _sit = _mind.situation(time.time(), self.agent)
+                _words = _mind.situation_words(_sit)
+                _woke = time.strftime("%H:%M", time.localtime(float(getattr(self.agent, "true_session_start", time.time()) or time.time())))
+                data["situation"] = (f"you woke at {_woke}" + (", " + _words if _words else ""))
         except Exception:
             pass
         prompt = build_reflection_loop_prompt(question, data)

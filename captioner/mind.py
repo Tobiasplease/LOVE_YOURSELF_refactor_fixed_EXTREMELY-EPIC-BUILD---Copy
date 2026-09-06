@@ -692,6 +692,9 @@ class Mind:
         name = self._name()
         if name:
             lines.append(P("mind.life-name").format(name=name))
+        events = self.events_today(now, agent)
+        if events:
+            lines.append(P("mind.life-events").format(events="; ".join(events)))
         before = self.before_chain(now)
         if before:
             lines.append(P("mind.life-before").format(when=when_words(now - float(before["ts"])), text=before["text"][:220]))
@@ -720,6 +723,55 @@ class Mind:
             chosen.add(m["text"])
             lines.append(P("mind.life-past").format(when=when_words(now - m["ts"]), text=m["text"][:220]))
         return " ".join(x for x in lines if x)
+
+    def events_today(self, now: float, agent, max_events: int = 3) -> List[str]:
+        """What has happened since the machine woke, as events with clocks, in
+        words: arrivals and departures, changes the referee saw, drawings, the
+        night's page. Memory material — the machine can say 'this morning'."""
+        out: List[tuple] = []
+        start = float(getattr(agent, "true_session_start", 0.0) or 0.0) or (now - 12 * 3600)
+        try:
+            from utils.episodic_log import episodic_log
+
+            pairs = episodic_log.get_pairs_in_window("person_arrived", "person_left", window_seconds=int(now - start) + 1)
+            for p in pairs:
+                st = p.get("start") or {}
+                en = p.get("end") or {}
+                if float(st.get("timestamp", 0)) < start:
+                    continue
+                if en:
+                    out.append((float(en["timestamp"]), f"someone came in at {clock(float(st['timestamp']))} and left after {dur_words(float(p.get('duration_seconds', 0)))}"))
+                else:
+                    out.append((float(st["timestamp"]), f"someone came in at {clock(float(st['timestamp']))}"))
+            for e in episodic_log.get_recent_events(window_seconds=int(now - start) + 1, types=["world_changed", "drew"]):
+                ts = float(e.get("timestamp", 0))
+                if ts < start:
+                    continue
+                if e.get("type") == "drew":
+                    out.append((ts, f"you drew at {clock(ts)}"))
+                else:
+                    out.append((ts, f"the view changed at {clock(ts)}"))
+        except Exception:
+            pass
+        for e in self.thread:
+            if e.get("kind") == "dream" and now - float(e.get("ts", 0)) < 36 * 3600:
+                out.append((float(e["ts"]), f"you wrote a page {when_words(now - float(e['ts']))}"))
+        out.sort()
+        return [t for _, t in out[-max_events:]]
+
+    def conclusions_today(self, now: float, max_items: int = 6) -> List[str]:
+        """The day's reflections' last sentences with their clocks, and last
+        night's page ending — the spine of the reflection (Sep 6)."""
+        lt = time.localtime(now)
+        midnight = now - (lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec)
+        items = []
+        for e in self.thread:
+            ts = float(e.get("ts", 0))
+            if e.get("kind") == "reflection" and ts >= midnight and e.get("text"):
+                items.append(f"{clock(ts)} — {last_sentence(e['text'])[:200]}")
+            elif e.get("kind") == "dream" and now - ts < 36 * 3600 and e.get("text"):
+                items.append(f"{when_words(now - ts)}, the night's page ended — {last_sentence(e['text'])[:200]}")
+        return items[-max_items:]
 
     def _people_line(self, now: float, agent) -> str:
         if getattr(agent, "_presence_believed", False):
@@ -1252,6 +1304,20 @@ class Mind:
             self.pending_notice = None
             cue += P("mind.pivot-notice").format(subject=subject, n=n_piv)
 
+        # TEMPO FOLLOWS THE EVENT (Sep 6): what just happened sets the room, the heat and the odds of a beat
+        tempo = "plain"
+        if kind == "look" and (getattr(agent, "_salience_event", None) or believed != getattr(self, "_last_believed_for_tempo", believed) or now - float(getattr(self, "_scare_ts", 0.0) or 0.0) < 120):
+            tempo = "surprise"
+        elif memory or (self.thread and self.thread[-1].get("kind") in ("reflection", "dream")) or ("since" in cue and ("anyone" in cue or "awake" in cue or "changed for" in cue)):
+            tempo = "new_thread"
+        else:
+            try:
+                sit = self.situation(now, agent)
+                if sit.get("still_h", 0) >= 1 and not sit.get("presence") and not sit.get("scare"):
+                    tempo = "still"
+            except Exception:
+                pass
+        self._last_believed_for_tempo = believed
         prior = self.recent_turns(now)
         turns: List[dict] = []
         life = self.life_block(now, agent)
@@ -1270,4 +1336,4 @@ class Mind:
             user = cue
         else:
             user = f"{life}\n\n{cue}".strip()
-        return {"system": system, "turns": turns, "user": user, "image": img_path if kind == "look" else None, "cue": cue, "memory": memory, "life": life, "uneventful": uneventful}
+        return {"system": system, "turns": turns, "user": user, "image": img_path if kind == "look" else None, "cue": cue, "memory": memory, "life": life, "uneventful": uneventful, "tempo": tempo}

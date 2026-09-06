@@ -1754,8 +1754,10 @@ class Captioner(MemoryMixin):
                     _arousal_adj = float(_cfg.AROUSAL_TEMP_SPAN) * (float(_read.get("arousal", 0.5)) - 0.5)
         except Exception:
             _arousal_adj = 0.0
-        _num = int(_cfg.MIND_NUM_PREDICT * _scale)
-        if _random.random() < float(_cfg.MIND_SHORT_BEAT_P) + _short_delta:
+        _tempo = (getattr(_cfg, "MIND_TEMPO", None) or {}).get(call.get("tempo") or "plain") or {}
+        _num = int(int(_tempo.get("num_predict", _cfg.MIND_NUM_PREDICT)) * _scale)
+        _arousal_adj += float(_tempo.get("temp_delta", 0.0))
+        if _random.random() < float(_tempo.get("short_p", _cfg.MIND_SHORT_BEAT_P)) + _short_delta:
             _num = int(_cfg.MIND_SHORT_BEAT_TOKENS)
         try:
             from utils import felt_loop as _fl2
