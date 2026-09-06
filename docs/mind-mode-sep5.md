@@ -285,3 +285,28 @@ output is a directive; every recursive channel needs its own noticing.
 - Earlier the same afternoon (371de8d): the standing tone line OFF, MIND_TEMP
   0.75, the look cue names ≤ 2 things — subtraction per north-star P7 and
   the anti-pattern list, after the tone spiral.
+
+## Sep 6, 15:25 — time in the reflection, tempo by event, memory as events (3052e66)
+
+The artist: the reflection should be "looking back and seeing one's
+development through time and space, establishing what has been said and
+concluded and how to proceed"; the cadence is rigid ("a surprise, or sinking
+into tiresome despair, or a new thought thread should all have different
+tempos"); "little to no references to memory… 'this morning this happened'".
+- **The reflection's spine.** In mind mode it now sees the day's reflections'
+  LAST sentences with their clocks and last night's page ending
+  (reflection.conclusions), where it is in time (reflection.situation: woke
+  at, hours alone, …), and the ask carries the stance (reflection.arc: an
+  hour ago / settled since you woke / still open / next). The old "read your
+  record above… where did you assume something the record doesn't show" ask
+  — the source of the "the record shows" register — no longer fires when
+  pages are present.
+- **Tempo follows the event** (config MIND_TEMPO, keyed by what just
+  happened, never by a mood word): surprise (an event look, a belief edge, a
+  scare) = 28 tokens, half short beats, hotter; new_thread (after a
+  reflection/dream/recall/time edge) = 96 tokens, no beats; still (≥1 h
+  unchanged, alone) = 64, cooler; plain = 56.
+- **Memory as events.** The life block carries "Since you woke: someone came
+  in at 09:02 and left after a minute or two; the view changed at 12:47; you
+  wrote a page this morning" (Mind.events_today, ≤3). Recall is framed as
+  remembering (mind.cue-recall "You remember, from {when}: …").
