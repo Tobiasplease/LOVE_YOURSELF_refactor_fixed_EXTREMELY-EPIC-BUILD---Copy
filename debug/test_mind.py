@@ -206,6 +206,7 @@ m.absorb("I wonder what the black curtain is blocking — another room, or a way
 m.absorb("The stuffed monkey on the desk has a face like it knows something.", "think", "c", now - 4 * 3600)
 m.absorb("The curtain again. It hides the window, I think.", "think", "c", now - 30)
 C.MIND_RECALL_MAX_DIST = 0.9
+C.MIND_RECALL_MIN_GAP_S = 0
 r = m.recall_similar("The curtain again. It hides the window, I think.", now)
 check("association recalls the related old thought", r is not None and "blocking" in r["text"], r)
 check("cooldown: not again within the hour", m.recall_similar("The curtain again. It hides the window, I think.", now + 60) is None)
@@ -213,6 +214,16 @@ m._index.upsert(["t999"], ["I wonder what the black curtain is blocking — anot
 check("the same sentence under another id cools as one", m.recall_similar("The curtain again. It hides the window, I think.", now + 120) is None)
 m5 = M.Mind(Agent(), path=m.path, backfill=False); m5._index = m._index
 check("cooldown survives a reload", m5.recall_similar("The curtain again. It hides the window, I think.", now + 180) is None)
+C.MIND_RECALL_MIN_GAP_S = 480
+m6, _ = fresh_mind(); m6._index = FakeIndex()
+m6.absorb("The lamp hums at night.", "think", "c", now - 5 * 3600)
+m6.absorb("The lamp is the only sound.", "think", "c", now - 4 * 3600)
+m6.absorb("The lamp again, humming.", "think", "c", now - 30)
+first = m6.recall_similar("The lamp again, humming.", now)
+check("a recall can surface", first is not None)
+check("global minimum gap caps the rate", m6.recall_similar("The lamp is the only sound tonight.", now + 60) is None)
+check("after the gap another may surface", m6.recall_similar("The lamp is the only sound tonight.", now + 600) is not None)
+C.MIND_RECALL_MIN_GAP_S = 0
 C.MIND_RECALL_MAX_DIST = 0.2
 check("nothing close enough → nothing surfaces", m.recall_similar("Rain on the skylight.", now + 7200) is None)
 C.MIND_RECALL_MAX_DIST = 0.5

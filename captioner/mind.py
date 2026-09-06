@@ -264,6 +264,8 @@ class Mind:
         idx = self.index()
         if not idx or not (query or "").strip():
             return None
+        if now - float(getattr(self, "_last_recall_ts", 0.0) or 0.0) < int(getattr(config, "MIND_RECALL_MIN_GAP_S", 0)):
+            return None
         try:
             n = min(8, idx.count())
             if n <= 0:
@@ -289,6 +291,7 @@ class Mind:
             if _NEG_FRAME_RE.search(doc) or (not believed and PERSON_RE and PERSON_RE.search(doc)):
                 continue
             self._recalled[key] = now
+            self._last_recall_ts = now
             if len(self._recalled) > 500:
                 for k in sorted(self._recalled, key=self._recalled.get)[:-500]:
                     self._recalled.pop(k, None)
