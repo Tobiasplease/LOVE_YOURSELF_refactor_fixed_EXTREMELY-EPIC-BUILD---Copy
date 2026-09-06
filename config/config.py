@@ -1556,3 +1556,22 @@ MIND_INDEX_RETRY_S = float(os.getenv("MIND_INDEX_RETRY_S", 60))  # the thoughts 
 MIND_RECALL_MIN_GAP_S = int(os.getenv("MIND_RECALL_MIN_GAP_S", 480))  # at most one recall per this many seconds — a cap, not a schedule
 MIND_SHAPE = os.getenv("MIND_SHAPE", "text")  # "text": the thread rides as ONE running text (journal pages) + the cue; "turns": user-cue/assistant-thought pairs (Sep 5 shape)
 MIND_TEXT_ENTRIES = int(os.getenv("MIND_TEXT_ENTRIES", 10))  # entries in the running text (≤ MIND_TURN_MAX_AGE_S old)
+
+# ── MOOD WITH DYNAMICS (Sep 6, utils/mood.py) ──
+MOOD_ENABLED = os.getenv("MOOD_ENABLED", "true").lower() in ("true", "1", "yes")
+MOOD_TAU_V_S = float(os.getenv("MOOD_TAU_V_S", 600))  # valence inertia
+MOOD_TAU_A_S = float(os.getenv("MOOD_TAU_A_S", 300))  # arousal inertia
+MOOD_FATIGUE_PER_H = float(os.getenv("MOOD_FATIGUE_PER_H", 0.03))  # arousal down per hour awake (cap 14 h)
+MOOD_ALONE_PER_H = float(os.getenv("MOOD_ALONE_PER_H", 0.015))  # valence down per hour alone
+MOOD_STILL_PER_H = float(os.getenv("MOOD_STILL_PER_H", 0.03))  # arousal down per hour unchanged (cap 6 h)
+MOOD_NIGHT_AROUSAL = float(os.getenv("MOOD_NIGHT_AROUSAL", 0.1))  # 00:00–06:00
+MOOD_REFUSAL_VALENCE = float(os.getenv("MOOD_REFUSAL_VALENCE", 0.08))  # per gate refusal in the last 10 min (cap 5)
+MOOD_REFUSAL_AROUSAL = float(os.getenv("MOOD_REFUSAL_AROUSAL", 0.05))
+MOOD_SETTLED_VALENCE = float(os.getenv("MOOD_SETTLED_VALENCE", 0.15))  # a reflection settled in the last 10 min
+MOOD_SETTLED_AROUSAL = float(os.getenv("MOOD_SETTLED_AROUSAL", 0.1))
+MOOD_SCARE_AROUSAL = float(os.getenv("MOOD_SCARE_AROUSAL", 0.3))  # a phantom / motion onset: arousal jumps
+MOOD_SCARE_HOLD_S = float(os.getenv("MOOD_SCARE_HOLD_S", 300))
+MOOD_PRESENCE_AROUSAL = float(os.getenv("MOOD_PRESENCE_AROUSAL", 0.2))
+MOOD_PRESENCE_VALENCE = float(os.getenv("MOOD_PRESENCE_VALENCE", 0.1))
+MOOD_FELT_HELD_MIN_S = float(os.getenv("MOOD_FELT_HELD_MIN_S", 1800))  # the frame says how long the felt word has held after this
+MOOD_CADENCE_MAP = {}  # per-label overrides of utils/mood._DEFAULT_MAP, e.g. {"flat": {"interval_mult": 2.2}} — the malleable part

@@ -167,6 +167,12 @@ class Mind:
             self.last_look_ts = float(d.get("last_look_ts") or 0.0)
             self._edges = dict(d.get("edges") or {})
             self._recalled = dict(d.get("recalled") or {})
+            try:
+                from utils import mood as _mood
+
+                _mood.load(d.get("mood") or {})
+            except Exception:
+                pass
         except Exception:
             self.thread, self.positions = [], {}
 
@@ -181,6 +187,7 @@ class Mind:
                         "last_look_ts": self.last_look_ts,
                         "edges": self._edges,
                         "recalled": self._recalled,
+                        "mood": self._mood_state(),
                     },
                     f,
                     indent=1,
@@ -572,7 +579,15 @@ class Mind:
                 return "look"
         except Exception:
             pass
-        if since_look >= float(config.MIND_LOOK_EVERY_S):
+        look_mult = 1.0
+        try:
+            from utils import felt_loop as _fl
+
+            mc = _fl._mood_cadence()
+            look_mult = float(mc["look_mult"]) if mc else 1.0
+        except Exception:
+            pass
+        if since_look >= float(config.MIND_LOOK_EVERY_S) / max(0.25, look_mult):
             return "look"
         return "think"
 
@@ -738,6 +753,92 @@ class Mind:
                 return True  # half the thought, or a quarter plus eight words in a row — a copy, not a phrase the room keeps producing
         return False
 
+    # ---- the mood with dynamics ---------------------------------------------------
+    @staticmethod
+    def _mood_state() -> dict:
+        try:
+            from utils import mood as _mood
+
+            return _mood.state()
+        except Exception:
+            return {}
+
+    def note_scare(self, now: float) -> None:
+        self._scare_ts = now
+
+    def situation(self, now: float, agent) -> dict:
+        """The situation as numbers: what the mood is pulled by."""
+        alone_h = 0.0
+        if not getattr(agent, "_presence_believed", False):
+            left = 0.0
+            try:
+                from utils.episodic_log import episodic_log
+
+                ev = episodic_log.get_last_event("person_left")
+                left = float(ev.get("timestamp", 0)) if ev else 0.0
+            except Exception:
+                pass
+            left = max(left, float(getattr(agent, "_presence_dropped_at", 0.0) or 0.0))
+            alone_h = (now - left) / 3600.0 if left else 0.0
+        start = self.thread_start(now)
+        still = float(getattr(agent, "_world_change_ts", 0.0) or 0.0)
+        hits = [h for h in (getattr(agent, "_loop_hits", None) or []) if now - float(h[0]) < 600]
+        settled = any(e.get("kind") == "reflection" and now - e.get("ts", 0) < 600 for e in self.thread[-8:])
+        scare = (now - float(getattr(self, "_scare_ts", 0.0) or 0.0) < 300) or ("moved" in str(getattr(agent, "_salience_event", "") or ""))
+        hour = time.localtime(now).tm_hour
+        return {
+            "awake_h": (now - start) / 3600.0 if start else 0.0,
+            "alone_h": alone_h,
+            "still_h": (now - still) / 3600.0 if still else 0.0,
+            "night": hour < 6,
+            "refusals": len(hits) + (1 if int(getattr(agent, "_skip_streak", 0) or 0) >= 2 else 0),
+            "settled": settled,
+            "scare": scare,
+            "presence": bool(getattr(agent, "_presence_believed", False)),
+        }
+
+    def situation_words(self, inputs: dict) -> str:
+        """The same situation in words for the compressor's FELT ask (structure: durations and facts only)."""
+        from captioner.prompts import casual_time_string
+
+        parts = []
+        if inputs.get("awake_h", 0) >= 0.5:
+            parts.append(f"awake {casual_time_string(inputs['awake_h'] * 60)}")
+        if inputs.get("alone_h", 0) >= 0.5:
+            parts.append(f"no one here for {casual_time_string(inputs['alone_h'] * 60)}")
+        if inputs.get("presence"):
+            parts.append("someone in the room")
+        if inputs.get("night"):
+            parts.append("the middle of the night")
+        if inputs.get("still_h", 0) >= 1:
+            parts.append(f"nothing changed for {casual_time_string(inputs['still_h'] * 60)}")
+        if inputs.get("refusals", 0) >= 2:
+            parts.append("your last thoughts kept circling")
+        if inputs.get("scare"):
+            parts.append("something startled you just now")
+        return ", ".join(parts)
+
+    def tick_mood(self, now: float, agent) -> dict:
+        try:
+            from utils import mood as _mood
+
+            if not getattr(config, "MOOD_ENABLED", True):
+                return {}
+            read = None
+            try:
+                from captioner.context_compression import context_compressor as _cc
+
+                read = _cc.get_last_mood_read()
+                inputs = self.situation(now, agent)
+                _cc.situation_line = self.situation_words(inputs)
+            except Exception:
+                inputs = self.situation(now, agent)
+            st = _mood.tick(now, read, inputs)
+            self._save()
+            return st
+        except Exception:
+            return {}
+
     def note_look(self, now: float) -> None:
         """A look happened, stored or not — the look timer advances either way
         (Sep 5 23:25–23:39: gated looks left the timer stale, so every phantom
@@ -870,6 +971,7 @@ class Mind:
 
     # ---- the call ----------------------------------------------------------------
     def build(self, kind: str, now: float, agent, scene: Optional[dict], img_path: Optional[str]) -> dict:
+        self.tick_mood(now, agent)
         system = P("mind.system")
         try:
             from utils.state_manager import state_manager as _sm
@@ -885,6 +987,16 @@ class Mind:
                 felt = (_cc.get_felt_state() or "").strip()
                 if felt:
                     system += P("monologue.felt-frame").format(felt=felt)
+                    try:
+                        from utils import mood as _mood
+
+                        held = _mood.felt_held_s(now)
+                        if getattr(config, "MOOD_ENABLED", True) and held >= float(config.MOOD_FELT_HELD_MIN_S):
+                            from captioner.prompts import casual_time_string
+
+                            system += P("monologue.felt-held").format(duration=casual_time_string(held / 60.0))
+                    except Exception:
+                        pass
         except Exception:
             pass
 

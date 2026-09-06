@@ -30,8 +30,25 @@ def _lerp(lo: float, hi: float, t: float) -> float:
     return lo + (hi - lo) * t
 
 
+def _mood_cadence() -> Optional[dict]:
+    """The mood's cadence map when the mood with dynamics is on (Sep 6)."""
+    try:
+        from config.config import MOOD_ENABLED
+
+        if not MOOD_ENABLED:
+            return None
+        from utils import mood
+
+        return mood.cadence()
+    except Exception:
+        return None
+
+
 def cadence_mult(read: Optional[dict] = None) -> float:
     """Multiplier on the quiet/rest caption interval. 1.0 when off or unknown."""
+    mc = _mood_cadence()
+    if mc:
+        return float(mc["interval_mult"])
     try:
         from config.config import FELT_CADENCE_MULT_CHARGED, FELT_CADENCE_MULT_DRAINED, FELT_LOOP_ENABLED
 
@@ -46,6 +63,9 @@ def cadence_mult(read: Optional[dict] = None) -> float:
 
 
 def budget_scale(read: Optional[dict] = None) -> float:
+    mc = _mood_cadence()
+    if mc:
+        return float(mc["budget_scale"])
     try:
         from config.config import FELT_BUDGET_SCALE_CHARGED, FELT_BUDGET_SCALE_DRAINED, FELT_LOOP_ENABLED
 
@@ -60,6 +80,9 @@ def budget_scale(read: Optional[dict] = None) -> float:
 
 
 def short_beat_delta(read: Optional[dict] = None) -> float:
+    mc = _mood_cadence()
+    if mc:
+        return float(mc["short_beat_delta"])
     try:
         from config.config import FELT_LOOP_ENABLED, FELT_SHORT_BEAT_DELTA_CHARGED, FELT_SHORT_BEAT_DELTA_DRAINED
 

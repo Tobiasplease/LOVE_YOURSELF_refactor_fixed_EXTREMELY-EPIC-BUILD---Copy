@@ -313,6 +313,7 @@ class ContextCompressionEngine:
                 recent_text=recent_text,
                 current_baseline=current_baseline or "(nothing yet)",
                 self_known=self_known_str,
+                situation=(getattr(self, "situation_line", "") or "").strip() or "(as before)",  # the mind's time edges, in words (Sep 6): the FELT answer is asked inside the situation
             )
 
             model_options = {

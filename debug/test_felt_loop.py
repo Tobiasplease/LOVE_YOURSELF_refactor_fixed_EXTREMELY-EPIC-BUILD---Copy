@@ -13,6 +13,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from captioner.prompt_registry import FRAGMENTS  # noqa: E402
 from captioner.prompts import _quiet_elicit_dose  # noqa: E402
 from utils import felt_loop  # noqa: E402
+from config import config as _cfg  # noqa: E402
+
+_cfg.MOOD_ENABLED = False  # this suite tests the legacy felt lerps; the mood with dynamics (Sep 6) overrides them when on
 
 fails = 0
 
@@ -51,6 +54,7 @@ import time  # noqa: E402
 context_compressor.last_mood_read = {"arousal": 0.1, "valence": -0.6, "felt": "tired", "timestamp": time.time()}
 a = A()
 from config import config  # noqa: E402
+
 
 lines = [_quiet_elicit_dose(a) for _ in range(config.QUIET_ELICIT_EVERY_N * 3)]
 fired = [x for x in lines if x]

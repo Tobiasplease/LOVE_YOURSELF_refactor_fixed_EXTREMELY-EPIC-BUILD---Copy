@@ -1747,6 +1747,14 @@ class Captioner(MemoryMixin):
         _num = int(_cfg.MIND_NUM_PREDICT * _scale)
         if _random.random() < float(_cfg.MIND_SHORT_BEAT_P) + _short_delta:
             _num = int(_cfg.MIND_SHORT_BEAT_TOKENS)
+        try:
+            from utils import felt_loop as _fl2
+
+            _mc = _fl2._mood_cadence()
+            if _mc:
+                _arousal_adj = float(_mc.get("temp_delta", 0.0))  # the mood's heat replaces the raw arousal nudge
+        except Exception:
+            pass
         opts = {
             "temperature": min(1.0, max(0.6, (_cfg.CAPTION_TEMP_BORED if self.boredom > 0.7 else _cfg.CAPTION_TEMP) + _arousal_adj)),
             "top_p": _cfg.CAPTION_TOP_P,
@@ -1797,6 +1805,8 @@ class Captioner(MemoryMixin):
         if reason in self._ECHO_REASONS or reason == "recall_echo":
             self._stream_store_ok = False
             self._last_gate_reason = reason
+            if reason == "phantom_presence":
+                mind.note_scare(now)  # a phantom is a scare to the mood, even though the words are not kept
             self._note_unstored_cycle(reason, caption[:60])
             self._note_loop_hit(caption, reason)
             log_json_entry(

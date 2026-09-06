@@ -81,6 +81,13 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_blind"],
         "placeholders": ["felt"],
     },
+    "monologue.felt-held": {
+        "title": "Felt state — how long it has held",
+        "text": " It's been like this for {duration}.",
+        "note": "Mood with dynamics (Sep 6): after MOOD_FELT_HELD_MIN_S the frame says how long the machine's own felt word has held — a fact about the state, not a new word.",
+        "used_by": ["mind"],
+        "placeholders": ["duration"],
+    },
     "monologue.pen-parked": {
         "title": "Pen parked (between drawings)",
         "text": "You are between drawings at the moment — the pen is parked, touching nothing. ",
@@ -877,12 +884,13 @@ FRAGMENTS = {
             'EVENT: one plain past-tense sentence, if something HAPPENED worth remembering — someone arrived or left, something changed or was made. Or "none".\n'
             "PLEASANTNESS: unpleasant, neutral or pleasant\n"
             "ENERGY: drained, settled, stirred or charged\n"
+            "Where you are: {situation}\n"
             "FELT: how do you feel right now, in a word or two — the way you'd answer if someone asked\n"
             'REPEATING: if the thoughts above keep circling one phrase or one idea, name it in a few words — or "none"'
         ),
         "note": "The memory diff — every 8 captions. Writes: baseline room, self-notes, events, mood/felt-state. Everything this pass keeps comes back into future prompts; everything it invents contaminates them.",
         "used_by": ["compression"],
-        "placeholders": ["recent_text", "current_baseline", "self_known"],
+        "placeholders": ["recent_text", "current_baseline", "self_known", "situation"],
     },
     "concepts.system": {
         "title": "Concept extraction system prompt",
