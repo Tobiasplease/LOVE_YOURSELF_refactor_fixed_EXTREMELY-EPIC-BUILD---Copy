@@ -412,8 +412,28 @@ class Mind:
 
     def recent_turns(self, now: Optional[float] = None) -> List[dict]:
         now = now or time.time()
-        fresh = [e for e in self.thread if now - e.get("ts", 0) <= int(config.MIND_TURN_MAX_AGE_S) and e.get("text")]
-        return fresh[-int(config.MIND_TURNS) :]
+        fresh = [e for e in self.thread if now - e.get("ts", 0) <= int(config.MIND_TURN_MAX_AGE_S) and e.get("text") and e.get("kind") != "past"]
+        n = int(config.MIND_TEXT_ENTRIES) if getattr(config, "MIND_SHAPE", "text") == "text" else int(config.MIND_TURNS)
+        return fresh[-n:]
+
+    @staticmethod
+    def running_text(entries: List[dict]) -> str:
+        """The thread as journal text: paragraphs, no stamps, no cues. A new
+        paragraph at a gap of three minutes or more, at a look, at a reflection
+        (the same rule debug/journal.py prints with). Sep 6 morning, artist:
+        'put together it should form pages of what looks like an actual journal'."""
+        paras: List[List[str]] = []
+        last_ts = None
+        for e in entries:
+            t = (e.get("text") or "").strip()
+            if not t:
+                continue
+            ts = float(e.get("ts", 0))
+            if not paras or (last_ts is not None and (ts - last_ts >= 180 or e.get("kind") in ("look", "reflection", "wake"))):
+                paras.append([])
+            paras[-1].append(t)
+            last_ts = ts
+        return "\n\n".join(" ".join(p) for p in paras)
 
     # ---- subjects, positions, pivots ----------------------------------------
     def _terms(self) -> List[str]:
@@ -918,7 +938,12 @@ class Mind:
         prior = self.recent_turns(now)
         turns: List[dict] = []
         life = self.life_block(now, agent)
-        if prior:
+        if prior and getattr(config, "MIND_SHAPE", "text") == "text":
+            # the journal shape: the world's cues are ephemeral; only the machine's own text persists, as pages
+            turns.append({"role": "user", "content": life})
+            turns.append({"role": "assistant", "content": self.running_text(prior)})
+            user = cue
+        elif prior:
             first = prior[0]
             turns.append({"role": "user", "content": f"{life}\n\n{first.get('cue') or ''}".strip()})
             turns.append({"role": "assistant", "content": first["text"]})

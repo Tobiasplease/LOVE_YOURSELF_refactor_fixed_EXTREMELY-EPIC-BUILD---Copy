@@ -86,12 +86,21 @@ a = Agent()
 m.absorb("Dust on the desk. Nobody's touched it.", "wake", "17:50. You wake.", now - 500)
 m.absorb("The chair is empty and I keep looking at it.", "look", "17:51. You look at the wooden chair.", now - 440)
 m.absorb("Maybe empty is just what a chair is most of the time.", "think", "17:52. Eyes resting.", now - 380)
+C.MIND_SHAPE = "turns"
 call = m.build("think", now, a, {}, "/tmp/x.jpg")
 roles = [t["role"] for t in call["turns"]]
-check("turns alternate user/assistant", roles == ["user", "assistant"] * 3, roles)
-check("life block opens the first user turn", call["turns"][0]["content"].startswith("It's "), call["turns"][0]["content"][:40])
-check("first cue follows the life block", "17:50. You wake." in call["turns"][0]["content"])
+check("turns shape: alternate user/assistant", roles == ["user", "assistant"] * 3, roles)
+check("turns shape: life block opens the first user turn", call["turns"][0]["content"].startswith("It's "), call["turns"][0]["content"][:40])
+check("turns shape: first cue follows the life block", "17:50. You wake." in call["turns"][0]["content"])
 check("no stamps inside assistant content", not any(re.match(r"\s*\d\d:\d\d\s*[—–-]", t["content"]) for t in call["turns"] if t["role"] == "assistant"))
+C.MIND_SHAPE = "text"
+call = m.build("think", now, a, {}, "/tmp/x.jpg")
+roles = [t["role"] for t in call["turns"]]
+check("text shape: life, then ONE running text", roles == ["user", "assistant"], roles)
+body = call["turns"][1]["content"]
+check("text shape: no cues, no stamps in the text", "You wake" not in body and "Eyes resting" not in body and not re.search(r"\d\d:\d\d", body))
+check("text shape: a look starts a new paragraph", "\n\nThe chair is empty" in body, body)
+check("text shape: the cue is the user turn", call["user"].startswith(time.strftime("%H:%M", time.localtime(now))))
 check("think turn carries no image", call["image"] is None)
 check("current cue has the clock", re.match(r"\d\d:\d\d\. ", call["user"]) is not None, call["user"][:30])
 check("think cue quotes its own last sentence as the premise", 'You were on: "Maybe empty is just what a chair is most of the time."' in call["user"], call["user"])
