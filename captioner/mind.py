@@ -1107,8 +1107,19 @@ class Mind:
             if event:
                 cue = P("mind.cue-look-event").format(clock=clock(now), event=str(event).strip(), someone=someone)
             else:
-                terms = self.in_view(agent)
-                where = P("mind.where").format(terms=", the ".join(terms[:-1]) + " and the " + terms[-1] if len(terms) > 1 else terms[0]) if terms else ""
+                placed = self.in_view_placed(agent)[:3]
+                terms = [t for t, _ in placed] if placed else self.in_view(agent)
+                if placed:
+                    groups: Dict[str, List[str]] = {}
+                    for t, w in placed:
+                        groups.setdefault(w, []).append(t)
+                    parts = []
+                    for w, ts in groups.items():
+                        names = ", the ".join(ts[:-1]) + " and the " + ts[-1] if len(ts) > 1 else ts[0]
+                        parts.append(f"{names} {w}")
+                    where = P("mind.where").format(terms="; the ".join(parts))  # "You look at the lamp and the bag high to your right; the shelf to your right."
+                else:
+                    where = P("mind.where").format(terms=", the ".join(terms[:-1]) + " and the " + terms[-1] if len(terms) > 1 else terms[0]) if terms else ""
                 verdict = getattr(agent, "_last_view_verdict", None)
                 change = {"unchanged": P("mind.change-none"), "changed": P("mind.change-yes")}.get(verdict or "", "")
                 if verdict in ("new", "baselined") and not self._seen_this_session(terms, agent):
@@ -1122,9 +1133,6 @@ class Mind:
             except Exception:
                 pose = None
             cue += self.turn_report(pose)
-            placed = self.in_view_placed(agent)
-            if placed:
-                cue += P("mind.placement").format(placements=", ".join(f"the {t} {w}" for t, w in placed[:3]))
         else:
             self.think_count += 1
             n = int(config.MIND_MEMORY_EVERY_N)

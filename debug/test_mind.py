@@ -298,10 +298,10 @@ check("placement words: to your left", M.Mind.placement_words(60, 107) == "to yo
 check("first look: no turn report", m.turn_report((90.0, 107.5)) == "")
 check("turned to the right and up", "turned to your right and up" in m.turn_report((120.0, 130.0)))
 check("head hasn't moved", "hasn't moved" in m.turn_report((122.0, 131.0)))
-m.in_view = lambda agent: ["red foam finger"]
-m.in_view_placed = lambda agent: [("red foam finger", "high to your right")]
+m.in_view = lambda agent: ["red foam finger", "black cloth bag", "wooden chair"]
+m.in_view_placed = lambda agent: [("red foam finger", "high to your right"), ("black cloth bag", "high to your right"), ("wooden chair", "low to your left")]
 lk = m.build("look", now, Agent(), {}, "/tmp/x.jpg")
-check("look cue: the look first, the body after", lk["user"].index("You look") < lk["user"].index("the red foam finger high to your right"), lk["user"])
+check("look cue: placement grouped inside the look sentence", "You look at the red foam finger and the black cloth bag high to your right; the wooden chair low to your left." in lk["user"], lk["user"])
 check("beats: '…' kept", M.Mind.beat_of("...") == "…" and M.Mind.beat_of("") == "…")
 check("beats: a short fragment kept as itself", M.Mind.beat_of("The pen is still") == "The pen is still")
 check("beats: a long cut fragment becomes …", M.Mind.beat_of("The pen is still sitting there on the desk waiting for a hand that") == "…")

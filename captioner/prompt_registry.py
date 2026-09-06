@@ -856,7 +856,13 @@ FRAGMENTS = {
         "placeholders": ["clock", "where", "change", "someone"],
     },
     "mind.cue-look-event": {"title": "Cue — something happened", "text": "{clock}. {event}{someone}", "used_by": ["mind"], "placeholders": ["clock", "event", "someone"]},
-    "mind.where": {"title": "Cue — where the look lands", "text": " at the {terms}", "used_by": ["mind"], "placeholders": ["terms"]},
+    "mind.where": {
+        "title": "Cue — where the look lands, placed",
+        "text": " at the {terms}",
+        "note": "Sep 6 12:30: the things in view carry their placement relative to the body, grouped — 'the lamp and the bag high to your right; the shelf to your right' — inside the look sentence, so it never outranks the look.",
+        "used_by": ["mind"],
+        "placeholders": ["terms"],
+    },
     "mind.turned": {
         "title": "Cue — you turned your head",
         "text": " You've turned {direction} since your last look.",
@@ -865,13 +871,7 @@ FRAGMENTS = {
         "placeholders": ["direction"],
     },
     "mind.head-still": {"title": "Cue — head hasn't moved", "text": " Your head hasn't moved.", "used_by": ["mind"]},
-    "mind.placement": {
-        "title": "Cue — where things sit relative to you",
-        "text": " {placements}.",
-        "note": "Body-relative placement of the things in view, from the registry's pan/tilt in the gaze code's own convention (left/right, high/low, ahead). One clause.",
-        "used_by": ["mind"],
-        "placeholders": ["placements"],
-    },
+
     "mind.change-none": {"title": "Cue — nothing changed", "text": " Nothing has changed since your last look.", "used_by": ["mind"]},
     "mind.change-yes": {"title": "Cue — something changed", "text": " Something's changed here since you last looked.", "used_by": ["mind"]},
     "mind.change-new": {"title": "Cue — first look this way", "text": " You haven't looked this way before.", "used_by": ["mind"]},
@@ -1381,7 +1381,7 @@ PASSES = {
             {"frag": "mind.cue-look", "gate": "kind == look, quiet"},
             {"frag": "mind.turned", "gate": "look; the head moved ≥ MIND_TURN_MIN_DEG since the last look"},
             {"frag": "mind.head-still", "gate": "look; it didn't"},
-            {"frag": "mind.placement", "gate": "look; registry terms in view, placed relative to the body"},
+            {"frag": "mind.where", "gate": "look; the things in view, grouped by where they sit relative to the body (registry pan/tilt in the gaze convention)"},
             {"frag": "mind.cue-look-event", "gate": "kind == look, salience event"},
             {"frag": "mind.cue-think", "gate": "kind == think"},
             {"frag": "mind.cue-premise", "gate": "kind == think, a previous thought exists"},
