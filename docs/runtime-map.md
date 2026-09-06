@@ -1764,3 +1764,12 @@ to `Mind.interval`. Retired in this mode: drift/wander/inward/memory-mode/
 decision ask, NEW ABOUT ME self-notes, trait promotion, persona
 consolidation, the self/durable frame block. Stores re-seeded 21:37 Sep 5
 (`debug/reseed_stores.py`, archive in event_log/archive-20260905-2137/).
+
+## Mood with dynamics (Sep 6) — utils/mood.py
+Valence/arousal with inertia, pulled by the machine's read (compressor) and
+the situation (Mind.situation: awake/alone/night/still/refusals/settled/
+scare/presence). `Mind.tick_mood` runs at every build; `utils/felt_loop`
+sources `mood.cadence()` (interval, budget, short beats, look rate, heat)
+when MOOD_ENABLED; `Mind.next_kind` applies look_mult; `_mind_generate`
+applies temp_delta; the compressor's FELT ask carries `situation_line`; the
+frame adds monologue.felt-held. Persisted in mind_thread.json "mood".

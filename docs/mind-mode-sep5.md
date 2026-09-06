@@ -175,3 +175,25 @@ reflections; no cues, no stamps] [user: cue]. The world's cues are ephemeral;
 only the machine's own text persists. MIND_TEXT_ENTRIES=10, MIND_NUM_PREDICT
 80. debug/journal.py renders mind_thread.json as pages with the same
 paragraph rule. MIND_SHAPE=turns restores the Sep 5 shape.
+
+## Sep 6, 11:34 — mood with dynamics (commit 5a83315, utils/mood.py)
+
+The artist (03:15): "awake alone in the middle of the night… should be
+notably emotive… exhausted or frustrated, maybe a bit scared, or super
+serene." Measured overnight: the compressor read "frustrated / trapped /
+stuck" again and again while the text stayed mild — the felt loop mirrored
+the text and could not climb; 3 a.m. reached the machine as facts, not as a
+state. Now: valence/arousal with inertia (MOOD_TAU_V_S 600, MOOD_TAU_A_S 300)
+pulled by the machine's own read AND the situation — hours awake, hours
+alone, night, stillness, gate refusals in the last 10 min (frustration
+material), a reflection that settled (serenity), a scare (phantom gate or
+motion onset: arousal jumps), presence. A label is derived structurally
+(flat / serene / frustrated / on_edge / keen / neutral) and drives the
+CADENCE MAP (MOOD_CADENCE_MAP overrides per label): interval, budget, short
+beats, look rate, heat — the malleable part. utils/felt_loop now sources the
+mood when MOOD_ENABLED. No words are added: the felt word stays the
+machine's own; the compressor's FELT ask is now asked INSIDE the situation
+("Where you are: awake about 4 hours, no one here for about 3 hours, the
+middle of the night…" — Mind.situation_words); the frame adds how long the
+felt word has held after MOOD_FELT_HELD_MIN_S (monologue.felt-held). State
+persists in mind_thread.json "mood". Tests: debug/test_mood.py.
