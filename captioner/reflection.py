@@ -495,7 +495,7 @@ class ReflectionLoop:
                 data["conclusions"] = _mind.conclusions_today(time.time())
                 _sit = _mind.situation(time.time(), self.agent)
                 _words = _mind.situation_words(_sit)
-                _woke = time.strftime("%H:%M", time.localtime(float(getattr(self.agent, "true_session_start", time.time()) or time.time())))
+                _woke = time.strftime("%H:%M", time.localtime(_mind.woke_at(time.time(), self.agent)))
                 data["situation"] = (f"you woke at {_woke}" + (", " + _words if _words else ""))
         except Exception:
             pass

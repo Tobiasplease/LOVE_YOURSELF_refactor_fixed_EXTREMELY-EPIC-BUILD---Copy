@@ -663,7 +663,7 @@ class Mind:
             first = time.strftime("%B %Y", time.localtime(float(life.get("first_boot", now))))
         except Exception:
             first = "some time ago"
-        woke = clock(float(getattr(agent, "true_session_start", now) or now))
+        woke = clock(self.woke_at(now, agent))
         lines.append(P("mind.life-when").format(clock=clock(now), weekday=time.strftime("%A", time.localtime(now)), daypart=daypart(now), first=first, woke=woke))
         terms = self._terms()[: int(config.MIND_ROOM_TERMS)]
         if terms:
@@ -729,7 +729,7 @@ class Mind:
         words: arrivals and departures, changes the referee saw, drawings, the
         night's page. Memory material — the machine can say 'this morning'."""
         out: List[tuple] = []
-        start = float(getattr(agent, "true_session_start", 0.0) or 0.0) or (now - 12 * 3600)
+        start = self.woke_at(now, agent)
         try:
             from utils.episodic_log import episodic_log
 
@@ -1036,6 +1036,16 @@ class Mind:
         was followed by a second look a minute later)."""
         self.last_look_ts = now
         self._save()
+
+    def woke_at(self, now: float, agent) -> float:
+        """When the machine woke TODAY: the start of the day's chain of thought,
+        not the last process restart (15:26 Sep 6: 'you woke at 15:26' after a
+        restart, and an events line that counted nothing before it)."""
+        lt = time.localtime(now)
+        midnight = now - (lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec)
+        first_today = next((float(e.get("ts", 0)) for e in self.thread if float(e.get("ts", 0)) >= midnight and e.get("kind") in ("wake", "look", "think", "reflection")), 0.0)
+        session = float(getattr(agent, "true_session_start", 0.0) or 0.0)
+        return first_today or session or now
 
     def thread_start(self, now: float) -> float:
         """Start of the continuous chain of thought (gaps under MIND_TURN_MAX_AGE_S)."""

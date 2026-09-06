@@ -343,6 +343,14 @@ _t3 = m3.build("think", now, Agent(), {}, None)
 check("a think without an event is plain, still, or a new thread (a time edge counts)", _t3["tempo"] in ("plain", "still", "new_thread") and (_t3["tempo"] != "new_thread" or "since" in _t3["user"]), (_t3["tempo"], _t3["user"][-90:]))
 ev = m.events_today(now, Agent())
 check("events today is a list of clocked events (the page counts)", any("wrote a page" in x for x in ev), ev)
+lt = time.localtime(now); midnight = now - (lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec)
+m5, _ = fresh_mind()
+if now - midnight > 4 * 3600:
+    m5.absorb("First thought of the day.", "wake", "c", midnight + 3600)
+    a5 = Agent(); a5.true_session_start = now - 120
+    check("woke = the day's first thought, not the last restart", abs(m5.woke_at(now, a5) - (midnight + 3600)) < 1)
+else:
+    check("woke = the day's first thought, not the last restart (skipped: too early in the day)", True)
 
 print("\n[6] turn kind + cadence")
 m, M = fresh_mind()
