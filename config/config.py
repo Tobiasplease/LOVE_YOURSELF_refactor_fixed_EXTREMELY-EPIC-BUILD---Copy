@@ -1605,3 +1605,5 @@ MIND_TEMPO = {
     "plain": {"num_predict": 56, "short_p": 0.2, "temp_delta": 0.0},
 }
 MIND_WAKE_GAP_S = int(os.getenv("MIND_WAKE_GAP_S", 2700))  # a gap in the thread this long (45 min) = the machine was off; "woke" is the first thought after the last such gap
+MIND_LOOK_EVERY_BELIEVED_S = float(os.getenv("MIND_LOOK_EVERY_BELIEVED_S", 60))  # while someone is believed here, a look every minute (a person after days alone is the event)
+MIND_INTERVAL_BELIEVED_MULT = float(os.getenv("MIND_INTERVAL_BELIEVED_MULT", 0.6))

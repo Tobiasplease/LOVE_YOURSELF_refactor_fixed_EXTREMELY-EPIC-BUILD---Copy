@@ -438,11 +438,15 @@ check("thread reloads", m3.thread and m3.thread[-1]["text"] == "Kept across a re
 print("\n[7b] the accumulated past reaches the prompting (Sep 6)")
 m, M = fresh_mind()
 a = Agent(); a._presence_dropped_at = now - 3700; a._world_change_ts = 0.0
+from utils.episodic_log import episodic_log as _el
+_orig_last = _el.get_last_event
+_el.get_last_event = lambda t: None  # the live log must not decide this test
 e1 = m.time_edges(now, a)
 check("time edge fires at the hour alone", "since anyone was here" in e1 and "hour" in e1, e1)
 check("same threshold doesn't fire twice", m.time_edges(now + 30, a) == "")
 e2 = m.time_edges(now + 3700, a)
 check("next threshold fires", "since anyone was here" in e2 and "2 hours" in e2, e2)
+_el.get_last_event = _orig_last
 import captioner.prompts as _pr
 _orig = _pr.build_loop_notice_line
 _pr.build_loop_notice_line = lambda agent: "You keep coming back to the lamp."

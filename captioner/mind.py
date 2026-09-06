@@ -614,13 +614,15 @@ class Mind:
     def next_kind(self, now: float, scene: Optional[dict], agent) -> str:
         hot = bool(getattr(agent, "_salience_hot", False))
         believed = bool(getattr(agent, "_presence_believed", False))
-        edge = self._last_believed is not None and believed != self._last_believed
+        edge = (self._last_believed is None and believed) or (self._last_believed is not None and believed != self._last_believed)  # a belief restored at boot is an edge too (15:56 Sep 6)
         self._last_believed = believed
         since_look = now - self.last_look_ts
         if not self.last_look_ts:
             return "look"
         if hot or edge or (scene or {}).get("view_changed"):
             return "look" if since_look >= 3 else "think"
+        if believed and since_look >= float(getattr(config, "MIND_LOOK_EVERY_BELIEVED_S", 60)):
+            return "look"
         if since_look < float(config.MIND_LOOK_MIN_GAP_S):
             return "think"
         try:
@@ -652,6 +654,8 @@ class Mind:
             base *= float(felt_loop.cadence_mult())
         except Exception:
             pass
+        if getattr(agent, "_presence_believed", False):
+            base *= float(getattr(config, "MIND_INTERVAL_BELIEVED_MULT", 0.6))
         return base
 
     # ---- the life block ------------------------------------------------------
@@ -1324,6 +1328,8 @@ class Mind:
                         cue += P("mind.cue-recall").format(when=when_words(now - memory["ts"]), memory=memory["text"][:220])
                         print(f"[MIND] recall by association (d={memory.get('distance', 0):.2f}, {when_words(now - memory['ts'])}): {memory['text'][:70]}")
         if kind == "think":
+            if believed:
+                cue += someone  # the person is in the room on think turns too, not only when the eyes are open
             cue += self._felt_shift()
             cue += self._tone_notice()
             cue += self.time_edges(now, agent)
