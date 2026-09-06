@@ -1795,6 +1795,8 @@ class Captioner(MemoryMixin):
             )
 
         _raw = self._strip_leaked_stamps(self._strip_list_shape(_generate(opts)))
+        if kind == "think":
+            _raw = mind.strip_restated_premise(_raw, getattr(mind, "_premise_used", ""))  # the continuation is the entry
         caption = self._trim_to_boundary(_raw)
         if kind == "look":
             mind.note_look(now)  # the look happened whether or not what it said is kept
@@ -1829,6 +1831,7 @@ class Captioner(MemoryMixin):
         if reason in self._ECHO_REASONS or reason == "recall_echo":
             self._stream_store_ok = False
             self._last_gate_reason = reason
+            mind.note_spoken(caption, now)  # not kept, but said — the premise moves
             if reason == "phantom_presence":
                 mind.note_scare(now)  # a phantom is a scare to the mood, even though the words are not kept
             self._note_unstored_cycle(reason, caption[:60])

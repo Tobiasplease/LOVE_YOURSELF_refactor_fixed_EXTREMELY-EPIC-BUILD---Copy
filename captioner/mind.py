@@ -387,6 +387,8 @@ class Mind:
         entry = {"ts": now, "kind": kind, "cue": (cue or "").strip(), "text": text, "subject": subject}
         if kind == "look" and uneventful:
             entry["uneventful"] = True
+        self._gate_streak = 0
+        self._spoken_tail = None
         self.thread.append(entry)
         if len(self.thread) > int(config.MIND_THREAD_MAX):
             self.thread = self.thread[-int(config.MIND_THREAD_MAX) :]
@@ -397,10 +399,38 @@ class Mind:
         self._index_add([entry])
         return entry
 
+    def note_spoken(self, text: str, now: float) -> None:
+        """A thought that was spoken but not kept still moves the premise —
+        otherwise the next turn gets the identical context and says the
+        identical thing (14:37–14:40 Sep 6: four "A black stick in the dark"
+        openings in a row, each gated, the premise never moving)."""
+        self._spoken_tail = (last_sentence(text)[:200], now)
+        self._gate_streak = int(getattr(self, "_gate_streak", 0) or 0) + 1
+
+    def strip_restated_premise(self, text: str, premise: str) -> str:
+        """The model often opens by restating the quoted premise; the
+        continuation is the entry, the restatement is not."""
+        t = (text or "").strip()
+        pz = (premise or "").strip().rstrip(".!?…").strip()
+        if not pz or len(pz.split()) < 3:
+            return t
+        head = t[: len(pz) + 3].lower()
+        if head.startswith(pz.lower()):
+            rest = t[len(pz):].lstrip(" .!?…,;:—–-")
+            if len(rest.split()) >= 3:
+                return rest[0].upper() + rest[1:] if rest[0].islower() else rest
+        return t
+
     def premise(self, now: Optional[float] = None) -> str:
         """The machine's own last sentence, quoted back as the thing to go on
         from (the continuation mechanic — see mind.cue-premise)."""
         now = now or time.time()
+        if int(getattr(self, "_gate_streak", 0) or 0) >= 2:
+            self._gate_streak = 0
+            return ""  # two refusals in a row: one turn with no premise, so the context changes
+        spoken = getattr(self, "_spoken_tail", None)
+        if spoken and (not self.thread or spoken[1] > float(self.thread[-1].get("ts", 0))) and now - spoken[1] < 600:
+            return spoken[0]
         if not self.thread:
             return ""
         last = self.thread[-1]
@@ -1199,6 +1229,7 @@ class Mind:
             else:
                 cue = P("mind.cue-think").format(clock=clock(now))
                 prem = self.premise(now)
+                self._premise_used = prem
                 if prem:
                     cue += P("mind.cue-premise").format(premise=prem)
                     memory = self.recall_similar(prem, now, believed=believed)
