@@ -1364,6 +1364,15 @@ class Mind:
             else:
                 cue = P("mind.cue-think").format(clock=clock(now))
                 prem = self.premise(now)
+                if believed:
+                    try:
+                        from utils.episodic_log import episodic_log as _el
+
+                        _arr = _el.get_last_event("person_arrived")
+                        if _arr and now - float(_arr.get("timestamp", 0)) < int(getattr(config, "MIND_PERSON_FRESH_S", 600)):
+                            prem = ""  # a person after days alone outranks the thread (Sep 6 16:15)
+                    except Exception:
+                        pass
                 self._premise_used = prem
                 if prem:
                     cue += P("mind.cue-premise").format(premise=prem)
