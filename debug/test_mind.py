@@ -271,13 +271,17 @@ check("frame carries the felt word and the tone", "Right now: frustrated." in ca
 
 print("\n[5e] the tone loop has a counter-force")
 m, M = fresh_mind()
+C.MIND_TONE_LOCK_READS = 2
 check("a fresh tone stands", not m._tone_locked("flat, analytical"))
-check("a second read with the same word: still stands", not m._tone_locked("clinical, precise, flat"))
-check("the third read with the same word: locked", m._tone_locked("flat, detached"))
+check("a second read sharing a word: locked", m._tone_locked("clinical, precise, flat"))
 n1 = m._tone_notice()
-check("said back once as a noticing", "You've been sounding flat, detached for a while now." == n1.strip(), n1)
+check("said back once as a noticing", "You've been sounding clinical, precise, flat for a while now." == n1.strip(), n1)
 check("only once", m._tone_notice() == "")
-check("a new tone stands again", not m._tone_locked("warm, quick"))
+check("suppressed for a while after the noticing, even for a new tone", m._tone_locked("warm, quick"))
+m._tone_suppressed_until = 0.0
+check("after the window a new tone stands again", not m._tone_locked("warm, quick"))
+m._tone_hist = []
+check("unrelated consecutive reads don't lock", not m._tone_locked("tired, slow") and not m._tone_locked("bright, quick"))
 p2 = _cc._parse_memory_response("PLEASANTNESS: neutral\nENERGY: settled\nFELT: still\nTONE: analytical, precise definition of physical states\nREPEATING: none")
 _cc._absorb_mood(p2)
 check("a content-pattern 'tone' is dropped", _cc.get_tone() == "", _cc.get_tone())

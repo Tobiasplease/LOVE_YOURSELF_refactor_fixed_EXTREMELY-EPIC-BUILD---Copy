@@ -1589,3 +1589,5 @@ DREAM_TEMPERATURE = float(os.getenv("DREAM_TEMPERATURE", 0.7))
 COMPRESSION_FREQUENCY = int(os.getenv("COMPRESSION_FREQUENCY", 5))  # the memory diff + mood/tone read every N kept thoughts (was 8, hardcoded) — the tone loop turns over faster (Sep 6 12:00)
 MIND_BEAT_MAX_WORDS = int(os.getenv("MIND_BEAT_MAX_WORDS", 6))  # a boundary-less fragment this short is a beat; longer is "…"
 MIND_TURN_MIN_DEG = float(os.getenv("MIND_TURN_MIN_DEG", 8))  # head movement since the last look below this reads as "hasn't moved"
+MIND_TONE_LOCK_READS = int(os.getenv("MIND_TONE_LOCK_READS", 2))  # consecutive tone reads sharing a word = a lock (3 was fifteen minutes of groove, 12:55 Sep 6)
+MIND_TONE_SUPPRESS_S = int(os.getenv("MIND_TONE_SUPPRESS_S", 900))  # after the noticing, the tone stays out of the frame this long

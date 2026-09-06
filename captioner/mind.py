@@ -843,7 +843,9 @@ class Mind:
             from captioner.context_compression import context_compressor as _cc
 
             if not getattr(_cc, "last_mood_read", None):
-                _cc.last_mood_read = dict(read)
+                restored = dict(read)
+                restored["tone"] = ""  # never restore a tone across a restart: the standing line is a directive and a stale one is worse
+                _cc.last_mood_read = restored
                 if read.get("felt"):
                     _cc.set_felt_state(read["felt"])
         except Exception:
@@ -1034,15 +1036,21 @@ class Mind:
         """Has one word run through the last three tone reads? Then the standing
         line would only deepen the groove: it leaves the frame, and the cue
         says it back once (mind.tone-held)."""
+        now = time.time()
+        if now < float(getattr(self, "_tone_suppressed_until", 0.0) or 0.0):
+            return True  # after a noticing the frame stays clear of the tone for a while — the groove needs room to fade
         hist = list(getattr(self, "_tone_hist", []) or [])
         if not hist or hist[-1] != tone:
             hist.append(tone)
             self._tone_hist = hist[-3:]
-        words = [set(w for w in _WORD_RE.findall(t.lower()) if len(w) > 3) for t in self._tone_hist]
-        locked = len(words) >= 3 and bool(words[0] & words[1] & words[2])
-        if locked and not getattr(self, "_tone_notice_pending", False) and getattr(self, "_tone_noticed_for", "") != tone:
+        n = max(2, int(getattr(config, "MIND_TONE_LOCK_READS", 2)))
+        words = [set(w for w in _WORD_RE.findall(t.lower()) if len(w) > 3) for t in self._tone_hist[-n:]]
+        locked = len(words) >= n and bool(set.intersection(*words))
+        if locked and not getattr(self, "_tone_notice_pending", False):
             self._tone_notice_pending = True
             self._tone_noticed_for = tone
+            self._tone_suppressed_until = now + int(getattr(config, "MIND_TONE_SUPPRESS_S", 900))
+            self._tone_hist = []
         return locked
 
     def _tone_notice(self) -> str:
