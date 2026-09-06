@@ -278,10 +278,12 @@ n1 = m._tone_notice()
 check("said back once as a noticing", "You've been sounding clinical, precise, flat for a while now." == n1.strip(), n1)
 check("only once", m._tone_notice() == "")
 check("suppressed for a while after the noticing, even for a new tone", m._tone_locked("warm, quick"))
-m._tone_suppressed_until = 0.0
+m._mirror["tone"]["until"] = 0.0
 check("after the window a new tone stands again", not m._tone_locked("warm, quick"))
-m._tone_hist = []
+m._mirror["tone"]["hist"] = []
 check("unrelated consecutive reads don't lock", not m._tone_locked("tired, slow") and not m._tone_locked("bright, quick"))
+check("the felt word locks the same way", not m._mirror_locked("felt", "static") and m._mirror_locked("felt", "static balance"))
+check("felt noticing rides once", "You've felt static balance for a while now." in m._tone_notice() and m._tone_notice() == "")
 p2 = _cc._parse_memory_response("PLEASANTNESS: neutral\nENERGY: settled\nFELT: still\nTONE: analytical, precise definition of physical states\nREPEATING: none")
 _cc._absorb_mood(p2)
 check("a content-pattern 'tone' is dropped", _cc.get_tone() == "", _cc.get_tone())

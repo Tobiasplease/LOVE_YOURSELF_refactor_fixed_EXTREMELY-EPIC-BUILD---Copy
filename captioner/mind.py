@@ -1032,32 +1032,41 @@ class Mind:
         except Exception:
             return ""
 
-    def _tone_locked(self, tone: str) -> bool:
-        """Has one word run through the last three tone reads? Then the standing
-        line would only deepen the groove: it leaves the frame, and the cue
-        says it back once (mind.tone-held)."""
+    def _mirror_locked(self, channel: str, phrase: str) -> bool:
+        """A standing mirror of the machine's own output is a directive. When
+        one word runs through MIND_TONE_LOCK_READS consecutive reads of a
+        channel (tone, felt), the line leaves the frame for
+        MIND_TONE_SUPPRESS_S and the cue says it back once as a noticing."""
         now = time.time()
-        if now < float(getattr(self, "_tone_suppressed_until", 0.0) or 0.0):
-            return True  # after a noticing the frame stays clear of the tone for a while — the groove needs room to fade
-        hist = list(getattr(self, "_tone_hist", []) or [])
-        if not hist or hist[-1] != tone:
-            hist.append(tone)
-            self._tone_hist = hist[-3:]
+        st = getattr(self, "_mirror", None)
+        if st is None:
+            st = self._mirror = {}
+        c = st.setdefault(channel, {"hist": [], "until": 0.0, "pending": "", "hist_max": 3})
+        if now < float(c["until"]):
+            return True
+        if not c["hist"] or c["hist"][-1] != phrase:
+            c["hist"] = (c["hist"] + [phrase])[-3:]
         n = max(2, int(getattr(config, "MIND_TONE_LOCK_READS", 2)))
-        words = [set(w for w in _WORD_RE.findall(t.lower()) if len(w) > 3) for t in self._tone_hist[-n:]]
+        words = [set(w for w in _WORD_RE.findall(t.lower()) if len(w) > 3) for t in c["hist"][-n:]]
         locked = len(words) >= n and bool(set.intersection(*words))
-        if locked and not getattr(self, "_tone_notice_pending", False):
-            self._tone_notice_pending = True
-            self._tone_noticed_for = tone
-            self._tone_suppressed_until = now + int(getattr(config, "MIND_TONE_SUPPRESS_S", 900))
-            self._tone_hist = []
+        if locked and not c["pending"]:
+            c["pending"] = phrase
+            c["until"] = now + int(getattr(config, "MIND_TONE_SUPPRESS_S", 900))
+            c["hist"] = []
         return locked
 
-    def _tone_notice(self) -> str:
-        if getattr(self, "_tone_notice_pending", False):
-            self._tone_notice_pending = False
-            return P("mind.tone-held").format(tone=getattr(self, "_tone_noticed_for", ""))
+    def _mirror_notice(self, channel: str, frag: str, key: str) -> str:
+        c = (getattr(self, "_mirror", None) or {}).get(channel)
+        if c and c.get("pending"):
+            phrase, c["pending"] = c["pending"], ""
+            return P(frag).format(**{key: phrase})
         return ""
+
+    def _tone_locked(self, tone: str) -> bool:
+        return self._mirror_locked("tone", tone)
+
+    def _tone_notice(self) -> str:
+        return self._mirror_notice("tone", "mind.tone-held", "tone") + self._mirror_notice("felt", "mind.felt-lock", "felt")
 
     def _felt_shift(self) -> str:
         """The felt loop as an event: rides once when the compressor's felt word changes."""
@@ -1121,7 +1130,7 @@ class Mind:
                 from captioner.context_compression import context_compressor as _cc
 
                 felt = (_cc.get_felt_state() or "").strip()
-                if felt:
+                if felt and not self._mirror_locked("felt", felt):
                     system += P("monologue.felt-frame").format(felt=felt)
                     try:
                         from utils import mood as _mood

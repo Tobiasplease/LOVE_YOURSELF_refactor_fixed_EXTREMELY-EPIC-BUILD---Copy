@@ -88,6 +88,13 @@ FRAGMENTS = {
         "used_by": ["mind"],
         "placeholders": ["tone"],
     },
+    "mind.felt-lock": {
+        "title": "Cue — you've felt the same for a while",
+        "text": " You've felt {felt} for a while now.",
+        "note": "The felt frame is the older mirror (Sep 4) and locks the same way the tone did (13:00 Sep 6: 'Right now: static.' → static text → read 'static'). Same counter-force: a word through two consecutive reads leaves the frame for MIND_TONE_SUPPRESS_S and is said back once as a noticing.",
+        "used_by": ["mind"],
+        "placeholders": ["felt"],
+    },
     "mind.tone-held": {
         "title": "Cue — you've been sounding the same for a while",
         "text": " You've been sounding {tone} for a while now.",
@@ -1395,7 +1402,8 @@ PASSES = {
             {"frag": "mind.cue-recall", "gate": "kind == think; a past thought within MIND_RECALL_MAX_DIST of the premise (ChromaDB 'thoughts'), aged, uncooled"},
             {"frag": "mind.life-before", "gate": "life block; the previous chain's last thought, ≤ MIND_LIFE_BEFORE_MAX_AGE_S old"},
             {"frag": "mind.felt-shift", "gate": "the felt word changed since the last turn (the felt loop as an event)"},
-            {"frag": "mind.tone-held", "gate": "think; the same word ran through the last three tone reads — the tone leaves the frame and is said back once"},
+            {"frag": "mind.tone-held", "gate": "think; the same word ran through MIND_TONE_LOCK_READS consecutive tone reads — the tone leaves the frame for MIND_TONE_SUPPRESS_S and is said back once"},
+            {"frag": "mind.felt-lock", "gate": "think; the same for the felt word"},
             {"frag": "mind.edge-alone", "gate": "think turns; a DURATION_EDGE threshold since the last person left was just crossed (belief OFF); one edge per cue"},
             {"frag": "mind.edge-still", "gate": "think turns; a threshold since the room last changed was just crossed"},
             {"frag": "mind.edge-awake", "gate": "think turns; a threshold since the thread's continuous start was just crossed"},
