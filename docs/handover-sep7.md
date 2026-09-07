@@ -201,3 +201,11 @@ current subject; keep the recall gate (`Mind.is_recall`) so a verbatim copy
 is not kept. Measure with `debug/mind_watch.py`: refrain/template gate hits
 should fall, and `debug/journal.py` pages should go further on a subject
 instead of restating it.
+
+### Job 9 — the place, the unknown, the open question
+See `docs/plan-place-and-unknowns-sep7.md` (written Sep 7 evening, after the
+artist: "it never says 'I'm in a robotics workshop'… what are we missing for
+it to be naturally exploratory and inquisitive and persistent?"). Three
+phases, in order: the place belief harvested like the NAME is; uncertainty
+surfaced honestly from the spatial registry's own confidences; open questions
+that persist until answered. Do Phase 1 alone and watch a day before Phase 2.
