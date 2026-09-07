@@ -1143,6 +1143,8 @@ class Mind:
                 since = " — the last person left " + when_words(now - float(ev["timestamp"]))
         except Exception:
             pass
+        if drifting:
+            self.scrub_phantoms(now, window_s=float(getattr(config, "MIND_SCRUB_WINDOW_S", 3600)))
         return P("mind.nobody").format(since=since, drift=P("mind.nobody-drift") if drifting else "")
 
     _SURFACE_KINDS = ("said", "recall", "question", "drawing", "settled", "want", "awake")
@@ -1237,7 +1239,8 @@ class Mind:
         for e in self.thread:
             t = (e.get("text") or "").strip()
             ts = float(e.get("ts", 0))
-            if t and now - ts <= window_s and e.get("kind") in ("look", "think", "memory", "wake", "beat") and is_phantom_presence(t):
+            _drift = is_phantom_presence(t) or (_STILL_THERE_RE.search(t) and not believed_spans)
+            if t and now - ts <= window_s and e.get("kind") in ("look", "think", "memory", "wake", "beat") and _drift:
                 dropped.append(e)
             else:
                 keep.append(e)

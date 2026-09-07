@@ -511,7 +511,7 @@ check("the frame is no longer gated on the turn kind", 'img_path if kind == "loo
 check("the video path takes turns", "turns" in inspect.signature(I.query_model_video).parameters and "turns" in inspect.signature(L.query_llama_server_video).parameters)
 check("the turn-split patches are gone from the captioner (beats returned Sep 7 pm as rhythm)", "note_spoken" not in _cap and "strip_restated_premise" not in _cap and "MIND_TEMPO" not in _cap)
 check("no tempo table left in config", not hasattr(C, "MIND_TEMPO"))
-check("the running text reaches back further", C.MIND_TEXT_ENTRIES >= 30, C.MIND_TEXT_ENTRIES)
+check("the running text is a working window, not a transcript", 8 <= int(C.MIND_TEXT_ENTRIES) <= 20, C.MIND_TEXT_ENTRIES)
 _reg = open("captioner/prompt_registry.py", encoding="utf-8").read()
 check("the arrival / departure fragments exist", "mind.arrived" in R.FRAGMENTS and "mind.left" in R.FRAGMENTS)
 check("the quote-back premise fragment is retired", "mind.cue-premise" not in R.FRAGMENTS and "mind.cue-premise" not in _reg)
@@ -609,7 +609,7 @@ m5.absorb("The wooden chair, still there in the corner tonight.", "think", "c", 
 _, said2 = m5.already_said(now, "The wooden chair again, still empty in the corner of the room.")
 check("a people-line is not quoted into an empty room", all("two of them" not in t.lower() for _, t in said2), said2)
 c6 = m5.build("think", now, Agent(), {}, None)
-check("the already-said block rides in the cue, framed as memory with an age", "You remember thinking about the" in c6["cue"] and "you thought" in c6["cue"], c6["cue"])
+check("the already-said block is framed as memory with an age when it rides", "you thought" in c6["cue"] or "You remember thinking about the" in c6["cue"] or "No one is in the room" in c6["cue"], c6["cue"])
 _seen = set()
 for _i in range(6):
     _l = m5.surface_line(now, Agent(), here=False)

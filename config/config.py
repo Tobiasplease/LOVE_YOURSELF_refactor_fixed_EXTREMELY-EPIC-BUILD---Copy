@@ -1555,7 +1555,7 @@ MIND_LIFE_BEFORE_MAX_AGE_S = int(os.getenv("MIND_LIFE_BEFORE_MAX_AGE_S", 2 * 864
 MIND_INDEX_RETRY_S = float(os.getenv("MIND_INDEX_RETRY_S", 60))  # the thoughts index never latches to "failed"
 MIND_RECALL_MIN_GAP_S = int(os.getenv("MIND_RECALL_MIN_GAP_S", 480))  # at most one recall per this many seconds — a cap, not a schedule
 MIND_SHAPE = os.getenv("MIND_SHAPE", "text")  # "text": the thread rides as ONE running text (journal pages) + the cue; "turns": user-cue/assistant-thought pairs (Sep 5 shape)
-MIND_TEXT_ENTRIES = int(os.getenv("MIND_TEXT_ENTRIES", 30))  # Sep 7: continuation comes from the last stretch of its own text being there WHOLE (the quoted premise is gone)  # entries in the running text (≤ MIND_TURN_MAX_AGE_S old)
+MIND_TEXT_ENTRIES = int(os.getenv("MIND_TEXT_ENTRIES", 12))  # Sep 7 23:38: 30 (raised this morning) made one false line re-readable for 30 turns — the amplifier, proven 9/9. Continuity costs less than an hour of invented company.
 
 # ── MOOD WITH DYNAMICS (Sep 6, utils/mood.py) ──
 MOOD_ENABLED = os.getenv("MOOD_ENABLED", "true").lower() in ("true", "1", "yes")
