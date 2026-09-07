@@ -161,3 +161,43 @@ python debug/journal.py 2              # last 2 hours as pages
 ```
 Never type the literal `machine.py` in a shell command — `stop_machine.sh`
 pkills on it and will kill your own shell.
+
+## Jobs 6–8 (added Sep 7 midday after the artist ran the every-frame branch)
+
+Symptom: with the picture on every call it describes the room every minute
+and repeats surface observations; "not kept" is a storage gate and does not
+prevent the next repeat; it believes two people are present when the artist
+alone is there (the mannequin torso/head reads as a person).
+
+### Job 6 — the count, and the mannequin named (smallest)
+`_assess_scene` knows the detector's person count. Put it in the cue when
+someone is here ("One person is here." / "Two people are here." — registry
+fragment, placeholder `count`), and keep naming the mannequin head/torso
+from the registry when they are in view (already done for looks; make sure
+it rides when a person is present too, since that is exactly when the model
+double-counts). Files: `captioner/mind.py::build` (the `lead` block),
+`captioner/captioner.py::_assess_scene`, `captioner/prompt_registry.py`.
+
+### Job 7 — seeing is available, not the assignment
+In `mind.system` (prompt_registry) the sentence "When you look, you say what
+you actually see." plus a cue that names only what is in view = an
+instruction to describe, every minute. Remove that sentence from the frame
+(note why in the fragment's `note`; wording is the artist's), and make the
+interior lines ride on EVERY call, not only sparsely: the felt word (frame),
+the want (life block, already), and — job 8 — what it has already said about
+the current subject. The 3.6-era prompt did both at once because the picture
+was one input among many; restore that balance without taking the picture
+away.
+
+### Job 8 — "what you've already said about X" (the anti-repetition context)
+Before each call, take the subject of the last kept entry
+(`Mind.subject_of`) and query the ChromaDB "thoughts" collection
+(`Mind.index()`, `recall_similar` is the pattern) with the last entry's
+text; put the top 2 older results (≥ 1 h old, not in the running text) in
+the cue as a memory block: "About the {subject}, you've already said: "…"
+and "…"" (registry fragment, placeholders `subject`, `said`). Framed as
+memory (doctrine). This replaces the one-recall-per-8-minutes rule for the
+current subject; keep the recall gate (`Mind.is_recall`) so a verbatim copy
+is not kept. Measure with `debug/mind_watch.py`: refrain/template gate hits
+should fall, and `debug/journal.py` pages should go further on a subject
+instead of restating it.
