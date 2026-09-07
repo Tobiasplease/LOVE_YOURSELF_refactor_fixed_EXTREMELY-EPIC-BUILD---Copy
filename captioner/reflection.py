@@ -277,6 +277,18 @@ class ReflectionLoop:
         try:
             # The concepts ledger, not core_facts['place'] — that prose is
             # retired from surfacing (see get_core_facts_string).
+            try:
+                from captioner.prompt_registry import P as _P2
+                from utils.episodic_log import episodic_log as _el2
+                from utils.lore_ledger import lore_ledger as _ll2
+
+                _cur2 = _ll2.current_place()
+                if _cur2.get("place"):
+                    data["place_standing"] = _P2("reflection.place-standing").format(
+                        age=_el2.format_ago(time.time() - float(_cur2.get("first_ts", time.time()))), place=_cur2["place"]
+                    )
+            except Exception:
+                pass
             inventory = get_semantic_memory().get_place_inventory(max_items=8, min_times_seen=3)
             if inventory:
                 data["place_inventory"] = inventory
@@ -471,6 +483,22 @@ class ReflectionLoop:
         # no name stands, the question invites the act of naming — the NAME slot
         # only ever harvested a name the reflection used on its own, which is
         # never. An invitation, not a name; "or leave it" keeps it a choice.
+        if subject == "the room":
+            # Phase 1 (Sep 7): once a day while no place stands, once a week when
+            # one does — so the belief can change if the room does.
+            try:
+                from captioner.prompt_registry import P as _P
+                from config.config import PLACE_INVITE_EVERY_S, PLACE_REASK_EVERY_S
+                from utils.lore_ledger import lore_ledger as _ll
+
+                _cur = _ll.current_place()
+                _every = PLACE_REASK_EVERY_S if _cur else PLACE_INVITE_EVERY_S
+                _last = float(getattr(self, "_place_invited_at", 0.0) or 0.0)
+                if _every > 0 and time.time() - _last > _every:
+                    self._place_invited_at = time.time()
+                    question = question.rstrip() + " " + _P("reflection.place-invite", default="")
+            except Exception:
+                pass
         if subject == "yourself":
             try:
                 from captioner.prompt_registry import P as _P

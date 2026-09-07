@@ -1793,3 +1793,13 @@ thoughts index with the last thing written and puts what it has already said
 about that subject in the cue (mind.already-said), replacing the scheduled
 recall on that subject. `mind.system` no longer instructs it to say what it
 sees.
+
+## The place belief (Sep 7, phase 1 of docs/plan-place-and-unknowns-sep7.md)
+`utils/lore_ledger.note_place/current_place` (+ place_history): a few words,
+no sentence, never an object already in the spatial registry. Formed by
+`reflection.place-invite` appended to the ROOM subject (once per
+PLACE_INVITE_EVERY_S while none stands, PLACE_REASK_EVERY_S when one does),
+harvested by the new PLACE slot in the distillation (11th), surfaced as
+`mind.life-place` — and `mind.life-room` shortens to
+MIND_ROOM_TERMS_WITH_PLACE when it stands. The room reflection is told the
+standing belief and its age (`reflection.place-standing`) so it can revise.

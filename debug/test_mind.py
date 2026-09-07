@@ -374,7 +374,8 @@ check("woke = the first thought after the last real gap, not the restart, not mi
 m6, _ = fresh_mind()
 for _k in range(0, 72):
     m6.absorb(f"All night, thought {_k}.", "think", "c", now - 20 * 3600 + _k * 1000)
-check("no gap since yesterday → 'yesterday at' or a duration", m6.woke_words(now, a5).startswith("yesterday at") or "ago" in m6.woke_words(now, a5), m6.woke_words(now, a5))
+_first6 = min(float(e["ts"]) for e in m6.thread)
+check("an unbroken chain wakes at its first thought, however long ago", abs(m6.woke_at(now, a5) - _first6) < 1, (m6.woke_at(now, a5), _first6))
 check("the situation says how it woke", "you woke" in lb or True)
 
 print("\n[6] turn kind + cadence")

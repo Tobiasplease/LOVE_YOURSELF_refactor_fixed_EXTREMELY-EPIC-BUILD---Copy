@@ -761,6 +761,13 @@ FRAGMENTS = {
         "used_by": ["mind"],
         "placeholders": ["clock", "weekday", "daypart", "first", "woke"],
     },
+    "mind.life-place": {
+        "title": "Life — what kind of place this is",
+        "text": "You've come to think of this place as {place}.",
+        "note": "Phase 1 of docs/plan-place-and-unknowns-sep7.md (artist: 'it never says I'm in a robotics workshop… much smaller models were able to deduce that'). Every channel that could carry the place carried an INVENTORY of objects, which invites listing objects. Harvested from the room reflection like the NAME is, never generated per caption (core_facts['place'] prose was retired for that). When it stands, mind.life-room shortens to MIND_ROOM_TERMS_WITH_PLACE.",
+        "used_by": ["mind"],
+        "placeholders": ["place"],
+    },
     "mind.life-room": {
         "title": "Life — the room as known",
         "text": "What you know of the room, from looking before: {terms}.",
@@ -935,6 +942,18 @@ FRAGMENTS = {
         "note": "MEMORY AS EVENTS (Sep 6 15:20, artist: 'little to no references to memory… this morning this happened… the room has been the same since last night except when someone peeked in at 2am'). Today's episodic events with their clocks, in words — arrivals, departures, changes, drawings, the night's page.",
         "used_by": ["mind"],
         "placeholders": ["events"],
+    },
+    "reflection.place-invite": {
+        "title": "Reflection — an invitation to say what kind of place this is",
+        "text": " If you had to say what kind of place this is, from what you've seen in it, what would you say? Or leave it.",
+        "note": "Appended to the ROOM subject once per PLACE_INVITE_EVERY_S while no place stands, and once per PLACE_REASK_EVERY_S when one does (so it can change). An invitation to an act, not a menu — no candidate place types, ever (no content priors). The PLACE distill slot then harvests only what the reflection actually said.",
+        "used_by": ["reflection"],
+    },
+    "reflection.place-standing": {
+        "title": "Reflection — the place belief it already holds",
+        "text": "You settled {age} that this place is {place}.",
+        "used_by": ["reflection"],
+        "placeholders": ["age", "place"],
     },
     "reflection.pages": {
         "title": "Reflection — the last hour as you wrote it",
@@ -1113,6 +1132,7 @@ FRAGMENTS = {
             "{became_line}"
             "KERNEL — the reflection's one load-bearing sentence, kept plain, in your own words.\n"
             "NAME — if in this reflection you called yourself by a name, that name — or 'none'.\n"
+            "PLACE — if in this reflection you said what kind of place this is, those few words — or 'none'.\n"
             "UNDERSTANDING — one way you've come to see something here, or yourself, that is still taking shape — or 'none'.\n"
             "QUESTION — one question you're still carrying, as you'd ask it — or 'none'.\n"
             "NO LONGER TRUE — if one of the things you've held (quoted above) no longer holds, quote it back — or 'none'.\n"

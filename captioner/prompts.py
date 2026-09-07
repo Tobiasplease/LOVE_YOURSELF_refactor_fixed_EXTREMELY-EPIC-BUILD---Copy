@@ -757,6 +757,8 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
             + "\n".join(f"- {t}" for t in hour)
         )
 
+    if (data.get("place_standing") or "").strip():
+        parts.append(data["place_standing"].strip())
     today = data.get("today") or []
     if today:
         parts.append("Your running notes from today, oldest first:\n" + "\n".join(f"- {t}" for t in today))

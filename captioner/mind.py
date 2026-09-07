@@ -630,7 +630,17 @@ class Mind:
             first = "some time ago"
         woke = self.woke_words(now, agent)
         lines.append(P("mind.life-when").format(clock=clock(now), weekday=time.strftime("%A", time.localtime(now)), daypart=daypart(now), first=first, woke=woke))
-        terms = self._terms()[: int(config.MIND_ROOM_TERMS)]
+        place = ""
+        try:
+            from utils.lore_ledger import lore_ledger
+
+            place = (lore_ledger.current_place() or {}).get("place", "")
+        except Exception:
+            place = ""
+        if place:
+            lines.append(P("mind.life-place").format(place=place))
+        n_terms = int(getattr(config, "MIND_ROOM_TERMS_WITH_PLACE", 4)) if place else int(config.MIND_ROOM_TERMS)
+        terms = self._terms()[:n_terms]
         if terms:
             lines.append(P("mind.life-room").format(terms=", ".join(terms)))
         lines.append(self._people_line(now, agent, here=here))

@@ -45,7 +45,7 @@ class LoreLedger:
     def __init__(self, state_path: str = None):
         self._lock = threading.Lock()
         self.state_path = state_path or _LEDGER_PATH
-        self._data = {"reveries": [], "threads": [], "name": None, "name_history": [], "questions": []}
+        self._data = {"reveries": [], "threads": [], "name": None, "name_history": [], "questions": [], "place": None, "place_history": []}
         self._load()
 
     def _load(self):
@@ -205,6 +205,38 @@ class LoreLedger:
             self._data["name"] = {"name": name, "first_ts": time.time(), "last_ts": time.time(), "times_affirmed": 0}
             self._save()
             return True
+
+    def note_place(self, text: str, known_terms=None) -> bool:
+        """What kind of place this is, in the machine's own words — harvested
+        from a reflection, never generated per caption (core_facts['place']
+        was retired for exactly that reason). Structural gate only: a few
+        words, no sentence, and not merely the name of one object already in
+        the room (that is an inventory answer, not a place)."""
+        text = (text or "").strip().strip(".\"'").strip()
+        low = text.lower()
+        if not text or len(text.split()) > 8 or len(text) > 70 or low in ("none", "nothing", "here"):
+            return False
+        if any(c in text for c in ".!?") or low.startswith(("i ", "it ", "this is a place where")):
+            return False
+        for t in known_terms or []:
+            if low == str(t).strip().lower():
+                return False  # an object, not a place
+        with self._lock:
+            cur = self._data.get("place")
+            if cur and (cur.get("place", "").lower() == low):
+                cur["last_ts"] = time.time()
+                cur["times_affirmed"] = cur.get("times_affirmed", 0) + 1
+                self._save()
+                return True
+            if cur:
+                self._data["place_history"] = (self._data.get("place_history") or [])[-9:] + [cur]
+            self._data["place"] = {"place": text, "first_ts": time.time(), "last_ts": time.time(), "times_affirmed": 0}
+            self._save()
+            return True
+
+    def current_place(self) -> dict:
+        with self._lock:
+            return dict(self._data.get("place") or {})
 
     def current_name(self) -> str:
         with self._lock:

@@ -833,7 +833,7 @@ class ContextCompressionEngine:
             if not response or not isinstance(response, str):
                 return None
             changed = []
-            trait, belief, want, kernel, became, name, lore, question, no_longer, resolved = self._parse_distillation(response)
+            trait, belief, want, kernel, became, name, lore, question, no_longer, resolved, place = self._parse_distillation(response)
             if resolved and prior_want:
                 # Sep 5 (agency round): a want closes through whatever it was
                 # about — thought through, or let go — in the machine's words.
@@ -927,6 +927,17 @@ class ContextCompressionEngine:
             try:
                 from config.config import LORE_ENABLED
 
+                if LORE_ENABLED and place:
+                    from utils.lore_ledger import lore_ledger as _llp
+
+                    try:
+                        from perception.spatial_registry import spatial_registry as _sr
+
+                        _terms = list((_sr.get_entries() or {}).keys())
+                    except Exception:
+                        _terms = []
+                    if _llp.note_place(place, known_terms=_terms):
+                        changed.append(f"place={_llp.current_place().get('place','')}")
                 if LORE_ENABLED and (name or lore or question):
                     from utils.lore_ledger import lore_ledger
 
@@ -964,7 +975,7 @@ class ContextCompressionEngine:
         """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL / NAME / LORE / QUESTION / NO LONGER TRUE; strips any leaked label; 'none'/blank → empty."""
         import re
 
-        trait = belief = want = kernel = became = name = lore = question = no_longer = resolved = ""
+        trait = belief = want = kernel = became = name = lore = question = no_longer = resolved = place = ""
 
         def _val(line: str, label_re: str) -> str:
             v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
@@ -991,9 +1002,11 @@ class ContextCompressionEngine:
                 question = _val(line, r"^question\b[\s:：—–\-]*")
             elif low.startswith("no longer"):
                 no_longer = _val(line, r"^no longer(?: true)?\b[\s:：—–\-]*")
+            elif low.startswith("place"):
+                place = _val(line, r"^place\b[\s:：—–\-]*")
             elif low.startswith("resolved"):
                 resolved = _val(line, r"^resolved\b[\s:：—–\-]*")
-        return trait, belief, want, kernel, became, name, lore, question, no_longer, resolved
+        return trait, belief, want, kernel, became, name, lore, question, no_longer, resolved, place
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).

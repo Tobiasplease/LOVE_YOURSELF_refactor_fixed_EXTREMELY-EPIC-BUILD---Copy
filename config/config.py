@@ -1610,3 +1610,7 @@ MIND_SAID_MAX_DIST = float(os.getenv("MIND_SAID_MAX_DIST", 0.6))
 MIND_SAID_MAX = int(os.getenv("MIND_SAID_MAX", 2))
 MIND_BEAT_MAX_WORDS = int(os.getenv("MIND_BEAT_MAX_WORDS", 6))  # a reply this short with no sentence end is a beat, kept as itself; longer and unfinished becomes "…"
 PHANTOM_PRESENCE_SEEN_WINDOW_S = float(os.getenv("PHANTOM_PRESENCE_SEEN_WINDOW_S", 600))  # the phantom gate needs SUSTAINED absence: if the detector saw anyone this recently, a sentence about a person is perception, not a ghost (Sep 7)
+# ── the place belief (docs/plan-place-and-unknowns-sep7.md, phase 1) ──
+PLACE_INVITE_EVERY_S = float(os.getenv("PLACE_INVITE_EVERY_S", 86400))  # invite an answer once a day while none stands
+PLACE_REASK_EVERY_S = float(os.getenv("PLACE_REASK_EVERY_S", 7 * 86400))  # and re-ask weekly once one does, so it can change
+MIND_ROOM_TERMS_WITH_PLACE = int(os.getenv("MIND_ROOM_TERMS_WITH_PLACE", 4))  # the list shortens when a place name is doing the compressing
