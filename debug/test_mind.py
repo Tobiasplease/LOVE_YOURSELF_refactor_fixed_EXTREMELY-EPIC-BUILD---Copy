@@ -628,8 +628,28 @@ check("no call goes out on a bare clock, hot or quiet", _bare == 0, _bare)
 m8, _ = fresh_mind()
 for _t, _txt in ((300, "There he is. The grey shirt."), (200, "He's there, sitting at the desk."), (60, "There he is again.")):
     m8.absorb(_txt, "think", "c", now - _t)
-check("it is told it has already noted them, so it can stop rediscovering", "already said they're here" in m8._noted_already(now), m8._noted_already(now))
-check("and only once in a while", m8._noted_already(now + 5) == "")
+check("the counter is no longer wired into the cue (it became a tic)", "cue += self._noted_already" not in open("captioner/mind.py", encoding="utf-8").read())
+m9, _ = fresh_mind()
+a9 = Agent()
+m9.build("think", now, a9, {"person_in_frame": True, "person_count": 1}, None)
+import perception.person_detection_state as _pds9b
+_o9b = _pds9b.get_person_detection_state
+
+
+class _Away9:
+    def is_looking_at_last_known_location(self, tolerance=18.0):
+        return False
+
+    def request_absence_check(self):
+        return None
+
+
+_pds9b.get_person_detection_state = lambda: _Away9()
+_c_short = m9.build("think", now + 120, a9, {"person_in_frame": False}, None)
+check("looking away still holds presence for a while", "gone" not in _c_short["cue"], _c_short["cue"])
+_c_long = m9.build("think", now + float(C.MIND_PRESENCE_MAX_UNSEEN_S) + 120, a9, {"person_in_frame": False}, None)
+check("but the hold is bounded — no more believing forever while looking away", "They've gone." in _c_long["cue"], _c_long["cue"])
+_pds9b.get_person_detection_state = _o9b
 C.MIND_SAID_MAX_DIST = 0.6
 
 src = open("captioner/mind.py", encoding="utf-8").read()

@@ -1097,7 +1097,7 @@ class Mind:
             return t if len(t.split()) <= int(getattr(config, "MIND_BEAT_MAX_WORDS", 6)) else "…"
         return None
 
-    def _noted_already(self, now: float, window_s: float = 600.0, n_min: int = 2) -> str:
+    def _noted_already(self, now: float, window_s: float = 600.0, n_min: int = 2) -> str:  # RETIRED Sep 7 22:30: giving it a count made it narrate the count ("Eight times. Just eight.") instead of stopping. Kept for the test; not wired.
         """How many times it has already said someone is here, lately — so the
         next turn continues instead of rediscovering them (Sep 7)."""
         try:
@@ -1427,6 +1427,7 @@ class Mind:
             in_frame = False
         if in_frame:
             self._here_last_seen = now
+            self._here_confirmed = now  # the last ACTUAL sighting, never extended by the look-away guard
         elif not believed:
             # Sep 7 (artist: "it looked away from me and declared I was gone"):
             # the adjudicated belief has obeyed this law since Sep 4, the
@@ -1437,8 +1438,17 @@ class Mind:
 
                 if not _gpds().is_looking_at_last_known_location(tolerance=float(config.PRESENCE_ABSENCE_LOOK_TOLERANCE)):
                     self._here_last_seen = now  # the eyes are elsewhere; that is not a departure
+                    if now - float(getattr(self, "_absence_asked", 0.0) or 0.0) > 60:
+                        self._absence_asked = now
+                        _gpds().request_absence_check()  # go and look, rather than believing forever
             except Exception:
                 self._here_last_seen = now  # fail closed: never invent a departure from a failure to check
+            # BOUNDED (Sep 7 22:30): the guard above kept presence alive for an
+            # hour on one sighting while the artist was not in the building, and
+            # the machine wrote a person under the shelf the whole time.
+            _conf = float(getattr(self, "_here_confirmed", 0.0) or 0.0)
+            if _conf and now - _conf > float(getattr(config, "MIND_PRESENCE_MAX_UNSEEN_S", 300)):
+                self._here_last_seen = 0.0
         held = (now - float(getattr(self, "_here_last_seen", 0.0) or 0.0)) < float(getattr(config, "MIND_PRESENCE_HOLD_S", 60))
         was_here = getattr(self, "_last_here", None)
         here = believed or in_frame or (bool(was_here) and held)  # a missed frame is not a departure
@@ -1532,8 +1542,6 @@ class Mind:
             cue += self._tone_notice()
             cue += self.time_edges(now, agent)
             cue += self._loop_line(agent)
-        if here:
-            cue += self._noted_already(now)
         if not memory:
             # EVERY call carries context (Sep 7, the artist: "there should be
             # absolutely no calls without a good bit of context"). Hot cycles
