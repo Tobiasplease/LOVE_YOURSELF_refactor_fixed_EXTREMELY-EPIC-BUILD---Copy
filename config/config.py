@@ -1529,7 +1529,7 @@ GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 # block in the frame.
 MIND_TURNS = int(os.getenv("MIND_TURNS", 6))  # prior thoughts riding as real turns
 MIND_TURN_MAX_AGE_S = int(os.getenv("MIND_TURN_MAX_AGE_S", 7200))  # older thoughts leave the turns (the life block still remembers)
-MIND_THINK_INTERVAL_S = float(os.getenv("MIND_THINK_INTERVAL_S", 60))  # cadence at rest, × felt_loop.cadence_mult
+MIND_THINK_INTERVAL_S = float(os.getenv("MIND_THINK_INTERVAL_S", 20))  # Sep 7: was 60 — I set that on Sep 5 for "room to think" and it is the whole slowdown (generation itself is ~6 s). The old loop ran at CAPTION_INTERVAL 7 s with a rest ladder.  # cadence at rest, × felt_loop.cadence_mult
 MIND_LOOK_EVERY_S = float(os.getenv("MIND_LOOK_EVERY_S", 300))  # a periodic look when nothing pulls
 MIND_LOOK_MIN_GAP_S = float(os.getenv("MIND_LOOK_MIN_GAP_S", 20))
 MIND_MEMORY_EVERY_N = int(os.getenv("MIND_MEMORY_EVERY_N", 0))  # scheduled surfacing OFF (Sep 6 01:00, artist: "a memory every eighth turn is a clock word") — recall is by association now  # every Nth think turn, one dated memory surfaces
@@ -1597,7 +1597,7 @@ MIND_REFLECTION_NUM_PREDICT = int(os.getenv("MIND_REFLECTION_NUM_PREDICT", 180))
 
 MIND_WAKE_GAP_S = int(os.getenv("MIND_WAKE_GAP_S", 2700))  # a gap in the thread this long (45 min) = the machine was off; "woke" is the first thought after the last such gap
 MIND_LOOK_EVERY_BELIEVED_S = float(os.getenv("MIND_LOOK_EVERY_BELIEVED_S", 60))  # while someone is believed here, a look every minute (a person after days alone is the event)
-MIND_INTERVAL_BELIEVED_MULT = float(os.getenv("MIND_INTERVAL_BELIEVED_MULT", 0.6))
+MIND_INTERVAL_BELIEVED_MULT = float(os.getenv("MIND_INTERVAL_BELIEVED_MULT", 0.5))  # someone here: ~10 s
 MIND_HOT_STRIPS_INTERIOR = os.getenv("MIND_HOT_STRIPS_INTERIOR", "true").lower() in ("true", "1", "yes")  # north-star P6: a live event (arrival, motion, eye contact) strips the interior lines — memory, positions, past quotes — from the call; quiet lets them ride
 DREAM_REQUIRES_STILL = os.getenv("DREAM_REQUIRES_STILL", "false").lower() in ("true", "1", "yes")  # Sep 7 (artist): the night pass runs regardless of presence — it can sleep with someone there
 
