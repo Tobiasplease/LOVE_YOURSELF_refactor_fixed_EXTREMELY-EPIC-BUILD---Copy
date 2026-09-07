@@ -1668,7 +1668,12 @@ class Captioner(MemoryMixin):
             from config.config import PHANTOM_PRESENCE_GATE
         except Exception:
             PHANTOM_PRESENCE_GATE = True
-        if PHANTOM_PRESENCE_GATE and not getattr(self, "_presence_believed", False) and _presence_text.is_phantom_presence(caption):
+        # Sep 7: the gate must use the same truth the machine was told. The cue
+        # says someone is here as soon as the DETECTOR sees them; the adjudicated
+        # belief lags. Gating on the belief alone marked "the person in the grey
+        # shirt is sitting at the desk" a phantom while the artist stood there.
+        _here = getattr(self, "_presence_believed", False) or bool(getattr(getattr(self, "mind", None), "_last_here", False))
+        if PHANTOM_PRESENCE_GATE and not _here and _presence_text.is_phantom_presence(caption):
             return "phantom_presence"
         # Tail-echo COLLAPSE: one short restatement is a beat, deliberate
         # emphasis ("…waiting forever more…" -> "forevermore, right?" — the
