@@ -1087,6 +1087,21 @@ class Mind:
             return t if len(t.split()) <= int(getattr(config, "MIND_BEAT_MAX_WORDS", 6)) else "…"
         return None
 
+    def _noted_already(self, now: float, window_s: float = 600.0, n_min: int = 2) -> str:
+        """How many times it has already said someone is here, lately — so the
+        next turn continues instead of rediscovering them (Sep 7)."""
+        try:
+            from utils.presence_text import PERSON_RE
+        except Exception:
+            return ""
+        n = sum(1 for e in self.thread[-10:] if now - float(e.get("ts", 0)) <= window_s and e.get("text") and PERSON_RE.search(e["text"]))
+        if n < n_min:
+            return ""
+        if now - float(getattr(self, "_noted_said_ts", 0.0) or 0.0) < 120:
+            return ""
+        self._noted_said_ts = now
+        return P("mind.noted-already").format(n={2: "twice", 3: "three times"}.get(n, f"{n} times"))
+
     _SURFACE_KINDS = ("said", "recall", "question", "drawing", "settled", "want", "awake")
 
     def surface_line(self, now: float, agent, here: bool = False) -> str:
@@ -1507,6 +1522,8 @@ class Mind:
             cue += self._tone_notice()
             cue += self.time_edges(now, agent)
             cue += self._loop_line(agent)
+        if here:
+            cue += self._noted_already(now)
         if not memory:
             # EVERY call carries context (Sep 7, the artist: "there should be
             # absolutely no calls without a good bit of context"). Hot cycles

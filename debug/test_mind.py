@@ -624,6 +624,11 @@ for _i in range(8):
     if len(_c7["cue"].strip()) <= 8:
         _bare += 1
 check("no call goes out on a bare clock, hot or quiet", _bare == 0, _bare)
+m8, _ = fresh_mind()
+for _t, _txt in ((300, "There he is. The grey shirt."), (200, "He's there, sitting at the desk."), (60, "There he is again.")):
+    m8.absorb(_txt, "think", "c", now - _t)
+check("it is told it has already noted them, so it can stop rediscovering", "already said they're here" in m8._noted_already(now), m8._noted_already(now))
+check("and only once in a while", m8._noted_already(now + 5) == "")
 C.MIND_SAID_MAX_DIST = 0.6
 
 src = open("captioner/mind.py", encoding="utf-8").read()

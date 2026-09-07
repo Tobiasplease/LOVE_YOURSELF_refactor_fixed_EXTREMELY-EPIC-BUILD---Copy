@@ -796,6 +796,13 @@ FRAGMENTS = {
         "used_by": ["mind"],
         "placeholders": ["terms"],
     },
+    "mind.noted-already": {
+        "title": "Cue — you have already noted them being here",
+        "text": " You've already said they're here, {n} times in the last few minutes.",
+        "note": "Sep 7 (artist: 'the he's right there sentence keeps getting repeated continuously'). With a person in view every frame, each turn re-announces the discovery. This is the loop notice applied to presence: what it has already done is a fact it can hear, and catching yourself is a thought. Structure only — the count is of its own entries.",
+        "used_by": ["mind"],
+        "placeholders": ["n"],
+    },
     "mind.cue-question": {
         "title": "Cue — a question you carry",
         "text": " A question you've been carrying: \"{question}\"",
