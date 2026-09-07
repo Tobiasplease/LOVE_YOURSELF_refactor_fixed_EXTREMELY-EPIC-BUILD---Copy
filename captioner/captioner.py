@@ -903,6 +903,8 @@ class Captioner(MemoryMixin):
 
                 verdict = presence_adjudicator.gate()
                 info["presence_adjudication"] = verdict or "pending"
+                if verdict == "person":
+                    self._adj_person_ts = time.time()  # the only signal allowed to license person-talk
                 if verdict != "person":
                     seen_now = False  # thing, or not yet judged — no belief, no arrival
             except Exception:
@@ -1676,8 +1678,13 @@ class Captioner(MemoryMixin):
         # shirt is sitting at the desk" a phantom while the artist stood there.
         from config.config import PHANTOM_PRESENCE_SEEN_WINDOW_S as _seen_win
 
-        _seen_recently = time.time() - float(getattr(self, "_last_person_seen_ts", 0.0) or 0.0) < float(_seen_win)
-        _here = getattr(self, "_presence_believed", False) or bool(getattr(getattr(self, "mind", None), "_last_here", False)) or _seen_recently
+        # Sep 7 22:35: raw detection may NOT license person-talk — the face
+        # detector fires on the mannequin head, so "seen recently" was true
+        # almost continuously and half an output of invented company went
+        # ungated while the artist was not in the building. Only the
+        # adjudicator, which exists to tell a person from a thing, counts.
+        _adj_person = time.time() - float(getattr(self, "_adj_person_ts", 0.0) or 0.0) < float(_seen_win)
+        _here = getattr(self, "_presence_believed", False) or _adj_person
         if PHANTOM_PRESENCE_GATE and not _here and _presence_text.is_phantom_presence(caption):
             return "phantom_presence"
         # Tail-echo COLLAPSE: one short restatement is a beat, deliberate

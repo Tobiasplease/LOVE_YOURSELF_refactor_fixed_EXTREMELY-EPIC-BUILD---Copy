@@ -803,6 +803,13 @@ FRAGMENTS = {
         "used_by": ["mind"],
         "placeholders": ["terms"],
     },
+    "mind.nobody": {
+        "title": "Cue — nobody is in the room",
+        "text": " No one is in the room{since}. You've been writing as if someone were.",
+        "note": "Sep 7 22:35 (artist: 'I am NOT there… it should correct itself'). A gate refuses a sentence after it is written; this puts the fact in front of the machine BEFORE it writes, and only when its own recent entries claimed a person. Dosed, so it is a correction and not a chant.",
+        "used_by": ["mind"],
+        "placeholders": ["since"],
+    },
     "mind.noted-already": {
         "title": "Cue — you have already noted them being here",
         "text": " You've already said they're here, {n} times in the last few minutes.",

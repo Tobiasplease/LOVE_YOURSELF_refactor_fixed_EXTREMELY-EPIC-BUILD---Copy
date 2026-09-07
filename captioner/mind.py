@@ -1112,6 +1112,30 @@ class Mind:
         self._noted_said_ts = now
         return P("mind.noted-already").format(n={2: "twice", 3: "three times"}.get(n, f"{n} times"))
 
+    def _nobody_line(self, now: float, agent) -> str:
+        """Nobody is here, and it has just written as if someone were — the
+        correction goes in BEFORE the next thought, not into a gate after it."""
+        try:
+            from utils.presence_text import PERSON_RE
+        except Exception:
+            return ""
+        recent = [e for e in self.thread[-6:] if now - float(e.get("ts", 0)) <= 600 and e.get("text")]
+        if not any(PERSON_RE.search(e["text"]) for e in recent):
+            return ""
+        if now - float(getattr(self, "_nobody_said_ts", 0.0) or 0.0) < 120:
+            return ""
+        self._nobody_said_ts = now
+        since = ""
+        try:
+            from utils.episodic_log import episodic_log
+
+            ev = episodic_log.get_last_event("person_left")
+            if ev:
+                since = " — the last person left " + when_words(now - float(ev["timestamp"]))
+        except Exception:
+            pass
+        return P("mind.nobody").format(since=since)
+
     _SURFACE_KINDS = ("said", "recall", "question", "drawing", "settled", "want", "awake")
 
     def surface_line(self, now: float, agent, here: bool = False) -> str:
@@ -1542,6 +1566,8 @@ class Mind:
             cue += self._tone_notice()
             cue += self.time_edges(now, agent)
             cue += self._loop_line(agent)
+        if not here:
+            cue += self._nobody_line(now, agent)
         if not memory:
             # EVERY call carries context (Sep 7, the artist: "there should be
             # absolutely no calls without a good bit of context"). Hot cycles
