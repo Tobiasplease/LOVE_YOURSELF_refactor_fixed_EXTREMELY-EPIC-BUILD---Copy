@@ -501,6 +501,7 @@ src = open("captioner/captioner.py", encoding="utf-8").read()
 check("a refused thought prints as a pause, not a labelled stutter", '"…"' in open("captioner/captioner.py", encoding="utf-8").read() and "[not kept —" not in open("captioner/captioner.py", encoding="utf-8").read().split("_live_log")[1][:600])
 check("the phantom gate needs sustained absence, not an instant", "PHANTOM_PRESENCE_SEEN_WINDOW_S" in open("captioner/captioner.py", encoding="utf-8").read())
 check("the phantom gate trusts the adjudicator, not raw detection (a mannequin head reads as a face)", '_adj_person = time.time()' in src and "_last_person_seen_ts" not in src.split("_adj_person =")[1][:400])
+check("a refused caption never reaches the compressor either (spoken-not-stored means nowhere)", 'getattr(self, "_stream_store_ok", True):\n                context_compressor.add_caption' in open("captioner/captioner.py", encoding="utf-8").read())
 check("captioner treats recall_echo as spoken-not-stored", 'reason == "recall_echo"' in src and '"recall_echo": "repeats an old thought"' in src)
 
 print("\n[7d] every call carries the picture (source-level)")
