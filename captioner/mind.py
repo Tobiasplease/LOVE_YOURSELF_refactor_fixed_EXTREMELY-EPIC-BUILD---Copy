@@ -43,6 +43,11 @@ from typing import Dict, List, Optional, Tuple
 from captioner.prompt_registry import P
 from config import config
 
+# What it has already said about a THING must never drag people back in: an old
+# "Two of them now. One sitting in that black chair…" quoted beside "Someone is
+# here" made the machine see two people (Sep 7, the artist caught it).
+_PEOPLE_RE = re.compile(r"\b(he|him|his|she|her|hers|they|them|their|someone|somebody|person|people|man|woman|guy|visitor|figure|face|hands)\b", re.I)
+
 _NEG_FRAME_RE = re.compile(r"\b(it.s not|isn.t|not (?:a|an|the|just)\b|no longer|used to|not .{1,25} anymore)\b", re.I)
 _WORD_RE = re.compile(r"[a-z']+")
 _STOP = set(
@@ -785,8 +790,8 @@ class Mind:
             ts = float((meta or {}).get("ts", 0))
             if dist > maxd or now - ts < min_age or doc in turn_texts or len(doc.split()) < 5:
                 continue
-            if not believed and PERSON_RE and PERSON_RE.search(doc):
-                continue
+            if _PEOPLE_RE.search(doc):
+                continue  # this block is about a thing in the room, never about who is in it
             (strong if head in doc.lower() else weak).append(doc)
         picked = (strong or weak)[: int(getattr(config, "MIND_SAID_MAX", 2))]
         return (subject, picked) if picked else ("", [])

@@ -107,7 +107,11 @@ class A:
 m = Mind(A(), path="/tmp/mood_test_thread.json", backfill=False)
 m._index = False
 m.absorb("A thought.", "think", "c", now - 3000)
+from utils.episodic_log import episodic_log as _el  # the live log must not decide this test
+_orig = _el.get_last_event
+_el.get_last_event = lambda t: None
 words = m.situation_words(m.situation(now, A()))
+_el.get_last_event = _orig
 check("situation in words: durations and facts", "no one here for" in words and "circling" in words and "nothing changed" in words, words)
 
 print("\nALL PASS" if not FAILS else f"\nFAILED: {FAILS}")

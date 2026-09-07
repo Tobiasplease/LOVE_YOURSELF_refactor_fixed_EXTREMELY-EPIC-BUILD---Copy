@@ -836,7 +836,7 @@ FRAGMENTS = {
         "placeholders": ["when", "text"],
     },
     "mind.cue-wake": {"title": "Cue — waking", "text": "{clock}. You wake.", "used_by": ["mind"], "placeholders": ["clock"]},
-    "mind.cue-think": {"title": "Cue — eyes resting", "text": "{clock}. Eyes resting.", "used_by": ["mind"], "placeholders": ["clock"]},
+    "mind.cue-think": {"title": "Cue — the clock", "text": "{clock}.", "note": "Sep 7: 'Eyes resting.' removed — a remnant of the abandoned no-frame turn (the artist: 'they don't do that, it's confusing'). With the picture on every call the cue is just the time; the world's other facts follow it.", "used_by": ["mind"], "placeholders": ["clock"]},
     "mind.felt-shift": {
         "title": "Cue — the felt word moved",
         "text": " {prev}, then {curr}.",
@@ -919,7 +919,7 @@ FRAGMENTS = {
     },
     "mind.cue-think-memory": {
         "title": "Cue — a memory surfaces",
-        "text": "{clock}. Eyes resting. Something from {when} comes back: \"{memory}\"",
+        "text": "{clock}. You remember, from {when}: \"{memory}\"",
         "note": "Every MIND_MEMORY_EVERY_N-th think turn. The memory is CHOSEN: old enough, novel against the last few thoughts, never a reframe, never person-tinged while the room is believed empty (probe B: a phantom-tinged pull re-conjured him).",
         "used_by": ["mind"],
         "placeholders": ["clock", "when", "memory"],

@@ -102,7 +102,7 @@ check("text shape: no cues, no stamps in the text", "You wake" not in body and "
 check("text shape: a look does NOT break the paragraph (entries follow each other)", "\n\nThe chair is empty" not in body and "The chair is empty" in body, body)
 check("text shape: the cue is the user turn", call["user"].startswith(time.strftime("%H:%M", time.localtime(now))))
 check("every call carries the picture — a think turn too (Sep 7)", call["image"] == "/tmp/x.jpg")
-check("current cue has the clock", re.match(r"\d\d:\d\d\. ", call["user"]) is not None, call["user"][:30])
+check("current cue has the clock", re.match(r"\d\d:\d\d\.", call["user"]) is not None, call["user"][:30])
 check("the quote-back premise is gone; the running text carries the continuation (Sep 7)", "You were on" not in call["user"], call["user"])
 check("the running text holds the last stretch whole", "Maybe empty is just what a chair is most of the time." in call["turns"][1]["content"])
 look = m.build("look", now, a, {}, "/tmp/x.jpg")
@@ -185,7 +185,7 @@ check("person memory allowed when believed", any("He sat" in t for t in picks), 
 C.MIND_MEMORY_EVERY_N = 4
 m.think_count = 3
 c = m.build("think", now, a, {}, None)
-check("scheduled surfacing still works when enabled", c["memory"] is not None and "comes back" in c["user"], c["user"])
+check("scheduled surfacing still works when enabled", c["memory"] is not None and "You remember, from" in c["user"], c["user"])
 C.MIND_MEMORY_EVERY_N = 0
 
 print("\n[5b] the felt loop in the conversation")
@@ -562,6 +562,10 @@ C.MIND_SAID_MAX_DIST = 0.95
 subj, said = m5.already_said(now, "The wooden chair again, still empty in the corner of the room.")
 check("already-said returns the subject and older lines about it", subj == "wooden chair" and len(said) >= 1, (subj, said))
 check("nothing from the current stretch is quoted back", all("still empty in the corner" not in t for t in said), said)
+m5.absorb("The wooden chair has two of them sitting in it, one with headphones on.", "think", "c", now - 4 * 3600)
+m5.absorb("The wooden chair, still there in the corner tonight.", "think", "c", now - 20)
+_, said2 = m5.already_said(now, "The wooden chair again, still empty in the corner of the room.")
+check("what you've already said never drags people back in", all("two of them" not in t.lower() for t in said2), said2)
 c6 = m5.build("think", now, Agent(), {}, None)
 check("the already-said block rides in the cue, framed as memory", "you've already said" in c6["cue"], c6["cue"])
 C.MIND_SAID_MAX_DIST = 0.6
