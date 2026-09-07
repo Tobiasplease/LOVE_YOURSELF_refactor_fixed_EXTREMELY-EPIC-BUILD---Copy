@@ -497,6 +497,8 @@ check("a short thought that is mostly a copy is recall", m.is_recall("I'm lookin
 call = {"memory": {"text": "Those two white heads on the shelf keep their blank faces turned away from me."}, "life": ""}
 check("parroting the surfaced memory is recall", m.is_recall("Those two white heads on the shelf keep their blank faces turned away from me again.", call, now))
 src = open("captioner/captioner.py", encoding="utf-8").read()
+check("a refused thought prints as a pause, not a labelled stutter", '"…"' in open("captioner/captioner.py", encoding="utf-8").read() and "[not kept —" not in open("captioner/captioner.py", encoding="utf-8").read().split("_live_log")[1][:600])
+check("the phantom gate needs sustained absence, not an instant", "PHANTOM_PRESENCE_SEEN_WINDOW_S" in open("captioner/captioner.py", encoding="utf-8").read())
 check("the phantom gate uses the same presence truth as the cue (frame-level, not only the belief)", '_here = getattr(self, "_presence_believed", False) or bool(getattr(getattr(self, "mind", None), "_last_here", False))' in src)
 check("captioner treats recall_echo as spoken-not-stored", 'reason == "recall_echo"' in src and '"recall_echo": "repeats an old thought"' in src)
 

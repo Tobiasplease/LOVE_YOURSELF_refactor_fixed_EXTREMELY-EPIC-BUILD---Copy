@@ -888,6 +888,8 @@ class Captioner(MemoryMixin):
         # adjudicated belief below stays as the LATER correction (it may retract)
         # and still gates storage, arrivals and the ledgers.
         info["person_in_frame"] = bool(seen_now)
+        if seen_now:
+            self._last_person_seen_ts = time.time()  # the gate needs a window, not an instant (Sep 7)
 
         # Adjudicated presence (Aug 18): a faceless person-candidate does not
         # commit the belief on YOLO's word — the machine's own eye looks first
@@ -1672,7 +1674,10 @@ class Captioner(MemoryMixin):
         # says someone is here as soon as the DETECTOR sees them; the adjudicated
         # belief lags. Gating on the belief alone marked "the person in the grey
         # shirt is sitting at the desk" a phantom while the artist stood there.
-        _here = getattr(self, "_presence_believed", False) or bool(getattr(getattr(self, "mind", None), "_last_here", False))
+        from config.config import PHANTOM_PRESENCE_SEEN_WINDOW_S as _seen_win
+
+        _seen_recently = time.time() - float(getattr(self, "_last_person_seen_ts", 0.0) or 0.0) < float(_seen_win)
+        _here = getattr(self, "_presence_believed", False) or bool(getattr(getattr(self, "mind", None), "_last_here", False)) or _seen_recently
         if PHANTOM_PRESENCE_GATE and not _here and _presence_text.is_phantom_presence(caption):
             return "phantom_presence"
         # Tail-echo COLLAPSE: one short restatement is a beat, deliberate
@@ -3031,7 +3036,7 @@ class Captioner(MemoryMixin):
                 # not the memory — spoken-not-stored lines carry a prefix so the
                 # artist can tell a gated line from one the stream kept.
                 _kept = getattr(self, "_stream_store_ok", True)
-                _why = {
+                _why = {  # noqa: F841  (kept for the log; the feed shows a pause instead — Sep 7)
                     "refrain_echo": "repeats itself",
                     "template_echo": "same opening again",
                     "tail_echo": "repeats itself",
@@ -3040,7 +3045,10 @@ class Captioner(MemoryMixin):
                     "recall_echo": "repeats an old thought",
                 }.get(getattr(self, "_last_gate_reason", ""), "not kept")
                 with open(_live_log, "a", encoding="utf-8") as _f:
-                    _f.write(("" if _kept else f"[not kept — {_why}] ") + caption.replace("\n", " ") + "\n")
+                    # A refused thought is a pause, not a stutter with a label
+                    # (the artist: "it just looks awkward in the caption display
+                    # and doesn't seem to actually help much at all").
+                    _f.write((caption.replace("\n", " ") if _kept else "…") + "\n")
             except Exception:
                 pass
         else:

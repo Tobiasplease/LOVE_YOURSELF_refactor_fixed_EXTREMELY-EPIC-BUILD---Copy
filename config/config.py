@@ -1609,3 +1609,4 @@ MIND_SAID_MIN_AGE_S = int(os.getenv("MIND_SAID_MIN_AGE_S", 1800))  # "you've alr
 MIND_SAID_MAX_DIST = float(os.getenv("MIND_SAID_MAX_DIST", 0.6))
 MIND_SAID_MAX = int(os.getenv("MIND_SAID_MAX", 2))
 MIND_BEAT_MAX_WORDS = int(os.getenv("MIND_BEAT_MAX_WORDS", 6))  # a reply this short with no sentence end is a beat, kept as itself; longer and unfinished becomes "…"
+PHANTOM_PRESENCE_SEEN_WINDOW_S = float(os.getenv("PHANTOM_PRESENCE_SEEN_WINDOW_S", 600))  # the phantom gate needs SUSTAINED absence: if the detector saw anyone this recently, a sentence about a person is perception, not a ghost (Sep 7)
