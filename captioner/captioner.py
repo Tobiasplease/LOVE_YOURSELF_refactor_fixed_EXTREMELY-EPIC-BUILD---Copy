@@ -1991,6 +1991,9 @@ class Captioner(MemoryMixin):
             self._last_gate_reason = reason
             if reason == "phantom_presence":
                 mind.note_scare(now)  # a phantom is a scare to the mood, even though the words are not kept
+                # and the ones that already got in must come out, or the running
+                # text replays them (proven: contaminated text → 9/9 person claims)
+                mind.scrub_phantoms(now, window_s=float(getattr(_cfg, "MIND_SCRUB_WINDOW_S", 3600)))
             self._note_unstored_cycle(reason, caption[:60])
             self._note_loop_hit(caption, reason)
             log_json_entry(

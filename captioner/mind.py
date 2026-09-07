@@ -1203,6 +1203,42 @@ class Mind:
                 return line
         return ""
 
+    def scrub_phantoms(self, now: float, window_s: float = 3600.0, believed_spans=None) -> int:
+        """Remove entries that claim a person while nobody was there — from the
+        thread AND from the thoughts index.
+
+        PROVEN Sep 7 22:50 (debug/probe_person_hallucination.py, live server,
+        the frames it actually hallucinated on): with a clean running text the
+        picture produces a person-claim 0–1 times in 9; with its OWN previous
+        entries saying "he's there" it produces one 9 times in 9. The picture
+        is innocent. The running text is the belief — the same law as Sep 4's
+        stream ablation. So a phantom that got in must come OUT, or it is
+        replayed for the next MIND_TEXT_ENTRIES turns and sustains itself."""
+        try:
+            from utils.presence_text import is_phantom_presence
+        except Exception:
+            return 0
+        keep, dropped = [], []
+        for e in self.thread:
+            t = (e.get("text") or "").strip()
+            ts = float(e.get("ts", 0))
+            if t and now - ts <= window_s and e.get("kind") in ("look", "think", "memory", "wake", "beat") and is_phantom_presence(t):
+                dropped.append(e)
+            else:
+                keep.append(e)
+        if not dropped:
+            return 0
+        self.thread = keep
+        try:
+            idx = self.index()
+            if idx:
+                idx.delete(ids=[self._tid(e) for e in dropped] + [self._tid_old(e) for e in dropped])
+        except Exception:
+            pass
+        self._save()
+        print(f"[MIND] scrubbed {len(dropped)} phantom entries from the thread and the index")
+        return len(dropped)
+
     def note_look(self, now: float) -> None:
         """A look happened, stored or not — the look timer advances either way
         (Sep 5 23:25–23:39: gated looks left the timer stale, so every phantom

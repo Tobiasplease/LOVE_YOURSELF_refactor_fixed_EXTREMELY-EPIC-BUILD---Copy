@@ -1615,3 +1615,4 @@ PLACE_INVITE_EVERY_S = float(os.getenv("PLACE_INVITE_EVERY_S", 86400))  # invite
 PLACE_REASK_EVERY_S = float(os.getenv("PLACE_REASK_EVERY_S", 7 * 86400))  # and re-ask weekly once one does, so it can change
 MIND_ROOM_TERMS_WITH_PLACE = int(os.getenv("MIND_ROOM_TERMS_WITH_PLACE", 4))  # the list shortens when a place name is doing the compressing
 MIND_PRESENCE_MAX_UNSEEN_S = float(os.getenv("MIND_PRESENCE_MAX_UNSEEN_S", 300))  # the look-away hold is BOUNDED: past this with no sighting, presence drops whatever the gaze is doing
+MIND_SCRUB_WINDOW_S = float(os.getenv("MIND_SCRUB_WINDOW_S", 3600))  # when a phantom is caught, phantom entries this recent are removed from the thread and the index
