@@ -607,6 +607,12 @@ _, said2 = m5.already_said(now, "The wooden chair again, still empty in the corn
 check("a people-line is not quoted into an empty room", all("two of them" not in t.lower() for _, t in said2), said2)
 c6 = m5.build("think", now, Agent(), {}, None)
 check("the already-said block rides in the cue, framed as memory with an age", "You remember thinking about the" in c6["cue"] and "you thought" in c6["cue"], c6["cue"])
+_seen = set()
+for _i in range(6):
+    _l = m5.surface_line(now, Agent(), here=False)
+    if _l:
+        _seen.add(_l.strip()[:40])
+check("the interior line rotates — no two calls in a row look alike", len(_seen) >= 2, _seen)
 C.MIND_SAID_MAX_DIST = 0.6
 
 src = open("captioner/mind.py", encoding="utf-8").read()

@@ -1087,6 +1087,66 @@ class Mind:
             return t if len(t.split()) <= int(getattr(config, "MIND_BEAT_MAX_WORDS", 6)) else "…"
         return None
 
+    _SURFACE_KINDS = ("said", "recall", "question", "drawing", "settled", "want")
+
+    def surface_line(self, now: float, agent, here: bool = False) -> str:
+        """ONE interior line per call, ROTATING (Sep 7).
+
+        Why the repeats: in the 3.6 era every call carried a different bundle —
+        the last drawings, the felt delta, how long it had been off — so the
+        prompt differed every minute. Mind mode stripped that down to a clock;
+        3 of 12 consecutive cues were the bare time, so the model saw an
+        identical prompt and wrote an identical thought, and the echo gates
+        refused it AFTER generation. Variation belongs in the prompt, not in a
+        gate. Each line is one the machine wrote itself, framed as memory."""
+        rr = int(getattr(self, "_surface_rr", 0) or 0)
+        kinds = self._SURFACE_KINDS
+        for k in range(len(kinds)):
+            kind = kinds[(rr + k) % len(kinds)]
+            line = ""
+            try:
+                if kind in ("said", "recall"):
+                    tail = self.last_written(now)
+                    if tail and kind == "said":
+                        subject, said = self.already_said(now, tail, believed=here)
+                        if said:
+                            line = P("mind.already-said").format(subject=subject, said="; ".join('%s you thought "%s"' % (w, t[:200]) for w, t in said))
+                    elif tail:
+                        m = self.recall_similar(tail, now, believed=here)
+                        if m:
+                            line = P("mind.cue-recall").format(when=when_words(now - m["ts"]), memory=m["text"][:220])
+                elif kind == "question":
+                    from utils.lore_ledger import lore_ledger
+
+                    q = lore_ledger.pick_question()
+                    qt = (q.get("text") if isinstance(q, dict) else q) or "" if q else ""
+                    if qt:
+                        line = P("mind.cue-question").format(question=str(qt).strip())
+                elif kind == "drawing":
+                    from drawing.drawing_memory import get_drawing_memory
+
+                    arc = (get_drawing_memory().get_arc_line_named(max_count=2, title_chars=45) or "").strip()
+                    if arc:
+                        line = " " + arc
+                elif kind == "settled":
+                    cs = self.conclusions_today(now)
+                    if cs:
+                        line = P("mind.cue-settled").format(text=cs[-1].split("— ", 1)[-1][:200])
+                elif kind == "want":
+                    from captioner.prompts import casual_time_string
+                    from utils.want_ledger import want_ledger
+
+                    f = want_ledger.current_facts()
+                    if f and f.get("text"):
+                        line = P("mind.cue-want").format(age=casual_time_string(float(f["age_s"]) / 60.0), want=str(f["text"]).rstrip("."))
+            except Exception:
+                line = ""
+            if line and line.strip() != (getattr(self, "_surface_last", "") or "").strip():
+                self._surface_rr = rr + k + 1
+                self._surface_last = line
+                return line
+        return ""
+
     def note_look(self, now: float) -> None:
         """A look happened, stored or not — the look timer advances either way
         (Sep 5 23:25–23:39: gated looks left the timer stale, so every phantom
@@ -1441,16 +1501,7 @@ class Mind:
             cue += self.time_edges(now, agent)
             cue += self._loop_line(agent)
             if not memory:
-                tail = self.last_written(now)
-                subject, said = self.already_said(now, tail, believed=here) if tail else ("", [])
-                if said:
-                    cue += P("mind.already-said").format(subject=subject, said="; ".join('%s you thought "%s"' % (w, t[:200]) for w, t in said))
-                    print(f"[MIND] already said about {subject}: {len(said)}")
-                elif tail:
-                    memory = self.recall_similar(tail, now, believed=here)
-                    if memory:
-                        cue += P("mind.cue-recall").format(when=when_words(now - memory["ts"]), memory=memory["text"][:220])
-                        print(f"[MIND] recall by association (d={memory.get('distance', 0):.2f}, {when_words(now - memory['ts'])}): {memory['text'][:70]}")
+                cue += self.surface_line(now, agent, here=here)  # one rotating interior line, so no two calls look alike
             if not memory:
                 cue += self._elicit_dose()
         if self.thread and now - self.thread[-1].get("ts", now) >= float(config.STREAM_GAP_MARK_SECONDS):

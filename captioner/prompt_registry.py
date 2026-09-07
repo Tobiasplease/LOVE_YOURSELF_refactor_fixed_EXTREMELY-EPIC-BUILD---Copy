@@ -796,6 +796,24 @@ FRAGMENTS = {
         "used_by": ["mind"],
         "placeholders": ["terms"],
     },
+    "mind.cue-question": {
+        "title": "Cue — a question you carry",
+        "text": " A question you've been carrying: \"{question}\"",
+        "used_by": ["mind"],
+        "placeholders": ["question"],
+    },
+    "mind.cue-settled": {
+        "title": "Cue — something you settled today",
+        "text": " Earlier today you settled: \"{text}\"",
+        "used_by": ["mind"],
+        "placeholders": ["text"],
+    },
+    "mind.cue-want": {
+        "title": "Cue — the standing want",
+        "text": " You've wanted, for {age}: {want}.",
+        "used_by": ["mind"],
+        "placeholders": ["age", "want"],
+    },
     "mind.already-said": {
         "title": "Cue — what you have already said about this",
         "text": " You remember thinking about the {subject}: {said}.",
