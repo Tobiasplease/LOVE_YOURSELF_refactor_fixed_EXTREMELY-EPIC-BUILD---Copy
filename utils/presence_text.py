@@ -17,7 +17,7 @@ PERSON_RE = re.compile(
     r"(?<!the )\b(he|him|his|she|her|hers)\b"
     r"|\b(the|that|this) (man|woman|guy|person|visitor)\b"
     r"|\b(a|an|some|one) (man|woman|guy|person|visitor) (is|sits|stands|sitting|standing|leaning|hunched|crouching|working|reading|looking|typing|at the|in the|on the|by the)\b"
-    r"|\bsomeone('s| is| sits| stands| sitting| standing| leaning| hunched| crouching| working| reading| looking)\b",
+    r"|\b(someone|somebody)\b",  # Sep 7 22:57: "There's someone there" slipped the gate and restarted an hour of invented company  # NOT they/them/their: objects are "they" too ("the two heads, they're facing away") — over-gating the room is worse
     re.I,
 )  # Sep 5 23:19: "I see a person sitting in that wooden chair. They're looking down…" (the mannequin head at the desk) slipped through on "a person"
 
@@ -30,7 +30,10 @@ NOT_PRESENT_RE = re.compile(
     r"|\b(could|should|would|might|want to|draw|drawing|sketch|sketching)\b[^.?!]{0,24}\b(a|an|some|one) (man|woman|guy|person|visitor)\b"  # "I could draw a person inside it" is not a sighting
     r"|\b(a|an|some|one) (man|woman|guy|person|visitor) (should|would|could|might|used to|ought to)\b"
     r"|\b(he|she|they)('s| is| are| has| have)?\s+(gone|left|not here|missing)\b"
-    r"|\bwhere (he|she|they) (was|were|sat|stood|used)\b",
+    r"|\bwhere (he|she|they) (was|were|sat|stood|used)\b"
+    r"|\b(waiting|waits|wait) for (someone|somebody|them|him|her)\b"  # a wish is not a sighting
+    r"|\b(their|his|her) (absence|empty|gone)\b"
+    r"|\babsence\b",
     re.I,
 )
 

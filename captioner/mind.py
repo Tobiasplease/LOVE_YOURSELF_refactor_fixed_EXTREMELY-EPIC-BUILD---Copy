@@ -1120,7 +1120,8 @@ class Mind:
         except Exception:
             return ""
         recent = [e for e in self.thread[-6:] if now - float(e.get("ts", 0)) <= 600 and e.get("text")]
-        if not any(PERSON_RE.search(e["text"]) for e in recent):
+        spoken = now - float(getattr(self, "_phantom_spoken_ts", 0.0) or 0.0) <= 600
+        if not spoken and not any(PERSON_RE.search(e["text"]) for e in recent):
             return ""
         if now - float(getattr(self, "_nobody_said_ts", 0.0) or 0.0) < 120:
             return ""
@@ -1202,6 +1203,12 @@ class Mind:
                 self._surface_last = line
                 return line
         return ""
+
+    def note_phantom(self, now: float) -> None:
+        """A person-claim was spoken and refused. The correction must be able to
+        fire on that, not only on ones that got stored (Sep 7: the gate keeps
+        them out of the thread, so the thread-based trigger never fired)."""
+        self._phantom_spoken_ts = now
 
     def scrub_phantoms(self, now: float, window_s: float = 3600.0, believed_spans=None) -> int:
         """Remove entries that claim a person while nobody was there — from the
