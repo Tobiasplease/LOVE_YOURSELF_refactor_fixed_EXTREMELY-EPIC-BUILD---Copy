@@ -798,8 +798,8 @@ FRAGMENTS = {
     },
     "mind.already-said": {
         "title": "Cue — what you have already said about this",
-        "text": " About the {subject}, you've already said: {said}",
-        "note": "Sep 7 (artist: the chromaDB system should inform the model if it repeats itself — access what has already been said about a thing and continue that narrative exploration whilst not repeating it). The thoughts index queried with the last thing written, subject-scoped, framed as memory. Replaces the scheduled recall on the current subject; the storage gates stay as the last resort.",
+        "text": " You remember thinking about the {subject}: {said}.",
+        "note": "Framed as MEMORY with the age of each thought (Sep 7, the artist: 'already said needs to be framed as a memory — if it said I thought there was two people but only see one that would be fine'), so an old line that contradicts the present can be corrected instead of repeated. Sep 7 (artist: the chromaDB system should inform the model if it repeats itself — access what has already been said about a thing and continue that narrative exploration whilst not repeating it). The thoughts index queried with the last thing written, subject-scoped, framed as memory. Replaces the scheduled recall on the current subject; the storage gates stay as the last resort.",
         "used_by": ["mind"],
         "placeholders": ["subject", "said"],
     },

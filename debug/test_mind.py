@@ -533,9 +533,12 @@ class _FakeIdx:
 
 m, M = fresh_mind()
 c = m.build("think", now, Agent(), {"person_in_frame": True, "person_count": 2}, None)
-check("the cue says how many people are here", "Two people are here, since" in c["cue"], c["cue"])
+check("the cue says how many people are here at the edge", "Two people are here, since" in c["cue"], c["cue"])
+c_after = m.build("think", now + 1, Agent(), {"person_in_frame": True, "person_count": 2}, None)
+check("the standing presence fact leaves the cue and lives in what it knows", "people are here, since" not in c_after["cue"] and "in the room now, since" in c_after["life"], (c_after["cue"], c_after["life"][:120]))
 check("and names what else is in view, so shapes are not counted as people", "Also in view:" in c["cue"], c["cue"])
-c1 = m.build("think", now, Agent(), {"person_in_frame": True, "person_count": 1}, None)
+m1a, _ = fresh_mind()
+c1 = m1a.build("think", now, Agent(), {"person_in_frame": True, "person_count": 1}, None)
 check("one person reads as someone", "Someone is here, since" in c1["cue"], c1["cue"])
 
 m2, _ = fresh_mind()
@@ -545,7 +548,7 @@ c2 = m2.build("think", now, a2, {"person_in_frame": True, "person_count": 1}, No
 check("an arrival is said once, with the time alone", "just come in" in c2["cue"], c2["cue"])
 check("since = this visit, from the frame", ("since " + M.clock(now)) in c2["cue"], c2["cue"])
 c3 = m2.build("think", now + 5, a2, {"person_in_frame": False}, None)
-check("a missed frame is not a departure", "here, since" in c3["cue"] and "gone" not in c3["cue"], c3["cue"])
+check("a missed frame is not a departure", "gone" not in c3["cue"] and "in the room now, since" in c3["life"], (c3["cue"], c3["life"][:100]))
 c4 = m2.build("think", now + 200, a2, {"person_in_frame": False}, None)
 check("gone once the hold expires", "They've gone." in c4["cue"], c4["cue"])
 
@@ -560,14 +563,14 @@ m5.absorb("The wooden chair keeps its shape even when nobody sits in it here.", 
 m5.absorb("The wooden chair again, still empty in the corner of the room.", "think", "c", now - 30)
 C.MIND_SAID_MAX_DIST = 0.95
 subj, said = m5.already_said(now, "The wooden chair again, still empty in the corner of the room.")
-check("already-said returns the subject and older lines about it", subj == "wooden chair" and len(said) >= 1, (subj, said))
-check("nothing from the current stretch is quoted back", all("still empty in the corner" not in t for t in said), said)
+check("already-said returns the subject and older thoughts, each with its age", subj == "wooden chair" and len(said) >= 1 and all(isinstance(x, tuple) and "ago" in x[0] or "yesterday" in x[0] or "today" in x[0] for x in said), (subj, said))
+check("nothing from the current stretch is quoted back", all("still empty in the corner" not in t for _, t in said), said)
 m5.absorb("The wooden chair has two of them sitting in it, one with headphones on.", "think", "c", now - 4 * 3600)
 m5.absorb("The wooden chair, still there in the corner tonight.", "think", "c", now - 20)
 _, said2 = m5.already_said(now, "The wooden chair again, still empty in the corner of the room.")
-check("what you've already said never drags people back in", all("two of them" not in t.lower() for t in said2), said2)
+check("a people-line is not quoted into an empty room", all("two of them" not in t.lower() for _, t in said2), said2)
 c6 = m5.build("think", now, Agent(), {}, None)
-check("the already-said block rides in the cue, framed as memory", "you've already said" in c6["cue"], c6["cue"])
+check("the already-said block rides in the cue, framed as memory with an age", "You remember thinking about the" in c6["cue"] and "you thought" in c6["cue"], c6["cue"])
 C.MIND_SAID_MAX_DIST = 0.6
 
 src = open("captioner/mind.py", encoding="utf-8").read()

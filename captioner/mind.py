@@ -616,7 +616,7 @@ class Mind:
         return base
 
     # ---- the life block ------------------------------------------------------
-    def life_block(self, now: float, agent, hot: bool = False) -> str:
+    def life_block(self, now: float, agent, hot: bool = False, here: Optional[bool] = None) -> str:
         """The present facts that are true now, plus what it carries. hot
         (north-star P6): a live event strips the interior lines — past quotes,
         positions, questions, settled beliefs, the previous chain's ending —
@@ -633,7 +633,7 @@ class Mind:
         terms = self._terms()[: int(config.MIND_ROOM_TERMS)]
         if terms:
             lines.append(P("mind.life-room").format(terms=", ".join(terms)))
-        lines.append(self._people_line(now, agent))
+        lines.append(self._people_line(now, agent, here=here))
         lines.append(self._drawings_line(now))
         try:
             from utils.state_manager import state_manager as _sm
@@ -790,11 +790,11 @@ class Mind:
             ts = float((meta or {}).get("ts", 0))
             if dist > maxd or now - ts < min_age or doc in turn_texts or len(doc.split()) < 5:
                 continue
-            if _PEOPLE_RE.search(doc):
-                continue  # this block is about a thing in the room, never about who is in it
-            (strong if head in doc.lower() else weak).append(doc)
+            if _PEOPLE_RE.search(doc) and not believed:
+                continue  # a line about people quoted into an empty room is a phantom; with someone here it can be corrected
+            (strong if head in doc.lower() else weak).append((ts, doc))
         picked = (strong or weak)[: int(getattr(config, "MIND_SAID_MAX", 2))]
-        return (subject, picked) if picked else ("", [])
+        return (subject, [(when_words(now - t), d) for t, d in picked]) if picked else ("", [])
 
     def _alone_words(self, now: float, agent) -> str:
         """How long the room was empty before this arrival, in words."""
@@ -835,8 +835,8 @@ class Mind:
             pass
         return (" " + " ".join(parts)) if parts else ""
 
-    def _people_line(self, now: float, agent) -> str:
-        if getattr(agent, "_presence_believed", False):
+    def _people_line(self, now: float, agent, here: Optional[bool] = None) -> str:
+        if getattr(agent, "_presence_believed", False) if here is None else here:
             return P("mind.life-people-now").format(since=self.person_since(now), history=self.person_history(now))
         try:
             from utils.episodic_log import episodic_log
@@ -1397,6 +1397,10 @@ class Mind:
                 cue = P("mind.cue-think-memory").format(clock=clock(now), when=when_words(now - memory["ts"]), memory=memory["text"][:220])
             else:
                 cue = P("mind.cue-think").format(clock=clock(now))
+        first_sight = here and was_here is None  # boot with someone already there: say it once
+        if lead and not (edge_in or edge_out or hot or first_sight):
+            lead = ""  # the standing presence fact lives in what it knows; the cue carries only the EVENT
+            # (Sep 7, the artist: "it keeps repeating 'I see him now, grey shirt' — not properly continuing the thread")
         if lead:
             cue = re.sub(r"^(\d\d:\d\d\.)", r"\1" + lead.replace("\\", "\\\\"), cue, count=1) if re.match(r"^\d\d:\d\d\.", cue) else lead.strip() + " " + cue
         if edge_in:
@@ -1414,7 +1418,7 @@ class Mind:
                 tail = self.last_written(now)
                 subject, said = self.already_said(now, tail, believed=here) if tail else ("", [])
                 if said:
-                    cue += P("mind.already-said").format(subject=subject, said=" and ".join('"%s"' % t[:200] for t in said))
+                    cue += P("mind.already-said").format(subject=subject, said="; ".join('%s you thought "%s"' % (w, t[:200]) for w, t in said))
                     print(f"[MIND] already said about {subject}: {len(said)}")
                 elif tail:
                     memory = self.recall_similar(tail, now, believed=here)
@@ -1434,7 +1438,7 @@ class Mind:
 
         prior = self.recent_turns(now)
         turns: List[dict] = []
-        life = self.life_block(now, agent, hot=hot)
+        life = self.life_block(now, agent, hot=hot, here=here)
         if prior and getattr(config, "MIND_SHAPE", "text") == "text":
             # the journal shape: the world's cues are ephemeral; only the machine's own text persists, as pages
             turns.append({"role": "user", "content": life})
