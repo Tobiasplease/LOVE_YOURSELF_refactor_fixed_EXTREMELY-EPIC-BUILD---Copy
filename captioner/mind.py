@@ -46,6 +46,10 @@ from config import config
 # What it has already said about a THING must never drag people back in: an old
 # "Two of them now. One sitting in that black chair…" quoted beside "Someone is
 # here" made the machine see two people (Sep 7, the artist caught it).
+# "Still there. Under the shelf. Just a dark shape, hunched over." — the phantom
+# continued with no person word at all (Sep 7 23:23).
+_STILL_THERE_RE = re.compile(r"\b(still there|he.s there|they.re there|hunched|sitting there|under the shelf)\b", re.I)
+
 _PEOPLE_RE = re.compile(r"\b(he|him|his|she|her|hers|they|them|their|someone|somebody|person|people|man|woman|guy|visitor|figure|face|hands)\b", re.I)
 
 _NEG_FRAME_RE = re.compile(r"\b(it.s not|isn.t|not (?:a|an|the|just)\b|no longer|used to|not .{1,25} anymore)\b", re.I)
@@ -1119,11 +1123,15 @@ class Mind:
             from utils.presence_text import PERSON_RE
         except Exception:
             return ""
+        # Sep 7 23:25: the phantom survives WITHOUT person words — "They are
+        # still there. Under the shelf. Just a dark shape, hunched over." No
+        # wording gate can catch that, so the world fact rides whenever it is
+        # true, like the no-paper fact does. It is a fact about the room, not a
+        # mirror of the machine's own output, so it cannot spiral.
         recent = [e for e in self.thread[-6:] if now - float(e.get("ts", 0)) <= 600 and e.get("text")]
         spoken = now - float(getattr(self, "_phantom_spoken_ts", 0.0) or 0.0) <= 600
-        if not spoken and not any(PERSON_RE.search(e["text"]) for e in recent):
-            return ""
-        if now - float(getattr(self, "_nobody_said_ts", 0.0) or 0.0) < 120:
+        drifting = spoken or any(PERSON_RE.search(e["text"]) or _STILL_THERE_RE.search(e["text"]) for e in recent)
+        if now - float(getattr(self, "_nobody_said_ts", 0.0) or 0.0) < float(getattr(config, "MIND_NOBODY_EVERY_S", 60)):
             return ""
         self._nobody_said_ts = now
         since = ""
@@ -1135,7 +1143,7 @@ class Mind:
                 since = " — the last person left " + when_words(now - float(ev["timestamp"]))
         except Exception:
             pass
-        return P("mind.nobody").format(since=since)
+        return P("mind.nobody").format(since=since, drift=P("mind.nobody-drift") if drifting else "")
 
     _SURFACE_KINDS = ("said", "recall", "question", "drawing", "settled", "want", "awake")
 

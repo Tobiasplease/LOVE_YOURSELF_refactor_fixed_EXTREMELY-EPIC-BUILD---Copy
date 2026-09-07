@@ -805,10 +805,15 @@ FRAGMENTS = {
     },
     "mind.nobody": {
         "title": "Cue — nobody is in the room",
-        "text": " No one is in the room{since}. You've been writing as if someone were.",
+        "text": " No one is in the room{since}.{drift}",
         "note": "Sep 7 22:35 (artist: 'I am NOT there… it should correct itself'). A gate refuses a sentence after it is written; this puts the fact in front of the machine BEFORE it writes, and only when its own recent entries claimed a person. Dosed, so it is a correction and not a chant.",
         "used_by": ["mind"],
-        "placeholders": ["since"],
+        "placeholders": ["since", "drift"],
+    },
+    "mind.nobody-drift": {
+        "title": "Cue — and it has been writing as if someone were",
+        "text": " You've been writing as if someone were.",
+        "used_by": ["mind"],
     },
     "mind.noted-already": {
         "title": "Cue — you have already noted them being here",
