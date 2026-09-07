@@ -119,11 +119,14 @@ def due(mind, now: float, agent) -> bool:
     if not (int(config.DREAM_HOUR) <= h < int(config.DREAM_HOUR_END)):
         return False
     last = float(getattr(mind, "last_dream_ts", 0.0) or 0.0)
-    if now - last < 20 * 3600:
-        return False
-    if getattr(agent, "_presence_believed", False) or getattr(agent, "_salience_hot", False):
-        return False
-    still = float(getattr(agent, "_world_change_ts", 0.0) or 0.0)
-    if still and now - still < int(config.DREAM_STILL_MIN_S):
-        return False
+    lt = time.localtime(now)
+    window_start = now - ((h - int(config.DREAM_HOUR)) * 3600 + lt.tm_min * 60 + lt.tm_sec)  # today's DREAM_HOUR
+    if last >= window_start:
+        return False  # one pass per night — a fixed 20 h rule blocked 04:00 after an 11:39 pass the day before (Sep 7)
+    if getattr(config, "DREAM_REQUIRES_STILL", False):
+        if getattr(agent, "_presence_believed", False) or getattr(agent, "_salience_hot", False):
+            return False
+        still = float(getattr(agent, "_world_change_ts", 0.0) or 0.0)
+        if still and now - still < int(config.DREAM_STILL_MIN_S):
+            return False
     return True

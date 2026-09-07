@@ -49,12 +49,15 @@ C.DREAM_ENABLED = True
 h = time.localtime(now).tm_hour
 C.DREAM_HOUR, C.DREAM_HOUR_END = h, h + 1
 check("due in the window, still and alone", D.due(M(), now, A()))
-m2 = M(); m2.last_dream_ts = now - 3600
+m2 = M(); m2.last_dream_ts = now - 60
 check("not twice a night", not D.due(m2, now, A()))
+m2b = M(); m2b.last_dream_ts = now - 20 * 3600
+check("yesterday's pass does not block tonight's", D.due(m2b, now, A()))
 a2 = A(); a2._presence_believed = True
-check("not with someone here", not D.due(M(), now, a2))
-a3 = A(); a3._world_change_ts = now - 60
-check("not right after a change", not D.due(M(), now, a3))
+check("someone here does not block it (Sep 7)", D.due(M(), now, a2))
+C.DREAM_REQUIRES_STILL = True
+check("…unless the still rule is switched on", not D.due(M(), now, a2))
+C.DREAM_REQUIRES_STILL = False
 C.DREAM_HOUR, C.DREAM_HOUR_END = (h + 2) % 24, (h + 3) % 24
 check("not outside the window", not D.due(M(), now, A()))
 C.DREAM_ENABLED = False

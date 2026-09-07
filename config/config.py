@@ -1599,3 +1599,4 @@ MIND_WAKE_GAP_S = int(os.getenv("MIND_WAKE_GAP_S", 2700))  # a gap in the thread
 MIND_LOOK_EVERY_BELIEVED_S = float(os.getenv("MIND_LOOK_EVERY_BELIEVED_S", 60))  # while someone is believed here, a look every minute (a person after days alone is the event)
 MIND_INTERVAL_BELIEVED_MULT = float(os.getenv("MIND_INTERVAL_BELIEVED_MULT", 0.6))
 MIND_HOT_STRIPS_INTERIOR = os.getenv("MIND_HOT_STRIPS_INTERIOR", "true").lower() in ("true", "1", "yes")  # north-star P6: a live event (arrival, motion, eye contact) strips the interior lines — memory, positions, past quotes — from the call; quiet lets them ride
+DREAM_REQUIRES_STILL = os.getenv("DREAM_REQUIRES_STILL", "false").lower() in ("true", "1", "yes")  # Sep 7 (artist): the night pass runs regardless of presence — it can sleep with someone there
