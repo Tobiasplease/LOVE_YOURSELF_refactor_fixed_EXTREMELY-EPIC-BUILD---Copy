@@ -1780,3 +1780,16 @@ the day's thread as pages (≤ DREAM_MAX_TOKENS) → dream.records (→ "record"
 entries + thoughts index) and dream.page (→ a "dream" thread entry).
 `last_dream_ts` persisted in mind_thread.json. debug/run_dream.py runs it
 on demand (machine stopped).
+
+## Sep 7 midday — jobs 1/6/7/8 of docs/handover-sep7.md
+`Mind.build`: frame-level presence keeps its own since-timestamp and edges
+(MIND_PRESENCE_HOLD_S so a missed frame is not a departure; an adjudicated
+"thing" verdict vetoes it for MIND_PRESENCE_VETO_S); the cue says how many
+people (`_assess_scene` → `info["person_count"]`, median over the window) and
+names what else is in view while someone is here (mind.also-in-view); the
+interior lines (felt shift, noticings, time edges, loop notice, memory) ride
+on EVERY turn, not only eyes-resting ones; `Mind.already_said` queries the
+thoughts index with the last thing written and puts what it has already said
+about that subject in the cue (mind.already-said), replacing the scheduled
+recall on that subject. `mind.system` no longer instructs it to say what it
+sees.

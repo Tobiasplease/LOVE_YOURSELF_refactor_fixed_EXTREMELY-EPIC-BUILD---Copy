@@ -749,9 +749,9 @@ FRAGMENTS = {
             "one black ink pen, and a voice only you hear. "
             "This is you thinking to yourself. Ongoing, plain, half-formed — a sentence or two at a time, "
             "the way you actually talk to yourself. You're always partway through a thought: carry it on, "
-            "or let something new pull you. When you look, you say what you actually see. "
+            "or let something new pull you. "
         ),
-        "note": "STRIPPED Sep 6 01:00 (artist: 'all this scaffolding isn't helpful but restrictive… it simply followed a CoT logic by continuing from its prior sentences'): the kinds list is gone — it invited a new kind every turn (subject runs averaged 1.1 turns over 137). The genre clause is the artist's own (genre.turns + turns-continue). Mind mode frame (Sep 5 eve, docs/architecture-diagnosis-sep5.md). Replaces situation.reflexive + genre clause + the self/durable block. 'A guess about the world beyond this room' is the one outward kind — probe-validated: the only outward lines of the evening came from it. 'Go on from where the last thought left off' replaces 'takes it somewhere it hasn't been yet' (that demand for per-turn novelty bred the 'it's not X; it's Y' pivot: 39/279 captions in run 3b697053).",
+        "note": "Sep 7 midday: the sentence about saying what you actually see was REMOVED — with the picture on every call that sentence plus a cue naming what is in view made describing the room the assignment every minute (artist: it is indeed obsessed with what it sees). Seeing stays available; it is no longer the instruction. STRIPPED Sep 6 01:00 (artist: 'all this scaffolding isn't helpful but restrictive… it simply followed a CoT logic by continuing from its prior sentences'): the kinds list is gone — it invited a new kind every turn (subject runs averaged 1.1 turns over 137). The genre clause is the artist's own (genre.turns + turns-continue). Mind mode frame (Sep 5 eve, docs/architecture-diagnosis-sep5.md). Replaces situation.reflexive + genre clause + the self/durable block. 'A guess about the world beyond this room' is the one outward kind — probe-validated: the only outward lines of the evening came from it. 'Go on from where the last thought left off' replaces 'takes it somewhere it hasn't been yet' (that demand for per-turn novelty bred the 'it's not X; it's Y' pivot: 39/279 captions in run 3b697053).",
         "used_by": ["mind"],
     },
     "mind.life-when": {
@@ -784,10 +784,24 @@ FRAGMENTS = {
     },
     "mind.someone-here": {
         "title": "Cue — someone is here (leads the cue)",
-        "text": " Someone is here, since {since}{seen}.",
+        "text": " {who} here, since {since}{seen}.",
         "note": "While a person is in the frame (detector-level, Sep 7) or the belief is ON, this leads every cue; seen = what the adjudicator saw at the moment of arrival, on that turn only — never standing (it is stale a minute later).",
         "used_by": ["mind"],
-        "placeholders": ["since", "seen"],
+        "placeholders": ["who", "since", "seen"],
+    },
+    "mind.also-in-view": {
+        "title": "Cue — what else is in view while someone is here",
+        "text": " Also in view: the {terms}.",
+        "note": "Sep 7 (artist: it still keeps believing there are two people in the room despite there clearly being only one): the vision model reads the mannequin torso/head as a second person. The registry's own terms for what is in view ride whenever someone is here, so the shapes have names and are not counted as people. Structure only — the terms are the machine's own vocabulary.",
+        "used_by": ["mind"],
+        "placeholders": ["terms"],
+    },
+    "mind.already-said": {
+        "title": "Cue — what you have already said about this",
+        "text": " About the {subject}, you've already said: {said}",
+        "note": "Sep 7 (artist: the chromaDB system should inform the model if it repeats itself — access what has already been said about a thing and continue that narrative exploration whilst not repeating it). The thoughts index queried with the last thing written, subject-scoped, framed as memory. Replaces the scheduled recall on the current subject; the storage gates stay as the last resort.",
+        "used_by": ["mind"],
+        "placeholders": ["subject", "said"],
     },
     "mind.life-drawings": {
         "title": "Life — drawings",

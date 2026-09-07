@@ -694,6 +694,7 @@ class Captioner(MemoryMixin):
             "ego_count": 0,
             "scene_motion": False,
             "person_present_in_window": False,
+            "person_count": 0,
             "eye_contact": False,
         }
         try:
@@ -734,6 +735,7 @@ class Captioner(MemoryMixin):
             # read as constant arrivals/departures
             counts = [f.get("detection", {}).get("person_count", 0) for f in recent_meta]
             count_changed = len(set(counts)) > 1
+            info["person_count"] = int(sorted(counts)[len(counts) // 2]) if counts else 0  # median over the window: the cue says how many, so the model stops counting mannequins as people (Sep 7)
 
             # bool() everywhere: person_angle arrives as numpy float, so bare
             # comparisons yield numpy bools that crash JSON logging downstream

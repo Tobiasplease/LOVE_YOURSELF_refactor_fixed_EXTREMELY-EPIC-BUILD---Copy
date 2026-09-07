@@ -741,13 +741,55 @@ class Mind:
         return items[-max_items:]
 
     def person_since(self, now: float) -> str:
+        """Since when THIS visit — the frame-level edge, not the last adjudicated
+        arrival (Sep 7: a stale ledger arrival said "since 16:19" the next day)."""
+        ts = float(getattr(self, "_here_since", 0.0) or 0.0)
+        if ts:
+            return clock(ts)
         try:
             from utils.episodic_log import episodic_log
 
             ev = episodic_log.get_last_event("person_arrived")
-            return clock(float(ev["timestamp"])) if ev else "a moment ago"
+            if ev and now - float(ev["timestamp"]) < 3600:
+                return clock(float(ev["timestamp"]))
         except Exception:
-            return "a moment ago"
+            pass
+        return "a moment ago"
+
+    def already_said(self, now: float, query: str, believed: bool = False) -> tuple:
+        """What it has already said about the thing it is on — the thoughts
+        index as standing context, so a repeat is visible to it and the natural
+        move is to go further (Sep 7, the artist's ask; the storage gates only
+        ever refused a repeat AFTER it was written). Returns (subject, [texts])."""
+        subject = self.subject_of(query or "")
+        idx = self.index()
+        if not subject or not idx or not (query or "").strip():
+            return ("", [])
+        try:
+            n = min(10, idx.count())
+            if n <= 0:
+                return ("", [])
+            res = idx.query(query_texts=[query[:400]], n_results=n, include=["documents", "metadatas", "distances"])
+        except Exception:
+            return ("", [])
+        turn_texts = {e.get("text") for e in self.recent_turns(now)}
+        min_age = int(getattr(config, "MIND_SAID_MIN_AGE_S", 1800))
+        maxd = float(getattr(config, "MIND_SAID_MAX_DIST", 0.6))
+        try:
+            from utils.presence_text import PERSON_RE
+        except Exception:
+            PERSON_RE = None  # noqa: N806
+        head = subject.split()[-1].lower().rstrip("s")
+        strong, weak = [], []
+        for doc, meta, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0]):
+            ts = float((meta or {}).get("ts", 0))
+            if dist > maxd or now - ts < min_age or doc in turn_texts or len(doc.split()) < 5:
+                continue
+            if not believed and PERSON_RE and PERSON_RE.search(doc):
+                continue
+            (strong if head in doc.lower() else weak).append(doc)
+        picked = (strong or weak)[: int(getattr(config, "MIND_SAID_MAX", 2))]
+        return (subject, picked) if picked else ("", [])
 
     def _alone_words(self, now: float, agent) -> str:
         """How long the room was empty before this arrival, in words."""
@@ -1266,12 +1308,25 @@ class Mind:
         # may retract) — they are off the critical path of what the machine is
         # told is in front of it.
         in_frame = bool((scene or {}).get("person_in_frame"))
-        here = believed or in_frame
-        hot = bool(getattr(agent, "_salience_hot", False)) or bool(getattr(agent, "_salience_event", None))
+        # The machine's own eye retracts the detector (Sep 7): after a "thing"
+        # verdict a person-shaped box is not a person for MIND_PRESENCE_VETO_S.
+        if (scene or {}).get("presence_adjudication") == "thing":
+            self._person_veto_until = now + float(getattr(config, "MIND_PRESENCE_VETO_S", 300))
+        if in_frame and now < float(getattr(self, "_person_veto_until", 0.0) or 0.0):
+            in_frame = False
+        if in_frame:
+            self._here_last_seen = now
+        held = (now - float(getattr(self, "_here_last_seen", 0.0) or 0.0)) < float(getattr(config, "MIND_PRESENCE_HOLD_S", 60))
         was_here = getattr(self, "_last_here", None)
+        here = believed or in_frame or (bool(was_here) and held)  # a missed frame is not a departure
+        hot = bool(getattr(agent, "_salience_hot", False)) or bool(getattr(agent, "_salience_event", None))
         edge_in = here and was_here is False
         edge_out = (not here) and was_here is True
         self._last_here = here
+        if edge_in or (here and not float(getattr(self, "_here_since", 0.0) or 0.0)):
+            self._here_since = now
+        if edge_out:
+            self._here_since = 0.0
         if edge_in or edge_out:
             hot = True
         someone = ""
@@ -1286,7 +1341,12 @@ class Mind:
                     seen = " — " + (d[0].lower() + d[1:])  # only on the arrival turn: a snapshot of what someone is doing is stale a minute later (artist, 16:20)
             except Exception:
                 pass
-            lead = P("mind.someone-here").format(since=self.person_since(now), seen=seen)  # the person leads the cue
+            _n = int((scene or {}).get("person_count") or 0)
+            _who = {2: "Two people are", 3: "Three people are"}.get(_n, "Several people are" if _n > 3 else "Someone is")
+            lead = P("mind.someone-here").format(who=_who, since=self.person_since(now), seen=seen)  # the person leads the cue
+            _others = [t for t, _ in self.in_view_placed(agent)[:2]] or self.in_view(agent)[:2]
+            if _others:
+                lead += P("mind.also-in-view").format(terms=", the ".join(_others[:-1]) + " and the " + _others[-1] if len(_others) > 1 else _others[0])
         if not getattr(config, "MIND_HOT_STRIPS_INTERIOR", True):
             hot = False
         memory = None
@@ -1332,24 +1392,30 @@ class Mind:
                 cue = P("mind.cue-think-memory").format(clock=clock(now), when=when_words(now - memory["ts"]), memory=memory["text"][:220])
             else:
                 cue = P("mind.cue-think").format(clock=clock(now))
-                tail = self.last_written(now)
-                if tail and not hot:
-                    # memory only by association, and only while the moment is quiet
-                    memory = self.recall_similar(tail, now, believed=here)
-                    if memory:
-                        cue += P("mind.cue-recall").format(when=when_words(now - memory["ts"]), memory=memory["text"][:220])
-                        print(f"[MIND] recall by association (d={memory.get('distance', 0):.2f}, {when_words(now - memory['ts'])}): {memory['text'][:70]}")
         if lead:
             cue = re.sub(r"^(\d\d:\d\d\.)", r"\1" + lead.replace("\\", "\\\\"), cue, count=1) if re.match(r"^\d\d:\d\d\.", cue) else lead.strip() + " " + cue
         if edge_in:
             cue += P("mind.arrived").format(alone=self._alone_words(now, agent))
         elif edge_out:
             cue += P("mind.left")
-        if kind == "think":
+        # THE INTERIOR RIDES ON EVERY TURN (Sep 7): with the picture on every call,
+        # gating these to eyes-resting turns left the cue as pure description.
+        if not hot:
             cue += self._felt_shift()
             cue += self._tone_notice()
             cue += self.time_edges(now, agent)
             cue += self._loop_line(agent)
+            if not memory:
+                tail = self.last_written(now)
+                subject, said = self.already_said(now, tail, believed=here) if tail else ("", [])
+                if said:
+                    cue += P("mind.already-said").format(subject=subject, said=" and ".join('"%s"' % t[:200] for t in said))
+                    print(f"[MIND] already said about {subject}: {len(said)}")
+                elif tail:
+                    memory = self.recall_similar(tail, now, believed=here)
+                    if memory:
+                        cue += P("mind.cue-recall").format(when=when_words(now - memory["ts"]), memory=memory["text"][:220])
+                        print(f"[MIND] recall by association (d={memory.get('distance', 0):.2f}, {when_words(now - memory['ts'])}): {memory['text'][:70]}")
             if not memory:
                 cue += self._elicit_dose()
         if self.thread and now - self.thread[-1].get("ts", now) >= float(config.STREAM_GAP_MARK_SECONDS):

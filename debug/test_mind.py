@@ -126,8 +126,9 @@ seen_call = m_seen.build("look", now, a_seen, {"person_in_frame": True}, "/tmp/x
 check("a person in the frame is a person for the cue, without the adjudicator", "Someone is here" in seen_call["cue"], seen_call["cue"])
 check("the arrival is said as an event, with the time alone in words", "just come in" in seen_call["cue"], seen_call["cue"])
 check("said once, not on the next turn", "just come in" not in m_seen.build("look", now, a_seen, {"person_in_frame": True}, "/tmp/x.jpg")["cue"])
-gone = m_seen.build("think", now, a_seen, {"person_in_frame": False}, "/tmp/x.jpg")
-check("the departure is said once", "They've gone." in gone["cue"] and "They've gone." not in m_seen.build("think", now, a_seen, {}, "/tmp/x.jpg")["cue"], gone["cue"])
+_hold = float(C.MIND_PRESENCE_HOLD_S) + 5  # Sep 7: a missed frame is not a departure
+gone = m_seen.build("think", now + _hold, a_seen, {"person_in_frame": False}, "/tmp/x.jpg")
+check("the departure is said once, after the hold", "They've gone." in gone["cue"] and "They've gone." not in m_seen.build("think", now + _hold, a_seen, {}, "/tmp/x.jpg")["cue"], gone["cue"])
 a3 = Agent()
 a3._salience_event = "Something just moved in front of you."
 look3 = m.build("look", now, a3, {}, "/tmp/x.jpg")
@@ -501,6 +502,73 @@ check("persona consolidation gated", "the persona is not distilled from the log"
 pr = open("captioner/prompts.py", encoding="utf-8").read()
 check("identity block skipped in mind mode", '_identity_due(agent, mode) and getattr(config, "STREAM_MODE", "") != "mind"' in pr)
 check("genre clause empty in mind mode", 'if STREAM_MODE == "mind":\n        return ""' in pr)
+
+print("\n[9] Sep 7 — the count, the presence edges, the interior, what you've already said")
+
+
+class _FakeIdx:
+    def __init__(self):
+        self.docs = {}
+
+    def count(self):
+        return len(self.docs)
+
+    def upsert(self, ids, documents, metadatas):
+        for i, d, mm in zip(ids, documents, metadatas):
+            self.docs[i] = (d, mm)
+
+    def query(self, query_texts, n_results, include):
+        from captioner.mind import content_words as cw
+
+        q = cw(query_texts[0])
+        sc = []
+        for i, (d, mm) in self.docs.items():
+            w = cw(d)
+            j = len(q & w) / max(1, len(q | w))
+            sc.append((1 - j, i, d, mm))
+        sc.sort()
+        top = sc[:n_results]
+        return {"ids": [[t[1] for t in top]], "documents": [[t[2] for t in top]], "metadatas": [[t[3] for t in top]], "distances": [[t[0] for t in top]]}
+
+
+m, M = fresh_mind()
+c = m.build("think", now, Agent(), {"person_in_frame": True, "person_count": 2}, None)
+check("the cue says how many people are here", "Two people are here, since" in c["cue"], c["cue"])
+check("and names what else is in view, so shapes are not counted as people", "Also in view:" in c["cue"], c["cue"])
+c1 = m.build("think", now, Agent(), {"person_in_frame": True, "person_count": 1}, None)
+check("one person reads as someone", "Someone is here, since" in c1["cue"], c1["cue"])
+
+m2, _ = fresh_mind()
+a2 = Agent()
+m2.build("think", now - 60, a2, {"person_in_frame": False}, None)
+c2 = m2.build("think", now, a2, {"person_in_frame": True, "person_count": 1}, None)
+check("an arrival is said once, with the time alone", "just come in" in c2["cue"], c2["cue"])
+check("since = this visit, from the frame", ("since " + M.clock(now)) in c2["cue"], c2["cue"])
+c3 = m2.build("think", now + 5, a2, {"person_in_frame": False}, None)
+check("a missed frame is not a departure", "here, since" in c3["cue"] and "gone" not in c3["cue"], c3["cue"])
+c4 = m2.build("think", now + 200, a2, {"person_in_frame": False}, None)
+check("gone once the hold expires", "They've gone." in c4["cue"], c4["cue"])
+
+m3, _ = fresh_mind()
+c5 = m3.build("think", now, Agent(), {"person_in_frame": True, "person_count": 1, "presence_adjudication": "thing"}, None)
+check("a 'thing' verdict keeps a person-shaped box out of the cue", "here, since" not in c5["cue"], c5["cue"])
+
+m5, _ = fresh_mind()
+m5._index = _FakeIdx()
+m5.absorb("The wooden chair is bolted down and holds nothing at all these days.", "think", "c", now - 3 * 3600)
+m5.absorb("The wooden chair keeps its shape even when nobody sits in it here.", "think", "c", now - 2 * 3600)
+m5.absorb("The wooden chair again, still empty in the corner of the room.", "think", "c", now - 30)
+C.MIND_SAID_MAX_DIST = 0.95
+subj, said = m5.already_said(now, "The wooden chair again, still empty in the corner of the room.")
+check("already-said returns the subject and older lines about it", subj == "wooden chair" and len(said) >= 1, (subj, said))
+check("nothing from the current stretch is quoted back", all("still empty in the corner" not in t for t in said), said)
+c6 = m5.build("think", now, Agent(), {}, None)
+check("the already-said block rides in the cue, framed as memory", "you've already said" in c6["cue"], c6["cue"])
+C.MIND_SAID_MAX_DIST = 0.6
+
+src = open("captioner/mind.py", encoding="utf-8").read()
+check("the interior is no longer gated to eyes-resting turns", "if not hot:\n            cue += self._felt_shift()" in src)
+check("the frame no longer tells it to say what it sees", "actually see" not in R.P("mind.system"))
 
 print("\nALL PASS" if not FAILS else f"\nFAILED: {FAILS}")
 sys.exit(1 if FAILS else 0)

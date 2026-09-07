@@ -86,7 +86,7 @@ artist's to finalize; memory must never read as present-tense scene truth.
 
 ## The jobs, in order. Do one, test, commit, push, verify live, then the next.
 
-### Job 1 — presence edges from the frame (small, first)
+### Job 1 — presence edges from the frame — DONE Sep 7 midday (see runtime-map)
 Since Sep 7 the cue says "Someone is here, since 16:19" when the frame-level
 detector sees a person, but "since" comes from the last *adjudicated*
 arrival in `utils/episodic_log` (stale: 16:19 was yesterday), and the
@@ -169,7 +169,7 @@ and repeats surface observations; "not kept" is a storage gate and does not
 prevent the next repeat; it believes two people are present when the artist
 alone is there (the mannequin torso/head reads as a person).
 
-### Job 6 — the count, and the mannequin named (smallest)
+### Job 6 — the count, and the mannequin named — DONE Sep 7 midday
 `_assess_scene` knows the detector's person count. Put it in the cue when
 someone is here ("One person is here." / "Two people are here." — registry
 fragment, placeholder `count`), and keep naming the mannequin head/torso
@@ -178,7 +178,7 @@ it rides when a person is present too, since that is exactly when the model
 double-counts). Files: `captioner/mind.py::build` (the `lead` block),
 `captioner/captioner.py::_assess_scene`, `captioner/prompt_registry.py`.
 
-### Job 7 — seeing is available, not the assignment
+### Job 7 — seeing is available, not the assignment — DONE Sep 7 midday
 In `mind.system` (prompt_registry) the sentence "When you look, you say what
 you actually see." plus a cue that names only what is in view = an
 instruction to describe, every minute. Remove that sentence from the frame
@@ -189,7 +189,7 @@ the current subject. The 3.6-era prompt did both at once because the picture
 was one input among many; restore that balance without taking the picture
 away.
 
-### Job 8 — "what you've already said about X" (the anti-repetition context)
+### Job 8 — "what you've already said about X" — DONE Sep 7 midday
 Before each call, take the subject of the last kept entry
 (`Mind.subject_of`) and query the ChromaDB "thoughts" collection
 (`Mind.index()`, `recall_similar` is the pattern) with the last entry's

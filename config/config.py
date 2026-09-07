@@ -1600,3 +1600,11 @@ MIND_LOOK_EVERY_BELIEVED_S = float(os.getenv("MIND_LOOK_EVERY_BELIEVED_S", 60)) 
 MIND_INTERVAL_BELIEVED_MULT = float(os.getenv("MIND_INTERVAL_BELIEVED_MULT", 0.6))
 MIND_HOT_STRIPS_INTERIOR = os.getenv("MIND_HOT_STRIPS_INTERIOR", "true").lower() in ("true", "1", "yes")  # north-star P6: a live event (arrival, motion, eye contact) strips the interior lines — memory, positions, past quotes — from the call; quiet lets them ride
 DREAM_REQUIRES_STILL = os.getenv("DREAM_REQUIRES_STILL", "false").lower() in ("true", "1", "yes")  # Sep 7 (artist): the night pass runs regardless of presence — it can sleep with someone there
+
+# ── Sep 7 midday: the artist ran the every-frame branch — "obsessed with what it sees",
+# repeats surface observations, believes two people are in the room. Jobs 1/6/7/8 of docs/handover-sep7.md.
+MIND_PRESENCE_HOLD_S = float(os.getenv("MIND_PRESENCE_HOLD_S", 60))  # the detector missing a frame is not a departure
+MIND_PRESENCE_VETO_S = float(os.getenv("MIND_PRESENCE_VETO_S", 300))  # after the adjudicator says "thing", frame-level presence is ignored this long
+MIND_SAID_MIN_AGE_S = int(os.getenv("MIND_SAID_MIN_AGE_S", 1800))  # "you've already said" only quotes thoughts older than this
+MIND_SAID_MAX_DIST = float(os.getenv("MIND_SAID_MAX_DIST", 0.6))
+MIND_SAID_MAX = int(os.getenv("MIND_SAID_MAX", 2))
