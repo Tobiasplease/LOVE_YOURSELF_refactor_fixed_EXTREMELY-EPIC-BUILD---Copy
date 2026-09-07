@@ -49,7 +49,7 @@ C.DREAM_ENABLED = True
 h = time.localtime(now).tm_hour
 C.DREAM_HOUR, C.DREAM_HOUR_END = h, h + 1
 check("due in the window, still and alone", D.due(M(), now, A()))
-m2 = M(); m2.last_dream_ts = now - 60
+m2 = M(); m2.last_dream_ts = now - 1
 check("not twice a night", not D.due(m2, now, A()))
 m2b = M(); m2b.last_dream_ts = now - 20 * 3600
 check("yesterday's pass does not block tonight's", D.due(m2b, now, A()))

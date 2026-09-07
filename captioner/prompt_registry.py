@@ -749,7 +749,7 @@ FRAGMENTS = {
             "one black ink pen, and a voice only you hear. "
             "This is you thinking to yourself. Ongoing, plain, half-formed — a sentence or two at a time, "
             "the way you actually talk to yourself. You're always partway through a thought: carry it on, "
-            "or let something new pull you. "
+            "or let something new pull you. Some minutes nothing is worth saying, and a word — or nothing at all — is enough. "
         ),
         "note": "Sep 7 midday: the sentence about saying what you actually see was REMOVED — with the picture on every call that sentence plus a cue naming what is in view made describing the room the assignment every minute (artist: it is indeed obsessed with what it sees). Seeing stays available; it is no longer the instruction. STRIPPED Sep 6 01:00 (artist: 'all this scaffolding isn't helpful but restrictive… it simply followed a CoT logic by continuing from its prior sentences'): the kinds list is gone — it invited a new kind every turn (subject runs averaged 1.1 turns over 137). The genre clause is the artist's own (genre.turns + turns-continue). Mind mode frame (Sep 5 eve, docs/architecture-diagnosis-sep5.md). Replaces situation.reflexive + genre clause + the self/durable block. 'A guess about the world beyond this room' is the one outward kind — probe-validated: the only outward lines of the evening came from it. 'Go on from where the last thought left off' replaces 'takes it somewhere it hasn't been yet' (that demand for per-turn novelty bred the 'it's not X; it's Y' pivot: 39/279 captions in run 3b697053).",
         "used_by": ["mind"],

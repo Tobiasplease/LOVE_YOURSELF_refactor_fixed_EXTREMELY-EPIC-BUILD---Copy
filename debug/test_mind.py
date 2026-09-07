@@ -126,9 +126,33 @@ seen_call = m_seen.build("look", now, a_seen, {"person_in_frame": True}, "/tmp/x
 check("a person in the frame is a person for the cue, without the adjudicator", "Someone is here" in seen_call["cue"], seen_call["cue"])
 check("the arrival is said as an event, with the time alone in words", "just come in" in seen_call["cue"], seen_call["cue"])
 check("said once, not on the next turn", "just come in" not in m_seen.build("look", now, a_seen, {"person_in_frame": True}, "/tmp/x.jpg")["cue"])
+import perception.person_detection_state as _pds  # a departure needs eyes on the spot (Sep 7 pm)
+_orig_state = _pds.get_person_detection_state
+
+
+class _Looking:
+    def is_looking_at_last_known_location(self, tolerance=18.0):
+        return True
+
+
+_pds.get_person_detection_state = lambda: _Looking()
 _hold = float(C.MIND_PRESENCE_HOLD_S) + 5  # Sep 7: a missed frame is not a departure
 gone = m_seen.build("think", now + _hold, a_seen, {"person_in_frame": False}, "/tmp/x.jpg")
 check("the departure is said once, after the hold", "They've gone." in gone["cue"] and "They've gone." not in m_seen.build("think", now + _hold, a_seen, {}, "/tmp/x.jpg")["cue"], gone["cue"])
+
+
+class _Away:
+    def is_looking_at_last_known_location(self, tolerance=18.0):
+        return False
+
+
+_pds.get_person_detection_state = lambda: _Away()
+m_away, _ = fresh_mind()
+a_away = Agent()
+m_away.build("think", now, a_away, {"person_in_frame": True, "person_count": 1}, None)
+c_away = m_away.build("think", now + _hold + 60, a_away, {"person_in_frame": False}, None)
+check("looking away is not a departure", "gone" not in c_away["cue"] and "in the room now, since" in c_away["life"], (c_away["cue"], c_away["life"][:90]))
+_pds.get_person_detection_state = _orig_state
 a3 = Agent()
 a3._salience_event = "Something just moved in front of you."
 look3 = m.build("look", now, a3, {}, "/tmp/x.jpg")
@@ -386,7 +410,7 @@ m.in_view = lambda agent: ["red foam finger", "black cloth bag", "wooden chair"]
 m.in_view_placed = lambda agent: [("red foam finger", "high to your right"), ("black cloth bag", "high to your right"), ("wooden chair", "low to your left")]
 lk = m.build("look", now, Agent(), {}, "/tmp/x.jpg")
 check("look cue: at most two things, placed, inside the look sentence", "You look at the red foam finger and the black cloth bag high to your right." in lk["cue"] and "wooden chair" not in lk["cue"], lk["cue"])
-check("the beat rule is gone (Sep 7)", not hasattr(M.Mind, "beat_of"))
+check("beats are back as rhythm, not as a token trick (Sep 7 pm)", hasattr(M.Mind, "beat_of"))
 
 print("\n[6b] the look timer advances even when the look is not kept")
 m, M = fresh_mind()
@@ -482,7 +506,7 @@ check("the mind decides its frames with the same code the legacy path uses", "_f
 check("a mind turn with motion sends the sequence, conversation intact", "frames=_fs[\"video_frames\"]" in _cap and "turns=call[\"turns\"]" in _cap)
 check("the frame is no longer gated on the turn kind", 'img_path if kind == "look"' not in open("captioner/mind.py", encoding="utf-8").read())
 check("the video path takes turns", "turns" in inspect.signature(I.query_model_video).parameters and "turns" in inspect.signature(L.query_llama_server_video).parameters)
-check("the turn-split patches are gone from the captioner", "beat_of" not in _cap and "note_spoken" not in _cap and "strip_restated_premise" not in _cap and "MIND_TEMPO" not in _cap)
+check("the turn-split patches are gone from the captioner (beats returned Sep 7 pm as rhythm)", "note_spoken" not in _cap and "strip_restated_premise" not in _cap and "MIND_TEMPO" not in _cap)
 check("no tempo table left in config", not hasattr(C, "MIND_TEMPO"))
 check("the running text reaches back further", C.MIND_TEXT_ENTRIES >= 30, C.MIND_TEXT_ENTRIES)
 _reg = open("captioner/prompt_registry.py", encoding="utf-8").read()
@@ -550,8 +574,19 @@ check("an arrival is said once, with the time alone", "just come in" in c2["cue"
 check("since = this visit, from the frame", ("since " + M.clock(now)) in c2["cue"], c2["cue"])
 c3 = m2.build("think", now + 5, a2, {"person_in_frame": False}, None)
 check("a missed frame is not a departure", "gone" not in c3["cue"] and "in the room now, since" in c3["life"], (c3["cue"], c3["life"][:100]))
+import perception.person_detection_state as _pds9
+_o9 = _pds9.get_person_detection_state
+
+
+class _Look9:
+    def is_looking_at_last_known_location(self, tolerance=18.0):
+        return True
+
+
+_pds9.get_person_detection_state = lambda: _Look9()
 c4 = m2.build("think", now + 200, a2, {"person_in_frame": False}, None)
-check("gone once the hold expires", "They've gone." in c4["cue"], c4["cue"])
+check("gone once the hold expires, with the eyes on the spot", "They've gone." in c4["cue"], c4["cue"])
+_pds9.get_person_detection_state = _o9
 
 m3, _ = fresh_mind()
 c5 = m3.build("think", now, Agent(), {"person_in_frame": True, "person_count": 1, "presence_adjudication": "thing"}, None)
@@ -577,6 +612,13 @@ C.MIND_SAID_MAX_DIST = 0.6
 src = open("captioner/mind.py", encoding="utf-8").read()
 check("the interior is no longer gated to eyes-resting turns", "if not hot:\n            cue += self._felt_shift()" in src)
 check("the frame no longer tells it to say what it sees", "actually see" not in R.P("mind.system"))
+check("the frame permits a word or nothing", "nothing at all" in R.P("mind.system"))
+check("beats: an empty or punctuation-only reply is a beat", M.Mind.beat_of("...") == "…" and M.Mind.beat_of("") == "…")
+check("beats: a short unfinished reply is kept as itself", M.Mind.beat_of("Still nothing") == "Still nothing")
+check("beats: a long unfinished reply becomes a mark", M.Mind.beat_of("The lamp is still burning away up there in the corner where it always") == "…")
+check("a whole thought is not a beat", M.Mind.beat_of("The lamp is still. It waits.") is None)
+_src = open("captioner/mind.py", encoding="utf-8").read()
+check("a look-away is not a departure", "is_looking_at_last_known_location" in _src and "that is not a departure" in _src)
 
 print("\nALL PASS" if not FAILS else f"\nFAILED: {FAILS}")
 sys.exit(1 if FAILS else 0)

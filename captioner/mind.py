@@ -1073,6 +1073,20 @@ class Mind:
         except Exception:
             return {}
 
+    @staticmethod
+    def beat_of(raw: str) -> Optional[str]:
+        """Rhythm (restored Sep 7, the artist: "make it understand that if
+        nothing is significant it can just output '….' or a single word").
+        An all-punctuation reply, or a short reply with no sentence end, is a
+        BEAT: kept in the text as itself, not dropped as silence. Returns the
+        beat, or None when the reply is an ordinary thought."""
+        t = (raw or "").strip()
+        if not t or all(c in ".…·-— " for c in t):
+            return "…"
+        if not any(c in t for c in ".!?…"):
+            return t if len(t.split()) <= int(getattr(config, "MIND_BEAT_MAX_WORDS", 6)) else "…"
+        return None
+
     def note_look(self, now: float) -> None:
         """A look happened, stored or not — the look timer advances either way
         (Sep 5 23:25–23:39: gated looks left the timer stale, so every phantom
@@ -1321,6 +1335,18 @@ class Mind:
             in_frame = False
         if in_frame:
             self._here_last_seen = now
+        elif not believed:
+            # Sep 7 (artist: "it looked away from me and declared I was gone"):
+            # the adjudicated belief has obeyed this law since Sep 4, the
+            # frame-level path added this morning did not. A person is not
+            # gone because the head turned away from them.
+            try:
+                from perception.person_detection_state import get_person_detection_state as _gpds
+
+                if not _gpds().is_looking_at_last_known_location(tolerance=float(config.PRESENCE_ABSENCE_LOOK_TOLERANCE)):
+                    self._here_last_seen = now  # the eyes are elsewhere; that is not a departure
+            except Exception:
+                self._here_last_seen = now  # fail closed: never invent a departure from a failure to check
         held = (now - float(getattr(self, "_here_last_seen", 0.0) or 0.0)) < float(getattr(config, "MIND_PRESENCE_HOLD_S", 60))
         was_here = getattr(self, "_last_here", None)
         here = believed or in_frame or (bool(was_here) and held)  # a missed frame is not a departure

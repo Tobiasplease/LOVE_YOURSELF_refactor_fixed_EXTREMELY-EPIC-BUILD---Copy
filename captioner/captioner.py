@@ -1943,6 +1943,19 @@ class Captioner(MemoryMixin):
             )
 
         _raw = self._strip_leaked_stamps(self._strip_list_shape(_generate(opts)))
+        _beat = mind.beat_of(_raw) if (self.first_caption_done and not _ifr(_raw)) else None
+        if _beat is not None:
+            # a beat is a thought, not a failure: it enters the text and prints (Sep 7)
+            mind.absorb(_beat, kind, call["cue"], now)
+            log_json_entry(LogType.CAPTION, {"caption": _beat, "mode": "beat", "mood": self.current_mood, "beat": True}, print_message=_beat)
+            try:
+                with open(os.path.join(MOOD_SNAPSHOT_FOLDER, "live_captions.txt"), "a", encoding="utf-8") as _f:
+                    _f.write(_beat + "\n")
+            except Exception:
+                pass
+            self.last_caption = _beat
+            self.last_caption_time = now
+            return None
         caption = self._trim_to_boundary(_raw)
         if kind == "look":
             mind.note_look(now)  # the look happened whether or not what it said is kept
