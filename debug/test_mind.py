@@ -613,6 +613,15 @@ for _i in range(6):
     if _l:
         _seen.add(_l.strip()[:40])
 check("the interior line rotates — no two calls in a row look alike", len(_seen) >= 2, _seen)
+_bare, _m7 = 0, fresh_mind()[0]
+_m7.absorb("A thought to continue from.", "think", "c", now - 60)
+for _i in range(8):
+    _a7 = Agent()
+    _a7._salience_event = "Something just moved in front of you." if _i % 2 else None
+    _c7 = _m7.build("think", now + _i, _a7, {}, None)
+    if len(_c7["cue"].strip()) <= 8:
+        _bare += 1
+check("no call goes out on a bare clock, hot or quiet", _bare == 0, _bare)
 C.MIND_SAID_MAX_DIST = 0.6
 
 src = open("captioner/mind.py", encoding="utf-8").read()

@@ -1087,7 +1087,7 @@ class Mind:
             return t if len(t.split()) <= int(getattr(config, "MIND_BEAT_MAX_WORDS", 6)) else "…"
         return None
 
-    _SURFACE_KINDS = ("said", "recall", "question", "drawing", "settled", "want")
+    _SURFACE_KINDS = ("said", "recall", "question", "drawing", "settled", "want", "awake")
 
     def surface_line(self, now: float, agent, here: bool = False) -> str:
         """ONE interior line per call, ROTATING (Sep 7).
@@ -1139,6 +1139,13 @@ class Mind:
                     f = want_ledger.current_facts()
                     if f and f.get("text"):
                         line = P("mind.cue-want").format(age=casual_time_string(float(f["age_s"]) / 60.0), want=str(f["text"]).rstrip("."))
+                elif kind == "awake":
+                    # the guaranteed slot: there is always a duration, so no call goes out on a bare clock
+                    from captioner.prompts import casual_time_string as _cts
+
+                    w = self.woke_at(now, agent)
+                    if w and now - w > 120:
+                        line = P("mind.edge-awake").format(duration=_cts((now - w) / 60.0))
             except Exception:
                 line = ""
             if line and line.strip() != (getattr(self, "_surface_last", "") or "").strip():
@@ -1500,8 +1507,12 @@ class Mind:
             cue += self._tone_notice()
             cue += self.time_edges(now, agent)
             cue += self._loop_line(agent)
-            if not memory:
-                cue += self.surface_line(now, agent, here=here)  # one rotating interior line, so no two calls look alike
+        if not memory:
+            # EVERY call carries context (Sep 7, the artist: "there should be
+            # absolutely no calls without a good bit of context"). Hot cycles
+            # used to strip the interior entirely, which is exactly when it
+            # stood in front of a person repeating "he's right there".
+            cue += self.surface_line(now, agent, here=here)
             if not memory:
                 cue += self._elicit_dose()
         if self.thread and now - self.thread[-1].get("ts", now) >= float(config.STREAM_GAP_MARK_SECONDS):
