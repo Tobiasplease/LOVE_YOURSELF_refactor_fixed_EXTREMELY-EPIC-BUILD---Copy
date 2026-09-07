@@ -209,3 +209,13 @@ it to be naturally exploratory and inquisitive and persistent?"). Three
 phases, in order: the place belief harvested like the NAME is; uncertainty
 surfaced honestly from the spatial registry's own confidences; open questions
 that persist until answered. Do Phase 1 alone and watch a day before Phase 2.
+
+### Job 10 — continuation, not resemblance
+See `docs/plan-continuation-sep8.md` (Sep 8, after the artist: "it ISN'T
+continuing — repetition is basically the opposite… there is such an obvious
+difference between 'continue this text' and 'write something similar to
+this'"). A chat call asks for a NEW message that follows the previous ones,
+which is resemblance; the fix is to leave the assistant turn OPEN with the
+running text inside it so the model continues rather than restarts. Probe
+six shapes and measure development (new-claim rate × connection rate) before
+building anything.
