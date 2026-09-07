@@ -1555,9 +1555,7 @@ class Mind:
             _n = int((scene or {}).get("person_count") or 0)
             _who = {2: "Two people are", 3: "Three people are"}.get(_n, "Several people are" if _n > 3 else "Someone is")
             lead = P("mind.someone-here").format(who=_who, since=self.person_since(now), seen=seen)  # the person leads the cue
-            _others = [t for t, _ in self.in_view_placed(agent)[:2]] or self.in_view(agent)[:2]
-            if _others:
-                lead += P("mind.also-in-view").format(terms=", the ".join(_others[:-1]) + " and the " + _others[-1] if len(_others) > 1 else _others[0])
+
         if not getattr(config, "MIND_HOT_STRIPS_INTERIOR", True):
             hot = False
         memory = None
@@ -1594,6 +1592,9 @@ class Mind:
             except Exception:
                 pose = None
             cue += self.turn_report(pose)
+            _known = [t for t, _ in self.in_view_placed(agent)[:3]] or self.in_view(agent)[:3]
+            if _known:
+                cue += P("mind.also-in-view").format(terms=", the ".join(_known[:-1]) + " and the " + _known[-1] if len(_known) > 1 else _known[0])
         else:
             self.think_count += 1
             n = 0 if hot else int(config.MIND_MEMORY_EVERY_N)

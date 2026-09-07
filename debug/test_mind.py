@@ -410,7 +410,8 @@ check("head hasn't moved", "hasn't moved" in m.turn_report((122.0, 131.0)))
 m.in_view = lambda agent: ["red foam finger", "black cloth bag", "wooden chair"]
 m.in_view_placed = lambda agent: [("red foam finger", "high to your right"), ("black cloth bag", "high to your right"), ("wooden chair", "low to your left")]
 lk = m.build("look", now, Agent(), {}, "/tmp/x.jpg")
-check("look cue: at most two things, placed, inside the look sentence", "You look at the red foam finger and the black cloth bag high to your right." in lk["cue"] and "wooden chair" not in lk["cue"], lk["cue"])
+check("look cue: at most two things, placed, inside the look sentence", "You look at the red foam finger and the black cloth bag high to your right." in lk["cue"], lk["cue"])
+check("and every look names what the registry knows is in view (a shape resolved is not a person)", "What you know is in view:" in lk["cue"], lk["cue"])
 check("beats are back as rhythm, not as a token trick (Sep 7 pm)", hasattr(M.Mind, "beat_of"))
 
 print("\n[6b] the look timer advances even when the look is not kept")
@@ -565,7 +566,8 @@ c = m.build("think", now, Agent(), {"person_in_frame": True, "person_count": 2},
 check("the cue says how many people are here at the edge", "Two people are here, since" in c["cue"], c["cue"])
 c_after = m.build("think", now + 1, Agent(), {"person_in_frame": True, "person_count": 2}, None)
 check("the standing presence fact leaves the cue and lives in what it knows", "people are here, since" not in c_after["cue"] and "in the room now, since" in c_after["life"], (c_after["cue"], c_after["life"][:120]))
-check("and names what else is in view, so shapes are not counted as people", "Also in view:" in c["cue"], c["cue"])
+_look_named = m.build("look", now, Agent(), {"person_in_frame": True, "person_count": 2}, "/tmp/x.jpg")
+check("and a look names what is in view, so shapes are not counted as people", "What you know is in view:" in _look_named["cue"], _look_named["cue"])
 m1a, _ = fresh_mind()
 c1 = m1a.build("think", now, Agent(), {"person_in_frame": True, "person_count": 1}, None)
 check("one person reads as someone", "Someone is here, since" in c1["cue"], c1["cue"])

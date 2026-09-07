@@ -798,8 +798,8 @@ FRAGMENTS = {
     },
     "mind.also-in-view": {
         "title": "Cue — what else is in view while someone is here",
-        "text": " Also in view: the {terms}.",
-        "note": "Sep 7 (artist: it still keeps believing there are two people in the room despite there clearly being only one): the vision model reads the mannequin torso/head as a second person. The registry's own terms for what is in view ride whenever someone is here, so the shapes have names and are not counted as people. Structure only — the terms are the machine's own vocabulary.",
+        "text": " What you know is in view: the {terms}.",
+        "note": "Sep 8 00:25: rides on EVERY look, not only when someone is present — by then the phantom had moved into language no gate can see ('they', 'a dark hunched shape', 'hunched over the desk'), and knowledge is the only thing that can resolve a shape into a thing. Probe arm B: with the in-view names the model wrote 'the head on the desk, the one with the black hair' instead of a person. Sep 7 (artist: it still keeps believing there are two people in the room despite there clearly being only one): the vision model reads the mannequin torso/head as a second person. The registry's own terms for what is in view ride whenever someone is here, so the shapes have names and are not counted as people. Structure only — the terms are the machine's own vocabulary.",
         "used_by": ["mind"],
         "placeholders": ["terms"],
     },
