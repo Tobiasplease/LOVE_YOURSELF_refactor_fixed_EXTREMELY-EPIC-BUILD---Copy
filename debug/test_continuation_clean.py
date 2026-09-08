@@ -7,6 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.llama_server import _clean_continuation as C  # noqa: E402
+from utils.llama_server import _seam_prefill as SP  # noqa: E402
 
 FAILS = []
 
@@ -28,5 +29,10 @@ check("no prefill, no change", C("A whole new thought.", "") == "A whole new tho
 curly = "waiting to see if it’s going to fall over. It hasn’t."
 check("a curly apostrophe in the seam vs a straight one in the output is still stripped", C("It hasn't. The red bucket is still upside down.", curly) == "The red bucket is still upside down.", C("It hasn't. The red bucket is still upside down.", curly))
 check("an unrelated reply is not truncated", C("The lamp is on.", tail) == "The lamp is on.")
+print("\n[seam] the trailing space is conditional")
+check("after a full stop the seam keeps its trailing space (else the turn reads finished)", SP("So I don't move.") == "So I don't move. ")
+check("mid-clause the seam has no trailing space (else the model starts mid-word)", SP("it's just a bright, ") == "it's just a bright,")
+check("a dangling word gets no space either", SP("The room is still there, but it ") == "The room is still there, but it")
+
 print("\nALL PASS" if not FAILS else f"\nFAILED: {FAILS}")
 sys.exit(1 if FAILS else 0)

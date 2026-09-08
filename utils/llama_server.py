@@ -344,7 +344,7 @@ def _append_stream_and_user(messages: list, history: Optional[List[str]], user_m
             tail = _LOG_STAMP_RE.sub("", lines.pop())  # newest entry leaves the log, becomes the seam
             seam = _seam_of(tail, _hybrid_prefill_chars())
             if seam:
-                prefill = seam + " "
+                prefill = _seam_prefill(seam)
         if lines:
             messages.append({"role": "assistant", "content": "\n".join(lines)})
         messages.append(user_message)
@@ -377,6 +377,17 @@ def _append_stream_and_user(messages: list, history: Optional[List[str]], user_m
                 messages.append({"role": "assistant", "content": past})
     messages.append(user_message)
     return ""
+
+
+def _seam_prefill(seam: str) -> str:
+    """The trailing space on the seam is conditional (Sep 8, probe-measured).
+    After a full stop the space is what keeps the model going — without it a
+    finished sentence reads as a finished turn (2/8 empty replies). But after
+    a MID-CLAUSE seam the space makes the model emit a token without its own
+    leading space, i.e. a word fragment ("a bright, " → "icky spot",
+    "it " → "is  different"). Mid-clause, the model supplies the space."""
+    s = (seam or "").rstrip()
+    return s + (" " if s.endswith((".", "!", "?", "…", '"', "'", ")")) else "")
 
 
 def _clean_continuation(text: str, prefill: str = "") -> str:
