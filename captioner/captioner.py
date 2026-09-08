@@ -2819,7 +2819,13 @@ class Captioner(MemoryMixin):
 
         # Add caption to context compression system (environmental change detection remains disabled)
         try:
-            if context_compressor and caption and caption.strip():
+            # SPOKEN-NOT-STORED MEANS STORED NOWHERE (found Sep 7 23:55 on the
+            # mind-mode branch, and the same door is open here): refused
+            # captions were still feeding the compressor, which then wrote
+            # things like "ROOM: A person sits at a desk…" and "EVENT: the same
+            # individual returned" — the phantom leaves the stream by one gate
+            # and comes back as a standing fact through another.
+            if context_compressor and caption and caption.strip() and getattr(self, "_stream_store_ok", True):
                 context_compressor.add_caption(caption, time.time(), img_path)
         except Exception as e:
             print(f"[CAPTIONER] Context compression failed: {e}")
