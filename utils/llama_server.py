@@ -389,7 +389,7 @@ def _clean_continuation(text: str, prefill: str = "") -> str:
         tail = prefill.rstrip()
         for n in range(min(len(tail), 120), 11, -1):
             if text.startswith(tail[-n:]):
-                text = text[n:].lstrip()
+                text = text[n:].lstrip(" ,;:.—–-\n\t")
                 break
         else:
             # RE-TYPING (Aug 1): the model doesn't always resume at the seam —
@@ -405,7 +405,23 @@ def _clean_continuation(text: str, prefill: str = "") -> str:
             if len(key) >= 12:
                 idx = text.find(key)
                 if idx >= 0:
-                    text = text[idx + len(key) :].lstrip()
+                    text = text[idx + len(key) :].lstrip(" ,;:.—–-\n\t")  # the joint may leave a dangling comma
+                else:
+                    # WORD-WISE OVERLAP (Sep 8): with a whole-document prefill the
+                    # model re-types the tail with small differences (spacing,
+                    # punctuation, a changed word), so neither exact test fires and
+                    # the entire re-typed passage was stored as the new thought —
+                    # which reads as the machine repeating itself when it was in
+                    # fact continuing. Compare words, ignoring case and punctuation.
+                    def _w(x):
+                        return [re.sub(r"[^\w']", "", t).lower() for t in x.split()]
+
+                    tw, xw = _w(tail), _w(text)
+                    raw = text.split()
+                    for k in range(min(len(tw), len(xw), 60), 3, -1):
+                        if tw[-k:] == xw[:k]:
+                            text = " ".join(raw[k:]).lstrip(" ,;:.—–-\n\t")
+                            break
     return text
 
 
