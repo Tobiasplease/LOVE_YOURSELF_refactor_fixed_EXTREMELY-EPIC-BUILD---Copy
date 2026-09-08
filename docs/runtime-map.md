@@ -1765,3 +1765,14 @@ recent 'yourself' reflection, with its age, ≤ IDENTITY_THOUGHT_MAX_AGE_S) and
 ledger). `core_facts["self"]`, `self_notes` and the durable ledger still
 accumulate (dashboard, consolidation, drawing intent) but reach no caption or
 reflection prompt — candidates for retirement.
+
+## Hybrid seam spacing (Sep 8) — `utils/llama_server._seam_prefill`
+The trailing space on the prefill seam is conditional: kept after terminal
+punctuation (without it a finished sentence reads as a finished turn — 2/8
+empty replies in `debug/probe_prefill_space.py`), dropped mid-clause (with it
+the model emits a token without its leading space — a word fragment:
+"a bright, " → "icky spot"). `_clean_continuation` normalises curly/straight
+quotes before matching and strips a short re-typed sentence when it is the
+seam's whole last sentence. The 3.6-era "fragment seam" and "document mode"
+were both re-tried Sep 8 and reverted (see config notes on SEAM_MODE and
+STREAM_MODE).
