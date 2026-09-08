@@ -1518,3 +1518,15 @@ GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 
 # 5. Additional devices can be added here
 # CUSTOM_DEVICE_PORT = "/dev/ttyUSB5"
+
+# ── SEAM MODE (Sep 8 experiment, docs/probe_seam_fragment) ──
+# "sentence": the thought is trimmed to its last complete sentence before it is
+#   spoken and stored (Aug 20/28), so the hybrid seam hands back a FINISHED
+#   sentence and the next call must start a new one — which is where the model
+#   reaches for "it's not X, it's Y".
+# "fragment": a thought cut off by the token budget keeps its unfinished tail,
+#   as in the 3.6 runs the artist prefers, so the seam is a fragment and the next
+#   call continues INSIDE a sentence (probe: mid-clause continuation 0/6 -> 3/6).
+#   The run-on guard is unchanged: a long text with no boundary at all is still
+#   refused by _stream_push.
+SEAM_MODE = os.getenv("SEAM_MODE", "fragment")

@@ -235,10 +235,14 @@ class Captioner(MemoryMixin):
         echo/erosion machinery churned — 89 spoken-not-stored + 58 erosions
         in 31 min fighting what storage had admitted)."""
         t = (text or "").strip()
+        try:
+            from config.config import SEAM_MODE as _sm
+        except Exception:
+            _sm = "sentence"
         idx = max(t.rfind("."), t.rfind("!"), t.rfind("?"))
         # >=10: don't trim down to a stub like "3." — a real short sentence
         # ("The man moved.") is kept, a numeric fragment is not
-        if idx >= 10 and idx < len(t) - 1:
+        if _sm != "fragment" and idx >= 10 and idx < len(t) - 1:
             t = t[: idx + 1]
         elif idx < 10 and len(t.split()) > 24:
             log_json_entry(
@@ -1524,8 +1528,13 @@ class Captioner(MemoryMixin):
         # Sep 5: a chain is a BARE number opening right after a bare-number
         # opening ("497 days" -> "498 days"); "2x4s", "3D", "100%" are words.
         _bare_num = re.compile(r"^\s*\d+(?:[.:,]\d+)*(?=[\s.…—–-]|$)")
-        if _bare_num.match(caption) and self._stream and _bare_num.match(list(self._stream)[-1] or ""):
-            return "number_chain"
+        if (
+            _bare_num.match(caption)
+            and self._stream
+            and _bare_num.match(list(self._stream)[-1] or "")
+            and not re.match(r"^\s*\d{1,2}(:\d\d)?\s*([apAP]\.?[mM])\b", caption)
+        ):
+            return "number_chain"  # a clock time is not a number chain (Sep 8: "7 PM. The light from the window…")
         # A claimed act of marking while the pen is parked is always false.
         if self._PHANTOM_DRAWING_RE.search(caption) and not self._drawing_now():
             return "phantom_drawing"

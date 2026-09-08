@@ -13,7 +13,13 @@ import re
 from typing import List
 
 # "(?<!the )": a cut word ("i didn't draw the she[lf]", "the he[adset]") is not a pronoun.
-PERSON_RE = re.compile(r"(?<!the )\b(he|him|his|she|her|hers)\b|\b(the|that|this) (man|woman|guy|person|visitor)\b", re.I)
+PERSON_RE = re.compile(
+    r"(?<!the )\b(he|him|his|she|her|hers)\b"
+    r"|\b(the|that|this) (man|woman|guy|person|visitor)\b"
+    r"|\b(a|an|some|one) (man|woman|guy|person|visitor) (is|sits|stands|sitting|standing|leaning|hunched|crouching|working|reading|looking|typing|at the|in the|on the|by the)\b"
+    r"|\b(someone|somebody)\b",  # ported from Sep 7: "There's someone there" was slipping the gate
+    re.I,
+)
 
 # Within the SAME sentence as the person mention: absence, past tense, or wondering.
 NOT_PRESENT_RE = re.compile(
@@ -22,7 +28,12 @@ NOT_PRESENT_RE = re.compile(
     r"|\b(he|she|they|him|her)('d| was| were| had| did| went| came| sat| stood| took| said| typed| kept| got| left| looked| moved| walked| stopped| turned| leaned| stayed|\s+\w+ed)\b"  # NOT "'s been": "he's been sitting there" is present
     r"|\b(if|whether|maybe|perhaps|when|wonder|wondering|unless|imagine|imagining|pretend|pretending)\s+(he|she|they|him|her)\b"
     r"|\b(he|she|they)('s| is| are| has| have)?\s+(gone|left|not here|missing)\b"
-    r"|\bwhere (he|she|they) (was|were|sat|stood|used)\b",
+    r"|\bwhere (he|she|they) (was|were|sat|stood|used)\b"
+    r"|\b(he|she|they|someone|somebody)\s*('s|s| is| was| isn.t| wasn.t)?\s*(not|never)\s+(sitting|standing|here|there|at|in|by)\b"  # a DENIAL is not a sighting (Sep 8)
+    r"|\bisn.t (sitting|standing|here|there|at|in|by)\b"
+    r"|\b(drawing|drawings|sketch|sketches|drew|drawn|picture) of\b"  # a person in a drawing is not a person in the room
+    r"|\bthe (old |last |first )?(drawing|sketch|picture)\b"
+    r"|\b(waiting|waits|wait) for (someone|somebody|them|him|her)\b",
     re.I,
 )
 
