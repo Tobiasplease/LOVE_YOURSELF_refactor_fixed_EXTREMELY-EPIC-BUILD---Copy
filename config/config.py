@@ -1529,4 +1529,4 @@ GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 #   call continues INSIDE a sentence (probe: mid-clause continuation 0/6 -> 3/6).
 #   The run-on guard is unchanged: a long text with no boundary at all is still
 #   refused by _stream_push.
-SEAM_MODE = os.getenv("SEAM_MODE", "fragment")
+SEAM_MODE = os.getenv("SEAM_MODE", "sentence")  # EXPERIMENT RUN AND REVERTED Sep 8 11:46-12:11: fragment mode produced 20/97 amputated entries and ZERO mid-clause continuations — the model re-starts the fragment instead of continuing it ("5m to that desk edge is" -> "5m to that desk edge feels heavier..."), and a measuring tic appeared. Antithesis 5%->3% is within noise at n=97. The seam is not the lever; keep the Aug 28 trim.
