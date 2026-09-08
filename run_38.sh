@@ -54,6 +54,6 @@ export CAPTION_MIN_P="${CAPTION_MIN_P:-0.05}"
 export STREAM_WINDOW=24
 export STREAM_CONSOLIDATE_CHARS=12000
 
-export STREAM_MODE="${STREAM_MODE:-hybrid}"
+export STREAM_MODE="${STREAM_MODE:-document}"  # Sep 8 experiment; STREAM_MODE=hybrid ./run_38.sh to revert
 
 exec python machine.py "$@"
