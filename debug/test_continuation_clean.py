@@ -25,6 +25,8 @@ check("re-typing with changed punctuation is stripped", C(retyped, tail).startsw
 retyped2 = "2m  away:  the white sheer curtain ripples gently  in a draft that seems to come from nowhere."
 check("re-typing with changed spacing is stripped", C(retyped2, tail).startswith("that seems"), C(retyped2, tail))
 check("no prefill, no change", C("A whole new thought.", "") == "A whole new thought.")
+curly = "waiting to see if it’s going to fall over. It hasn’t."
+check("a curly apostrophe in the seam vs a straight one in the output is still stripped", C("It hasn't. The red bucket is still upside down.", curly) == "The red bucket is still upside down.", C("It hasn't. The red bucket is still upside down.", curly))
 check("an unrelated reply is not truncated", C("The lamp is on.", tail) == "The lamp is on.")
 print("\nALL PASS" if not FAILS else f"\nFAILED: {FAILS}")
 sys.exit(1 if FAILS else 0)

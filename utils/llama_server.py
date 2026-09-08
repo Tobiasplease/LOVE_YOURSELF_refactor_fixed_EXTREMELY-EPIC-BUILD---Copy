@@ -386,7 +386,12 @@ def _clean_continuation(text: str, prefill: str = "") -> str:
     text = _THINK_RE.sub("", text or "")
     text = _THINK_OPEN_RE.sub("", text).strip()
     if prefill:
-        tail = prefill.rstrip()
+        # Sep 8: the seam is stored with curly quotes, the model re-types it
+        # with straight ones ("hasn’t" vs "hasn't") — neither strip matched and
+        # three consecutive entries opened "It hasn't." Compare on one alphabet.
+        _norm = str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"'})
+        text = text.translate(_norm)
+        tail = prefill.rstrip().translate(_norm)
         for n in range(min(len(tail), 120), 11, -1):
             if text.startswith(tail[-n:]):
                 text = text[n:].lstrip(" ,;:.—–-\n\t")
@@ -414,7 +419,7 @@ def _clean_continuation(text: str, prefill: str = "") -> str:
                     # which reads as the machine repeating itself when it was in
                     # fact continuing. Compare words, ignoring case and punctuation.
                     def _w(x):
-                        return [re.sub(r"[^\w']", "", t).lower() for t in x.split()]
+                        return [re.sub(r"[^\w]", "", t).lower() for t in x.split()]
 
                     tw, xw = _w(tail), _w(text)
                     raw = text.split()
@@ -422,6 +427,16 @@ def _clean_continuation(text: str, prefill: str = "") -> str:
                         if tw[-k:] == xw[:k]:
                             text = " ".join(raw[k:]).lstrip(" ,;:.—–-\n\t")
                             break
+                    else:
+                        # a SHORT re-typed sentence ("It hasn't.") is under the
+                        # 4-word floor above; accept 2–3 words only when they are
+                        # the seam's entire last sentence — that is a re-typing,
+                        # not a coincidence (Sep 8, three entries opened "It hasn't.")
+                        last_sent = [p for p in re.split(r"[.!?]+", tail) if p.strip()]
+                        lw = _w(last_sent[-1]) if last_sent else []
+                        k = len(lw)
+                        if 2 <= k <= 3 and xw[:k] == lw and len(xw) > k:
+                            text = " ".join(raw[k:]).lstrip(" ,;:.—–-\n\t")
     return text
 
 
