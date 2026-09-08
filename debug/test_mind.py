@@ -412,6 +412,21 @@ m.in_view_placed = lambda agent: [("red foam finger", "high to your right"), ("b
 lk = m.build("look", now, Agent(), {}, "/tmp/x.jpg")
 check("look cue: at most two things, placed, inside the look sentence", "You look at the red foam finger and the black cloth bag high to your right." in lk["cue"], lk["cue"])
 check("and every look names what the registry knows is in view (a shape resolved is not a person)", "What you know is in view:" in lk["cue"], lk["cue"])
+m14, _ = fresh_mind()
+m14.absorb("The dark shape by the desk was a bag. It sits on the wooden chair by the wall.", "think", "c", now - 3600)
+check("a real conclusion is kept as the position", len((m14.positions.get("wooden chair", {}) or {}).get("text", "").split()) >= 5, m14.positions.get("wooden chair"))
+m14.absorb("A tool?", "think", "c", now - 60)
+check("a fragment does not overwrite it", len(m14.positions["wooden chair"]["text"].split()) >= 5, m14.positions.get("wooden chair"))
+m15, _ = fresh_mind()
+m15._last_look_pose = (90.0, 107.5)
+import vision.gaze as _vg
+_ovg = _vg.get_gaze_state
+_vg.get_gaze_state = lambda: {"pan": 125, "tilt": 107, "direction": "right", "state": "idle"}
+a15 = Agent(); a15._last_view_verdict = "changed"
+check("a view change after turning is named as turning, not as the room changing", "you turned" in m15.build("look", now, a15, {}, "/tmp/x.jpg")["cue"], m15.build("look", now, a15, {}, "/tmp/x.jpg")["cue"])
+_vg.get_gaze_state = _ovg
+check("and it is read back when that thing is in view", "You settled" in m14.settled_for(["wooden chair"], now), m14.settled_for(["wooden chair"], now))
+check("framed as memory with an age", "ago" in m14.settled_for(["wooden chair"], now))
 check("beats are back as rhythm, not as a token trick (Sep 7 pm)", hasattr(M.Mind, "beat_of"))
 
 print("\n[6b] the look timer advances even when the look is not kept")

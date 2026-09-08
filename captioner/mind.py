@@ -531,12 +531,32 @@ class Mind:
                 pos["pivots"] = 0
         else:
             pos = {"pivots": 0, "ts": now}
-        pos["text"] = last_sentence(text)[:200]
+        _new = last_sentence(text)[:200]
+        # a fragment does not replace a real conclusion (Sep 8: positions held
+        # "A tool?" and "The two heads." where a settled sentence had been)
+        if len(_new.split()) >= int(getattr(config, "MIND_SETTLED_MIN_WORDS", 5)) or not pos.get("text"):
+            pos["text"] = _new
+            pos["settled_ts"] = now
         pos["last_ts"] = now
         self.positions[subject] = pos
         if len(self.positions) > 40:
             for k in sorted(self.positions, key=lambda k: self.positions[k].get("last_ts", 0))[:-40]:
                 self.positions.pop(k, None)
+
+    def settled_for(self, terms: List[str], now: float, n: int = 2) -> str:
+        """What it has already settled about the things it is looking at —
+        read back so a conclusion holds and can be built on."""
+        out = []
+        ttl = int(config.MIND_POSITION_TTL_S)
+        for t in terms:
+            p = self.positions.get(t) or {}
+            txt = (p.get("text") or "").strip()
+            ts = float(p.get("settled_ts") or p.get("last_ts") or 0)
+            if txt and len(txt.split()) >= int(getattr(config, "MIND_SETTLED_MIN_WORDS", 5)) and now - ts <= ttl:
+                out.append(P("mind.settled").format(when=when_words(now - ts), text=txt.rstrip(".") + "."))
+            if len(out) >= n:
+                break
+        return "".join(out)
 
     def fresh_positions(self, now: float, exclude: str = "", n: int = 2) -> List[Tuple[str, str]]:
         ttl = int(config.MIND_POSITION_TTL_S)
@@ -894,6 +914,18 @@ class Mind:
         h = "to your left" if pan - 90.0 < -thr else ("to your right" if pan - 90.0 > thr else "ahead")
         v = "low" if tilt - 107.5 < -thr else ("high" if tilt - 107.5 > thr else "")
         return f"{v} {h}".strip()
+
+    def _turned_since_last_look(self, agent, thr: float = 12.0) -> bool:
+        try:
+            from vision.gaze import get_gaze_state
+
+            g = get_gaze_state()
+            last = getattr(self, "_last_look_pose", None)
+            if not last:
+                return False
+            return abs(float(g.get("pan", 90)) - float(last[0])) > thr or abs(float(g.get("tilt", 107.5)) - float(last[1])) > thr
+        except Exception:
+            return False
 
     def turn_report(self, pose: Optional[tuple]) -> str:
         """Since the last look: turned which way, or not at all. A sense report, one clause."""
@@ -1581,6 +1613,10 @@ class Mind:
                     where = P("mind.where").format(terms=", the ".join(terms[:-1]) + " and the " + terms[-1] if len(terms) > 1 else terms[0]) if terms else ""
                 verdict = getattr(agent, "_last_view_verdict", None)
                 change = {"unchanged": P("mind.change-none"), "changed": P("mind.change-yes")}.get(verdict or "", "")
+                # the head moved, so a different part of the room is in front of
+                # it — that is not the room changing (Sep 8)
+                if int((scene or {}).get("ego_count", 0) or 0) >= 2 or self._turned_since_last_look(agent):
+                    change = P("mind.change-ego")
                 if verdict in ("new", "baselined") and not self._seen_this_session(terms, agent):
                     change = P("mind.change-new")  # honest only when nothing in view was seen this session (the referee keys by gaze cell)
                 cue = P("mind.cue-look").format(clock=clock(now), where=where, change=change, someone=someone)
@@ -1595,6 +1631,7 @@ class Mind:
             _known = [t for t, _ in self.in_view_placed(agent)[:3]] or self.in_view(agent)[:3]
             if _known:
                 cue += P("mind.also-in-view").format(terms=", the ".join(_known[:-1]) + " and the " + _known[-1] if len(_known) > 1 else _known[0])
+                cue += self.settled_for(_known, now, n=int(getattr(config, "MIND_SETTLED_IN_CUE", 2)))
         else:
             self.think_count += 1
             n = 0 if hot else int(config.MIND_MEMORY_EVERY_N)

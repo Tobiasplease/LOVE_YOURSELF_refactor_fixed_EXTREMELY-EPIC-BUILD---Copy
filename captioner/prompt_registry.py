@@ -796,6 +796,13 @@ FRAGMENTS = {
         "used_by": ["mind"],
         "placeholders": ["who", "since", "seen"],
     },
+    "mind.settled": {
+        "title": "Cue — what you already settled about a thing in view",
+        "text": " You settled {when} that {text}",
+        "note": "Sep 8 00:35 (artist: 'none of the object reasoning threads STICK, and thus they cannot deepen… it sometimes claims to have been wrong but it never stays'). 40 conclusions about objects were being stored and NONE were ever read back — MIND_LIFE_FULL had switched them off on Sep 6 along with the mirrors that were spiralling, which was right for its own voice and wrong for its knowledge of things. Rides on a look, for the things actually in view, framed as memory with an age. This is also what makes a correction hold: 'the dark shape was a bag' comes back the next time it looks there.",
+        "used_by": ["mind"],
+        "placeholders": ["when", "text"],
+    },
     "mind.also-in-view": {
         "title": "Cue — what else is in view while someone is here",
         "text": " What you know is in view: the {terms}.",
@@ -1005,6 +1012,12 @@ FRAGMENTS = {
 
     "mind.change-none": {"title": "Cue — nothing changed", "text": " Nothing has changed since your last look.", "used_by": ["mind"]},
     "mind.change-yes": {"title": "Cue — something changed", "text": " Something's changed here since you last looked.", "used_by": ["mind"]},
+    "mind.change-ego": {
+        "title": "Cue — the view changed because you moved",
+        "text": " This is a different part of the room, not a change in it — you turned.",
+        "note": "Sep 8 00:40 (artist: \"'the glare is back' — no, you just looked to the right! There is no persistent world model\"). The legacy path had this clause and mind mode dropped it. Without it every pan reads as an event in the world.",
+        "used_by": ["mind"],
+    },
     "mind.change-new": {"title": "Cue — first look this way", "text": " You haven't looked this way before.", "used_by": ["mind"]},
     "mind.someone": {"title": "Cue — someone here", "text": " Someone is here.", "note": "Rides while a person is in the frame (detector-level) or the adjudicated belief is ON — whichever is sooner (Sep 7).", "used_by": ["mind"]},
     "mind.arrived": {
