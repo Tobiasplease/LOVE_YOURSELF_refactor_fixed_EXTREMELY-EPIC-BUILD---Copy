@@ -843,7 +843,7 @@ STREAM_BREAK_SECONDS = 7200
 # had momentum (aliveness); world had grounding but answered a static room
 # forty times an hour (flat) and its delta framing elicited fake-delta tropes
 # ("the light feels different now"). A/B directly against the world runs.
-STREAM_MODE = os.getenv("STREAM_MODE", "document")  # Sep 8 experiment: the whole monologue rides as an OPEN assistant turn ending mid-sentence — "continue this text", not "write another one like these" (the original document-mode magic, retired Aug 1 for poison amplification; the storage law, phantom gate, scrub and compressor door all exist now)
+STREAM_MODE = os.getenv("STREAM_MODE", "hybrid")  # document mode TRIED AND REVERTED Sep 8 12:24-12:42: it reproduced the Aug 1 failure exactly — the model continues the document, so a list shape it once emitted ("50cm away:", "1m away:", "2m away:") becomes an endless list of empty stubs. Poison amplification is the mode's nature, not a tuning problem.
 
 # HYBRID seam size (Aug 1): how many chars of the machine's latest thought are
 # handed back as the continuation prefill in STREAM_MODE="hybrid". Short on
@@ -1529,4 +1529,4 @@ GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 #   call continues INSIDE a sentence (probe: mid-clause continuation 0/6 -> 3/6).
 #   The run-on guard is unchanged: a long text with no boundary at all is still
 #   refused by _stream_push.
-SEAM_MODE = os.getenv("SEAM_MODE", "fragment")  # EXPERIMENT RUN AND REVERTED Sep 8 11:46-12:11: fragment mode produced 20/97 amputated entries and ZERO mid-clause continuations — the model re-starts the fragment instead of continuing it ("5m to that desk edge is" -> "5m to that desk edge feels heavier..."), and a measuring tic appeared. Antithesis 5%->3% is within noise at n=97. The seam is not the lever; keep the Aug 28 trim.
+SEAM_MODE = os.getenv("SEAM_MODE", "sentence")
