@@ -1750,3 +1750,18 @@ Bundled fix (same date): `graceful_cleanup()` now calls
 silently skipped the awakening-continuity save and the closing journal entry.
 
 Gate check without hardware: `debug/test_low_energy_gates.py`.
+
+## Identity in the frame (Sep 8) — descriptions retired, material for reasoning instead
+`monologue.self-wrap` ("What you've come to know about yourself: …") is RETIRED
+(empty fragment, no users) and `monologue.durable-wrap` ("What has stayed true
+across days: …") is off the frame (DURABLE_IN_FRAME=false). Both quoted
+first-person self-descriptions as standing facts; the self line "I measure
+distance to a task repeatedly" produced captions that measured distances, and
+the durable ledger held 40 facts of the form "I stare at objects until I
+mistake them for threats". `prompts.identity_material_lines` rides on the
+identity dose instead: `monologue.self-thought` (last sentence of the most
+recent 'yourself' reflection, with its age, ≤ IDENTITY_THOUGHT_MAX_AGE_S) and
+`monologue.self-question` (least-recently surfaced open question from the lore
+ledger). `core_facts["self"]`, `self_notes` and the durable ledger still
+accumulate (dashboard, consolidation, drawing intent) but reach no caption or
+reflection prompt — candidates for retirement.

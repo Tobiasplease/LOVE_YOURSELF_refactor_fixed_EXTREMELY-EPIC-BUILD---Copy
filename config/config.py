@@ -1530,3 +1530,5 @@ GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 #   The run-on guard is unchanged: a long text with no boundary at all is still
 #   refused by _stream_push.
 SEAM_MODE = os.getenv("SEAM_MODE", "sentence")
+IDENTITY_THOUGHT_MAX_AGE_S = int(os.getenv("IDENTITY_THOUGHT_MAX_AGE_S", 3 * 86400))  # a self-conclusion older than this no longer rides; it must be re-thought (Sep 8)
+DURABLE_IN_FRAME = os.getenv("DURABLE_IN_FRAME", "false").lower() in ("true", "1", "yes")  # Sep 8: the stayed-true line was 40 first-person self-indictments; a standing description is stage direction

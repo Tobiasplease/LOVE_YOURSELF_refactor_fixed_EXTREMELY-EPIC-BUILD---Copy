@@ -171,11 +171,10 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
     # other modes see it every IDENTITY_EVERY_N_CAPTIONS.
     if not detox and _identity_due(agent, mode):
         try:
-            from captioner.context_compression import context_compressor
-
-            self_knowledge = context_compressor.core_facts.get("self", "").strip()
-            if self_knowledge and len(self_knowledge) > 10:
-                base += P("monologue.self-wrap").format(self_knowledge=self_knowledge)
+            # Sep 8: no standing self-description (see monologue.self-wrap note).
+            # Identity enters as material for reasoning: a dated conclusion
+            # from its own reflection on itself, and a question it carries.
+            base += identity_material_lines(agent)
             # A distilled self-name rides the same dose (re-entry round) —
             # it exists only once the machine has named itself in a reflection
             from utils.lore_ledger import lore_ledger
@@ -191,7 +190,11 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
             from captioner.durable_ledger import get_durable_ledger
 
             _ledger = get_durable_ledger()
-            durable = _ledger.render()
+            # Sep 8: the durable ledger held 40 facts, all first-person, all of
+            # the class "I stare at static objects until I mistake them for
+            # threats" — riding as "what has stayed true" that is an instruction.
+            # Same defect as the self-wrap; off the frame unless DURABLE_IN_FRAME.
+            durable = _ledger.render() if bool(getattr(config, "DURABLE_IN_FRAME", False)) else ""
             if durable:
                 base += P("monologue.durable-wrap").format(durable=durable)
                 # Sep 5 (audible time + the turn path): how long the core has
@@ -296,6 +299,36 @@ def _quiet_elicit_dose(agent) -> str:
         return P(kinds[rr % len(kinds)], default="")
     except Exception:
         return ""
+
+
+def identity_material_lines(agent=None) -> str:
+    """What reaches the frame about the machine's identity (Sep 8): not a
+    description of what it is, but material to reason with — the dated last
+    conclusion of its most recent reflection on itself, and one of its own
+    open questions. Both in its words; both framed as past or open."""
+    out = ""
+    try:
+        from captioner.semantic_memory import get_semantic_memory
+
+        refl = get_semantic_memory().get_recent_reflections(limit=1, subject="yourself")
+        if refl:
+            text = (refl[-1].get("text") or "").strip()
+            ts = float(refl[-1].get("timestamp") or 0)
+            sents = [x.strip() for x in re.split(r"(?<=[.!?])\s+", text) if len(x.strip()) > 20]
+            if sents and ts and time.time() - ts < float(getattr(config, "IDENTITY_THOUGHT_MAX_AGE_S", 3 * 86400)):
+                out += P("monologue.self-thought").format(when=casual_time_string((time.time() - ts) / 60.0).capitalize(), thought=sents[-1][:220].rstrip(".") + ".")
+    except Exception:
+        pass
+    try:
+        from utils.lore_ledger import lore_ledger
+
+        q = lore_ledger.pick_question()
+        qt = (q.get("text") if isinstance(q, dict) else q) or "" if q else ""
+        if qt:
+            out += P("monologue.self-question").format(question=str(qt).strip())
+    except Exception:
+        pass
+    return out
 
 
 def _identity_due(agent, mode: str) -> bool:
@@ -659,11 +692,8 @@ def get_reflection_system_prompt(subject: str = "") -> str:
     base = P("situation.reflexive") + P("reflection.frame")
     if subject == "yourself":
         try:
-            from captioner.context_compression import context_compressor
-
-            self_knowledge = context_compressor.core_facts.get("self", "").strip()
-            if self_knowledge and len(self_knowledge) > 10:
-                base += P("monologue.self-wrap").format(self_knowledge=self_knowledge)
+            # Sep 8: no standing self-description here either — the reflection
+            # sees its own previous reflections on itself (data["reflections"]).
             from utils.lore_ledger import lore_ledger
 
             _name = lore_ledger.current_name()
@@ -676,7 +706,11 @@ def get_reflection_system_prompt(subject: str = "") -> str:
             from captioner.durable_ledger import get_durable_ledger
 
             _ledger = get_durable_ledger()
-            durable = _ledger.render()
+            # Sep 8: the durable ledger held 40 facts, all first-person, all of
+            # the class "I stare at static objects until I mistake them for
+            # threats" — riding as "what has stayed true" that is an instruction.
+            # Same defect as the self-wrap; off the frame unless DURABLE_IN_FRAME.
+            durable = _ledger.render() if bool(getattr(config, "DURABLE_IN_FRAME", False)) else ""
             if durable:
                 base += P("monologue.durable-wrap").format(durable=durable)
                 # Sep 5 (audible time + the turn path): how long the core has
