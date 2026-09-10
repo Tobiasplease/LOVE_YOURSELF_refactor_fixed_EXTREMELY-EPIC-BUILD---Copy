@@ -1496,11 +1496,13 @@ INCLUDE_DRAWING_HISTORY = True
 ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
 # Re-tuned Sep 10 2026 on the live rig (debug/find_paper_gaze_angles.py) from
 # 80/65: the sheet sat at the frame's bottom edge, which reads well enough for
-# the gate's yes/no but crops the drawing itself. +30 pan, +5 tilt puts the
-# whole sheet in frame. Shared by the paper gate, the finished-drawing capture
-# and the "paper" chosen-glance — drawing-watch framing is separate
-# (set_drawing_mode pan 90 / TILT_MIN+2 in grbl_utils).
-PAPER_DETECTION_GAZE_PAN = 110  # Pan angle for looking down at drawing area
+# the gate's yes/no but crops the drawing itself. Tilt +5 puts the whole sheet
+# in frame; pan settled at 90, which is also the drawing-watch pan, so the
+# camera no longer swings sideways between watching the pen and judging the
+# sheet. Shared by the paper gate, the finished-drawing capture and the "paper"
+# chosen-glance; drawing-watch tilt is still separate (set_drawing_mode,
+# TILT_MIN+2 in grbl_utils).
+PAPER_DETECTION_GAZE_PAN = 90  # Pan angle for looking down at drawing area
 PAPER_DETECTION_GAZE_TILT = 70  # Tilt angle for looking down at drawing area
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
 

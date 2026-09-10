@@ -1302,11 +1302,13 @@ choreography exactly:
    the gantry play the recorded 'paper' take; returns clear-seconds, capped by
    FINISHED_CAPTURE_MAX_CLEAR_S (20s, well inside KINETIC_PAPER_MAX_HOLD_S=30)
 2. gaze parked at PAPER_DETECTION_GAZE_PAN/TILT — **re-tuned Sep 10 on the live
-   rig from 80/65 to 110/70** (debug/find_paper_gaze_angles.py): the sheet sat
+   rig from 80/65 to 90/70** (debug/find_paper_gaze_angles.py): the sheet sat
    at the frame's bottom edge, fine for the gate's yes/no but cropping the
-   drawing itself. Shared by the gate, this capture and the "paper"
-   chosen-glance; drawing-watch framing is separate (set_drawing_mode, pan 90 /
-   TILT_MIN+2) — with range 0 here (a still camera;
+   drawing itself. Pan 90 matches the drawing-watch pan, so the camera no
+   longer swings sideways between watching the pen and judging the sheet.
+   Shared by the gate, this capture and the "paper" chosen-glance;
+   drawing-watch tilt stays separate (set_drawing_mode, TILT_MIN+2) — with
+   range 0 here (a still camera;
    the gate's organic drift needs update_paper_search_target(), which only the
    aruco sweep calls), settling FINISHED_CAPTURE_SETTLE_S (4s)
 3. FINISHED_CAPTURE_FRAMES (2) frames via `safety.paper_detection.grab_table_frame`
