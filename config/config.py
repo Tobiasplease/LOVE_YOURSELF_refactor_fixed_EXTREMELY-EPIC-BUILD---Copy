@@ -790,7 +790,20 @@ UARM_START_PLAY_FILE = os.path.join(
 
 # difference between the below? hmm
 MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
-CAPTION_INTERVAL = 7  # seconds between full caption cycles
+# Sep 10 (artist): "I do not want the caption interval to shift at all, that is not
+# what I mean by cadence. It's mechanical and detached because it's disconnected
+# from the actual LLM awareness. Stillness and 'nothing to say' should be a choice
+# by the model, not imposed. Stillness is where the mind is more likely to drift,
+# imagine things, make up its own stories and ambitions — and rate limiting the
+# mind during these times is the wrong approach." One fixed interval. The tiers
+# (LIVE / QUIET / REST ladder, Sep 4-5) and the felt-loop cadence multiplier all
+# collapse to it. Cadence now lives where the model decides it: the silence beat
+# ("or nothing at all" -> "..."), beat-length thoughts, and the drift turn whose
+# probability rises with boredom (DRIFT_BASE_P x DRIFT_BOREDOM_GAIN). Measured
+# before: the ladder reached 192 s (120 x 1.6) with the artist sitting in the room
+# (docs/where-we-are-sep9.md §19).
+CAPTION_INTERVAL_FIXED = float(os.getenv("CAPTION_INTERVAL_FIXED", 16))  # the cadence the feed has actually been read at
+CAPTION_INTERVAL = CAPTION_INTERVAL_FIXED  # was 7 (base tier)
 # Ego-compensated scene motion (vision/scene_motion.py): fraction of the frame
 # still moving after the camera's own movement is optically undone.
 # Calibrate with debug/test_scene_motion.py if it over/under-triggers.
@@ -1284,15 +1297,15 @@ BASE_VOICE_DETOX = False
 
 # Attention breathes (north-star principle 6): cadence tightens when something
 # is happening, stretches when nothing has happened for a while
-CAPTION_INTERVAL_LIVE = 4  # cadence while salience is hot (motion, arrival, fresh eye contact)
-CAPTION_INTERVAL_QUIET = 12  # cadence after a long quiet stretch
+CAPTION_INTERVAL_LIVE = CAPTION_INTERVAL_FIXED  # was 4 (hot tier) — Sep 10: no tiers, see CAPTION_INTERVAL_FIXED
+CAPTION_INTERVAL_QUIET = CAPTION_INTERVAL_FIXED  # was 12 (quiet tier) — Sep 10: no tiers
 # REST (Sep 4): a real pause. Fires only when the quiet is WORLD-VERIFIED
 # (pose-referee confirms, WORLD_STILL_MIN_CONFIRMS) and the body reads
 # drained (arousal < 0.25) — thought slows when nothing pulls and nothing
 # stirs. Salience snaps back to 4s instantly. The feed finally breathes.
-CAPTION_INTERVAL_REST = float(os.getenv("CAPTION_INTERVAL_REST", 28))
+CAPTION_INTERVAL_REST = CAPTION_INTERVAL_FIXED  # was 28, deepening a rung per still hour — Sep 10: no rest ladder (REST > QUIET is what armed it)
 CAPTION_QUIET_AFTER = 120  # seconds without salience before the cadence stretches
-CAPTION_INTERVAL_REST_MAX = float(os.getenv("CAPTION_INTERVAL_REST_MAX", 120))  # rest deepens one rung per unchanged hour (Sep 5)
+CAPTION_INTERVAL_REST_MAX = CAPTION_INTERVAL_FIXED  # was 120 — Sep 10: no rest ladder
 
 # TIME-AND-LOOP ROUND (Sep 5, docs/time-and-loop-round-sep5.md): a still room is
 # not an absence of events — the passage of time is one, and catching yourself
@@ -1328,8 +1341,8 @@ CHOSEN_GLANCE_DWELL_MULT = float(os.getenv("CHOSEN_GLANCE_DWELL_MULT", 1.4))
 # thought the quiet elicitation invites. Measured per run by caption_metrics
 # ("by_felt"). Temperature already followed arousal (AROUSAL_TEMP_SPAN).
 FELT_LOOP_ENABLED = os.getenv("FELT_LOOP_ENABLED", "true").lower() == "true"
-FELT_CADENCE_MULT_DRAINED = float(os.getenv("FELT_CADENCE_MULT_DRAINED", 1.6))  # quiet interval × this at arousal 0.1
-FELT_CADENCE_MULT_CHARGED = float(os.getenv("FELT_CADENCE_MULT_CHARGED", 0.6))  # … at arousal 0.8
+FELT_CADENCE_MULT_DRAINED = float(os.getenv("FELT_CADENCE_MULT_DRAINED", 1.0))  # was 1.6 — Sep 10: the felt read no longer scales the interval (it still rides the frame)
+FELT_CADENCE_MULT_CHARGED = float(os.getenv("FELT_CADENCE_MULT_CHARGED", 1.0))  # was 0.6 — Sep 10: neutral
 FELT_BUDGET_SCALE_DRAINED = float(os.getenv("FELT_BUDGET_SCALE_DRAINED", 0.7))
 FELT_BUDGET_SCALE_CHARGED = float(os.getenv("FELT_BUDGET_SCALE_CHARGED", 1.4))
 FELT_SHORT_BEAT_DELTA_DRAINED = float(os.getenv("FELT_SHORT_BEAT_DELTA_DRAINED", 0.15))
