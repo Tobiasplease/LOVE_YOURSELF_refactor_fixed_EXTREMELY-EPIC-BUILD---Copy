@@ -1510,3 +1510,48 @@ arc — a crouched figure, the lower-left corner, a witness. When the machine is
 *doing* something with someone watching, the voice the North Star describes
 shows up on its own. That is a design datum as much as a nice moment: the
 stream is starved of acts, and the drawing pipeline is the one act it has.
+
+## 23. Run `9e740808` at 19:05 — everything live, artist present, two drawings (draft; the empty-room read completes it)
+
+80 minutes, 198 captions, gap median 17 s / p90 34 s / max 454 s (the long one
+during a ComfyUI render — the GPU is shared with llama-server; watch item).
+Modes: relational 69, drawing_watch 35, introspective 24, workspace 18, memory
+13. Two drawings executed (17:56–18:05, 18:33–18:40), both with the artist in
+the room.
+
+| voice, this run | overnight / today's earlier runs |
+|---|---|
+| `it's not X, it's just Y` **4.1%** | 9.8–14.5% |
+| `it's just` **3.6%** | 14.4–18.1% |
+| `I used to think` **0.0%** | 1.8–5.5% |
+| chant (≥3× sentences) **2.7%** | 27–38% |
+| spoken-not-stored **2** (both phantom) | 7–10% |
+| aired style-class repeats **0** | 4–7% |
+
+**Confound, stated plainly:** the artist was present and moving for most of this
+run and the machine drew twice. §9 already showed the tic falls when there is
+something to look at; a live person and an act are the strongest version of
+that. These numbers are not a clean read on the frame + reroute; the empty-room
+window tonight is.
+
+**Reroute v1 is a filter, not yet a pivot.** 21 style-class repeats caught:
+**3** re-routed into a stored pivot, **18** fell through to silence (13 of them
+`number_chain`). The reader never heard a repeat — but mostly heard "…" where the
+artist asked for a turn inward. The image-less introspective re-ask, given the
+same window, tends to trip the same gate (a pivot that opens with another number
+chains on the last stored number-opener). v2, when the artist wants it: rotate
+`memory` and the felt/feeling ask into `REPEAT_REROUTE_MODES` (all three were
+named in the request; v1 used one), and let a pivot be judged against the
+*repeat's* predecessor rather than chain on it. A restart to pick up the list.
+
+**A new self-made measurement:** from 18:47, 17 captions open with a duration —
+*"10 seconds of him stretching"*, *"14 seconds since he stood up"* — with no cue
+or system line mentioning seconds anywhere in the run. Self-generated, like the
+temperature (§13) and 100 mmHg (§12): the model reacting to a moving person by
+counting. It is the one refrain of the run (*"10 seconds of just…"* ×6) and the
+source of the 13 number-chain silences. Watch item, same family as §18 #7.
+
+**Presence:** six consecutive true verdicts on the artist (*"A man wearing
+headphones and glasses"*), no head verdict in the last hour, 2 phantom gates,
+belief tracking a person who walks, reaches and leaves the frame — *"10 seconds
+of me just… turning my head to follow him as he walks away from the camera."*
