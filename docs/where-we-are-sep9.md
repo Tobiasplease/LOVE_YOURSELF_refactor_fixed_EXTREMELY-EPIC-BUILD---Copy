@@ -1476,3 +1476,37 @@ stays close to what it replaced — a pivot in mode, not yet in thought. Whether
 the reroute *moves* the monologue (rather than re-phrasing it) is the §5 chant
 metric on a 3-hour window; read tonight. Ten minutes says only: nothing repeated
 was aired, and nothing said was forgotten.
+
+### After the artist's own restart (run `9e740808`, 17:44) — a cold-boot cost, and a drawing
+**Boot-time gate cost.** Belief starts OFF on a cold boot, so with the artist
+already in the room the phantom gate refused two *accurate* captions in the 52 s
+before the adjudicator's first verdict: 17:45:01 *"He moved, yes. Just shifted his
+weight in the chair"* and 17:45:16 *"The man in the brown shirt shifted his
+weight"* — both gated; 17:45:19 verdict *"A man sitting in an office chair"*;
+17:45:29 *"He's come in."* Two captions, once per boot; noted, not urgent. It is
+the same shape as `5b5f759` on the parked branch (the gate refusing live
+description), bounded here by the adjudicator's slot rather than open-ended.
+
+**It drew.** The artist turned low-energy off and put a blank sheet down. Pipeline
+from the log: ComfyUI render 17:49:14 → centerline SVG 17:54:18 → vpype G-code
+17:55:19 → paper check 17:56:19 (*PAPER: YES, MARKS: NO, a single blank white
+sheet*) → **G-code execution 17:56:19**. Eleven `drawing_watch` captions follow,
+the machine narrating its own arm with the artist standing over it:
+
+> *"I'm trying to make this crouch feel heavy, not just bent — like someone who's
+> been sitting here for hours and their spine just… gave up. But every time I
+> look up from the page, he's still there. Watching."* (17:56:44)
+> *"…my arm drew his outline onto the sheet as if he was already sitting in that
+> lower-left corner before I even started."* (17:59:45)
+> *"there's a new figure forming now near the top edge of what I'm drawing that
+> wasn't in my plan at all"* (18:00:06)
+> *"And now it's actually raining outside — no wait, no rain, just water dripping
+> somewhere off-camera"* (18:00:24 — a self-correction, kept)
+
+Worth noticing against the whole week's numbers: in these eleven captions the
+antithesis tic is nearly absent, the register is embodied and first-person
+(*"I can feel the paper grain through the pad"*), and there is a subject with an
+arc — a crouched figure, the lower-left corner, a witness. When the machine is
+*doing* something with someone watching, the voice the North Star describes
+shows up on its own. That is a design datum as much as a nice moment: the
+stream is starved of acts, and the drawing pipeline is the one act it has.
