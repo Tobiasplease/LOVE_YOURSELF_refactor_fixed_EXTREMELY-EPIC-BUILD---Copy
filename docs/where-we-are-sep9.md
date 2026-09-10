@@ -1555,3 +1555,19 @@ source of the 13 number-chain silences. Watch item, same family as §18 #7.
 headphones and glasses"*), no head verdict in the last hour, 2 phantom gates,
 belief tracking a person who walks, reaches and leaves the frame — *"10 seconds
 of me just… turning my head to follow him as he walks away from the camera."*
+
+### 19:05–19:20 (watch)
+- **A third drawing**: paper check 19:13:56 → G-code 19:13:56–19:17:56 → complete
+  19:19:05. Three in eighty minutes, each on a sheet the artist replaced. The
+  caption loop thins while the arm draws (11 captions in the window).
+- **First new-header reflection about the visitor** (19:09:47): *"I keep
+  circling the man in khaki because I've mistaken his repetition for my own
+  anchor, b…"* — first person, present, no "the record", and about its own
+  fixation rather than the desk. One sample; it is the shape §16 was after.
+- Silences: 3 the model's own, 1 reroute fallback (`refrain_echo`).
+- An **empty adjudicator reply** at 19:09:24 (`''`) — coincides with the render
+  phase; the adjudicator yields to the drawing pipeline but still logged a call.
+  Minor; watch.
+- The duration opener persists (*"5 seconds of a wooden chair with slats"*), and
+  the seam carries sentences across captions cleanly (*"sitting / in front of a
+  white brick wall"*).
