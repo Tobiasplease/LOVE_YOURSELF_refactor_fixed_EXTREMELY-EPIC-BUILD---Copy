@@ -999,3 +999,44 @@ commits. Nothing room-specific in either.
 
 Whether a *real* arrival still registers is untested — nobody has walked in
 since the change. That remains the other half of the measure.
+
+### "He's back" / "the one with the glasses" (10:19, run `45797a36`) — traced
+Artist, from the dashboard: *"'He's back now' — no I'm not and there definitely
+wasn't anyone walking in. And 'the glasses' … none of the mannequins have
+glasses. That is definitely a memory rather than the present."*
+
+**"He's back." is the cue, verbatim.** `prompts.py:1411`: on an OFF→ON edge, if
+the belief dropped less than `PRESENCE_REARRIVAL_WINDOW_S` (30 min) ago, the
+resumption prior marks it *familiar* and the cue line is literally *"He's back."*
+(else *"He's come in."*); the ON→OFF edge says *"They've gone — the room's quiet
+again."* Under this morning's re-judge the belief no longer sticks — which was
+the point — but it now **flickers**: 16 OFF→ON edges in 35 minutes, all inside
+the 30-min window, none logged as arrivals. So the reader gets *gone / back /
+gone / back* every two or three minutes, each "back" a fresh `person` verdict on
+the same head-crop. **An artifact of the morning change interacting with the
+resumption prior** — shorter phantoms, narrated at both edges.
+
+Fix (room-agnostic, narration only, belief mechanics untouched): debounce the
+edge *lines* — no "He's back" for an OFF that lasted under a floor, no "They've
+gone" for an ON that lasted under it — and log the suppressed edges so they can
+be counted. The belief still flips for the gate and the mode; the prose stops
+flapping. Interim until §13 design item 2 (the adjudicator's question carries
+the registry term) removes the false verdicts themselves.
+
+**"Glasses" is not a memory — there is no channel that could have carried it.**
+The frame the model was looking at (the caption's own image, 10:19:51): the foam
+finger, the two white heads and the bundle on the top shelf, the dark-haired
+silicone head at bottom-left, the curtain. No glasses. No caption prompt or
+system prompt before 10:19:51 contains the word; the only prompts that do are
+the compression and memory calls *quoting the caption afterwards*.
+`core_facts.people` is empty (wiped last night); `entity_ledger.json` holds four
+older adjudicator descriptions with "glasses" (past visits), but nothing routes
+an entity description into the caption prompt on this branch. So the model was
+told *"He's back."* — definite, singular, *familiar* — and, looking at a frame
+with one dark-haired head and two white ones, supplied a second familiar figure
+with the stock distinguishing feature. The 10:21:46 follow-up (*"The man with
+the glasses is adjusting his collar"*) was an inward beat — no image — continuing
+the stored line. Confabulation seeded by the cue and propagated by the window,
+wearing the grammar of memory ("back", "the one with"). The artist's instinct
+that it is not the present is right; the mechanism is the frame's assertion of
+familiarity, not recall.
