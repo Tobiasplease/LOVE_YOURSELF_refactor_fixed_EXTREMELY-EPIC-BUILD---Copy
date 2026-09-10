@@ -1416,3 +1416,29 @@ hand is still shaking…"* at 17:22:24 and 17:26:14) — the reroute (§21) went
 right after this measurement; no chosen silences in the window.
 
 Reroute restart: 17:31:15, verified (pid 564931).
+
+### Third cycle (17:2x → 17:36) — departure lost to the restart, return clean on a cold boot
+The artist left again a few minutes after 17:30 and returned ~17:35. The reroute
+restart (17:30:30–17:30:56) fell exactly on the departure, so no "They've gone"
+exists for it — the machine came up cold (`Just woke up`, belief OFF). The
+return, on the fresh run `a1810324`:
+
+| | |
+|---|---|
+| 17:35:46 | adjudicator: *"A man in a green jacket looks at his phone while wearing hea[dphones]"* — true |
+| 17:35:59 | cue **"He's come in."** — a genuine arrival this time (cold boot → nothing "recently present" → not resumed) |
+| 17:36:00 | relational: *"He's back. I was just about to start, and now I have to wait again"* — the model's own phrasing |
+| arrivals logged since 17:30 | NONE |
+
+Verdict → edge 13 s; verdict → the artist in the prose 14 s. Two real arrivals
+today, both registered within a quarter of a minute of the verdict, once belief
+was not pre-occupied by the head.
+
+Both Sep 10 17:13–17:28 watchers (Sonnet, and the late-finishing first one)
+agree on every timestamp of the second cycle; the first watcher added a chosen
+silence at 17:19:59 with the room empty — the model choosing to say nothing to
+nobody, which is §20 working.
+
+**Reroute, first live firing:** 17:33:11, `refrain_echo → introspective`,
+pivot *"I keep looking at it, that stupid…"* — the repeat was never aired.
+Spoken-not-stored in the new run so far: none.
