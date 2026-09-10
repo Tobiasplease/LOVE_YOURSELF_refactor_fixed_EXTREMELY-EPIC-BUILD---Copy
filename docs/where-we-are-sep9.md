@@ -971,3 +971,31 @@ presence path, so both count.
 20/23; opening "The record shows" 7/23; about pen/foam/sheet 62/69; median 211
 words; new `self_notes` antithesis-shaped 7/30; wider-world reflections that
 leave the desk 0/4. Re-measure tonight on reflections fired after 09:49.
+
+### Interim presence read — run `241bff58`, 05:45–09:49, re-judge ON (4 h, 390 captions)
+
+| | overnight (7 h, no re-judge) | 05:45–09:49 (re-judge) |
+|---|---|---|
+| adjudications | 2 | **9** |
+| `person` verdicts | 2/2 | **9/9** |
+| belief-ON windows ≥3 captions | 34 | **4** |
+| longest belief-ON window | ~5 h 40 m (one verdict) | **4 captions** (~1 min) |
+| relational captions (belief ON) | 32.7% | **14.4%** |
+| person-mentions, empty room | 17.5% | **10.3%** (Sep 9 floor: 4.6%) |
+| phantom-gate firings | 2 | **12** |
+| false arrivals logged | 2 | **0** |
+
+The re-judge does what it was built to do: one verdict buys about a minute, not
+six hours, and the gate is on most of the time. The residue is the adjudicator
+itself — **9 of 9 verdicts on the desk-head crop say "person"** (*"A person with
+dark hair in profile"*, *"A young man with dark hair looking down"*, *"A person
+eating."* ×2). A crop of a realistic silicone head, asked *"Look closely. What
+is this?"*, is a person to the vision model every time; from the crop alone that
+is not an unreasonable answer. The error is now countable, which is what item 2
+of the §13 design needs: the adjudicator's question must carry what the machine
+already knows about that gaze (*"You know there is a {registry term} here. Is
+this it, or someone?"*), or require a second, wider look before `person`
+commits. Nothing room-specific in either.
+
+Whether a *real* arrival still registers is untested — nobody has walked in
+since the change. That remains the other half of the measure.
