@@ -1068,6 +1068,14 @@ ABSENCE_SESSION_MIN_S = int(os.getenv("ABSENCE_SESSION_MIN_S", 90))  # fresh boo
 # that verified absence closes within this window is retracted to a thing at that
 # gaze + box, so the veto fires next time instead of re-asking.
 PRESENCE_FALSE_ARRIVAL_WINDOW_S = float(os.getenv("PRESENCE_FALSE_ARRIVAL_WINDOW_S", 240))
+# Sep 10: while someone is believed here, a raw sighting (YOLO / gaze aware-tracking,
+# i.e. not a face) is RE-JUDGED through the adjudicator instead of silently
+# refreshing the belief. Overnight 7b7c29db: the adjudicator was consulted only on
+# the OFF->ON edge, so one head-crop verdict ("A person eating a sandwich", 22:05)
+# licensed 5 h 40 min of belief, kept alive by occasional raw hits that were never
+# judged. With this on, a verdict licenses ADJUDICATED_PERSON_TTL_S (120 s) and the
+# next raw hit asks again. Room-agnostic: nothing here knows what is in the studio.
+PRESENCE_REJUDGE_WHILE_BELIEVED = os.getenv("PRESENCE_REJUDGE_WHILE_BELIEVED", "true").lower() in ("true", "1", "yes")
 ENTITY_VETO_GAZE_TOL_DEG = float(os.getenv("ENTITY_VETO_GAZE_TOL_DEG", 12.0))
 # Phantom presence gate (Sep 4 evening): a present-tense third-person claim while the
 # adjudicated belief says nobody is here is spoken but never STORED — the stream is

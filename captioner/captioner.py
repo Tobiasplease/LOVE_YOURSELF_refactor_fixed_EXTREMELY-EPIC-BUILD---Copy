@@ -784,6 +784,30 @@ class Captioner(MemoryMixin):
                     seen_now = False  # thing, or not yet judged — no belief, no arrival
             except Exception:
                 pass
+        # Sep 10: A RAW HIT WHILE BELIEVED IS RE-JUDGED, NOT TRUSTED. The block
+        # above runs only on the OFF->ON edge; once believed, every raw seen_now
+        # zeroed the absence counters below without ever being looked at, so one
+        # verdict on a head-crop kept the belief alive for 5 h 40 min overnight
+        # (7b7c29db, docs/where-we-are-sep9.md §13). gate() already returns
+        # "person" inside ADJUDICATED_PERSON_TTL_S, the veto if one is on file,
+        # and otherwise queues a fresh look (rate-limited) and returns None —
+        # so a confirmed person refreshes, anything else lets the watch run.
+        # Faces (eye contact with a body, a close walk-up) still refresh directly.
+        elif seen_now and self._presence_believed and not face_evidence:
+            try:
+                from config.config import PRESENCE_REJUDGE_WHILE_BELIEVED
+            except Exception:
+                PRESENCE_REJUDGE_WHILE_BELIEVED = True
+            if PRESENCE_REJUDGE_WHILE_BELIEVED:
+                try:
+                    from perception.presence_adjudicator import presence_adjudicator
+
+                    verdict = presence_adjudicator.gate()
+                    info["presence_adjudication"] = verdict or "pending"
+                    if verdict != "person":
+                        seen_now = False  # not (re)confirmed — the absence watch keeps counting
+                except Exception:
+                    pass
 
         arrival = False
         resumed = False
