@@ -426,6 +426,12 @@ class PaperDetector:
 paper_detector = PaperDetector()
 
 
+def grab_table_frame(camera):
+    """Freshest full-res view of the table — one implementation, shared by the
+    pre-draw paper gate and the post-draw finished-drawing capture."""
+    return paper_detector._grab_frame(camera)
+
+
 def check_paper_before_drawing(camera, servos, captioner=None) -> bool:
     """
     Convenience function to check paper presence before drawing.

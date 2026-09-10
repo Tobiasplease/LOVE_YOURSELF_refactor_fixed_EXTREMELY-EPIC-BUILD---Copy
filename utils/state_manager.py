@@ -41,6 +41,10 @@ class StateManager:
         self.paper_state: str = ""
         self.last_paper_check_ts: float = 0.0
         self.last_paper_check_reason: str = ""
+        # Last photograph of a finished drawing, taken in the ritual's Step 2.5
+        # before the uArm discards the sheet (drawing/finished_capture.py).
+        self.last_finished_drawing_image: Optional[str] = None
+        self.last_finished_drawing_ts: float = 0.0
         # Hardware references for early paper detection
         self._camera = None
         self._servos = None

@@ -1513,6 +1513,16 @@ PAPER_VLM_SETTLE_S = 4.0  # gaze travel time before the first frame (live gaze e
 # present-tense truth.
 PAPER_STATE_TTL_S = 1800
 
+# === FINISHED-DRAWING CAPTURE (Sep 10 2026) ===
+# The completion ritual used to home, release the gaze, and let the uArm
+# discard the sheet — the machine never saw what it made. Step 2.5 of the
+# ritual now photographs the finished drawing first, using the paper gate's
+# get-clear choreography. Capture only; nothing is asked of the model yet.
+ENABLE_FINISHED_DRAWING_CAPTURE = True
+FINISHED_CAPTURE_FRAMES = 2  # frames kept per drawing; the last one is the filed path
+FINISHED_CAPTURE_SETTLE_S = 4.0  # gaze travel before the first frame (matches PAPER_VLM_SETTLE_S)
+FINISHED_CAPTURE_MAX_CLEAR_S = 20.0  # cap on the kinetic get-clear wait, well inside KINETIC_PAPER_MAX_HOLD_S
+
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
 # ArUco detection is fast and reliable - safe to enable for post-home check
 ENABLE_POST_HOME_PAPER_CHECK = True

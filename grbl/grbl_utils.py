@@ -1426,6 +1426,18 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             print_message="[✅] Homing complete - beginning 30-second completion pause at home position",
         )
 
+        # Step 2.5 (Sep 10): photograph the finished sheet BEFORE the uArm hook
+        # discards it. Deliberately placed while the gaze is still locked to the
+        # surface — it parks the gaze on the table itself and drops the lock on
+        # the way out, which Step 3 below then makes explicit. Capture only, and
+        # it swallows its own failures: the ritual must not depend on a photo.
+        try:
+            from drawing.finished_capture import capture_finished_drawing
+
+            capture_finished_drawing()
+        except Exception as e:
+            print(f"[📷] Finished-drawing capture unavailable: {e}")
+
         # Step 3: Unlock gaze system during completion pause
         print("[DEBUG] About to unlock gaze system...")
         try:

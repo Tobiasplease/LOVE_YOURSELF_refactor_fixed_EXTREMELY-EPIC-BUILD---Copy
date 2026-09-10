@@ -1260,6 +1260,48 @@ Proof: debug/test_paper_check_runtime.py (end-to-end),
 debug/test_paper_vlm_check.py (quick A/B), debug/test_paper_vlm_matrix.py
 (labeled scenario matrix, accumulates results.csv).
 
+**Get-clear recording now EXISTS (verified Sep 10).** The Aug 31 note above
+describes a period with no 'paper' dataset; `TemperamentLibrary.scan()` now
+returns `paper: ['session_paper_a.json']`, so `paper_clear()` returns a real
+duration and the uncleared-view downgrade no longer fires on every check.
+
+## Finished-drawing capture (Sep 10 — Step 2.5 of the completion ritual)
+
+**The machine now sees what it made before the paper goes.** Until Sep 10 the
+completion ritual homed the gantry, UNLOCKED the gaze (releasing it from the
+drawing surface), and then let the uArm hook discard the sheet — no capture
+anywhere in the post-draw path. The drawing was thrown away unseen.
+
+`drawing/finished_capture.capture_finished_drawing()`, called from
+grbl/grbl_utils.py between the homing-complete log and the Step 3 gaze unlock.
+Reuses the paper gate's choreography exactly:
+
+1. `hooks.on_paper_check_start` → `kinetic_bus.paper_clear()` — both arms and
+   the gantry play the recorded 'paper' take; returns clear-seconds, capped by
+   FINISHED_CAPTURE_MAX_CLEAR_S (20s, well inside KINETIC_PAPER_MAX_HOLD_S=30)
+2. gaze parked at PAPER_DETECTION_GAZE_PAN/TILT with range 0 (a still camera;
+   the gate's organic drift needs update_paper_search_target(), which only the
+   aruco sweep calls), settling FINISHED_CAPTURE_SETTLE_S (4s)
+3. FINISHED_CAPTURE_FRAMES (2) frames via `safety.paper_detection.grab_table_frame`
+   — the one shared implementation — written to event_log/finished_drawings/
+   as `finished_<stamp>_<i>.jpg` at JPEG q95
+4. gaze released (which also drops the drawing lock, making Step 3's unlock a
+   no-op), then `hooks.on_paper_check_done` → `paper_release()`
+
+Last path filed on `state_manager.last_finished_drawing_image` (+ `_ts`);
+logged as NEW_DRAWING / `finished_drawing_captured` with frame count and
+`view_cleared`.
+
+**CAPTURE ONLY, on purpose.** Nothing is asked of the model. The critique
+removed Aug 5 ("judge THE PAPER, not the ComfyUI image") wants a
+post-processed image — deskewed, cropped to the sheet — and this step exists
+to produce that raw material first. Toggle: ENABLE_FINISHED_DRAWING_CAPTURE.
+Fails silently by construction (swallows its own exceptions, and the call site
+wraps it again): a failed photograph must never block the ritual or the uArm
+discard. Proof: debug/test_finished_capture.py (stub camera + stub hooks,
+asserts clear → park → frames → free → release ordering and the disabled /
+no-camera / raising-hook paths).
+
 ## Drawing prompt generation (July 10: DRAWING_ANALYSIS_MODE="stream"; Aug 10: stocktake beat + register freedom)
 
 Up to THREE calls (prompts.stream_drawing_analysis), replacing the 5-step committee:
