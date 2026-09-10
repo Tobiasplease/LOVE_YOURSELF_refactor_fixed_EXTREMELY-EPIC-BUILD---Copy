@@ -1510,23 +1510,46 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         completion_thread_running = threading.Event()
 
         def completion_self_critique():
-            """Record the completion fact. (The LLM self-critique that used to
-            run here was REMOVED Aug 5 — artist: "not useful and underutilised",
-            to be redesigned to judge the paper rather than the ComfyUI image.
-            Its dead stumps — the unused prompt, the always-empty self_critique
-            and its log branch — were deleted Aug 30; git history keeps them.
-            What survives is the fact: the pen finished, and the machine should
-            remember drawing.)"""
+            """Look at the sheet, then record the completion fact.
+
+            The Aug 5 removal set the terms of the critique's return: judge the
+            paper, not the ComfyUI image, and only ever once. It came back Sep 10
+            as drawing/finished_review.py, reading the ritual's own photograph —
+            this thread is where it belongs, because the uArm hook below does not
+            wait on it, so the sheet is still taken on time if the model is slow
+            or silent. A review is never required: the fact survives without one.
+            """
             try:
-                from utils.drawing_state import DrawingState
                 from utils.state_manager import state_manager
 
-                drawing_info = DrawingState.get_drawing_info()
-                compressed_desc = drawing_info.get("description", "a drawing") if drawing_info else "a drawing"
+                # The intent in the machine's own words. get_drawing_info() used
+                # to be read here, but Step 1 has already called end_drawing(),
+                # which clears it — so every completion memory recorded the
+                # literal "Completed drawing a drawing." current_drawing_prompt
+                # survives that point and is what the review judges against.
+                compressed_desc = (
+                    getattr(state_manager, "current_drawing_prompt", None)
+                    or getattr(state_manager, "last_completed_drawing_prompt", None)
+                    or "a drawing"
+                )
+
+                review = None
+                try:
+                    from drawing.finished_review import review_finished_drawing
+
+                    review = review_finished_drawing(intent=compressed_desc if compressed_desc != "a drawing" else None)
+                except Exception as e:
+                    print(f"[🔍] Drawing review hook failed: {e}")
 
                 try:
                     if hasattr(state_manager, "captioner") and hasattr(state_manager.captioner, "observe"):
+                        # The review rides the fact in the machine's own words,
+                        # unwrapped — north-star P1's corollary: its own text is
+                        # quoted as its own, never paraphrased into a caption of
+                        # itself ("Looking at it, the machine felt...").
                         completion_text = f"Completed drawing {compressed_desc}."
+                        if review:
+                            completion_text = f"{completion_text} {review}"
                         state_manager.captioner.observe(
                             completion_text,
                             state_manager.captioner.current_mood if hasattr(state_manager.captioner, "current_mood") else 0.5,

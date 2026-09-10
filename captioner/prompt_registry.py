@@ -832,6 +832,30 @@ FRAGMENTS = {
         "used_by": ["reflection_distill"],
         "placeholders": ["prior_want"],
     },
+    # --- Drawing review (Sep 10) -----------------------------------------
+    "review.frame": {
+        "title": "Drawing review — frame",
+        "text": (
+            "The attached photograph is the sheet on the table in front of you, taken a moment ago with the pen lifted. "
+            "It is the drawing you just made, seen from where your gaze sits: the paper lies at an angle to you and the "
+            "room's light falls unevenly across it. "
+        ),
+        "note": "Appended to situation.reflexive for the review pass. States the viewing conditions as FACT so a cast shadow is not read as ink — the sheet really is a trapezoid under uneven light and the crop is deliberately neither rectified nor contrast-stretched (drawing/sheet_crop.py). Says 'the drawing you just made' rather than naming a subject: what it is is the model's to judge.",
+        "used_by": ["drawing_review"],
+    },
+    "review.intent-wrap": {
+        "title": "Drawing review — what it set out to make",
+        "text": 'What you set out to make: "{intent}"\n\n',
+        "note": "The intent in the machine's OWN words (state_manager.current_drawing_prompt = first line of _last_drawing_intent), never the render prompt — Aug 5, artist: the review must judge THE PAPER against what it meant, not re-describe the ComfyUI image.",
+        "used_by": ["drawing_review"],
+        "placeholders": ["intent"],
+    },
+    "review.elicit": {
+        "title": "Drawing review — the ask",
+        "text": "Look at what the pen actually left on the paper. How much of it is there? Say it blunt.",
+        "note": "Elicitation, not fence (north-star P2): it names the act — look at the physical trace — and asks a question whose honest answer can be 'hardly anything, it's too faint to tell'. Plenty of these drawings come out barely legible and that is the machine's to know, so nothing here presumes a drawing worth describing. 'Say it blunt' is elicit.quiet-feel's validated phrasing.",
+        "used_by": ["drawing_review"],
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -1233,8 +1257,21 @@ PASSES = {
     "drawing_review": {
         "title": "Drawing review",
         "blurb": "Judges the physical trace against the intent, in paper space.",
-        "migrated": False,
-        "source": "drawing/ (review pass, Aug 12)",
+        "migrated": True,
+        "source": "drawing/finished_review.py",
+        "system": [
+            {"frag": "situation.reflexive", "gate": None},
+            {"frag": "review.frame", "gate": None},
+        ],
+        "user": [
+            {
+                "frag": "review.intent-wrap",
+                "gate": "skipped when no intent was recorded — then there is nothing to judge against and the pass does not run",
+            },
+            {"frag": "review.elicit", "gate": None},
+        ],
+        "image": "the sheet crop from the completion ritual (state_manager.last_finished_drawing_sheet)",
+        "note": "Returned Sep 10, after the Aug 5 removal. Runs ONCE per drawing, inside the ritual's completion thread, and publishes to drawing.last_reflection so the completion memory records it without a second pass (artist: 'it should definitely only critique it once'). An empty answer is never stored — timeouts getting saved as the machine's reflection is what made the old pass untrustworthy.",
     },
     "artistic_arc": {
         "title": "The body of work",

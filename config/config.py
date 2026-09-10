@@ -1556,6 +1556,12 @@ FINISHED_CAPTURE_SHEET_MARGIN = 25  # px of slack around a detected sheet
 # still reads as faint. 0 disables. See drawing/sheet_crop.enhance for the two
 # corrections that were measured and rejected.
 FINISHED_CAPTURE_SHARPEN = 0.6
+# The drawing review (Sep 10, drawing/finished_review.py) — the critique that
+# was removed Aug 5, returned on the terms set then: it judges THE PAPER
+# against the intent, and runs once per drawing, inside the ritual's
+# completion thread so the uArm discard never waits on it.
+ENABLE_FINISHED_DRAWING_REVIEW = True
+FINISHED_REVIEW_TIMEOUT_S = 90  # generous: the sheet is already taken by the time this matters
 
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
 # ArUco detection is fast and reliable - safe to enable for post-home check
