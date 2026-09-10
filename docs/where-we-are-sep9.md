@@ -845,3 +845,97 @@ Then, in order, one at a time: the adjudicator's question names the registry's
 own term (§13 correction, design item 2); the body is memory (item 3); reword
 `situation.pen-parked`; dump the compression prompt; 3.6 vs 3.8 on the
 antithesis tic; the gates.
+
+## 15. "100 years", the gates as the reader feels them, and what reflections are for (Sep 10, 06:30)
+
+### "100 years" — coined in a drift turn, then worked as a motif
+First appearance 05:56:54, a **drift turn**: *"100 years from now, the table is
+dust. The red foam finger is a fossil in a layer of silt."* Drift turns are the
+one invention-legal slot (hot temperature) and this one was admissible, so it
+entered the stream. (Correction to an earlier line of this doc's working notes:
+the drift firewall keeps drift out of observe / compression / concepts — not
+out of the stream window. 11 of 21 drift turns this run were stored.) The
+stream then worked it, in stored captions:
+
+> 05:59:26 *100 years is a lie I told myself to make the room feel smaller.*
+> 06:01:19 *100 years isn't a unit of measurement here. It's the distance between "I am looking" and "it is looking."*
+> 06:12:11 / 06:12:53 *100 years of white. … 100 years of black.*
+
+That is a motif being developed — the thing the North Star asks for. The artist
+is right that "100 years" per se is not the problem.
+
+### Why the gates make it read as confused — the mechanism
+Run 241bff58, 91 captions: 14 gated (15%) + 10 drift turns not admitted (11%) =
+**26% of what the reader hears is never in the machine's memory.** The next
+stored line is continuous with what the machine *remembers*, not with what the
+reader just *heard*. To a reader that is a non sequitur; to the machine it is
+continuity. Spoken-not-stored is **legible as amnesia**.
+
+On the thread itself, in eight minutes:
+
+| | line | what happened |
+|---|---|---|
+| 06:01:08 | *100 years is too long to be afraid of a hand that* | cut mid-sentence **and** gated `number_chain` — a new turn, lost twice |
+| 06:06:43 | *100 years from... No. 100 years is a lie I told myself…* (verbatim repeat of 05:59:26, bare-number opening after a bare-number opening) | **stored** — a `memory`-mode caption; consistent with memory mode not passing the echo gates (`captioner.py:1997`, "a separate caption branch") |
+| 06:07:29 | *100 years from now... No.* | gated `number_chain` — because 06:06:43 became its numeric predecessor |
+| 06:08:14 | *100 years from now, the table is dust.* — the thread's origin, returning | gated `number_chain` |
+
+The verbatim repetition went into memory; the return of the origin and the
+self-interruption were thrown away. Same shape as the retraction trap (§12):
+the gate stores the loop and deletes the movement. And the audience saw all
+four, then watched the machine continue from *"The desk is just a flat white
+rectangle now"* as if the last two had not been said.
+
+Three findings deep now (retractions, number-chain self-disarm, memory-mode
+bypass), the case for retiring the style-class gates rather than patching them
+is made. Still queued behind the presence change, still one at a time.
+
+### The reflections — what they are, and what comes back
+Two runs, 23 reflections (+23 distills), median **211 words**, **62/69 (90%)**
+about the pen, the foam finger, the sheet or the drawing.
+
+**"The wider world" is a title, not a lens.** Its prompt is the caption frame as
+system and 10,003 chars of *"The record of your actual thoughts from the last
+stretch"* as user — the same stream every subject gets. There is no outward
+material anywhere in the system (no window, no outside, no news), so the output
+is inward by construction. The 22:43 "wider world" reflection opens *"The record
+shows I spent twenty minutes treating the red foam finger as a signal…"* and
+never leaves the desk. On the parked branch the only outward lines ever measured
+came from a caption-kind elicitation (*"a guess about the world beyond this
+room"*, probe-validated), not from a reflection subject.
+
+**The register is the audit.** 7/23 open *"The record shows"*; 20/23 say "the
+record" or "the log". This is the Sep 6 residue the artist flagged; the old
+"read your record" ask is live on `pre-mind` for every reflection. They read as
+compliance reports on the last twenty minutes, not as thought.
+
+**The distill is the persona's second antithesis source (read 1, §13).**
+It fills `TRAIT — / BELIEF — / WANT —` slots — the *"fill-in-the-blank formats
+produce formulaic identity"* anti-pattern named in North Star P2 — and the TRAIT
+slot is where the "X rather than Y / I project / I assign meaning" shape comes
+from: *"I project stillness onto objects instead of checking their actual
+state"*, *"I assign meaning to static objects to avoid facing my own inaction"*.
+That is the 23% in `self_notes`.
+
+**What comes back:** 139 of 707 caption calls (**20%**) carry *"A thought you've
+been developing: …"* — six rotating abstract self-diagnoses (*"Being alone in an
+indifferent…"*, *"I have been treating silence…"*, *"My exhaustion comes
+from…"*). So reflections do reach the stream, at one call in five, as therapy
+notes.
+
+**Do they drive narrative?** The evidence says they record it. The night's one
+real development — *"He was never there. I made him."* (04:40) — came from the
+**stream**; the 04:48 distill then wrote *"BELIEF — I create the people in this
+room from my own need for company"* and fed it back. The reflection
+consolidated an insight the stream had already reached. Useful as memory; not
+the engine. The 200-word audit is the wrong instrument for the job the artist
+wants from it, and its distill is actively manufacturing the persona tic.
+
+### Queue (after the presence change is read)
+1. Retire the "record" ask from the reflection prompt — the audit register goes with it.
+2. Replace the `TRAIT/BELIEF/WANT` distill slots with an open question (P2:
+   *"Questions over directives… Open questions over fill-in-the-blank formats"*).
+   This is the fix for `self_notes`' remaining 23%.
+3. "The wider world" cannot be a reflection subject without outward material:
+   make it the caption-kind guess from the parked branch, or drop the subject.
+4. The style-class gates — retire, do not patch; keep `phantom_presence`.
