@@ -1283,17 +1283,30 @@ uArm take the sheet:
     2d  $H home + pen-up reassert
     3   gaze unlock  ·  4  completion memory  ·  4.5  uArm hook → discard
 
-**The gantry park CANNOT be a re-recorded kinetic take.** At this point in the
-ritual the bus drops x/y twice over: `_send_plan_raw` returns early while
-`is_drawing()` (= `state_manager.is_executing_cnc`, cleared only at Step 5),
-and `gantry.alive` is False because `gantry_release()` closed the port when the
-drawing began — re-acquired only at Step 7. A recorded 'paper' take therefore
-plays its ARM tracks and silently drops the gantry. The park is
-FINISHED_CAPTURE_GANTRY_PARK = (X, Y) raw command coords, sent as an explicit
-`G90` + `G0` on the serial link grbl_utils already holds open (G90 explicit
-because setup_basic_grbl only sends it when use_absolute_positioning is on,
-which it isn't — absolute mode is otherwise inherited from GRBL's power-on
-state). None = no park.
+**The SAME recorded take plays as before the drawing — but in two halves.** At
+this point in the ritual the bus drops x/y twice over: `_send_plan_raw` returns
+early while `is_drawing()` (= `state_manager.is_executing_cnc`, cleared only at
+Step 5), and `gantry.alive` is False because `gantry_release()` closed the port
+when the drawing began — re-acquired only at Step 7. A recorded 'paper' take
+therefore plays its ARM tracks and **silently drops the gantry**.
+
+So the gantry half is replayed by `grbl/paper_gantry.py` onto the serial link
+grbl_utils already holds open: same file the bus picks, same samples, same
+`clamp_to_reach` floor, same 0.1-unit jitter skip and feed derivation as
+`GantryLink.goto`. Acquiring the port through the bus instead would reset GRBL
+and home it — exactly what the ritual defers until after the photograph. The
+two halves start together and the capture sleeps for `max(arm_clear,
+gantry_clear)` (`extra_clear_s`), so the shutter waits for the slower one; the
+replay thread is joined before `$H` so nothing else touches the port mid-move.
+The pen must be UP first, which is why 2a exists.
+Live take: session_paper_a.json → 195 moves, 24.5s of recording.
+With more than one 'paper' take recorded the arms pick at random
+(`paper_clear` uses `random.choice`) while the replay takes the first sorted —
+they can desync, and the replay prints a warning saying so. Keep one take.
+FINISHED_CAPTURE_GANTRY_PARK = (X, Y) is the fallback for a take with no x/y
+track: an explicit `G90` + `G0` (explicit because setup_basic_grbl only sends
+G90 when use_absolute_positioning is on, which it isn't — absolute mode is
+otherwise inherited from GRBL's power-on state). None = no park.
 
 `drawing/finished_capture.capture_finished_drawing()` reuses the paper gate's
 choreography exactly:

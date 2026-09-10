@@ -1413,27 +1413,33 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         except Exception:
             pass
 
-        # Step 2b: get the gantry out of the camera's way for the capture.
-        # This has to be a direct G0 on the ritual's own port: the kinetic
-        # 'paper' get-clear moves the ARMS only here — its x/y tracks are
-        # dropped twice over (is_executing_cnc is still set until Step 5, and
-        # the bus released the gantry port when the drawing began, re-acquiring
-        # only at Step 7). Unset = no park move, gantry stays where it finished.
+        # Step 2b: the GANTRY half of the same recorded 'paper' get-clear the
+        # pre-draw check plays. It has to be replayed onto this port rather than
+        # left to the bus: at this point in the ritual the bus drops x/y twice
+        # over (is_executing_cnc still set until Step 5, gantry port released to
+        # the drawing pipeline until Step 7), so a recorded take that contains a
+        # gantry track moves the arms only. Runs alongside the arm half, which
+        # the capture's kinetic hook starts; the capture waits for the longer.
+        gantry_clear_s = 0.0
+        gantry_thread = None
         try:
-            from config.config import FINISHED_CAPTURE_GANTRY_PARK
+            from grbl.paper_gantry import paper_gantry_plan, replay_paper_gantry
 
-            if FINISHED_CAPTURE_GANTRY_PARK:
-                px, py = FINISHED_CAPTURE_GANTRY_PARK
-                print(f"[📷] Parking gantry clear of the camera: X{px} Y{py}")
-                # G90 explicitly: setup_basic_grbl only sends it when
-                # use_absolute_positioning is on (it defaults off), so absolute
-                # mode is inherited from GRBL's power-on state. Fine for the
-                # g-code, not something a park move should assume.
-                send_cmd(ser, "G90")
-                send_cmd(ser, f"G0 X{px} Y{py}")
-                wait_until_idle(ser, 30)
+            _moves, gantry_clear_s = paper_gantry_plan()
+            if _moves:
+                gantry_thread = threading.Thread(target=replay_paper_gantry, args=(ser,), daemon=True, name="PaperGantryClear")
+                gantry_thread.start()
+            else:
+                from config.config import FINISHED_CAPTURE_GANTRY_PARK
+
+                if FINISHED_CAPTURE_GANTRY_PARK:
+                    px, py = FINISHED_CAPTURE_GANTRY_PARK
+                    print(f"[📷] No gantry track in the paper take — static park X{px} Y{py}")
+                    send_cmd(ser, "G90")
+                    send_cmd(ser, f"G0 X{px} Y{py}")
+                    wait_until_idle(ser, 30)
         except Exception as e:
-            print(f"[📷] Gantry park skipped: {e}")
+            print(f"[📷] Gantry get-clear skipped: {e}")
 
         # Step 2c: photograph the finished sheet — before homing, and before the
         # uArm hook discards it. Runs while the gaze is still locked to the
@@ -1443,9 +1449,16 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         try:
             from drawing.finished_capture import capture_finished_drawing
 
-            capture_finished_drawing()
+            capture_finished_drawing(extra_clear_s=gantry_clear_s)
         except Exception as e:
             print(f"[📷] Finished-drawing capture unavailable: {e}")
+
+        # The replay owns this serial link while it runs — never send $H over it
+        if gantry_thread is not None:
+            gantry_thread.join(timeout=gantry_clear_s + 30.0)
+            if gantry_thread.is_alive():
+                print("[📷] ⚠️ Gantry get-clear still running — waiting for idle before homing")
+                wait_until_idle(ser, 30)
 
         # Step 2d: now home
         send_cmd(ser, "$H")

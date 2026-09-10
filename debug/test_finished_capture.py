@@ -14,6 +14,7 @@ Run:  python debug/test_finished_capture.py
 
 import os
 import sys
+import time
 
 import numpy as np
 
@@ -119,6 +120,34 @@ try:
         failures.append("a failing get-clear hook lost the photo entirely")
 except Exception as e:
     failures.append(f"exception escaped into the ritual: {e}")
+
+print("\n=== two-halves wait (arms vs gantry) ===")
+# the shutter must wait for the SLOWER half of the body, not just the arms
+hooks.on_paper_check_start = lambda: 0.2
+timings = []
+for arms, gantry in ((0.2, 1.0), (1.0, 0.2)):
+    hooks.on_paper_check_start = lambda a=arms: a
+    t0 = time.time()
+    capture_finished_drawing(extra_clear_s=gantry)
+    waited = time.time() - t0
+    timings.append((arms, gantry, waited))
+    print(f"  arms={arms}s gantry={gantry}s -> waited {waited:.2f}s")
+    if waited < max(arms, gantry):
+        failures.append(f"shot before the body stopped: arms={arms} gantry={gantry} waited={waited:.2f}")
+
+print("\n=== gantry plan from the live paper take ===")
+from grbl.paper_gantry import paper_gantry_plan, paper_take_name  # noqa: E402
+
+take = paper_take_name()
+moves, dur = paper_gantry_plan()
+print(f"  take   : {take or '(none)'}")
+print(f"  moves  : {len(moves)}  recording {dur:.1f}s")
+if take and not moves:
+    failures.append(f"paper take {take} yields no gantry moves — the x/y track is missing or unreadable")
+if moves:
+    bad = [m for m in moves if not (100 <= m[2] <= 3000)]
+    if bad:
+        failures.append(f"{len(bad)} moves outside the feed clamp, e.g. {bad[0]}")
 
 print("\n" + "=" * 50)
 if failures:

@@ -74,8 +74,13 @@ def _shoot(camera) -> List[str]:
     return out
 
 
-def capture_finished_drawing(camera=None) -> Optional[str]:
+def capture_finished_drawing(camera=None, extra_clear_s: float = 0.0) -> Optional[str]:
     """Photograph the finished sheet before the arm takes it away.
+
+    extra_clear_s: seconds another get-clear started outside this function needs
+    before the view is actually clear — the completion ritual replays the paper
+    take's gantry track itself (grbl/paper_gantry.py), and both halves of the
+    body must finish moving before the shutter.
 
     Returns the path of the last frame written, or None when disabled, when
     there is no camera, or on any failure.
@@ -104,9 +109,11 @@ def capture_finished_drawing(camera=None) -> Optional[str]:
                 clear_wait = min(float(_kin_hooks.on_paper_check_start() or 0.0), cap_s)
         except Exception:
             pass
-        if clear_wait > 0:
-            print(f"[📷] Arms clearing the view ({clear_wait:.1f}s) before photographing the drawing…")
-            time.sleep(clear_wait)
+        wait_s = max(clear_wait, float(extra_clear_s or 0.0))
+        if wait_s > 0:
+            arms = f"{clear_wait:.1f}s arms" if clear_wait else "arms did not move"
+            print(f"[📷] Body clearing the view ({wait_s:.1f}s — {arms}, {extra_clear_s:.1f}s gantry) before photographing the drawing…")
+            time.sleep(wait_s)
         elif clear_expected:
             # Unlike the gate, an occluded frame is still worth keeping here —
             # nothing is decided on it. The warning says what the picture is worth.
@@ -140,7 +147,8 @@ def capture_finished_drawing(camera=None) -> Optional[str]:
                 "frames": len(paths),
                 "images": paths,
                 "image": path or "",
-                "view_cleared": clear_wait > 0 or not clear_expected,
+                "view_cleared": wait_s > 0 or not clear_expected,
+                "clear_s": {"arms": clear_wait, "gantry": float(extra_clear_s or 0.0)},
                 "duration": time.time() - started,
                 "prompt": prompt,
             },
