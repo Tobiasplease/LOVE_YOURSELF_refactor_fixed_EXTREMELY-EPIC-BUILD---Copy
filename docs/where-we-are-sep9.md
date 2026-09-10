@@ -1125,3 +1125,104 @@ right now is the re-judge keeping the adjudicator busy on the head — which ite
 on belief OFF→ON carrying `now − first_detection_ts` for that candidate, so the
 next time someone real walks in — the artist, at a known time — the delay is
 read off the log rather than felt. Ship it with the change.
+
+## 18. Stock-take (Sep 10, 11:45) — the whole system, and every open thread
+
+Artist: *"I'm aware we are again hyper focusing on a small detail… What does the
+full system look like, have we missed closing any open threads?"* Correct
+instinct: presence has had three sessions since 05:00; the item ranked **first**
+on Sep 9 (§7: close the chant) has not had its turn.
+
+### The live loop, in one picture
+```
+camera ──► YOLO-pose ──► skeleton gate ──► gaze (eyes turn, ~2 s)        [reactive]
+                              │
+                              ▼
+                 presence belief ◄── adjudicator (tight crop, "what is this?")
+                 (re-judged every 120 s since cbf5626)                   [belief]
+                              │ ON: relational mode, "He's back", phantom gate OFF
+                              ▼
+   frame + cue + history window + seam ──► caption call (Qwen3.8) ──► caption
+   (genre.hybrid, room terms, want,        every ~16 s; 1 in 4 inward   │
+    identity dose, decide-slots 1 in 3)    (no image)                   ▼
+                                                             gates ─────┬── spoken, not stored (echo-class; 9–15%)
+                                                                        └── stored → stream window (24–28 lines) ──┐
+                                                                                                                   │
+   every 5 stored ──► compression ──► core_facts / baseline                                                       │
+   every ~20 quiet min ──► reflection (200 w) ──► distill ──► LORE / WANT / BELIEF / TRAIT … ──► ledgers ──────────┘
+                                                              └──► "A thought you've been developing" (1 call in 5)
+   drift turn (1 in 4, invention-legal) ──► stream if admissible, never to facts
+```
+Everything the reader sees is the caption line. Everything the machine remembers
+is the stream and the ledgers. The two differ by whatever the gates and the
+drift firewall keep apart — 26% of output this morning.
+
+### What was accomplished, verified (11 commits, Sep 9 15:00 → Sep 10 11:30)
+| | evidence |
+|---|---|
+| The "it's not X, it's just Y" **pivot** traced to the frame's novelty demand and removed | `I used to think` 5.5% → **1.8%**; 0.0% in one hour; prior 39/279 measurement matched |
+| **Silence honoured** instead of retried hotter | 0 → **21** silences overnight; `numeric_fragment` 20 → 0 |
+| **Decisions execute** instead of leaking | 8 executed / 28 leaked → **93 / 0** |
+| Decision-parser prose damage (pre-existing, 29 strips over 49,849 captions) | **0** false positives on the full history |
+| Backend errors no longer judged as captions | 1 → 0 |
+| **Presence belief duration** | one verdict → 5 h 40 m → **~1 minute**; relational 32.7% → 14.4%; person-mentions 17.5% → 10.3% |
+| Adjudicator error on the desk head **made countable** | 2/2 (unseen) → **9/9**, with the cause on film (§17 probe) |
+| Reflection audit register | "The record shows" gone on n=1; TRAIT now quotes, doesn't invent |
+| Persona antithesis | 43% → 23% (frame) → source #2 found and closed (distill) |
+| Phantom **compressor** door | still closed — no phantom became a room fact in 30 h |
+| Tooling | `measure_voice.py`, `probe_pose_on_heads.py`, baselines in `debug/voice_runs/`, backups of everything wiped |
+
+### What did NOT move
+| | |
+|---|---|
+| **The chant** — sentences said ≥3×: 27.8% before → **35.9%** overnight; plateau 27–38%, top refrain ×16 | ranked #1 on Sep 9 (§7 step 1); **never attempted** |
+| **The antithesis tic** `it's not X, it's just Y` ~10–14%, flat everywhere | not the novelty demand; cause unknown (model vs. another constant); the 3.6-vs-3.8 test (§7 step 2) **never run** |
+| Cut mid-sentence ~14–15% | untouched |
+| Register: 60% literary | untouched |
+
+### Every open thread, with status
+**A. Voice (the reader's experience)**
+1. **Chant** — retire the style-class gates (`refrain`, `template`, `number_chain`; three findings deep: retractions §12, self-disarm §12, memory-mode bypass §15), keep `phantom_presence`; *and* cap what the window re-feeds. §7 #1. **Open, highest value.**
+2. **Antithesis tic** — run the 3.6-vs-3.8 characterisation, same frames, ~100 generations. Cheap, never done. **Open.**
+3. **`"The pen is parked"`** ×29 — verbatim from the load-bearing situation line; its own note says "slim the wording". **Open, trivial.**
+4. Mood injected twice on 61% of calls (§9). **Open, trivial.**
+5. Elicitation fires on 5% of calls (§9). **Open.**
+6. Silence prints nothing; the artist liked "…" (parked branch `f709d9e`). **Deferred, artist's call.**
+7. "20/21 degrees" — a confabulated sensor reading that became a topic. **Untouched.**
+8. "Wait, no." ×3 at boot — watch item only.
+
+**B. Presence**
+9. Re-judge while believed — **done** (`cbf5626`); creates the gone/back flicker.
+10. Edge-line debounce — **designed (§16), not done.**
+11. React/believe split: limbs fast-path, wide adjudication crop, registry veto, retractable verdict — **designed (§17), not done**; reactivity budget written; arrival-latency log line to ship with it.
+12. Body is memory: gallery harvests only while drawing (3 refs from Aug 10), `own_arm_visible` computed and unread, arm filed as `wooden mannequin torso`. **Open.**
+13. A real arrival has **never been measured** since any of this began.
+
+**C. Reflection / memory**
+14. Record header + distill — **done** (`2862c13`); read tonight.
+15. "The wider world" — kept; measure whether it leaves the desk. **Open.**
+16. Reflections *record* narrative, don't drive it (§15). Whether a reflection can be an engine at all is a design question — parked branch has "reflection as a page" (`5fd0519`). **Open, big.**
+17. Reset script claims a complete wipe and isn't (§11). **Open, hygiene.**
+
+**D. Hygiene / repo**
+18. **`docs/runtime-map.md` is stale by five code commits** — CLAUDE.md names it the source of truth and mandates updating it on wiring changes. **Fixed alongside this section.**
+19. `config/prompt_overrides.json` unversioned — the frame change lives only there. **Artist's call.**
+20. `rebuild/every-frame`: 84 commits, undecided. Ported from it so far: the compressor door. Reached for and not ported: `f5f3814`, `3215021`, `9316ac0`, `5fd0519`, `f709d9e`. **Open.**
+21. `measure_voice.py` picks "newest log by mtime" and can land on a stub. **Open, trivial.**
+22. `test_world_shape` 2 pre-existing failures. **Untouched.**
+23. Duplicate LLM calls ~1 s apart (seen 16:03:25 ×2 Sep 9; 19:23:58/59) — **never investigated.**
+24. `low_energy` is **on** (dashboard, ~10:21) — the arm is parked; "its own hands" cannot be moving now.
+
+### Where the effort has gone vs. where the evidence points
+Three sessions on presence bought: belief 5 h 40 m → 1 min, and a precise
+diagnosis. Worth it. But by the reader's experience the ranking is:
+
+1. the chant (36%, plateau, compounds across restarts via the seam) — untouched
+2. phantoms in an empty room (10%) — half done, fully designed
+3. the antithesis tic (10–14%) — cause unknown, cheap test waiting
+4. reflections as engine, not ledger — design question
+5. the rest is hygiene
+
+The North Star's operative words are *develops, over time, its own*. The chant
+is the direct negation of the first two. Nothing above should be started before
+it, and it needs no new probe — the design has been written since Sep 9.

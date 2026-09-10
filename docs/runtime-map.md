@@ -1776,3 +1776,33 @@ quotes before matching and strips a short re-typed sentence when it is the
 seam's whole last sentence. The 3.6-era "fragment seam" and "document mode"
 were both re-tried Sep 8 and reverted (see config notes on SEAM_MODE and
 STREAM_MODE).
+
+## Wiring changes, Sep 9–10 (branch `rebuild/pre-mind`) — see docs/where-we-are-sep9.md
+- **Frame** — `genre.hybrid` overridden via `config/prompt_overrides.json` (gitignored,
+  live): the per-turn novelty demand and the change-hunt are gone; *"One thread
+  moving through time, attentive to what you see now and where the thought itself
+  leads."* Not yet baked into `prompt_registry.py`.
+- **Caption path** (`captioner.py`, `47a990e`): an empty reply reaches the silence
+  beat (it was `numeric_fragment` → retried hotter); a backend sentinel is dropped
+  and logged, never gated; a retraction (`_RETRACTION_RE`) is exempt from the
+  style-class echo gates but never from `_PHANTOM_REASONS`; `_DECISION_SPAN_RE`
+  parses `LOOK stay; EXPECT …` and no longer eats lowercase prose (uppercase: any
+  separator; lowercase: colon + head of line).
+- **Presence** (`cbf5626`): `PRESENCE_REJUDGE_WHILE_BELIEVED` (default on) — a raw
+  sighting while believed goes through `presence_adjudicator.gate()` like an edge;
+  only `person` inside `ADJUDICATED_PERSON_TTL_S` refreshes the belief. Known
+  artifact: gone/back edge lines every few minutes while the head keeps
+  re-adjudicating as `person` (9/9); debounce + react/believe split designed, not shipped.
+- **Reflection** (`2862c13`): material header is *"What you've been thinking over the
+  last stretch, oldest first:"* (no "record"); `distill.system` extracts only;
+  TRAIT may only quote the reflection. Parser and other slots unchanged.
+- **Measurement**: `debug/measure_voice.py` (six voice metrics, `--hourly`),
+  `debug/probe_pose_on_heads.py` (skeleton gate on saved frames, CPU).
+- **Ops**: launch with `setsid ./start_impostor.sh` from any non-interactive shell
+  and verify with `pgrep -af machine.py` + `tmux ls` — the tmux server dies with
+  a backgrounded caller and the script still exits 0. Importing
+  `captioner.captioner` from a debug script mints a stub `<id>-event-log.json`
+  (15 KB, no captions); quarantine in `event_log/archive-stub-runs/`.
+- **Stores**: full wipe Sep 9 17:29 (`force_memory_reset.py --backup`); the
+  script leaves `lore_ledger`, `want_ledger`, `spatial_registry`,
+  `vocab_promotion` behind despite claiming a complete reset.
