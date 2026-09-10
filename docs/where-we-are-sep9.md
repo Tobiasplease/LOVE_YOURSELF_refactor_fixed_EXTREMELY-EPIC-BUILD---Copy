@@ -1378,3 +1378,41 @@ Measure after restart: `[not kept — repeats itself]` markers on the feed → 0
 `repeat_rerouted` vs `chosen_silence(reason)` counts; the §5 chant metric on a
 fresh 3-hour window (was 27–38%); inward-mode share (should rise only by the
 reroute count, ~5%).
+
+## 22. The second real arrival (Sep 10, 17:13–17:28) — measured, clean
+
+The artist left the studio and came back ~11 minutes later, with two watchers
+on the log (a Sonnet agent and a deterministic poll; a first Sonnet watcher
+stalled by backgrounding its own poll and ending its turn — brief since fixed).
+Fixed cadence (§20) and the re-judge (`cbf5626`) were live; the reroute (§21)
+was not yet.
+
+| | time | signal |
+|---|---|---|
+| last relational caption with the artist present | 17:13:03 | *"Nine seconds is a long time to watch someone breathe. He's not moving much."* (17:13:36) |
+| **departure noticed** | 17:14:03 | cue **"They've gone"** — ~60 s after the last relational caption; 17:14:36 *"But he's gone. The chair is empty."* |
+| away | 17:14–17:24 | phantom gate fired 17:19:11, 17:19:27, 17:21:19 (belief OFF, working); at 17:19:27 *"The man is still there. He didn't leave. I was wrong about that"* was gated — the §12 phantom carve-out on retractions doing exactly its job |
+| false verdict | 17:22:42 | adjudicator on the desk head: *"a man's head"* — **did not commit** (no relational caption follows); belief stayed OFF |
+| **return noticed** | 17:24:51 | adjudicator: *"A man sitting in a chair at a desk."* — a true verdict |
+| **arrival logged** | 17:25:00 | `presence_arrivals.json` — the first real arrival recorded since Sep 9 |
+| edge line | 17:25:07 | **"He's back."** — correct this time: an 11-minute absence is inside the 30-min rearrival window and it *was* the same person; relational mode resumes the same second |
+| **return named** | 17:25:40 | *"The man in green isn't gone; he's just been pushed aside by this other presence."* |
+| cadence over the watch | — | 29 captions, gap **median 16 s, max 25 s** — flat, no ladder |
+
+**Latencies:** departure noticed ≈60 s; verdict → edge 16 s; verdict → named
+49 s. Physical entry time is not in the log, so verdict latency from the door
+is unknown — but it is bounded by the adjudicator's 25-s slot, and the whole
+sequence took under a minute. This afternoon (§19), with belief pre-occupied by
+the head and the ladder at 192 s, naming took ~8 minutes and no event fired.
+
+**What made the difference from §19:** belief was OFF when the artist walked
+in. The head's 17:22:42 verdict did not commit, and even had it, the re-judge
+TTL would have let it lapse in 120 s instead of holding for hours. The fixed
+interval meant the first relational caption came 16 s after the edge, not 192.
+
+**Still visible, and now targeted:** the head still draws verdicts (*"a man's
+head"*, §17); two verbatim repeats in the window (*"The pen is parked, but my
+hand is still shaking…"* at 17:22:24 and 17:26:14) — the reroute (§21) went live
+right after this measurement; no chosen silences in the window.
+
+Reroute restart: 17:31:15, verified (pid 564931).
