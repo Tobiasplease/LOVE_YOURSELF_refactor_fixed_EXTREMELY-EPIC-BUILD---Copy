@@ -1040,3 +1040,67 @@ the stored line. Confabulation seeded by the cue and propagated by the window,
 wearing the grammar of memory ("back", "the one with"). The artist's instinct
 that it is not the present is right; the mechanism is the frame's assertion of
 familiarity, not recall.
+
+## 17. Why pose detection does not stop a head — measured (Sep 10, 10:40)
+
+Artist: *"The machine needs to be highly reactive to actual people, but not to
+disembodied heads. I really thought the pose detection would fix it. Is it due
+to the cropping thing?"* Both — and the probe shows how.
+
+`debug/probe_pose_on_heads.py` runs the live weights (`yolo11m-pose.pt`, CPU) on
+the exact frames the adjudicator judged, and prints what the skeleton gate saw:
+
+| frame | person box | gate | confident keypoints |
+|---|---|---|---|
+| 22:05:33 (→ *"A person eating a sandwich."*) | conf 0.64, the desk head | **PASSES** | nose .98, l_eye .99, r_eye .79, l_ear .95, **l_shoulder .84, r_shoulder .91** |
+| 04:15:09 (→ *"A person eating noodles."*) | conf 0.51, the desk head | **PASSES** | nose .97, l_eye .98, r_eye .69, l_ear .93, **l_shoulder .64, r_shoulder .81** |
+| 10:19:51 (the "glasses" caption) | conf 0.31, the desk head | rejected | 4 kp, one shoulder only |
+| 04:51 (*"someone is sitting there, dark hair"*) | **no box at all** | — | the caption was pure text continuation |
+
+**The gate is "a face with shoulders", not "a body".** The rule is ≥5 confident
+keypoints in ≥2 of three regions (head / torso / limbs). A realistic face gives
+four head keypoints, and **the pose model draws shoulders under any convincing
+face** — at 0.8–0.9 confidence, on a head sitting on a desk with a drill under
+it. Head region + hallucinated torso region = 2 regions. The limbs region
+(elbows, wrists, hips, knees, ankles) is never found on a head, and is never
+required. The idea — *a person is a head AND a body* — is right; the threshold
+lets a head through on the model's own invented shoulders.
+
+**Then the crop removes the evidence.** `get_person_crop()` is the tight YOLO
+box, no margin. The adjudicator receives a close crop of a realistic head —
+shelf, desk, drill, scale all gone — and is asked *"Look closely. What is this?"*
+Nine of nine times today it said a person. From that crop, that is not a bad
+answer; the question is unanswerable without context.
+
+So three checks in a row, and each asks the same question — *is this
+person-shaped?* — of a thing that is. None asks the two questions that would
+actually separate a person from a head: **is there anything below the
+shoulders**, and **do I already know what sits at this spot** (the registry:
+`mannequin head`, 9,020 sightings, 2.5° from the verdict gaze).
+
+### The shape of the fix (room-agnostic; nothing here names a mannequin)
+Split *reacting* from *believing*. The eyes should turn at a person-shape
+instantly — that is the reactivity the artist wants, and it costs nothing to be
+wrong for a second. The **belief** (which drives the prose, the gate, relational
+mode, "He's back") should need more than a face with shoulders:
+
+1. **Gate → belief: require limbs, or a second region below the head.** Keep
+   the current gate for the *gaze* (reactive). For the belief, a candidate with
+   no limb-region keypoints goes to adjudication as it does now — but the
+   adjudicator's `person` needs context to count (next item). A seated person
+   behind a desk still shows elbows/wrists; a head on a desk never does.
+2. **Adjudicate on context, not a crop.** Send the crop with a wide margin (the
+   box grown ~2×, so the surface it sits on is visible) or the frame with the
+   box marked, and keep the open question. "A mannequin head on a desk" is what
+   any VLM says of the wider view; "a person eating" is what it says of the
+   tight one. Same model, same words, better evidence.
+3. **The registry gets a vote** (§13 design item 2): a candidate at a gaze+box
+   overlapping a registered, repeatedly verified object is that object unless
+   the adjudicator — seeing context — overrides; and the question carries the
+   machine's own term for what it knows is there.
+4. **Debounce the edge narration** (§16 addendum) so a still-flickering belief
+   is not read out as gone/back every two minutes while 1–3 land.
+
+Measure: adjudicator `person` verdicts on the desk-head boxes (9/9 → ~0),
+belief-ON in the empty room (14.4% → ~0), and — untested so far — an arrival
+event when someone real walks in. The room stays as it is.
