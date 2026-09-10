@@ -45,6 +45,7 @@ class StateManager:
         # before the uArm discards the sheet (drawing/finished_capture.py).
         self.last_finished_drawing_image: Optional[str] = None
         self.last_finished_drawing_ts: float = 0.0
+        self.last_finished_drawing_sheet: Optional[str] = None
         # Hardware references for early paper detection
         self._camera = None
         self._servos = None

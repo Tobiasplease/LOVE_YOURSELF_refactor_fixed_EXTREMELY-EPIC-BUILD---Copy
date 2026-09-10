@@ -859,7 +859,9 @@ STREAM_BREAK_SECONDS = 7200
 # had momentum (aliveness); world had grounding but answered a static room
 # forty times an hour (flat) and its delta framing elicited fake-delta tropes
 # ("the light feels different now"). A/B directly against the world runs.
-STREAM_MODE = os.getenv("STREAM_MODE", "hybrid")  # document mode TRIED AND REVERTED Sep 8 12:24-12:42: it reproduced the Aug 1 failure exactly — the model continues the document, so a list shape it once emitted ("50cm away:", "1m away:", "2m away:") becomes an endless list of empty stubs. Poison amplification is the mode's nature, not a tuning problem.
+STREAM_MODE = os.getenv(
+    "STREAM_MODE", "hybrid"
+)  # document mode TRIED AND REVERTED Sep 8 12:24-12:42: it reproduced the Aug 1 failure exactly — the model continues the document, so a list shape it once emitted ("50cm away:", "1m away:", "2m away:") becomes an endless list of empty stubs. Poison amplification is the mode's nature, not a tuning problem.
 
 # HYBRID seam size (Aug 1): how many chars of the machine's latest thought are
 # handed back as the continuation prefill in STREAM_MODE="hybrid". Short on
@@ -1358,7 +1360,9 @@ CHOSEN_GLANCE_DWELL_MULT = float(os.getenv("CHOSEN_GLANCE_DWELL_MULT", 1.4))
 # thought the quiet elicitation invites. Measured per run by caption_metrics
 # ("by_felt"). Temperature already followed arousal (AROUSAL_TEMP_SPAN).
 FELT_LOOP_ENABLED = os.getenv("FELT_LOOP_ENABLED", "true").lower() == "true"
-FELT_CADENCE_MULT_DRAINED = float(os.getenv("FELT_CADENCE_MULT_DRAINED", 1.0))  # was 1.6 — Sep 10: the felt read no longer scales the interval (it still rides the frame)
+FELT_CADENCE_MULT_DRAINED = float(
+    os.getenv("FELT_CADENCE_MULT_DRAINED", 1.0)
+)  # was 1.6 — Sep 10: the felt read no longer scales the interval (it still rides the frame)
 FELT_CADENCE_MULT_CHARGED = float(os.getenv("FELT_CADENCE_MULT_CHARGED", 1.0))  # was 0.6 — Sep 10: neutral
 FELT_BUDGET_SCALE_DRAINED = float(os.getenv("FELT_BUDGET_SCALE_DRAINED", 0.7))
 FELT_BUDGET_SCALE_CHARGED = float(os.getenv("FELT_BUDGET_SCALE_CHARGED", 1.4))
@@ -1537,6 +1541,21 @@ FINISHED_CAPTURE_MAX_CLEAR_S = 20.0  # cap on the kinetic get-clear wait, well i
 # port released to the drawing pipeline), so a recording moves the arms only.
 # None = no park move; the gantry stays wherever the drawing left it.
 FINISHED_CAPTURE_GANTRY_PARK = None
+# The capture is also written cropped to the sheet, which is the frame the model
+# should be shown: at 32x32 px per image token the full table view spends ~160
+# tokens on the paper and ~13 on the marks. Fractions of the frame, not pixels,
+# so the box survives a capture-resolution change. Measured from the Sep 10
+# captures (sheet spanned x 286-919, y 387-688 at 1280x720) plus margin; the
+# sheet drifts ~60px between drawings, hence the slack. Re-derive with
+# debug/find_sheet_crop.py if the rig moves.
+FINISHED_CAPTURE_CROP_TO_SHEET = True
+FINISHED_CAPTURE_SHEET_BOX = (0.20, 0.50, 0.74, 0.99)  # x1, y1, x2, y2 as frame fractions
+FINISHED_CAPTURE_SHEET_MARGIN = 25  # px of slack around a detected sheet
+# Unsharp strength on the crop, to survive the resample into 32px cells. Fixed,
+# never per-image: it deepens ink without moving the paper, so a faint drawing
+# still reads as faint. 0 disables. See drawing/sheet_crop.enhance for the two
+# corrections that were measured and rejected.
+FINISHED_CAPTURE_SHARPEN = 0.6
 
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
 # ArUco detection is fast and reliable - safe to enable for post-home check
@@ -1593,5 +1612,11 @@ GRBL_CNC_PORT = "/dev/arduino_cnc"  # GRBL CNC Arduino (fixed udev symlink)
 #   The run-on guard is unchanged: a long text with no boundary at all is still
 #   refused by _stream_push.
 SEAM_MODE = os.getenv("SEAM_MODE", "sentence")
-IDENTITY_THOUGHT_MAX_AGE_S = int(os.getenv("IDENTITY_THOUGHT_MAX_AGE_S", 3 * 86400))  # a self-conclusion older than this no longer rides; it must be re-thought (Sep 8)
-DURABLE_IN_FRAME = os.getenv("DURABLE_IN_FRAME", "false").lower() in ("true", "1", "yes")  # Sep 8: the stayed-true line was 40 first-person self-indictments; a standing description is stage direction
+IDENTITY_THOUGHT_MAX_AGE_S = int(
+    os.getenv("IDENTITY_THOUGHT_MAX_AGE_S", 3 * 86400)
+)  # a self-conclusion older than this no longer rides; it must be re-thought (Sep 8)
+DURABLE_IN_FRAME = os.getenv("DURABLE_IN_FRAME", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)  # Sep 8: the stayed-true line was 40 first-person self-indictments; a standing description is stage direction

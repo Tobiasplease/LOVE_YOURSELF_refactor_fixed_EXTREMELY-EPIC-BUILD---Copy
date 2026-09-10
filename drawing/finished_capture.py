@@ -10,9 +10,11 @@ the sheet, the gaze parked on the table, frames pulled from the shared camera
 feed, then the body released.
 
 CAPTURE ONLY, deliberately. Judging what the pen actually made is the critique
-removed Aug 5, and it wants a post-processed image — deskewed and cropped to
-the sheet — not a raw table view. This step exists to produce that raw material
-and to prove the choreography lands in the window before the paper goes.
+removed Aug 5. Each frame is written twice: the full table view, and beside it
+`_sheet.jpg`, cropped to the paper and mildly sharpened (drawing/sheet_crop.py)
+— that crop is the one worth showing the model, because the full view spends
+~13 of its ~1024 image tokens on the marks. Deskewing was considered and
+dropped; the trapezoid costs the model far less than the wasted tokens did.
 
 Never raises. The completion ritual and the uArm discard must not depend on a
 photograph succeeding.
@@ -24,6 +26,30 @@ from typing import List, Optional
 
 from config import config as _cfg
 from event_logging.event_logger import LogType, log_json_entry
+
+_last_crop: dict = {}
+
+
+def _write_sheet_crop(frame, full_path: str) -> Optional[str]:
+    """Write `<full>_sheet.jpg` beside the full frame. Never raises."""
+    import cv2
+
+    try:
+        from drawing.sheet_crop import crop_to_sheet, enhance
+
+        crop, box, method = crop_to_sheet(frame)
+        crop = enhance(crop)
+        path = full_path.replace(".jpg", "_sheet.jpg")
+        if not cv2.imwrite(path, crop, [cv2.IMWRITE_JPEG_QUALITY, 95]):
+            return None
+        h, w = frame.shape[:2]
+        share = ((box[2] - box[0]) * (box[3] - box[1])) / float(w * h)
+        _last_crop.update({"path": path, "box": list(box), "method": method, "frame_share": round(share, 3)})
+        print(f"[📷] Sheet crop: {crop.shape[1]}x{crop.shape[0]} ({share:.0%} of frame, {method})")
+        return path
+    except Exception as e:
+        print(f"[📷] Sheet crop failed: {e}")
+        return None
 
 
 def _shoot(camera) -> List[str]:
@@ -61,6 +87,10 @@ def _shoot(camera) -> List[str]:
             path = os.path.join(img_dir, f"finished_{stamp}_{i}.jpg")
             if cv2.imwrite(path, frame, [cv2.IMWRITE_JPEG_QUALITY, 95]):
                 out.append(path)
+                # The full frame stays for context and for re-deriving the box;
+                # the crop beside it is the one worth showing the model.
+                if bool(getattr(_cfg, "FINISHED_CAPTURE_CROP_TO_SHEET", True)):
+                    _write_sheet_crop(frame, path)
     finally:
         if parked:
             # Also drops the gaze lock (set_paper_search_mode shares the drawing-mode
@@ -136,6 +166,9 @@ def capture_finished_drawing(camera=None, extra_clear_s: float = 0.0) -> Optiona
 
             _sm.last_finished_drawing_image = path
             _sm.last_finished_drawing_ts = time.time() if path else 0.0
+            # The crop is what gets shown to the model; the full frame stays on
+            # last_finished_drawing_image so existing readers see no change.
+            _sm.last_finished_drawing_sheet = _last_crop.get("path") if path else None
             prompt = _sm.current_drawing_prompt or getattr(_sm, "last_completed_drawing_prompt", None)
         except Exception:
             prompt = None
@@ -147,6 +180,10 @@ def capture_finished_drawing(camera=None, extra_clear_s: float = 0.0) -> Optiona
                 "frames": len(paths),
                 "images": paths,
                 "image": path or "",
+                "sheet_image": _last_crop.get("path", ""),
+                "sheet_box": _last_crop.get("box"),
+                "sheet_crop_method": _last_crop.get("method", ""),
+                "sheet_frame_share": _last_crop.get("frame_share"),
                 "view_cleared": wait_s > 0 or not clear_expected,
                 "clear_s": {"arms": clear_wait, "gantry": float(extra_clear_s or 0.0)},
                 "duration": time.time() - started,
