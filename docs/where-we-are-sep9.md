@@ -810,3 +810,38 @@ verified, with nothing told. Nothing below names a mannequin, a night, or a room
 Measure, unchanged: person-mentions in an empty room (17.5% → under 5%), and an
 *arrival event* when a real person walks in — the 23:34 curtain-closer produced
 none. The room stays as it is.
+
+## 14. Shipped Sep 10 morning — and the evening read
+
+Commits on `rebuild/pre-mind`:
+- `47a990e` captioner: silence is not a failure, errors leave the caption path,
+  retractions are not echoes, decision parser fixed (§12)
+- `ef16e3b` docs: this stock-take + `debug/measure_voice.py` + `debug/voice_runs/`
+- `cbf5626` presence: a raw sighting while believed is re-judged, not trusted —
+  `PRESENCE_REJUDGE_WHILE_BELIEVED` (default on, env-overridable). Suites:
+  `test_presence_adjudication`, `test_phantom_presence`, `test_absence_standing`,
+  `test_agency_round` ALL PASS.
+
+Restarted 05:45 (detached, verified). `last_caption.txt` left as it was — the
+seam carried *"The paper is full. It's not blank."*, not a number chant.
+
+**Not versioned:** `config/prompt_overrides.json` is gitignored (line 257) by
+design — live edits from the prompt panel until "deliberately baked back". The
+frame change (`genre.hybrid`, §10) therefore survives restarts but not a fresh
+clone. Baking it into `prompt_registry.py` is the artist's call (the wording is
+theirs); until then the override file is the only copy.
+
+**Evening read** (same numbers as §13, `debug/measure_voice.py --hourly` plus the
+presence script in §13):
+1. belief-ON duration per verdict — was 5 h 40 m on one head-crop verdict
+2. person-mentions in the empty studio — 17.5% overnight; target under 5%
+3. adjudications: count, and how many `person` verdicts land on the same
+   gaze+box — this is the adjudicator's own error rate, now countable
+4. an arrival event if anyone actually walks in
+5. the §13 voice numbers, to confirm nothing regressed (this change touches no
+   prompt, so they should not move)
+
+Then, in order, one at a time: the adjudicator's question names the registry's
+own term (§13 correction, design item 2); the body is memory (item 3); reword
+`situation.pen-parked`; dump the compression prompt; 3.6 vs 3.8 on the
+antithesis tic; the gates.
