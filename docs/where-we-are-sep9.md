@@ -553,9 +553,12 @@ nothing running. `pgrep machine.py` returns empty and `tmux ls` says "no server
 running". Two earlier restarts the same evening happened to survive, so this
 fails intermittently, which is worse.
 
-    setsid ./start_impostor.sh </dev/null >/tmp/start.out 2>&1
+    nohup setsid -f ./start_impostor.sh </dev/null >/tmp/start.out 2>&1
 
-Always verify a restart rather than trusting the exit code:
+(Plain `setsid` held twice on Sep 10 and failed once, at 14:39, with the artist
+in the studio — about a minute down. `-f` forks so the tmux server never has
+this shell as an ancestor.) Always verify a restart rather than trusting the
+exit code:
 
     pgrep -af "machine\.py" | grep -v "bash -c"     # must print a pid
     tmux ls                                          # must list impostor-system

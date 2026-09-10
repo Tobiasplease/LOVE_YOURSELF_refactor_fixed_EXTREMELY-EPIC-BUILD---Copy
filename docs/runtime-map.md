@@ -1798,9 +1798,12 @@ STREAM_MODE).
   TRAIT may only quote the reflection. Parser and other slots unchanged.
 - **Measurement**: `debug/measure_voice.py` (six voice metrics, `--hourly`),
   `debug/probe_pose_on_heads.py` (skeleton gate on saved frames, CPU).
-- **Ops**: launch with `setsid ./start_impostor.sh` from any non-interactive shell
-  and verify with `pgrep -af machine.py` + `tmux ls` — the tmux server dies with
-  a backgrounded caller and the script still exits 0. Importing
+- **Ops**: from any non-interactive/agent shell launch with
+  `nohup setsid -f ./start_impostor.sh </dev/null >/tmp/start.out 2>&1` and ALWAYS
+  verify with `pgrep -af machine.py` + `tmux ls` — the tmux server dies with the
+  caller's session and the script still prints "[start] … running" and exits 0.
+  Plain `setsid` held on Sep 10 05:45 and 09:49 and failed at 14:39 (one minute
+  down with the artist present); `nohup setsid -f` held. Importing
   `captioner.captioner` from a debug script mints a stub `<id>-event-log.json`
   (15 KB, no captions); quarantine in `event_log/archive-stub-runs/`.
 - **Stores**: full wipe Sep 9 17:29 (`force_memory_reset.py --backup`); the
