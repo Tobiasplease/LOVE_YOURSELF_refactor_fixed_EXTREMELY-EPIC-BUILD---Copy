@@ -103,6 +103,19 @@ def replay_paper_gantry(ser) -> float:
             return 0.0
 
         print(f"[📷] Gantry get-clear: replaying {len(moves)} moves (~{duration:.1f}s of recording)")
+
+        # Drain first. Step 2a asserts pen-up 5x plus a dwell, all deliberately
+        # wait_ok=False, so SIX unread "ok"s are sitting in the buffer. Without
+        # this, the first six send_cmd calls below consume those instead of
+        # their own, every read runs six commands ahead of reality, and the
+        # stream loses its backpressure — GRBL's 128-byte RX buffer overflows
+        # and rejects a garbled line (observed live: "error: Invalid gcode
+        # ID:24" reported against a coordinate that was never the problem).
+        try:
+            ser.reset_input_buffer()
+        except Exception:
+            pass
+
         send_cmd(ser, "G90")  # absolute — setup_basic_grbl only sends this when use_absolute_positioning is on
         for x, y, feed in moves:
             send_cmd(ser, f"G1 X{x:.3f} Y{y:.3f} F{feed}")
@@ -117,6 +130,14 @@ def replay_paper_gantry(ser) -> float:
         return elapsed
     except Exception as e:
         print(f"[📷] Gantry get-clear replay failed: {e}")
+        # Leave the link parked and idle whatever went wrong — $H follows this
+        # in the ritual and must not inherit a half-streamed motion or an
+        # unread error.
+        try:
+            ser.reset_input_buffer()
+            wait_until_idle(ser, 30)
+        except Exception:
+            pass
         return time.time() - started
 
 

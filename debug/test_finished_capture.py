@@ -14,6 +14,7 @@ Run:  python debug/test_finished_capture.py
 
 import os
 import sys
+import tempfile
 import time
 
 import numpy as np
@@ -24,6 +25,11 @@ import config.config as cfg  # noqa: E402
 
 cfg.FINISHED_CAPTURE_SETTLE_S = 0.2  # keep the test quick
 cfg.FINISHED_CAPTURE_FRAMES = 2
+# Write into a throwaway dir, NEVER the live event_log: the real captures land
+# in <MOOD_SNAPSHOT_FOLDER>/finished_drawings/ under the same finished_*.jpg
+# naming, and cleaning up after this test once took four real drawings with it.
+cfg.MOOD_SNAPSHOT_FOLDER = tempfile.mkdtemp(prefix="finished_capture_test_")
+print(f"[test] capture output redirected to {cfg.MOOD_SNAPSHOT_FOLDER}")
 
 import safety.paper_detection as pd  # noqa: E402
 import utils.hooks as hooks  # noqa: E402
