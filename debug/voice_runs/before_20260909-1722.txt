@@ -1,0 +1,24 @@
+log: 5fa25d28-event-log.json
+RUN  2026-09-09T14:23:32 -> 2026-09-09T17:20:12   captions=385
+
+TIC (form — expect flat over time if it is a model prior)
+  'it's not X, it's just Y'             36    9.4%
+  'it's just ...'                       44   11.4%
+  'I used to think ...'                 20    5.2%
+
+CHANT (content — this one is feedback)
+  sentences said >=3x                   25   (107 emissions, 27.8% of output)
+  exact duplicate captions              14    3.6%
+      15x  The red thing isn't there anymore.
+       8x  It's just red plastic.
+       8x  The chair is empty.
+       5x  I used to think the red foam finger was a sign, a call to action.
+       5x  Now I see it as just a piece of plastic.
+       5x  The chair is empty now.
+       4x  It's just a workshop.
+       4x  The pen is parked.
+
+OTHER
+  cut mid-sentence (no end punct)       52   13.5%
+  person mentioned                      69   17.9%
+  caption gap median / p90              16s  31s

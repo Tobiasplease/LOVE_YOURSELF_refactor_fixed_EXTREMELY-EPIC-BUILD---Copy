@@ -1,0 +1,35 @@
+log: 7b7c29db-event-log.json
+RUN  2026-09-09T22:02:48 -> 2026-09-10T05:04:17   captions=878
+
+TIC (form — expect flat over time if it is a model prior)
+  'it's not X, it's just Y'             86    9.8%
+  'it's just ...'                      126   14.4%
+  'I used to think ...'                 16    1.8%
+
+CHANT (content — this one is feedback)
+  sentences said >=3x                   89   (315 emissions, 35.9% of output)
+  exact duplicate captions              18    2.1%
+       9x  The pen is parked.
+       9x  The chair is empty.
+       8x  The red is just pigment.
+       8x  I am the one who draws the line around the leak.
+       5x  It's not a hand.
+       5x  It was always empty.
+       5x  I think I saw someone there because the silence felt like a person holding their breath.
+       5x  The paper is full.
+
+OTHER
+  cut mid-sentence (no end punct)      131   14.9%
+  person mentioned                      79    9.0%
+  caption gap median / p90              16s  49s
+
+DRIFT  (a rising tic = amplification; flat = model prior)
+  hour     n   'just'   'used to think'
+   00     125     9.6%     0.8%
+   01      61    13.1%     6.6%
+   02      79    24.1%     6.3%
+   03     129    15.5%     3.1%
+   04     191    10.5%     0.0%
+   05       2     0.0%     0.0%
+   22     147    12.2%     0.0%
+   23     144    20.1%     1.4%
