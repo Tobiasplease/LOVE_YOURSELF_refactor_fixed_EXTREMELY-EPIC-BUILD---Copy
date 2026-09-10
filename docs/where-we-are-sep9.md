@@ -1459,3 +1459,20 @@ walk-in never made it; the other ~19 are the desk head re-arming belief — ever
 decide the cue's "he" vs "someone", so the head has been voting on who the
 visitor is. One more consumer of the phantom, and one more reason §17's
 react/believe split comes before anything else in presence.
+
+### Reroute, first ten minutes live (run `a1810324`, 17:31–17:41, 36 captions)
+| | before (today's runs) | first 10 min |
+|---|---|---|
+| style-class repeats aired (`[not kept — repeats itself / same opening / number chain]`) | 4–7% of captions | **0** |
+| spoken-not-stored, any reason | 7–10% | **0** |
+| `repeat_rerouted` | — | 2 (refrain → introspective 17:33:11; template → introspective 17:35:49) |
+| `chosen_silence` | ~1 per 10 min | 2 |
+| gap median / max | 16 s / 25 s | 16 s / 65 s (a reroute is a second LLM call) |
+
+The two pivots: *"It's just a piece of plastic,"* → *"I keep looking at it, that
+stupid…"*; *"It's just sitting there, blank and waiting"* → *"2 hours since I
+touched this one. It's still sitting there,"*. The second passed the gate but
+stays close to what it replaced — a pivot in mode, not yet in thought. Whether
+the reroute *moves* the monologue (rather than re-phrasing it) is the §5 chant
+metric on a 3-hour window; read tonight. Ten minutes says only: nothing repeated
+was aired, and nothing said was forgotten.
