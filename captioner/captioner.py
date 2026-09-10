@@ -1298,11 +1298,37 @@ class Captioner(MemoryMixin):
             entries = entries[:-1]
         return entries
 
+    # Sep 9: the separator is optional — the model writes "LOOK stay; EXPECT
+    # stillness at the bench" as often as "LOOK — the door", and the old
+    # pattern required [:—-], so the pair rode into the caption AND the glance
+    # never fired (28 of 36 decisions lost in run 134e42fd). Groups: 1 label,
+    # 2 separator form, 3 space form, 4 value. Without a separator the value has
+    # no punctuation to stop at, so a capital ends it (?-i: because re.I would
+    # make [A-Z] match anything). Case rules live in _decision_span_ok.
     _DECISION_SPAN_RE = re.compile(
-        r"(?:^|(?<=\s))(?:\d\d:\d\d\s*[—–-]\s*)?(LOOK|EXPECT)\s*[:：—–\-]\s*([^.;!?\n]+?)"
-        r"(?=\s*[.;!?](?:\s|$)|\s+(?:\d\d:\d\d\s*[—–-]\s*)?(?:LOOK|EXPECT)\s*[:：—–\-]|\s*$)[.;]?",
+        r"(?:^|(?<=\s))(?:\d\d:\d\d\s*[—–-]\s*)?(LOOK|EXPECT)(?:(\s*[:：—–\-]\s*)|(\s+))([^.;!?\n]+?)"
+        r"(?=\s*[.;!?](?:\s|$)|\s+(?:\d\d:\d\d\s*[—–-]\s*)?(?:LOOK|EXPECT)\b|\s+(?-i:[A-Z])|\s*$)[.;]?",
         re.I,
     )
+
+    @staticmethod
+    def _decision_span_ok(m) -> bool:
+        """UPPERCASE takes any separator (or none) — that is how the cue asks for it.
+
+        Lowercase needs a COLON *and* the head of its line. The model does write
+        "look: stay" on its own line, but lowercase mid-sentence is ordinary
+        prose: "But look—this foam finger isn't even pointing at anything" and
+        "But look: just grey wool sleeves, a cluttered desk…" both parsed as
+        decisions and lost their clause — 29 such strips across the
+        49,844-caption history, all pre-dating the Sep 9 rework. The cue asks for
+        the span "first, on one line before the thought", so position is the
+        honest disambiguator."""
+        if m.group(1).isupper():
+            return True
+        sep = m.group(2) or ""
+        if ":" not in sep and "：" not in sep:
+            return False
+        return not m.string[: m.start()].strip()
 
     _LEAKED_STAMP_RE = re.compile(r"(?:(?<=^)|(?<=[.!?…]\s)|(?<=\n))\d\d:\d\d\.?\s*[—–-]?\s*")
 
@@ -1368,13 +1394,13 @@ class Captioner(MemoryMixin):
             return text, None
         kept, decision = [], {}
         for raw in text.split("\n"):
-            hits = list(self._DECISION_SPAN_RE.finditer(raw))
+            hits = [m for m in self._DECISION_SPAN_RE.finditer(raw) if self._decision_span_ok(m)]
             if not hits:
                 kept.append(raw)
                 continue
             for m in hits:
-                decision[m.group(1).lower()] = m.group(2).strip().strip("\"'").rstrip(".")
-            rest = self._DECISION_SPAN_RE.sub("", raw).strip(" —–-:")
+                decision[m.group(1).lower()] = m.group(4).strip().strip("\"'").rstrip(".")
+            rest = self._DECISION_SPAN_RE.sub(lambda m: "" if self._decision_span_ok(m) else m.group(0), raw).strip(" —–-:")
             if rest.strip():
                 kept.append(rest)
         if not decision:
@@ -1587,6 +1613,19 @@ class Captioner(MemoryMixin):
     # storage). Shape-class rejections (meta, parroting, salad, CJK) stay
     # unspeakable — they'd break the fiction if displayed.
     _ECHO_REASONS = frozenset({"template_echo", "refrain_echo", "tail_echo", "number_chain", "phantom_presence"})
+    # Never exempted by the retraction rule: a correction that puts a person back
+    # in an empty room is the failure, not the recovery.
+    _PHANTOM_REASONS = frozenset({"phantom_presence", "phantom_drawing"})
+    # The machine undoing one of its own claims. Deliberately narrow — it must
+    # name the undoing, not merely contrast two things ("it's not X, it's Y" is
+    # the tic, not a retraction).
+    _RETRACTION_RE = re.compile(
+        r"\bI was wrong\b|\bI made (?:it|that|them) up\b|\bI (?:was )?invent(?:ed|ing)\b|"
+        r"\bnever (?:was|were) (?:real|there)\b|\bisn'?t real\b|\bwas never\b|"
+        r"\bI (?:was )?imagin(?:ed|ing)\b|\bI mis(?:read|took|judged)\b|"
+        r"\bI keep saying\b|\bI was making it mean\b",
+        re.I,
+    )
 
     def _note_unstored_cycle(self, reason: str, preview: str) -> None:
         """A cycle ended without the stream growing (echo spoken-not-stored,
@@ -2463,10 +2502,26 @@ class Captioner(MemoryMixin):
                         caption, _decision = self._extract_decision(caption)
                         if _decision:
                             self._act_on_decision(_decision)
-                        from utils.inference import is_failed_response as _ifr
-
                         _bare = (caption or "").strip()
-                        if self.first_caption_done and not _ifr(caption) and (not _bare or all(c in ".…·-— " for c in _bare)):
+                        # Sep 9: an EMPTY reply is not a failure. is_failed_response()
+                        # is true for the backend's sentinel AND for "", and this
+                        # branch used it as its guard — so the commonest form of "or
+                        # nothing at all" (and the seam's known 2-in-8 empty) skipped
+                        # the silence beat, fell to the gates, came out labelled
+                        # numeric_fragment and was RETRIED HOTTER. The machine chose
+                        # silence and we made it speak: 20 times in run 4ac0d7c7.
+                        # The sentinel now leaves the caption path here instead of
+                        # being judged as if the machine had written it (a 503 was
+                        # word_salad'd at 20:43 the same run).
+                        if _bare.startswith("[WARNING]") or _bare.startswith("[ERROR]"):
+                            log_json_entry(
+                                LogType.DEBUG,
+                                {"message": "Backend error reached the caption path — dropped", "action": "caption_backend_error", "raw": _bare[:160]},
+                                print_message=f"[⚠️] backend error, no caption: {_bare[:70]}",
+                            )
+                            self.last_caption_time = now
+                            return None
+                        if self.first_caption_done and (not _bare or all(c in ".…·-— " for c in _bare)):
                             self._note_unstored_cycle("chosen_silence", _bare or "(empty)")
                             log_json_entry(
                                 LogType.CAPTION,
@@ -2483,6 +2538,24 @@ class Captioner(MemoryMixin):
                         _gate_ctx = f"{system_prompt or ''}\n{user_prompt or ''}"
                         self._stream_store_ok = True
                         reason = self._caption_reject_reason(caption, _gate_ctx)
+                        # Sep 9: A RETRACTION NAMES WHAT IT RETRACTS, so it always
+                        # looks like an echo of the claim it is undoing — and the
+                        # echo gates ate exactly the sentences where the machine
+                        # caught its own confabulation ("100mmHg isn't a constant,
+                        # it's just a measurement. I was making it mean something").
+                        # The invented fact was stored and the correction discarded,
+                        # so a belief could be entered but never left: the mechanism
+                        # behind "it claims to have been wrong but it never stays"
+                        # (artist, Sep 8). Style-class echoes only — the phantom
+                        # gates are excluded, because "I was wrong about him leaving"
+                        # is a retraction that ASSERTS a person into an empty room.
+                        if reason in self._ECHO_REASONS and reason not in self._PHANTOM_REASONS and self._RETRACTION_RE.search(caption or ""):
+                            log_json_entry(
+                                LogType.DEBUG,
+                                {"message": f"Retraction kept despite {reason}", "action": "retraction_kept", "reason": reason, "caption_preview": caption[:60]},
+                                print_message=f"[↩️] retraction — kept in the stream despite {reason}",
+                            )
+                            reason = None
                         if reason in self._ECHO_REASONS:
                             # Verbatim repeat of the caption just SPOKEN (not
                             # just the window) — a broken record, not emphasis:
