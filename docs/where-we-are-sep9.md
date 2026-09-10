@@ -986,7 +986,7 @@ leave the desk 0/4. Re-measure tonight on reflections fired after 09:49.
 | relational captions (belief ON) | 32.7% | **14.4%** |
 | person-mentions, empty room | 17.5% | **10.3%** (Sep 9 floor: 4.6%) |
 | phantom-gate firings | 2 | **12** |
-| false arrivals logged | 2 | **0** |
+| arrivals logged (all the head) | 2 | **5** — 05:59, 06:21, 06:46, 07:20, 09:19; corrected Sep 10 17:40, see §22 |
 
 The re-judge does what it was built to do: one verdict buys about a minute, not
 six hours, and the gate is on most of the time. The residue is the adjudicator
@@ -1428,7 +1428,7 @@ return, on the fresh run `a1810324`:
 | 17:35:46 | adjudicator: *"A man in a green jacket looks at his phone while wearing hea[dphones]"* — true |
 | 17:35:59 | cue **"He's come in."** — a genuine arrival this time (cold boot → nothing "recently present" → not resumed) |
 | 17:36:00 | relational: *"He's back. I was just about to start, and now I have to wait again"* — the model's own phrasing |
-| arrivals logged since 17:30 | NONE |
+| arrivals logged since 17:30 | **17:35:51** — verdict → ledger 5 s → cue 8 s later |
 
 Verdict → edge 13 s; verdict → the artist in the prose 14 s. Two real arrivals
 today, both registered within a quarter of a minute of the verdict, once belief
@@ -1442,3 +1442,20 @@ nobody, which is §20 working.
 **Reroute, first live firing:** 17:33:11, `refrain_echo → introspective`,
 pivot *"I keep looking at it, that stupid…"* — the repeat was never aired.
 Spoken-not-stored in the new run so far: none.
+
+### Correction (17:40) — the arrivals ledger, read properly, and what it has been recording
+Three earlier lines said "no arrival logged" on the strength of a reader that did
+`list(dict.values())` on `{"arrivals": [...]}` and so saw one list instead of the
+entries. Corrected: §16 (5 arrivals 05:45–09:49, not 0), §22 third cycle
+(17:35:51, not NONE). §19 stands — there is no entry for the ~14:06 walk-in
+(masked, as described) — but there are entries at 14:28:34 and 14:41:37 while
+the artist was present: re-arms. Future scripts: `json.load(f)["arrivals"]`.
+
+**The finding underneath:** `presence_arrivals.json` has **22 entries today**
+(Sep 10 05:59 → 17:35). Two are the artist (17:25:00, 17:35:51); the ~14:06
+walk-in never made it; the other ~19 are the desk head re-arming belief — every
+"He's back." of the morning was written down as a visit. This ledger is what
+`presence_identity.singular_regime()` reads (*min_arrivals=8 over 7 days*) to
+decide the cue's "he" vs "someone", so the head has been voting on who the
+visitor is. One more consumer of the phantom, and one more reason §17's
+react/believe split comes before anything else in presence.
