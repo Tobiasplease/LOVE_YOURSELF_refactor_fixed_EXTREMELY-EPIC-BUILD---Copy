@@ -1460,21 +1460,38 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
                 print("[📷] ⚠️ Gantry get-clear still running — waiting for idle before homing")
                 wait_until_idle(ser, 30)
 
-        # Step 2d: now home
-        send_cmd(ser, "$H")
-        wait_until_idle(ser, 30)  # Wait for homing to complete
-        # Reassert UP after homing in case PWM was reset during $H
+        # Step 2d: now home. DEFAULT_HOME_TIMEOUT, not the 5s default — a real
+        # homing cycle takes ~10s and GRBL says nothing until it lands. That
+        # this ever worked was an accident: the pen-up burst above is
+        # wait_ok=False, so $H used to consume one of ITS stale "ok"s and
+        # return instantly while wait_until_idle did the actual waiting. Once
+        # the gantry replay started draining the buffer, $H began honestly
+        # waiting for its own reply and timed out — taking the gaze unlock, the
+        # completion memory and the uArm discard down with it (Sep 10, live).
+        #
+        # Isolated for the same reason: homing is not worth the paper move. A
+        # GRBL hiccup here must not stop the sheet being taken away.
         try:
-            send_cmd(ser, PEN_UP_CMD, wait_ok=False)
-            time.sleep(0.4)
-        except Exception:
-            pass
+            send_cmd(ser, "$H", timeout=DEFAULT_HOME_TIMEOUT)
+            wait_until_idle(ser, 30)  # Wait for homing to complete
+            # Reassert UP after homing in case PWM was reset during $H
+            try:
+                send_cmd(ser, PEN_UP_CMD, wait_ok=False)
+                time.sleep(0.4)
+            except Exception:
+                pass
 
-        log_json_entry(
-            LogType.GRBL,
-            {"message": "Homed for completion ritual - staying at home for 30-second pause", "action": "completion_homing_complete"},
-            print_message="[✅] Homing complete - beginning 30-second completion pause at home position",
-        )
+            log_json_entry(
+                LogType.GRBL,
+                {"message": "Homed for completion ritual - staying at home for 30-second pause", "action": "completion_homing_complete"},
+                print_message="[✅] Homing complete - beginning 30-second completion pause at home position",
+            )
+        except Exception as e:
+            log_json_entry(
+                LogType.ERROR,
+                {"message": f"Completion homing failed: {e}", "component": "grbl", "action": "completion_homing_failed"},
+                print_message=f"[❌] Completion homing failed ({e}) — continuing the ritual so the sheet still gets taken",
+            )
 
         # Step 3: Unlock gaze system during completion pause
         print("[DEBUG] About to unlock gaze system...")
