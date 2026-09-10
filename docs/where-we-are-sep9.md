@@ -1104,3 +1104,24 @@ mode, "He's back") should need more than a face with shoulders:
 Measure: adjudicator `person` verdicts on the desk-head boxes (9/9 → ~0),
 belief-ON in the empty room (14.4% → ~0), and — untested so far — an arrival
 event when someone real walks in. The room stays as it is.
+
+### Reactivity budget — the constraint on §17 (artist: "my one worry is that it'll delay the reactivity to real people")
+Reactivity is four events on four clocks. Measured from the config as it runs:
+
+| event | today, real person, no eye contact | after §17 |
+|---|---|---|
+| **eyes turn** (gaze `aware`) | first YOLO box ≤1.5 s (`YOLO_INTERVAL_IDLE`), then `AWARE_ENTRY_CONFIRM_S` = 2.0 s continuous → **~2–3.5 s**; tracking at 0.1 s after | **unchanged** — the gaze keeps today's gate |
+| **belief ON**, person looking at the camera | `eye_contact` (face in ≥40% of recent frames + a body) → **immediate**, no adjudicator | **unchanged** |
+| **belief ON**, faceless / not looking | `is_present` on the first YOLO hit → adjudicator → VLM ~3 s → **~3–5 s best case**; **up to ~30 s** if the adjudicator's 25-s slot (`PRESENCE_ADJUDICATE_MIN_INTERVAL_S`) is busy — and under the re-judge it is busy re-judging the desk head every 25 s | **faster**: a candidate with limb keypoints (elbows/wrists count — a seated person shows them; a head never does) commits belief *without* the adjudicator; the registry veto stops the head consuming the adjudicator's slot, so partial/seated candidates get judged sooner |
+| **the prose reacts** (relational mode, "He's come in") | next caption cycle after belief, median 16 s | **unchanged** — the edge debounce keys on how long the *previous* state lasted; a real arrival after a long empty stretch fires on the very next caption |
+
+Net: nothing real gets slower. Eye contact stays instant, the eyes stay at ~2 s,
+full bodies get *faster* than today, and the only thing that waits longer is a
+face with invented shoulders. The one genuine reactivity cost in the system
+right now is the re-judge keeping the adjudicator busy on the head — which item
+3 (the registry veto) removes.
+
+**Make it a number.** Arrival latency has never been measured. Add one log line
+on belief OFF→ON carrying `now − first_detection_ts` for that candidate, so the
+next time someone real walks in — the artist, at a known time — the delay is
+read off the log rather than felt. Ship it with the change.
