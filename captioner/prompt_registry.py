@@ -846,7 +846,7 @@ FRAGMENTS = {
     "review.intent-wrap": {
         "title": "Drawing review — what it set out to make",
         "text": 'What you set out to make: "{intent}"\n\n',
-        "note": "The intent in the machine's OWN words (state_manager.current_drawing_prompt = first line of _last_drawing_intent), never the render prompt — Aug 5, artist: the review must judge THE PAPER against what it meant, not re-describe the ComfyUI image.",
+        "note": "Aug 5, artist: the review must judge THE PAPER against what it meant. It judges the paper — but WHAT IT READS AS THE INTENT IS CURRENTLY THE RENDER PROMPT, not the machine's own words: drawing.py:442 sets current_drawing_prompt to the terse display_line, then _invoke_comfyui_drawing overwrites it at drawing.py:563 with the full ComfyUI description, and that is what is live at capture time. It shows: given one, the review answered in that register — 'none of the darkness the brief asked for'. Wants its own field carrying _last_drawing_intent through to the ritual.",
         "used_by": ["drawing_review"],
         "placeholders": ["intent"],
     },
