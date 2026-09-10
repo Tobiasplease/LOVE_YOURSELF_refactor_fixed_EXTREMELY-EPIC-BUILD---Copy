@@ -775,7 +775,10 @@ UARM_MOTION_STORAGE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "
 UARM_PLAY_AFTER_DRAW = True
 UARM_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    "papermove_20260306_214746.txt",  # Paper movement after GRBL completion
+    # Re-recorded Sep 10 2026: the March take was calibrated for a different
+    # scale. Clean single grab/release (ee,1 -> ee,0); the old take opened with
+    # a stray ee,0. Git history keeps papermove_20260306_214746.txt.
+    "papermovenewest_20260910_193654.txt",  # Paper movement after GRBL completion
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---

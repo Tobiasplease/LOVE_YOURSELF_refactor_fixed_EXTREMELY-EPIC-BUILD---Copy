@@ -845,15 +845,18 @@ try:
         def _uarm_after_grbl():
             def _run():
                 try:
-                    from grbl.idle_movement_manager import get_manager, pause_for_drawing
-
                     # Force pause idle movements regardless of CNC state
-                    # (since we're in transition period between GRBL completion and uArm execution)
-                    manager = get_manager()
-                    if manager.process and manager.process.poll() is None:
-                        manager.pause_for_drawing()
-                    else:
-                        pass
+                    # (since we're in transition period between GRBL completion and uArm execution).
+                    # Kept in its own try: the paper move is the point, and this
+                    # pause must never be able to take it down again — the Aug 30
+                    # retirement of the wanderer's subprocess left a `.process`
+                    # probe here that raised and silently ate the whole play.
+                    try:
+                        from grbl.idle_movement_manager import get_manager
+
+                        get_manager().pause_for_drawing()
+                    except Exception as e:
+                        print(f"[uArm] Idle pause skipped: {e}")
 
                     target = _normalize_smooth(UARM_PLAY_FILE)
                     app = None
