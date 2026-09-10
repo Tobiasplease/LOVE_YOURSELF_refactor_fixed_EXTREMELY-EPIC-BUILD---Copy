@@ -939,3 +939,35 @@ wants from it, and its distill is actively manufacturing the persona tic.
 3. "The wider world" cannot be a reflection subject without outward material:
    make it the caption-kind guess from the parked branch, or drop the subject.
 4. The style-class gates — retire, do not patch; keep `phantom_presence`.
+
+## 16. Shipped Sep 10, 09:49 — the reflection register (commit `2862c13`)
+
+Three edits, one variable ("the reflection pipeline"), measured as one:
+1. `prompts.py` material header: *"The record of your actual thoughts from the
+   last stretch, oldest first — as you had them, not summarized"* →
+   *"What you've been thinking over the last stretch, oldest first:"*.
+   Provenance and tense; no genre word to cite back.
+2. `distill.system`: *"distill … into plain, literal self-knowledge — concrete
+   habits, beliefs, wants"* → *"pull out what a reflection actually said, plainly
+   — nothing it did not say"*.
+3. `distill.user` TRAIT: *"one plain fact about what kind of machine you are: a
+   habit or fixation"* → *"only if the reflection itself says something plain
+   about what you do: that, in your own words — else 'none'"*. Parser unchanged;
+   the other slots (BELIEF, WANT, KERNEL, NAME, LORE, QUESTION, NO LONGER TRUE,
+   BECAME, RESOLVED) untouched — LORE is the one producing the good feedback.
+"The wider world" kept. Fragment notes carry the evidence; wording is the
+artist's to finalize.
+
+`test_reflection_organs` corroborates §15 independently: *"what it's for vs the
+wider world: 2 identical blocks, 47% of the shorter prompt"* — the subjects
+share half their prompt, and the shared half is the material block.
+
+**Restart at 09:49:13** (detached, verified). Tonight's presence read therefore
+has two segments: run `241bff58` 05:45–09:49 (re-judge change alone) and the run
+from 09:49 (re-judge + reflection change). The reflection change touches no
+presence path, so both count.
+
+**Reflection baseline (two runs before the change):** "the record"/"the log" in
+20/23; opening "The record shows" 7/23; about pen/foam/sheet 62/69; median 211
+words; new `self_notes` antithesis-shaped 7/30; wider-world reflections that
+leave the desk 0/4. Re-measure tonight on reflections fired after 09:49.
