@@ -1226,3 +1226,81 @@ diagnosis. Worth it. But by the reader's experience the ranking is:
 The North Star's operative words are *develops, over time, its own*. The chant
 is the direct negation of the first two. Nothing above should be started before
 it, and it needs no new probe — the design has been written since Sep 9.
+
+## 19. The first real arrival (Sep 10, ~14:06) — noticed, unregistered, at rest tempo
+
+Artist: *"I just walked in. It did notice me. The output rate does seem slower —
+several minutes between captions. And it reacted to me very casually again, as
+if I hadn't been away for over 12 hours."* All three are one mechanism.
+
+### Timeline, from the log
+| | |
+|---|---|
+| 13:49:04 | adjudicator on the desk head → *"A person with dark hair in profile."* → belief **ON**; cue *"He's back."* |
+| ~14:06 | the artist walks in — a **motion onset**; cadence drops 192 s → 12 s for one `CAPTION_QUIET_AFTER` window (120 s): captions at 14:06:38, :55, 14:07:04, :16, :28, :29, :46 |
+| 14:07:46 → | back to **192 s** — the rest ladder, with a person sitting in the room |
+| 14:14:12 | first caption that names them: *"The one in camouflage just looks down…"* (~8 min after entry) |
+| 14:14:14 | adjudicator, on a real person for the first time in 30 h: *"A man with glasses looking down."* |
+| 14:17:20, 14:20:34 | next captions — 3 minutes apart, artist present |
+| — | **no OFF→ON edge, no "He's come in.", no arrival logged.** The phantom gate never fired between 13:49 and 14:25: belief was already ON, on the head, when the real person entered |
+
+### Why it read as casual
+1. **The phantom masked the arrival.** Belief was ON (the head, 13:49) so the
+   real person produced no OFF→ON edge — the one event that says *"He's come
+   in."*, logs an arrival, and sets `arrival` salience. The machine went from an
+   invented person to a real one with no event between them.
+2. **Nothing on this branch carries "away for 12 hours".** The edge lines are
+   *"He's back."* / *"He's come in."* with no duration; `_presence_dropped_at`
+   is used for the absence-standing fact, not the arrival. And under the flicker
+   the last drop was 13:32 anyway — the phantom cycle erases absence. (The parked
+   branch's life block carries *"since when, their visits over the last days"*,
+   `139ab1b`; not on `pre-mind`.)
+3. **The cadence never came up.** See below.
+
+### Why there were minutes between captions — the rest ladder, exactly
+`_current_caption_interval`: after `CAPTION_QUIET_AFTER` (120 s) with no salience,
+if the pose referee has confirmed the world still ≥ `WORLD_STILL_MIN_CONFIRMS` (3)
+*and* the mood read's arousal < 0.25 ("heavy, waiting"), the interval becomes
+`min(120, 28 × (1 + hours since _world_change_ts)) × felt cadence mult`, and the
+felt multiplier is **1.6** when drained (`FELT_CADENCE_MULT_DRAINED`). That is
+the ladder in the log: 45 → 90 → 134 → 179 → **192 s** (28 / 56 / 84 / 112 / 120
+× 1.6). It climbed all day and was on its top rung when the artist arrived.
+
+Three structural facts about it:
+- **It has no presence guard.** A believed person does not stop it. To the
+  cadence logic, a person sitting quietly is an empty room.
+- **Its clock never resets.** `_world_change_ts` moves only when the pose
+  referee reports *"changed"* — which fired **0 times in 943 cues** overnight
+  (§9b). So "hours since the world changed" is just hours since boot.
+- **Salience is onset-only** (July 27, deliberately — a shifting person must
+  not keep it hot), so a real entry buys one 120-s window at 12 s, then rest.
+  The LIVE tier (4 s) needs `arrival`, eye onset or a close walk-up; `arrival`
+  was eaten by the phantom.
+
+The Sep 4 intent — *"honest silence in the feed"* — is sound for an empty room.
+The artist's Sep 6 reaction on the parked branch (*"why is it printing so
+slowly"*; `11a88a3` found a 60-s rest "the sole cause of the slowdown") suggests
+192 s is past what they want even then. Design question, theirs: what is the
+rest ceiling, and should a believed presence hold the cadence at QUIET (12 s)?
+
+### The arrival number, finally
+Entry ≈14:06 (motion onset). First caption naming the artist: **14:14:12**.
+Detection itself was fast — the burst began within seconds — but with no edge
+and a 192-s interval, *naming* took ~8 minutes and two caption slots. The
+latency the artist felt was cadence, not perception. (The adjudicator's *"A man
+with glasses"* at 14:14:14 is its first true verdict in 30 hours; this morning's
+"glasses" at 10:19 remains channel-less — the ledger knew, the caption model was
+never told.)
+
+### What this changes in the plan
+Nothing in §17 was wrong; this sharpens what the arrival event *is*. It is the
+linchpin — edge line, arrival log, salience, and (should) tempo reset and
+duration — and the phantom consumes it. Two additions, both room-agnostic:
+- **A believed presence holds the cadence at QUIET**, never REST (the ladder
+  gets a presence guard); and the ladder's clock should also reset on a
+  confirmed arrival, not only on a referee verdict that never comes.
+- **The edge carries duration**: *"He's come in — you haven't seen anyone for
+  twelve hours"* is an attested fact from `_presence_dropped_at` once the
+  flicker is gone; the phrasing is the artist's.
+And the ordering stands: §18's #1 (the chant) first; then §17 as one change,
+with these two folded in.
