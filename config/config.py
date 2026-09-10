@@ -1494,8 +1494,14 @@ INCLUDE_DRAWING_HISTORY = True
 # === PAPER DETECTION SAFETY SYSTEM ===
 # Prevent drawing on bare surfaces by checking for paper before execution
 ENABLE_PAPER_DETECTION = True  # Master toggle for paper detection safety
-PAPER_DETECTION_GAZE_PAN = 80  # Pan angle for looking down at drawing area (adjusted further left for better centering)
-PAPER_DETECTION_GAZE_TILT = 65  # Tilt angle for looking down at drawing area (low enough to see ArUco marker)
+# Re-tuned Sep 10 2026 on the live rig (debug/find_paper_gaze_angles.py) from
+# 80/65: the sheet sat at the frame's bottom edge, which reads well enough for
+# the gate's yes/no but crops the drawing itself. +30 pan, +5 tilt puts the
+# whole sheet in frame. Shared by the paper gate, the finished-drawing capture
+# and the "paper" chosen-glance — drawing-watch framing is separate
+# (set_drawing_mode pan 90 / TILT_MIN+2 in grbl_utils).
+PAPER_DETECTION_GAZE_PAN = 110  # Pan angle for looking down at drawing area
+PAPER_DETECTION_GAZE_TILT = 70  # Tilt angle for looking down at drawing area
 ALLOW_PAPER_DETECTION_OVERRIDE = True  # Allow manual override when paper check fails
 
 # Which eye judges the paper (Aug 20). "vlm": the loaded model looks at the
@@ -1522,6 +1528,13 @@ ENABLE_FINISHED_DRAWING_CAPTURE = True
 FINISHED_CAPTURE_FRAMES = 2  # frames kept per drawing; the last one is the filed path
 FINISHED_CAPTURE_SETTLE_S = 4.0  # gaze travel before the first frame (matches PAPER_VLM_SETTLE_S)
 FINISHED_CAPTURE_MAX_CLEAR_S = 20.0  # cap on the kinetic get-clear wait, well inside KINETIC_PAPER_MAX_HOLD_S
+# Where to send the gantry so it doesn't sit in the photograph, as (X, Y) raw
+# command coords — a direct G0 on the ritual's own port, sent unwarped. This
+# CANNOT be done by re-recording the kinetic 'paper' take: at this point in the
+# ritual the bus's x/y tracks are dropped (is_executing_cnc still set, gantry
+# port released to the drawing pipeline), so a recording moves the arms only.
+# None = no park move; the gantry stays wherever the drawing left it.
+FINISHED_CAPTURE_GANTRY_PARK = None
 
 # Conservative rollout: only run paper check after GRBL homing when explicitly enabled.
 # ArUco detection is fast and reliable - safe to enable for post-home check

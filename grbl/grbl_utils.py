@@ -1385,17 +1385,20 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
     except Exception as e:
         print(f"[⚠️] Could not update drawing state: {e}")
 
-    # Step 2: Home the machine and pause for completion ritual
+    # Step 2: Pen up, look at what was made, THEN home (order set Sep 10 by the
+    # artist: the drawing finishes, the body gets clear, the camera captures,
+    # only then does the machine home and the uArm take the sheet away).
     print(f"🏠 [DEBUG] COMPLETION RITUAL STARTING")
     try:
         log_json_entry(
             LogType.GRBL,
             {"message": "Starting completion ritual", "action": "completion_ritual_start"},
-            print_message="[🏠] Starting completion ritual - homing and pausing...",
+            print_message="[🏠] Starting completion ritual - pen up, capture, then homing...",
         )
 
-        # CRITICAL: Ensure pen is up before homing in completion ritual
-        # This is especially important after drawing when pen might still be down
+        # Step 2a — CRITICAL: pen UP before ANYTHING moves. This used to be
+        # welded to the homing command below; the capture now runs first, and
+        # a gantry park with the pen down would drag it across the drawing.
         for i in range(int(GRBL_PEN_UP_REPEATS)):
             try:
                 send_cmd(ser, PEN_UP_CMD, wait_ok=False)
@@ -1410,7 +1413,41 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
         except Exception:
             pass
 
-        # Now safe to send homing command
+        # Step 2b: get the gantry out of the camera's way for the capture.
+        # This has to be a direct G0 on the ritual's own port: the kinetic
+        # 'paper' get-clear moves the ARMS only here — its x/y tracks are
+        # dropped twice over (is_executing_cnc is still set until Step 5, and
+        # the bus released the gantry port when the drawing began, re-acquiring
+        # only at Step 7). Unset = no park move, gantry stays where it finished.
+        try:
+            from config.config import FINISHED_CAPTURE_GANTRY_PARK
+
+            if FINISHED_CAPTURE_GANTRY_PARK:
+                px, py = FINISHED_CAPTURE_GANTRY_PARK
+                print(f"[📷] Parking gantry clear of the camera: X{px} Y{py}")
+                # G90 explicitly: setup_basic_grbl only sends it when
+                # use_absolute_positioning is on (it defaults off), so absolute
+                # mode is inherited from GRBL's power-on state. Fine for the
+                # g-code, not something a park move should assume.
+                send_cmd(ser, "G90")
+                send_cmd(ser, f"G0 X{px} Y{py}")
+                wait_until_idle(ser, 30)
+        except Exception as e:
+            print(f"[📷] Gantry park skipped: {e}")
+
+        # Step 2c: photograph the finished sheet — before homing, and before the
+        # uArm hook discards it. Runs while the gaze is still locked to the
+        # surface; it parks the gaze on the table itself and drops the lock on
+        # the way out, which Step 3 below then makes explicit. Capture only, and
+        # it swallows its own failures: the ritual must not depend on a photo.
+        try:
+            from drawing.finished_capture import capture_finished_drawing
+
+            capture_finished_drawing()
+        except Exception as e:
+            print(f"[📷] Finished-drawing capture unavailable: {e}")
+
+        # Step 2d: now home
         send_cmd(ser, "$H")
         wait_until_idle(ser, 30)  # Wait for homing to complete
         # Reassert UP after homing in case PWM was reset during $H
@@ -1425,18 +1462,6 @@ def execute_gcode_file(ser, gcode_file, move_timeout=DEFAULT_MOVE_TIMEOUT):
             {"message": "Homed for completion ritual - staying at home for 30-second pause", "action": "completion_homing_complete"},
             print_message="[✅] Homing complete - beginning 30-second completion pause at home position",
         )
-
-        # Step 2.5 (Sep 10): photograph the finished sheet BEFORE the uArm hook
-        # discards it. Deliberately placed while the gaze is still locked to the
-        # surface — it parks the gaze on the table itself and drops the lock on
-        # the way out, which Step 3 below then makes explicit. Capture only, and
-        # it swallows its own failures: the ritual must not depend on a photo.
-        try:
-            from drawing.finished_capture import capture_finished_drawing
-
-            capture_finished_drawing()
-        except Exception as e:
-            print(f"[📷] Finished-drawing capture unavailable: {e}")
 
         # Step 3: Unlock gaze system during completion pause
         print("[DEBUG] About to unlock gaze system...")

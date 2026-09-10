@@ -1265,21 +1265,48 @@ describes a period with no 'paper' dataset; `TemperamentLibrary.scan()` now
 returns `paper: ['session_paper_a.json']`, so `paper_clear()` returns a real
 duration and the uncleared-view downgrade no longer fires on every check.
 
-## Finished-drawing capture (Sep 10 — Step 2.5 of the completion ritual)
+## Finished-drawing capture (Sep 10 — Step 2c of the completion ritual)
 
 **The machine now sees what it made before the paper goes.** Until Sep 10 the
 completion ritual homed the gantry, UNLOCKED the gaze (releasing it from the
 drawing surface), and then let the uArm hook discard the sheet — no capture
 anywhere in the post-draw path. The drawing was thrown away unseen.
 
-`drawing/finished_capture.capture_finished_drawing()`, called from
-grbl/grbl_utils.py between the homing-complete log and the Step 3 gaze unlock.
-Reuses the paper gate's choreography exactly:
+**Ritual order (set Sep 10 by the artist)** — the drawing finishes, the body
+gets clear, the camera captures, and only THEN does the machine home and the
+uArm take the sheet:
+
+    2a  pen UP (was welded to the $H below; nothing may move over the sheet
+        with the pen down, and 2b/2c now move things)
+    2b  gantry park — direct G0 on the ritual's own port, see below
+    2c  finished-drawing capture (kinetic get-clear + gaze park + frames)
+    2d  $H home + pen-up reassert
+    3   gaze unlock  ·  4  completion memory  ·  4.5  uArm hook → discard
+
+**The gantry park CANNOT be a re-recorded kinetic take.** At this point in the
+ritual the bus drops x/y twice over: `_send_plan_raw` returns early while
+`is_drawing()` (= `state_manager.is_executing_cnc`, cleared only at Step 5),
+and `gantry.alive` is False because `gantry_release()` closed the port when the
+drawing began — re-acquired only at Step 7. A recorded 'paper' take therefore
+plays its ARM tracks and silently drops the gantry. The park is
+FINISHED_CAPTURE_GANTRY_PARK = (X, Y) raw command coords, sent as an explicit
+`G90` + `G0` on the serial link grbl_utils already holds open (G90 explicit
+because setup_basic_grbl only sends it when use_absolute_positioning is on,
+which it isn't — absolute mode is otherwise inherited from GRBL's power-on
+state). None = no park.
+
+`drawing/finished_capture.capture_finished_drawing()` reuses the paper gate's
+choreography exactly:
 
 1. `hooks.on_paper_check_start` → `kinetic_bus.paper_clear()` — both arms and
    the gantry play the recorded 'paper' take; returns clear-seconds, capped by
    FINISHED_CAPTURE_MAX_CLEAR_S (20s, well inside KINETIC_PAPER_MAX_HOLD_S=30)
-2. gaze parked at PAPER_DETECTION_GAZE_PAN/TILT with range 0 (a still camera;
+2. gaze parked at PAPER_DETECTION_GAZE_PAN/TILT — **re-tuned Sep 10 on the live
+   rig from 80/65 to 110/70** (debug/find_paper_gaze_angles.py): the sheet sat
+   at the frame's bottom edge, fine for the gate's yes/no but cropping the
+   drawing itself. Shared by the gate, this capture and the "paper"
+   chosen-glance; drawing-watch framing is separate (set_drawing_mode, pan 90 /
+   TILT_MIN+2) — with range 0 here (a still camera;
    the gate's organic drift needs update_paper_search_target(), which only the
    aruco sweep calls), settling FINISHED_CAPTURE_SETTLE_S (4s)
 3. FINISHED_CAPTURE_FRAMES (2) frames via `safety.paper_detection.grab_table_frame`
