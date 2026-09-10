@@ -1304,3 +1304,35 @@ duration — and the phantom consumes it. Two additions, both room-agnostic:
   flicker is gone; the phrasing is the artist's.
 And the ordering stands: §18's #1 (the chant) first; then §17 as one change,
 with these two folded in.
+
+## 20. Decision: the caption interval does not shift (Sep 10, ~14:50)
+
+Artist: *"I do not want the caption interval to shift at all, that is not what I
+mean by cadence. It's mechanical and detached because it's disconnected from the
+actual LLM awareness. Stillness and 'nothing to say' should be a choice by the
+model, not imposed. Stillness is where the mind is more likely to drift, imagine
+things, make up its own stories and ambitions (it does not do that right now).
+And rate limiting the mind during these times is thusly the wrong approach."*
+
+Shipped: `CAPTION_INTERVAL_FIXED = 16` (env); LIVE / QUIET / REST / REST_MAX all
+equal it; `FELT_CADENCE_MULT_*` = 1.0. The Sep 4–5 tiers and the rest ladder
+are gone; the felt read still rides the frame, it just no longer scales time.
+Restarted and verified. Reverses the Sep 4 "honest silence in the feed" design,
+on the artist's reasoning: the timer stood in for a judgment the model should
+make, and it inverted the North Star — stillness rationed thought instead of
+freeing it.
+
+**What "cadence" means now, in the machine's own hands**
+- *nothing to say*: the silence beat — "or nothing at all" → "…" (21/night since
+  `47a990e`; the reader's sense of pacing is the model's own pauses)
+- *beat-length thoughts*: a word, a clause, a paragraph — the frame permits all
+- *drift in stillness*: `DRIFT_BASE_P` 0.05 × (1 + `DRIFT_BOREDOM_GAIN` 2.0 ×
+  boredom) — the one lever that is *meant* to rise with stillness. 21 of 91
+  captions were drift turns this morning, so drifting happens; the artist's
+  point — *"it does not do that right now"* — is about what the drift produces
+  (kind-named: remembered / invented / feared / wished, no content) rather than
+  its rate. **Next design thread: what makes a drift a story or an ambition.**
+
+Measure: caption gap median/p90 should be flat at ~16 s in every 10-minute
+bucket from now on (`measure_voice.py` prints it); §19's 45→192 s ladder must
+not reappear.
