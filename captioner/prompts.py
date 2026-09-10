@@ -774,7 +774,12 @@ def build_reflection_loop_prompt(question: str, data: dict) -> str:
     hour = data.get("hour") or []
     if hour:
         parts.append(
-            "The record of your actual thoughts from the last stretch, oldest first — as you had them, not summarized:\n"
+            # Sep 10: "The record of your actual thoughts … as you had them, not
+            # summarized" was cited straight back — 7/23 reflections opened "The
+            # record shows", 20/23 said "the record"/"the log", and every one
+            # read as an audit of the last twenty minutes (docs/where-we-are-
+            # sep9.md §15). Provenance and tense only; no genre word to quote.
+            "What you've been thinking over the last stretch, oldest first:\n"
             + "\n".join(f"- {t}" for t in hour)
         )
 

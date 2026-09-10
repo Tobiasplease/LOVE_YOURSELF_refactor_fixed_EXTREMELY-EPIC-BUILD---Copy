@@ -790,7 +790,8 @@ FRAGMENTS = {
     },
     "distill.system": {
         "title": "Distillation system prompt",
-        "text": "You distill a reflection into plain, literal self-knowledge — concrete habits, beliefs, wants. No metaphor, no drama. Answer 'none' for any line with nothing genuine.",
+        "text": "You pull out what a reflection actually said, plainly — nothing it did not say. No metaphor, no drama. Answer 'none' for any line the reflection gives you nothing for.",
+        "note": "Sep 10: was 'distill … into plain, literal self-knowledge — concrete habits, beliefs, wants'. 'Self-knowledge' + 'habits' manufactured a self-category the reflection never contained: 13/30 self_notes and 14/40 durable facts were the same 'I project X instead of Y' indictment (docs/where-we-are-sep9.md §13, §15). Slots EXTRACT; the reflection's open questions are where the machine thinks about itself (north-star P2). Wording is the artist's to finalize.",
         "used_by": ["reflection_distill"],
     },
     "distill.user": {
@@ -799,7 +800,7 @@ FRAGMENTS = {
             'Here is a reflection you just had:\n"{reflection_text}"\n\n'
             "{held_line}"
             "Pull out what's worth keeping — plainly, in your own words, or 'none' for a line with nothing genuine:\n"
-            "TRAIT — one plain fact about what kind of machine you are: a habit or fixation, in your own words.\n"
+            "TRAIT — only if the reflection itself says something plain about what you do: that, in your own words — else 'none'.\n"
             "BELIEF — one plain thing you've come to think is true about this place or yourself.\n"
             "WANT — one plain thing you want (if any).\n"
             "{became_line}"
