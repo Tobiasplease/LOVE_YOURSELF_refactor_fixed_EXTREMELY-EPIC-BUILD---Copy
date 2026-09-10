@@ -1339,3 +1339,42 @@ freeing it.
 Measure: caption gap median/p90 should be flat at ~16 s in every 10-minute
 bucket from now on (`measure_voice.py` prints it); §19's 45→192 s ladder must
 not reappear.
+
+## 21. A repeat is re-routed, not aired (Sep 10, ~17:30) — committed, NOT yet restarted
+
+Artist: *"'Not kept, repeats itself' is still quite prevalent. It's good to catch
+it but let's set it up to where it doesn't happen. A system we had ages ago
+rerouted the monologue at a detected repeat to a different caption mode — go
+more introspective, analyse feeling, internality, memory, pondering."*
+
+Prevalence today: spoken-not-stored 7–10% of captions per run (refrain +
+template 4–7%). What that meant for the reader: the repeat was *aired*, then
+kept out of the stream — heard by the audience, forgotten by the machine (§15).
+
+**Shipped (`REPEAT_REROUTE_ENABLED`, default on; `REPEAT_REROUTE_MODES`, default
+`introspective`):** on a style-class echo (`refrain_echo`, `template_echo`,
+`tail_echo`, `number_chain`) the repeat is **never spoken**. The same cycle
+re-asks with an inward mode — image-less, like the interiority beat: *think,
+don't look* — runs the pivot through the same gates once, and if it passes,
+speaks and **stores** it (`caption_reroute` in the log, action `repeat_rerouted`).
+If the pivot also repeats or comes back empty, the cycle becomes a **chosen
+silence** ("…", action `chosen_silence` with `reason`) — the model's own
+"nothing new to say", consistent with §20. `phantom_presence` is never
+re-routed: it is a truth gate, not a style gate. The repeat still counts as loop
+evidence (`_note_loop_hit`), so the next cue can still say "you've been saying X".
+Modes rotate through the list; `memory` is supported but off by default until
+its builder is read under load.
+
+This is the first half of §18's #1 (the chant): the gate stops deleting
+movement and airing loops. The second half — capping what the window re-feeds —
+is still queued. Detection is unchanged; only the *response* changed.
+
+Suites: `test_storage_law`, `test_agency_round`, `test_phantom_presence`,
+`test_absence_standing`, `test_persona_baseline` — see commit. **Restart held**
+until the watcher has captured the artist's departure and return (a restart
+mid-test would erase the measurement).
+
+Measure after restart: `[not kept — repeats itself]` markers on the feed → 0;
+`repeat_rerouted` vs `chosen_silence(reason)` counts; the §5 chant metric on a
+fresh 3-hour window (was 27–38%); inward-mode share (should rise only by the
+reroute count, ~5%).

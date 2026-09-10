@@ -1475,6 +1475,61 @@ class Captioner(MemoryMixin):
                     return run
         return ""
 
+    def _reroute_repeat(self, caption: str, reason: str, gen_options, gate_ctx_hint: str = ""):
+        """Sep 10: a detected style-class repeat is never aired. Re-ask the same
+        cycle in an inward mode (image-less, like the interiority beat) and hand
+        back the pivot — or None, which the caller turns into a chosen silence.
+        The repeat itself still counts as loop evidence (_note_loop_hit), so the
+        next cue can say "you've been saying X"; what changes is that the reader
+        never hears the echo and the machine never forgets a line it said."""
+        try:
+            from config.config import CAPTION_MIN_P, CAPTION_NUM_PREDICT, CAPTION_TEMP, CAPTION_TOP_P, REPEAT_REROUTE_MODES
+            from config.config import MODEL_NAME as _model_label
+            from captioner.prompts import build_simple_caption_prompt, get_monologue_system_prompt
+            from utils.inference import is_failed_response, query_model
+
+            modes = [m for m in (REPEAT_REROUTE_MODES or ["introspective"]) if m in ("introspective", "memory")] or ["introspective"]
+            i = getattr(self, "_reroute_idx", 0)
+            mode = modes[i % len(modes)]
+            self._reroute_idx = i + 1
+            if mode == "memory":
+                from captioner.prompts import build_memory_mode_prompt
+
+                user_prompt, _ = build_memory_mode_prompt(self)
+            else:
+                user_prompt, _ = build_simple_caption_prompt(self, force_mode="introspective")
+            system_prompt = get_monologue_system_prompt(mode, agent=self)
+            opts = dict(gen_options or {}) or {"temperature": CAPTION_TEMP, "top_p": CAPTION_TOP_P, "min_p": CAPTION_MIN_P, "num_predict": CAPTION_NUM_PREDICT}
+            text = query_model(
+                prompt=user_prompt or "...",
+                model=_model_label,
+                image=None,
+                system_prompt=system_prompt,
+                timeout=60,
+                log_dir=MOOD_SNAPSHOT_FOLDER,
+                options=opts,
+                prompt_type="caption_reroute",
+                history=self._stream_history(),
+            )
+            if is_failed_response(text):
+                return None, mode
+            text = self._strip_leaked_stamps(self._trim_to_boundary(self._strip_list_shape(text)))
+            text, _decision = self._extract_decision(text)
+            if _decision:
+                self._act_on_decision(_decision)
+            bare = (text or "").strip()
+            if not bare or all(c in ".…·-— " for c in bare):
+                return None, mode
+            if self._caption_reject_reason(bare, f"{system_prompt}\n{user_prompt}"):
+                return None, mode
+            return bare, mode
+        except Exception as e:
+            try:
+                log_json_entry(LogType.DEBUG, {"message": f"Repeat reroute failed: {e}", "action": "repeat_reroute_error"})
+            except Exception:
+                pass
+            return None, ""
+
     def _note_loop_hit(self, caption: str, reason: str) -> None:
         """Sep 5 (time-and-loop round): an echo-class refusal is evidence of a
         loop. Record the shared run so the prompt can tell the machine — a
@@ -2601,20 +2656,57 @@ class Captioner(MemoryMixin):
                                 )
                                 self.last_caption_time = now
                                 return None
-                            self._stream_store_ok = False
-                            self._last_gate_reason = reason  # the feed marker says why (Sep 5)
-                            self._note_unstored_cycle(reason, caption[:60])
-                            self._note_loop_hit(caption, reason)  # Sep 5: the loop becomes a fact it can hear
-                            log_json_entry(
-                                LogType.DEBUG,
-                                {
-                                    "message": f"Echo caption spoken, not stored ({reason})",
-                                    "action": "echo_spoken_not_stored",
-                                    "reason": reason,
-                                    "caption_preview": caption[:60],
-                                },
-                                print_message=f"[🔂] {reason} — spoken, but kept out of the stream (streak {self._skip_streak})",
-                            )
+                            try:
+                                from config.config import REPEAT_REROUTE_ENABLED
+                            except Exception:
+                                REPEAT_REROUTE_ENABLED = False
+                            if REPEAT_REROUTE_ENABLED and reason not in self._PHANTOM_REASONS:
+                                # Sep 10: a style-class repeat is re-routed, never aired (see config
+                                # REPEAT_REROUTE_ENABLED). The repeat stays loop evidence; the reader
+                                # gets the pivot, the stream keeps it.
+                                self._note_loop_hit(caption, reason)
+                                _pivot, _pmode = self._reroute_repeat(caption, reason, gen_options)
+                                if _pivot:
+                                    log_json_entry(
+                                        LogType.DEBUG,
+                                        {
+                                            "message": f"Repeat re-routed to {_pmode} ({reason})",
+                                            "action": "repeat_rerouted",
+                                            "reason": reason,
+                                            "mode": _pmode,
+                                            "repeat_preview": caption[:60],
+                                            "caption_preview": _pivot[:60],
+                                        },
+                                        print_message=f"[↪️] {reason} — re-routed to {_pmode}: {_pivot[:60]}",
+                                    )
+                                    caption, caption_mode = _pivot, _pmode
+                                    self._stream_store_ok = True
+                                    self._last_gate_reason = ""
+                                    reason = None
+                                else:
+                                    self._note_unstored_cycle("repeat_silenced", caption[:60])
+                                    log_json_entry(
+                                        LogType.CAPTION,
+                                        {"message": "Repeat — pivot also repeated, chose silence", "action": "chosen_silence", "silent": True, "raw": "", "reason": reason, "repeat_preview": caption[:60]},
+                                        print_message=f"[🤫] {reason} — nothing new to say (streak {self._skip_streak})",
+                                    )
+                                    self.last_caption_time = now
+                                    return None
+                            else:
+                                self._stream_store_ok = False
+                                self._last_gate_reason = reason  # the feed marker says why (Sep 5)
+                                self._note_unstored_cycle(reason, caption[:60])
+                                self._note_loop_hit(caption, reason)  # Sep 5: the loop becomes a fact it can hear
+                                log_json_entry(
+                                    LogType.DEBUG,
+                                    {
+                                        "message": f"Echo caption spoken, not stored ({reason})",
+                                        "action": "echo_spoken_not_stored",
+                                        "reason": reason,
+                                        "caption_preview": caption[:60],
+                                    },
+                                    print_message=f"[🔂] {reason} — spoken, but kept out of the stream (streak {self._skip_streak})",
+                                )
                         elif reason:
                             from config.config import ANTI_ECHO_RETRY_TEMP_BUMP
 

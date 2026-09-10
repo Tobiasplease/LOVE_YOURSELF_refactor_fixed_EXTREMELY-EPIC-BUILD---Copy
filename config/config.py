@@ -988,6 +988,20 @@ ANTI_ECHO_WORDS = 5
 # template tic. Tics live in the last few entries.
 ANTI_ECHO_COMPARE_TAIL = int(os.getenv("ANTI_ECHO_COMPARE_TAIL", 8))
 ANTI_ECHO_RETRY_TEMP_BUMP = 0.15
+# Sep 10 (artist): "'not kept, repeats itself' is still quite prevalent. It's good
+# to catch it but let's make sure we set it up to where it doesn't happen. A
+# system we had ages ago rerouted the monologue at a detected repeat to a
+# different caption mode — go more introspective, analyse feeling, internality,
+# memory, pondering." Today a style-class echo (refrain / template / tail /
+# number_chain) is AIRED and then kept out of the stream, so the reader hears the
+# repeat and the machine forgets saying it (26% of output spoken-not-remembered,
+# docs/where-we-are-sep9.md §15). Now the repeat is never spoken: the same cycle
+# re-asks with an inward mode (image-less, like the interiority beat) and STORES
+# the pivot; if the pivot also fails a gate, the cycle becomes a chosen silence
+# ("...") — the model's own "nothing new", not an aired echo. phantom_presence is
+# never rerouted (a truth gate, not a style gate). Modes rotate through the list.
+REPEAT_REROUTE_ENABLED = os.getenv("REPEAT_REROUTE_ENABLED", "true").lower() in ("true", "1", "yes")
+REPEAT_REROUTE_MODES = [m.strip() for m in os.getenv("REPEAT_REROUTE_MODES", "introspective").split(",") if m.strip()]
 
 # A blink is not a night: below this offline gap, restarting skips the full
 # awakening ceremony (which, run several times an hour across dev restarts,
