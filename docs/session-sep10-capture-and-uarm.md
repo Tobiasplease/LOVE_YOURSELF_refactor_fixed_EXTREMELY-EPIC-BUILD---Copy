@@ -139,3 +139,112 @@ Four earlier capture images were deleted by an over-broad cleanup glob of mine
 (`finished_2026091*_*.jpg` matched real captures, not just test output). Not
 recoverable. `debug/test_finished_capture.py` now writes to a temp dir so it
 cannot happen again.
+
+---
+
+## Later that night — the machine judges what it made
+
+Two commits on top of the above: `06c2432` (sheet crop) and `6052c31` (the
+review). `0f09ba2` was confirmed on the live rig first — the 22:37 drawing's
+ritual homed for **22 seconds** where the old 5s `DEFAULT_CMD_TIMEOUT` would
+have thrown, and the whole order landed as designed:
+
+    22:37:20  gcode_execution_complete / completion_ritual_start
+    22:37:38  paper_gantry_replayed        15.0s
+    22:37:52  finished_drawing_captured    2 frames, view_cleared=True
+    22:38:14  completion_homing_complete
+
+### Why the raw capture was never going to work
+
+The vision tower reads an image as **32x32-pixel cells** (`patch_size 16`,
+`spatial_merge_size 2`, from `mmproj-F16.gguf`), and `--image-min-tokens 1024`
+floors every image at ~1024 of them. A 1280x720 table view is *below* that
+floor, so mtmd was already upscaling our frame. Of those 1024 tokens the sheet
+got ~184 and the marks themselves ~13. The skew was never the problem; the
+sampling was.
+
+Each capture is now written twice — the full frame, and `_sheet.jpg` cropped to
+the paper. Per-token ground sampling goes **30x30px -> 15x15px**.
+
+**Not deskewed**, on the artist's call: the trapezoid costs the model far less
+than the wasted tokens did.
+
+**The crop unions detection with a nominal box.** The sheet drifts between
+drawings (61px in x, 27px in y across the four Sep 10 captures), so a fixed box
+either clips or wastes — but naive detection alone would have clipped 1 of those
+4 frames, when a shadow ate the right half of `221152_1`. Detection handles the
+drift; the nominal box makes clipping impossible. Re-derive it with
+`debug/find_sheet_crop.py` when the rig moves.
+
+### Sharpening yes, contrast no — with numbers
+
+Unsharp 0.6 deepens the ink (darkest 2%: 66 -> 59) while the paper median holds
+(164 -> 163). That invariant is the whole test: the paper stays the reference
+point, so a drawing that came out faint still reads as faint against its own
+sheet. Two corrections were measured and **rejected**:
+
+- **percentile contrast stretch** — maps this frame's darkest ink to black, so a
+  barely-there drawing arrives looking confident.
+- **illumination flatten** — measured 66 -> **125**. Dense hatching drags down
+  the very background it divides by, so dividing brightens precisely the
+  passages worth seeing. It washes the drawing out to fix a shadow that was not
+  the problem.
+
+### The review (`drawing/finished_review.py`)
+
+The Aug 5 note said the critique should return judging the paper, not the
+ComfyUI image, and should only run once. Both hold: it reads the crop against
+`current_drawing_prompt`, runs inside the ritual's existing completion thread
+(which the uArm hook does not wait on, so the sheet is still taken on time), and
+publishes to `drawing.last_reflection` so the completion memory records it
+without a second pass. **An empty answer is never stored** — saved timeouts are
+what discredited the old pass.
+
+Prompts are in the registry (`review.frame`, `review.intent-wrap`,
+`review.elicit`), so they are live-editable; the `drawing_review` pass is now
+`migrated: True`. The ask is an elicitation, not a fence: nothing presumes a
+drawing worth describing, because many are barely legible and that is the
+machine's to know.
+
+Live results on the two Sep 10 drawings:
+
+- real intent (a low dense pool of hatching) vs a sheet where the ink landed
+  high — *"Not there. The ink is all high up, clustered around a rounded shape.
+  ... The dense pool of shadow I intended doesn't exist."*
+- matching intent, same sheet — *"Mostly there... but the line is shaky and
+  broken, there's a stray mark low on the page"*
+
+It graduates rather than always reaching for "rough sketch".
+
+Also fixed: the completion memory read `get_drawing_info()` after Step 1's
+`end_drawing()` had cleared it, so every drawing was remembered as the literal
+"Completed drawing a drawing." (open thread 5 above — now closed).
+
+## Still open after this session
+
+1. **`ensure_homed` does a phantom home on every attempt 1.** It sends `$H`
+   with `wait_ok=False` then polls `get_status()` with no delay, so the first
+   `?` returns the pre-homing `Idle` and homing is declared complete in ~0.7s.
+   `G54` then can't get its `ok` inside `DEFAULT_CMD_TIMEOUT` and throws:
+
+       22:33:11  homing_start
+       22:33:11  homing_complete  duration=0.70
+       22:33:16  homing_exception  Timeout on G54, response=[]  TimeoutError
+       22:33:16  homing_retry_delay
+       22:33:35  homing_complete  duration=12.48
+
+   Self-healing via the retry, which is why it has been invisible — but it costs
+   ~24s and a spurious soft reset on every drawing and every startup. Fix: don't
+   accept `Idle` until the machine has been seen to leave it.
+2. **Capture at 2560x1440.** The camera offers it over MJPG (enumerated Sep 10;
+   YUYV tops out at 1080p). The sheet would be ~1260x520 real pixels instead of
+   ~630x260 — 2x the linear detail into the same 1024 tokens. The blocker is
+   that `machine.py:194` opens the shared cap once at 720p for the 30fps loop
+   and the capture takes the ArUco thread's shared frame, so it needs a
+   momentary re-config during the ritual (already a stop-the-world moment) plus
+   `CAP_PROP_FOURCC` set to MJPG.
+3. **Occlusion at the sheet's edges.** The wooden shoulder takes the
+   bottom-right corner and the pen carriage the right side, in every frame. The
+   drawing itself is clear, so this is not urgent.
+4. Gantry resume hook at Step 7, and `find_paper_gaze_angles.py` — both
+   unchanged from above.
