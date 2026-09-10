@@ -1571,3 +1571,50 @@ of me just… turning my head to follow him as he walks away from the camera."*
 - The duration opener persists (*"5 seconds of a wooden chair with slats"*), and
   the seam carries sentences across captions cleanly (*"sitting / in front of a
   white brick wall"*).
+
+### 19:21–19:41 — three findings
+**1. The duration stamp is a chant, and the reroute is muting it.** 19:22–19:30:
+18 captions stored, 12 silenced (11 `number_chain`); **11 of 11 reroute pivots
+opened with a number** (*"10 seconds of him tilting that head…"*, *"5 more."*).
+The image-less introspective re-ask inherits the habit from the window, trips
+the same gate, and the cycle goes quiet — the reader hears "…" every 40 s
+instead of a turn inward. Ten of the eighteen *stored* captions also open with a
+duration; the gate only catches consecutive ones. Roughly half the output is
+now *"N seconds of/since…"*.
+Origin: no cue or system line mentions seconds. The history window is rendered
+as a timestamped log with honest gap markers (*"(about 6 minutes later)"*), and
+the model imitates the genre with **invented** durations — the Aug 20 class
+(`_GAP_MARK_ECHO_RE`: "a self-written passage-of-time claim is invented time")
+in a new shape. It even leaks a clock mid-caption: *"10 seconds. / The purple
+light is still there. / 19:22 — It's not just bleeding into"*.
+**v2 (needs a restart):** (a) rotate `memory` (and the felt ask) into
+`REPEAT_REROUTE_MODES` so a `number_chain` pivot comes from a different builder;
+(b) extend `_strip_leaked_stamps` to the bare duration stub (*"10 seconds."*,
+*"5 more."*) under the same law as the clock stamp — invented time, render-layer
+shape, stripped at the mouth. Room-agnostic. Measure: duration openers (~55% →
+<5%), number-chain silences (11 in 8 min → ~0), pivots stored vs silenced.
+
+**2. The reflection's audit register is back — through a side door.** 19:31:41,
+subject *the wider world*: it does go out — *"following it out leads not to a
+source, but to a signal lost in transit — a digital artifact stripped of its
+context"* — the first outward reflection measured. Then: *"**the record shows** I
+was projecting a 'held breath' onto an architectural flaw… **the timestamps
+reveal** it was merely static"*. The header no longer says "record"; two other
+things do: every line of the material carries a clock (*"19:22 — …"*), and
+prior reflections ride in as excerpts — including pre-change ones that open
+"The record shows". The distill's *TRAIT — I project meaning onto neutral
+details…* is a faithful paraphrase of a sentence the reflection wrote (*"I was
+projecting… because I was waiting for the man to react"*), so the extraction
+rule works; the indictment now originates in the reflection's own audit stance.
+n=2 under the new header: one clean (19:09), one audit (19:31). Header fix
+necessary, not sufficient. Candidates: drop the clock from the material lines
+(the gap markers already carry time), and age out pre-change excerpts.
+
+**3. The phantom gate on the departure edge.** "They've gone" 19:29:39, then three
+gated: *"5 seconds of just the screen light flickering on his face"* (13 s after
+the edge), *"10 seconds of him pulling on that green jacket"*, and *"The swing of
+the black curtain cut off his exit, so I only saw the shadow of him leaving"* —
+past tense with the pronoun as object (*him leaving*), which `NOT_PRESENT_RE`
+does not exempt (it keys on *he/she/they + past verb*). Small; same family as
+the boot-time cost. Then, correctly: *"He's gone. The chair is empty… It wasn't
+a man leaving. It was a shadow detaching."*
