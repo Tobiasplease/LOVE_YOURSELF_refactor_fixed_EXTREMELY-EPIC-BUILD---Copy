@@ -829,7 +829,7 @@ MOOD_EVALUATION_INTERVAL = 10  # seconds between mood evaluations
 # probability rises with boredom (DRIFT_BASE_P x DRIFT_BOREDOM_GAIN). Measured
 # before: the ladder reached 192 s (120 x 1.6) with the artist sitting in the room
 # (docs/where-we-are-sep9.md §19).
-CAPTION_INTERVAL_FIXED = float(os.getenv("CAPTION_INTERVAL_FIXED", 16))  # the cadence the feed has actually been read at
+CAPTION_INTERVAL_FIXED = float(os.getenv("CAPTION_INTERVAL_FIXED", 8))  # Sep 11 (artist): "Why 16s caption cadence? We can make it less right? Let's try 8" — with 6.8 s clip calls this runs the model near saturation; measure skips and the real gap  # the cadence the feed has actually been read at
 CAPTION_INTERVAL = CAPTION_INTERVAL_FIXED  # was 7 (base tier)
 # Ego-compensated scene motion (vision/scene_motion.py): fraction of the frame
 # still moving after the camera's own movement is optically undone.
