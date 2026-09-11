@@ -374,8 +374,22 @@ def _hybrid_seam_expected(agent) -> bool:
         return True
 
 
+_NUM_WORDS = (
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+    "seventeen eighteen nineteen twenty".split()
+    + ["twenty-" + w for w in "one two three four five six seven eight nine".split()]
+    + ["thirty"]
+)
+
+
+def _num_word(n: int) -> str:
+    """Sep 11: durations in words, never integers (the seventeen-days law) —
+    a digit-led fact line is imitated as a digit-led caption opening."""
+    return _NUM_WORDS[n] if 0 <= n < len(_NUM_WORDS) else str(n)
+
+
 def casual_time_string(minutes: float) -> str:
-    """Convert minutes to casual human-readable time description."""
+    """Convert minutes to casual human-readable time description (words only)."""
     if minutes < -2:
         # A meaningfully negative age means the stored stamp is in the future —
         # clock-skew corruption, not recency. "just now" here told the machine
@@ -387,29 +401,29 @@ def casual_time_string(minutes: float) -> str:
     elif minutes < 6:
         return "a few minutes"
     elif minutes < 16:
-        return f"about {int(minutes)} minutes"
+        return f"about {_num_word(int(minutes))} minutes"
     elif minutes < 26:
-        return "about 20 minutes"
+        return "about twenty minutes"
     elif minutes < 41:
         return "half an hour"
     elif minutes < 56:
-        return "about 45 minutes"
+        return "about three quarters of an hour"
     elif minutes < 91:
         return "about an hour"
     elif minutes < 150:
-        return "about 2 hours"
+        return "about two hours"
     elif minutes < 210:
-        return "about 3 hours"
+        return "about three hours"
     elif minutes < 300:
-        return "about 4 hours"
+        return "about four hours"
     elif minutes < 1440:
         hours = int(minutes / 60)
-        return f"about {hours} hours"
+        return f"about {_num_word(hours)} hours"
     elif minutes < 2160:
         return "about a day"
     else:
         days = round(minutes / 1440)
-        return "about a day" if days <= 1 else f"about {days} days"
+        return "about a day" if days <= 1 else f"about {_num_word(days)} days"
 
 
 def part_of_day_string(hour: int) -> str:
@@ -528,8 +542,7 @@ def get_felt_arc_line(agent) -> str:
         if len(hist) < 3:
             return ""
         now = time.time()
-        if now - getattr(agent, "_felt_arc_last_ts", 0.0) < FELT_ARC_MIN_GAP_S:
-            return ""
+        turn_ok = now - getattr(agent, "_felt_arc_last_ts", 0.0) >= FELT_ARC_MIN_GAP_S
 
         cls = [_valence_class(h.get("valence", 0.0)) for h in hist]
         cur = cls[-1]
@@ -545,7 +558,7 @@ def get_felt_arc_line(agent) -> str:
             return ""
 
         # TURN: fresh streak after a prior tenor that held ≥20 min, both named
-        if prior and len(streak) <= 2 and (prior[-1]["timestamp"] - prior[0]["timestamp"]) >= 1200:
+        if turn_ok and prior and len(streak) <= 2 and (prior[-1]["timestamp"] - prior[0]["timestamp"]) >= 1200:
             old, new = newest_felt(prior), newest_felt(streak)
             if old and new and old.lower() != new.lower():
                 agent._felt_arc_last_ts = now
@@ -553,8 +566,9 @@ def get_felt_arc_line(agent) -> str:
         # STEADY: the tenor has held a long while
         held_s = now - streak[0]["timestamp"]
         felt = newest_felt(streak)
+        # STEADY is STANDING (Sep 11): no dose — it rides every call once the
+        # tenor has held FELT_ARC_AFTER_S, its duration moving with the clock.
         if felt and held_s >= FELT_ARC_AFTER_S:
-            agent._felt_arc_last_ts = now
             return P("caption.felt-arc-steady").format(felt=felt, duration=casual_time_string(held_s / 60.0))
     except Exception:
         pass
@@ -583,24 +597,70 @@ def get_unchanged_line(agent) -> str:
         now = time.time()
         unchanged_s = unchanged_duration_s(agent, now)
         if unchanged_s < UNCHANGED_FACT_AFTER_S:
-            agent._unchanged_line_last_phrase = None  # clock reset — a rebuilt stillness may reuse a phrase
             return ""
-        # Dose on PHRASE CHANGE, not a timer (first live evening: the coarse
-        # "about an hour" bracket spans 56-91 min, so a fixed min-gap fed the
-        # model the identical sentence three times — a standing fact recited
-        # becomes the scene). Each dose is a new sentence: 20 min → half an
-        # hour → 45 → an hour → 2 hours. The min-gap survives as a floor.
-        phrase = casual_time_string(unchanged_s / 60.0)
-        if phrase == getattr(agent, "_unchanged_line_last_phrase", None):
-            return ""
-        if now - float(getattr(agent, "_unchanged_line_last_ts", 0) or 0) < UNCHANGED_FACT_MIN_GAP_S:
-            return ""
-        agent._unchanged_line_last_phrase = phrase
-        agent._unchanged_line_last_ts = now
-        return P("caption.unchanged").format(duration=phrase)
+        # STANDING (Sep 11, artist: "the appropriate data should reach every
+        # single call"). The phrase-change dose and the min-gap are gone: the
+        # line rides on every call once the stillness is longer than a moment,
+        # and its duration moves with the clock. Words, never integers.
+        return P("caption.unchanged").format(duration=casual_time_string(unchanged_s / 60.0))
     except Exception:
         return ""
 
+
+
+def _head_line_from(agent, pan: float, tilt: float, direction: str, verdict, now: float) -> str:
+    """Pure core of get_head_line (testable without the gaze hardware).
+
+    STANDING (Sep 11): once the head has held one direction for
+    HEAD_STANDING_AFTER_S the posture rides every call with its duration in
+    words. Right after a turn (the first HEAD_TURN_VERDICT_S) the pose-view
+    referee's verdict for the new view is the fact instead — as it was /
+    changed since you last looked / never looked here — unless the
+    expectation check already said it this call. A move beyond
+    HEAD_HOLD_TOL_DEG resets the clock. Direction words are the gaze module's."""
+    from config.config import HEAD_HOLD_TOL_DEG, HEAD_STANDING_AFTER_S, HEAD_TURN_VERDICT_S
+
+    hold = getattr(agent, "_head_hold", None)
+    if hold is None or abs(pan - hold["pan"]) > HEAD_HOLD_TOL_DEG or abs(tilt - hold["tilt"]) > HEAD_HOLD_TOL_DEG:
+        hold = agent._head_hold = {"pan": pan, "tilt": tilt, "since": now}
+    held_s = now - hold["since"]
+    direction = (direction or "ahead").replace("looking ", "").replace("straight ", "")
+    if held_s >= HEAD_STANDING_AFTER_S:
+        return P("caption.looking-for").format(direction=direction, duration=casual_time_string(held_s / 60.0))
+    if held_s > HEAD_TURN_VERDICT_S or now - float(getattr(agent, "_expect_checked_at", 0.0) or 0.0) < 5.0:
+        return ""
+    frag = {"unchanged": "caption.view-as-was", "changed": "caption.view-changed", "baselined": "caption.view-new", "new": "caption.view-new"}.get(verdict)
+    return P(frag).format(direction=direction) if frag else ""
+
+
+def get_head_line(agent) -> str:
+    try:
+        from vision.gaze import get_gaze_description, physics_state
+
+        return _head_line_from(
+            agent, float(physics_state.pan), float(physics_state.tilt), get_gaze_description() or "ahead", getattr(agent, "_last_view_verdict", None), time.time()
+        )
+    except Exception:
+        return ""
+
+
+def build_standing_facts(agent, include_felt: bool = True) -> str:
+    """STANDING FACTS (Sep 11). Artist's ruling: "the appropriate data should
+    reach every single call." Stillness, the head, and the felt tenor ride on
+    every caption-family call (caption, reroute, memory, drift, wander hop) as
+    plain measured facts with their durations in words — not once at an edge.
+
+    History, so nobody re-doses this by reflex: B4 (Aug 31) dosed the
+    unchanged line on phrase change because a standing fact fed identically
+    three times was recited back; the duration edge and the body hold (Sep 5)
+    fired once per threshold. Over run b4bd951b (Sep 11) that left the time
+    facts in 3, 2 and 1 of 458 caption calls — the artist's "prior text plus
+    accumulated data plus the passing of time" was connected at a quarter of
+    its plugs. The recitation risk is accepted and measured, not dosed away."""
+    parts = [get_unchanged_line(agent), get_head_line(agent)]
+    if include_felt:
+        parts.append(get_felt_arc_line(agent))
+    return "\n".join(x for x in parts if x)
 
 def get_tenure_line() -> str:
     """How long the machine has existed in this room — from lifetime_state.json,
@@ -1284,7 +1344,7 @@ def build_body_line(agent) -> str:
     """BODY AS FACTS (Sep 5, agency round). The voice borrowed a human body —
     knuckles, wrists, blood — because its own was invisible to it. Two facts,
     code-attested, as edges: the head held in one direction past a threshold
-    (BODY_HOLD_THRESHOLDS_MIN; a move beyond HEAD_HOLD_TOL_DEG resets), and
+    (moved to get_head_line as a STANDING line, Sep 11), and
     the body parked / awake when low-energy toggles. Direction words are the
     gaze module's own."""
     parts = []
@@ -1303,24 +1363,8 @@ def build_body_line(agent) -> str:
             parts.append(P("caption.body-parked") if parked else P("caption.body-unparked"))
     except Exception:
         pass
-    try:
-        from config.config import BODY_HOLD_THRESHOLDS_MIN, HEAD_HOLD_TOL_DEG
-        from vision.gaze import get_gaze_description, physics_state
-
-        pan, tilt = float(physics_state.pan), float(physics_state.tilt)
-        hold = getattr(agent, "_head_hold", None)
-        if hold is None or abs(pan - hold["pan"]) > HEAD_HOLD_TOL_DEG or abs(tilt - hold["tilt"]) > HEAD_HOLD_TOL_DEG:
-            agent._head_hold = {"pan": pan, "tilt": tilt, "since": now, "fired": set()}
-        else:
-            held_min = (now - hold["since"]) / 60.0
-            due = [m for m in BODY_HOLD_THRESHOLDS_MIN if held_min >= m and m not in hold["fired"]]
-            if due:
-                m = max(due)
-                hold["fired"].update(x for x in BODY_HOLD_THRESHOLDS_MIN if x <= m)
-                direction = (get_gaze_description() or "ahead").replace("looking ", "").replace("straight ", "")
-                parts.append(P("caption.body-hold").format(direction=direction, duration=casual_time_string(float(m))))
-    except Exception:
-        pass
+    # The head hold (once per threshold) moved to get_head_line as a STANDING
+    # line (Sep 11); this builder keeps the parked/unparked edges only.
     line = " ".join(p for p in parts if p)
     if line:
         try:
@@ -1448,6 +1492,7 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         cur = chosen_glance.current()
         if cur and cur.get("started") and not cur.get("checked") and _time.time() - cur["started"] >= DECIDE_SETTLE_S:
             cur["checked"] = True
+            agent._expect_checked_at = _time.time()  # Sep 11: get_head_line yields to this line
             verdict = getattr(agent, "_last_view_verdict", None)
             outcome = {
                 "unchanged": "the view there is as it was",
@@ -1503,42 +1548,8 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
         parts.append("A while's passed.")
         agent._last_time_drift = now
 
-    # DURATION EDGE (Sep 5, time-and-loop round): world-verified stillness
-    # crossing a threshold IS an event — the passage of time is not nothing.
-    # Fires once per threshold per unchanged span; any change (referee, a
-    # presence edge) resets the clock and re-arms the thresholds.
-    try:
-        from config.config import DURATION_EDGE_THRESHOLDS_MIN
-
-        _now = _time.time()
-        _anchor = max(
-            float(getattr(agent, "_world_change_ts", 0.0) or 0.0),
-            float(getattr(agent, "_presence_dropped_at", 0.0) or 0.0),
-            float(getattr(agent, "true_session_start", 0.0) or 0.0),
-        )
-        if _anchor > 0 and not getattr(agent, "_presence_believed", False):
-            if getattr(agent, "_duration_edge_anchor", None) != _anchor:
-                agent._duration_edge_anchor = _anchor
-                agent._duration_edges_fired = set()
-            _still_min = (_now - _anchor) / 60.0
-            _due = [mm for mm in DURATION_EDGE_THRESHOLDS_MIN if _still_min >= mm and mm not in agent._duration_edges_fired]
-            if _due:
-                _m = max(_due)
-                agent._duration_edges_fired.update(x for x in DURATION_EDGE_THRESHOLDS_MIN if x <= _m)
-                parts.append(P("caption.duration-edge").format(duration=casual_time_string(float(_m))))
-                try:
-                    from event_logging.event_logger import log_json_entry
-                    from event_logging.log_type import LogType
-
-                    log_json_entry(
-                        LogType.DEBUG,
-                        {"message": "Duration edge", "action": "duration_edge", "minutes": _m},
-                        print_message=f"[⏳] nothing has changed for {casual_time_string(float(_m))}",
-                    )
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    # The duration edge (Sep 5, once per threshold) is superseded (Sep 11) by
+    # the STANDING unchanged line in build_standing_facts — every call, moving.
 
     return " ".join(parts)
 
@@ -2291,6 +2302,9 @@ def build_memory_mode_prompt(agent) -> tuple:
             prompt_parts.append(P("memory.ask-place"))
 
         final_prompt = "\n".join(prompt_parts)
+        facts = build_standing_facts(agent)  # Sep 11: every call, memory mode included
+        if facts:
+            final_prompt = final_prompt + "\n" + facts
         return final_prompt, "memory"
 
     except Exception as e:
@@ -2445,24 +2459,12 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
         if blink_line:
             turn_parts.append(blink_line)
 
-    # 1d. UNCHANGED-NESS AS FACT (B4, Aug 31) — how long since anything
-    # happened, stated plainly when the stillness is long enough to be a
-    # fact of the present. The machine's only duration signal used to be a
-    # temperature nudge; this is the same signal as words, with the reaction
-    # left entirely to the mind. Events displace it like everything else.
-    if not live:
-        unchanged_line = get_unchanged_line(agent)
-        if unchanged_line:
-            turn_parts.append(unchanged_line)
-
-    # 1e. THE FELT ARC AS FACT (Sep 4) — the trajectory of the mood reads,
-    # in the machine's own felt words: a turn once when the tenor changes, a
-    # duration when it holds. Same doctrine as B4: fact in, meaning out.
-    if not live and not detox:
-        felt_arc_line = get_felt_arc_line(agent)
-        if felt_arc_line:
-            turn_parts.append(felt_arc_line)
-
+    # 1d+1e. STANDING FACTS (Sep 11, artist: "the appropriate data should
+    # reach every single call") — stillness, head, felt tenor: every call,
+    # live or not; the felt line still respects detox.
+    facts = build_standing_facts(agent, include_felt=not detox)
+    if facts:
+        turn_parts.append(facts)
     # 2. MODE-GATED CONTEXT
     if not detox and mode in MODE_CONTEXTS:
         context_fn = MODE_CONTEXTS[mode].get("context_fn")

@@ -87,14 +87,16 @@ _orig = runtime_mode.low_energy
 runtime_mode.low_energy = lambda: True
 line = build_body_line(a)
 check("first call in low-energy → parked fact", "parked" in line, line)
-check("hold clock started, nothing due", build_body_line(a) == "")
-a._head_hold["since"] = time.time() - 11 * 60
-line = build_body_line(a)
-check("head held 11 min → hold fact with direction + duration", line.startswith("Your head has been turned") and "minutes" in line, line)
-check("fires once per threshold", build_body_line(a) == "")
-gz.physics_state.pan = 120.0  # a big move resets
-build_body_line(a)
-check("move beyond tolerance resets the clock", (time.time() - a._head_hold["since"]) < 5)
+check("the body line no longer carries the head hold (Sep 11: standing, in get_head_line)", build_body_line(a) == "")
+from captioner.prompts import _head_line_from  # noqa: E402
+
+_now = time.time()
+_head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now)  # the hold clock starts on the first look
+line = _head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now + 11 * 60)
+check("head held 11 min → STANDING fact with direction + duration in words", line == "You've been looking left for about eleven minutes.", line)
+check("and again on the next call (standing, not once per threshold)", _head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now + 11 * 60 + 16) == line)
+_head_line_from(a, 120.0, 100.0, "looking right", "baselined", _now + 12 * 60)  # a big move resets
+check("move beyond tolerance resets the clock", abs(a._head_hold["since"] - (_now + 12 * 60)) < 1)
 runtime_mode.low_energy = lambda: False
 line = build_body_line(a)
 check("low-energy off edge → awake fact", "awake" in line, line)

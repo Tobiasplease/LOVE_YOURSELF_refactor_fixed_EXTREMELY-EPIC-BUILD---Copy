@@ -347,7 +347,7 @@ FRAGMENTS = {
     "caption.duration-edge": {
         "title": "Duration edge (time-and-loop round)",
         "text": "Nothing in the room has changed for {duration}.",
-        "note": "Sep 5 (docs/time-and-loop-round-sep5.md, artist: 'nothing happening in a room overnight is an event'). Fires ONCE per threshold (DURATION_EDGE_THRESHOLDS_MIN) per world-verified unchanged span — an edge like an arrival, so the delta doctrine holds. The clock resets on a referee world_changed, a presence edge, or a boot; it does not run while someone is believed present. {duration} in words (casual_time_string). Wording is the artist's to finalize.",
+        "note": "SUPERSEDED Sep 11 by caption.unchanged as a STANDING line (artist: 'the appropriate data should reach every single call'); kept for the record. Was: Sep 5 (docs/time-and-loop-round-sep5.md, artist: 'nothing happening in a room overnight is an event'). Fires ONCE per threshold (DURATION_EDGE_THRESHOLDS_MIN) per world-verified unchanged span — an edge like an arrival, so the delta doctrine holds. The clock resets on a referee world_changed, a presence edge, or a boot; it does not run while someone is believed present. {duration} in words (casual_time_string). Wording is the artist's to finalize.",
         "used_by": ["caption", "caption_blind"],
         "placeholders": ["duration"],
     },
@@ -432,9 +432,37 @@ FRAGMENTS = {
     "caption.body-hold": {
         "title": "Body — head held (agency round)",
         "text": "Your head has been turned {direction} for {duration}.",
-        "note": "Sep 5 (artist: the voice borrows a human body — knuckles, wrists, blood — because its own is invisible to it). The machine's actual posture as a fact, once per hold threshold (BODY_HOLD_THRESHOLDS_MIN); a move beyond HEAD_HOLD_TOL_DEG resets the clock. Direction words are the gaze module's own. Wording is the artist's to finalize.",
-        "used_by": ["caption", "caption_blind"],
+        "note": "SUPERSEDED Sep 11 by caption.looking-for (STANDING). Was: Sep 5 (artist: the voice borrows a human body — knuckles, wrists, blood — because its own is invisible to it). The machine's actual posture as a fact, once per hold threshold (BODY_HOLD_THRESHOLDS_MIN); a move beyond HEAD_HOLD_TOL_DEG resets the clock. Direction words are the gaze module's own. Wording is the artist's to finalize.",
+        "used_by": [],
         "placeholders": ["direction", "duration"],
+    },
+    "caption.looking-for": {
+        "title": "Body — where the head has been (standing)",
+        "text": "You've been looking {direction} for {duration}.",
+        "note": "Sep 11 (artist: 'the appropriate data should reach every single call'). The posture as a STANDING fact on every caption-family call once the head has held one direction for HEAD_STANDING_AFTER_S; {duration} in words and moving. Direction words are the gaze module's own. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": ["direction", "duration"],
+    },
+    "caption.view-as-was": {
+        "title": "Body — just turned, view unchanged (standing)",
+        "text": "You've just turned {direction}; the view here is as it was when you last looked.",
+        "note": "Sep 11. For the first HEAD_TURN_VERDICT_S after a turn the pose-view referee's verdict for the new view rides as the fact (the hundredth look and the first look must be different input). Yields to caption.expect-check when that fired this call. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": ["direction"],
+    },
+    "caption.view-changed": {
+        "title": "Body — just turned, view changed (standing)",
+        "text": "You've just turned {direction}; the view here has changed since you last looked.",
+        "note": "Sep 11. Referee verdict 'changed' (world-verified, WORLD_VIEW_DIFF_THRESHOLD). Same yielding rule as caption.view-as-was.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": ["direction"],
+    },
+    "caption.view-new": {
+        "title": "Body — just turned, never looked here (standing)",
+        "text": "You've just turned {direction}; you hadn't looked this way before.",
+        "note": "Sep 11. Referee verdict 'baselined'/'new' — a first look this session (references are perceptual and start fresh at boot). Same yielding rule as caption.view-as-was.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": ["direction"],
     },
     "caption.body-parked": {
         "title": "Body — parked (low energy edge)",
@@ -494,8 +522,8 @@ FRAGMENTS = {
     "caption.felt-arc-steady": {
         "title": "Felt arc — steady",
         "text": 'You\'ve felt "{felt}", or near it, for {duration}.',
-        "note": "The emotional arc as fact (Sep 4). {felt} is the machine's OWN phrase from its mood reads — never our word for a feeling; {duration} is the measured hold of the current tenor (valence-class streak). Same doctrine as B4's unchanged line: fact in, meaning out. Dosed FELT_ARC_MIN_GAP_S; a live moment displaces it. Wording is the artist's to finalize.",
-        "used_by": ["caption"],
+        "note": "The emotional arc as fact (Sep 4). {felt} is the machine's OWN phrase from its mood reads — never our word for a feeling; {duration} is the measured hold of the current tenor (valence-class streak). Same doctrine as B4's unchanged line: fact in, meaning out. Sep 11: STANDING — no dose, every caption-family call once the tenor has held FELT_ARC_AFTER_S, live or not (artist: 'the appropriate data should reach every single call'); the TURN variant keeps its gap. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
         "placeholders": ["felt", "duration"],
     },
     "caption.felt-arc-turn": {
@@ -508,8 +536,8 @@ FRAGMENTS = {
     "caption.unchanged": {
         "title": "Unchanged-ness (B4)",
         "text": "Nothing has happened for {duration}.",
-        "note": "Boredom's text channel (Aug 31): a FACT computed from the episodic record (arrivals, departures, drawings, new sightings), never a scripted feeling — whether it reads as tedium, peace, or an itch for change is the machine's business. Fires after UNCHANGED_FACT_AFTER_S of stillness, re-doses at most every UNCHANGED_FACT_MIN_GAP_S; a live event displaces it.",
-        "used_by": ["caption"],
+        "note": "Boredom's text channel (Aug 31): a FACT computed from the episodic record (arrivals, departures, drawings, new sightings), never a scripted feeling — whether it reads as tedium, peace, or an itch for change is the machine's business. Sep 11: STANDING — on every caption-family call once the stillness exceeds UNCHANGED_FACT_AFTER_S (now two minutes), duration moving with the clock in words, live or not (artist: 'the appropriate data should reach every single call'); the phrase-change dose and min-gap are gone. It also replaces the Sep 5 duration edge.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
         "placeholders": ["duration"],
     },
     "caption.no-paper": {

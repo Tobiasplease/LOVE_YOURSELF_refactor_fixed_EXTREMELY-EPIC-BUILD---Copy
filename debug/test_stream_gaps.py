@@ -55,7 +55,7 @@ def test_render():
     print("    " + "\n    ".join(lines))
     markers = [l for l in lines if l.startswith("(") and l.endswith(" later)")]
     check("one gap marker for the 22-min lull", len(markers) == 1, str(markers))
-    check("marker uses words not integers", markers and "about 20 minutes later" in markers[0], str(markers))
+    check("marker uses words not integers", markers and "about twenty minutes later" in markers[0], str(markers))
     check("marker sits between the right entries", lines.index(markers[0]) == 2 if markers else False)
     check("no trailing marker when newest is fresh", not lines[-1].startswith("("))
     check("stamped lines keep the log shape", all(":" in l[:6] for l in lines if not l.startswith("(")))
@@ -66,7 +66,7 @@ def test_render():
     c2._stream_ts.append(now - 480)
     lines2 = c2._stream_history()
     print("    " + "\n    ".join(lines2))
-    check("trailing marker when NOW is far from the last entry", lines2[-1] == "(about 8 minutes later)", str(lines2))
+    check("trailing marker when NOW is far from the last entry", lines2[-1] == "(about eight minutes later)", str(lines2))
 
 
 def test_hybrid_seam():

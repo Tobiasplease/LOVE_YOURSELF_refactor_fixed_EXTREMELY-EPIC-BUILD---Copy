@@ -1618,3 +1618,164 @@ past tense with the pronoun as object (*him leaving*), which `NOT_PRESENT_RE`
 does not exempt (it keys on *he/she/they + past verb*). Small; same family as
 the boot-time cost. Then, correctly: *"He's gone. The chair is empty… It wasn't
 a man leaving. It was a shadow detaching."*
+
+## 24. The coordinate (Sep 11, 12:27) — and the structure that turns a one-off into a genre
+
+Run `b4bd951b`, booted 12:17:53 on last night's tree (the other session's
+capture/review/uArm commits; no drawing ran, only paper checks). At 12:27:13,
+ten minutes in, a caption call answered *"40.548135, -79.992635. I don't need to
+be anywhere else."* — a latitude/longitude north of Pittsburgh. Nothing in that
+call's prompt or system prompt held any such number. By 14:44, 357 of the 511
+captions stored since carried a pair, 299 of them opening with one.
+
+**The chain, event by event.**
+
+1. **Boot put the voice in log mode.** The awakening line (*"about 12 hours dark…
+   came back on about 9 minutes ago"*) became stamps and counts: *"12:20 —"*,
+   *"12:40 AM… wait, no."*, *"7 minutes."*, *"12 hours is a long time"*. The stamp
+   stripper cut the *12:40* and stored the orphan *"AM… wait, no."* The window
+   already held lines opening with digits.
+2. **The tic supplied the word.** 12:27:02, a reroute (refrain_echo → introspective,
+   §21) produced *"…the geometry of the room has shifted… It's not a warning.
+   It's just a coordinate."*
+3. **The seam supplied the digits.** The next call was prefilled with that
+   sentence. Asked to continue after *"It's just a coordinate."*, the model wrote one.
+4. **A stripper mangled it and hid it from the gate.** `_COUNTDOWN_PREFIX_RE`
+   (built for *"5… 4… 3…"*) read *"40."* as a countdown stub and removed it:
+   *"548135, -79.992635."* `number_chain`'s `_bare_num` recognises a number
+   followed by space/period, never by a comma — the raw form would have counted
+   as a numeric opening, the mangled form does not. `numeric_fragment` fired only
+   when the pair came alone (14 hotter retries). With any prose after it, stored.
+5. **The window taught it back.** One stored line opening with a pair, and the
+   model imitated the opening: counted up (548136, 548137, 548138) for half an
+   hour, then collapsed to memorised pairs (*"547380,-120"* ×43; 144 distinct).
+
+| half hour | stored captions with a pair |
+|---|---|
+| 12:00 | 4 / 10 |
+| 12:30 | 60 / 97 |
+| 13:00 | 61 / 108 |
+| 13:30 | 85 / 116 |
+| 14:00 | 92 / 115 |
+| 14:30 | 55 / 65 |
+
+Of 649 caption-family model responses this run, **356 opened with a number
+pair, 39 with a clock stamp**. The stamps get stripped (leaving *"AM."*), the
+pairs did not. Gates fired 32 times in total; the reroute pivoted 15.
+
+**The structure, as the model sees one caption call** (`utils/llama_server.py
+_append_stream_and_user`, `captioner._stream_history`, `_stream_push`):
+
+1. system prompt;
+2. **assistant message: the last 23 stored captions**, each rendered
+   `HH:MM — text` (STREAM_WINDOW=24; the newest is pulled out to be the seam);
+3. user message: frames + the present (situational lines, the developing thought…);
+4. **assistant prefill: the last sentence of the newest stored caption**, stamp
+   removed, ≤220 chars, cut at a sentence boundary. SEAM_MODE=sentence trims
+   every stored caption to a boundary, so the seam is always a *finished*
+   sentence and generation must open a new one.
+
+The response is then stripped (stamps, list shapes, countdowns), trimmed to a
+boundary, decision-extracted, and judged by `_caption_reject_reason` (~15
+reasons, measured against the window minus the seam — `_comparable_stream`).
+What passes is spoken **and stored**: it becomes line 24 of the next call's log,
+and its last sentence becomes the next seam. Nothing not stored can propagate.
+
+**Three carriers of continuity, all verbatim.** The seam (immediate, token
+level). The window (the next ~6 minutes at 16 s). The slow ones — stream
+consolidation (*"reusing their own words wherever possible… no new imagery"*),
+compression, and the reflection material (the same lines, oldest first, each with
+its clock). Every one carries the past as *strings*. The code says so in as many
+words: `_prefill_mode` — *"reusing its words is what continuation MEANS"*.
+
+**Why that is echo and not continuation.** A model extending its own prior text
+reproduces the text's regularities, not its thought. The log's strongest
+regularity is the line opening: twenty-three lines that begin with digits. The
+content-level regularities follow the same route: refrains (*"the red foam
+finger is just decor"* ×N), the antithesis shape, the *"N seconds of…"* stamp
+(§23). The gates, the reroute, the front-erosion (`stream_erosion`), the
+consolidation and spoken-not-stored are all managers of a poisoned window; their
+existence is the evidence. The design notes already know it: STREAM_WINDOW —
+*"the stream amplifies whatever register is in the window"*; STREAM_MODE (on
+document mode) — *"poison amplification is the mode's nature, not a tuning
+problem"* (hybrid bounds the prefill to one tail, but the 23-line log rides
+whole); SEAM_MODE — *"the seam hands back a FINISHED sentence and the next call
+must start a new one — which is where the model reaches for 'it's not X, it's Y'"*.
+
+Worth holding onto: the window was switched on (June 28) to stop *amnesiac*
+repetition — the model could not see it had already said "dust motes". It stops
+that kind and produces the other kind, *imitative* repetition. Two echoes; the
+system traded one for the other and then built gates against the second.
+
+**What continuation would need** (laid out, not decided): the past present as
+meaning rather than strings — what I was thinking about, what I concluded, what
+is unresolved — with the verbatim surface reduced to the one seam the artist
+likes (the mid-sentence pickup: 73 of 569 consecutive captions this run opened
+mid-sentence, the good kind). Candidate levers, one at a time: the log without
+the digit template (no `HH:MM —`; gaps are already words); the seam as a
+fragment rather than a finished sentence (SEAM_MODE=fragment, the 3.6 shape);
+the log as an abstractive paraphrase instead of verbatim lines; a smaller window
+with the meaning carriers doing the work. The three strippers proposed on Sep 11
+(countdown regex, AM/PM orphan, leading pair) would close this instance and
+nothing else.
+
+Immediate state: the window is saturated and will not clear itself; the seam
+file written at shutdown would carry a pair-prefixed caption into a restart.
+
+**Correction (Sep 11, afternoon — the artist's objection stands).** The strong
+form above — "hand it a transcript and it copies the transcript" — is wrong as a
+law, and the artist's counter is the data: the machine does not constantly
+repeat. In this run the gates and reroute touched ~5% of captions; the other
+95% moved. The head changes the view on ~25% of calls (110 drift turns + 34
+LOOK turns over 568 image calls), so "the same picture every time" was also
+overstated. Prior text + new image + time + mood + desire IS the continuation
+design and it mostly works. What breeds is narrower: a **format at the line
+opening** (a stamp, a number, a duration stub) and, less reliably, a refrain. A
+language model reproduces a fixed string at a fixed position almost
+deterministically once it sits in two lines; ordinary sentences vary and do not
+breed. That is why one coordinate became 356 and one sentence about the finger
+did not become 356. The strippers exist for exactly this; the countdown regex
+mangled instead of removed and hid the shape from the gate. So the fix for this
+incident is the small one (§24 top), not a redesign, and the paraphrase-window
+proposal is withdrawn as a first step.
+
+Where the artist's version of continuation is actually thin: the "accumulated
+data" barely arrives. Over 458 caption calls: *nothing has changed for X* 3
+(fires once per threshold per unchanged span, by design), *your head has been
+turned X* 2, *you've felt X for* 1, *you keep coming back to X* 17, the
+expectation check 79. Mood is two words every call; the one standing desire
+line (*no paper on the desk*) rode every call and visibly drove the thought (the
+paper hunt, "the paper is the ceiling"). The engine is connected at about a
+quarter of its plugs. That, not the window, is the upstream place to work.
+
+## 25. Sep 11 afternoon — the storage fix, and the facts made standing
+
+Artist's rulings, verbatim: *"a few strange coordinates aren't bad per se, it's
+… the structure that introduces the echo that is bad"*; *"Echo is not
+continuation, in fact it's the opposite"*; *"prior text plus the new image and
+the passing of time should be enough… plus accumulated data, mood, ambitions,
+desire"*; and the decision: **"The appropriate data should reach every single
+call."**
+
+**Done (uncommitted at the time of writing; see runtime-map "Wiring changes,
+Sep 11" for the wiring):**
+
+1. *Storage hygiene for the incident* — the countdown regex no longer mangles a
+   decimal, a coordinate-shaped pair opening a sentence is stripped at the mouth
+   like a leaked stamp, an AM/PM rides out with its stamp. Sixteen mouth cases
+   in `debug/test_format_strip.py`, including the ones that must survive
+   ("7 minutes.", "100 years.", "2x4s", "10, 20, 30 years").
+2. *Standing facts* — stillness, head, felt tenor on every caption-family call
+   (caption, reroute, memory, drift, wander hop), durations moving with the
+   clock, in words. Before: 3, 2 and 1 of 458 caption calls. The loop notice
+   stays dosed (a nudge, not data); the expectation check stays per glance and
+   the head line yields to it.
+
+**What to read next run** (same tools as §22–23): the share of caption prompts
+carrying each standing line (should be ~all once two minutes in); the
+prompt-echo rate — captions opening with or restating a standing line ("Nothing
+has happened for…", "I've been looking left for…") — B4's Aug 31 lesson says
+this is where a standing fact "becomes the scene"; whether a coordinate-shaped
+opening ever reaches the feed again (must be 0); tic/chant via
+`measure_voice.py`. If the echo of the standing lines is high, the answer is
+their wording and shape, not a dose — the ruling stands.

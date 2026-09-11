@@ -1173,10 +1173,13 @@ QUIET_ELICIT_EVERY_N = int(os.getenv("QUIET_ELICIT_EVERY_N", 5))
 
 # Unchanged-ness as fact (B4, Aug 31) — boredom's text channel. After this
 # long with no episodic change (arrival, departure, drawing, new sighting),
-# the caption prompt states the duration as a plain fact; re-stated at most
-# every MIN_GAP so a standing fact never becomes the scene.
-UNCHANGED_FACT_AFTER_S = float(os.getenv("UNCHANGED_FACT_AFTER_S", 1200))
-UNCHANGED_FACT_MIN_GAP_S = float(os.getenv("UNCHANGED_FACT_MIN_GAP_S", 600))
+# the caption prompt states the duration as a plain fact.
+# Sep 11 (artist: "the appropriate data should reach every single call"): the
+# line is STANDING — on every caption-family call once the stillness is longer
+# than a moment, duration moving with the clock, in words. The min-gap and the
+# phrase-change dose are gone (MIN_GAP_S kept for env compatibility, unused).
+UNCHANGED_FACT_AFTER_S = float(os.getenv("UNCHANGED_FACT_AFTER_S", 120))
+UNCHANGED_FACT_MIN_GAP_S = float(os.getenv("UNCHANGED_FACT_MIN_GAP_S", 600))  # unused since Sep 11
 
 # B3 want ledger (Aug 31) — the want's lifecycle as recorded fact.
 # The desire line grows its arc tail (age + refusal count) once the want is
@@ -1274,8 +1277,8 @@ QUESTIONS_MAX = 8
 # finally distills from days it actually FELT (it never had before).
 FELT_ARC_ENABLED = os.getenv("FELT_ARC_ENABLED", "true").lower() in ("true", "1", "yes")
 FELT_HISTORY_MAX = 120
-FELT_ARC_AFTER_S = float(os.getenv("FELT_ARC_AFTER_S", 3600))  # steady variant: same tenor held this long
-FELT_ARC_MIN_GAP_S = float(os.getenv("FELT_ARC_MIN_GAP_S", 1800))
+FELT_ARC_AFTER_S = float(os.getenv("FELT_ARC_AFTER_S", 600))  # steady variant: same tenor held this long — STANDING from here on (Sep 11, every call)
+FELT_ARC_MIN_GAP_S = float(os.getenv("FELT_ARC_MIN_GAP_S", 1800))  # the TURN variant's gap only (Sep 11)
 
 LORE_ENABLED = os.getenv("LORE_ENABLED", "true").lower() in ("true", "1", "yes")
 LORE_REVERIES_MAX = 40
@@ -1331,7 +1334,7 @@ CAPTION_INTERVAL_REST_MAX = CAPTION_INTERVAL_FIXED  # was 120 — Sep 10: no res
 # looping is another. Duration edges fire once per threshold of world-verified
 # stillness; loop notices ride when the echo gates have refused the same run
 # several times, or when the compressor names a circling phrase.
-DURATION_EDGE_THRESHOLDS_MIN = [int(x) for x in os.getenv("DURATION_EDGE_THRESHOLDS_MIN", "30,60,120,240,480").split(",")]
+DURATION_EDGE_THRESHOLDS_MIN = [int(x) for x in os.getenv("DURATION_EDGE_THRESHOLDS_MIN", "30,60,120,240,480").split(",")]  # unused since Sep 11: superseded by the STANDING unchanged line (UNCHANGED_FACT_AFTER_S)
 LOOP_NOTICE_AFTER = int(os.getenv("LOOP_NOTICE_AFTER", 3))  # echo-gate refusals of a shared run within LOOP_NOTICE_WINDOW_S
 LOOP_NOTICE_WINDOW_S = int(os.getenv("LOOP_NOTICE_WINDOW_S", 600))
 LOOP_NOTICE_COOLDOWN_S = int(os.getenv("LOOP_NOTICE_COOLDOWN_S", 600))
@@ -1340,8 +1343,14 @@ LOOP_NOTICE_COOLDOWN_S = int(os.getenv("LOOP_NOTICE_COOLDOWN_S", 600))
 PERSONA_CONSOLIDATE_ENABLED = os.getenv("PERSONA_CONSOLIDATE_ENABLED", "true").lower() == "true"
 PERSONA_CONSOLIDATE_EVERY_S = float(os.getenv("PERSONA_CONSOLIDATE_EVERY_S", 20 * 3600))
 # Body as facts (Sep 5, agency round): the machine's own posture, not a borrowed one.
-BODY_HOLD_THRESHOLDS_MIN = [int(x) for x in os.getenv("BODY_HOLD_THRESHOLDS_MIN", "3,10,30,60").split(",")]
+BODY_HOLD_THRESHOLDS_MIN = [int(x) for x in os.getenv("BODY_HOLD_THRESHOLDS_MIN", "3,10,30,60").split(",")]  # unused since Sep 11: the head line is STANDING (HEAD_STANDING_AFTER_S)
 HEAD_HOLD_TOL_DEG = float(os.getenv("HEAD_HOLD_TOL_DEG", 20.0))
+# Sep 11 (artist: "the appropriate data should reach every single call"): after
+# this long in one direction the posture rides every call with its duration;
+# for the first HEAD_TURN_VERDICT_S after a turn the referee's verdict for the
+# new view rides instead (as it was / changed / never looked here).
+HEAD_STANDING_AFTER_S = float(os.getenv("HEAD_STANDING_AFTER_S", 120))
+HEAD_TURN_VERDICT_S = float(os.getenv("HEAD_TURN_VERDICT_S", 45))
 # DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the
 # caption ends with LOOK / EXPECT in the machine's own words; LOOK is executed
 # by the gaze as a "chosen" glance, the next turn states the consequence and,

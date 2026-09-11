@@ -353,6 +353,14 @@ class Captioner(MemoryMixin):
             except Exception:
                 pass
         try:
+            from captioner.prompts import build_standing_facts
+
+            _facts = build_standing_facts(self)  # Sep 11: the time/head/felt facts reach every call
+            if _facts:
+                ask = _facts + "\n" + ask
+        except Exception:
+            pass
+        try:
             text = query_model(
                 prompt=ask,
                 model=MODEL_NAME,
@@ -405,6 +413,14 @@ class Captioner(MemoryMixin):
                 break  # the world interrupts a wander
             move = P(moves[(rr + k) % len(moves)], default="")
             ask = P("wander.hop").format(seed=seed[-220:], move=move)
+            try:
+                from captioner.prompts import build_standing_facts
+
+                _facts = build_standing_facts(self)  # Sep 11: every call, hops included
+                if _facts:
+                    ask = _facts + "\n" + ask
+            except Exception:
+                pass
             try:
                 text = query_model(
                     prompt=ask,
@@ -1050,7 +1066,19 @@ class Captioner(MemoryMixin):
     _ENUM_PREFIX_RE = re.compile(r"^\s*\)?\s*\d{1,2}[).:\]]\s+")
     # "12... " / "16... 15... " countdown prefixes: numbers are the strongest
     # continuation bait there is — strip them, keep any prose that follows.
-    _COUNTDOWN_PREFIX_RE = re.compile(r"^\s*(?:\d{1,4}\s*[.,…!]+[\s\n]*)+")
+    # Sep 11: a stub must END at whitespace or the end of text. "40.548135,
+    # -79.992635" is not a countdown, and eating its "40." mangled a stray
+    # coordinate into "548135, -79.992635" — a shape no gate recognised, which
+    # then bred through the window for two hours (docs/where-we-are-sep9.md §24).
+    # A comma run counts only when it is the WHOLE text ("3, 2, 1."): a run
+    # that continues into prose ("10, 20, 30 years") is a list in speech.
+    _COUNTDOWN_PREFIX_RE = re.compile(r"^\s*(?:(?:\d{1,4}\s*[.…!]+(?:\s+|$))+|\d{1,4}(?:\s*,\s*\d{1,4})+\s*[.…!]*\s*$)")
+    # A coordinate-shaped pair opening a sentence ("40.548135, -79.99",
+    # "547380,-120 The wood…") is a format, not speech: the model's prior for
+    # the word "coordinate", and once stored the strongest line-opening bait
+    # there is (Sep 11: one became 356 of 649 responses). Stripped at the
+    # mouth like a leaked stamp; a run of three or more numbers is left alone.
+    _COORD_PAIR_RE = re.compile(r"(?:^|(?<=[.!?…]\s)|(?<=\n))\s*[-−]?\d+(?:\.\d+)?\s*,\s*[-−]?\d+(?:\.\d+)?(?=[\s.…!?;:]|$)[.…]*\s*")
 
     # Present-tense physical drawing acts. The machine only draws while GRBL
     # executes — and inference is paused then, so a caption claiming an act of
@@ -1123,7 +1151,7 @@ class Captioner(MemoryMixin):
     # the gate then number_chain'd half the run's captions. Leading position
     # is the disambiguator: a caption that OPENS with HH:MM is the render
     # layer's job done by the mouth; mid-sentence time talk stays untouched.
-    _LOG_STAMP_LEAD_RE = re.compile(r"^\s*\d{1,2}:\d{2}\s+(?=\S)")
+    _LOG_STAMP_LEAD_RE = re.compile(r"^\s*\d{1,2}:\d{2}(?:\s*[AaPp]\.?[Mm]\.?)?[.…]*\s+(?=\S)")  # Sep 11: an AM/PM rides with the stamp
 
     # The gap renderer's line — "(about 8 minutes later)" — is render-layer
     # time, same law as the clock stamp: the captioner owns the clock, and a
@@ -1161,6 +1189,7 @@ class Captioner(MemoryMixin):
     def _strip_list_shape(cls, text: str) -> str:
         t = cls._ENUM_PREFIX_RE.sub("", (text or "").strip())
         t = cls._COUNTDOWN_PREFIX_RE.sub("", t)
+        t = cls._COORD_PAIR_RE.sub("", t)
         t = cls._LOG_STAMP_ANY_RE.sub(" ", t)
         t = cls._LOG_STAMP_LEAD_RE.sub("", t)
         t = cls._GAP_MARK_ECHO_RE.sub(" ", t)
@@ -1354,7 +1383,9 @@ class Captioner(MemoryMixin):
             return False
         return not m.string[: m.start()].strip()
 
-    _LEAKED_STAMP_RE = re.compile(r"(?:(?<=^)|(?<=[.!?…]\s)|(?<=\n))\d\d:\d\d\.?\s*[—–-]?\s*")
+    # Sep 11: also eat an AM/PM after the stamp — "12:40 AM... wait, no." used
+    # to be stored as "AM... wait, no.", an orphan that then opened lines.
+    _LEAKED_STAMP_RE = re.compile(r"(?:(?<=^)|(?<=[.!?…]\s)|(?<=\n))\d\d:\d\d(?:\s*[AaPp]\.?[Mm]\.?)?[.…]*\s*[—–-]?\s*")
 
     def _strip_leaked_stamps(self, text: str) -> str:
         """A bare HH:MM at the start of a sentence is the stream's log format

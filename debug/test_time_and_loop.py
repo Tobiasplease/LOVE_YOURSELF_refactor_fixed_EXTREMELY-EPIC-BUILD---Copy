@@ -97,14 +97,18 @@ def agent(still_s, believed=False, confirms=3):
     return a
 
 
+# Sep 11: the duration edge is SUPERSEDED by the standing unchanged line
+# (artist: "the appropriate data should reach every single call") — see
+# debug/test_standing_facts.py for the standing behaviour.
+from captioner.prompts import get_unchanged_line
+import utils.episodic_log as _el
+_el.episodic_log.get_last_event = lambda etype: None
 a = agent(2 * 3600)
-line = build_situational_line(a)
-check("2h still → duration edge fires", "Nothing in the room has changed for" in line, line)
-check("second call → fires once", "Nothing in the room" not in build_situational_line(a))
-a._world_change_ts = time.time()  # the world changed: clock resets
-check("after a change → re-armed, silent under the first threshold", "Nothing in the room" not in build_situational_line(a))
-check("someone believed present → no stillness clock", "Nothing in the room" not in build_situational_line(agent(2 * 3600, believed=True)))
-check("20 min still → below the first threshold", "Nothing in the room" not in build_situational_line(agent(20 * 60)))
+check("no duration edge in the situational line any more", "Nothing in the room has changed for" not in build_situational_line(a))
+check("2h still → the standing line, in words", get_unchanged_line(a) == "Nothing has happened for about two hours.", get_unchanged_line(a))
+check("and again on the next call (standing, not an edge)", get_unchanged_line(a) == "Nothing has happened for about two hours.")
+check("under two minutes → nothing yet", get_unchanged_line(agent(60)) == "", get_unchanged_line(agent(60)))
+check("20 min still → standing", get_unchanged_line(agent(20 * 60)) == "Nothing has happened for about twenty minutes.", get_unchanged_line(agent(20 * 60)))
 
 # --- B3 loop notice: gate source
 b = A()

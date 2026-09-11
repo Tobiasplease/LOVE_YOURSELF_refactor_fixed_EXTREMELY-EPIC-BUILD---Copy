@@ -48,7 +48,7 @@ check(
 )
 check("silent: belief still on", build_standing_absence_line(agent(True, 5 * 60, HIM)) == "")
 line = build_standing_absence_line(agent(False, None, HIM))
-check("fallback: no drop on record, 10 min into the session", line == "No one's been in the room since you woke up, about 10 minutes ago.", line)
+check("fallback: no drop on record, 10 min into the session", line == "No one's been in the room since you woke up, about ten minutes ago.", line)
 check("silent: no drop on record, 30 s into the session (detector settle)", build_standing_absence_line(agent(False, None, HIM, session_s=30)) == "")
 check("silent: no drop on record, stream without a person", build_standing_absence_line(agent(False, None, NO_HIM)) == "")
 check("silent: only mention is beyond the scanned tail", build_standing_absence_line(agent(False, 5 * 60, HIM[:1] + NO_HIM * 5)) == "")
@@ -56,7 +56,7 @@ check("rides: mention inside the tail", build_standing_absence_line(agent(False,
 line = build_standing_absence_line(agent(False, 30, HIM))
 check("grammar: 'just now' has no 'ago'", line == "He left just now; the room's been empty since.", line)
 line = build_standing_absence_line(agent(False, 25 * 60, HIM, regime=False))
-check("plural regime says Someone", line.startswith("Someone left about 20 minutes ago"), line)
+check("plural regime says Someone", line.startswith("Someone left about twenty minutes ago"), line)
 
 # the departure cycle: the edge line speaks, the standing fact yields, then rides next call
 a = agent(False, 1, HIM)

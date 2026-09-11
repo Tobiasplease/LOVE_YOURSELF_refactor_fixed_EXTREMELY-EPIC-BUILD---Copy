@@ -1893,3 +1893,37 @@ STREAM_MODE).
 - **Stores**: full wipe Sep 9 17:29 (`force_memory_reset.py --backup`); the
   script leaves `lore_ledger`, `want_ledger`, `spatial_registry`,
   `vocab_promotion` behind despite claiming a complete reset.
+
+## Wiring changes, Sep 11 (branch `rebuild/pre-mind`) — see docs/where-we-are-sep9.md §24–25
+- **Mouth strippers** (`captioner.py`): `_COUNTDOWN_PREFIX_RE` only eats a stub that
+  ends at whitespace/end ("40.548135" keeps its "40."; a comma run counts only
+  when it is the whole text); new `_COORD_PAIR_RE` in `_strip_list_shape` removes a
+  coordinate-shaped pair opening a sentence ("40.548135, -79.99", "547380,-120");
+  `_LEAKED_STAMP_RE` / `_LOG_STAMP_LEAD_RE` also eat an AM/PM after a stamp (no
+  more stored "AM..." orphans). Cause: the Sep 11 coordinate storm (356/649
+  responses), §24. Test: `debug/test_format_strip.py`.
+- **STANDING FACTS** (`prompts.build_standing_facts`; artist: *"the appropriate
+  data should reach every single call"*): on EVERY caption-family call —
+  `caption`, `caption_reroute`, `memory` (appended to the prompt), `drift_turn` and
+  `wander_hop` (prepended to the ask) — live or not:
+  - `caption.unchanged` *"Nothing has happened for {duration}."* standing from
+    UNCHANGED_FACT_AFTER_S (now 120 s), duration moving; the phrase-change dose,
+    the min-gap and the Sep 5 duration edge are gone (superseded, config vars kept
+    unused);
+  - `caption.looking-for` *"You've been looking {direction} for {duration}."*
+    standing from HEAD_STANDING_AFTER_S (120 s); for the first HEAD_TURN_VERDICT_S
+    (45 s) after a turn the pose-view referee's verdict rides instead
+    (`caption.view-as-was` / `view-changed` / `view-new`), yielding to
+    `caption.expect-check` when that fired this call (`agent._expect_checked_at`);
+    the Sep 5 body-hold thresholds are gone (`build_body_line` keeps the
+    parked/unparked edges only);
+  - `caption.felt-arc-steady` standing from FELT_ARC_AFTER_S (now 600 s), no dose;
+    the TURN variant keeps FELT_ARC_MIN_GAP_S.
+  Words, never integers: `casual_time_string` spells numbers ("about six
+  minutes", "about two hours"); a digit-led fact line was imitated as a
+  digit-led opening. Tests: `debug/test_standing_facts.py`,
+  `debug/test_time_and_loop.py` (B1 rewritten), `debug/test_agency_round.py`.
+  History kept in the `build_standing_facts` docstring (B4's recitation lesson,
+  the 3/2/1-of-458 measurement).
+- **Ops**: `MOOD_SNAPSHOT_FOLDER` in the environment does NOT redirect the run log
+  minted at captioner import — quarantine stubs after running debug scripts.
