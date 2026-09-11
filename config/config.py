@@ -1385,6 +1385,20 @@ HEAD_HOLD_TOL_DEG = float(os.getenv("HEAD_HOLD_TOL_DEG", 20.0))
 # new view rides instead (as it was / changed / never looked here).
 HEAD_STANDING_AFTER_S = float(os.getenv("HEAD_STANDING_AFTER_S", 120))
 HEAD_TURN_VERDICT_S = float(os.getenv("HEAD_TURN_VERDICT_S", 45))
+# EVENT MEMORY (Sep 11, artist: "Things out of the ordinary need to have a lot more weight in
+# the memory… the rarity should also determine the significance at the time of discovery").
+# The last completed event (a visit, a verified change) rides every thought call as a standing
+# fact for a lifetime = RARITY_FACTOR × the gap that preceded it, floored at MIN_S and capped at
+# MAX_S: a visit after a day alone stays six hours, one five minutes after the last stays ten
+# minutes. Above ARRIVAL_RARITY_MIN_S the arrival cue itself states the rarity ("the first in
+# about a day"). PRESENCE_EDGE_STICKY_S: an arrival/departure cue rides until a prompt carrying
+# it was actually sent, at most this long. See captioner/event_memory.py.
+EVENT_MEMORY_ENABLED = os.getenv("EVENT_MEMORY_ENABLED", "true").lower() in ("true", "1", "yes")
+EVENT_MEMORY_RARITY_FACTOR = float(os.getenv("EVENT_MEMORY_RARITY_FACTOR", 0.25))
+EVENT_MEMORY_MIN_S = float(os.getenv("EVENT_MEMORY_MIN_S", 600))
+EVENT_MEMORY_MAX_S = float(os.getenv("EVENT_MEMORY_MAX_S", 6 * 3600))
+ARRIVAL_RARITY_MIN_S = float(os.getenv("ARRIVAL_RARITY_MIN_S", 1200))
+PRESENCE_EDGE_STICKY_S = float(os.getenv("PRESENCE_EDGE_STICKY_S", 120))
 # DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the
 # caption ends with LOOK / EXPECT in the machine's own words; LOOK is executed
 # by the gaze as a "chosen" glance, the next turn states the consequence and,

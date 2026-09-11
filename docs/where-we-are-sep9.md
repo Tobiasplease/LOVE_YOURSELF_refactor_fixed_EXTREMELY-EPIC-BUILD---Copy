@@ -1873,3 +1873,93 @@ the beat exists to leave the stream's trajectory, so the question line
 (*"Follow the thought you're already having — where does it go?"*) rides
 instead. It still does.
 
+
+## 28. The 22:19 walk-past and the 22:26 visit (Sep 11, read at 23:30)
+
+Artist, 23:2x: *"Someone walked past about an hour ago… It left no trace in the
+current real-time captioning."* Then: *"Person detection is notably flaky, the
+awareness can miss many seconds of events due to its nature. There should be a
+way to differentiate a consistent world model from a truly novel event."* And on
+the cue wording: *"'He's come in' isn't very good. This wasn't me, it was a
+different person."* (My own clock was ~6 h off during the first read — I had
+been reading "now" off old log stamps; the ledgers were right.)
+
+**22:19:19 — the walk-past.** A clip frame shows a dark figure filling the right
+half of the picture at arm's length. YOLO: one box, conf 0.76; the skeleton gate
+rejected it (no keypoints at that range/blur). No belief, no cue; the caption on
+that clip talked about the curtain. Correct by the gate's rules, and exactly the
+"flaky" case: a one-second pass at close range gives no skeleton.
+
+**22:26–22:32 — the visit** (pose pass over 331 saved frames + clip frames):
+
+| | time | lag |
+|---|---|---|
+| first gate-passing frame (person at the shelf) | 22:26:26 | |
+| adjudicator: "A person in black clothing standing indoors." | 22:26:34 | +8 s |
+| first caption naming them ("They're still sitting there. The person in the black jacket…") | 22:27:25 | +59 s |
+| arrival noticed as arrival ("The chair was empty just now… Now there's someone in it.") | 22:29:08 | +2 m 42 s |
+| last gate-passing frame | 22:30:33 | |
+| ledger person_left | 22:30:41 | +8 s |
+| "They've gone" cue in a prompt | 22:32:09 | +96 s |
+
+Also: the 22:30 reflection opened on it; the compression's EVENT slot wrote it
+twice; entity, episodic and arrivals ledgers all have it. First arrival since
+22:21 the previous night — a full day.
+
+**Where the trace died.** `build_standing_absence_line` rides only while the
+last ABSENCE_STANDING_TAIL (8) stored lines mention the person, so it stopped
+within two minutes by design. Nothing that outlives the window (ledgers,
+EVENT slot, reflection) reaches a caption call; the standing stillness line
+("Nothing has happened for about an hour") is the event's only shadow. By 23:10
+none of 94 prompts carried it.
+
+**Cue anomalies.** (1) The arrival edge line ("He's come in.") never reached ANY
+prompt this run — the only presence line was the drift turn's *"He's here, just
+out of view right now"* at 22:27:52 (wrong: they were in view). The edge is
+detected and consumed at prompt-build time in `build_situational_line`
+(`_prev_presence_for_line`); no skipped call or extra builder was found in the
+log, and belief transitions are not logged, so the cause is open. Needed
+regardless: log belief ON/OFF as events, and make the edge sticky until a prompt
+carrying it is actually sent. (2) The departure cue's 96 s lag matches
+ADJUDICATED_PERSON_TTL_S = 120: the belief outlives the last sighting by up to
+two minutes. (3) "He" — the singular regime assumes the usual man; the entity
+ledger already had "a person in black clothing". Proposed: "Someone's come in"
+by default, "He's back" only when re-ID says familiar.
+
+**The design thread (artist's).** The consistent world model exists in pieces
+(referee references, spatial registry, entity/arrivals ledgers, the stillness
+clock); the novel event exists as a record; nothing compares the two. The
+arrivals ledger knew this was the first person in a day — rarity should have set
+its lifetime in the frame (hours, in words), not the eight-line window rule.
+
+## 29. Event memory: rarity sets weight (Sep 11, ~23:50)
+
+Artist: *"Things out of the ordinary need to have a lot more weight in the
+memory, of course? … The rarity should also determine the significance at the
+time of discovery — so someone walking in after a period of loneliness should
+be reacted to appropriately like 'finally someone is here' or 'someone walked
+in!'"* Built (runtime-map "EVENT MEMORY"):
+
+- **Weight = rarity**, measured against the machine's own ledgers, room-agnostic.
+  The last completed event rides every thought call as a standing fact for a
+  quarter of the gap that preceded it (ten minutes to six hours). Last night's
+  visit, the first in a day, therefore stays until about 04:30: *"Earlier: The
+  person sitting in the chair left, leaving only the empty seat behind. That was
+  about an hour ago, the first visitor in about a day."* — the middle sentence is
+  the compressor's own, written at 22:30.
+- **Significance at discovery**: the arrival cue states the rarity as a fact —
+  *"Someone's come in — the first in about a day."* The exclamation is the
+  machine's to make (fact in, meaning out).
+- **The three repairs from §28**: belief ON/OFF logged; the arrival/departure
+  cue sticky until a prompt carrying it was actually sent; "He" only on re-ID.
+- The reflection takes a rare visit up once while its line is alive.
+
+Not built (second step, after a day's measurement): the walk-past class — a
+large high-confidence box the skeleton gate rejects on consecutive frames as a
+lower-tier, unverified event.
+
+**What to read:** the standing event line in prompts (share, and that its age
+moves); the next arrival's cue text and its lag from the first gate-passing
+frame (belief events now make this a direct measurement); whether the machine's
+first words after a rare arrival carry the rarity; that the routine form dies
+in ten minutes.

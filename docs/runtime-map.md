@@ -1967,3 +1967,32 @@ STREAM_MODE).
   IDENTITY_EVERY_N_CAPTIONS / DRAWING_LINE_EVERY_N. The `elicit.introspective`
   line (*"Follow the thought you're already having — where does it go?"*) already
   rode every inward beat (Aug 25) and still does.
+- **EVENT MEMORY** (Sep 11 night, artist: *"Things out of the ordinary need to
+  have a lot more weight in the memory… the rarity should also determine the
+  significance at the time of discovery"*; `captioner/event_memory.py`):
+  - `build_last_event_line` (in `build_standing_facts`, so on every thought
+    call): the last COMPLETED event — a visit (`person_left` paired with its
+    `person_arrived`) or a verified change (`world_changed`) — as a standing fact
+    for a lifetime = EVENT_MEMORY_RARITY_FACTOR (0.25) × the gap before it,
+    floored EVENT_MEMORY_MIN_S (600) and capped EVENT_MEMORY_MAX_S (6 h). Gap from
+    the episodic log plus the arrivals ledger. Text: the compressor's own EVENT
+    sentence written during the event (`context_compressor.events`) if any, else
+    a plain ledger fact; age and rarity in words (`caption.last-event`,
+    `caption.last-event-plain`). Suppressed while a visit is in progress. Never
+    stored in the stream.
+  - `arrival_cue_text`: the arrival edge carries its rarity above
+    ARRIVAL_RARITY_MIN_S (1200): `caption.arrival-someone[-rare]`,
+    `caption.arrival-back[-rare]` (re-ID familiar only), `caption.arrival-people[-rare]`;
+    `caption.departure` moved to the registry.
+  - **Sticky edges**: `build_situational_line` stores the cue in
+    `agent._presence_edge` and rides it on every build until the captioner marks
+    it sent after a successful generate (PRESENCE_EDGE_STICKY_S cap). The 22:26
+    arrival's cue never reached a prompt (§28).
+  - `presence_who`: "He" only when `_presence_arrival_familiar` (re-ID); the
+    singular-regime prior no longer names anyone (drift.presence, absence line).
+  - Belief transitions are logged: debug action `presence_belief` (ON with
+    resumed/arrival, OFF with the absence-watch time).
+  - `reflection._next_subject`: while a rare visit's line is alive, "the visitor"
+    jumps the rotation once per event.
+  Test: `debug/test_event_memory.py`; `debug/test_absence_standing.py` updated
+  to the pronoun rule.

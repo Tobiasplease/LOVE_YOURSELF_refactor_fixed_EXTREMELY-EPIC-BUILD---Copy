@@ -327,7 +327,9 @@ class Captioner(MemoryMixin):
                 recent = frame_buffer.get_recent_with_metadata(seconds=6, max_frames=1)
                 in_frame = bool(recent and (recent[-1].get("detection") or {}).get("person"))
                 if not in_frame:
-                    who = "He" if getattr(self, "_presence_singular_regime", True) else "Someone"
+                    from captioner.prompts import presence_who
+
+                    who = presence_who(self)  # Sep 11: "He" only on re-ID
                     ask = P("drift.presence").format(who=who) + "\n" + ask
             else:
                 # Sep 4 evening — the inverse hole: belief OFF, stream still
@@ -851,6 +853,11 @@ class Captioner(MemoryMixin):
                     _reid = None
                 resumed = recently_present if _reid is None else (_reid is True)
                 self._presence_believed = True
+                log_json_entry(  # Sep 11: belief transitions are events now — the 22:26 read had to guess them
+                    LogType.DEBUG,
+                    {"message": "Presence belief ON", "action": "presence_belief", "believed": True, "resumed": bool(resumed)},
+                    print_message=f"[👤] presence believed ON ({'resumed' if resumed else 'arrival'})",
+                )
                 arrival = not resumed  # OFF->ON edge — the only genuine arrival
                 if arrival:
                     # Sep 5 (agency round): a want about a person is MET by a real
@@ -944,6 +951,11 @@ class Captioner(MemoryMixin):
                         pass
             if self._absence_watch_s > PRESENCE_BELIEF_DECAY_SECONDS or getattr(self, "_absence_episodes", 0) >= 3:
                 self._presence_believed = False  # looked, repeatedly, nobody there — they really left
+                log_json_entry(
+                    LogType.DEBUG,
+                    {"message": "Presence belief OFF", "action": "presence_belief", "believed": False, "absence_watch_s": float(getattr(self, "_absence_watch_s", 0.0) or 0.0)},
+                    print_message="[👤] presence believed OFF (verified absence)",
+                )
                 self._presence_dropped_at = now  # anchors the resumption prior on the next sighting
                 # Sep 5: the departure reaches the episodic record — nothing ever
                 # wrote person_left, so the visitor reflection read every arrival
@@ -2628,6 +2640,10 @@ class Captioner(MemoryMixin):
                                 )
 
                         caption = self._trim_to_boundary(self._strip_list_shape(_generate(gen_options)))
+                        if caption and not str(caption).startswith(("[WARNING]", "[ERROR]")):
+                            _edge = getattr(self, "_presence_edge", None)
+                            if _edge and not _edge.get("sent"):
+                                _edge["sent"] = True  # Sep 11: the edge line stays until a prompt carrying it was actually sent
 
                         # THE SILENCE BEAT (Sep 2): the genre menu now ends
                         # "or nothing at all — staying quiet is yours to

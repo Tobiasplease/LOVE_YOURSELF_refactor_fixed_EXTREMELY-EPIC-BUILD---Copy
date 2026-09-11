@@ -42,7 +42,7 @@ def agent(believed, dropped_ago, stream, regime=True, session_s=600):
 
 
 line = build_standing_absence_line(agent(False, 5 * 60, HIM))
-check("rides: belief off, dropped 5 min, stream mentions him", line == "He left a few minutes ago; the room's been empty since.", line)
+check("rides: belief off, dropped 5 min, stream mentions him (Sep 11: 'Someone' unless re-ID says familiar)", line == "Someone left a few minutes ago; the room's been empty since.", line)
 check(
     "silent: stream without a person mention ('they' about shelves does not count)", build_standing_absence_line(agent(False, 5 * 60, NO_HIM)) == ""
 )
@@ -54,7 +54,7 @@ check("silent: no drop on record, stream without a person", build_standing_absen
 check("silent: only mention is beyond the scanned tail", build_standing_absence_line(agent(False, 5 * 60, HIM[:1] + NO_HIM * 5)) == "")
 check("rides: mention inside the tail", build_standing_absence_line(agent(False, 5 * 60, NO_HIM * 3 + HIM[:1])) != "")
 line = build_standing_absence_line(agent(False, 30, HIM))
-check("grammar: 'just now' has no 'ago'", line == "He left just now; the room's been empty since.", line)
+check("grammar: 'just now' has no 'ago'", line == "Someone left just now; the room's been empty since.", line)
 line = build_standing_absence_line(agent(False, 25 * 60, HIM, regime=False))
 check("plural regime says Someone", line.startswith("Someone left about twenty minutes ago"), line)
 

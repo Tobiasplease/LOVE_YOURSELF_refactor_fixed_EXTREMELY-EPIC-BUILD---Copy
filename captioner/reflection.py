@@ -108,6 +108,20 @@ class ReflectionLoop:
         from captioner.prompts import get_reflection_subjects
 
         subjects = get_reflection_subjects()
+        # Sep 11 (event memory): while a rare visit is still a live standing
+        # fact, the long-form thought takes it up once — the visitor subject
+        # jumps the rotation, one time per event.
+        try:
+            from captioner import event_memory as _em
+
+            live = _em.last_event()
+            if live and live["kind"] == _em.VISIT_KIND and live["alive"] and live["rare"] and getattr(self, "_event_reflected_ts", None) != live["ts"] and self._has_visitor_material():
+                self._event_reflected_ts = live["ts"]
+                for subject, question in subjects:
+                    if subject == "the visitor":
+                        return subject, question
+        except Exception:
+            pass
         for _ in range(len(subjects)):
             subject, question = subjects[self._subject_idx]
             self._subject_idx = (self._subject_idx + 1) % len(subjects)

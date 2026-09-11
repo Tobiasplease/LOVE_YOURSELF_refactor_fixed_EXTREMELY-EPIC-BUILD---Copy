@@ -646,6 +646,41 @@ def get_head_line(agent) -> str:
         return ""
 
 
+def presence_who(agent) -> str:
+    """Sep 11 (artist: "'He's come in' isn't very good. This wasn't me, it was a
+    different person."). The definite "He" only when re-identification says
+    the arrival is familiar; otherwise "Someone". The singular-regime prior
+    (one-man studio) no longer names anyone by itself."""
+    return "He" if getattr(agent, "_presence_arrival_familiar", False) else "Someone"
+
+
+def build_last_event_line(agent) -> str:
+    """WHAT LAST HAPPENED (Sep 11, artist: "Things out of the ordinary need to
+    have a lot more weight in the memory"). The most recent completed event —
+    a visit, a verified change — as a standing fact whose lifetime is set by
+    its rarity (captioner/event_memory.py). In the machine's own words when
+    the compressor wrote any, else a plain fact; age and rarity in words. Not
+    while a visit is in progress (the presence lines carry that)."""
+    try:
+        if not bool(getattr(config, "EVENT_MEMORY_ENABLED", True)):
+            return ""
+        from captioner import event_memory as _em
+
+        ev = _em.last_event()
+        if not ev or not ev["alive"]:
+            return ""
+        if ev["kind"] == _em.VISIT_KIND and getattr(agent, "_presence_believed", False):
+            return ""
+        what = _em.event_words(ev)
+        age = casual_time_string(ev["age_s"] / 60.0)
+        rarity = _em.rarity_phrase(ev["kind"], ev["gap_s"])
+        if rarity:
+            return P("caption.last-event").format(what=what, age=age, rarity=rarity)
+        return P("caption.last-event-plain").format(what=what, age=age)
+    except Exception:
+        return ""
+
+
 def build_standing_facts(agent, include_felt: bool = True) -> str:
     """STANDING FACTS (Sep 11). Artist's ruling: "the appropriate data should
     reach every single call." Stillness, the head, and the felt tenor ride on
@@ -659,7 +694,7 @@ def build_standing_facts(agent, include_felt: bool = True) -> str:
     facts in 3, 2 and 1 of 458 caption calls — the artist's "prior text plus
     accumulated data plus the passing of time" was connected at a quarter of
     its plugs. The recitation risk is accepted and measured, not dosed away."""
-    parts = [get_unchanged_line(agent), get_head_line(agent)]
+    parts = [get_unchanged_line(agent), build_last_event_line(agent), get_head_line(agent)]
     if include_felt:
         parts.append(get_felt_arc_line(agent))
     return "\n".join(x for x in parts if x)
@@ -1297,7 +1332,7 @@ def build_standing_absence_line(agent) -> str:
         return ""
     _note_absence_ride(agent, True)
     if dropped > 0:
-        who = "He" if getattr(agent, "_presence_singular_regime", True) else "Someone"
+        who = presence_who(agent)  # Sep 11: "He" only on re-ID
         ago = casual_time_string((time.time() - dropped) / 60.0)
         when = ago if ago == "just now" else f"{ago} ago"
         return P("caption.absence-standing").format(who=who, when=when)
@@ -1425,6 +1460,30 @@ def build_loop_notice_line(agent) -> str:
     return line
 
 
+def arrival_cue_text(agent) -> str:
+    """The arrival edge line with its rarity (Sep 11). The gap before this
+    arrival comes from the ledgers (event_memory.gap_before); above
+    ARRIVAL_RARITY_MIN_S the cue states it — "the first in about a day". The
+    machine's reaction to that is its own."""
+    try:
+        from captioner import event_memory as _em
+
+        gap = _em.gap_before(time.time(), _em.VISIT_KIND)
+        rare = _em.is_rare(gap)
+        gap_words = casual_time_string(gap / 60.0) if rare else ""
+    except Exception:
+        rare, gap_words = False, ""
+    if getattr(agent, "_presence_arrival_familiar", False):
+        key = "caption.arrival-back"
+    elif getattr(agent, "_presence_arrival_count", 1) > 1:
+        key = "caption.arrival-people"
+    else:
+        key = "caption.arrival-someone"
+    if rare:
+        return P(key + "-rare").format(gap=gap_words)
+    return P(key)
+
+
 def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str = "idle") -> str:
     """The DELTA line: only what CHANGED since the last caption, delivered as a
     brief interruption to the ongoing thought — never a restatement of standing
@@ -1453,19 +1512,21 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
     # arriving IS him unless re-ID says back, or the count says company.
     believed = bool(getattr(agent, "_presence_believed", False))
     prev = getattr(agent, "_prev_presence_for_line", None)
+    # Sep 11: (1) the edge is STICKY — detected here, but it rides until a
+    # prompt carrying it has actually been sent (captioner marks "sent" after a
+    # successful generate; the 22:26 arrival's cue never reached a prompt);
+    # (2) the arrival carries its RARITY as a fact (artist: "someone walking in
+    # after a period of loneliness should be reacted to appropriately"); (3)
+    # "He" only when re-ID says familiar (presence_who).
     if believed and prev is False:
-        if getattr(agent, "_presence_arrival_familiar", False):
-            parts.append("He's back.")
-        elif getattr(agent, "_presence_arrival_count", 1) > 1:
-            parts.append("People have come in.")
-        elif getattr(agent, "_presence_singular_regime", True):
-            parts.append("He's come in.")
-        else:
-            parts.append("Someone's come in.")
+        agent._presence_edge = {"text": arrival_cue_text(agent), "ts": _time.time(), "sent": False}
     elif (not believed) and prev is True:
-        parts.append("They've gone — the room's quiet again.")
+        agent._presence_edge = {"text": P("caption.departure"), "ts": _time.time(), "sent": False}
         agent._absence_edge_cycle = True  # the standing absence fact yields to the edge this call
     agent._prev_presence_for_line = believed
+    _edge = getattr(agent, "_presence_edge", None)
+    if _edge and not _edge.get("sent") and _time.time() - float(_edge.get("ts", 0)) < float(getattr(config, "PRESENCE_EDGE_STICKY_S", 120)):
+        parts.append(_edge["text"])
 
     # The gaze's own deliberate acts are events too: when it turned to a
     # remembered object, the mind should know the view change was its own
