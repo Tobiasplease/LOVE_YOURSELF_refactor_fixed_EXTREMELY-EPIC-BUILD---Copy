@@ -1948,3 +1948,22 @@ STREAM_MODE).
   from the previous native call (the stale-clip guard). Test:
   `debug/test_native_video.py [--live]`. The `superframe` mode (llama-video,
   3.5 fork) is dead code awaiting removal.
+- **Every thought call carries the picture** (Sep 11, artist: *"the inward beats
+  should carry a picture still, as established many times prior. No call should
+  be without visual information"*): the inward beat now sends the clip (native)
+  or the still like any caption call; `_reroute_repeat`, memory mode and the
+  wander hops send the current frame (`image=img_path`). Text-processing calls
+  (compression, distillation, audits, paper check) and the reflection remain
+  image-less. A native clip needs two buffer frames; the boot's first cycle sends
+  its one still.
+- **The inward beat's balance** (Sep 11, artist: *"the inward beats need to
+  prioritise the internality of the machine without omitting the space around
+  it"*): the inward beat sends the STILL (native mode's clip is for regular
+  calls), and its interior carriers ride undosed — `caption.lore`, the dated
+  self-conclusion + open question (`identity_material_lines`), the drawing arc
+  (`_drawing_line_due`), the machine's own question line — via
+  `agent._inward_beat`, set in `_process_frame` where `inward` is decided.
+  Regular calls keep LORE_LINE_EVERY_N / QUESTION_LINE_EVERY_N /
+  IDENTITY_EVERY_N_CAPTIONS / DRAWING_LINE_EVERY_N. The `elicit.introspective`
+  line (*"Follow the thought you're already having — where does it go?"*) already
+  rode every inward beat (Aug 25) and still does.

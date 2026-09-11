@@ -341,6 +341,8 @@ def _identity_due(agent, mode: str) -> bool:
     # anyone else. Dosed like the other modes unless the switch is off.
     if mode == "introspective" and not bool(getattr(config, "IDENTITY_DOSE_ALL_MODES", True)):
         return True
+    if getattr(agent, "_inward_beat", False):
+        return True  # Sep 11 (artist): the inward beat prioritises the interior — its own last conclusion rides every beat
     n = int(getattr(config, "IDENTITY_EVERY_N_CAPTIONS", 6))
     if n <= 0:
         return True
@@ -1601,6 +1603,8 @@ def _drawing_line_due(agent) -> bool:
         return True
     if agent is None:
         return True
+    if getattr(agent, "_inward_beat", False):
+        return True  # Sep 11: the inward beat carries the drawing arc every time
     n = int(getattr(agent, "_drawing_line_counter", 0) or 0) + 1
     agent._drawing_line_counter = n
     if int(getattr(agent, "_caption_count", 0) or 0) <= 2:
@@ -1669,7 +1673,7 @@ def get_lore_line(agent) -> str:
             return ""
         counter = getattr(agent, "_lore_line_counter", 0) + 1
         agent._lore_line_counter = counter
-        if counter % max(LORE_LINE_EVERY_N, 1) != 0:
+        if counter % max(LORE_LINE_EVERY_N, 1) != 0 and not getattr(agent, "_inward_beat", False):  # Sep 11: undosed on an inward beat
             return ""
         from utils.lore_ledger import lore_ledger
 
@@ -1696,7 +1700,7 @@ def get_question_line(agent) -> str:
             return ""
         counter = getattr(agent, "_question_line_counter", 0) + 1
         agent._question_line_counter = counter
-        if counter % max(QUESTION_LINE_EVERY_N, 1) != 0:
+        if counter % max(QUESTION_LINE_EVERY_N, 1) != 0 and not getattr(agent, "_inward_beat", False):  # Sep 11: undosed on an inward beat
             return ""
         from utils.lore_ledger import lore_ledger
 

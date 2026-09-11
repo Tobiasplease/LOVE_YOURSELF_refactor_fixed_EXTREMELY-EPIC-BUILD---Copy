@@ -378,9 +378,9 @@ class Captioner(MemoryMixin):
             return
         stored = self._absorb_drift_text(text, ask, now)
         if stored:
-            self._wander(stored)
+            self._wander(stored, img_path=img_path)
 
-    def _wander(self, seed: str) -> None:
+    def _wander(self, seed: str, img_path: str = None) -> None:
         """WANDER (Sep 5, introspection round). The artist's early system went
         from the dog, to wanting to play with it, to how dogs regulate their
         temperature, to how technology and art connect — a chain of scope moves,
@@ -425,7 +425,7 @@ class Captioner(MemoryMixin):
                 text = query_model(
                     prompt=ask,
                     model=MODEL_NAME,
-                    image=None,
+                    image=img_path,  # Sep 11 (artist): no call without visual information — a hop looks too
                     system_prompt=P("drift.system"),
                     timeout=60,
                     log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -1506,7 +1506,7 @@ class Captioner(MemoryMixin):
                     return run
         return ""
 
-    def _reroute_repeat(self, caption: str, reason: str, gen_options, gate_ctx_hint: str = ""):
+    def _reroute_repeat(self, caption: str, reason: str, gen_options, gate_ctx_hint: str = "", img_path: str = None):
         """Sep 10: a detected style-class repeat is never aired. Re-ask the same
         cycle in an inward mode (image-less, like the interiority beat) and hand
         back the pivot — or None, which the caller turns into a chosen silence.
@@ -1534,7 +1534,7 @@ class Captioner(MemoryMixin):
             text = query_model(
                 prompt=user_prompt or "...",
                 model=_model_label,
-                image=None,
+                image=img_path,  # Sep 11 (artist): no call without visual information
                 system_prompt=system_prompt,
                 timeout=60,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -2125,7 +2125,7 @@ class Captioner(MemoryMixin):
                         caption = query_model(
                             prompt=memory_prompt,
                             model=_model_label,
-                            image=None,
+                            image=img_path,  # Sep 11 (artist): no call without visual information
                             system_prompt=memory_system,
                             timeout=60,
                             log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -2178,6 +2178,7 @@ class Captioner(MemoryMixin):
                             and len(self._stream) >= 2
                             and self._caption_count % INTROSPECT_INTERVAL == 0
                         )
+                        self._inward_beat = bool(inward)  # Sep 11: the interior carriers ride undosed on an inward beat (prompts.py)
 
                         # THE CLOSE LOOK (Aug 28): the gaze just revisited a
                         # remembered object and the detector confirmed it there
@@ -2463,8 +2464,15 @@ class Captioner(MemoryMixin):
                         from config.config import VIDEO_NATIVE_FRAMES as _vnative_frames
 
                         _native = _vmode == "native"
+                        # Sep 11 (artist): "No call should be without visual information" — the
+                        # inward beat looks too (it used to think image-less by design), but
+                        # at the STILL, not the clip: "the inward beats need to prioritise the
+                        # internality of the machine without omitting the space around it" —
+                        # a clip carries motion to narrate, a still is the space, present.
                         if _native and _vnative_always and not inward and not close_look and VIDEO_MODE_ENABLED and bool(recent_meta):
                             use_video = True
+                        if _native and use_video and len(recent_meta) < 2:
+                            use_video = False  # a clip needs two frames; the boot's first cycle sends its one still
                         if use_video:
                             # Ego-motion frames inside a superframe pair encode the
                             # whole room as shifting, which the model reads as people
@@ -2595,7 +2603,7 @@ class Captioner(MemoryMixin):
                             # look → the object's crop (look closely). Otherwise
                             # send the frame; on eye contact send the face crop, not a
                             # wide shot where it's a hundred-pixel smudge.
-                            send_path = None if inward else img_path
+                            send_path = img_path  # Sep 11 (artist): no call without visual information — inward beats included
                             if send_path and close_look:
                                 send_path = close_look["path"]
                             elif send_path and getattr(self, "_eye_contact_now", False) and reactivity_data:
@@ -2722,7 +2730,7 @@ class Captioner(MemoryMixin):
                                 # REPEAT_REROUTE_ENABLED). The repeat stays loop evidence; the reader
                                 # gets the pivot, the stream keeps it.
                                 self._note_loop_hit(caption, reason)
-                                _pivot, _pmode = self._reroute_repeat(caption, reason, gen_options)
+                                _pivot, _pmode = self._reroute_repeat(caption, reason, gen_options, img_path=img_path)
                                 if _pivot:
                                     log_json_entry(
                                         LogType.DEBUG,

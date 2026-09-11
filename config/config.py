@@ -1169,6 +1169,16 @@ PRESENCE_REID_MAX_AGE = 21600.0  # seconds; gallery entries older than this (6h)
 # its drawings, why it's here) instead of cataloguing objects. The external
 # observation stream was "completely external"; this weaves in depth. 0 = off.
 INTROSPECT_INTERVAL = 4
+# Sep 11 (artist): "the inward beats should carry a picture still, as established many times prior.
+# No call should be without visual information." The inward beat, the reroute, memory mode and
+# the wander hops all send the current frame now (captioner.py); only the text-processing
+# calls (compression, distillation, audits) and the reflection stay image-less.
+# Balance (artist, same day): "the inward beats need to prioritise the internality of the
+# machine without omitting the space around it" — the inward beat gets the STILL (not the
+# clip) and its interior carriers ride undosed: the lore line, its dated self-conclusion and
+# open question, the drawing arc (agent._inward_beat, read by prompts.py). Regular calls
+# keep their doses (LORE_LINE_EVERY_N, QUESTION_LINE_EVERY_N, IDENTITY_EVERY_N_CAPTIONS,
+# DRAWING_LINE_EVERY_N).
 
 # Identity dosing (Aug 22): the self-description + durable ledger used to ride
 # EVERY caption, which turned identity into a script — "I invent imaginary

@@ -1848,3 +1848,28 @@ baseline: still 4%, inward 9%, drift turn 11%); whether a head turn is now read
 as the camera moving; caption-call duration and model-busy share (baseline
 4.3 s / 33%); any `caption_native_video_failed` entries; the `[0m0.00s]` chunk's
 echo, if any; tic and chant via `measure_voice.py`.
+
+**17:15 — and every thought call looks.** Artist: *"The inward beats should
+carry a picture still as established many times prior. No call should be
+without visual information."* The inward beat, the reroute, memory mode and the
+wander hops now carry the frame (the inward beat the clip). Restarted 17:15.
+The first native boot (17:06) had sent stills on every call because the old
+steady-frame filter counts the breathing sway as camera motion (0/6, 1/6, 2/6
+steady); native mode now sends the last four frames as they are.
+
+**~17:25 — the inward beat's balance.** Artist: *"The trick is balancing the
+image with the internal data. The inward beats need to prioritise the
+internality of the machine without omitting the space around it."* Found: the
+inward beat had been interior mostly by subtraction (no picture); its
+introspective context adds only the dosed drawing-arc line, and every other
+interior carrier rides by dose on every call alike. Now: the inward beat gets
+the still, not the clip, and the lore line, its dated self-conclusion and open
+question, and the drawing arc ride on every inward beat (regular calls keep
+their doses). The wording of those lines is the artist's. Restarted ~17:25.
+"The question is the door" — a code comment, never seen by the model: on a
+normal hybrid call the mid-sentence prefill leads the next thought, so the
+elicitation question is suppressed; on an inward beat there was no picture and
+the beat exists to leave the stream's trajectory, so the question line
+(*"Follow the thought you're already having — where does it go?"*) rides
+instead. It still does.
+
