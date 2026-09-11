@@ -164,7 +164,12 @@ def rarity_phrase(kind: str, gap_s: Optional[float]) -> str:
 def event_words(ev: Dict) -> str:
     """The sentence for the event: the machine's own if it has one, else a
     plain fact from the ledger, in words."""
-    if ev.get("words"):
+    # Own words only when SHORT (Sep 12 00:05): the first live line carried a
+    # 24-word mid-visit sentence — "…only their back remains visible as they
+    # sit hunched over the desk" — which, riding every prompt for hours in an
+    # empty room, is a phantom-presence seed. A short sentence is a memory; a
+    # long one is a scene. Past the cap the ledger fact speaks instead.
+    if ev.get("words") and len(ev["words"].split()) <= int(_cfg("EVENT_MEMORY_OWN_WORDS_MAX", 18)):
         w = ev["words"].strip()
         return w if w.endswith((".", "!", "?")) else w + "."
     from captioner.prompts import casual_time_string

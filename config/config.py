@@ -1399,6 +1399,7 @@ EVENT_MEMORY_MIN_S = float(os.getenv("EVENT_MEMORY_MIN_S", 600))
 EVENT_MEMORY_MAX_S = float(os.getenv("EVENT_MEMORY_MAX_S", 6 * 3600))
 ARRIVAL_RARITY_MIN_S = float(os.getenv("ARRIVAL_RARITY_MIN_S", 1200))
 PRESENCE_EDGE_STICKY_S = float(os.getenv("PRESENCE_EDGE_STICKY_S", 120))
+EVENT_MEMORY_OWN_WORDS_MAX = int(os.getenv("EVENT_MEMORY_OWN_WORDS_MAX", 18))  # the machine's own sentence for an event rides only if this short; longer → the ledger fact (a long sentence is a scene, not a memory)
 # DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the
 # caption ends with LOOK / EXPECT in the machine's own words; LOOK is executed
 # by the gaze as a "chosen" glance, the next turn states the consequence and,

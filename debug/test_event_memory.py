@@ -64,6 +64,9 @@ check("the compressor's own words are preferred", line.startswith("Earlier: The 
 CC.events.append({"event": "The red foam finger was confirmed to not be present in the room.", "timestamp": T - 3650})
 line = build_last_event_line(agent())
 check("a newer sentence about something else is not the visit's words", "The person sitting in the chair left" in line and "foam finger" not in line, line)
+CC.events[:] = [{"event": "The occupant of the chair is no longer present; only their back remains visible as they sit hunched over the desk looking at a phone.", "timestamp": T - 3900}]
+line = build_last_event_line(agent())
+check("a long mid-event sentence yields to the ledger fact", line.startswith("Earlier: Someone came in, stayed a few minutes, and left."), line)
 check("not while a visit is in progress", build_last_event_line(agent(_presence_believed=True)) == "")
 
 # --- a routine visit: five minutes after the previous one, an hour ago → dead
