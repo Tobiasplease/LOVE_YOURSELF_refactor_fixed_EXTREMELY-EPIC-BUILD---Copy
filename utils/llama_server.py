@@ -904,6 +904,143 @@ def query_llama_server(
 # ---------------------------------------------------------------------------
 
 
+_native_last_sig = None  # the stale-clip guard (see _query_native_video)
+
+
+def _encode_clip(frames: List[bytes], fps: float, scale: str) -> bytes:
+    """JPEG frames → a small H.264 mp4 (faststart) via ffmpeg. The server
+    decodes it with its own ffmpeg at its sampling fps, so the clip is encoded
+    at exactly that rate: N frames in → N frames sampled → N/2 super-frames."""
+    import os as _os
+    import subprocess
+    import tempfile
+
+    fd, out = tempfile.mkstemp(suffix=".mp4")
+    _os.close(fd)
+    try:
+        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "image2pipe", "-vcodec", "mjpeg", "-framerate", str(fps), "-i", "-"]
+        if scale:
+            cmd += ["-vf", f"scale={scale}"]
+        cmd += ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]
+        subprocess.run(cmd, input=b"".join(frames), check=True, timeout=20, capture_output=True)
+        with open(out, "rb") as f:
+            return f.read()
+    finally:
+        try:
+            _os.unlink(out)
+        except OSError:
+            pass
+
+
+def _query_native_video(
+    prompt: str,
+    frames: List[bytes],
+    system_prompt: Optional[str] = None,
+    options: Optional[dict] = None,
+    timeout: int = 60,
+    history: Optional[List[str]] = None,
+    react: bool = False,
+    clip_dir: Optional[str] = None,
+) -> str:
+    """NATIVE VIDEO (Sep 11, artist: "It has native video awareness so it should
+    realise the difference between a moving camera and objects moving in the
+    room" / "try with the proposed video path just to see what happens").
+
+    The frames ride as ONE video — `input_video`, raw base64 — and mainline
+    llama.cpp (video input since PR #24269, June 2026; Qwen-VL super-frame
+    pairing PR #21858) decodes it with ffmpeg and encodes it temporally. No
+    inter-frame markers, no motion sentences: probed on this server with
+    Qwen3.8-27B, a panning clip came back "the camera is panning slowly to the
+    right", an object sliding in a fixed view came back "the camera is static,
+    but the small wooden rack… slides", eight real frames with head turns came
+    back "the camera pans around" — the camera/world split we had been
+    scripting by hand (docs/where-we-are-sep9.md §26).
+
+    Known costs on the Aug 17 build: the server samples at a fixed 4 fps and
+    prepends a "[0m0.00s]" text chunk (newer builds: --video-fps,
+    --video-timestamp-interval); every frame is floored to ≥1024 tokens by
+    --image-min-tokens, so 4 frames → 2 super-frames ≈ 3.2k prompt tokens ≈
+    5.4 s here (a still is 1.1k / 2.3 s).
+
+    STALE-CLIP GUARD: this build gives a lazily decoded video no content id, so
+    with cache_prompt on, a request whose token prefix matches the previous one
+    is served the PREVIOUS clip's KV (measured: 5229/5233 cached, the model
+    described the old clip). The prefix normally changes every call (the
+    stream grows); when it does not — an unchanged window, a retry — the cache
+    is turned off for that call. Current master hashes the video bytes."""
+    global _native_last_sig
+    from config.config import VIDEO_NATIVE_FPS, VIDEO_NATIVE_SCALE
+
+    clip = _encode_clip(frames, float(VIDEO_NATIVE_FPS), VIDEO_NATIVE_SCALE)
+    clip_path = None
+    if clip_dir:
+        try:
+            import os as _os
+
+            _os.makedirs(clip_dir, exist_ok=True)
+            clip_path = _os.path.join(clip_dir, f"clip_{int(time.time())}.mp4")
+            with open(clip_path, "wb") as f:
+                f.write(clip)
+        except Exception:
+            clip_path = None
+    messages = []
+    if system_prompt and system_prompt.strip():
+        messages.append({"role": "system", "content": system_prompt})
+    user_content = [
+        {"type": "input_video", "input_video": {"data": base64.b64encode(clip).decode("utf-8")}},
+        {"type": "text", "text": prompt},
+    ]
+    prefill = _append_stream_and_user(messages, history, {"role": "user", "content": user_content}, react=react)
+    sig = hash(("\n".join(history or []), prompt, system_prompt or "", react))
+    cache_ok = sig != _native_last_sig
+    _native_last_sig = sig
+    payload = {
+        "messages": messages,
+        "stream": False,
+        "cache_prompt": cache_ok,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    if options:
+        payload["temperature"] = options.get("temperature", 0.8)
+        if "top_p" in options:
+            payload["top_p"] = options["top_p"]
+        if "num_predict" in options or "max_tokens" in options:
+            payload["max_tokens"] = options.get("max_tokens", options.get("num_predict", 60))
+        if "repeat_penalty" in options:
+            payload["repeat_penalty"] = options["repeat_penalty"]
+        _forward_sampler_options(payload, options)
+    _vt0 = time.time()
+    endpoint = f"{LLAMA_SERVER_URL}/v1/chat/completions"
+    response = requests.post(endpoint, json=payload, timeout=timeout)
+    response.raise_for_status()
+    data = response.json()
+    response_text = _clean_continuation(data.get("choices", [{}])[0].get("message", {}).get("content", ""), prefill)
+    _usage = data.get("usage", {}) or {}
+    print(
+        f"[VIDEO native] {len(frames)} frames → {len(clip) // 1024} KB clip, prompt {_usage.get('prompt_tokens', '?')} tok"
+        f" (cached {(_usage.get('prompt_tokens_details') or {}).get('cached_tokens', '?')}), {time.time() - _vt0:.1f}s{'' if cache_ok else ', cache off (unchanged prefix)'}"
+    )
+    log_llm_call(
+        prompt=prompt,
+        model="llama-server",
+        response=response_text,
+        success=True,
+        timeout=timeout,
+        log_dir=MOOD_SNAPSHOT_FOLDER,
+        system_prompt=system_prompt,
+        prompt_type="caption",
+        api_endpoint=endpoint,
+        image_path=clip_path,
+        history_len=len(history or []),
+        stream_mode=(_stream_mode() + ("-react" if react else "")) if history else None,
+        num_frames=len(frames),
+        prefill_tail=prefill[-150:] if prefill else None,
+        duration_s=time.time() - _vt0,
+    )
+    _note_query_outcome(None)
+    return response_text
+
+
 def _query_multi_image(
     prompt: str,
     frames: List[bytes],
@@ -1182,6 +1319,7 @@ def query_llama_server_video(
     history: Optional[List[str]] = None,
     react: bool = False,
     frame_ts: Optional[List[float]] = None,
+    clip_dir: Optional[str] = None,
 ) -> str:
     """
     Query llama-server with multiple video frames.
@@ -1239,6 +1377,34 @@ def query_llama_server_video(
 
             mode = VIDEO_MODE
 
+        if mode == "native":
+            try:
+                return _query_native_video(
+                    prompt=prompt,
+                    frames=frames,
+                    system_prompt=system_prompt,
+                    options=options,
+                    timeout=timeout,
+                    history=history,
+                    react=react,
+                    clip_dir=clip_dir,
+                )
+            except Exception as e:
+                _note_query_outcome(str(e))
+                log_llm_call(
+                    prompt=prompt,
+                    model="llama-server",
+                    response=None,
+                    success=False,
+                    error_message=str(e),
+                    timeout=timeout,
+                    log_dir=MOOD_SNAPSHOT_FOLDER,
+                    system_prompt=system_prompt,
+                    prompt_type="caption_native_video_failed",
+                    num_frames=len(frames),
+                )
+                print(f"[llama-server] Native video failed ({e}), falling back to multi-image")
+                mode = "multi"
         if mode == "superframe":
             try:
                 return _query_superframe(

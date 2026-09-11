@@ -57,7 +57,31 @@ VIDEO_MODE_ENABLED = os.getenv("VIDEO_MODE_ENABLED", "true").lower() == "true"
 # Plain multi-image sends legible stills, runs on STANDARD llama.cpp mtmd (no
 # patched fork — frees model choice for the upgrade A/B), and keeps the same
 # upstream motion/steady-frame decision logic. "superframe" stays a toggle.
-VIDEO_MODE = os.getenv("VIDEO_MODE", "multi")  # "multi" (plain multi-image) or "superframe" (Conv3D temporal encoding via llama-video)
+# "native" (Sep 11, artist: "try with the proposed video path just to see what
+# happens"): the frames ride as ONE video (`input_video`) through mainline
+# llama.cpp's video path — ffmpeg decode, Qwen-VL super-frame pairing, temporal
+# encoding — with no inter-frame markers and no motion sentences. The 3.8
+# stack's server (stock upstream, Aug 17 build) reports modalities.video=true;
+# probed Sep 11 it told a panning camera from a sliding object and read eight
+# real frames with head turns as "the camera pans around" (docs/where-we-are-
+# sep9.md §26). "multi" and "superframe" stay as toggles; "superframe" is the
+# dead 3.5-fork path.
+VIDEO_MODE = os.getenv("VIDEO_MODE", "native")  # "native" (one clip, server-side video) | "multi" (separate stills) | "superframe" (dead, 3.5 fork)
+# Native-video knobs. ALWAYS: a clip on every caption call that has a picture
+# (the still-room case is exactly where the invented motion happens), not only
+# above MOTION_THRESHOLD; falls back to one still when fewer than FRAMES steady
+# frames exist. FRAMES: the last N buffer frames, contiguous (the buffer runs
+# ~2 fps, so 4 frames ≈ the last 2 s). FPS: the clip's encoded rate — must equal
+# the server's sampling rate (fixed 4.0 on the Aug 17 build; --video-fps on
+# newer builds) or frames get duplicated. SCALE: encode size; under
+# --image-min-tokens 1024 every frame is floored to ≥1024 tokens whatever the
+# size, so 4 frames → 2 super-frames ≈ 3.2k prompt tokens ≈ 5.4 s here vs 1.1k /
+# 2.3 s for a still (measured Sep 11). Drop the floor and size the frames to
+# make it cheaper; the sheet-crop review would then upscale its own crop.
+VIDEO_NATIVE_ALWAYS = os.getenv("VIDEO_NATIVE_ALWAYS", "true").lower() in ("true", "1", "yes")
+VIDEO_NATIVE_FRAMES = int(os.getenv("VIDEO_NATIVE_FRAMES", 4))
+VIDEO_NATIVE_FPS = float(os.getenv("VIDEO_NATIVE_FPS", 4.0))
+VIDEO_NATIVE_SCALE = os.getenv("VIDEO_NATIVE_SCALE", "960:540")
 MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.015"))  # frame diff below this = static, use a single image
 # How many frames a video call actually sends (Aug 2). The buffer collects up to
 # six; six were being sent, ~4k image tokens per call, and on the 27B that is

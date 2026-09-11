@@ -1927,3 +1927,24 @@ STREAM_MODE).
   the 3/2/1-of-458 measurement).
 - **Ops**: `MOOD_SNAPSHOT_FOLDER` in the environment does NOT redirect the run log
   minted at captioner import — quarantine stubs after running debug scripts.
+- **NATIVE VIDEO** (`VIDEO_MODE="native"`, default since Sep 11 — artist: *"try
+  with the proposed video path just to see what happens"*): on every caption
+  call that has a picture (VIDEO_NATIVE_ALWAYS), the last VIDEO_NATIVE_FRAMES (4)
+  steady buffer frames are encoded to one H.264 clip at VIDEO_NATIVE_FPS (4.0,
+  = the server's fixed sampling rate on the Aug 17 build) and sent as
+  `{"type":"input_video","input_video":{"data":<raw base64>}}` —
+  `llama_server._query_native_video`, dispatched from `query_llama_server_video`,
+  falling back to "multi" then a single still on error. No inter-frame markers,
+  no motion sentences (`motion_line` is blanked in native mode). The clip is
+  saved beside the frame (`<run>-images/clip_<ts>.mp4`) and logged as
+  `image_path` with `num_frames`, so the read can tell clip calls from stills.
+  Fewer than 4 steady frames → one still, as before. Inward beats and close
+  looks unchanged (no picture / the crop). Drift turns still send a still.
+  Costs (measured Sep 11): 4 frames → 2 super-frames ≈ 3.2k prompt tokens ≈
+  5.4 s vs 1.1k / 2.3 s for a still, because `--image-min-tokens 1024` floors
+  every frame; the Aug 17 server also prepends a `[0m0.00s]` text chunk (no
+  `--video-timestamp-interval` yet) and gives lazily decoded video no cache id —
+  `_query_native_video` turns `cache_prompt` off when the prefix is unchanged
+  from the previous native call (the stale-clip guard). Test:
+  `debug/test_native_video.py [--live]`. The `superframe` mode (llama-video,
+  3.5 fork) is dead code awaiting removal.

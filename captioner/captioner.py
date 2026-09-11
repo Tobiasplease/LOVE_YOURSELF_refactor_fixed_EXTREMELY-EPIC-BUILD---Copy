@@ -2456,6 +2456,15 @@ class Captioner(MemoryMixin):
                             not inward and not close_look and VIDEO_MODE_ENABLED and bool(recent_meta) and scene["max_diff"] > MOTION_THRESHOLD
                         )
 
+                        # NATIVE VIDEO (Sep 11): a clip on every call that has a
+                        # picture — the still room is where motion gets invented.
+                        from config.config import VIDEO_MODE as _vmode
+                        from config.config import VIDEO_NATIVE_ALWAYS as _vnative_always
+                        from config.config import VIDEO_NATIVE_FRAMES as _vnative_frames
+
+                        _native = _vmode == "native"
+                        if _native and _vnative_always and not inward and not close_look and VIDEO_MODE_ENABLED and bool(recent_meta):
+                            use_video = True
                         if use_video:
                             # Ego-motion frames inside a superframe pair encode the
                             # whole room as shifting, which the model reads as people
@@ -2471,7 +2480,16 @@ class Captioner(MemoryMixin):
                             # detection is YOLO person-angle math, not the model
                             # watching video — when something moves, video resumes.
                             steady_meta = [f for f in recent_meta if not f.get("detection", {}).get("ego_motion")]
-                            if scene_motion:
+                            if _native:
+                                # NATIVE (Sep 11): no steady filter. The breathing sway and
+                                # gaze nudges flag nearly every frame as ego-motion (first
+                                # native boot: 0/6, 1/6, 2/6 steady → every call fell back to
+                                # a still). The clip is sent as it is, sway and turns
+                                # included — telling the camera's motion from the room's is
+                                # exactly what the video path is for (§26: eight real frames
+                                # with turns → "the camera pans around").
+                                send_meta = recent_meta
+                            elif scene_motion:
                                 send_meta = recent_meta
                             elif len(steady_meta) >= 3:
                                 send_meta = steady_meta
@@ -2489,7 +2507,9 @@ class Captioner(MemoryMixin):
                             # don't. Sampled evenly (first … last) so the window's
                             # SPAN survives the thinning: the point of multi-frame
                             # is the interval between them, not their number.
-                            if use_video and len(send_meta) > VIDEO_SEND_FRAMES:
+                            if use_video and _native:
+                                send_meta = send_meta[-_vnative_frames:]  # a clip is contiguous: the last N frames, not a spread
+                            elif use_video and len(send_meta) > VIDEO_SEND_FRAMES:
                                 step = (len(send_meta) - 1) / (VIDEO_SEND_FRAMES - 1) if VIDEO_SEND_FRAMES > 1 else 0
                                 send_meta = (
                                     [send_meta[-1]] if VIDEO_SEND_FRAMES == 1 else [send_meta[round(i * step)] for i in range(VIDEO_SEND_FRAMES)]
@@ -2533,6 +2553,11 @@ class Captioner(MemoryMixin):
                                 motion_line = " The room is still."
                             else:
                                 motion_line = ""  # nothing attestable — claim nothing
+                            if _native:
+                                # Sep 11 (artist): explaining the camera to the model is
+                                # "an awkward workaround to something the model should
+                                # intrinsically know" — the clip carries it. No sentences.
+                                motion_line = ""
 
                             print(
                                 f"[VIDEO] {total}/{len(recent_meta)} frames over {duration:.1f}s, scene_motion={scene_motion}, residual={scene['max_residual']:.3f}, ego={ego_count}, face={face_frames}/{total}, person={person_frames}/{total}"
@@ -2562,6 +2587,7 @@ class Captioner(MemoryMixin):
                                     timeout=60,
                                     history=self._stream_history(),
                                     react=_fresh_start,
+                                    clip_dir=(os.path.dirname(img_path) if (_native and img_path) else None),
                                 )
 
                         else:

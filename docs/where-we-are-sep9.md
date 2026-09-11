@@ -1779,3 +1779,72 @@ this is where a standing fact "becomes the scene"; whether a coordinate-shaped
 opening ever reaches the feed again (must be 0); tic/chant via
 `measure_voice.py`. If the echo of the standing lines is high, the answer is
 their wording and shape, not a dose — the ruling stands.
+
+## 26. Native video on the 3.8 stack — probed live (Sep 11, ~16:40)
+
+Artist: *"the super frame path was made for 3.6. It's outdated. What does it look
+like for 3.8? It should be able to handle it natively."* Checked online and on
+the box, then probed the running server.
+
+**Facts.** Mainline llama.cpp merged native video input on June 8, 2026 (PR
+#24269): ffmpeg decodes the clip as a subprocess, Qwen-VL-family models get
+consecutive frames merged pairwise into super-frames (PR #21858), timestamps
+ride as text chunks. The server takes `{"type":"input_video","input_video":
+{"data": <raw base64 | url>}}` on `/v1/chat/completions`. The 3.8 stack's
+server (`~/llama.cpp-38`, stock upstream Aug 17 build, `MTMD_VIDEO=ON`, ffmpeg
+6.1 installed) reports `modalities: {vision: true, video: true}` for
+Qwen3.8-27B + its mmproj. The old path (`_query_superframe`, the `llama-video`
+package, `mm_processor_kwargs`) was for the patched 3.5 fork and is dead.
+
+**Probe** (2 s clips at 4 fps built from a real frame; cache off; one line asked):
+- whole view slides → *"The camera is panning slowly to the right."*
+- one object slides, view fixed → *"The camera is static, but the small wooden
+  rack with hanging tools on the middle shelf slides horizontally to the right."*
+- identical frames, neutral question → *"Nothing happens in this clip; it is a
+  static… shot"* (a three-way leading question once got "panning slightly").
+- **eight real frames from today's run**, one per caption, sway and head turns
+  included → *"The camera pans around a cluttered workshop…"* — the change is
+  attributed to the camera, not the room. The awareness we were scripting by
+  hand (§ "you were looking around") comes for free.
+
+**Costs and catches.**
+- ~5,200 prompt tokens per 2 s clip at 4 fps (8 frames → 4 super-frames, each
+  forced to ≥1024 tokens by `--image-min-tokens 1024`), 9–15 s per call here. A
+  3-still call today is ~3k. Budget knobs: fps and clip length (1 s at 4 fps or
+  2 s at 2 fps ≈ 2 super-frames ≈ 2.6k tokens ≈ 5 s).
+- The Aug 17 build has no `--video-fps` / `--video-timestamp-interval` (fixed
+  4.0 fps; a `[0m0.00s]` text chunk before the frames — digits, words law).
+  Current master has both (`--video-fps`, default 4.0; `--video-timestamp-interval`,
+  default 5000 ms, 0 disables).
+- **Prompt-cache bug in the Aug 17 build**: with `cache_prompt` on, clips two and
+  three were served clip one's KV (5229/5233 cached, 1.3 s). The lazy video
+  chunk carries no content id there; current master hashes the video bytes
+  (sha256, per-frame suffix). Until a rebuild: `cache_prompt: false` on video
+  calls.
+- The July "blur" that turned superframe off: super-frames pair frames 250 ms
+  apart; a 1° sway over a 4 s breath is ~0.06° between paired frames. Keep the
+  saccade-frame skip and it's a non-issue — the real-frames clip had turns in it.
+
+**What it would look like** (design, not done): rebuild `~/llama.cpp-38` from
+master; launch `--video-fps 2 --video-timestamp-interval 0`; `VIDEO_MODE=native`
+sends a 1–2 s clip from the frame buffer (already ~2 fps, 30 s deep) as raw
+base64 `input_video` on every call; no markers, no motion lines; the previous
+call's frame rides in the clip so "did the view change" is seen, not narrated;
+delete `_query_superframe` and the `llama-video` dependency. One variable, after
+the current run is read.
+
+## 27. Trial: native video on every caption call (Sep 11, from ~17:10)
+
+Artist: *"Let's stop the machine then and try with the proposed video path
+just to see what happens."* Stopped 16:56 (graceful). Wiring in runtime-map
+"Wiring changes, Sep 11 — NATIVE VIDEO". One variable: the picture on a caption
+call is now a 2-second clip of the last four buffer frames instead of a still,
+sent through mainline llama.cpp's video path with no markers and no motion
+sentences. Everything else as in §25. Server unchanged (Aug 17 build: fixed
+4 fps, a `[0m0.00s]` chunk, 1024-token floor per frame).
+
+**What to read:** motion verbs on still things by call kind (§ "micro-dosing"
+baseline: still 4%, inward 9%, drift turn 11%); whether a head turn is now read
+as the camera moving; caption-call duration and model-busy share (baseline
+4.3 s / 33%); any `caption_native_video_failed` entries; the `[0m0.00s]` chunk's
+echo, if any; tic and chant via `measure_voice.py`.
