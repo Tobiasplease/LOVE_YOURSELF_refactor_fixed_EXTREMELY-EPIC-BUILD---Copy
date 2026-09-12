@@ -184,10 +184,12 @@ kind of call that wants your ear on real output rather than my judgement.
 Deliberately ordered so everything before the prompt is provable in isolation,
 and nothing reaches the voice until you've heard what it does.
 
-- **Stage 0 — sidecar hearing, no machine.** VAD + faster-whisper in the
-  sidecar, `GET /mic` page, HTTPS via `tailscale cert`, fragments printed and
-  optionally taped. Provable alone, from your phone, with the machine down.
-  Touches nothing in the caption path.
+- **Stage 0 — does it hear at all?** `debug/test_hearing.py` (BUILT, Sep 12) —
+  standalone, imports nothing from the project, runs with the machine up or
+  down. Room mic via `--local`, phone via `--phone` over Tailscale HTTPS,
+  a WAV file via `--wav`, and `--fake` to exercise capture/segmentation/
+  transport with no model loaded. This answers the go/no-go question before
+  any of it is wired anywhere.
 - **Stage 1 — the local mic.** Same pipeline, `arecord`/`sounddevice` source
   instead of HTTP. Confirms the real acoustic case, which is the go/no-go.
 - **Stage 2 — the fact reaches the machine.** `POST /machine/hearing`,
