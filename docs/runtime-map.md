@@ -1996,3 +1996,16 @@ STREAM_MODE).
     jumps the rotation once per event.
   Test: `debug/test_event_memory.py`; `debug/test_absence_standing.py` updated
   to the pronoun rule.
+- **Main-loop crash → exit** (Sep 12 morning): `machine.py`'s module-level `try`
+  around the camera loop had only a `KeyboardInterrupt` handler. At 01:49 the
+  OpenCV DNN face detector returned a non-finite box; `astype("int")` made
+  garbage, the coordinates overflowed downstream, and `cv2.rectangle` in the
+  dashboard overlay raised — the main thread ended, the non-daemon threads kept
+  the PID alive, the supervisor saw nothing, the head froze, the POV went dark,
+  and only the reflection loop ran (26 reflections, every 20 min, to 08:51).
+  Now: non-finite DNN boxes are skipped; the overlay is wrapped; and a general
+  `except Exception` after the loop logs the traceback (`component: main_loop`),
+  runs `graceful_cleanup()` and `_bounded_exit(1)` so the supervisor restarts the
+  machine. Ops: a "Component 'captioner' has gone silent" stream with a live PID
+  means the main loop is dead — `stop_machine.sh`'s SIGINT cannot reach a dead
+  main thread; use SIGTERM/SIGKILL, then relaunch.

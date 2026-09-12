@@ -22,6 +22,7 @@ refuse_second_machine()
 guard_clock()
 
 import cv2
+import numpy as np
 
 try:
     import torch
@@ -1427,6 +1428,8 @@ try:
             conf = detections[0, 0, i, 2]
             if conf > CONFIDENCE_THRESHOLD and conf > best_conf:
                 box = detections[0, 0, i, 3:7] * [w, h, w, h]
+                if not np.all(np.isfinite(box)):
+                    continue  # Sep 12: a NaN box from the DNN overflowed downstream and took the main loop down (01:49)
                 best_box = box.astype("int")
                 best_conf = conf
 
@@ -1682,8 +1685,11 @@ try:
             debug_print("Servo controller not initialized; skipping PAN/TILT/LUNG sends", "WARN")
 
         if face_box:
-            (x1, y1, x2, y2) = face_box
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green = face
+            try:
+                (x1, y1, x2, y2) = (int(v) for v in face_box)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green = face
+            except Exception:
+                pass  # Sep 12: a display overlay must never take the loop down
 
         # === SELF VISUALIZATION ===
         if person_is_self:
@@ -1802,3 +1808,21 @@ try:
 except KeyboardInterrupt:
     graceful_cleanup()
     _bounded_exit(0)
+except Exception as _fatal:
+    # Sep 12: the main loop died at 01:49 (a NaN face box → cv2.rectangle) and the
+    # process LINGERED — the non-daemon threads kept it alive, the supervisor saw
+    # a live PID, the head froze, the POV went dark, and only the reflection
+    # loop went on, every twenty minutes for seven hours. Any unexpected
+    # exception here now logs its traceback, cleans up, and exits non-zero so the
+    # supervisor restarts the machine within seconds.
+    import traceback as _tb
+
+    try:
+        log_json_entry(LogType.ERROR, {"message": f"Main loop crashed: {_fatal}", "component": "main_loop", "traceback": _tb.format_exc()}, print_message=f"[💥] Main loop crashed: {_fatal} — exiting so the supervisor restarts")
+    except Exception:
+        print(f"[💥] Main loop crashed: {_fatal}")
+    try:
+        graceful_cleanup()
+    except Exception:
+        pass
+    _bounded_exit(1)

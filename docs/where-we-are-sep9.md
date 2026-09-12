@@ -1963,3 +1963,21 @@ moves); the next arrival's cue text and its lag from the first gate-passing
 frame (belief events now make this a direct measurement); whether the machine's
 first words after a rare arrival carry the rarity; that the routine form dies
 in ten minutes.
+
+## 30. The night of Sep 11–12: the main loop died at 01:49
+
+Artist, 08:53: *"The machine kind of crashed? The latest output are super
+verbose reflections."* Not a crash: the main loop died at 01:49:23 (a NaN face
+box from the OpenCV DNN → overflow → `cv2.rectangle` raised at module level, no
+handler but KeyboardInterrupt) and the process lingered on its non-daemon
+threads. The supervisor saw a live PID; the health tracker wrote "captioner has
+gone silent" 284 times and restarts nothing; the reflection loop, which needs no
+frames, went on every twenty minutes — 26 reflections into a feed with no
+captions. Head still, POV dark. Restarted 08:55; fix + restart 09:0x (runtime-map
+"Main-loop crash → exit").
+
+What the run gave before it died (00:05–01:49, the first stretch on the whole
+stack — native video, 8 s cadence, standing facts, event memory): 537 captions.
+The event line rode every call. Read it in the morning pass with the tools of
+§22–23; the pending items from §29 (arrival lag now measurable; the cue text;
+the routine-visit form) still need a real arrival.
