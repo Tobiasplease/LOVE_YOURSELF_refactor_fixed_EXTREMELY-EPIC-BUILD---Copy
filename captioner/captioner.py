@@ -2176,6 +2176,11 @@ class Captioner(MemoryMixin):
                             prompt_type="memory",
                             history=self._stream_history(),
                         )
+                        # Sep 12 14:00: memory mode was the one mouth with no strippers — its
+                        # caption went to the stream and the feed raw ("13:55 — The small, dark
+                        # thing…" stored with its stamp; a stored stamp is the seed that bred
+                        # the coordinate). Same mouth as every other caption now.
+                        caption = self._strip_leaked_stamps(self._trim_to_boundary(self._strip_list_shape(caption or "")))
                         log_json_entry(
                             LogType.DEBUG,
                             {"message": "Memory mode triggered", "action": "memory_mode", "time_since_last": time_since_memory},

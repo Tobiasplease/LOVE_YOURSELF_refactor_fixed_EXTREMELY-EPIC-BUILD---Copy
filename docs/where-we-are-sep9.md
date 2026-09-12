@@ -2047,3 +2047,11 @@ in 23% of captions; a turn is now said once (HEAD_TURN_VERDICT_S 10); (4) the
 head's own glances leaking into the motion signal earn no attention now. All
 four applied after the 50-minute read, one restart.
 
+**13:56 read of the repaired run + one more find.** No motion re-pumps ("own
+motion" absorbed 7), drift stamps 0/40 (from 20/53), narration of its own turns
+23% → 14%, attention decayed cleanly 1.0 → 0.41 in 25 min. Then a stamped
+caption reached the feed from MEMORY MODE — the one mouth with no strippers,
+storing its stamp into the stream (the coordinate's breeding path). Fixed
+14:00, restart. The gate's remaining false positive is idiom ("trying to call
+someone who never left"), left alone.
+

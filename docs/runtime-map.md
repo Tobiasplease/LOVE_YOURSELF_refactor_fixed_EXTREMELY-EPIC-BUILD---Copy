@@ -2048,7 +2048,9 @@ STREAM_MODE).
   ("I'm looking up-right now" had become 23% of captions); (4)
   `attention.update`: no motion/salience credit while the camera itself was
   moving (`ego_count ≥ 2`) — the earlier re-pumps all followed a glance.
-  Open: a stamped drift response reached `live_captions.txt` as separate lines
-  while the stored caption was clean; the writer is unidentified (the caption
-  path's live-log write is the only candidate). Removing the source (2) is the
-  fix in force.
+  Resolved 14:00: the stamped feed lines came from MEMORY MODE — the one mouth
+  with no strippers; its caption went to the stream and the feed raw ("13:55 —
+  The small, dark thing…" stored with its stamp). It now runs the same
+  `_strip_leaked_stamps / _trim_to_boundary / _strip_list_shape` as every
+  caption. Known limit of the phantom gate: idiom ("trying to call someone who
+  never left", about the foam hand) — costs a spoken-not-stored cycle; left.
