@@ -6,13 +6,15 @@ the open rulings, written against `rebuild/pre-mind` @ 6141460.
 
 ## What exists today: nothing
 
-Worth stating plainly, because three things claim otherwise:
+Worth stating plainly, because until Sep 12 three things claimed otherwise:
 
-- `requirements.txt:24-26` — `openai-whisper` and `pyaudio`, both commented out
-  since 2025 and never uncommented on any branch.
-- `README.md` — advertises "Speech Recognition: Whisper-based local speech
-  processing (optional)".
-- `CLAUDE.md` (old copy on `main`) — lists Whisper under optional models.
+- `requirements.txt` — `openai-whisper` and `pyaudio`, both commented out since
+  2025 and never uncommented on any branch. NOW corrected to name the packages
+  this actually uses (`faster-whisper`, `sounddevice`), still commented.
+- `README.md` — advertised "Speech Recognition: Whisper-based local speech
+  processing (optional)". NOW removed; it described nothing.
+- `CLAUDE.md` (old copy on `main`) — listed Whisper under optional models;
+  already clean on `rebuild/pre-mind`.
 
 The only audio code this project has ever had was `speech_logger.py`, added
 2025-07-26 (`ae99bfe`) and deleted 2025-08-15 (`91820b2`). It was a side-car

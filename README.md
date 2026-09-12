@@ -17,7 +17,6 @@ A sophisticated AI-driven interactive system that combines computer vision, mood
 - **Advanced Processing**:
   - **Memory System**: Maintains contextual awareness and interaction history
   - **Breathing Simulation**: Simulates natural breathing patterns for life-like behavior
-  - **Speech Recognition**: Whisper-based local speech processing (optional)
   - **Spatial Memory**: Object tracking and spatial awareness
 - **Event Logging**: Comprehensive JSON-based logging of all system events with run management
 
@@ -289,7 +288,7 @@ The system automatically handles type conversion and validates that override key
    - Verify `SERIAL_PORT` and Arduino connection
    - Check GRBL connection for CNC functionality
    - Ensure proper Arduino firmware is uploaded
-3. **ollama errors**: Ensure ollama server is running on localhost:11434
+3. **Inference errors**: Ensure llama-server is up on `http://localhost:8080` (`utils/llama_server.py` starts it; check `event_log/llama_server.log`)
 4. **Import errors**: Verify virtual environment is activated and dependencies installed
 5. **Model files missing**: Ensure OpenCV face detection models are in `models/` directory
 6. **G-code processing errors**: Verify vpype and related tools are properly installed

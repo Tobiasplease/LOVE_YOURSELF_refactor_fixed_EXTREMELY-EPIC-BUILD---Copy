@@ -21,9 +21,11 @@ git+https://github.com/uArm-Developer/pyuf.git
 Pillow>=10.0.0
 matplotlib>=3.7.0
 
-# Speech Recognition
-# openai-whisper>=20231117
-# pyaudio>=0.2.11
+# Hearing (experimental, not in the runtime path — debug/test_hearing.py only).
+# Install by hand when testing; left out of the default install so a normal
+# setup doesn't pull ctranslate2. CPU int8 on purpose: the VLM owns the GPU.
+# faster-whisper>=1.2.0
+# sounddevice>=0.4.6
 
 #bCNC>=0.9.16
 vpype
