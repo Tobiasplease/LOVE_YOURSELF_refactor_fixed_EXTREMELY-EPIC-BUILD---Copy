@@ -58,7 +58,7 @@ class RoomAttention:
         self.value = 1.0
         self.last_reason = reason
 
-    def update(self, scene: dict, now: float = None, view_verdict: str = None, new_view: bool = False) -> float:
+    def update(self, scene: dict, now: float = None, view_verdict: str = None, new_view: bool = False, unseen_share: float = 1.0) -> float:
         """One caption cycle: apply what the eyes found, then decay. `new_view` is
         a 20° cell not looked at this session (the captioner keeps the set) — the
         referee's 6° "baselined" fired on nearly every wander and pinned attention
@@ -68,8 +68,14 @@ class RoomAttention:
             self.value = 1.0
             self.ts = now
             return self.value
-        if scene.get("salience_hot") or scene.get("scene_motion") or scene.get("eye_contact") or scene.get("face_close"):
-            self.snap("motion" if scene.get("scene_motion") else "salience", now)
+        if scene.get("eye_contact") or scene.get("face_close") or (scene.get("salience_hot") and scene.get("presence_believed")):
+            self.snap("someone", now)  # a person: full attention, no argument
+        elif scene.get("salience_hot") or scene.get("scene_motion"):
+            # Sep 12 12:20: motion or salience with NOBODY believed present was
+            # snapping attention from 0.45 to 1.0 in an empty room (twice each
+            # in half an hour — the lamp, the flow's own noise). Now it adds,
+            # it does not reset: real events keep adding, noise fades.
+            self.bump(float(_cfg("ATTENTION_BUMP_MOTION", 0.4)), "motion" if scene.get("scene_motion") else "salience", now)
         elif scene.get("presence_believed") and self.value < float(_cfg("ATTENTION_PRESENT_FLOOR", 0.8)):
             self._decay_to(now)
             self.value = float(_cfg("ATTENTION_PRESENT_FLOOR", 0.8))
@@ -77,7 +83,12 @@ class RoomAttention:
         elif scene.get("view_changed") or view_verdict == "changed":
             self.bump(float(_cfg("ATTENTION_BUMP_CHANGED", 0.6)), "view changed", now)
         elif new_view:
-            self.bump(float(_cfg("ATTENTION_BUMP_NEW_VIEW", 0.3)), "new view", now)
+            # Novelty depletes: a first look somewhere is worth less the more of
+            # the room has already been seen (unseen_share = cells not yet looked
+            # at / reachable cells). Without this the curious gaze refuelled
+            # itself — each explore found a new cell, each cell paid +0.3, and
+            # attention never settled below 0.5 (Sep 12, first hour).
+            self.bump(float(_cfg("ATTENTION_BUMP_NEW_VIEW", 0.3)) * max(0.0, min(1.0, unseen_share)), "new view", now)
         else:
             self._decay_to(now)
             self.last_reason = "same"

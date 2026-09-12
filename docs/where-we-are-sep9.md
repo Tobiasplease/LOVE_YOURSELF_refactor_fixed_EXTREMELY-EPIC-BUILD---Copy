@@ -2019,3 +2019,19 @@ turned" share; room-noun share per call kind against 83–97%; object switches
 vs stays; any "blurry"/"low resolution" mentions in captions (the floor is
 256; if they appear, that is data about the floor); motion attribution;
 adjudicator/paper-check behaviour unchanged (their crops keep 1024).
+
+**First read (12:14–12:39, after three adjustments in the same variable:
+novelty depletes with the share of the room already seen; motion/salience
+with nobody present adds +0.4 instead of resetting; the gaze regime has
+hysteresis 0.5/0.75).** Attention 1.0 → below 0.5 at 12:32 → 0.33 by 12:39;
+room pictures 1024 → ~570 tokens; no blur mentions in 154 captions; no
+failures. First measured drop in room-boundness this week: room-noun share
+81% in the first half of the run → 65% in the second; "just turned" 65/71 →
+47/72; LOOK decisions 41/h (from 57–59). No head hold ≥2 min yet — the
+settled regime had run seven minutes. The four earlier re-pumps were the head's
+own glances leaking into the motion signal (each followed a "Glance (explore)"
+or a glance check); the clean fix — no motion bump while the camera itself was
+moving (ego_count) — is held as the next single change. The feed at 12:39:
+*"why does my head say 'warm'? maybe because it feels like something that has
+been…"*
+

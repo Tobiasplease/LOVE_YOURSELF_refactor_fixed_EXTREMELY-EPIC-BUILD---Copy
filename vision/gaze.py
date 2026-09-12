@@ -307,11 +307,21 @@ def set_attention(value: float) -> None:
         _attention = 1.0
 
 
-def _attention_curious() -> bool:
-    try:
-        from config.config import ATTENTION_CURIOUS, GAZE_ATTENTION_ENABLED
+_settled = False  # regime with hysteresis (Sep 12 12:20): settle below ATTENTION_CURIOUS, wake above ATTENTION_WAKE
 
-        return (not GAZE_ATTENTION_ENABLED) or _attention >= float(ATTENTION_CURIOUS)
+
+def _attention_curious() -> bool:
+    global _settled
+    try:
+        from config.config import ATTENTION_CURIOUS, ATTENTION_WAKE, GAZE_ATTENTION_ENABLED
+
+        if not GAZE_ATTENTION_ENABLED:
+            return True
+        if _settled and _attention >= float(ATTENTION_WAKE):
+            _settled = False
+        elif (not _settled) and _attention < float(ATTENTION_CURIOUS):
+            _settled = True
+        return not _settled
     except Exception:
         return True
 

@@ -1416,7 +1416,9 @@ ATTENTION_DECAY_TAU_S = float(os.getenv("ATTENTION_DECAY_TAU_S", 600))
 ATTENTION_PRESENT_FLOOR = float(os.getenv("ATTENTION_PRESENT_FLOOR", 0.8))  # while someone is believed present
 ATTENTION_BUMP_CHANGED = float(os.getenv("ATTENTION_BUMP_CHANGED", 0.6))  # the referee: the view changed
 ATTENTION_BUMP_NEW_VIEW = float(os.getenv("ATTENTION_BUMP_NEW_VIEW", 0.3))  # a first look this way
-ATTENTION_CURIOUS = float(os.getenv("ATTENTION_CURIOUS", 0.5))  # above: the gaze behaves as before (zone expiry, lottery); below: it settles
+ATTENTION_CURIOUS = float(os.getenv("ATTENTION_CURIOUS", 0.5))  # below: the gaze settles (zone holds, lottery slows)
+ATTENTION_WAKE = float(os.getenv("ATTENTION_WAKE", 0.75))  # a settled gaze wakes only above this (hysteresis, Sep 12 12:20)
+ATTENTION_BUMP_MOTION = float(os.getenv("ATTENTION_BUMP_MOTION", 0.4))  # motion/salience with nobody believed present ADDS this; a person snaps to 1.0
 ATTENTION_IMAGE_TOKENS_MAX = int(os.getenv("ATTENTION_IMAGE_TOKENS_MAX", 1024))
 ATTENTION_IMAGE_TOKENS_MIN = int(os.getenv("ATTENTION_IMAGE_TOKENS_MIN", 256))  # the machine's own sentence for an event rides only if this short; longer → the ledger fact (a long sentence is a scene, not a memory)
 # DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the

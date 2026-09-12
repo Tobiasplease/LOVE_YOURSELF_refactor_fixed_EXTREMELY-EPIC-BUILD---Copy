@@ -2210,7 +2210,14 @@ class Captioner(MemoryMixin):
                             _new_view = _cell is not None and _cell not in _seen
                             if _cell is not None:
                                 _seen.add(_cell)
-                            self._attention.update(scene, now, view_verdict=getattr(self, "_last_view_verdict", None), new_view=_new_view)
+                            try:
+                                from config.config import PAN_MAX, PAN_MIN, TILT_MAX, TILT_MIN
+
+                                _total_cells = max(1, (int(round(PAN_MAX / 20.0)) - int(round(PAN_MIN / 20.0)) + 1) * (int(round(TILT_MAX / 20.0)) - int(round(TILT_MIN / 20.0)) + 1))
+                            except Exception:
+                                _total_cells = 36
+                            _unseen = max(0.0, 1.0 - len(_seen) / float(_total_cells))
+                            self._attention.update(scene, now, view_verdict=getattr(self, "_last_view_verdict", None), new_view=_new_view, unseen_share=_unseen)
                             self._room_attention = self._attention.value
                             from vision import gaze as _gz
 
