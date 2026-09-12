@@ -29,6 +29,11 @@ NOT_PRESENT_RE = re.compile(
     r"|\b(if|whether|maybe|perhaps|when|wonder|wondering|unless|imagine|imagining|pretend|pretending)\s+(he|she|they|him|her)\b"
     r"|\b(he|she|they)('s| is| are| has| have)?\s+(gone|left|not here|missing)\b"
     r"|\bwhere (he|she|they) (was|were|sat|stood|used)\b"
+    # Sep 12 (artist: "that gate is odd, it didn't mention a person at all"):
+    # "worn smooth where someone sat for a long time" was gated. An indefinite
+    # person with a past-tense verb is a memory, like the pronoun forms above.
+    r"|\b(someone|somebody|a person|people|a man|a woman)\s+(was|were|had|sat|stood|used|left|came|went|put|placed|forgot|worked|lived|slept|touched|wrote|sat down|stood up|once)\b"
+    r"|\bwhere (someone|somebody|a person|people) (was|were|sat|stood|used)\b"
     r"|\b(he|she|they|someone|somebody)\s*('s|s| is| was| isn.t| wasn.t)?\s*(not|never)\s+(sitting|standing|here|there|at|in|by)\b"  # a DENIAL is not a sighting (Sep 8)
     r"|\bisn.t (sitting|standing|here|there|at|in|by)\b"
     r"|\b(drawing|drawings|sketch|sketches|drew|drawn|picture) of\b"  # a person in a drawing is not a person in the room

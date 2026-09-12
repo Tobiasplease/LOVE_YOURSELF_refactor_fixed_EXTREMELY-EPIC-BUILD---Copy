@@ -70,6 +70,13 @@ class RoomAttention:
             return self.value
         if scene.get("eye_contact") or scene.get("face_close") or (scene.get("salience_hot") and scene.get("presence_believed")):
             self.snap("someone", now)  # a person: full attention, no argument
+        elif (scene.get("salience_hot") or scene.get("scene_motion")) and int(scene.get("ego_count", 0) or 0) >= 2:
+            # Sep 12 13:10: the head's own glance leaks into the motion signal
+            # (each earlier re-pump followed a "Glance (explore)" or a glance
+            # check). While the camera itself was moving, motion is not the
+            # room's — no credit; a person is caught above regardless.
+            self._decay_to(now)
+            self.last_reason = "own motion"
         elif scene.get("salience_hot") or scene.get("scene_motion"):
             # Sep 12 12:20: motion or salience with NOBODY believed present was
             # snapping attention from 0.45 to 1.0 in an empty room (twice each

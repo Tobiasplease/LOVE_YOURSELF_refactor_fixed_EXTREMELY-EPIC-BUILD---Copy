@@ -372,7 +372,7 @@ class Captioner(MemoryMixin):
                 log_dir=MOOD_SNAPSHOT_FOLDER,
                 options={"temperature": DRIFT_TEMP, "num_predict": DRIFT_NUM_PREDICT},
                 prompt_type="drift_turn",
-                history=self._stream_history(),
+                history=self._stream_history_unstamped(),  # Sep 12: the drift leaves the log
             )
         except Exception:
             return
@@ -433,7 +433,7 @@ class Captioner(MemoryMixin):
                     log_dir=MOOD_SNAPSHOT_FOLDER,
                     options={"temperature": DRIFT_TEMP, "num_predict": WANDER_HOP_NUM_PREDICT},
                     prompt_type="wander_hop",
-                    history=self._stream_history()[-WANDER_HOP_HISTORY:],  # a hop travels light (first live chain: the full log pulled it back)
+                    history=self._stream_history_unstamped()[-WANDER_HOP_HISTORY:],  # a hop travels light (first live chain: the full log pulled it back); Sep 12: and unstamped
                 )
             except Exception:
                 break
@@ -531,6 +531,14 @@ class Captioner(MemoryMixin):
             return f"{w}:{h}"
         except Exception:
             return ""
+
+    def _stream_history_unstamped(self) -> list:
+        """The window without its clock stamps (Sep 12): handed to the drift turn
+        and the wander hops. Given the stamped log, 20 of 53 drift responses came
+        back as MORE stamped log lines ("13:00 — I'm looking up-right now. 13:00 —
+        The black curtain…") — the drift continued the log instead of leaving the
+        room. Gap markers stay; only the "HH:MM — " prefix goes."""
+        return [re.sub(r"^\d{1,2}:\d\d\s*[—–-]\s*", "", l) for l in self._stream_history()]
 
     def _stream_history(self) -> list:
         """The stream as the model sees it. World shape: timestamped log lines

@@ -2038,3 +2038,17 @@ STREAM_MODE).
   Baselines to beat (Sep 12 morning): no head hold ≥2 min in 765 prompts, 59
   LOOK decisions/h, "just turned" on 78% of calls; room noun in 83–97% of every
   call kind; object switches 5× stays.
+- **Sep 12 ~13:10, four small repairs** (applied after the artist's 13:00
+  screenshot): (1) `presence_text.NOT_PRESENT_RE` exempts an indefinite person in
+  the past ("where someone sat for a long time" was gated as a presence claim);
+  (2) the drift turn and the wander hops get the window UNSTAMPED
+  (`_stream_history_unstamped`) — with the stamped log, 20/53 drift responses
+  came back as more stamped log lines instead of leaving the room; (3)
+  HEAD_TURN_VERDICT_S 45 → 10: a turn is said once, not for five calls
+  ("I'm looking up-right now" had become 23% of captions); (4)
+  `attention.update`: no motion/salience credit while the camera itself was
+  moving (`ego_count ≥ 2`) — the earlier re-pumps all followed a glance.
+  Open: a stamped drift response reached `live_captions.txt` as separate lines
+  while the stored caption was clean; the writer is unidentified (the caption
+  path's live-log write is the only candidate). Removing the source (2) is the
+  fix in force.

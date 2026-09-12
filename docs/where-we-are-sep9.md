@@ -2035,3 +2035,15 @@ moving (ego_count) — is held as the next single change. The feed at 12:39:
 *"why does my head say 'warm'? maybe because it feels like something that has
 been…"*
 
+**13:00, the artist's screenshot** — *"It still feels quite like shifting between
+objects. And that gate is odd. It didn't mention a person at all?"* Found:
+(1) the gate took *"worn smooth where someone sat for a long time"* for a
+presence claim — an indefinite person in the past was not in NOT_PRESENT_RE;
+(2) the doubled "13:00 — " stamps were a drift turn continuing the stamped log
+(20 of 53 drift responses did) — the drift and the hops now get the window
+without stamps; (3) *"I'm looking ahead again", "I'm looking down-left now"* —
+the "you've just turned" line, riding five calls per turn, echoed as narration
+in 23% of captions; a turn is now said once (HEAD_TURN_VERDICT_S 10); (4) the
+head's own glances leaking into the motion signal earn no attention now. All
+four applied after the 50-minute read, one restart.
+

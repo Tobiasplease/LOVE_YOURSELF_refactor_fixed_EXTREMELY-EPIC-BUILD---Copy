@@ -83,3 +83,10 @@ check("registry: desire absent tail", (FRAGMENTS.get("caption.desire-absent-tail
 
 print(f"\n{'ALL PASS' if not fails else f'{fails} FAILED'}")
 sys.exit(1 if fails else 0)
+
+# Sep 12: an indefinite person in the past is a memory, not a presence claim
+from utils.presence_text import is_phantom_presence as _ipp  # noqa: E402
+
+check("'where someone sat for a long time' is not a presence claim", not _ipp("Just the wood, worn smooth where someone sat for a long time."))
+check("'someone left a spool here' is not a presence claim", not _ipp("Someone left a spool here once."))
+check("'someone is sitting there' still is", _ipp("Someone is sitting there, hunched over the desk."))

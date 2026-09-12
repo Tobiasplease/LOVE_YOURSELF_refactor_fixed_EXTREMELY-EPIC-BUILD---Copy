@@ -1384,7 +1384,7 @@ HEAD_HOLD_TOL_DEG = float(os.getenv("HEAD_HOLD_TOL_DEG", 20.0))
 # for the first HEAD_TURN_VERDICT_S after a turn the referee's verdict for the
 # new view rides instead (as it was / changed / never looked here).
 HEAD_STANDING_AFTER_S = float(os.getenv("HEAD_STANDING_AFTER_S", 120))
-HEAD_TURN_VERDICT_S = float(os.getenv("HEAD_TURN_VERDICT_S", 45))
+HEAD_TURN_VERDICT_S = float(os.getenv("HEAD_TURN_VERDICT_S", 10))  # Sep 12 13:10: was 45 — five calls of "you've just turned" per turn came back as "I'm looking up-right now" in 23% of captions; a turn is said once
 # EVENT MEMORY (Sep 11, artist: "Things out of the ordinary need to have a lot more weight in
 # the memory… the rarity should also determine the significance at the time of discovery").
 # The last completed event (a visit, a verified change) rides every thought call as a standing

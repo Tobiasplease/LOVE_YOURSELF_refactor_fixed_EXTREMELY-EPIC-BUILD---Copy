@@ -54,6 +54,8 @@ check("ten minutes of sameness → ~0.46 (floor 0.15, tau 600)", abs(a.value - (
 a.update({}, T + 3600)
 check("an hour → at the floor", a.value < 0.17, a.value)
 check("below curious", not curious(a.value))
+a.update({"scene_motion": True, "ego_count": 4}, T + 3609)
+check("motion while the camera itself moved earns nothing", a.value < 0.2 and a.last_reason == "own motion", (a.value, a.last_reason))
 a.update({"scene_motion": True}, T + 3610)
 check("motion alone adds 0.4, does not reset", abs(a.value - (0.15 + 0.4)) < 0.03 and a.last_reason == "motion", a.value)
 a.update({"scene_motion": True, "salience_hot": True, "presence_believed": True}, T + 3611)
