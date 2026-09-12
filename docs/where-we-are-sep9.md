@@ -1981,3 +1981,41 @@ stack — native video, 8 s cadence, standing facts, event memory): 537 captions
 The event line rode every call. Read it in the morning pass with the tools of
 §22–23; the pending items from §29 (arrival lag now measurable; the cue text;
 the routine-visit form) still need a real arrival.
+
+## 31. Room attention: the picture's size and the gaze on one dial (Sep 12, ~10:30)
+
+Artist: *"It's certainly continuous and seems quite affected and grounded… it's
+still cycling in between what it sees in the room, never really gets sick of it
+or staying at a certain spot… There's no semblance of daydreaming or
+detachment."* Then, on the fix: *"the no picture requirement seems mechanical
+and forced… boredom prompting a head turn makes sense, but that should and
+could get boring too, it's not an either/or… How can we fundamentally simulate
+it properly without having it feel like a forced function?"* And on the gaze:
+*"it still feels semi random… we are having the camera move randomly and then
+telling the machine that it's moving, when optimally it should be the opposite.
+Lower energy and lower novelty should contribute to how and where it looks."*
+
+**Measured before** (this morning): the head never held one direction within
+20° for two minutes in 765 prompts; turns spread evenly over eight directions;
+59 LOOK decisions/h; six independent drivers on their own timers (face tracking,
+a 45 s idle-glance lottery, the LOOK ask every third caption, a 45 s zone
+expiry "to encourage exploration", Perlin wander, search/paper/drawing modes),
+none informed by novelty; energy entered only as movement style. Room nouns in
+83–97% of every call kind, the daydream paths included; object switched 5× for
+every stay.
+
+**Built** (runtime-map "ROOM ATTENTION"): one value earned by what the eyes
+find, decaying with sameness; the room picture and the clip sized by it
+(1024 → 256 tokens — "the room seen out of the corner of the eye"); the gaze's
+four timers scaled by it (a chosen look holds below 0.5; the lottery slows; the
+explore share and the wander range shrink); the LOOK ask rarer as it falls. The
+1024-token floor moved from the server to each call that needs it. No sentence
+about any of it reaches the model.
+
+**What to read:** the attention trace (debug `attention` events) — does it fall
+below 0.5 in a still room and snap on motion; image tokens in the log's
+`image_path` names; the head's longest hold and cell changes per hour; "just
+turned" share; room-noun share per call kind against 83–97%; object switches
+vs stays; any "blurry"/"low resolution" mentions in captions (the floor is
+256; if they appear, that is data about the floor); motion attribution;
+adjudicator/paper-check behaviour unchanged (their crops keep 1024).

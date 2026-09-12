@@ -285,7 +285,59 @@ llm_target_zone_pan = "ahead"
 llm_target_zone_tilt = "level"
 llm_zone_active = False  # Whether LLM is actively directing gaze
 llm_zone_set_time = 0.0  # When LLM zone was last set
-llm_zone_timeout = 45.0  # LLM zones expire after 45 seconds, return to free wandering
+llm_zone_timeout = 45.0  # LLM zones expire after 45 seconds, return to free wandering — while attention is high (Sep 12: below ATTENTION_CURIOUS a chosen look HOLDS)
+
+# ROOM ATTENTION on the gaze (Sep 12, artist: "Someone that is bored and sick of
+# a space doesn't still dart around the room… lower energy and lower novelty
+# should contribute to how and where it looks"). One value from
+# captioner/attention.py, set every caption cycle. It scales the four timers
+# that used to run on their own clocks: the LLM zone no longer expires below
+# ATTENTION_CURIOUS (stay means stay), the idle glance lottery slows as
+# attention falls, the explore share shrinks with it, and the organic wander
+# range contracts — the eyes settle. Face tracking and search are untouched:
+# anything moving snaps attention back to 1.0 and everything wakes.
+_attention = 1.0
+
+
+def set_attention(value: float) -> None:
+    global _attention
+    try:
+        _attention = min(1.0, max(0.0, float(value)))
+    except Exception:
+        _attention = 1.0
+
+
+def _attention_curious() -> bool:
+    try:
+        from config.config import ATTENTION_CURIOUS, GAZE_ATTENTION_ENABLED
+
+        return (not GAZE_ATTENTION_ENABLED) or _attention >= float(ATTENTION_CURIOUS)
+    except Exception:
+        return True
+
+
+def _glance_slowdown() -> float:
+    """1.0 when fully attentive; up to ~7× longer between idle glances at the floor."""
+    try:
+        from config.config import GAZE_ATTENTION_ENABLED
+
+        if not GAZE_ATTENTION_ENABLED:
+            return 1.0
+    except Exception:
+        pass
+    return 1.0 / max(_attention, 0.15)
+
+
+def _attention_factor() -> float:
+    """0.3 at the floor, 1.0 when fully attentive (wander range, explore share)."""
+    try:
+        from config.config import GAZE_ATTENTION_ENABLED
+
+        if not GAZE_ATTENTION_ENABLED:
+            return 1.0
+    except Exception:
+        pass
+    return 0.3 + 0.7 * _attention
 
 # Tracking angle awareness
 tracking_person_last_x = None
@@ -742,12 +794,12 @@ def _update_registry_glance(now):
         except Exception:
             pass
         return _glance_target
-    if now - _glance_last_end < GAZE_GLANCE_INTERVAL * random.uniform(0.6, 1.4):
+    if now - _glance_last_end < GAZE_GLANCE_INTERVAL * random.uniform(0.6, 1.4) * _glance_slowdown():  # Sep 12: the lottery slows as attention falls
         return None
     try:
         from perception.spatial_registry import spatial_registry
 
-        pick = spatial_registry.pick_glance_target(explore_weight=GAZE_GLANCE_EXPLORE_WEIGHT)
+        pick = spatial_registry.pick_glance_target(explore_weight=GAZE_GLANCE_EXPLORE_WEIGHT * _attention_factor())  # Sep 12: exploring shrinks with attention
     except Exception:
         pick = None
     if not pick:
@@ -841,8 +893,8 @@ def update_organic_movement(now):
         tilt_center = (tilt_min + tilt_max) / 2
 
         # Organic variance bounded to stay in zone (80% of zone width)
-        pan_range = (pan_max - pan_min) * 0.8
-        tilt_range = (tilt_max - tilt_min) * 0.8
+        pan_range = (pan_max - pan_min) * 0.8 * _attention_factor()  # Sep 12: the wander contracts as attention falls
+        tilt_range = (tilt_max - tilt_min) * 0.8 * _attention_factor()
 
         pan_micro_target = pan_center + (pan_noise - 0.5) * pan_range
         tilt_micro_target = tilt_center + (tilt_noise - 0.5) * tilt_range
@@ -852,8 +904,8 @@ def update_organic_movement(now):
         tilt_micro_target = clamp(tilt_micro_target, tilt_min, tilt_max)
     else:
         # Full contemplative range — use most of the servo range
-        pan_range = (PAN_MAX - PAN_MIN) * 0.85
-        tilt_range = (TILT_MAX - TILT_MIN) * 0.55
+        pan_range = (PAN_MAX - PAN_MIN) * 0.85 * _attention_factor()  # Sep 12
+        tilt_range = (TILT_MAX - TILT_MIN) * 0.55 * _attention_factor()
 
         pan_center = (PAN_MIN + PAN_MAX) / 2
         tilt_center = (TILT_MIN + TILT_MAX) / 2 + 5  # Slight downward bias
@@ -1237,7 +1289,7 @@ def update_gaze(frame, face_box, current_emotion_state="calm_observant", yolo_pe
             state = "idle"
 
             # Check LLM zone timeout - if stuck in same zone too long, encourage exploration
-            if llm_zone_active and (now - llm_zone_set_time) > llm_zone_timeout:
+            if llm_zone_active and _attention_curious() and (now - llm_zone_set_time) > llm_zone_timeout:  # Sep 12: below ATTENTION_CURIOUS a chosen look holds
                 print(f"[👁️] LLM zone '{llm_target_zone_pan}/{llm_target_zone_tilt}' timed out after {llm_zone_timeout:.0f}s → exploring freely")
                 llm_zone_active = False
 

@@ -229,7 +229,9 @@ class PresenceAdjudicatorThread(threading.Thread):
         nb = self._current_candidate_box()
         if crop is None or nb is None or crop.shape[0] < 40 or crop.shape[1] < 20:
             return
-        ok, jpg = cv2.imencode(".jpg", crop)
+        from utils.image_tokens import sized as _sized
+
+        ok, jpg = cv2.imencode(".jpg", _sized(crop, 1024))  # Sep 12: the look stays at 1024 tokens now that the server floor is gone
         if not ok:
             return
         pan = tilt = None

@@ -257,7 +257,7 @@ class PaperDetector:
 
                 response = query_model(
                     PAPER_CHECK_PROMPT,
-                    image=jpg.tobytes(),
+                    image=__import__('utils.image_tokens', fromlist=['sized_jpeg']).sized_jpeg(jpg.tobytes(), 1024),  # Sep 12: full detail, as the old floor gave
                     timeout=90,
                     options={"temperature": 0.1, "num_predict": 120},
                     prompt_type="paper_check",

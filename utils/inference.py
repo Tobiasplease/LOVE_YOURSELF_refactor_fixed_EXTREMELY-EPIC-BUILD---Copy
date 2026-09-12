@@ -93,6 +93,7 @@ def query_model_video(
     react: bool = False,
     frame_ts: Optional[List[float]] = None,
     clip_dir: Optional[str] = None,
+    clip_scale: str = "",
 ) -> str:
     """Query with multiple video frames (native video, super-frame or multi-image mode)."""
     from utils.llama_server import query_llama_server_video
@@ -110,6 +111,7 @@ def query_model_video(
         react=react,
         frame_ts=frame_ts,
         clip_dir=clip_dir,
+        clip_scale=clip_scale,
     )
 
 

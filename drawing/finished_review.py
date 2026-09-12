@@ -81,7 +81,7 @@ def review_finished_drawing(image_path: Optional[str] = None, intent: Optional[s
         text = (
             query_model(
                 prompt,
-                image=image_path,
+                image=__import__('utils.image_tokens', fromlist=['sized_copy']).sized_copy(image_path, 1024),  # Sep 12: the sheet keeps its 1024 tokens client-side
                 system_prompt=system_prompt,
                 timeout=int(getattr(_cfg, "FINISHED_REVIEW_TIMEOUT_S", 90)),
                 prompt_type="drawing_review",

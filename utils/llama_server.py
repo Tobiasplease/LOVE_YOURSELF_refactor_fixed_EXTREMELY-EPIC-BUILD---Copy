@@ -514,10 +514,12 @@ def start_server(model_path: str = None, mmproj_path: str = None, ctx_size: int 
     # the defaults moved). MTP speculative decoding stays OFF: it is a variable
     # the 9B never had and the voice question is a distribution question —
     # LLAMA_MTP=1 ./run_27b.sh re-enables it for the ~1.7x decode speed.
-    # --image-min-tokens 1024: Qwen-VL needs >=1024 image tokens for spatial
-    # grounding; our frames encoded at ~600 and room awareness starved at the
-    # eye (Aug 17). Costs ~1.6s extra prompt eval per multi-image call.
-    extra = os.getenv("LLAMA_EXTRA_ARGS", "-fa on --image-min-tokens 1024").split()
+    # --image-min-tokens 1024 was here from Aug 17 (Qwen-VL wants >=1024 image
+    # tokens for grounding; frames encoded at ~600). Sep 12: the floor moved to
+    # the CLIENT (utils/image_tokens) — every call sizes its own picture, the
+    # crops and reviews keep 1024, the room view follows attention. The server
+    # flag would defeat that, so the default no longer carries it.
+    extra = os.getenv("LLAMA_EXTRA_ARGS", "-fa on").split()
     if extra:
         cmd.extend(extra)
 
@@ -941,6 +943,7 @@ def _query_native_video(
     history: Optional[List[str]] = None,
     react: bool = False,
     clip_dir: Optional[str] = None,
+    clip_scale: str = "",
 ) -> str:
     """NATIVE VIDEO (Sep 11, artist: "It has native video awareness so it should
     realise the difference between a moving camera and objects moving in the
@@ -971,7 +974,7 @@ def _query_native_video(
     global _native_last_sig
     from config.config import VIDEO_NATIVE_FPS, VIDEO_NATIVE_SCALE
 
-    clip = _encode_clip(frames, float(VIDEO_NATIVE_FPS), VIDEO_NATIVE_SCALE)
+    clip = _encode_clip(frames, float(VIDEO_NATIVE_FPS), clip_scale or VIDEO_NATIVE_SCALE)  # Sep 12: the clip on the attention dial
     clip_path = None
     if clip_dir:
         try:
@@ -1320,6 +1323,7 @@ def query_llama_server_video(
     react: bool = False,
     frame_ts: Optional[List[float]] = None,
     clip_dir: Optional[str] = None,
+    clip_scale: str = "",
 ) -> str:
     """
     Query llama-server with multiple video frames.
@@ -1388,6 +1392,7 @@ def query_llama_server_video(
                     history=history,
                     react=react,
                     clip_dir=clip_dir,
+                    clip_scale=clip_scale,
                 )
             except Exception as e:
                 _note_query_outcome(str(e))

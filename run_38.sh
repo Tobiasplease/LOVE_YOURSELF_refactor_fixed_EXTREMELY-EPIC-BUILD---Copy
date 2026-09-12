@@ -32,9 +32,9 @@ export LLAMA_CTX_SIZE=16384
 # eval per react call. The 3.6 arm runs without it — add there too before
 # any A/B that touches perception.
 if [ "${LLAMA_MTP:-0}" = "1" ]; then
-  export LLAMA_EXTRA_ARGS="--spec-type draft-mtp --spec-draft-n-max 2 -fa on --image-min-tokens 1024"
+  export LLAMA_EXTRA_ARGS="--spec-type draft-mtp --spec-draft-n-max 2 -fa on"
 else
-  export LLAMA_EXTRA_ARGS="-fa on --image-min-tokens 1024"
+  export LLAMA_EXTRA_ARGS="-fa on"  # Sep 12: the 1024-token floor moved to the client (utils/image_tokens) so the room view can follow attention
 fi
 export MODEL_NAME="qwen3.8:27b"
 

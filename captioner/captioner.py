@@ -366,7 +366,7 @@ class Captioner(MemoryMixin):
             text = query_model(
                 prompt=ask,
                 model=MODEL_NAME,
-                image=(img_path if DRIFT_SEND_IMAGE else None),
+                image=(self._sized_for_model(img_path) if DRIFT_SEND_IMAGE else None),  # Sep 12: at attention
                 system_prompt=P("drift.system"),
                 timeout=60,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -427,7 +427,7 @@ class Captioner(MemoryMixin):
                 text = query_model(
                     prompt=ask,
                     model=MODEL_NAME,
-                    image=img_path,  # Sep 11 (artist): no call without visual information — a hop looks too
+                    image=self._sized_for_model(img_path),  # Sep 11 (artist): no call without visual information — a hop looks too; Sep 12: at attention
                     system_prompt=P("drift.system"),
                     timeout=60,
                     log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -508,6 +508,29 @@ class Captioner(MemoryMixin):
             self._stream_push(framed)
         self.last_caption_time = now
         return text if stored else None
+
+    def _sized_for_model(self, path, full: bool = False):
+        """The picture at the size the moment deserves (Sep 12, utils/image_tokens):
+        a crop or an arrival at full detail (ATTENTION_IMAGE_TOKENS_MAX, what the
+        old server floor gave every image); a plain view of the room at the
+        current attention — peripheral when nothing has been new for a while."""
+        try:
+            from utils.image_tokens import sized_copy, tokens_for_attention
+
+            a = 1.0 if full else float(getattr(self, "_room_attention", 1.0))
+            return sized_copy(path, tokens_for_attention(a))
+        except Exception:
+            return path
+
+    def _clip_scale_for_attention(self) -> str:
+        """The clip's encode size on the same dial (w:h for ffmpeg)."""
+        try:
+            from utils.image_tokens import dims_for_tokens, tokens_for_attention
+
+            w, h = dims_for_tokens(1280, 720, tokens_for_attention(float(getattr(self, "_room_attention", 1.0))))
+            return f"{w}:{h}"
+        except Exception:
+            return ""
 
     def _stream_history(self) -> list:
         """The stream as the model sees it. World shape: timestamped log lines
@@ -1546,7 +1569,7 @@ class Captioner(MemoryMixin):
             text = query_model(
                 prompt=user_prompt or "...",
                 model=_model_label,
-                image=img_path,  # Sep 11 (artist): no call without visual information
+                image=self._sized_for_model(img_path),  # Sep 11 (artist): no call without visual information; Sep 12: at attention
                 system_prompt=system_prompt,
                 timeout=60,
                 log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -2137,7 +2160,7 @@ class Captioner(MemoryMixin):
                         caption = query_model(
                             prompt=memory_prompt,
                             model=_model_label,
-                            image=img_path,  # Sep 11 (artist): no call without visual information
+                            image=self._sized_for_model(img_path),  # Sep 11 (artist): no call without visual information; Sep 12: at attention
                             system_prompt=memory_system,
                             timeout=60,
                             log_dir=MOOD_SNAPSHOT_FOLDER,
@@ -2166,6 +2189,42 @@ class Captioner(MemoryMixin):
 
                         # Salience first — it decides how interior this caption gets
                         scene = self._assess_scene()
+                        # ROOM ATTENTION (Sep 12): earned by what the eyes found this
+                        # cycle, decaying with sameness. Sets the picture's size (below),
+                        # the gaze's restlessness (vision/gaze.set_attention) and the
+                        # LOOK ask cadence (prompts.build_decision_ask).
+                        try:
+                            from captioner.attention import RoomAttention
+
+                            if not hasattr(self, "_attention"):
+                                self._attention = RoomAttention(now)
+                            try:
+                                from vision.gaze import physics_state as _ps
+
+                                _cell = (int(round(float(_ps.pan) / 20.0)), int(round(float(_ps.tilt) / 20.0)))
+                            except Exception:
+                                _cell = None
+                            _seen = getattr(self, "_attention_seen_cells", None)
+                            if _seen is None:
+                                _seen = self._attention_seen_cells = set()
+                            _new_view = _cell is not None and _cell not in _seen
+                            if _cell is not None:
+                                _seen.add(_cell)
+                            self._attention.update(scene, now, view_verdict=getattr(self, "_last_view_verdict", None), new_view=_new_view)
+                            self._room_attention = self._attention.value
+                            from vision import gaze as _gz
+
+                            _gz.set_attention(self._room_attention)
+                            from utils.image_tokens import tokens_for_attention as _tfa
+
+                            log_json_entry(
+                                LogType.DEBUG,
+                                {"message": "Room attention", "action": "attention", "attention": round(self._room_attention, 3), "reason": self._attention.last_reason, "image_tokens": _tfa(self._room_attention)},
+                                print_message=None,
+                            )
+                        except Exception as _ae:
+                            self._room_attention = 1.0
+                            print(f"[👁️] attention update failed: {_ae}")
 
                         # THE DRIFT TURN preempts the cycle when its roll
                         # lands: the mind wanders with its eyes open, more
@@ -2608,6 +2667,7 @@ class Captioner(MemoryMixin):
                                     history=self._stream_history(),
                                     react=_fresh_start,
                                     clip_dir=(os.path.dirname(img_path) if (_native and img_path) else None),
+                                    clip_scale=(self._clip_scale_for_attention() if _native else ""),  # Sep 12: the clip on the attention dial
                                 )
 
                         else:
@@ -2624,6 +2684,7 @@ class Captioner(MemoryMixin):
                                     crop_path = self._write_face_context_crop(frame, face_box, img_path)
                                     if crop_path:
                                         send_path = crop_path
+                            send_path = self._sized_for_model(send_path, full=(send_path != img_path))  # Sep 12: crops full, the room at attention
 
                             def _generate(_opts):
                                 return query_model(
@@ -3671,7 +3732,7 @@ class Captioner(MemoryMixin):
         ask = P("awakening.arrival-ask").format(seed=seed, recall=(recall + "\n") if recall else "")
         response = query_model(
             prompt=ask,
-            image=img_path,
+            image=self._sized_for_model(img_path, full=True),  # Sep 12: an arrival is looked at in full
             timeout=90,
             log_dir=config.MOOD_SNAPSHOT_FOLDER,
             system_prompt=system_prompt,
@@ -3840,7 +3901,7 @@ class Captioner(MemoryMixin):
             caption = query_model(
                 prompt=user_prompt,
                 model=_cfg.MODEL_NAME,
-                image=buf.tobytes(),
+                image=__import__('utils.image_tokens', fromlist=['sized_jpeg']).sized_jpeg(buf.tobytes(), 1024),  # Sep 12: full detail, as the old floor gave
                 system_prompt=system_prompt,
                 timeout=60,
                 log_dir=MOOD_SNAPSHOT_FOLDER,

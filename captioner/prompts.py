@@ -1371,7 +1371,15 @@ def build_decision_ask(agent, live: bool, is_awakening: bool) -> str:
         return ""
     n = int(getattr(agent, "_decide_counter", 0) or 0) + 1
     agent._decide_counter = n
-    if n % DECIDE_EVERY_N != 0:
+    # Sep 12: the ask is rarer as attention falls — a depleted machine is not
+    # asked every half minute where to look, and its last answer holds.
+    try:
+        from captioner.attention import decide_every
+
+        _every = decide_every(DECIDE_EVERY_N, float(getattr(agent, "_room_attention", 1.0)))
+    except Exception:
+        _every = DECIDE_EVERY_N
+    if n % _every != 0:
         return ""
     agent._decision_asked = True
     return P("caption.decide")
@@ -2148,7 +2156,7 @@ def stream_drawing_analysis(memory_ref, extra: Optional[str] = None, image_path:
 
     intent = query_model(
         prompt=intent_prompt,
-        image=intent_image,
+        image=__import__('utils.image_tokens', fromlist=['sized_any']).sized_any(intent_image, 1024),  # Sep 12: full detail for the drawing's own look
         log_dir=MOOD_SNAPSHOT_FOLDER,
         system_prompt=intent_system,
         prompt_type="drawing_intent",

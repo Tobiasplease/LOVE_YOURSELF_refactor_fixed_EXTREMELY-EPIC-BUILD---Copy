@@ -2009,3 +2009,32 @@ STREAM_MODE).
   machine. Ops: a "Component 'captioner' has gone silent" stream with a live PID
   means the main loop is dead — `stop_machine.sh`'s SIGINT cannot reach a dead
   main thread; use SIGTERM/SIGKILL, then relaunch.
+- **ROOM ATTENTION** (Sep 12, artist: *"the picture in the frame is not the
+  problem, its size is"*; *"someone that is bored and sick of a space doesn't
+  still dart around the room… it's not an either/or"*): `captioner/attention.py`
+  keeps one value in [0,1], updated every caption cycle right after
+  `_assess_scene`: snap to 1.0 on scene motion / salience / eye contact / a close
+  face; floor 0.8 while someone is believed present; +0.6 on the referee's
+  "changed"; +0.3 on a first look at a pose; otherwise exponential decay toward
+  ATTENTION_FLOOR (0.15) with ATTENTION_DECAY_TAU_S (600). Logged per cycle as
+  debug action `attention` (value, reason, image_tokens). It drives:
+  - **the picture's size** (`utils/image_tokens`): the room view and the clip
+    encode at ATTENTION_IMAGE_TOKENS_MIN…MAX (256…1024) tokens by attention;
+    crops, the arrival look, the drawing-watch frame, the drawing intent, the
+    sheet review, the adjudicator, the label audit and the paper check keep 1024
+    (upscaled client-side). Sized copies are written beside the frame as
+    `<stem>_t<tokens>.jpg`, so the log's `image_path` names the size. The server
+    flag `--image-min-tokens 1024` (Aug 17) is GONE from `run_38.sh` and the
+    `LLAMA_EXTRA_ARGS` default — it would defeat the dial;
+  - **the gaze** (`vision/gaze.set_attention`, called each cycle): the LLM zone
+    expires on its 45 s clock only above ATTENTION_CURIOUS (0.5) — below, a
+    chosen look holds; the idle glance lottery's interval divides by attention
+    (up to ~7× longer at the floor); the explore share and the organic wander
+    range scale by 0.3+0.7·attention. Face tracking, search and drawing modes
+    untouched; GAZE_ATTENTION_ENABLED toggles;
+  - **the LOOK ask cadence** (`captioner.attention.decide_every`): DECIDE_EVERY_N
+    at full attention, up to four times rarer at the floor.
+  Nothing is said to the model about any of this. Test: `debug/test_attention.py`.
+  Baselines to beat (Sep 12 morning): no head hold ≥2 min in 765 prompts, 59
+  LOOK decisions/h, "just turned" on 78% of calls; room noun in 83–97% of every
+  call kind; object switches 5× stays.

@@ -98,7 +98,7 @@ class LabelAuditThread(threading.Thread):
         self._last_audit_time = time.time()
         reply = query_model(
             _AUDIT_PROMPT,
-            image=jpg,
+            image=__import__('utils.image_tokens', fromlist=['sized_jpeg']).sized_jpeg(jpg, 1024),  # Sep 12: full detail, as the old floor gave
             system_prompt=_AUDIT_SYSTEM,
             timeout=90,
             prompt_type="label_audit",

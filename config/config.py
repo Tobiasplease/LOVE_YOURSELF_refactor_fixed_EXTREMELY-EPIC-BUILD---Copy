@@ -1399,7 +1399,26 @@ EVENT_MEMORY_MIN_S = float(os.getenv("EVENT_MEMORY_MIN_S", 600))
 EVENT_MEMORY_MAX_S = float(os.getenv("EVENT_MEMORY_MAX_S", 6 * 3600))
 ARRIVAL_RARITY_MIN_S = float(os.getenv("ARRIVAL_RARITY_MIN_S", 1200))
 PRESENCE_EDGE_STICKY_S = float(os.getenv("PRESENCE_EDGE_STICKY_S", 120))
-EVENT_MEMORY_OWN_WORDS_MAX = int(os.getenv("EVENT_MEMORY_OWN_WORDS_MAX", 18))  # the machine's own sentence for an event rides only if this short; longer → the ledger fact (a long sentence is a scene, not a memory)
+EVENT_MEMORY_OWN_WORDS_MAX = int(os.getenv("EVENT_MEMORY_OWN_WORDS_MAX", 18))
+# ROOM ATTENTION (Sep 12, artist: "the picture in the frame is not the problem, its size is";
+# "someone that is bored and sick of a space doesn't still dart around the room… it's not an
+# either/or"). One value earned by what the eyes find (captioner/attention.py): novelty pulls
+# it up, sameness lets it decay toward FLOOR with time constant DECAY_TAU_S. It sets the room
+# picture's tokens between IMAGE_TOKENS_MAX (what the old --image-min-tokens floor gave every
+# image) and IMAGE_TOKENS_MIN (the room out of the corner of the eye), the clip's encode size,
+# the gaze's restlessness (vision/gaze.py: zone expiry only above CURIOUS, glance lottery and
+# explore share and wander range scaled) and the LOOK ask cadence (captioner/attention
+# .decide_every). Nothing is said to the model about it; the page's composition is the state.
+ATTENTION_ENABLED = os.getenv("ATTENTION_ENABLED", "true").lower() in ("true", "1", "yes")
+GAZE_ATTENTION_ENABLED = os.getenv("GAZE_ATTENTION_ENABLED", "true").lower() in ("true", "1", "yes")
+ATTENTION_FLOOR = float(os.getenv("ATTENTION_FLOOR", 0.15))
+ATTENTION_DECAY_TAU_S = float(os.getenv("ATTENTION_DECAY_TAU_S", 600))
+ATTENTION_PRESENT_FLOOR = float(os.getenv("ATTENTION_PRESENT_FLOOR", 0.8))  # while someone is believed present
+ATTENTION_BUMP_CHANGED = float(os.getenv("ATTENTION_BUMP_CHANGED", 0.6))  # the referee: the view changed
+ATTENTION_BUMP_NEW_VIEW = float(os.getenv("ATTENTION_BUMP_NEW_VIEW", 0.3))  # a first look this way
+ATTENTION_CURIOUS = float(os.getenv("ATTENTION_CURIOUS", 0.5))  # above: the gaze behaves as before (zone expiry, lottery); below: it settles
+ATTENTION_IMAGE_TOKENS_MAX = int(os.getenv("ATTENTION_IMAGE_TOKENS_MAX", 1024))
+ATTENTION_IMAGE_TOKENS_MIN = int(os.getenv("ATTENTION_IMAGE_TOKENS_MIN", 256))  # the machine's own sentence for an event rides only if this short; longer → the ledger fact (a long sentence is a scene, not a memory)
 # DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the
 # caption ends with LOOK / EXPECT in the machine's own words; LOOK is executed
 # by the gaze as a "chosen" glance, the next turn states the consequence and,
