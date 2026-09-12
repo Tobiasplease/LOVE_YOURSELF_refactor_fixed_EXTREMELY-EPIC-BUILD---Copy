@@ -799,15 +799,13 @@ UARM_MOTION_STORAGE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "
 UARM_PLAY_AFTER_DRAW = True
 UARM_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    # Re-recorded Sep 12 2026. Has ee,1 (pump ON) at line 176 of 306 and no
-    # ee,0 — that is NOT a missing release. uarm/swift/teach.py ends every take
-    # with set_pump(False) + set_gripper(False) BEFORE its return-to-start move,
-    # so the sheet is released at the last recorded sample and the arm then
-    # travels home empty. An ee,0 would only move that release earlier in the
-    # take. What this does mean: the recording must END over the bin, which
-    # this one does (verified on the rig). Git history keeps
+    # Re-recorded Sep 12 2026. Grab at ee,1 (line 171) and an EXPLICIT release
+    # at ee,0 (line 315), with 65 more lines of motion after it — the arm drops
+    # the sheet and then withdraws, rather than relying on the SDK's
+    # end-of-take set_pump(False) the way the earlier takes did. Git history
+    # keeps newpapermove_20260912_175137.txt,
     # papermovenewest_20260910_193654.txt and papermove_20260306_214746.txt.
-    "newpapermove_20260912_175137.txt",  # Paper movement after GRBL completion
+    "finalpapermove_20260912_181004.txt",  # Paper movement after GRBL completion
 )
 
 # --- uArm play-on-start (connectivity reassurance) ---
