@@ -2054,3 +2054,16 @@ STREAM_MODE).
   `_strip_leaked_stamps / _trim_to_boundary / _strip_list_shape` as every
   caption. Known limit of the phantom gate: idiom ("trying to call someone who
   never left", about the foam hand) — costs a spoken-not-stored cycle; left.
+- **Model reload after a drawing waits for the card** (Sep 12 19:00): the
+  handoff unloads the language model for ComfyUI (`drawing._unload_inference_model`)
+  and `_wait_for_drawing_completion` → `ensure_server_up` reloads it. At 17:45
+  the reload failed five times ("allocating 884 MiB: out of memory") because
+  ComfyUI takes longer than the old two-second retry window to release the GPU;
+  the machine ended its session at 17:50 and was down until a manual relaunch at
+  18:24 — a drawing triggered while the artist's colleague was in the room
+  silenced it for 35 minutes. Now `_free_comfyui_vram(wait_for_mib, timeout_s)`
+  posts ComfyUI `/free` and polls `nvidia-smi` until LLAMA_VRAM_NEEDED_MIB
+  (19500) is free or COMFY_FREE_WAIT_S (60) passes, and `ensure_server_up` makes
+  LLAMA_RELOAD_ATTEMPTS (5) tries with pauses 3/6/12/24/40 s. Test:
+  `debug/test_vram_wait.py`. Baseline VRAM: server 18.9 GB + machine 0.5 GB +
+  idle ComfyUI 0.4 GB of 24.5 GB.

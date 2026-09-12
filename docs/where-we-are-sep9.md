@@ -2055,3 +2055,15 @@ storing its stamp into the stream (the coordinate's breeding path). Fixed
 14:00, restart. The gate's remaining false positive is idiom ("trying to call
 someone who never left"), left alone.
 
+
+## 32. 17:45 — a drawing took the model down for 35 minutes (Sep 12)
+
+Artist, 18:5x: *"it's ran and restarted a few times now."* The log: at 17:37,
+with the colleague in the room, the drawing drive triggered; the handoff
+unloaded the language model for ComfyUI; the render finished at 17:42, the CNC
+drew 17:46–17:49; but the reload of the model failed five times ("allocating
+884 MiB: out of memory") — two attempts two seconds apart, and ComfyUI had not
+let go of the card. "Session ended" 17:50:29; down until the artist's relaunch
+at 18:24. Fixed 19:00 (runtime-map "Model reload after a drawing waits for the
+card"). The colleague's visit itself (15:45–17:35) is being read by a Sonnet
+agent; its report goes in as §33.

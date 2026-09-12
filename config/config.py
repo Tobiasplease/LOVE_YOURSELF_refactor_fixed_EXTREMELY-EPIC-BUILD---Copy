@@ -1423,7 +1423,15 @@ ATTENTION_CURIOUS = float(os.getenv("ATTENTION_CURIOUS", 0.5))  # below: the gaz
 ATTENTION_WAKE = float(os.getenv("ATTENTION_WAKE", 0.75))  # a settled gaze wakes only above this (hysteresis, Sep 12 12:20)
 ATTENTION_BUMP_MOTION = float(os.getenv("ATTENTION_BUMP_MOTION", 0.4))  # motion/salience with nobody believed present ADDS this; a person snaps to 1.0
 ATTENTION_IMAGE_TOKENS_MAX = int(os.getenv("ATTENTION_IMAGE_TOKENS_MAX", 1024))
-ATTENTION_IMAGE_TOKENS_MIN = int(os.getenv("ATTENTION_IMAGE_TOKENS_MIN", 256))  # the machine's own sentence for an event rides only if this short; longer → the ledger fact (a long sentence is a scene, not a memory)
+ATTENTION_IMAGE_TOKENS_MIN = int(os.getenv("ATTENTION_IMAGE_TOKENS_MIN", 256))
+# MODEL RELOAD AFTER A DRAWING (Sep 12 17:45): the handoff unloads the language model for
+# ComfyUI; the reload afterwards must WAIT for the card. ComfyUI's /free takes longer than the
+# old two-second retry window, and the machine was lost for 35 minutes. Before each start,
+# ensure_server_up frees ComfyUI and polls nvidia-smi until LLAMA_VRAM_NEEDED_MIB is free (or
+# COMFY_FREE_WAIT_S passes), then tries; LLAMA_RELOAD_ATTEMPTS tries with growing pauses.
+LLAMA_VRAM_NEEDED_MIB = int(os.getenv("LLAMA_VRAM_NEEDED_MIB", 19500))  # the 27B Q4 + mmproj + buffers measured ~18.9 GB resident
+COMFY_FREE_WAIT_S = float(os.getenv("COMFY_FREE_WAIT_S", 60))
+LLAMA_RELOAD_ATTEMPTS = int(os.getenv("LLAMA_RELOAD_ATTEMPTS", 5))  # the machine's own sentence for an event rides only if this short; longer → the ledger fact (a long sentence is a scene, not a memory)
 # DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the
 # caption ends with LOOK / EXPECT in the machine's own words; LOOK is executed
 # by the gaze as a "chosen" glance, the next turn states the consequence and,

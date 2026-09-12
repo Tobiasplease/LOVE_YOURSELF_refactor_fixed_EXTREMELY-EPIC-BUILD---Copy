@@ -626,10 +626,39 @@ def is_server_running() -> bool:
         return False
 
 
-def _free_comfyui_vram() -> None:
-    """Ask ComfyUI to release its models/VRAM. Harmless (caught) if ComfyUI
-    isn't running. Flux can linger on the GPU after a generation and starve the
-    -ngl load, so this must run before restarting llama-server."""
+def _parse_free_mib(text: str):
+    """First integer in nvidia-smi's '--query-gpu=memory.free' output, or None."""
+    import re as _re
+
+    m = _re.search(r"\d+", text or "")
+    return int(m.group(0)) if m else None
+
+
+def _gpu_free_mib():
+    """Free VRAM on device 0 in MiB via nvidia-smi, or None if unknown."""
+    try:
+        import subprocess
+
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits", "-i", "0"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+        return _parse_free_mib(out)
+    except Exception:
+        return None
+
+
+def _free_comfyui_vram(wait_for_mib: int = 0, timeout_s: float = 0.0) -> bool:
+    """Ask ComfyUI to release its models/VRAM, and — Sep 12 — WAIT until the
+    card actually has room before anyone tries to load the model.
+
+    Sep 12 17:45: a drawing was rendered while the artist's colleague was in
+    the room; the handoff unloaded the model for ComfyUI, and the reload
+    afterwards failed five times in a row ("allocating 884 MiB: out of
+    memory") because ComfyUI takes longer than the two-second retry window to
+    let go of the GPU. The machine ended its session at 17:50 and stayed down
+    until a manual relaunch at 18:24. Harmless (caught) if ComfyUI isn't
+    running. Returns True when the requested room is free (or no wait asked)."""
     try:
         requests.post(
             "http://localhost:8188/free",
@@ -638,21 +667,42 @@ def _free_comfyui_vram() -> None:
         )
     except Exception:
         pass
+    if wait_for_mib <= 0 or timeout_s <= 0:
+        return True
+    t0 = time.time()
+    while True:
+        free = _gpu_free_mib()
+        if free is None or free >= wait_for_mib:
+            if free is not None:
+                print(f"[VRAM] {free} MiB free — enough for the model ({wait_for_mib} MiB needed)")
+            return True
+        if time.time() - t0 >= timeout_s:
+            print(f"[VRAM] still only {free} MiB free after {timeout_s:.0f}s (need {wait_for_mib}) — trying anyway")
+            return False
+        time.sleep(2.0)
 
 
 def ensure_server_up() -> bool:
-    """Bring llama-server back up robustly: free ComfyUI VRAM first, then start,
-    retrying once. The bare start_server() failed 'during GRBL execution' — a
+    """Bring llama-server back up robustly: free ComfyUI's VRAM and WAIT for the
+    room, then start; several attempts with growing pauses (Sep 12: two
+    attempts two seconds apart lost the machine for 35 minutes after a
+    drawing). The bare start_server() failed 'during GRBL execution' — a
     query hit a down server while Flux still held the VRAM, so -ngl couldn't
     allocate and the 60s health check timed out."""
     if is_server_running():
         return True
-    _free_comfyui_vram()
-    for attempt in range(2):
+    try:
+        from config.config import COMFY_FREE_WAIT_S, LLAMA_RELOAD_ATTEMPTS, LLAMA_VRAM_NEEDED_MIB
+    except Exception:
+        COMFY_FREE_WAIT_S, LLAMA_RELOAD_ATTEMPTS, LLAMA_VRAM_NEEDED_MIB = 60.0, 5, 19500
+    pauses = [3, 6, 12, 24, 40, 60]
+    for attempt in range(max(1, int(LLAMA_RELOAD_ATTEMPTS))):
+        _free_comfyui_vram(wait_for_mib=int(LLAMA_VRAM_NEEDED_MIB), timeout_s=float(COMFY_FREE_WAIT_S))
         if start_server():
             return True
-        _free_comfyui_vram()
-        time.sleep(2)
+        pause = pauses[min(attempt, len(pauses) - 1)]
+        print(f"[llama-server] reload attempt {attempt + 1}/{LLAMA_RELOAD_ATTEMPTS} failed — waiting {pause}s")
+        time.sleep(pause)
     return False
 
 
