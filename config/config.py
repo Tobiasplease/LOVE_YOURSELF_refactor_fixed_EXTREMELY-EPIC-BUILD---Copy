@@ -799,11 +799,14 @@ UARM_MOTION_STORAGE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "
 UARM_PLAY_AFTER_DRAW = True
 UARM_PLAY_FILE = os.path.join(
     UARM_MOTION_STORAGE,
-    # Re-recorded Sep 12 2026. NOTE: this take has ee,1 (pump ON) at line 176
-    # of 306 and NO ee,0 — it grabs the sheet and never releases it, unlike the
-    # Sep 10 take (ee,1 -> ee,0). Deliberate or not, the suction stays on when
-    # the move ends. Git history keeps papermovenewest_20260910_193654.txt and
-    # papermove_20260306_214746.txt.
+    # Re-recorded Sep 12 2026. Has ee,1 (pump ON) at line 176 of 306 and no
+    # ee,0 — that is NOT a missing release. uarm/swift/teach.py ends every take
+    # with set_pump(False) + set_gripper(False) BEFORE its return-to-start move,
+    # so the sheet is released at the last recorded sample and the arm then
+    # travels home empty. An ee,0 would only move that release earlier in the
+    # take. What this does mean: the recording must END over the bin, which
+    # this one does (verified on the rig). Git history keeps
+    # papermovenewest_20260910_193654.txt and papermove_20260306_214746.txt.
     "newpapermove_20260912_175137.txt",  # Paper movement after GRBL completion
 )
 
