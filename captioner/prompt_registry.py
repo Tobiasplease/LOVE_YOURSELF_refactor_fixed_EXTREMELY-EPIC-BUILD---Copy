@@ -290,7 +290,7 @@ FRAGMENTS = {
     },
     "drift.lore-seed": {
         "title": "Drift turn — thread seed",
-        "text": 'You\'ve been coming back to this: "{text}"',
+        "text": 'A thought you were having: "{text}" Where does it go from here?',
         "note": "Re-entry round (Sep 3 evening): ~LORE_SEED_P of drifts open from an alive thread (least-recently surfaced first) so a developing understanding compounds instead of restarting from the room. REWORDED same evening (artist: 'You've been imagining' was genre classification, not provenance — the wallpaper law applies to type-labels too; the core is deepening understanding, stories are one emergent expression). 'You've been coming back to this' is attested by the ledger itself (times_affirmed/surfaced) — attribution + tense, no genre. The seam law holds: the seed can never read as scene truth. This resolves the deep-story fork: the material-seeded variant returned as the thread-seeded variant.",
         "used_by": ["drift_turn"],
         "placeholders": ["text"],
@@ -505,6 +505,34 @@ FRAGMENTS = {
         "note": "Sep 13 (artist: \"the rarity should also determine the significance at the time of discovery\"). The gap is measured against arrivals AND earlier passes, so a second pass an hour later is not announced as the first sign of anyone in a day. Wording is the artist's to finalize.",
         "used_by": ["caption"],
         "placeholders": ["gap"],
+    },
+    "caption.decide-tedium": {
+        "title": "Decision ask under pressure",
+        "text": "Same again. You can look somewhere else, say nothing, follow the thought out of the room — or stay with this and see what it turns into.",
+        "note": "Sep 13 (artist: \"tedium is material and repetition is in and of itself an event… we are missing something in the architecture\"). Replaces caption.decide when the tedium dial is at TEDIUM_ASK_AT (captioner/tedium.py) — pressure that has built with nothing to spend it on. Every option is an exit the machine already has, staying included; nothing here is a command, and the caption interval does not move (artist: \"Stillness and 'nothing to say' should be a choice by the model, not imposed\"). Wording is the artist's to finalize.",
+        "used_by": ["caption"],
+        "placeholders": [],
+    },
+    "drift.lore-seed-advance": {
+        "title": "Drift turn — a thread that has been carried on",
+        "text": 'A thought you were having: "{text}" Last time it got as far as: "{advance}" Where does it go from here?',
+        "note": "Sep 13 (thread write-back): when the ledger records a return, the drift opens from where the thought GOT TO rather than from where it started — restating the seed is what a thread with no advance can only do, and the Sep 12 night was made of restatement. Wording is the artist's to finalize.",
+        "used_by": ["drift_turn"],
+        "placeholders": ["text", "advance"],
+    },
+    "drift.lore-seed-question": {
+        "title": "Drift turn — a thread the machine has its own question about",
+        "text": 'A thought you were having: "{text}" You asked: "{question}"',
+        "note": "Sep 13: when one of the machine's OWN open questions (lore ledger, harvested by the distiller) overlaps the seeded thread, that question is the door — its words, not ours. Reviewed plan, Sep 13: \"a live thread must be present by QUESTION, not by statement, or it is the next refrain\". Wording is the artist's to finalize.",
+        "used_by": ["drift_turn"],
+        "placeholders": ["text", "question"],
+    },
+    "caption.lore-advance": {
+        "title": "Thread line — one the machine has come back to",
+        "text": 'A thought you\'ve been developing: "{text}" Last time you got as far as: "{advance}"',
+        "note": "Sep 13 (thread write-back): the Sep 12 night returned to 0 of 247 threads, because nothing recorded a return and so the line could only ever restate the seed. When a thread HAS been continued — the reflection said it carried it on, a drift opened from it and came back with something, or a caption wandered into it — the line says where it got to, which is the part that can be continued. Wording is the artist's to finalize.",
+        "used_by": ["caption"],
+        "placeholders": ["text", "advance"],
     },
     "caption.since-empty": {
         "title": "The remembered visit is over (event memory)",
@@ -939,6 +967,7 @@ FRAGMENTS = {
             "NAME — if in this reflection you called yourself by a name, that name — or 'none'.\n"
             "UNDERSTANDING — one way you've come to see something here, or yourself, that is still taking shape — or 'none'.\n"
             "QUESTION — one question you're still carrying, as you'd ask it — or 'none'.\n"
+            "THREAD — if this carried on a thought you'd already been having, that earlier thought in a few words — or 'none'.\n"
             "NO LONGER TRUE — if one of the things you've held (quoted above) no longer holds, quote it back — or 'none'.\n"
             "A few words each, first person, no metaphor."
         ),

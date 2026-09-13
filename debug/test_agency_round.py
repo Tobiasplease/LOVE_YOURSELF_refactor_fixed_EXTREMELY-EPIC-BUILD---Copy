@@ -55,7 +55,7 @@ check("abandoned count", led.abandoned_count(10) >= 3, led.abandoned_count(10))
 # --- distill parser: RESOLVED slot
 resp = "TRAIT — I wait.\nBELIEF — none\nWANT — none\nBECAME — none\nRESOLVED — I found the answer: the room is the desk.\nKERNEL — I sat.\nNAME — none\nUNDERSTANDING — none\nQUESTION — none\nNO LONGER TRUE — none"
 out = context_compressor._parse_distillation(resp)
-check("parser returns ten slots", len(out) == 10)
+check("parser returns eleven slots (THREAD added Sep 13)", len(out) == 11)
 check("RESOLVED parsed", out[9].startswith("I found the answer"), out[9])
 check("became-line carries the RESOLVED ask", "RESOLVED" in FRAGMENTS["distill.became-line"]["text"])
 

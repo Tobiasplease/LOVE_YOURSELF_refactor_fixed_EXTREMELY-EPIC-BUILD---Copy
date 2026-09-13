@@ -829,7 +829,7 @@ class ContextCompressionEngine:
             if not response or not isinstance(response, str):
                 return None
             changed = []
-            trait, belief, want, kernel, became, name, lore, question, no_longer, resolved = self._parse_distillation(response)
+            trait, belief, want, kernel, became, name, lore, question, no_longer, resolved, thread = self._parse_distillation(response)
             if resolved and prior_want:
                 # Sep 5 (agency round): a want closes through whatever it was
                 # about — thought through, or let go — in the machine's words.
@@ -923,6 +923,19 @@ class ContextCompressionEngine:
             try:
                 from config.config import LORE_ENABLED
 
+                # Sep 13 (thread write-back): the reflection says which earlier
+                # thought it carried on; the kernel is where it got to. Nothing
+                # recorded this before, so 0 of 247 threads were ever returned
+                # to and the ledger could neither compound nor prune.
+                if LORE_ENABLED and thread:
+                    try:
+                        from utils.lore_ledger import lore_ledger as _ll
+
+                        _hit = _ll.note_return_by_overlap(thread, source="reflection", min_words=2, advance=kernel or thread)
+                        if _hit:
+                            changed.append(f"thread-return={thread[:40]}")
+                    except Exception:
+                        pass
                 if LORE_ENABLED and (name or lore or question):
                     from utils.lore_ledger import lore_ledger
 
@@ -960,7 +973,7 @@ class ContextCompressionEngine:
         """Parse TRAIT / BELIEF / WANT / BECAME / KERNEL / NAME / LORE / QUESTION / NO LONGER TRUE; strips any leaked label; 'none'/blank → empty."""
         import re
 
-        trait = belief = want = kernel = became = name = lore = question = no_longer = resolved = ""
+        trait = belief = want = kernel = became = name = lore = question = no_longer = resolved = thread = ""
 
         def _val(line: str, label_re: str) -> str:
             v = re.sub(label_re, "", line, flags=re.IGNORECASE).strip().strip("\"'").strip()
@@ -989,7 +1002,11 @@ class ContextCompressionEngine:
                 no_longer = _val(line, r"^no longer(?: true)?\b[\s:：—–\-]*")
             elif low.startswith("resolved"):
                 resolved = _val(line, r"^resolved\b[\s:：—–\-]*")
-        return trait, belief, want, kernel, became, name, lore, question, no_longer, resolved
+            elif low.startswith("thread"):
+                # Sep 13: which earlier thought this one continued, in the
+                # machine's words — matched to the ledger by content overlap.
+                thread = _val(line, r"^thread\b[\s:：—–\-]*")
+        return trait, belief, want, kernel, became, name, lore, question, no_longer, resolved, thread
 
     def get_current_desire(self) -> str:
         """Get LLM-generated desire (what I want right now).

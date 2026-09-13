@@ -708,6 +708,7 @@ def get_unchanged_line(agent) -> str:
         silences = sum(1 for a in acts if a[1] == "silence")
         saids = [a[2] for a in acts if a[1] == "said" and a[2]]
         phrase, k = _top_phrase(saids, since)
+        agent._stretch_phrase, agent._stretch_phrase_n = phrase, k  # Sep 13: tedium reads the count it already computed
         try:
             interval = float(agent._current_caption_interval(now))
         except Exception:
@@ -1534,6 +1535,15 @@ def build_decision_ask(agent, live: bool, is_awakening: bool) -> str:
     if n % _every != 0:
         return ""
     agent._decision_asked = True
+    # Sep 13: under pressure the same ask names it and puts the ways out in
+    # view — including staying with it. Wording is the artist's to finalize.
+    try:
+        from captioner.tedium import pressing
+
+        if pressing(float(getattr(agent, "_tedium_value", 0.0) or 0.0)):
+            return P("caption.decide-tedium")
+    except Exception:
+        pass
     return P("caption.decide")
 
 
@@ -1642,6 +1652,31 @@ def arrival_cue_text(agent) -> str:
     if rare:
         return P(key + "-rare").format(gap=gap_words)
     return P(key)
+
+
+def drift_seed_ask(seed: dict) -> str:
+    """THE THREAD IS OPENED BY A QUESTION (Sep 13). Reviewed plan: "a live
+    thread must be present by QUESTION, not by statement, or it is the next
+    refrain." The old seed line stated "You've been coming back to this" — a
+    claim the ledger could not support (0 of 247 threads were returned to on
+    the Sep 12 night) and a shape the drift could only restate. In order: the
+    machine's own open question about this thread; where the thread last got
+    to; otherwise the thought and an open door."""
+    text = (seed or {}).get("text", "")
+    if not text:
+        return ""
+    try:
+        from utils.lore_ledger import lore_ledger
+
+        q = lore_ledger.question_for(seed)
+        if q and q.get("text"):
+            return P("drift.lore-seed-question").format(text=text, question=q["text"])
+    except Exception:
+        pass
+    adv = (((seed or {}).get("returns") or [{}])[-1].get("advance") or "").strip()
+    if adv and adv.lower() != text.strip().lower():
+        return P("drift.lore-seed-advance").format(text=text, advance=adv[:200])
+    return P("drift.lore-seed").format(text=text)
 
 
 def pass_cue_text(at_ts: float = None) -> str:
@@ -1917,9 +1952,17 @@ def get_lore_line(agent) -> str:
         threads = lore_ledger.alive_threads(3)
         if not threads:
             return ""
+        # Sep 13: a thread the machine has come back to goes first, and the
+        # line says where it got to last time — the seed alone can only be
+        # restated, and restating was the whole of the Sep 12 night.
+        returned = [t for t in threads if t.get("returns")]
+        pool = returned or threads
         rr = int(getattr(agent, "_lore_thread_rr", 0) or 0)
-        pick = threads[rr % len(threads)]
+        pick = pool[rr % len(pool)]
         agent._lore_thread_rr = rr + 1
+        adv = ((pick.get("returns") or [{}])[-1].get("advance") or "").strip()
+        if adv and adv.lower() != (pick.get("text") or "").strip().lower():
+            return P("caption.lore-advance").format(text=pick["text"], advance=adv[:200])
         return P("caption.lore").format(text=pick["text"])
     except Exception:
         return ""

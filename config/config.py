@@ -1321,6 +1321,39 @@ LORE_ENABLED = os.getenv("LORE_ENABLED", "true").lower() in ("true", "1", "yes")
 LORE_REVERIES_MAX = 40
 LORE_THREADS_MAX = 6
 LORE_SEED_P = float(os.getenv("LORE_SEED_P", 0.33))
+# THREAD WRITE-BACK (Sep 13). The Sep 12 night read: lore threads returned to,
+# 0 of 247. The machine opened threads and never came back to one, because
+# nothing recorded that a thread had been taken up — so nothing could compound
+# and nothing could be dropped. A RETURN is written when the reflection's
+# distiller says this thought continued an earlier one, when a drift seeded
+# with a thread comes back with something, or when a stored caption overlaps a
+# thread by RETURN_MIN_WORDS content words. A thread offered PRUNE_OFFERS times
+# with no return goes dormant: kept, never offered again, revived if the
+# machine wanders back into it on its own.
+# TEDIUM AS PRESSURE (Sep 13, artist: "tedium is material and repetition is in
+# and of itself an event… we are missing something in the architecture").
+# captioner/tedium.py. Rises only while nothing is happening, faster when the
+# call named the same thing again; never while someone is here or attention is
+# up. Discharges by a FRACTION when the pressure finds a way out. Each consumer
+# is an offer, never a command — the caption interval does not move and silence
+# stays the model's choice.
+TEDIUM_ENABLED = os.getenv("TEDIUM_ENABLED", "true").lower() in ("true", "1", "yes")
+TEDIUM_RISE_BASE = float(os.getenv("TEDIUM_RISE_BASE", 0.003))  # sameness alone asymptotes just above the ask
+TEDIUM_RISE_REPEAT = float(os.getenv("TEDIUM_RISE_REPEAT", 0.009))  # naming the same thing again counts four times as much
+TEDIUM_DECAY_TAU_S = float(os.getenv("TEDIUM_DECAY_TAU_S", 1800))
+TEDIUM_FLOOR = float(os.getenv("TEDIUM_FLOOR", 0.0))
+TEDIUM_DISCHARGE_DRIFT = float(os.getenv("TEDIUM_DISCHARGE_DRIFT", 0.5))
+TEDIUM_DISCHARGE_REFLECTION = float(os.getenv("TEDIUM_DISCHARGE_REFLECTION", 0.7))
+TEDIUM_DISCHARGE_EVENT = float(os.getenv("TEDIUM_DISCHARGE_EVENT", 1.0))
+TEDIUM_DISCHARGE_DRAWING = float(os.getenv("TEDIUM_DISCHARGE_DRAWING", 0.6))
+TEDIUM_DISCHARGE_SILENCE = float(os.getenv("TEDIUM_DISCHARGE_SILENCE", 0.15))
+TEDIUM_SILENCE_RUN = int(os.getenv("TEDIUM_SILENCE_RUN", 2))
+TEDIUM_DRIFT_GAIN = float(os.getenv("TEDIUM_DRIFT_GAIN", 1.5))  # drift odds multiplier at full pressure
+TEDIUM_ASK_AT = float(os.getenv("TEDIUM_ASK_AT", 0.6))  # the decision ask puts the exits in view
+TEDIUM_REFLECT_AT = float(os.getenv("TEDIUM_REFLECT_AT", 0.8))
+TEDIUM_REFLECT_FACTOR = float(os.getenv("TEDIUM_REFLECT_FACTOR", 0.5))  # of the reflection interval, under that pressure
+LORE_THREAD_PRUNE_OFFERS = int(os.getenv("LORE_THREAD_PRUNE_OFFERS", 3))
+LORE_THREAD_RETURN_MIN_WORDS = int(os.getenv("LORE_THREAD_RETURN_MIN_WORDS", 3))
 LORE_LINE_EVERY_N = int(os.getenv("LORE_LINE_EVERY_N", 4))  # the lore line's internal pacing inside the memory-surface rotation
 
 # Reflection-echo pacing (Aug 28 evening). Aug 22 removed this source's

@@ -87,7 +87,20 @@ class ReflectionLoop:
         if BASE_VOICE_DETOX:
             return False
         elapsed = time.time() - self.last_reflection_time
-        if elapsed < REFLECTION_LOOP_INTERVAL:
+        # Sep 13 (tedium as pressure): under real pressure the long thought can
+        # come early — the one interior text of the Sep 12 night was the 01:18
+        # reflection, and it arrived after hours of the machine repeating
+        # itself with nowhere to put it.
+        interval = REFLECTION_LOOP_INTERVAL
+        try:
+            from captioner.tedium import unbearable
+            from config.config import TEDIUM_REFLECT_FACTOR
+
+            if unbearable(float(getattr(self.agent, "_tedium_value", 0.0) or 0.0)):
+                interval = REFLECTION_LOOP_INTERVAL * float(TEDIUM_REFLECT_FACTOR)
+        except Exception:
+            pass
+        if elapsed < interval:
             return False
         if not getattr(self.agent, "first_caption_done", False):
             return False
@@ -568,6 +581,10 @@ class ReflectionLoop:
         try:
             from captioner.context_compression import context_compressor
 
+            try:
+                self.agent._tedium_discharge("reflection")  # Sep 13: the long thought is where the pressure goes
+            except Exception:
+                pass
             kernel = context_compressor.distill_reflection(text, subject, model=config.MODEL_NAME)
             try:
                 context_compressor.maybe_consolidate_persona(model=config.MODEL_NAME)  # once a day (Sep 5)

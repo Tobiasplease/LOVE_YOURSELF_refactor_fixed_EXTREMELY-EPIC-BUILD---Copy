@@ -2195,3 +2195,41 @@ STREAM_MODE).
   evidence of a person. Its rarity counts arrivals AND earlier passes, so a
   second crossing an hour later is not "the first sign of anyone in a day".
   debug/test_pass_event.py.
+- **Thread write-back, pruning and the thread-anchored drift ask (Sep 13)**:
+  the Sep 12 night returned to 0 of 247 lore threads, and the live ledger at
+  12:00 today read 268 threads, 157 offered, 0 ever returned to. Nothing
+  recorded a return, so the ledger could neither compound a story nor drop a
+  dead one, and the drift seed could only restate itself — its line literally
+  claimed "You've been coming back to this" about threads nothing had come back
+  to. Now `utils/lore_ledger.py` keeps `returns` per thread (ts, source,
+  advance) written from three places: the reflection distiller's new THREAD
+  slot ("if this carried on a thought you'd already been having, that earlier
+  thought in a few words"), matched to the ledger by content overlap with the
+  KERNEL as the advance; a drift that opened from a thread and came back, its
+  first sentence as the advance; and any stored caption that wanders into a
+  thread by LORE_THREAD_RETURN_MIN_WORDS (3) content words. A thread offered
+  LORE_THREAD_PRUNE_OFFERS (3) times with no return goes dormant — kept, never
+  offered, revived if the machine finds its own way back into it. `pick_seed`
+  prefers threads with returns, so a living story compounds. The arc-line
+  (`caption.lore-advance`) and the drift ask now state where the thought GOT
+  TO, and the drift opens by QUESTION: one of the machine's own open questions
+  about that thread (`lore_ledger.question_for`), else where it got to, else
+  the thought and an open door. `_parse_distillation` now returns eleven slots.
+  debug/test_lore_ledger.py.
+- **Tedium as pressure, with discharge (Sep 13)**: `captioner/tedium.py`, built
+  like the attention dial. Rises per thought call ONLY while the stretch is
+  running, four times faster when the call named the same thing again (the
+  stretch line's own phrase count, computed once and stashed), and not at all
+  while someone is here or attention is at ATTENTION_CURIOUS — novelty and
+  tedium are exclusive. Discharges by a FRACTION when the pressure finds a way
+  out: a drift (0.5), a reflection (0.7), a rare event or arrival (1.0), a
+  drawing being made (0.6), a run of two chosen silences (0.15). Decays with
+  tau 30 min otherwise. The tuning, measured in debug/test_tedium.py: sameness
+  alone takes over an hour to put the exits in view and never reaches the
+  reflection threshold; repetition every third call gets there in 18 minutes,
+  every call in 8. Three plugs, each an offer and never a command — the drift's
+  odds (×(1+1.5·tedium)), the decision ask (`caption.decide-tedium`: look
+  elsewhere, say nothing, follow the thought out, or stay with it), and the
+  reflection's interval (halved above TEDIUM_REFLECT_AT). The caption interval
+  does not move and silence stays the model's choice. Logged every call as
+  `action: "tedium"`.

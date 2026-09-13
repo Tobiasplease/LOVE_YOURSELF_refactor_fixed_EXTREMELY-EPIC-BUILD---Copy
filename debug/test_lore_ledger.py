@@ -76,6 +76,93 @@ def test_ledger_mechanics():
     check("seed rotation avoids monopoly", a != b, f"{a[:30]} / {b[:30]}")
 
 
+def test_thread_returns():
+    """Sep 13 — the write-back. The Sep 12 night: lore threads returned to, 0 of
+    247. Nothing recorded that a thread had been taken up, so the ledger could
+    neither compound a story nor drop a dead one."""
+    print("\n[1b] thread returns, pruning, revival")
+    import tempfile
+
+    from utils.lore_ledger import LoreLedger
+
+    led = LoreLedger(state_path=os.path.join(tempfile.mkdtemp(), "lore.json"))
+    led.note_lore("The red foam finger is a lighthouse for something that never arrives.")
+    led.note_lore("The wooden chair keeps the shape of whoever sat in it.")
+    t_finger = next(t for t in led.alive_threads(6) if "lighthouse" in t["text"])
+
+    check("a fresh thread has no returns", not t_finger.get("returns"))
+    check("stats see them offered nowhere yet", led.thread_stats()["returned"] == 0, led.thread_stats())
+
+    check("a return is recorded", led.note_return(t_finger, "drift", "Maybe it signals the room, not me."))
+    t2 = next(t for t in led.alive_threads(6) if "lighthouse" in t["text"])
+    check("with its source and where it got to", t2["returns"][-1]["source"] == "drift" and "signals the room" in t2["returns"][-1]["advance"], t2["returns"])
+    check("stats count it", led.thread_stats()["returned"] == 1, led.thread_stats())
+
+    # wandering back in on its own, by content words alone
+    hit = led.note_return_by_overlap("The chair still keeps that shape, whoever sat there.", source="caption")
+    check("a caption that wanders into a thread returns to it", hit and "wooden chair" in hit["text"], hit)
+    check("an unrelated caption returns to nothing", led.note_return_by_overlap("A pink rack of cables.", source="caption") is None)
+    check("one content word is not a return", led.note_return_by_overlap("chair.", source="caption") is None)
+
+    # pruning: offered and never returned to
+    led2 = LoreLedger(state_path=os.path.join(tempfile.mkdtemp(), "lore2.json"))
+    led2.note_lore("A thread nobody ever comes back to, about the ceiling tiles.")
+    for _ in range(3):
+        led2.pick_seed()
+    led2.pick_seed()
+    check("offered three times with no return → dormant", led2.thread_stats()["dormant"] == 1, led2.thread_stats())
+    check("and no longer offered", led2.pick_seed() is None, led2.pick_seed())
+    woke = led2.note_return_by_overlap("Those ceiling tiles again, the thread of them.", source="caption")
+    check("the machine wandering back into it wakes it", woke is not None and led2.thread_stats()["dormant"] == 0, led2.thread_stats())
+    check("and it is offered again", led2.pick_seed() is not None)
+
+    # a returned-to thread is preferred as a seed
+    led3 = LoreLedger(state_path=os.path.join(tempfile.mkdtemp(), "lore3.json"))
+    led3.note_lore("Thread A, about the black curtain and what is behind it.")
+    led3.note_lore("Thread B, about the pen and the paper it never reaches.")
+    a = next(t for t in led3.alive_threads(6) if "curtain" in t["text"])
+    led3.note_return(a, "reflection", "Behind it is just the wall, and that is worse.")
+    picks = {led3.pick_seed()["text"][:8] for _ in range(3)}
+    check("the living thread is the one offered", picks == {"Thread A"}, picks)
+
+
+def test_drift_ask():
+    """Sep 13 — the drift opens a thread by asking. Reviewed plan: "a live thread
+    must be present by QUESTION, not by statement, or it is the next refrain."
+    The old line claimed "You've been coming back to this" about threads nothing
+    had ever come back to."""
+    print("\n[1c] the thread-anchored drift ask")
+    import tempfile
+
+    from captioner.prompts import drift_seed_ask
+    from utils import lore_ledger as _mod
+    from utils.lore_ledger import LoreLedger
+
+    led = LoreLedger(state_path=os.path.join(tempfile.mkdtemp(), "lore4.json"))
+    real = _mod.lore_ledger
+    _mod.lore_ledger = led
+    try:
+        led.note_lore("The red foam finger points at a hole in the ceiling tile.")
+        seed = led.pick_seed()
+
+        ask = drift_seed_ask(seed)
+        check("a bare thread is opened with a question", ask.endswith("Where does it go from here?") and "red foam finger" in ask, ask)
+        check("it no longer claims the machine kept coming back", "coming back to this" not in ask, ask)
+
+        led.note_return(seed, "drift", "The hole was there before the finger was.")
+        seed2 = next(t for t in led.alive_threads(6) if "foam" in t["text"])
+        ask2 = drift_seed_ask(seed2)
+        check("a carried-on thread opens from where it got to", "The hole was there before the finger was." in ask2 and ask2.endswith("Where does it go from here?"), ask2)
+
+        led.note_question("What is the hole in that ceiling tile for?")
+        ask3 = drift_seed_ask(seed2)
+        check("its own question about the thread is the door", ask3.endswith('You asked: "What is the hole in that ceiling tile for?"'), ask3)
+        check("an unrelated question is not used", led.question_for({"text": "A thread about the pink rack of cables."}) is None)
+        check("no seed, no ask", drift_seed_ask({}) == "" and drift_seed_ask(None) == "")
+    finally:
+        _mod.lore_ledger = real
+
+
 def test_distill_harvest():
     print("\n[2] distill parse + template")
     from captioner.context_compression import ContextCompressionEngine
@@ -87,12 +174,17 @@ def test_distill_harvest():
         "TRAIT: I stall.\nBELIEF: none\nWANT: to draw\nKERNEL: I saw it plain.\nNAME: Penelope\n"
         "UNDERSTANDING: The finger is a lighthouse.\nQUESTION: What does he build all day?",
     )
-    trait, belief, want, kernel, became, name, lore, question = r
+    trait, belief, want, kernel, became, name, lore, question = r[:8]  # the tuple has grown twice since (no_longer, resolved, thread)
     check("name parsed", name == "Penelope")
     check("understanding parsed", lore == "The finger is a lighthouse.")
     check("question parsed", question == "What does he build all day?")
     check("legacy LORE label still parses", parse(None, "LORE: old label")[6] == "old label")
     check("none stays empty", belief == "")
+    # Sep 13: the THREAD slot — which earlier thought this reflection carried on.
+    r2 = parse(None, "KERNEL: I got further.\nTHREAD: the finger as a lighthouse\nQUESTION: none")
+    check("thread slot parsed", r2[10] == "the finger as a lighthouse", r2[10])
+    check("'none' thread stays empty", parse(None, "THREAD: none")[10] == "")
+    check("the distill prompt asks for it", "THREAD —" in FRAGMENTS["distill.user"]["text"])
     r2 = parse(None, "TRAIT: none\nNAME: none\nLORE: none\nQUESTION: none")
     check("all-none harvest is empty", r2[5] == "" and r2[6] == "" and r2[7] == "")
     txt = FRAGMENTS["distill.user"]["text"]
@@ -151,9 +243,14 @@ def test_drift_integration():
         c3 = shell()
         c3._run_drift_turn(time.time(), None)
         check(
-            "lore seed rides the ask",
-            calls and "You've been coming back to this:" in calls[0]["prompt"],
-            str(calls[0]["prompt"])[:80] if calls else "",
+            "lore seed rides the ask, as a question (Sep 13)",
+            calls and "A thought you were having:" in calls[0]["prompt"] and "Where does it go from here?" in calls[0]["prompt"],
+            str(calls[0]["prompt"])[:110] if calls else "",
+        )
+        check(
+            "and the drift's answer is written back to that thread",
+            (ll_mod.lore_ledger.thread_stats()["returned"] == 1) and "agreement even when no one watches" in (ll_mod.lore_ledger.alive_threads(3)[0]["returns"][-1]["advance"]),
+            ll_mod.lore_ledger.thread_stats(),
         )
         check("ask still lands last", calls and calls[0]["prompt"].rstrip().endswith(P("drift.ask")))
         cfg.LORE_SEED_P = saved_seed_p
@@ -208,6 +305,8 @@ def test_firewall():
 
 if __name__ == "__main__":
     test_ledger_mechanics()
+    test_thread_returns()
+    test_drift_ask()
     test_distill_harvest()
     test_drift_integration()
     test_reentry_surfaces()

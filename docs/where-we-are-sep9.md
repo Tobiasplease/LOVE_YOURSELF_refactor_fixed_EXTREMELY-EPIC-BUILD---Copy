@@ -2177,3 +2177,23 @@ Two restarts so far (13:05 for the first two items, and one for the pass
 detector). The dashboard needed only its own service restart. Still to do:
 thread write-back with pruning, the thread-anchored drift ask, tedium as
 pressure with discharge.
+
+**Thread write-back, the drift's question, and tedium (13:00 → 14:00).** The
+live ledger made the artist's complaint exact: 268 threads, 157 offered, 0 ever
+returned to. Returns are now written from the reflection's new THREAD slot, from
+a drift that opened on a thread and came back, and from any caption that wanders
+into one by three content words; three offers with no return puts a thread to
+sleep, and the machine finding its own way back wakes it. The drift no longer
+claims "You've been coming back to this" — it opens with the machine's own
+question about that thread when it has one, else with where the thought last got
+to, and asks where it goes from here.
+
+Tedium is the second half of the stretch line. The stretch made repetition
+audible; this makes it accumulate and gives it somewhere to go. It rises only
+while nothing is happening, four times faster on repetition, never while someone
+is here or attention is up, and it is spent by a drift, a reflection, an event, a
+drawing, or a run of chosen silence. Sameness alone takes an hour to put the
+exits in view and never triggers an early reflection; repetition every third call
+does it in eighteen minutes. The three plugs are offers: the drift comes due
+sooner, the decision ask names it and lists the ways out including staying with
+it, and the long thought may come early. The caption interval does not move.

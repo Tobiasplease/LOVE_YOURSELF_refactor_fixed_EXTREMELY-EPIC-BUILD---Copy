@@ -254,6 +254,18 @@ class Captioner(MemoryMixin):
         self._stream.append(t)
         self._stream_ts.append(time.time())
         self._note_act("said", t)
+        # Sep 13: the machine finding its own way back into a thread is the
+        # return that counts most — no call, content-word overlap only, and a
+        # dormant thread it wanders into wakes up (utils/lore_ledger.py).
+        try:
+            from config.config import LORE_ENABLED
+
+            if LORE_ENABLED and t:
+                from utils.lore_ledger import lore_ledger as _ll
+
+                _ll.note_return_by_overlap(t, source="caption")
+        except Exception:
+            pass
 
     def _note_act(self, kind: str, text: str = "") -> None:
         """The machine's own record of what it did (Sep 13, artist: "tedium is
@@ -308,6 +320,16 @@ class Captioner(MemoryMixin):
                 # hot inventive turn mid-execution is phantom-stroke bait
                 return False
             p = DRIFT_BASE_P * (1.0 + DRIFT_BOREDOM_GAIN * self.boredom)
+            # Sep 13 (tedium as pressure): the drift is the cheapest way out of
+            # a stretch that keeps repeating itself, so it comes due sooner as
+            # the pressure builds. An offer, not a schedule — the roll still
+            # decides, and the machine can stay with the room.
+            try:
+                from config.config import TEDIUM_DRIFT_GAIN
+
+                p *= 1.0 + float(TEDIUM_DRIFT_GAIN) * float(getattr(self, "_tedium_value", 0.0) or 0.0)
+            except Exception:
+                pass
             # Sep 5 (introspection round): "if I loop, I catch myself and that
             # becomes a new thought" — a fresh loop notice raises the odds of
             # stepping out.
@@ -368,7 +390,10 @@ class Captioner(MemoryMixin):
                 if _r.random() < LORE_SEED_P:
                     seed = lore_ledger.pick_seed()
                     if seed:
-                        ask = P("drift.lore-seed").format(text=seed["text"]) + "\n" + ask
+                        from captioner.prompts import drift_seed_ask
+
+                        ask = drift_seed_ask(seed) + "\n" + ask  # Sep 13: a question, not a restatement
+                        self._drift_seed_thread = seed  # Sep 13: what came back gets written to the thread
             except Exception:
                 pass
         try:
@@ -496,6 +521,17 @@ class Captioner(MemoryMixin):
                 from utils.lore_ledger import lore_ledger
 
                 lore_ledger.note_reverie(text)
+                # Sep 13 (thread write-back): a drift that opened from a thread
+                # and came back with something has CONTINUED it — the first
+                # sentence is where it got to. Without this the ledger could
+                # not tell a story being developed from one nothing ever
+                # returned to (0 of 247 on the Sep 12 night).
+                self._tedium_discharge("drift")  # Sep 13: the thought left the room, and took some of the pressure
+                _seed = getattr(self, "_drift_seed_thread", None)
+                if _seed:
+                    self._drift_seed_thread = None
+                    _first = re.split(r"(?<=[.!?])\s", text.strip())[0]
+                    lore_ledger.note_return(_seed, "drift", _first)
             except Exception:
                 pass
         if reason and reason not in self._ECHO_REASONS:
@@ -635,6 +671,76 @@ class Captioner(MemoryMixin):
                 # Wait longer on startup to allow main loop to populate frames
                 time.sleep(0.5 if not self.first_caption_done else 0.05)
 
+    def _update_tedium(self, now: float) -> None:
+        """TEDIUM AS PRESSURE (Sep 13, artist: "tedium is material and
+        repetition is in and of itself an event… we are missing something in
+        the architecture"). One call's worth of pressure, from facts the cycle
+        already computed: whether the stretch is running, whether this call
+        named the same thing again (the stretch line's own count), whether
+        anyone is here or attention is up, whether the machine chose to say
+        nothing. captioner/tedium.py holds the dial; the plugs are the drift's
+        odds, the decision ask and the reflection's interval."""
+        try:
+            from config.config import ATTENTION_CURIOUS, TEDIUM_ENABLED, UNCHANGED_FACT_AFTER_S
+
+            if not TEDIUM_ENABLED:
+                return
+            from captioner.tedium import Tedium
+
+            if not hasattr(self, "_tedium"):
+                self._tedium = Tedium(now)
+            from captioner.prompts import unchanged_duration_s
+
+            unchanged = float(unchanged_duration_s(self, now)) >= float(UNCHANGED_FACT_AFTER_S)
+            n = int(getattr(self, "_stretch_phrase_n", 0) or 0)
+            prev_n = int(getattr(self, "_tedium_prev_phrase_n", 0) or 0)
+            self._tedium_prev_phrase_n = n
+            engaged = bool(getattr(self, "_presence_believed", False)) or float(getattr(self, "_room_attention", 1.0)) >= float(ATTENTION_CURIOUS)
+            silent = bool(getattr(self, "_tedium_silent", False))
+            self._tedium_silent = False
+            # A drawing being made is the pressure spent on the thing the whole
+            # machine is for; caught on the edge, once.
+            drawing = False
+            try:
+                from utils.state_manager import state_manager
+
+                drawing = bool(getattr(state_manager, "is_generating_drawing", False) or getattr(state_manager, "is_executing_cnc", False))
+            except Exception:
+                pass
+            if drawing and not getattr(self, "_tedium_prev_drawing", False):
+                from config.config import TEDIUM_DISCHARGE_DRAWING
+
+                self._tedium.discharge(float(TEDIUM_DISCHARGE_DRAWING), "drawing", now)
+            self._tedium_prev_drawing = drawing
+            self._tedium.update(now, unchanged=unchanged, repeated=n > prev_n, engaged=engaged, silent=silent)
+            self._tedium_value = self._tedium.value
+            log_json_entry(
+                LogType.DEBUG,
+                {"message": "Tedium", "action": "tedium", **self._tedium.state(), "unchanged": bool(unchanged), "repeated": bool(n > prev_n)},
+                print_message=None,
+            )
+        except Exception as _te:
+            self._tedium_value = 0.0
+            print(f"[🫥] tedium update failed: {_te}")
+
+    def _tedium_discharge(self, which: str) -> None:
+        """The pressure found a way out (Sep 13). Fractions in config."""
+        try:
+            from config import config as _c
+
+            t = getattr(self, "_tedium", None)
+            if t is None:
+                return
+            amount = {
+                "drift": float(getattr(_c, "TEDIUM_DISCHARGE_DRIFT", 0.5)),
+                "reflection": float(getattr(_c, "TEDIUM_DISCHARGE_REFLECTION", 0.7)),
+                "event": float(getattr(_c, "TEDIUM_DISCHARGE_EVENT", 1.0)),
+            }.get(which, 0.5)
+            t.discharge(amount, which, time.time())
+            self._tedium_value = t.value
+        except Exception:
+            pass
+
     def _track_pass(self, now: float, raw_person: bool, info: dict) -> None:
         """SOMEONE WENT PAST (Sep 13, artist: "Someone walked past about an hour
         ago… It left no trace in the current real-time captioning… There should
@@ -700,6 +806,7 @@ class Captioner(MemoryMixin):
                     self._room_attention = self._attention.value
             except Exception:
                 pass
+            self._tedium_discharge("event")  # something happened; the stretch is over
             log_json_entry(
                 LogType.DEBUG,
                 {"message": "Someone went past", "action": "person_passed", "seen_s": round(seen_s, 1)},
@@ -988,6 +1095,7 @@ class Captioner(MemoryMixin):
                     print_message=f"[👤] presence believed ON ({'resumed' if resumed else 'arrival'})",
                 )
                 arrival = not resumed  # OFF->ON edge — the only genuine arrival
+                self._tedium_discharge("event")  # Sep 13: someone is here; whatever had built up is spent
                 if arrival:
                     # Sep 5 (agency round): a want about a person is MET by a real
                     # arrival — a fact the ledger keeps and the prompt says once;
@@ -1895,6 +2003,8 @@ class Captioner(MemoryMixin):
         poison, recency survives, and in the worst case the window empties
         gradually instead of vanishing at a stroke."""
         self._note_act("silence" if reason in ("chosen_silence", "repeat_silenced") else "unstored", preview)
+        if reason in ("chosen_silence", "repeat_silenced"):
+            self._tedium_silent = True  # Sep 13: staying quiet on purpose spends a little of the pressure
         self._skip_streak = getattr(self, "_skip_streak", 0) + 1
         if self._skip_streak >= 3 and len(self._stream) > 1:
             dropped = self._stream.popleft()
@@ -2336,6 +2446,7 @@ class Captioner(MemoryMixin):
                             _gz.set_attention(self._room_attention)
                             from utils.image_tokens import tokens_for_attention as _tfa
 
+                            self._update_tedium(now)
                             log_json_entry(
                                 LogType.DEBUG,
                                 {"message": "Room attention", "action": "attention", "attention": round(self._room_attention, 3), "reason": self._attention.last_reason, "image_tokens": _tfa(self._room_attention)},

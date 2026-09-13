@@ -120,6 +120,88 @@ class LoreLedger:
             self._save()
             return "opened"
 
+    # -- returns: a thread taken up again (Sep 13) -----------------------
+
+    def _thread_by_key(self, key) -> Optional[Dict]:
+        """A thread by its first_ts, which is stable for its whole life."""
+        if key is None:
+            return None
+        k = float(key.get("first_ts", 0)) if isinstance(key, dict) else float(key)
+        for t in self._data["threads"]:
+            if abs(float(t.get("first_ts", 0)) - k) < 0.001:
+                return t
+        return None
+
+    def note_return(self, key, source: str, advance: str = "") -> bool:
+        """The machine came back to this thread. `source` is how it came back
+        (reflection | drift | caption); `advance` is where it got to, in its
+        own words. A dormant thread returned to wakes up — the machine
+        wandering back into a story of its own accord is the only vote that
+        counts (Sep 13: nothing recorded returns, so 0 of 247 threads were
+        ever continued)."""
+        with self._lock:
+            t = self._thread_by_key(key)
+            if t is None:
+                return False
+            rs = t.setdefault("returns", [])
+            rs.append({"ts": time.time(), "source": str(source)[:20], "advance": (advance or "").strip()[:200]})
+            t["returns"] = rs[-8:]
+            t["last_ts"] = time.time()
+            if t.get("status") == "dormant":
+                t["status"] = "alive"
+            self._save()
+            return True
+
+    def note_return_by_overlap(self, text: str, source: str = "caption", min_words: int = None, advance: str = None) -> Optional[Dict]:
+        """Did this text wander back into a thread on its own? Content-word
+        overlap only — no call, no model. Returns the thread it landed in."""
+        from config.config import LORE_THREAD_RETURN_MIN_WORDS
+
+        need = int(min_words or LORE_THREAD_RETURN_MIN_WORDS)
+        words = _content_words(text)
+        if len(words) < need:
+            return None
+        best, best_n = None, 0
+        with self._lock:
+            for t in self._data["threads"]:
+                if t.get("status") == "faded":
+                    continue
+                n = len(words & _content_words(t.get("text", "")))
+                if n >= need and n > best_n:
+                    best, best_n = t, n
+        if best is None:
+            return None
+        key = float(best.get("first_ts", 0))
+        return dict(best) if self.note_return(key, source, advance if advance is not None else text) else None
+
+    def _prune_locked(self) -> int:
+        """Offered and never returned to, PRUNE_OFFERS times over: dormant.
+        Kept in the file — a thread the machine finds its own way back to
+        wakes up (note_return)."""
+        from config.config import LORE_THREAD_PRUNE_OFFERS
+
+        n = 0
+        for t in self._data["threads"]:
+            if t.get("status") != "alive":
+                continue
+            if not t.get("returns") and int(t.get("times_surfaced", 0)) >= int(LORE_THREAD_PRUNE_OFFERS):
+                t["status"] = "dormant"
+                n += 1
+        return n
+
+    def thread_stats(self) -> Dict:
+        """For the measurement: offered, returned to, dormant."""
+        with self._lock:
+            ts = self._data["threads"]
+            return {
+                "threads": len(ts),
+                "alive": sum(1 for t in ts if t.get("status") == "alive"),
+                "dormant": sum(1 for t in ts if t.get("status") == "dormant"),
+                "offered": sum(1 for t in ts if int(t.get("times_surfaced", 0)) > 0),
+                "returned": sum(1 for t in ts if t.get("returns")),
+                "returns": sum(len(t.get("returns") or []) for t in ts),
+            }
+
     def alive_threads(self, n: int = 6) -> List[Dict]:
         with self._lock:
             alive = [dict(t) for t in self._data["threads"] if t.get("status") == "alive"]
@@ -127,12 +209,17 @@ class LoreLedger:
 
     def pick_seed(self) -> Optional[Dict]:
         """One alive thread for a drift to open from — least-recently
-        surfaced first, so no single story monopolizes the daydreams."""
+        surfaced first, so no single story monopolizes the daydreams. Sep 13:
+        threads the machine has actually come back to are preferred, so a
+        living story compounds instead of competing with the ones nothing ever
+        returned to; those go dormant after LORE_THREAD_PRUNE_OFFERS offers."""
         with self._lock:
+            self._prune_locked()
             alive = [t for t in self._data["threads"] if t.get("status") == "alive"]
             if not alive:
                 return None
-            pick = min(alive, key=lambda t: t.get("last_surfaced_ts", 0.0))
+            pool = [t for t in alive if t.get("returns")] or alive
+            pick = min(pool, key=lambda t: t.get("last_surfaced_ts", 0.0))
             pick["times_surfaced"] = pick.get("times_surfaced", 0) + 1
             pick["last_surfaced_ts"] = time.time()
             self._save()
@@ -172,6 +259,28 @@ class LoreLedger:
         with self._lock:
             qs = [dict(q) for q in self._data.get("questions", []) if q.get("status") == "open"]
         return sorted(qs, key=lambda q: -q.get("last_ts", 0))[:n]
+
+    def question_for(self, thread, min_words: int = 2) -> Optional[Dict]:
+        """One of the machine's OWN open questions that belongs to this thread —
+        content-word overlap, most overlap wins (Sep 13). The drift opens a
+        thread by asking, and the best question is one it already asked."""
+        words = _content_words((thread or {}).get("text", "") if isinstance(thread, dict) else str(thread or ""))
+        if not words:
+            return None
+        best, best_n = None, 0
+        with self._lock:
+            for q in self._data.get("questions", []):
+                if q.get("status") != "open":
+                    continue
+                n = len(words & _content_words(q.get("text", "")))
+                if n >= int(min_words) and n > best_n:
+                    best, best_n = q, n
+            if best is not None:
+                best["times_surfaced"] = best.get("times_surfaced", 0) + 1
+                best["last_surfaced_ts"] = time.time()
+                self._save()
+                return dict(best)
+        return None
 
     def pick_question(self):
         """Least-recently surfaced open question, for the re-entry line."""
