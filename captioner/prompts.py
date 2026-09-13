@@ -811,6 +811,11 @@ def build_last_event_line(agent) -> str:
         what = _em.event_words(ev)
         age = casual_time_string(ev["age_s"] / 60.0)
         rarity = _em.rarity_phrase(ev["kind"], ev["gap_s"])
+        if ev["kind"] == _em.PASS_KIND:
+            # Sep 13: its own form — what is remembered is that nobody was
+            # properly seen, so the line cannot borrow the visit's wording.
+            key = "caption.last-event-pass" if rarity else "caption.last-event-pass-plain"
+            return P(key).format(age=age, rarity=rarity) if rarity else P(key).format(age=age)
         if rarity:
             line = P("caption.last-event").format(what=what, age=age, rarity=rarity)
         else:
@@ -1637,6 +1642,22 @@ def arrival_cue_text(agent) -> str:
     if rare:
         return P(key + "-rare").format(gap=gap_words)
     return P(key)
+
+
+def pass_cue_text(at_ts: float = None) -> str:
+    """The moment someone crosses the frame without ever being judged (Sep 13).
+    Rarity measured against arrivals and earlier passes alike. `at_ts` is the
+    pass's own moment: the caller builds this BEFORE writing the event, or the
+    pass counts itself as the last sign of anyone and is never rare."""
+    try:
+        from captioner import event_memory as _em
+
+        gap = _em.gap_before(float(at_ts or time.time()), _em.PASS_KIND)
+        if _em.is_rare(gap):
+            return P("caption.pass-cue-rare").format(gap=casual_time_string(gap / 60.0))
+    except Exception:
+        pass
+    return P("caption.pass-cue")
 
 
 def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str = "idle") -> str:

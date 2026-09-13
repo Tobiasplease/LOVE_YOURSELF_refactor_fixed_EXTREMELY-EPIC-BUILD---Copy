@@ -2173,3 +2173,25 @@ STREAM_MODE).
   systemd is. Restart the console with `systemctl --user restart
   impostor-dashboard`; `systemctl --user status impostor-dashboard` says
   whether it is the owner. The machine is untouched either way.
+- **A walk-past is an event of its own (Sep 13)**: the presence belief commits
+  only on the adjudicator's verdict, and a crossing of the frame ends before
+  that lands — so the Sep 11 evening walk-past reached no ledger at all
+  (artist: "It left no trace in the current real-time captioning… There should
+  be a way to differentiate a consistent world model from a truly novel
+  event"). `captioner._track_pass` reads the SAME evidence one step earlier:
+  the raw person signal after the own-body veto and the skeleton gate, before
+  the adjudicator downgrades it. Held for PASS_EVENT_MIN_S (2 s) and then gone
+  for PASS_EVENT_END_S (5 s), with the belief never on and the verdict never
+  "person" (that is a visit) or "thing" (that is the studio's own furniture),
+  it writes an episodic `person_passed`, snaps room attention, and puts
+  `caption.pass-cue` in the arrival cue's sticky slot — free, because a pass
+  never flips the belief. The cue is built BEFORE the event is written, at the
+  pass's own moment: measured after, the pass is its own last sign of anyone
+  and could never be rare. In event memory, PASS_KIND is the lower tier: a
+  tenth of the gap it broke, floor five minutes, cap one hour (a visit gets a
+  quarter, floor ten minutes, cap six hours), its own line
+  (`caption.last-event-pass`) saying the look was never had, and never the
+  compressor's own words — nothing was adjudicated, so nothing it said then is
+  evidence of a person. Its rarity counts arrivals AND earlier passes, so a
+  second crossing an hour later is not "the first sign of anyone in a day".
+  debug/test_pass_event.py.

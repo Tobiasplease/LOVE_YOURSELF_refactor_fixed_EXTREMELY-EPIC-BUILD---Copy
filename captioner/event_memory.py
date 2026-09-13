@@ -39,6 +39,7 @@ from config import config
 
 VISIT_KIND = "visit"
 CHANGE_KIND = "change"
+PASS_KIND = "pass"  # Sep 13: someone crossed the frame and was never judged (see config PASS_EVENT_*)
 
 
 def _cfg(name: str, default):
@@ -77,20 +78,34 @@ def gap_before(event_ts: float, kind: str) -> Optional[float]:
     rarity. None when there is no earlier event on record (unknown, not rare)."""
     if kind == VISIT_KIND:
         ts = [float(e["timestamp"]) for e in _episodic_events(["person_arrived"])] + _arrival_ledger_ts()
+    elif kind == PASS_KIND:
+        # A pass breaks a silence made of ANY human trace, its own kind included:
+        # measured against arrivals alone, two passes an hour apart would each
+        # read as the first sign of anyone in a day.
+        ts = [float(e["timestamp"]) for e in _episodic_events(["person_arrived", "person_passed"])] + _arrival_ledger_ts()
     else:
         ts = [float(e["timestamp"]) for e in _episodic_events(["world_changed"])]
     prior = [t for t in ts if t < event_ts - 60]
     return (event_ts - max(prior)) if prior else None
 
 
-def lifetime_s(gap_s: Optional[float]) -> float:
+def lifetime_s(gap_s: Optional[float], kind: str = VISIT_KIND) -> float:
     """How long an event stays a standing fact: a fixed fraction of the gap
-    that preceded it, between a floor and a cap."""
-    lo = float(_cfg("EVENT_MEMORY_MIN_S", 600))
-    hi = float(_cfg("EVENT_MEMORY_MAX_S", 6 * 3600))
+    that preceded it, between a floor and a cap. A pass is the lower tier —
+    a tenth of the gap, at most an hour — because the machine never got a
+    proper look at it and a long-lived line about a half-seen person is the
+    phantom-presence seed the Sep 12 read warned about."""
+    if kind == PASS_KIND:
+        lo = float(_cfg("PASS_EVENT_MIN_LIFETIME_S", 300))
+        hi = float(_cfg("PASS_EVENT_MAX_LIFETIME_S", 3600))
+        factor = float(_cfg("PASS_EVENT_RARITY_FACTOR", 0.1))
+    else:
+        lo = float(_cfg("EVENT_MEMORY_MIN_S", 600))
+        hi = float(_cfg("EVENT_MEMORY_MAX_S", 6 * 3600))
+        factor = float(_cfg("EVENT_MEMORY_RARITY_FACTOR", 0.25))
     if gap_s is None:
         return lo
-    return max(lo, min(hi, gap_s * float(_cfg("EVENT_MEMORY_RARITY_FACTOR", 0.25))))
+    return max(lo, min(hi, gap_s * factor))
 
 
 def is_rare(gap_s: Optional[float]) -> bool:
@@ -136,6 +151,12 @@ def last_event(now: Optional[float] = None) -> Optional[Dict]:
         dur = (lt - at) if at is not None else None
         words = _own_words(at if at is not None else lt - 600, lt + 300, must_match=_PERSON_WORDS)
         cands.append({"kind": VISIT_KIND, "ts": lt, "start_ts": at, "duration_s": dur, "gap_s": gap, "words": words})
+    passes = _episodic_events(["person_passed"])
+    if passes:
+        p = passes[-1]
+        pt = float(p["timestamp"])
+        dur = float((p.get("metadata") or {}).get("duration_s") or 0) or None
+        cands.append({"kind": PASS_KIND, "ts": pt, "start_ts": pt - (dur or 0), "duration_s": dur, "gap_s": gap_before(pt, PASS_KIND), "words": ""})
     changes = _episodic_events(["world_changed"])
     if changes:
         ch = changes[-1]
@@ -145,7 +166,7 @@ def last_event(now: Optional[float] = None) -> Optional[Dict]:
         return None
     ev = max(cands, key=lambda c: c["ts"])
     ev["age_s"] = now - ev["ts"]
-    ev["lifetime_s"] = lifetime_s(ev["gap_s"])
+    ev["lifetime_s"] = lifetime_s(ev["gap_s"], ev["kind"])
     ev["alive"] = ev["age_s"] <= ev["lifetime_s"]
     ev["rare"] = is_rare(ev["gap_s"])
     return ev
@@ -169,13 +190,15 @@ def rarity_phrase(kind: str, gap_s: Optional[float]) -> str:
         return ""
     from captioner.prompts import casual_time_string
 
-    noun = "visitor" if kind == VISIT_KIND else "change"
+    noun = "visitor" if kind in (VISIT_KIND, PASS_KIND) else "change"
     return f"the first {noun} in {casual_time_string(gap_s / 60.0)}"
 
 
 def event_words(ev: Dict) -> str:
     """The sentence for the event: the machine's own if it has one, else a
-    plain fact from the ledger, in words."""
+    plain fact from the ledger, in words. A pass has no own words by
+    construction — nothing was adjudicated, so nothing it said about that
+    moment is evidence of a person."""
     # Own words only when SHORT (Sep 12 00:05): the first live line carried a
     # 24-word mid-visit sentence — "…only their back remains visible as they
     # sit hunched over the desk" — which, riding every prompt for hours in an
@@ -186,6 +209,8 @@ def event_words(ev: Dict) -> str:
         return w if w.endswith((".", "!", "?")) else w + "."
     from captioner.prompts import casual_time_string
 
+    if ev["kind"] == PASS_KIND:
+        return ""  # the pass has its own line — it is about not having got a look
     if ev["kind"] == VISIT_KIND:
         if ev.get("duration_s") is not None:
             return f"Someone came in, stayed {casual_time_string(ev['duration_s'] / 60.0)}, and left."

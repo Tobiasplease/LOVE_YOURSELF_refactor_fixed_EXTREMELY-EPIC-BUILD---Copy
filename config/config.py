@@ -1403,6 +1403,21 @@ EVENT_MEMORY_MAX_S = float(os.getenv("EVENT_MEMORY_MAX_S", 6 * 3600))
 ARRIVAL_RARITY_MIN_S = float(os.getenv("ARRIVAL_RARITY_MIN_S", 1200))
 PRESENCE_EDGE_STICKY_S = float(os.getenv("PRESENCE_EDGE_STICKY_S", 120))
 EVENT_MEMORY_OWN_WORDS_MAX = int(os.getenv("EVENT_MEMORY_OWN_WORDS_MAX", 18))
+# SOMEONE WENT PAST (Sep 13, artist: "Someone walked past about an hour ago…
+# It left no trace in the current real-time captioning… There should be a way
+# to differentiate a consistent world model from a truly novel event."). The
+# presence belief needs the adjudicator to confirm a settled person; a walk
+# through the frame is over before that verdict lands, so it left no record at
+# all. A pass is the raw person signal (already past the own-body veto and the
+# skeleton gate) held for MIN_S and gone for END_S, with the belief never on
+# and the adjudicator never calling it a thing. It is an event of a lower
+# tier: remembered a tenth of the gap it broke, never a visit.
+PASS_EVENT_ENABLED = os.getenv("PASS_EVENT_ENABLED", "true").lower() in ("true", "1", "yes")
+PASS_EVENT_MIN_S = float(os.getenv("PASS_EVENT_MIN_S", 2.0))
+PASS_EVENT_END_S = float(os.getenv("PASS_EVENT_END_S", 5.0))
+PASS_EVENT_RARITY_FACTOR = float(os.getenv("PASS_EVENT_RARITY_FACTOR", 0.1))
+PASS_EVENT_MIN_LIFETIME_S = float(os.getenv("PASS_EVENT_MIN_LIFETIME_S", 300))
+PASS_EVENT_MAX_LIFETIME_S = float(os.getenv("PASS_EVENT_MAX_LIFETIME_S", 3600))
 # ROOM ATTENTION (Sep 12, artist: "the picture in the frame is not the problem, its size is";
 # "someone that is bored and sick of a space doesn't still dart around the room… it's not an
 # either/or"). One value earned by what the eyes find (captioner/attention.py): novelty pulls

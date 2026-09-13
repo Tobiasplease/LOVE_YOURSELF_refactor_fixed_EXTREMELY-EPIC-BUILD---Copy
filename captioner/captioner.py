@@ -635,6 +635,79 @@ class Captioner(MemoryMixin):
                 # Wait longer on startup to allow main loop to populate frames
                 time.sleep(0.5 if not self.first_caption_done else 0.05)
 
+    def _track_pass(self, now: float, raw_person: bool, info: dict) -> None:
+        """SOMEONE WENT PAST (Sep 13, artist: "Someone walked past about an hour
+        ago… It left no trace in the current real-time captioning… There should
+        be a way to differentiate a consistent world model from a truly novel
+        event.")
+
+        The presence belief commits only on the adjudicator's word, and a walk
+        through the frame ends before that verdict lands — so the crossing was
+        seen by YOLO, survived the skeleton gate and the own-body veto, and then
+        vanished without reaching a single ledger. A pass is that: the raw
+        person signal held for PASS_EVENT_MIN_S and then gone for
+        PASS_EVENT_END_S, with the belief never committing and the machine's own
+        eye never calling it a thing. Belief ON or a "person" verdict makes it a
+        visit and cancels the run; a "thing" verdict is the studio's own
+        furniture and cancels it too. No new heuristic — the same evidence, read
+        for a shorter event."""
+        try:
+            from config.config import PASS_EVENT_ENABLED, PASS_EVENT_END_S, PASS_EVENT_MIN_S
+
+            if not PASS_EVENT_ENABLED:
+                return
+            verdict = (info or {}).get("presence_adjudication")
+            if self._presence_believed or verdict == "person" or verdict == "thing":
+                self._pass_run = None
+                return
+            run = getattr(self, "_pass_run", None)
+            if raw_person:
+                if run is None:
+                    self._pass_run = {"start": now, "last": now}
+                else:
+                    run["last"] = now
+                return
+            if run is None or now - run["last"] < float(PASS_EVENT_END_S):
+                return
+            self._pass_run = None
+            seen_s = run["last"] - run["start"]
+            if seen_s < float(PASS_EVENT_MIN_S):
+                return  # a flicker, not a person crossing
+            # The cue is built BEFORE the event is written, at the pass's own
+            # moment: measured after, the pass is its own most recent sign of
+            # anyone and could never be rare.
+            cue = ""
+            try:
+                from captioner.prompts import pass_cue_text
+
+                cue = pass_cue_text(run["last"])
+            except Exception:
+                pass
+            try:
+                from utils.episodic_log import episodic_log
+
+                episodic_log.record("person_passed", "someone went past", metadata={"duration_s": round(seen_s, 1)}, timestamp=run["last"])
+            except Exception:
+                pass
+            if cue:
+                # The same sticky slot as the arrival cue: a pass never flips the
+                # belief, so the slot is free, and it inherits "rides until a
+                # prompt carrying it was actually sent".
+                self._presence_edge = {"text": cue, "ts": now, "sent": False}
+            try:
+                if getattr(self, "_attention", None) is not None:
+                    self._attention.snap("someone went past", now)
+                    self._room_attention = self._attention.value
+            except Exception:
+                pass
+            log_json_entry(
+                LogType.DEBUG,
+                {"message": "Someone went past", "action": "person_passed", "seen_s": round(seen_s, 1)},
+                print_message=f"[👤] someone went past ({seen_s:.1f}s in frame, never judged)",
+            )
+        except Exception:
+            pass
+
     def _assess_scene(self) -> dict:
         """One pass over the recent frame buffer, BEFORE the prompt is built:
         scene motion (person-angle, camera-compensated), presence, eye contact,
@@ -835,6 +908,11 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
 
+        # Sep 13: the raw candidate as it stands here — past the own-body veto
+        # and the skeleton gate, before the adjudicator downgrades it. A pass
+        # lives exactly in that gap (_track_pass).
+        raw_person_now = bool(seen_now)
+
         # Adjudicated presence (Aug 18): a faceless person-candidate does not
         # commit the belief on YOLO's word — the machine's own eye looks first
         # (perception/presence_adjudicator.py). "person" commits, "thing"
@@ -875,6 +953,8 @@ class Captioner(MemoryMixin):
                         seen_now = False  # not (re)confirmed — the absence watch keeps counting
                 except Exception:
                     pass
+
+        self._track_pass(now, raw_person_now, info)
 
         arrival = False
         resumed = False

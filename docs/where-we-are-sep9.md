@@ -2141,3 +2141,39 @@ the standing facts seeds it, and the window propagates it. One run each. The
 noun-phrase check was not yet live in this run, so its junk still rode it
 ("named i'm looking sixteen times", "named desk is clear seventeen times"); it
 takes effect at the next restart, which will not be forced for it.
+
+## 34. Working the handoff list (Sep 13, 12:45 → )
+
+Items from `docs/handoff-opus-sep13.md`, in order.
+
+**The remembered visit closes its own door.** The visit form of the last-event
+line now ends "No one has been here since.", skipped when anyone arrived after
+that departure — `last_event` pairs the last departure with the arrival before
+it, so a newer arrival would make the sentence a lie. This is the 19:01 phantom
+from Sep 12: a restart had emptied the stream, the memory stood with no absence
+line behind it, and the next caption seated him again.
+
+**Nobody is assumed to be a man.** `presence_who` returns "They" on a re-ID
+match and "Someone" otherwise; `presence_who_is` gives the contraction, because
+the drift's presence fact was "{who}'s here" and "They's" is not English.
+"They're back" replaces "He's back". A test now sweeps FRAGMENTS, STORES and
+PASSES for any gendered pronoun in text handed to the model. The machine's own
+past words are left alone: what it said is what it saw.
+
+**The photographed sheets reach the dashboard**, with a FULL FRAME latch that
+swaps the sheet crop for the 1280x720 camera frame it was cut from — the crop
+is exactly what hides the wooden shoulder crossing the paper. Two bugs the test
+caught before the live check: paging filtered files before grouping, so a
+capture returned on the next page as its older wide shot, and the name guard
+ended in `$`, which matches before a trailing newline. The console turned out to
+be the systemd service `impostor-dashboard`, not the tmux script.
+
+**A walk-past is an event of its own.** See the runtime-map bullet. The state
+machine reads the same evidence one step earlier than the belief does, and the
+tier below a visit keeps a half-seen person from becoming a long-lived standing
+fact — the phantom seed the Sep 12 read warned about.
+
+Two restarts so far (13:05 for the first two items, and one for the pass
+detector). The dashboard needed only its own service restart. Still to do:
+thread write-back with pruning, the thread-anchored drift ask, tedium as
+pressure with discharge.
