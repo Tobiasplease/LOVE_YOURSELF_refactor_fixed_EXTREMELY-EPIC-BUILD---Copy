@@ -2224,3 +2224,35 @@ counting IS the thing that was asked for — "repetition is in and of itself an
 event" — so the fix is the artist's call, not a stripper: dose the stretch line
 instead of riding every call, or drop the counts and keep only what was named,
 or accept counting as the voice. Not changed unilaterally.
+
+**The numbered people, and how far they got (Sep 13, 14:28 → 19:26).** The
+artist, of the live feed: "It's fully imagined entities with names as numbers."
+The chain was entirely the machine's own — prompt and system prompt carried zero
+digits throughout, and the frame sent to the model is clean. The stretch line
+reported counts; at 14:27:52 it first said "a hundred times or more"; at 14:28:42
+the captions began opening "104 looks now"; by 16:32 the numeral was a person in
+self_notes and the durable ledger ("I feel 104's awareness as an indifference
+rather than attention"); by 17:44 the reveries were full of 102 and 103 sitting
+in chairs in an empty room. The ladder removed the seed at 19:03 and the stretch
+lines went digit-free immediately, but the machine reinfected itself from its own
+memory: the persisted stream tail goes back into the window, so the first caption
+of that boot already said "103 has shifted into that black office chair", and
+today's own thread write-back had recorded these captions as where a thought got
+to. debug/purge_numbered_people.py removed 23 stream and memory entries, 31
+reveries, 2 journal entries, 1 self-note, 1 durable fact and 15 thread returns,
+backing up every file and keeping the threads themselves. A first pass matching
+the JSON dump caught the escape codes for curly quotes and would have deleted
+twenty real thoughts; it was retargeted to a number used AS somebody before
+anything was written.
+
+On clean memory (19:26 boot, 82 captions): numbers used as a person 0, down from
+26 of 93 on the previous boot and 357 of 1082 in the afternoon. No three-digit
+number appears at all. What remains is five captions opening "12 min." / "13
+min." — the stretch line's own {duration}, still a quantity, converted from "about
+twelve minutes" by the model. That is the old clock chant at 6% against its 38%,
+and it is the artist's call whether the duration goes on a ladder too, since the
+duration is the temporal anchor they asked for in the first place.
+
+**Unresolved, worth a decision.** Nothing checks what reaches identity, the
+durable ledger or the lore ledger, so a hallucination that survives one night
+becomes a permanent self-fact. That is exactly how "104's awareness" got in.
