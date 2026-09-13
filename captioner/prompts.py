@@ -683,6 +683,77 @@ def _top_phrase(saids, since_ts):
     return "", 0
 
 
+# THE LADDER (Sep 13 evening, artist: "It needs to compound as well… Mentioning
+# something ten times is not the same as mentioning it 2000 times, but both fall
+# under 'you keep coming back to', so how do we rectify this?").
+#
+# A quantity in front of the machine on every call is a thing it can render as a
+# numeral, and it did: 50 seconds after the stretch line first said "a hundred
+# times or more", the captions started opening "104 looks now…", 357 of 1082 of
+# them, the number drifting 104–110 because nothing was being counted — it was
+# re-rendering the phrase each time. So the count stays in this file and never
+# reaches the prompt above the smallest band. What crosses instead is what the
+# repetition has BECOME, on a log-spaced ladder: a different observation at each
+# rung, so it compounds over a long day (2000 mentions is eight rungs past ten,
+# not the same sentence), and no rung has a slot a numeral can fill.
+#
+# The machine got there first, unprompted, at 14:05: "I've said it so many times
+# it's started to sound like a name." That is the register these are written in.
+# Wording is the artist's to finalize.
+_RUNGS = (2, 4, 9, 21, 60, 150, 400, 1000)
+
+
+def _rung(n: int) -> int:
+    """Which band a count falls in — 0 for once, rising by roughly 2.5x."""
+    r = 0
+    for edge in _RUNGS:
+        if n >= edge:
+            r += 1
+    return r
+
+
+# Rung 0 is unreachable for this one (the phrase needs two mentions to exist at
+# all) and is kept so the rungs line up with the others. No quotation marks: a
+# quoted span is a unit the model copies whole, which is the echo being fought.
+_NAMED_LADDER = (
+    "said {p} once",
+    "kept coming back to {p}",
+    "said {p} more than anything else",
+    "said {p} so often it has stopped describing anything",
+    "said {p} until it is a word rather than a thing",
+    "said almost nothing but {p}",
+    "been saying {p} the way a clock says the hour",
+    "said {p} so long that saying it is the only thing still happening",
+    "worn {p} down to a sound",
+)
+_LOOKED_LADDER = (
+    "looked away once",
+    "looked around a couple of times",
+    "looked all round the room",
+    "looked at every corner of it",
+    "looked at every corner of it again",
+    "run out of places to look",
+    "looked everywhere there is to look, several times over",
+    "kept looking anyway, at nothing new",
+    "gone on looking long past there being anything to find",
+)
+_DRIFTED_LADDER = (
+    "drifted off once",
+    "drifted off a couple of times",
+    "kept drifting off",
+    "been somewhere else as often as here",
+    "spent more of it elsewhere than here",
+    "been mostly somewhere else",
+    "barely been in the room at all",
+    "been out of the room more than in it, for hours",
+    "stopped coming back for long",
+)
+
+
+def _ladder(ladder: tuple, n: int, **fmt) -> str:
+    return ladder[min(_rung(n), len(ladder) - 1)].format(**fmt)
+
+
 def get_unchanged_line(agent) -> str:
     """THE STRETCH (Sep 13, artist: "tedium is material and repetition is in and
     of itself an event… the continuous flow of time and interplay with boredom is
@@ -716,12 +787,14 @@ def get_unchanged_line(agent) -> str:
         quiet_s = silences * interval
         parts = []
         if looks:
-            parts.append(f"looked around {count_words(looks)}")
+            parts.append(_ladder(_LOOKED_LADDER, looks))
         if phrase and k >= 2:
-            parts.append(f"named {phrase} {count_words(k)}")
+            parts.append(_ladder(_NAMED_LADDER, k, p=phrase))
         if drifts:
-            parts.append(f"drifted off {count_words(drifts)}")
-        if quiet_s >= 120:
+            parts.append(_ladder(_DRIFTED_LADDER, drifts))
+        if quiet_s >= 0.6 * unchanged_s:
+            parts.append("been quiet for most of it")
+        elif quiet_s >= 120:
             parts.append(f"been quiet for {casual_time_string(quiet_s / 60.0)} of it")
         elif quiet_s >= 60:
             parts.append("been quiet for a minute of it")  # casual_time_string says "just now" below two minutes

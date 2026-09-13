@@ -50,7 +50,7 @@ check("90 s → nothing yet", get_unchanged_line(agent(90)) == "", get_unchanged
 check("3 min, nothing done yet → no line (Sep 13: the stretch, not the clock)", get_unchanged_line(agent(180)) == "", get_unchanged_line(agent(180)))
 a2 = agent(2 * 3600); a2._acts = [(time.time() - 100, "look", ""), (time.time() - 50, "look", "")]
 l1, l2 = get_unchanged_line(a2), get_unchanged_line(a2)
-check("2 h with two looks → the stretch line, in words, standing", l1 == l2 == "It's been about two hours since anything happened. In that time you've looked around twice.", (l1, l2))
+check("2 h with two looks → the stretch line, standing", l1 == l2 == "It's been about two hours since anything happened. In that time you've looked around a couple of times.", (l1, l2))
 
 # --- the head: verdict right after a turn, posture once held
 now = time.time()
@@ -70,7 +70,7 @@ check("a big move resets the clock", _head_line_from(a, 140, 100, "looking right
 # --- the block
 a3 = agent(3600); a3._acts = [(time.time() - 30, "look", "")]
 f = build_standing_facts(a3, include_felt=False)
-check("facts block carries the stretch line", "It's been about an hour since anything happened. In that time you've looked around once." in f, f)
+check("facts block carries the stretch line", "It's been about an hour since anything happened. In that time you've looked away once." in f, f)
 
 print("\n" + ("ALL PASS" if not fails else f"{fails} FAILED"))
 sys.exit(1 if fails else 0)

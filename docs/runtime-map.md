@@ -2233,3 +2233,24 @@ STREAM_MODE).
   reflection's interval (halved above TEDIUM_REFLECT_AT). The caption interval
   does not move and silence stays the model's choice. Logged every call as
   `action: "tedium"`.
+- **The stretch line stops counting and starts escalating (Sep 13 evening)**:
+  the counts were the seed of a new chant. 50 seconds after the line first said
+  "a hundred times or more" (14:27:52) the captions began opening "104 looks
+  now…" (14:28:42) — 357 of 1082, the number drifting 104-110 across 84
+  minutes because nothing was being counted: the model was re-rendering the
+  phrase as a numeral each time it spoke, and the window turned the first one
+  into a template. Prompt and system prompt contained zero digits throughout.
+  Spelling a count in words keeps digits out of OUR text but leaves a quantity
+  in front of the machine, and a quantity is renderable. The counts now stay in
+  `captioner/prompts.py` and never reach the prompt above the smallest band;
+  what crosses is what the repetition has become, on a log-spaced ladder
+  (rungs at 2, 4, 9, 21, 60, 150, 400, 1000): "kept coming back to the red foam
+  finger" → "said it more than anything else" → "so often it has stopped
+  describing anything" → "until it is a word rather than a thing" → "said
+  almost nothing but it" → "the way a clock says the hour" → "saying it is the
+  only thing still happening" → "worn it down to a sound". Same for looking and
+  drifting; the quiet clause says "most of it" past 60% of the stretch. It
+  compounds (artist: "mentioning something ten times is not the same as
+  mentioning it 2000 times") and no rung has a slot a numeral can fill. The
+  register came from the machine itself, unprompted at 14:05: "I've said it so
+  many times it's started to sound like a name." debug/test_stretch_line.py.

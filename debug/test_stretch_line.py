@@ -8,7 +8,7 @@ import utils.episodic_log as _el  # noqa: E402
 _el.episodic_log.get_last_event = lambda etype: None
 sys.modules["captioner.context_compression"] = types.SimpleNamespace(context_compressor=types.SimpleNamespace(introspective_state={}))
 CC = sys.modules["captioner.context_compression"].context_compressor
-from captioner.prompts import _top_phrase, count_words, get_unchanged_line  # noqa: E402
+from captioner.prompts import _DRIFTED_LADDER, _LOOKED_LADDER, _NAMED_LADDER, _ladder, _rung, _top_phrase, count_words, get_unchanged_line  # noqa: E402
 
 fails = 0
 def check(name, ok, got=""):
@@ -32,11 +32,11 @@ acts += [(T - 2500 + i * 100, "said", "The black curtain hangs there.") for i in
 a = agent(3000, acts)
 CC.introspective_state = {"loop_notice": {"phrase": "the red foam finger", "ts": T - 600}}
 line = get_unchanged_line(a)
-check("the stretch line", line == "It's been about three quarters of an hour since anything happened. In that time you've looked around a dozen times, named the red foam finger nine times, drifted off once, and been quiet for a few minutes of it.", line)
+check("the stretch line", line == "It's been about three quarters of an hour since anything happened. In that time you've looked at every corner of it, said the red foam finger so often it has stopped describing anything, drifted off once, and been quiet for a few minutes of it.", line)
 check("no digits in it", not any(ch.isdigit() for ch in line))
 CC.introspective_state = {}
 line2 = get_unchanged_line(a)
-check("without the compressor's phrase, its own repeated words are counted (earliest run wins the tie)", "named red foam finger nine times" in line2, line2)
+check("without the compressor's phrase, its own repeated words are used (earliest run wins the tie)", "said red foam finger so often" in line2, line2)
 check("nothing done → no line", get_unchanged_line(agent(3000, [])) == "")
 check("under two minutes → no line", get_unchanged_line(agent(60, acts)) == "")
 ph, k = _top_phrase(["the empty chair by the desk", "that empty chair again", "an empty chair, an empty desk"], T - 100)
@@ -62,6 +62,20 @@ ph, k = _top_phrase(["the clock says 12 hours", "12 hours of this", "12 hours ag
 check("no digit phrase from the fallback either", not any(ch.isdigit() for ch in ph), (ph, k))
 ph, k = _top_phrase(["red foam finger up there", "the red foam finger again", "red foam finger, still"], T - 100)
 check("edges must be content words: 'red foam finger', never 'the red foam'", ph == "red foam finger", (ph, k))
+# Sep 13 evening (artist: "Mentioning something ten times is not the same as
+# mentioning it 2000 times, but both fall under 'you keep coming back to'"). The
+# count stays in the code; what crosses is what the repetition has become, on a
+# log-spaced ladder — so it compounds, and no rung has a slot a numeral can fill.
+check("no digits anywhere in any rung", not any(c.isdigit() for L in (_NAMED_LADDER, _LOOKED_LADDER, _DRIFTED_LADDER) for r in L for c in r))
+named = [_ladder(_NAMED_LADDER, n, p="the finger") for n in (2, 5, 10, 25, 70, 200, 500, 2000)]
+check("ten mentions and two thousand do not read the same", len(set(named)) == len(named), named)
+check("and each one is a different observation, not a bigger number", "coming back" in named[0] and "worn" in named[-1], (named[0], named[-1]))
+check("two thousand is eight rungs past ten", _rung(2000) - _rung(10) == 5, (_rung(10), _rung(2000)))
+check("the ladder never runs out", _ladder(_NAMED_LADDER, 10**9, p="x") == _NAMED_LADDER[-1].format(p="x"))
+big = agent(7200, [(T - 7000 + i, "said", "the red foam finger again") for i in range(300)] + [(T - 6000 + i * 10, "look", "") for i in range(200)])
+line_big = get_unchanged_line(big)
+check("a long stretch reads as erosion, not as a tally", "the way a clock says the hour" in line_big and not any(c.isdigit() for c in line_big), line_big)
+
 q = agent(600, [(T - 400 + i * 8, "silence", "") for i in range(12)] + [(T - 300, "look", "")])
 line3 = get_unchanged_line(q)
 check("twelve quiet cycles (96 s) read as 'a minute of it', not 'just now of it'", line3.endswith("and been quiet for a minute of it."), line3)
