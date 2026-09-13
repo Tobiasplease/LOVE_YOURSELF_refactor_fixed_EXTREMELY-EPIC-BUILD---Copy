@@ -2067,3 +2067,65 @@ let go of the card. "Session ended" 17:50:29; down until the artist's relaunch
 at 18:24. Fixed 19:00 (runtime-map "Model reload after a drawing waits for the
 card"). The colleague's visit itself (15:45–17:35) is being read by a Sonnet
 agent; its report goes in as §33.
+
+## 33. The harsh read, and the stretch line (Sep 13, 01:24 → 11:20)
+
+Artist: *"Please judge the current output harshly against our stated goals…
+I'm not sure that it properly rests or goes introspective still. Most of it is
+still surface level 'red foam finger' stuff."* Measured over 19:00–01:24 (1,498
+captions): room object named in 74%, the finger in 30%, a digit-led duration
+opening 38% ("20 min stuck. the red foam finger is just... there."), reaching
+beyond the room 6.5%, lore threads returned to: 0 of 247. Attention at the
+floor 98% of cycles, gaze held in 23% of calls, silence chosen 597 times. **The
+body rests; the mind did not follow.** The one interior text of the night was
+the 01:18 reflection ("I didn't actually leave it be; I just changed the angle
+of my fatigue") — the call with no picture, twenty minutes of material and a
+question about itself.
+
+The chant was mine: the standing clock line, every call, became the thing it
+says — the coordinate mechanism one level up. Reviewed plan (as Fable): moving
+the line is a diagnostic, not a fix; a live thread must be present by
+*question*, not by statement, or it is the next refrain; the drift turn already
+has the shape for the reflection's ask. The artist's deeper objection: *"tedium
+is material and repetition is in and of itself an event… we are missing
+something in the architecture."* Named: the page carries the room's clock, not
+the machine's own history through the stretch; repetition is never counted
+where it can feel it; tedium has no discharge.
+
+**Built (first two):** the stretch line — what the machine did with the still
+time, from its own record, its repeated phrase counted as an event (runtime-map
+"THE STRETCH LINE"). Not built: tedium as pressure with discharge; the
+thread write-back; the thread-anchored drift ask.
+
+**What to read:** the digit-duration opening share against 38%; whether the
+machine speaks of its own repetition ("I've named it nine times"); whether the
+stretch line itself gets recited; room-noun share; the reflections.
+
+**First quarter-hour (11:22–11:35).** The stretch line rode 82 of 99 thought
+calls; the clock line is gone. Digit openings did not fall (29/71, 41% against
+38%): the clock line was never the source — the stamps in the window are, and
+the model does the arithmetic ("7 minutes is a long time to stare at the same
+wall"). Two captions spoke of their own repetition ("I've looked around thirty
+or forty times since I woke up, and every time I look at that red foam finger,
+I expect it to…") — the count is honest, a look being a head turn beyond
+twenty degrees, and the head turned that far between nearly every call. The
+line's own flaws: the compressor's REPEATING phrase went in unchecked ("named
+16 hours nine times", "named pointing four times", "named or a paper three
+times") — now a phrase needs two or more words, no digits, content words at
+both edges, and the fallback counts contiguous runs of its own words; and
+"been quiet for just now of it" between one and two minutes is now "a minute
+of it". Both in debug/test_stretch_line.py.
+
+**What the relaunch broke, and the repair (11:22–11:45).** The 11:22 boot put
+YOLO into a full card: the llama-server, reloaded at 02:50 after a drawing at
+the 18.9 GB baseline, had grown to 22.5 GB (the CUDA pool's high-water mark
+under four slots and the clip encoder; it never shrinks, and it resets at the
+next drawing reload). The old fallback set force_cpu and kept calling the
+half-moved model — 163 "CUDA OOM" lines, detection dead, nobody could have been
+seen. Now the device is decided from nvidia-smi before CUDA is touched, an OOM
+reloads a fresh CPU model, and a separate model object retries the card every
+two minutes (backing off to twenty) so the live one is never poisoned
+(perception/object_detection.py; debug/test_yolo_cpu_fallback.py and
+debug/test_yolo_device_policy.py). One repair restart at ~11:45 with the server
+killed first so it reloads at the baseline and YOLO gets the card. Runtime-map
+has the restart race of 11:20 as an ops note.

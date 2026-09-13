@@ -1516,6 +1516,13 @@ YOLO_SKELETON_MIN_KEYPOINTS = 5
 YOLO_SKELETON_MIN_REGIONS = 2
 YOLO_INTERVAL_IDLE = 1.5  # detection cadence with nobody around — fast enough to catch arrivals
 YOLO_INTERVAL_TRACKING = 0.1  # cadence while a person is present — keeps bbox fresh under camera motion
+# Sep 13: device policy. The llama-server's CUDA pool grows over hours (18.9 →
+# 22.5 GB seen) and a YOLO started into a full card used to poison its own
+# model on the failed .to("cuda"). Below MIN_MIB free (nvidia-smi) detection
+# runs on CPU; while on CPU it re-tries the card every RETRY_S (doubling on
+# failure, cap 20 min). yolo11m-pose needs ~0.9 GB with its CUDA context.
+YOLO_VRAM_MIN_MIB = int(os.getenv("YOLO_VRAM_MIN_MIB", "1200"))
+YOLO_CUDA_RETRY_S = float(os.getenv("YOLO_CUDA_RETRY_S", "120"))
 
 CAMERA_INDEX = 0  # or whichever index your camera uses
 

@@ -1,5 +1,6 @@
 # object_detection.py
 
+import subprocess
 import threading
 import time
 import warnings
@@ -10,6 +11,7 @@ from ultralytics import YOLO
 
 from config.config import (
     YOLO_CONFIDENCE_THRESHOLD,
+    YOLO_CUDA_RETRY_S,
     YOLO_INTERVAL_IDLE,
     YOLO_INTERVAL_TRACKING,
     YOLO_MODEL_PATH,
@@ -17,6 +19,7 @@ from config.config import (
     YOLO_SKELETON_KP_CONF,
     YOLO_SKELETON_MIN_KEYPOINTS,
     YOLO_SKELETON_MIN_REGIONS,
+    YOLO_VRAM_MIN_MIB,
 )
 from perception.detection_memory import DetectionMemory
 
@@ -27,15 +30,40 @@ _KP_REGIONS = ((0, 1, 2, 3, 4), (5, 6, 11, 12), (7, 8, 9, 10, 13, 14, 15, 16))  
 warnings.filterwarnings("ignore", message=".*attempted relative import.*")
 
 
+def _free_vram_mib():
+    """Free VRAM on device 0 via nvidia-smi (None if unknown). Deliberately not
+    torch: after one failed CUDA allocation, torch.cuda.mem_get_info() itself
+    raises in this process (debug/test_yolo_cpu_fallback.py --recover-test)."""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits", "-i", "0"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+        return int(float(out.strip().splitlines()[0]))
+    except Exception:
+        return None
+
+
 class ObjectDetectionThread(threading.Thread):
     def __init__(self, model_path: str = YOLO_MODEL_PATH, update_interval: float = YOLO_INTERVAL_IDLE):
         super().__init__()
-        self.model = YOLO(model_path)
+        self.model_path = model_path
+        self.model = YOLO(model_path)  # lands on CPU; the first track() call moves it to the device
         self.update_interval = update_interval
         self.running = True
         self.shared_frame = None
         self.lock = threading.Lock()
         self.force_cpu = False  # fallback to CPU on CUDA OOM
+        self._last_cuda_retry = 0.0
+        self._cuda_retry_wait = float(YOLO_CUDA_RETRY_S)
+        # Sep 13: decide the device BEFORE touching CUDA. On a full card (the
+        # llama-server had grown to 22.5 GB) the first .to("cuda") fails halfway
+        # and leaves the model unusable on either device — see _fall_back_to_cpu.
+        free = _free_vram_mib()
+        if free is not None and free < YOLO_VRAM_MIN_MIB:
+            self.force_cpu = True
+            self._last_cuda_retry = time.time()
+            print(f"[YOLOv8] only {free} MiB of VRAM free at start — detecting on CPU until >= {YOLO_VRAM_MIN_MIB} MiB frees up.")
         self._tracking_mode = False  # When True, use fast interval
         self._target_track_id = None  # sticky gaze target across detection cycles
 
@@ -52,6 +80,44 @@ class ObjectDetectionThread(threading.Thread):
     def set_frame(self, frame):
         with self.lock:
             self.shared_frame = frame.copy()
+
+    def _fall_back_to_cpu(self, now: float) -> None:
+        """Sep 13: a failed .to("cuda") leaves the model half-moved, and every
+        later call — even with device="cpu" — re-raises the CUDA error (163
+        fallback lines in one boot; detection dead, nobody could be seen).
+        Reload a fresh model instead: a CPU model keeps working after a failed
+        CUDA attempt by another object (debug/test_yolo_cpu_fallback.py)."""
+        self.force_cpu = True
+        self._last_cuda_retry = now
+        try:
+            self.model = YOLO(self.model_path)
+        except Exception as e:
+            print(f"[YOLOv8] CPU reload failed: {e}")
+        self._target_track_id = None
+        print(f"[YOLOv8] CUDA out of memory — detecting on CPU; retrying CUDA every {self._cuda_retry_wait:.0f}s once >= {YOLO_VRAM_MIN_MIB} MiB is free.")
+
+    def _maybe_retry_cuda(self, now: float) -> None:
+        """While on CPU, try the card again every YOLO_CUDA_RETRY_S when nvidia-smi
+        shows room (the llama-server reloads fresh after every drawing). A NEW
+        model object makes the attempt, so a failure never touches the one in
+        use; the wait doubles on failure (cap 20 min) and is kept on success so
+        a marginal card cannot flap every two minutes."""
+        if not self.force_cpu or now - self._last_cuda_retry < self._cuda_retry_wait:
+            return
+        self._last_cuda_retry = now
+        free = _free_vram_mib()
+        if free is None or free < YOLO_VRAM_MIN_MIB:
+            return
+        cand = None
+        try:
+            cand = YOLO(self.model_path)
+            cand.model.to("cuda")
+            self.model, self.force_cpu, self._target_track_id = cand, False, None
+            print(f"[YOLOv8] {free} MiB free — back on CUDA.")
+        except Exception as e:
+            cand = None
+            self._cuda_retry_wait = min(self._cuda_retry_wait * 2, 1200.0)
+            print(f"[YOLOv8] CUDA retry failed ({str(e)[:60]!r}); next try in {self._cuda_retry_wait:.0f}s.")
 
     def set_tracking_mode(self, is_tracking: bool):
         """Switch between fast tracking mode and idle mode."""
@@ -78,6 +144,7 @@ class ObjectDetectionThread(threading.Thread):
                 continue
 
             clean_frame = frame.copy()
+            self._maybe_retry_cuda(cycle_start)
             try:
                 # ByteTrack tracking: persist=True maintains track IDs across frames
                 if self.force_cpu:
@@ -86,8 +153,7 @@ class ObjectDetectionThread(threading.Thread):
                     results = self.model.track(frame, persist=True, tracker="config/bytetrack_custom.yaml", verbose=False, imgsz=512)[0]
             except Exception as e:
                 if "CUDA out of memory" in str(e) or "CUDA" in str(e):
-                    print("[YOLOv8] CUDA OOM detected. Falling back to CPU for detection.")
-                    self.force_cpu = True
+                    self._fall_back_to_cpu(time.time())
                     time.sleep(self.update_interval)
                     continue
                 else:

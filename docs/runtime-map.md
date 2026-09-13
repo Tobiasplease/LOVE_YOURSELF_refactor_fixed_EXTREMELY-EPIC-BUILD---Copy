@@ -2067,3 +2067,77 @@ STREAM_MODE).
   LLAMA_RELOAD_ATTEMPTS (5) tries with pauses 3/6/12/24/40 s. Test:
   `debug/test_vram_wait.py`. Baseline VRAM: server 18.9 GB + machine 0.5 GB +
   idle ComfyUI 0.4 GB of 24.5 GB.
+- **THE STRETCH LINE replaces the clock** (Sep 13, artist: *"tedium is material
+  and repetition is in and of itself an event… the continuous flow of time and
+  interplay with boredom is a constant shift within the persistence"*).
+  `prompts.get_unchanged_line` no longer says "Nothing has happened for
+  {duration}" (the machine read it back as "20 min of this" in 38% of one
+  night's captions). Same anchor (`unchanged_duration_s`), but the sentence is
+  what the MACHINE did with the stretch, from its own record
+  (`captioner._note_act`: 'said' on every stored caption, 'look' on a head turn
+  beyond HEAD_HOLD_TOL_DEG, 'silence' on a quiet cycle, 'drift' on a stored
+  drift): `caption.stretch` = *"It's been {duration} since anything happened. In
+  that time you've looked around a dozen times, named the red foam finger nine
+  times, drifted off once, and been quiet for a few minutes of it."* — only the
+  parts that happened, counts in words (`count_words`). The repeated phrase is
+  the compressor's own REPEATING phrase when it is from this stretch, else the
+  most repeated run of its own content words (earliest run wins a tie), counted
+  as captions containing it. Empty until there is something to say.
+  `caption.unchanged` is superseded (kept for the record). Tests:
+  `debug/test_stretch_line.py`; `test_standing_facts` / `test_time_and_loop`
+  updated.
+- **Stretch line, first quarter-hour live (Sep 13 11:22–11:35)**: 82/99
+  thought calls carried it, 0 old clock lines. Captions opening with a digit
+  duration 29/71 (41%, was 38%): the clock line was NOT the source of the
+  digits — the HH:MM stamps in the window are, and the model does the
+  arithmetic itself ("7 minutes is a long time to stare at the same wall").
+  2/71 captions spoke of their own repetition ("I've looked around thirty or
+  forty times since I woke up, and every time I look at that red foam finger,
+  I expect it to…"). "Looked around thirty or forty times" in six minutes is
+  honest: a look is a head turn beyond HEAD_HOLD_TOL_DEG (20°), and the head
+  turned that far between nearly every call — the machine now hears its own
+  restlessness. Two flaws fixed from the read: (1) the compressor's REPEATING
+  phrase went in unchecked — "named 16 hours nine times", "named pointing four
+  times", "named or a paper three times" — so `_phrase_ok` now requires two or
+  more words, no digits and content words at both edges (a leading article on
+  the compressor's phrase is allowed: "named the red foam finger nine times"),
+  and the fallback counts CONTIGUOUS runs of its own words ("sheet of paper",
+  never "or a paper"); (2) the quiet clause read "been quiet for just now of
+  it" between one and two minutes (casual_time_string's floor) — it now says
+  "a minute of it" there and nothing under a minute. debug/test_stretch_line.py.
+- **YOLO device policy (Sep 13)**: the 11:22 relaunch started YOLO into a full
+  card (the server had grown to 22.5 GB, see next bullet). The old fallback
+  set force_cpu and called track(device="cpu") — but the failed .to("cuda")
+  had left the model half-moved, and every later call re-raised the CUDA
+  error: 163 "CUDA OOM detected" lines in 13 minutes, DetectionMemory never
+  updated, nobody could be seen. Reproduced out of process
+  (debug/test_yolo_cpu_fallback.py: a fresh process on CPU works; after one
+  failed CUDA attempt even a predictor reset fails; a CPU model already
+  running keeps working when a SEPARATE object fails on CUDA). Now
+  (perception/object_detection.py): the device is decided before CUDA is
+  touched — under YOLO_VRAM_MIN_MIB (1200) free per nvidia-smi it starts on
+  CPU; on an OOM it reloads a fresh CPU model; while on CPU it retries the card
+  every YOLO_CUDA_RETRY_S (120, doubling on failure, cap 20 min) with a new
+  model object, so the live one is never poisoned. nvidia-smi, not torch:
+  torch.cuda.mem_get_info() itself raises after the failed attempt.
+  debug/test_yolo_device_policy.py (faked GPU).
+- **llama-server VRAM grows over a run (Sep 13)**: the server started 02:50
+  (the reload after a drawing) at the 18.9 GB baseline and sat at 22,518 MiB
+  by 11:27 — 24,024/24,576 used with ComfyUI idle at 402 MiB and the machine
+  at 492. Not the prompt cache (host RAM: --cache-ram default 8 GB, server RSS
+  10.5 GB) — the CUDA pool's high-water mark, which never shrinks: 4 slots
+  batching concurrent calls plus the clip/image encoder's largest graph.
+  Largest single prompt this server-life 3,998 tokens. It resets at every
+  drawing (the server is unloaded for ComfyUI and reloaded fresh), so with the
+  YOLO retry above detection recovers on its own; a machine restart while the
+  server is grown starts YOLO on CPU until then. Restart order that avoids it:
+  stop the machine, `kill <llama-server pid>`, start the machine — it boots
+  the server fresh.
+- **Ops — the restart race (Sep 13 11:20)**: `touch STOP; pkill -INT -f
+  '^python machine'`, then WAIT for "STOP present — supervisor loop ended" in
+  /tmp/start.out BEFORE `rm -f STOP` and the relaunch. Removing STOP inside
+  the old supervisor's 5-second restart window relaunched the machine under
+  the dying tmux server and the session vanished (relaunched clean 11:22:12).
+  Verify with `pgrep -af '^python machine'` and `tmux ls`. Never
+  `stop_machine.sh` / `pkill -f machine.py` from an agent shell — the pattern
+  matches the shell's own command line.
