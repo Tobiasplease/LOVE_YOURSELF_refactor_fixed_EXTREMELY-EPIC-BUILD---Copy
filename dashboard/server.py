@@ -324,8 +324,11 @@ def comfy_thumb(path: str, name: str, mtime_ns: int) -> bytes:
 
 def finished_list(q: dict) -> dict:
     """The photographed sheets, newest first. One entry per capture: the _sheet
-    crop when there is one, else the wide shot. The _t1024 copies are the
-    model's own reading size and are never listed."""
+    crop when there is one, else the wide shot. Each row also carries "wide",
+    the uncropped camera frame it came from (Sep 13, artist asking whether the
+    layout shows "the actual camera view of finished works" — the crop hides
+    the wooden shoulder cutting into the sheet, which is the thing to look at).
+    The _t1024 copies are the model's own reading size and are never listed."""
     limit = min(int(q.get("limit", ["24"])[0]), 100)
     before = float(q.get("before", ["0"])[0]) or None
     best = {}
@@ -342,6 +345,9 @@ def finished_list(q: dict) -> dict:
         return {"images": [], "error": "no finished-drawing captures yet"}
     # Paged after grouping: filtering files by mtime first let a capture come
     # back on the next page as its (older) wide shot.
+    for key, row in best.items():
+        wide = key + ".jpg"
+        row["wide"] = wide if row["sheet"] and os.path.exists(os.path.join(FINISHED_FOLDER, wide)) else None
     rows = [r for r in best.values() if not before or r["mtime"] < before]
     out = sorted(rows, key=lambda r: -r["mtime"])
     return {"images": out[:limit], "truncated": len(out) > limit}

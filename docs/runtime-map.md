@@ -2158,7 +2158,11 @@ STREAM_MODE).
   (one row per capture, the `_sheet` crop preferred, `_t1024` never listed,
   `limit`/`before` paging) and `GET /api/finished/img` (`&thumb=1` reuses the
   comfy thumbnailer), plus a "The Paper" / "Finished Sheets" pair in the
-  Drawings tab of `dashboard/index.html`. Two bugs the test caught before the
+  Drawings tab of `dashboard/index.html`, with a FULL FRAME latch that swaps
+  the sheet crop for the uncropped 1280x720 camera frame it was cut from —
+  the artist asked whether the layout shows "the actual camera view of
+  finished works", and the crop is exactly what hides the wooden shoulder
+  cutting into the paper. Two bugs the test caught before the
   live check: paging filtered files before grouping, so a capture came back on
   the next page as its older wide shot; and the name guard used `$`, which
   matches before a trailing newline. debug/test_dashboard_finished.py.

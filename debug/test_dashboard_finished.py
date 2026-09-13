@@ -47,6 +47,11 @@ check("one row per capture, newest first", names == ["finished_20260913_025838_1
 check("the model-sized copy is never listed", not any("t1024" in n for n in names))
 check("stray files are ignored", not any(n in ("notes.txt", "finished_bogus.jpg") for n in names))
 check("the wide shot stands in when there is no crop", "finished_20260913_021353_0.jpg" in names)
+# Sep 13 (artist: "Will the layout now include the actual camera view of finished
+# works?") — each cropped row carries the frame it was cut from, for the toggle.
+by = {r["name"]: r for r in d["images"]}
+check("a cropped row names its uncropped frame", by["finished_20260913_025838_1_sheet.jpg"]["wide"] == "finished_20260913_025838_1.jpg", by["finished_20260913_025838_1_sheet.jpg"])
+check("a row that IS the wide shot has no second frame", by["finished_20260913_021353_0.jpg"]["wide"] is None, by["finished_20260913_021353_0.jpg"])
 
 one = D.finished_list({"limit": ["1"]})
 check("limit and truncated", [r["name"] for r in one["images"]] == names[:1] and one["truncated"], one)

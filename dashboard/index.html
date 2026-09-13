@@ -183,7 +183,9 @@ section{display:none;}section.active{display:block;}
     <div class="cambar"><button id="btnMoreImgs">More</button></div>
   </div>
   <div class="grid2" style="margin-top:8px">
-    <div class="bevel"><h2>The Paper</h2><img id="paperImg" alt=""><div class="camnote" id="paperName">no captures yet</div></div>
+    <div class="bevel"><h2>The Paper</h2><img id="paperImg" alt="">
+      <div class="cambar"><button id="btnWide" class="latch">FULL FRAME</button><span class="camnote" id="paperName">no captures yet</span></div>
+    </div>
     <div class="bevel"><h2>Finished Sheets</h2>
       <div class="thumbs" id="paperGrid"></div>
       <div class="cambar"><button id="btnMorePaper">More</button></div>
@@ -360,14 +362,21 @@ async function loadDrawings(more) {
 }
 $("#btnMoreImgs").onclick = () => loadDrawings(true);
 
-/* the photographed sheet after each drawing (Sep 13) */
-let paperBefore = 0;
+/* the photographed sheet after each drawing (Sep 13). FULL FRAME swaps the
+   sheet crop for the camera frame it was cut from — where the wooden shoulder
+   crossing the paper is visible. */
+let paperBefore = 0, wideOn = false, paperShown = null;
+function show(im) {
+  paperShown = im;
+  const n = (wideOn && im.wide) ? im.wide : im.name;
+  $("#paperImg").src = "/api/finished/img?name=" + encodeURIComponent(n);
+  $("#paperName").textContent = n + " — " + ago(im.mtime) + " ago" + (wideOn && !im.wide ? " (no crop for this one)" : "");
+}
 async function loadPaper(more) {
   try {
     const q = more && paperBefore ? "?limit=24&before=" + paperBefore : "?limit=24";
     const d = await j("/api/finished/list" + q);
     if (!more) $("#paperGrid").textContent = "";
-    const show = im => { $("#paperImg").src = "/api/finished/img?name=" + encodeURIComponent(im.name); $("#paperName").textContent = im.name + " — " + ago(im.mtime) + " ago"; };
     (d.images || []).forEach((im, i) => {
       if (!more && i === 0) show(im);
       const t = el("img"); t.loading = "lazy"; t.src = "/api/finished/img?thumb=1&name=" + encodeURIComponent(im.name);
@@ -379,6 +388,12 @@ async function loadPaper(more) {
   } catch (e) { $("#paperName").textContent = "paper shots unavailable: " + e.message; }
 }
 $("#btnMorePaper").onclick = () => loadPaper(true);
+$("#btnWide").onclick = () => {
+  wideOn = !wideOn;
+  $("#btnWide").classList.toggle("on", wideOn);
+  $("#btnWide").textContent = wideOn ? "SHEET ONLY" : "FULL FRAME";
+  if (paperShown) show(paperShown);
+};
 
 /* history -------------------------------------------------------------- */
 let histLoaded = false, histBefore = 0;
