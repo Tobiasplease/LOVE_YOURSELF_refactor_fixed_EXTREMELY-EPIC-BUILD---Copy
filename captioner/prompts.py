@@ -577,37 +577,159 @@ def get_felt_arc_line(agent) -> str:
     return ""
 
 
-def get_unchanged_line(agent) -> str:
-    """Unchanged-ness as FACT (B4, Aug 31) — the boredom scalar's text channel.
+def count_words(n: int) -> str:
+    """A count in words, never digits (the seventeen-days law), coarser as it grows."""
+    n = int(n)
+    if n <= 0:
+        return "not at all"
+    small = {1: "once", 2: "twice", 3: "three times", 4: "four times", 5: "five times", 6: "six times", 7: "seven times", 8: "eight times", 9: "nine times", 10: "ten times"}
+    if n in small:
+        return small[n]
+    if n <= 13:
+        return "a dozen times"
+    if n <= 19:
+        return "fifteen-odd times"
+    if n <= 29:
+        return "twenty-odd times"
+    if n <= 49:
+        return "thirty or forty times"
+    if n <= 99:
+        return "dozens of times"
+    return "a hundred times or more"
 
-    The Aug 31 voice diagnosis: the machine's attention saturation reached the
-    model only as a temperature nudge, so the language layer had no way to be
-    sick of the table, aware of the hours, or hungry for change — it could only
-    dress the same observation in new metaphor. This states the duration of
-    stillness as a plain sense report and lets the mind decide what it means.
-    No scripted affect, no candidate feelings (no-content-priors rule).
 
-    "Change" is the episodic record's event set — arrivals, departures,
-    drawings ('drew' gets its first reader here), plus the newest new-concept
-    sighting — floored at session start so the line never claims time the
-    machine wasn't watching. A live event displaces it upstream; the min-gap
-    keeps a standing fact from becoming the scene (the 3b core-facts lesson).
-    """
+_STRETCH_STOP = set(
+    "the a an and or but of to in on at for with by from as is are was were be been being it its this that these those there here i im my me you your he she they them his her their we our just still now then again like into over under up down out off not no yes so too very what where when why how if than more most some any all each every".split()
+)
+
+
+_STRETCH_STOP |= set(
+    "i'm i've i'll i'd it's that's there's here's you're we're they're he's she's don't doesn't didn't isn't aren't wasn't weren't "
+    "can't won't couldn't has have had do does did not".split()
+)
+
+
+def _nounish(phrase: str) -> bool:
+    """The named thing must end on a noun — spaCy's call (utils.nlp singleton,
+    already loaded for vocab promotion): "sheet of paper", "wood grain", "red
+    foam finger" pass; "chair has", "i'm looking", "pointing", "still sitting"
+    do not (all seen live, Sep 13 11:22–11:49). Accepts everything if spaCy
+    is unavailable, leaving the structural filter alone in charge."""
     try:
-        from config.config import UNCHANGED_FACT_AFTER_S, UNCHANGED_FACT_MIN_GAP_S
+        from utils.nlp import nlp
+
+        doc = nlp(phrase)
+        return bool(len(doc)) and doc[-1].pos_ in ("NOUN", "PROPN")
+    except Exception:
+        return True
+
+
+def _phrase_ok(words) -> bool:
+    """A nameable thing: two or more words, no digits, and the run neither starts
+    nor ends on a stop word. The first live quarter-hour (Sep 13 11:22) put
+    "named 16 hours nine times", "named pointing four times" and "named or a
+    paper three times" into the stretch line — all three straight from the
+    compressor's REPEATING phrase, unchecked."""
+    if len(words) < 2 or any(ch.isdigit() for w in words for ch in w):
+        return False
+    return all(w not in _STRETCH_STOP and len(w) > 2 for w in (words[0], words[-1]))
+
+
+def _top_phrase(saids, since_ts):
+    """What it keeps naming (Sep 13): the compressor's own REPEATING phrase when
+    it is from this stretch and passes _phrase_ok, else the most repeated
+    CONTIGUOUS run of its own words (inner stop words allowed — "sheet of
+    paper"; edges must be content — never "or a paper"). Returns (phrase,
+    number of captions containing it)."""
+
+    def contains(ph):
+        ph = ph.lower().strip(" .\"'")
+        return sum(1 for s in saids if ph and ph in s.lower())
+
+    try:
+        from captioner.context_compression import context_compressor
+
+        ln = (getattr(context_compressor, "introspective_state", None) or {}).get("loop_notice") or {}
+        ph = (ln.get("phrase") or "").strip()
+        pw = re.findall(r"[a-z0-9']+", ph.lower())
+        while pw and pw[0] in ("the", "a", "an", "that", "this"):  # the compressor may lead with an article: "the red foam finger" reads fine
+            pw = pw[1:]
+        if ph and ph.lower() != "none" and float(ln.get("ts", 0) or 0) >= since_ts and _phrase_ok(pw) and _nounish(" ".join(pw)):
+            k = contains(ph)
+            if k >= 2:
+                return ph, k
+    except Exception:
+        pass
+    import collections
+
+    for n in (3, 2):
+        grams = collections.Counter()
+        first_pos = {}  # tie-break: the run that comes earliest in its sentences (the subject, not its predicate)
+        for s in saids:
+            w = re.findall(r"[a-z0-9']+", s.lower())
+            seen = set()
+            for i in range(len(w) - n + 1):
+                g = tuple(w[i : i + n])
+                if g in seen or not _phrase_ok(g):
+                    continue
+                seen.add(g)
+                grams[g] += 1
+                first_pos[g] = min(first_pos.get(g, i), i)
+        for g, k in sorted(grams.items(), key=lambda kv: (-kv[1], first_pos[kv[0]])):
+            if k < 3:
+                break
+            if _nounish(" ".join(g)):
+                return " ".join(g), k
+    return "", 0
+
+
+def get_unchanged_line(agent) -> str:
+    """THE STRETCH (Sep 13, artist: "tedium is material and repetition is in and
+    of itself an event… the continuous flow of time and interplay with boredom is
+    a constant shift within the persistence"). Replaces the clock ("Nothing has
+    happened for about twenty minutes"), which the machine read back as "20 min
+    of this" in 38% of one night's captions. Same anchor — the time since
+    anything last happened — but the sentence is about what the MACHINE did with
+    that time, from its own record (captioner._note_act): how often it looked
+    around, what it kept naming and how many times, whether it drifted, how long
+    it was quiet. It changes every minute while the room does not. Counts in
+    words. Empty until there is something to say."""
+    try:
+        from config.config import UNCHANGED_FACT_AFTER_S
 
         now = time.time()
         unchanged_s = unchanged_duration_s(agent, now)
         if unchanged_s < UNCHANGED_FACT_AFTER_S:
             return ""
-        # STANDING (Sep 11, artist: "the appropriate data should reach every
-        # single call"). The phrase-change dose and the min-gap are gone: the
-        # line rides on every call once the stillness is longer than a moment,
-        # and its duration moves with the clock. Words, never integers.
-        return P("caption.unchanged").format(duration=casual_time_string(unchanged_s / 60.0))
+        since = now - unchanged_s
+        acts = [a for a in (getattr(agent, "_acts", None) or []) if since <= a[0] <= now]
+        looks = sum(1 for a in acts if a[1] == "look")
+        drifts = sum(1 for a in acts if a[1] == "drift")
+        silences = sum(1 for a in acts if a[1] == "silence")
+        saids = [a[2] for a in acts if a[1] == "said" and a[2]]
+        phrase, k = _top_phrase(saids, since)
+        try:
+            interval = float(agent._current_caption_interval(now))
+        except Exception:
+            interval = 8.0
+        quiet_s = silences * interval
+        parts = []
+        if looks:
+            parts.append(f"looked around {count_words(looks)}")
+        if phrase and k >= 2:
+            parts.append(f"named {phrase} {count_words(k)}")
+        if drifts:
+            parts.append(f"drifted off {count_words(drifts)}")
+        if quiet_s >= 120:
+            parts.append(f"been quiet for {casual_time_string(quiet_s / 60.0)} of it")
+        elif quiet_s >= 60:
+            parts.append("been quiet for a minute of it")  # casual_time_string says "just now" below two minutes
+        if not parts:
+            return ""
+        acts_txt = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + (", and " if len(parts) > 2 else " and ") + parts[-1]
+        return P("caption.stretch").format(duration=casual_time_string(unchanged_s / 60.0), acts=acts_txt)
     except Exception:
         return ""
-
 
 
 def _head_line_from(agent, pan: float, tilt: float, direction: str, verdict, now: float) -> str:
@@ -623,8 +745,13 @@ def _head_line_from(agent, pan: float, tilt: float, direction: str, verdict, now
     from config.config import HEAD_HOLD_TOL_DEG, HEAD_STANDING_AFTER_S, HEAD_TURN_VERDICT_S
 
     hold = getattr(agent, "_head_hold", None)
-    if hold is None or abs(pan - hold["pan"]) > HEAD_HOLD_TOL_DEG or abs(tilt - hold["tilt"]) > HEAD_HOLD_TOL_DEG:
+    if hold is None:
         hold = agent._head_hold = {"pan": pan, "tilt": tilt, "since": now}
+    elif abs(pan - hold["pan"]) > HEAD_HOLD_TOL_DEG or abs(tilt - hold["tilt"]) > HEAD_HOLD_TOL_DEG:
+        hold = agent._head_hold = {"pan": pan, "tilt": tilt, "since": now}
+        _note = getattr(agent, "_note_act", None)  # Sep 13: a turn is an act the stretch line can count
+        if callable(_note):
+            _note("look")
     held_s = now - hold["since"]
     direction = (direction or "ahead").replace("looking ", "").replace("straight ", "")
     if held_s >= HEAD_STANDING_AFTER_S:
@@ -698,6 +825,7 @@ def build_standing_facts(agent, include_felt: bool = True) -> str:
     if include_felt:
         parts.append(get_felt_arc_line(agent))
     return "\n".join(x for x in parts if x)
+
 
 def get_tenure_line() -> str:
     """How long the machine has existed in this room — from lifetime_state.json,

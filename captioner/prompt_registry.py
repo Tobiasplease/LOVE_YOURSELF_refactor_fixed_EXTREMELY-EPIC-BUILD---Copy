@@ -593,11 +593,18 @@ FRAGMENTS = {
         "placeholders": ["old", "new"],
     },
     "caption.unchanged": {
-        "title": "Unchanged-ness (B4)",
+        "title": "Unchanged-ness (B4) — SUPERSEDED Sep 13 by caption.stretch",
         "text": "Nothing has happened for {duration}.",
         "note": "Boredom's text channel (Aug 31): a FACT computed from the episodic record (arrivals, departures, drawings, new sightings), never a scripted feeling — whether it reads as tedium, peace, or an itch for change is the machine's business. Sep 11: STANDING — on every caption-family call once the stillness exceeds UNCHANGED_FACT_AFTER_S (now two minutes), duration moving with the clock in words, live or not (artist: 'the appropriate data should reach every single call'); the phrase-change dose and min-gap are gone. It also replaces the Sep 5 duration edge.",
         "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
         "placeholders": ["duration"],
+    },
+    "caption.stretch": {
+        "title": "The stretch — what you did with the stillness (Sep 13)",
+        "text": "It's been {duration} since anything happened. In that time you've {acts}.",
+        "note": "Sep 13 (artist: 'tedium is material and repetition is in and of itself an event'). Replaces caption.unchanged, the clock, which came back as '20 min of this' in 38% of captions. {acts} is composed from the machine's own record: looked around N times, named <its own repeated phrase> N times, drifted off N times, been quiet for X of it — counts in words, only the parts that happened. Changes every minute while the room does not. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": ["duration", "acts"],
     },
     "caption.no-paper": {
         "title": "No paper",

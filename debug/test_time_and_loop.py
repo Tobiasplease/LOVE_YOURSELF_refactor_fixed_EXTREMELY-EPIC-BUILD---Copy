@@ -105,10 +105,11 @@ import utils.episodic_log as _el
 _el.episodic_log.get_last_event = lambda etype: None
 a = agent(2 * 3600)
 check("no duration edge in the situational line any more", "Nothing in the room has changed for" not in build_situational_line(a))
-check("2h still → the standing line, in words", get_unchanged_line(a) == "Nothing has happened for about two hours.", get_unchanged_line(a))
-check("and again on the next call (standing, not an edge)", get_unchanged_line(a) == "Nothing has happened for about two hours.")
+a._acts = [(time.time() - 60, "look", ""), (time.time() - 30, "silence", "")]
+check("2h still → the stretch line, in words (Sep 13)", get_unchanged_line(a).startswith("It's been about two hours since anything happened. In that time you've looked around once"), get_unchanged_line(a))
+check("and again on the next call (standing, not an edge)", get_unchanged_line(a) == get_unchanged_line(a))
 check("under two minutes → nothing yet", get_unchanged_line(agent(60)) == "", get_unchanged_line(agent(60)))
-check("20 min still → standing", get_unchanged_line(agent(20 * 60)) == "Nothing has happened for about twenty minutes.", get_unchanged_line(agent(20 * 60)))
+check("20 min still, nothing done → no line", get_unchanged_line(agent(20 * 60)) == "", get_unchanged_line(agent(20 * 60)))
 
 # --- B3 loop notice: gate source
 b = A()

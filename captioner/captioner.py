@@ -253,6 +253,23 @@ class Captioner(MemoryMixin):
             return
         self._stream.append(t)
         self._stream_ts.append(time.time())
+        self._note_act("said", t)
+
+    def _note_act(self, kind: str, text: str = "") -> None:
+        """The machine's own record of what it did (Sep 13, artist: "tedium is
+        material and repetition is in and of itself an event"): 'said' (a stored
+        caption), 'look' (a head turn beyond the hold tolerance), 'silence' (a
+        quiet cycle), 'drift' (a stored drift turn). Read by prompts.get_unchanged_line
+        — the stretch line — so the page carries the machine's own trajectory
+        through a still stretch instead of the room's clock."""
+        try:
+            from collections import deque
+
+            if not hasattr(self, "_acts"):
+                self._acts = deque(maxlen=6000)
+            self._acts.append((time.time(), kind, (text or "")[:300]))
+        except Exception:
+            pass
 
     def _stream_clear(self) -> None:
         self._stream.clear()
@@ -505,6 +522,7 @@ class Captioner(MemoryMixin):
         except Exception:
             pass
         if stored:
+            self._note_act("drift", text)
             self._stream_push(framed)
         self.last_caption_time = now
         return text if stored else None
@@ -1796,6 +1814,7 @@ class Captioner(MemoryMixin):
         FRONT, one entry per stuck cycle: the oldest entry is the likeliest
         poison, recency survives, and in the worst case the window empties
         gradually instead of vanishing at a stroke."""
+        self._note_act("silence" if reason in ("chosen_silence", "repeat_silenced") else "unstored", preview)
         self._skip_streak = getattr(self, "_skip_streak", 0) + 1
         if self._skip_streak >= 3 and len(self._stream) > 1:
             dropped = self._stream.popleft()
