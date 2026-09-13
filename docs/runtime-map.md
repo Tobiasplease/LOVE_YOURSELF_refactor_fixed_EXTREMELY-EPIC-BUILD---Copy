@@ -2150,3 +2150,22 @@ STREAM_MODE).
   Verify with `pgrep -af '^python machine'` and `tmux ls`. Never
   `stop_machine.sh` / `pkill -f machine.py` from an agent shell — the pattern
   matches the shell's own command line.
+- **The photographed sheets reach the dashboard (Sep 13)**: after every drawing
+  `drawing/finished_capture.py` writes `event_log/finished_drawings/finished_<date>_<time>_<n>.jpg`
+  plus a `_sheet` crop and a `_t1024` copy at the model's reading size, and the
+  Drawings tab only ever listed ComfyUI's renders (artist: "we added a system
+  for it but it doesn't show up in the mobile UI"). New: `GET /api/finished/list`
+  (one row per capture, the `_sheet` crop preferred, `_t1024` never listed,
+  `limit`/`before` paging) and `GET /api/finished/img` (`&thumb=1` reuses the
+  comfy thumbnailer), plus a "The Paper" / "Finished Sheets" pair in the
+  Drawings tab of `dashboard/index.html`. Two bugs the test caught before the
+  live check: paging filtered files before grouping, so a capture came back on
+  the next page as its older wide shot; and the name guard used `$`, which
+  matches before a trailing newline. debug/test_dashboard_finished.py.
+- **Ops — the dashboard is a systemd user service, not the tmux script (Sep 13)**:
+  `impostor-dashboard.service` (enabled, running since Sep 8) owns port 8800.
+  `dashboard/start_dashboard.sh` starts a SECOND copy in tmux that loops on
+  "Address already in use" — the script's own header says not to use it when
+  systemd is. Restart the console with `systemctl --user restart
+  impostor-dashboard`; `systemctl --user status impostor-dashboard` says
+  whether it is the owner. The machine is untouched either way.

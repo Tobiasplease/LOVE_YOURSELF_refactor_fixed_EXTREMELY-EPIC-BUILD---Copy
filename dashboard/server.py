@@ -21,6 +21,8 @@ Endpoints:
     GET  /api/comfy/list         ComfyUI output PNGs, newest first
     GET  /api/comfy/img          one PNG (?name=..., &thumb=1 for 480px JPEG)
     GET  /api/drawings           drawing_memory.json ledger passthrough
+    GET  /api/finished/list      photographed sheets after each drawing, newest first
+    GET  /api/finished/img       one photo (?name=..., &thumb=1 for 480px JPEG)
     GET  /api/roomcam.mjpg       room-POV MJPEG (placeholder when no cam)
     /machine/*                   reverse proxy -> 127.0.0.1:8801 (503 when down)
 """
@@ -29,6 +31,7 @@ import http.client
 import http.server
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -60,6 +63,13 @@ PORT = int(os.getenv("DASHBOARD_PORT", 8800))
 MACHINE_API = ("127.0.0.1", int(os.getenv("MACHINE_API_PORT", 8801)))
 PIDFILE = "/tmp/love_yourself_machine.pid"
 LIVE_CAPTIONS = os.path.join(MOOD_SNAPSHOT_FOLDER, "live_captions.txt")
+# Sep 13 (artist: "Do we have access to the actual images of the paper post
+# drawing… we added a system for it but it doesn't show up in the mobile UI").
+# drawing/finished_capture.py writes finished_<date>_<time>_<n>.jpg here, plus
+# a _sheet crop and a _t1024 copy sized for the model; the Drawings tab only
+# ever listed ComfyUI's renders.
+FINISHED_FOLDER = os.path.join(MOOD_SNAPSHOT_FOLDER, "finished_drawings")
+FINISHED_NAME_RE = re.compile(r"\Afinished_\d{8}_\d{6}_\d+(?:_sheet)?\.jpg\Z")
 STOP_FILE = os.path.join(REPO, "STOP")
 LLAMA_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 COMFY_URL = "http://localhost:8188"
@@ -312,6 +322,31 @@ def comfy_thumb(path: str, name: str, mtime_ns: int) -> bytes:
     return data
 
 
+def finished_list(q: dict) -> dict:
+    """The photographed sheets, newest first. One entry per capture: the _sheet
+    crop when there is one, else the wide shot. The _t1024 copies are the
+    model's own reading size and are never listed."""
+    limit = min(int(q.get("limit", ["24"])[0]), 100)
+    before = float(q.get("before", ["0"])[0]) or None
+    best = {}
+    try:
+        for e in os.scandir(FINISHED_FOLDER):
+            if not e.is_file() or not FINISHED_NAME_RE.match(e.name):
+                continue
+            st = e.stat()
+            key = e.name[: -len("_sheet.jpg")] if e.name.endswith("_sheet.jpg") else e.name[: -len(".jpg")]
+            row = {"name": e.name, "mtime": st.st_mtime, "size": st.st_size, "sheet": e.name.endswith("_sheet.jpg")}
+            if key not in best or (row["sheet"] and not best[key]["sheet"]):
+                best[key] = row
+    except FileNotFoundError:
+        return {"images": [], "error": "no finished-drawing captures yet"}
+    # Paged after grouping: filtering files by mtime first let a capture come
+    # back on the next page as its (older) wide shot.
+    rows = [r for r in best.values() if not before or r["mtime"] < before]
+    out = sorted(rows, key=lambda r: -r["mtime"])
+    return {"images": out[:limit], "truncated": len(out) > limit}
+
+
 def drawings_ledger() -> dict:
     try:
         with open(os.path.join(MOOD_SNAPSHOT_FOLDER, "drawing_memory.json"), encoding="utf-8") as f:
@@ -471,6 +506,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(comfy_list(q))
             if route == "/api/comfy/img":
                 return self._comfy_img(q)
+            if route == "/api/finished/list":
+                return self._json(finished_list(q))
+            if route == "/api/finished/img":
+                return self._finished_img(q)
             if route == "/api/drawings":
                 return self._json(drawings_ledger())
             if route == "/api/captions/stream":
@@ -532,6 +571,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._bytes(comfy_thumb(path, name, mtime_ns), "image/jpeg")
         with open(path, "rb") as f:
             return self._bytes(f.read(), "image/png")
+
+    def _finished_img(self, q):
+        name = os.path.basename(q.get("name", [""])[0])
+        if not FINISHED_NAME_RE.match(name):
+            return self._json({"error": "bad name"}, 400)
+        path = os.path.join(FINISHED_FOLDER, name)
+        try:
+            mtime_ns = os.stat(path).st_mtime_ns
+        except OSError:
+            return self._json({"error": "not found"}, 404)
+        if q.get("thumb", ["0"])[0] == "1":
+            return self._bytes(comfy_thumb(path, name, mtime_ns), "image/jpeg")
+        with open(path, "rb") as f:
+            return self._bytes(f.read(), "image/jpeg")
 
     # -- streams ------------------------------------------------------------
 

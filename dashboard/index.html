@@ -86,7 +86,7 @@ section{display:none;}section.active{display:block;}
 .camnote{padding:4px 8px;font-size:11.5px;color:var(--amber-dim);}
 
 /* drawings --------------------------------------------------------------- */
-#latestImg{width:100%;background:#000;display:block;min-height:180px;}
+#latestImg,#paperImg{width:100%;background:#000;display:block;min-height:180px;}
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;padding:6px;}
 .thumbs img{width:100%;aspect-ratio:1;object-fit:cover;cursor:pointer;border:1px solid var(--bevel-dk);}
 .thumbs img:hover{border-color:var(--amber);}
@@ -181,6 +181,13 @@ section{display:none;}section.active{display:block;}
   <div class="bevel" style="margin-top:8px"><h2>Gallery</h2>
     <div class="thumbs" id="thumbGrid"></div>
     <div class="cambar"><button id="btnMoreImgs">More</button></div>
+  </div>
+  <div class="grid2" style="margin-top:8px">
+    <div class="bevel"><h2>The Paper</h2><img id="paperImg" alt=""><div class="camnote" id="paperName">no captures yet</div></div>
+    <div class="bevel"><h2>Finished Sheets</h2>
+      <div class="thumbs" id="paperGrid"></div>
+      <div class="cambar"><button id="btnMorePaper">More</button></div>
+    </div>
   </div>
 </section>
 
@@ -349,8 +356,29 @@ async function loadDrawings(more) {
       ul.appendChild(li);
     });
   } catch (e) { $("#latestName").textContent = "gallery unavailable: " + e.message; }
+  loadPaper(more);
 }
 $("#btnMoreImgs").onclick = () => loadDrawings(true);
+
+/* the photographed sheet after each drawing (Sep 13) */
+let paperBefore = 0;
+async function loadPaper(more) {
+  try {
+    const q = more && paperBefore ? "?limit=24&before=" + paperBefore : "?limit=24";
+    const d = await j("/api/finished/list" + q);
+    if (!more) $("#paperGrid").textContent = "";
+    const show = im => { $("#paperImg").src = "/api/finished/img?name=" + encodeURIComponent(im.name); $("#paperName").textContent = im.name + " — " + ago(im.mtime) + " ago"; };
+    (d.images || []).forEach((im, i) => {
+      if (!more && i === 0) show(im);
+      const t = el("img"); t.loading = "lazy"; t.src = "/api/finished/img?thumb=1&name=" + encodeURIComponent(im.name);
+      t.onclick = () => { show(im); $("#paperImg").scrollIntoView({ behavior: "smooth", block: "center" }); };
+      $("#paperGrid").appendChild(t);
+      paperBefore = im.mtime;
+    });
+    if (!more && !(d.images || []).length) $("#paperName").textContent = d.error || "no captures yet";
+  } catch (e) { $("#paperName").textContent = "paper shots unavailable: " + e.message; }
+}
+$("#btnMorePaper").onclick = () => loadPaper(true);
 
 /* history -------------------------------------------------------------- */
 let histLoaded = false, histBefore = 0;
