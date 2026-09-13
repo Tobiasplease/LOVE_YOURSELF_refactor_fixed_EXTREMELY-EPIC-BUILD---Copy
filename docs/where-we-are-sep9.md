@@ -2129,3 +2129,15 @@ two minutes (backing off to twenty) so the live one is never poisoned
 debug/test_yolo_device_policy.py). One repair restart at ~11:45 with the server
 killed first so it reloads at the baseline and YOLO gets the card. Runtime-map
 has the restart race of 11:20 as an ops note.
+
+**Second run (11:43 boot, first 25 minutes).** YOLO stayed on the card, the
+server sat at 18.9 GB. The stretch line rode 89 of 101 calls. Captions opening
+with a digit duration: one in 144, against 41 of 103 in the 11:22 run measured
+the same way. The only change between the two runs on that axis was the digit
+refusal in the named clause ("named 16 hours nine times" had ridden sixteen
+calls of the first run), so the earlier reading needs correcting: the stamps in
+the window do not start the digit chain by themselves — a digit anywhere in
+the standing facts seeds it, and the window propagates it. One run each. The
+noun-phrase check was not yet live in this run, so its junk still rode it
+("named i'm looking sixteen times", "named desk is clear seventeen times"); it
+takes effect at the next restart, which will not be forced for it.

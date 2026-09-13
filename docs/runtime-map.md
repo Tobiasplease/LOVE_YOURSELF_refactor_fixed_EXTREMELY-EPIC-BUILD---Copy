@@ -2105,6 +2105,15 @@ STREAM_MODE).
   never "or a paper"); (2) the quiet clause read "been quiet for just now of
   it" between one and two minutes (casual_time_string's floor) — it now says
   "a minute of it" there and nothing under a minute. debug/test_stretch_line.py.
+  Second run (11:43 boot, 25 min, 144 captions): stretch line on 89/101 calls,
+  captions opening with a digit duration 1/144 against 41/103 in the 11:22 run
+  measured the same way. The one change between the runs on this axis was the
+  digit refusal in the named clause — "named 16 hours nine times" had ridden
+  16 calls of the 11:22 run — so the reading is: a digit anywhere in the
+  standing facts seeds the chain and the window propagates it; keep the
+  standing facts digit-free and the stamps alone do not start it. One run each;
+  the noun-phrase check was not yet live (its junk — "named i'm looking
+  sixteen times", "named desk is clear seventeen times" — rode this run).
 - **YOLO device policy (Sep 13)**: the 11:22 relaunch started YOLO into a full
   card (the server had grown to 22.5 GB, see next bullet). The old fallback
   set force_cpu and called track(device="cpu") — but the failed .to("cuda")
