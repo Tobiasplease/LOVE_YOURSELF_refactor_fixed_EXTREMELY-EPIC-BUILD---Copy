@@ -344,10 +344,10 @@ class Captioner(MemoryMixin):
                 recent = frame_buffer.get_recent_with_metadata(seconds=6, max_frames=1)
                 in_frame = bool(recent and (recent[-1].get("detection") or {}).get("person"))
                 if not in_frame:
-                    from captioner.prompts import presence_who
+                    from captioner.prompts import presence_who_is
 
-                    who = presence_who(self)  # Sep 11: "He" only on re-ID
-                    ask = P("drift.presence").format(who=who) + "\n" + ask
+                    who = presence_who_is(self)  # Sep 13: "They're" / "Someone's" — never a guessed sex
+                    ask = P("drift.presence").format(who_is=who) + "\n" + ask
             else:
                 # Sep 4 evening — the inverse hole: belief OFF, stream still
                 # carrying them; drift was re-seeding "he's still hunched" into

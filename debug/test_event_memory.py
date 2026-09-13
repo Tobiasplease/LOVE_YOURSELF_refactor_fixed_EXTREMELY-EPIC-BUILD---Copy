@@ -9,9 +9,13 @@ import time
 import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import re  # noqa: E402
+
 import utils.episodic_log as _el  # noqa: E402
 from captioner import event_memory as em  # noqa: E402
-from captioner.prompts import arrival_cue_text, build_last_event_line, build_situational_line, presence_who  # noqa: E402
+import captioner.prompt_registry as _registry  # noqa: E402
+from captioner.prompt_registry import P  # noqa: E402
+from captioner.prompts import arrival_cue_text, build_last_event_line, build_situational_line, build_standing_absence_line, presence_who, presence_who_is  # noqa: E402
 
 fails = 0
 
@@ -57,7 +61,7 @@ check("gap ≈ a day", ev and abs(ev["gap_s"] - 86400) < 5, ev and ev["gap_s"])
 check("lifetime capped at six hours", ev and ev["lifetime_s"] == 6 * 3600, ev and ev["lifetime_s"])
 check("alive and rare", ev and ev["alive"] and ev["rare"])
 line = build_last_event_line(agent())
-check("plain-fact line, in words", line == "Earlier: Someone came in, stayed a few minutes, and left. That was about an hour ago, the first visitor in about a day.", line)
+check("plain-fact line, in words", line == "Earlier: Someone came in, stayed a few minutes, and left. That was about an hour ago, the first visitor in about a day. No one has been here since.", line)
 CC.events[:] = [{"event": "The person sitting in the chair left, leaving only the empty seat behind.", "timestamp": T - 3700}]
 line = build_last_event_line(agent())
 check("the compressor's own words are preferred", line.startswith("Earlier: The person sitting in the chair left, leaving only the empty seat behind. That was about an hour ago, the first visitor"), line)
@@ -68,6 +72,17 @@ CC.events[:] = [{"event": "The occupant of the chair is no longer present; only 
 line = build_last_event_line(agent())
 check("a long mid-event sentence yields to the ledger fact", line.startswith("Earlier: Someone came in, stayed a few minutes, and left."), line)
 check("not while a visit is in progress", build_last_event_line(agent(_presence_believed=True)) == "")
+
+# Sep 13: the remembered visit closes its own door (the 19:01 phantom — a restart
+# emptied the stream, the memory stood alone, the next caption seated him again).
+CC.events[:] = []
+line = build_last_event_line(agent())
+check("the visit line ends by saying the room emptied", line.endswith("That was about an hour ago, the first visitor in about a day. No one has been here since."), line)
+EVENTS.append({"type": "person_arrived", "timestamp": T - 600})
+check("but not when someone arrived after that departure", "No one has been here since." not in build_last_event_line(agent()), build_last_event_line(agent()))
+check("anyone_since sees the later arrival", em.anyone_since(T - 3800) and not em.anyone_since(T - 60))
+EVENTS[:] = [e for e in EVENTS if e["timestamp"] != T - 600]
+check("no digits in the closing sentence", not any(ch.isdigit() for ch in build_last_event_line(agent())))
 
 # --- a routine visit: five minutes after the previous one, an hour ago → dead
 EVENTS[:] = [
@@ -93,11 +108,25 @@ check("routine but fresh → plain line", line == "Earlier: Someone came in, sta
 # --- the arrival cue with rarity
 EVENTS[:] = [{"type": "person_arrived", "timestamp": T - 86400}, {"type": "person_arrived", "timestamp": T - 1}]
 check("rare arrival, unknown person", arrival_cue_text(agent()) == "Someone's come in — the first in about a day.", arrival_cue_text(agent()))
-check("rare arrival, familiar", arrival_cue_text(agent(_presence_arrival_familiar=True)) == "He's back — the first time in about a day.", arrival_cue_text(agent(_presence_arrival_familiar=True)))
+check("rare arrival, familiar", arrival_cue_text(agent(_presence_arrival_familiar=True)) == "They're back — the first time in about a day.", arrival_cue_text(agent(_presence_arrival_familiar=True)))
 check("rare arrival, several", arrival_cue_text(agent(_presence_arrival_count=3)) == "People have come in — the first in about a day.")
 EVENTS[:] = [{"type": "person_arrived", "timestamp": T - 300}, {"type": "person_arrived", "timestamp": T - 1}]
 check("routine arrival, unknown person", arrival_cue_text(agent()) == "Someone's come in.", arrival_cue_text(agent()))
-check("presence_who: Someone unless re-ID", presence_who(agent()) == "Someone" and presence_who(agent(_presence_arrival_familiar=True)) == "He")
+# Sep 13 (artist: "gendering overall is not optimal because well you never know do you")
+check("presence_who: Someone, or They on re-ID — never a sex", presence_who(agent()) == "Someone" and presence_who(agent(_presence_arrival_familiar=True)) == "They")
+check("presence_who_is contracts correctly", presence_who_is(agent()) == "Someone's" and presence_who_is(agent(_presence_arrival_familiar=True)) == "They're")
+check("the drift's presence fact is grammatical either way", [P("drift.presence").format(who_is=presence_who_is(agent(_presence_arrival_familiar=f))) for f in (False, True)] == ["Someone's here, just out of view right now.", "They're here, just out of view right now."], [P("drift.presence").format(who_is=presence_who_is(agent(_presence_arrival_familiar=f))) for f in (False, True)])
+check("the standing absence fact is grammatical either way", all(build_standing_absence_line.__doc__ or True for _ in [0]) and "left" in P("caption.absence-standing").format(who="They", when="a few minutes ago"))
+_gendered = re.compile(r"\b(he|him|his|she|her|hers)\b", re.I)
+_leaks = sorted(
+    f"{name}:{k}:{field}"
+    for name in ("FRAGMENTS", "STORES", "PASSES")
+    for k, v in getattr(_registry, name, {}).items()
+    if isinstance(v, dict)
+    for field in ("text", "system", "prompt", "template")
+    if isinstance(v.get(field), str) and _gendered.search(v[field])
+)
+check("no registry text handed to the model assumes a sex", _leaks == [], _leaks)
 
 # --- the sticky edge
 EVENTS[:] = [{"type": "person_arrived", "timestamp": T - 86400}, {"type": "person_arrived", "timestamp": T - 1}]

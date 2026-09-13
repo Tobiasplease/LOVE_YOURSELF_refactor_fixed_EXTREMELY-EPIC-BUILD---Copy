@@ -774,11 +774,21 @@ def get_head_line(agent) -> str:
 
 
 def presence_who(agent) -> str:
-    """Sep 11 (artist: "'He's come in' isn't very good. This wasn't me, it was a
-    different person."). The definite "He" only when re-identification says
-    the arrival is familiar; otherwise "Someone". The singular-regime prior
-    (one-man studio) no longer names anyone by itself."""
-    return "He" if getattr(agent, "_presence_arrival_familiar", False) else "Someone"
+    """WHO IS THERE, without guessing (Sep 13, artist: "gendering overall is not
+    optimal because well you never know do you"). "They" when re-identification
+    says the arrival is familiar, "Someone" otherwise — the familiar/stranger
+    distinction survives, the sex of a stranger is never assumed. Sep 11 had
+    already taken the definite "He" off unfamiliar arrivals after the machine
+    greeted a different person as the artist; on Sep 12 a false familiar match
+    greeted the colleague as "He's back" and mis-gendered them once."""
+    return "They" if getattr(agent, "_presence_arrival_familiar", False) else "Someone"
+
+
+def presence_who_is(agent) -> str:
+    """The same word contracted with "is" — "They're" / "Someone's". A bare
+    {who} in a "{who}'s here" template used to be safe only because the pronoun
+    was singular; "They's" is not English."""
+    return "They're" if getattr(agent, "_presence_arrival_familiar", False) else "Someone's"
 
 
 def build_last_event_line(agent) -> str:
@@ -802,8 +812,17 @@ def build_last_event_line(agent) -> str:
         age = casual_time_string(ev["age_s"] / 60.0)
         rarity = _em.rarity_phrase(ev["kind"], ev["gap_s"])
         if rarity:
-            return P("caption.last-event").format(what=what, age=age, rarity=rarity)
-        return P("caption.last-event-plain").format(what=what, age=age)
+            line = P("caption.last-event").format(what=what, age=age, rarity=rarity)
+        else:
+            line = P("caption.last-event-plain").format(what=what, age=age)
+        # Sep 13 (artist, of the 19:01 phantom: "Why do these appear at all? If
+        # as a memory, fine, but believed to be present?"). A visit remembered
+        # in the past tense still reads as someone in the room when the stream
+        # has no absence line to contradict it — a restart empties the stream,
+        # and the fact stood alone. It closes its own door.
+        if ev["kind"] == _em.VISIT_KIND and not _em.anyone_since(ev["ts"]):
+            line += " " + P("caption.since-empty")
+        return line
     except Exception:
         return ""
 
@@ -1460,7 +1479,7 @@ def build_standing_absence_line(agent) -> str:
         return ""
     _note_absence_ride(agent, True)
     if dropped > 0:
-        who = presence_who(agent)  # Sep 11: "He" only on re-ID
+        who = presence_who(agent)  # Sep 13: "They" on re-ID, else "Someone" — never a guessed sex
         ago = casual_time_string((time.time() - dropped) / 60.0)
         when = ago if ago == "just now" else f"{ago} ago"
         return P("caption.absence-standing").format(who=who, when=when)
@@ -1653,7 +1672,7 @@ def build_situational_line(agent, gaze_direction: str = "ahead", gaze_state: str
     # successful generate; the 22:26 arrival's cue never reached a prompt);
     # (2) the arrival carries its RARITY as a fact (artist: "someone walking in
     # after a period of loneliness should be reacted to appropriately"); (3)
-    # "He" only when re-ID says familiar (presence_who).
+    # "They're back" only when re-ID says familiar (presence_who); a stranger is "Someone".
     if believed and prev is False:
         agent._presence_edge = {"text": arrival_cue_text(agent), "ts": _time.time(), "sent": False}
     elif (not believed) and prev is True:

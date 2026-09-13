@@ -318,10 +318,10 @@ FRAGMENTS = {
     },
     "drift.presence": {
         "title": "Drift turn — presence fact",
-        "text": "{who}'s here, just out of view right now.",
+        "text": "{who_is} here, just out of view right now.",
         "note": "Attention round (Sep 4): the drift call was the ONE prompt with no presence fact — a you-filled stream plus a you-less frame structurally invited phantom departures ('The man is gone', found live Sep 3). Rides the drift ask only when the presence belief is active AND no person is in the current frame. {who} follows the singular regime (He/Someone).",
         "used_by": ["drift_turn"],
-        "placeholders": ["who"],
+        "placeholders": ["who_is"],
     },
     "caption.absence-standing": {
         "title": "Standing absence fact (belief off, stream still carries them)",
@@ -478,6 +478,13 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
         "placeholders": ["what", "age"],
     },
+    "caption.since-empty": {
+        "title": "The remembered visit is over (event memory)",
+        "text": "No one has been here since.",
+        "note": "Sep 13 (artist, of the 19:01 phantom: \"Why do these appear at all? If as a memory, fine, but believed to be present?\"). Appended to the visit form of caption.last-event: on Sep 12 a restart emptied the stream, the remembered departure stood with no absence line behind it, and the next caption said 'and there he is, sitting on that chair' with the room empty. Skipped when anyone arrived after that departure (event_memory.anyone_since) — the visit line would then be standing over a real presence. Wording is the artist's to finalize.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": [],
+    },
     "caption.arrival-someone": {
         "title": "Arrival edge — someone",
         "text": "Someone's come in.",
@@ -494,13 +501,15 @@ FRAGMENTS = {
     },
     "caption.arrival-back": {
         "title": "Arrival edge — familiar (re-ID)",
-        "text": "He's back.",
+        "text": "They're back.",
+        "note": "Sep 13 (artist: \"gendering overall is not optimal because well you never know do you\"). Was \"He's back.\" — on Sep 12 a false re-ID greeted a visiting colleague with it and the captions mis-gendered them. Re-identification can say FAMILIAR; it cannot say who. Wording is the artist's to finalize.",
         "used_by": ["caption"],
         "placeholders": [],
     },
     "caption.arrival-back-rare": {
         "title": "Arrival edge — familiar, after a long gap",
-        "text": "He's back — the first time in {gap}.",
+        "text": "They're back — the first time in {gap}.",
+        "note": "Sep 13: see caption.arrival-back. Wording is the artist's to finalize.",
         "used_by": ["caption"],
         "placeholders": ["gap"],
     },

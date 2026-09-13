@@ -151,6 +151,18 @@ def last_event(now: Optional[float] = None) -> Optional[Dict]:
     return ev
 
 
+def anyone_since(ts: float) -> bool:
+    """Has anyone arrived since that moment? Sep 13: last_event() pairs the last
+    departure with the arrival before it, so a NEW arrival after it (belief
+    dropped, detection flaky, a visit still in progress) leaves the visit line
+    standing while someone is in fact in the room. The closing sentence must
+    not be added then."""
+    try:
+        return any(float(e["timestamp"]) > float(ts) for e in _episodic_events(["person_arrived"]))
+    except Exception:
+        return True
+
+
 def rarity_phrase(kind: str, gap_s: Optional[float]) -> str:
     """'the first visitor in about a day' — empty when the event was routine."""
     if not is_rare(gap_s):
