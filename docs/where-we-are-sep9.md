@@ -2197,3 +2197,30 @@ exits in view and never triggers an early reflection; repetition every third cal
 does it in eighteen minutes. The three plugs are offers: the drift comes due
 sooner, the decision ask names it and lists the ways out including staying with
 it, and the long thought may come early. The caption interval does not move.
+
+**Measured on the 13:58 boot (30 minutes, 198 captions).** The video clock is
+gone: 0 of 198, against 72% the run before. No passes fired, false or otherwise,
+with the twelve-second cap in place. Tedium behaved as tuned — 221 samples,
+"engaged" while attention was still high after the boot, then "nothing
+happening" (107) and "said it again" (21) once it fell to the floor, reaching
+0.23 in half an hour, so sameness alone is indeed a slow climb. The thread
+write-back works: from 0 returns ever, two threads have twelve returns between
+them and three threads went dormant, and the advances are real
+("It doesn't know it's been sitting there for a long time"). Captions speaking
+of their own repetition: 51 of 198, against 2 of 71 this morning.
+
+**And a regression the artist has to rule on.** Captions opening with a digit
+are back at 39 of 198 (20%), steady across every five-minute bucket, in thirty
+distinct forms: "37 times.", "45 times.", "104 looks now", "14 minutes.",
+"21 times I've said it to myself and it hasn't changed." The digits are the
+machine's own — no prompt contains them — but the source is plainly the stretch
+line, which tells it every call how many times it looked, named and drifted. It
+converts the words to numerals and opens with them. This is the clock line's
+failure mode wearing new clothes: 38% under the clock, 1 of 144 once the
+standing facts went digit-free, 20% now that the counts are richer and ride
+every call. Two of the twelve thread returns recorded a count as the thought's
+advance ("45 times.", "14 minutes."), so it is reaching the ledger too. The
+counting IS the thing that was asked for — "repetition is in and of itself an
+event" — so the fix is the artist's call, not a stripper: dose the stretch line
+instead of riding every call, or drop the counts and keep only what was named,
+or accept counting as the voice. Not changed unilaterally.
