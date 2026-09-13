@@ -47,6 +47,18 @@ cases = [
     ("a decimal is not a countdown", "40.5 degrees, the head says.", "40.5 degrees, the head says."),
     ("three numbers are left alone", "10, 20, 30 years. Same chair.", "10, 20, 30 years. Same chair."),
     ("a pair inside a sentence is left alone", "It's 12, 13 degrees in here.", "It's 12, 13 degrees in here."),
+    # Sep 13 — THE VIDEO CLOCK. llama-server prepends "[0m0.17s]" to every native
+    # video input; at 13:14:39 the model spoke it, wearing the stream's own
+    # separator, and within two runs 72% of captions were chanting "1m40. 2m07."
+    # at each other (system_state.json carried the tail across restarts, so it
+    # reseeded in two minutes).
+    ("the chunk marker wearing the stream's separator", "0m0.17s — I'm looking at the black office chair now.", "I'm looking at the black office chair now."),
+    ("the chant", "1m40. 2m07. It's red.", "It's red."),
+    ("markers between sentences", "0m51. It's just foam. 2m07. It's a piece of plastic.", "It's just foam. It's a piece of plastic."),
+    ("the bracketed form", "[0m0.00s] the room is still.", "the room is still."),
+    ("nothing but markers", "1m00. 1m00. 1m00.", ""),
+    ("a clock time is speech", "It's 2:07 in the morning and nothing has moved.", "It's 2:07 in the morning and nothing has moved."),
+    ("a bare measurement is speech", "The 3m gap between the desk and the wall.", "The 3m gap between the desk and the wall."),
 ]
 for name, raw, want in cases:
     got = mouth(raw)

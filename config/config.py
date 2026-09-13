@@ -1448,6 +1448,12 @@ EVENT_MEMORY_OWN_WORDS_MAX = int(os.getenv("EVENT_MEMORY_OWN_WORDS_MAX", 18))
 PASS_EVENT_ENABLED = os.getenv("PASS_EVENT_ENABLED", "true").lower() in ("true", "1", "yes")
 PASS_EVENT_MIN_S = float(os.getenv("PASS_EVENT_MIN_S", 2.0))
 PASS_EVENT_END_S = float(os.getenv("PASS_EVENT_END_S", 5.0))
+# A crossing is short. The first live false positive (Sep 13 13:45) was 24
+# seconds of a person-shaped thing while the machine's own arm was in frame and
+# the adjudicator had not run once all boot — that is not someone going past,
+# it is something the machine never looked at properly, and the belief path
+# with its adjudicator is what should decide it.
+PASS_EVENT_MAX_S = float(os.getenv("PASS_EVENT_MAX_S", 12.0))
 PASS_EVENT_RARITY_FACTOR = float(os.getenv("PASS_EVENT_RARITY_FACTOR", 0.1))
 PASS_EVENT_MIN_LIFETIME_S = float(os.getenv("PASS_EVENT_MIN_LIFETIME_S", 300))
 PASS_EVENT_MAX_LIFETIME_S = float(os.getenv("PASS_EVENT_MAX_LIFETIME_S", 3600))

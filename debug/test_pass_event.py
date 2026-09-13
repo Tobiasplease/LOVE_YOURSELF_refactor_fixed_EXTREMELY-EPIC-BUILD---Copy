@@ -74,6 +74,13 @@ check("adjudicated a thing → the studio's own furniture", run(seen, verdict="t
 
 # a second crossing after the first is its own pass
 rec2, _ = run(seen + [(40, True), (43, True), (44, False), (52, False)])
+# Sep 13, first live false positive: 24 s of a person-shape with the machine's own
+# arm in frame, the adjudicator never having run. A crossing is short.
+long_cross = [(0, False)] + [(t, True) for t in range(1, 25)] + [(30, False), (40, False)]
+check("a shape that lingers unjudged is not a pass", run(long_cross)[0] == [], run(long_cross)[0])
+edge = [(0, False), (1, True), (11, True), (12, False), (20, False)]
+check("ten seconds still counts", len(run(edge)[0]) == 1, run(edge)[0])
+
 check("two crossings are two passes", len(rec2) == 2, rec2)
 
 # --- the event-memory tier -------------------------------------------------

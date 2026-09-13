@@ -758,7 +758,7 @@ class Captioner(MemoryMixin):
         furniture and cancels it too. No new heuristic — the same evidence, read
         for a shorter event."""
         try:
-            from config.config import PASS_EVENT_ENABLED, PASS_EVENT_END_S, PASS_EVENT_MIN_S
+            from config.config import PASS_EVENT_ENABLED, PASS_EVENT_END_S, PASS_EVENT_MAX_S, PASS_EVENT_MIN_S
 
             if not PASS_EVENT_ENABLED:
                 return
@@ -779,6 +779,17 @@ class Captioner(MemoryMixin):
             seen_s = run["last"] - run["start"]
             if seen_s < float(PASS_EVENT_MIN_S):
                 return  # a flicker, not a person crossing
+            if seen_s > float(PASS_EVENT_MAX_S):
+                # Sep 13, first live false positive: 24 s of a person-shaped
+                # thing with the machine's own arm in frame. A crossing is
+                # short; something that lingers unjudged is the adjudicator's
+                # business, not a passer-by.
+                log_json_entry(
+                    LogType.DEBUG,
+                    {"message": "Long unjudged person-shape, not called a pass", "action": "pass_too_long", "seen_s": round(seen_s, 1)},
+                    print_message=f"[👤] {seen_s:.0f}s of something person-shaped, never judged — not calling it a pass",
+                )
+                return
             # The cue is built BEFORE the event is written, at the pass's own
             # moment: measured after, the pass is its own most recent sign of
             # anyone and could never be rare.
@@ -1635,13 +1646,25 @@ class Captioner(MemoryMixin):
     # Sep 11: also eat an AM/PM after the stamp — "12:40 AM... wait, no." used
     # to be stored as "AM... wait, no.", an orphan that then opened lines.
     _LEAKED_STAMP_RE = re.compile(r"(?:(?<=^)|(?<=[.!?…]\s)|(?<=\n))\d\d:\d\d(?:\s*[AaPp]\.?[Mm]\.?)?[.…]*\s*[—–-]?\s*")
+    # Sep 13: the VIDEO clock. llama-server prepends a chunk marker — "[0m0.17s]"
+    # — to every native video input, and the model started speaking in it: the
+    # first one, 13:14:39, came out as "0m0.17s — I'm looking at the black office
+    # chair now.", the marker wearing the stream's own "HH:MM — text" separator.
+    # Stored, the window taught it, and within two runs 72% of captions were
+    # chanting "1m40. 2m07." at each other; system_state.json carried the tail
+    # across restarts, so it reseeded itself in two minutes. Same class as the
+    # HH:MM leak above: an artifact of our plumbing, removed before it can be
+    # stored, not a gate on anything the machine meant.
+    _VIDEO_STAMP_RE = re.compile(r"(?:(?<=^)|(?<=[\s(]))\[?\s*\d{1,3}m\d{1,2}(?:\.\d+)?s?\s*\]?[.…,]*\s*[—–-]?\s*")
 
     def _strip_leaked_stamps(self, text: str) -> str:
-        """A bare HH:MM at the start of a sentence is the stream's log format
-        leaking into speech, not something the machine meant to say."""
+        """A bare HH:MM at the start of a sentence, or a video chunk marker
+        anywhere, is our own plumbing leaking into speech, not something the
+        machine meant to say."""
         if not text:
             return text
         out = self._LEAKED_STAMP_RE.sub("", text)
+        out = self._VIDEO_STAMP_RE.sub("", out)
         return " ".join(out.split()) if out.strip() else out
 
     def _maybe_paper_glance(self, now: float) -> None:
