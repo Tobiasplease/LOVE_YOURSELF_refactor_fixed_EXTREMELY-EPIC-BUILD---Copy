@@ -35,7 +35,13 @@ APPLY = "--apply" in sys.argv
 # twenty real thoughts. A bare "100 years" stays; "102 is hunched over that
 # desk" and "103's legs" go.
 NUM = re.compile(
-    r"\b\d{3}'s\b"
+    # Sep 14: the same failure in a third notation — Qwen's grounding output, a
+    # box or size for a region ("1416x1828", later incrementing "2440x-1420,
+    # 2460x-1440, 2480x-1460"). Seeded at 08:34 while the machine was describing
+    # a bright white rectangle at length; 761 of 5420 captions overnight, 64% of
+    # the last ninety minutes.
+    r"\b\d{3,4}\s*[x×]\s*-?\d{3,4}\b"
+    r"|\b\d{3}'s\b"
     r"|\b\d{3}\s+and\s+\d{3}\b"
     r"|\b\d{3}\s+(?:is|was|are|were|has|have|had|left|stayed|sat|sits|sitting|stands|standing|moved|disappeared|vanished|keeps|kept|hunched|leaned|shifted|turned)\b",
     re.I,
