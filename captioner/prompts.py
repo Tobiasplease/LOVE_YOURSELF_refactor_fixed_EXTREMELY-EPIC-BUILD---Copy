@@ -2990,9 +2990,15 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
 
                     facts = want_ledger.current_facts()
                     if facts and (facts["age_s"] >= WANT_ARC_TAIL_AFTER_S or facts["refusals"] > 0):
-                        refused_clause = f"; {facts['refusals']} tries came to nothing" if facts["refusals"] > 0 else ""
+                        # Sep 14: in words, and felt rather than measured. This
+                        # was the last standing line still handing over a figure
+                        # — "You've wanted this for about an hour; 2 tries came
+                        # to nothing" — and the captions under it opened "10
+                        # minutes of nothing."
+                        _n = int(facts["refusals"] or 0)
+                        refused_clause = f"; {count_words(_n)} it came to nothing" if _n > 0 else ""
                         desire_line += P("caption.desire-arc-tail").format(
-                            duration=casual_time_string(facts["age_s"] / 60.0), refused_clause=refused_clause
+                            duration=felt_duration(facts["age_s"]), refused_clause=refused_clause
                         )
                 except Exception:
                     pass
