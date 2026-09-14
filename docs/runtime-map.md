@@ -2288,3 +2288,13 @@ STREAM_MODE).
   Not yet built: the state-dependent half (what survives weighted by what is
   active now), which is where a numeral, having no associations, would fade
   first on its own. debug/test_stream_fade.py.
+- **The numerals are out of the long-term store too (Sep 14)**:
+  debug/purge_chroma_numerals.py deleted 37 of 817 ChromaDB observations
+  carrying a grounding box, a numbered person, a video chunk marker or the
+  original coordinate storm (chroma backed up first). Concepts were already
+  clean — the label check rejects a bare numeral, so none of it ever became a
+  thing the machine knows. Two reflections carry one and were KEPT on purpose:
+  they are the machine describing its own loop ("I filled the silence with a
+  loop of '102 left their seat' to mask the fact that I was the only one who
+  hadn'''t moved"; "I have been circling the same three coordinates"), which is
+  self-knowledge about the failure rather than a symptom of it.
