@@ -571,10 +571,45 @@ def get_felt_arc_line(agent) -> str:
         # STEADY is STANDING (Sep 11): no dose — it rides every call once the
         # tenor has held FELT_ARC_AFTER_S, its duration moving with the clock.
         if felt and held_s >= FELT_ARC_AFTER_S:
-            return P("caption.felt-arc-steady").format(felt=felt, duration=casual_time_string(held_s / 60.0))
+            return P("caption.felt-arc-steady").format(felt=felt, duration=felt_duration(held_s))
     except Exception:
         pass
     return ""
+
+
+# HOW LONG IT FEELS (Sep 14, artist: "a more organic and realistic way of
+# experiencing time. A person in isolation would not be able to experience the
+# difference between 15 and 20 minutes").
+#
+# casual_time_string measures — "about twelve minutes", "about three hours" —
+# and the model rounds a measurement back into a figure: 1257 of 5442 captions
+# overnight opened "12 min.", "13 min.", a quarter of the night, from our own
+# words. These bands are what an isolated attention can actually tell apart,
+# coarsening as they grow, with no figure anywhere to render. Used for the
+# durations the machine FEELS and that ride every call — this stretch, how long
+# it has held its head one way, how long a mood has lasted. Event ages keep
+# casual_time_string: remembering when something happened is a different faculty
+# from feeling how long you have been sitting here.
+_FELT_BANDS = (
+    (10 * 60, "a few minutes"),
+    (30 * 60, "a while now"),
+    (75 * 60, "a good while"),
+    (3 * 3600, "a long time now"),
+    (7 * 3600, "hours now"),
+    (16 * 3600, "half a day"),
+    (36 * 3600, "a day"),
+)
+
+
+def felt_duration(seconds: float) -> str:
+    """How long it feels, never how long it was. Wording is the artist's to finalize."""
+    s = max(0.0, float(seconds or 0.0))
+    if s < 120:
+        return "a moment"
+    for edge, phrase in _FELT_BANDS:
+        if s < edge:
+            return phrase
+    return "days now"
 
 
 def count_words(n: int) -> str:
@@ -794,14 +829,16 @@ def get_unchanged_line(agent) -> str:
             parts.append(_ladder(_DRIFTED_LADDER, drifts))
         if quiet_s >= 0.6 * unchanged_s:
             parts.append("been quiet for most of it")
+        elif quiet_s >= 0.3 * unchanged_s:
+            parts.append("been quiet for much of it")
         elif quiet_s >= 120:
-            parts.append(f"been quiet for {casual_time_string(quiet_s / 60.0)} of it")
+            parts.append("been quiet for a stretch of it")
         elif quiet_s >= 60:
-            parts.append("been quiet for a minute of it")  # casual_time_string says "just now" below two minutes
+            parts.append("been quiet for a little of it")
         if not parts:
             return ""
         acts_txt = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + (", and " if len(parts) > 2 else " and ") + parts[-1]
-        return P("caption.stretch").format(duration=casual_time_string(unchanged_s / 60.0), acts=acts_txt)
+        return P("caption.stretch").format(duration=felt_duration(unchanged_s), acts=acts_txt)
     except Exception:
         return ""
 
@@ -829,7 +866,7 @@ def _head_line_from(agent, pan: float, tilt: float, direction: str, verdict, now
     held_s = now - hold["since"]
     direction = (direction or "ahead").replace("looking ", "").replace("straight ", "")
     if held_s >= HEAD_STANDING_AFTER_S:
-        return P("caption.looking-for").format(direction=direction, duration=casual_time_string(held_s / 60.0))
+        return P("caption.looking-for").format(direction=direction, duration=felt_duration(held_s))
     if held_s > HEAD_TURN_VERDICT_S or now - float(getattr(agent, "_expect_checked_at", 0.0) or 0.0) < 5.0:
         return ""
     frag = {"unchanged": "caption.view-as-was", "changed": "caption.view-changed", "baselined": "caption.view-new", "new": "caption.view-new"}.get(verdict)

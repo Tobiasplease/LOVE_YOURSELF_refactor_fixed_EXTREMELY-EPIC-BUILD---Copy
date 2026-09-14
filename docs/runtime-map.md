@@ -2254,3 +2254,18 @@ STREAM_MODE).
   mentioning it 2000 times") and no rung has a slot a numeral can fill. The
   register came from the machine itself, unprompted at 14:05: "I've said it so
   many times it's started to sound like a name." debug/test_stretch_line.py.
+- **Felt duration replaces measured duration on the standing lines (Sep 14,
+  artist: "a more organic and realistic way of experiencing time. A person in
+  isolation would not be able to experience the difference between 15 and 20
+  minutes")**: casual_time_string MEASURES ("about twelve minutes") and the
+  model rounds a measurement back into a figure — 1257 of 5442 captions
+  overnight opened "12 min." / "13 min.", a quarter of the night, out of our own
+  words. `prompts.felt_duration` bands it instead, coarsening as it grows: a
+  moment / a few minutes / a while now / a good while / a long time now / hours
+  now / half a day / a day / days now. Fifteen and twenty minutes are the same
+  band by design. Used for the durations the machine FEELS and that ride every
+  call — the stretch, the head hold (caption.looking-for), the mood hold
+  (caption.felt-arc-steady) — and the stretch's quiet clause now says "a little
+  / a stretch / much / most of it". Event ages keep casual_time_string:
+  remembering when something happened is a different faculty from feeling how
+  long you have been sitting here. debug/test_stretch_line.py.

@@ -32,7 +32,7 @@ acts += [(T - 2500 + i * 100, "said", "The black curtain hangs there.") for i in
 a = agent(3000, acts)
 CC.introspective_state = {"loop_notice": {"phrase": "the red foam finger", "ts": T - 600}}
 line = get_unchanged_line(a)
-check("the stretch line", line == "It's been about three quarters of an hour since anything happened. In that time you've looked at every corner of it, said the red foam finger so often it has stopped describing anything, drifted off once, and been quiet for a few minutes of it.", line)
+check("the stretch line", line == "It's been a good while since anything happened. In that time you've looked at every corner of it, said the red foam finger so often it has stopped describing anything, drifted off once, and been quiet for a stretch of it.", line)
 check("no digits in it", not any(ch.isdigit() for ch in line))
 CC.introspective_state = {}
 line2 = get_unchanged_line(a)
@@ -78,7 +78,16 @@ check("a long stretch reads as erosion, not as a tally", "the way a clock says t
 
 q = agent(600, [(T - 400 + i * 8, "silence", "") for i in range(12)] + [(T - 300, "look", "")])
 line3 = get_unchanged_line(q)
-check("twelve quiet cycles (96 s) read as 'a minute of it', not 'just now of it'", line3.endswith("and been quiet for a minute of it."), line3)
+check("a little quiet is 'a little of it', with no figure", line3.endswith("and been quiet for a little of it."), line3)
 q = agent(600, [(T - 400 + i * 8, "silence", "") for i in range(5)] + [(T - 300, "look", "")])
 check("under a minute of quiet is not mentioned", "quiet" not in get_unchanged_line(q), get_unchanged_line(q))
+# Sep 14 (artist: "A person in isolation would not be able to experience the
+# difference between 15 and 20 minutes"). 1257 of 5442 captions overnight opened
+# "12 min." / "13 min.", a quarter of the night, rounded from our own words.
+from captioner.prompts import felt_duration  # noqa: E402
+check("fifteen and twenty minutes feel the same", felt_duration(900) == felt_duration(1200) == "a while now")
+check("a few minutes and half a day do not", len({felt_duration(300), felt_duration(2000), felt_duration(5000), felt_duration(30000), felt_duration(200000)}) == 5)
+check("it coarsens as it grows", [felt_duration(s) for s in (300, 1200, 2700, 7200, 20000, 43200, 90000, 300000)] == ["a few minutes", "a while now", "a good while", "a long time now", "hours now", "half a day", "a day", "days now"])
+check("no figure in any band", not any(c.isdigit() for s in range(0, 300000, 53) for c in felt_duration(s)))
+check("the stretch line carries no digit at any age", not any(c.isdigit() for s in (200, 900, 4000, 30000, 200000) for c in get_unchanged_line(agent(s, acts))))
 print("\n" + ("ALL PASS" if not fails else f"{fails} FAILED")); sys.exit(1 if fails else 0)

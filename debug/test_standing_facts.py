@@ -50,7 +50,7 @@ check("90 s → nothing yet", get_unchanged_line(agent(90)) == "", get_unchanged
 check("3 min, nothing done yet → no line (Sep 13: the stretch, not the clock)", get_unchanged_line(agent(180)) == "", get_unchanged_line(agent(180)))
 a2 = agent(2 * 3600); a2._acts = [(time.time() - 100, "look", ""), (time.time() - 50, "look", "")]
 l1, l2 = get_unchanged_line(a2), get_unchanged_line(a2)
-check("2 h with two looks → the stretch line, standing", l1 == l2 == "It's been about two hours since anything happened. In that time you've looked around a couple of times.", (l1, l2))
+check("2 h with two looks → the stretch line, standing", l1 == l2 == "It's been a long time now since anything happened. In that time you've looked around a couple of times.", (l1, l2))
 
 # --- the head: verdict right after a turn, posture once held
 now = time.time()
@@ -64,13 +64,16 @@ check("expectation check spoke this call → yields", _head_line_from(b, 90, 100
 check("no verdict → nothing right after a turn", _head_line_from(A(), 90, 100, "looking left", "off_center", now) == "")
 check("past the verdict window, before standing → nothing", _head_line_from(a, 90, 100, "looking left", "unchanged", now + 60) == "")
 check("held 3 min → standing, in words", _head_line_from(a, 91, 101, "looking left", "unchanged", now + 180) == "You've been looking left for a few minutes.")
-check("held 2 h → standing", _head_line_from(a, 90, 100, "looking left", "unchanged", now + 7200) == "You've been looking left for about two hours.")
+# Sep 14 (artist: "A person in isolation would not be able to experience the
+# difference between 15 and 20 minutes") — felt durations are banded, not measured.
+check("held 2 h → standing, felt not measured", _head_line_from(a, 90, 100, "looking left", "unchanged", now + 7200) == "You've been looking left for a long time now.")
+check("fifteen and twenty minutes feel the same", _head_line_from(a, 90, 100, "looking left", "unchanged", now + 900) == _head_line_from(a, 90, 100, "looking left", "unchanged", now + 1200) == "You've been looking left for a while now.")
 check("a big move resets the clock", _head_line_from(a, 140, 100, "looking right", "baselined", now + 7300) == "You've just turned right; you hadn't looked this way before.")
 
 # --- the block
 a3 = agent(3600); a3._acts = [(time.time() - 30, "look", "")]
 f = build_standing_facts(a3, include_felt=False)
-check("facts block carries the stretch line", "It's been about an hour since anything happened. In that time you've looked away once." in f, f)
+check("facts block carries the stretch line", "It's been a good while since anything happened. In that time you've looked away once." in f, f)
 
 print("\n" + ("ALL PASS" if not fails else f"{fails} FAILED"))
 sys.exit(1 if fails else 0)
