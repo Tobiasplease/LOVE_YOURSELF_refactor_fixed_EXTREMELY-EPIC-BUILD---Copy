@@ -1711,12 +1711,21 @@ FINISHED_CAPTURE_GANTRY_PARK = None
 # The capture is also written cropped to the sheet, which is the frame the model
 # should be shown: at 32x32 px per image token the full table view spends ~160
 # tokens on the paper and ~13 on the marks. Fractions of the frame, not pixels,
-# so the box survives a capture-resolution change. Measured from the Sep 10
-# captures (sheet spanned x 286-919, y 387-688 at 1280x720) plus margin; the
-# sheet drifts ~60px between drawings, hence the slack. Re-derive with
-# debug/find_sheet_crop.py if the rig moves.
+# so the box survives a capture-resolution change.
+#
+# RE-DERIVED Sep 14 after the camera was repositioned, which took the wooden
+# shoulder out of frame and grew the sheet from ~17% to ~26% of it. Detection
+# was identical across 5 live frames at pan 90 / tilt 70: x 269-829, y 324-720.
+# The sheet now runs to the bottom frame edge — a small corner of it is out of
+# view, judged acceptable rather than chasing it with tilt, which turned out to
+# have almost no authority (21 degrees of command moved the view 33px).
+#
+# The box adds 25px margin plus 61x27px for how far the SHEET wanders between
+# drawings, since it is placed by hand and these 5 frames were one sitting. That
+# slack costs ~13% coarser sampling and buys never clipping a drawing.
+# Re-derive with: python debug/find_sheet_crop.py --live 5   (machine stopped)
 FINISHED_CAPTURE_CROP_TO_SHEET = True
-FINISHED_CAPTURE_SHEET_BOX = (0.20, 0.50, 0.74, 0.99)  # x1, y1, x2, y2 as frame fractions
+FINISHED_CAPTURE_SHEET_BOX = (0.143, 0.378, 0.715, 1.000)  # x1, y1, x2, y2 as frame fractions
 FINISHED_CAPTURE_SHEET_MARGIN = 25  # px of slack around a detected sheet
 # Unsharp strength on the crop, to survive the resample into 32px cells. Fixed,
 # never per-image: it deepens ink without moving the paper, so a faint drawing
