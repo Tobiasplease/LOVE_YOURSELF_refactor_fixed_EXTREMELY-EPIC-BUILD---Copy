@@ -16,11 +16,13 @@ drawings come out faint, and how legible the marks are is something the machine
 needs to know when it judges what it made. Cleaning that up would be lying to
 it about its own hand.
 
-The sheet moves between drawings — measured across the Sep 10 captures, the
-left edge wandered 61px and the top 27px — so a fixed box alone either clips or
-wastes. Detection handles the drift; the nominal box is unioned in so a
-shadowed or half-found sheet can never crop the drawing away. In the Sep 10
-sample naive detection alone would have clipped 1 frame in 4.
+The box is FIXED (FINISHED_CAPTURE_SHEET_BOX), sized to cover the sheet's
+hand-placed wander — 61px in x and 27px in y across the Sep 10 captures.
+Detection no longer feeds the crop: it was unioned with the nominal box, so it
+could only widen it, and once the nominal covered the wander it contributed
+nothing at all. It survives as sheet_warning(), which says the box has gone
+stale rather than silently changing the crop. Re-derive after the rig moves:
+python debug/find_sheet_crop.py --live 5
 """
 
 from typing import Optional, Tuple
@@ -75,22 +77,53 @@ def _detect(frame: np.ndarray) -> Optional[Box]:
 
 
 def sheet_box(frame: np.ndarray) -> Tuple[Box, str]:
-    """Where to crop, and how it was decided ("detected+nominal" or "nominal")."""
-    h, w = frame.shape[:2]
-    nominal = _nominal(w, h)
-    found = _detect(frame)
-    if found is None:
-        return nominal, "nominal"
+    """Where to crop. The configured box, always.
 
-    margin = int(getattr(_cfg, "FINISHED_CAPTURE_SHEET_MARGIN", 25))
-    x1, y1, x2, y2 = found
-    box = (
-        max(0, min(nominal[0], x1 - margin)),
-        max(0, min(nominal[1], y1 - margin)),
-        min(w, max(nominal[2], x2 + margin)),
-        min(h, max(nominal[3], y2 + margin)),
-    )
-    return box, "detected+nominal"
+    Detection used to feed this, unioned with the nominal box so it could only
+    ever widen the crop — which meant that once the nominal was sized to cover
+    the sheet's hand-placed wander, detection contributed nothing. Measured on
+    the Sep 14 frames: detected+margin (244, 299, 854, 720) inside nominal
+    (183, 272, 915, 720), final crop identical to nominal. It was also the
+    fragile half, keying on bright desaturated paper at exactly the moment the
+    paper is covered in ink — on Sep 10 it returned a box 742px wide instead of
+    919 when a shadow crossed the sheet, and the nominal rescued it.
+
+    So detection is demoted to a staleness check (see sheet_warning): it says
+    the box needs re-deriving, rather than silently changing the crop.
+    """
+    h, w = frame.shape[:2]
+    return _nominal(w, h), "nominal"
+
+
+def sheet_warning(frame: np.ndarray) -> Optional[str]:
+    """Is the sheet still inside the configured box? Never raises.
+
+    Returns a line worth logging when the sheet has moved out from under the
+    crop — camera knocked, table shifted, paper badly placed — which is the
+    signal to re-derive with debug/find_sheet_crop.py --live. Returns None when
+    all is well, or when the sheet simply could not be found (an inked sheet is
+    hard to detect, and that is not evidence the box is wrong).
+    """
+    try:
+        h, w = frame.shape[:2]
+        found = _detect(frame)
+        if found is None:
+            return None
+        x1, y1, x2, y2 = _nominal(w, h)
+        out = []
+        if found[0] < x1:
+            out.append(f"{x1 - found[0]}px past the left")
+        if found[1] < y1:
+            out.append(f"{y1 - found[1]}px past the top")
+        if found[2] > x2:
+            out.append(f"{found[2] - x2}px past the right")
+        if found[3] > y2:
+            out.append(f"{found[3] - y2}px past the bottom")
+        if not out:
+            return None
+        return f"sheet sits outside the crop box ({', '.join(out)}) — re-derive with debug/find_sheet_crop.py --live 5"
+    except Exception:
+        return None
 
 
 def enhance(crop: np.ndarray) -> np.ndarray:

@@ -35,8 +35,11 @@ def _write_sheet_crop(frame, full_path: str) -> Optional[str]:
     import cv2
 
     try:
-        from drawing.sheet_crop import crop_to_sheet, enhance
+        from drawing.sheet_crop import crop_to_sheet, enhance, sheet_warning
 
+        warning = sheet_warning(frame)
+        if warning:
+            print(f"[📷] ⚠️ {warning}")
         crop, box, method = crop_to_sheet(frame)
         crop = enhance(crop)
         path = full_path.replace(".jpg", "_sheet.jpg")
@@ -44,7 +47,7 @@ def _write_sheet_crop(frame, full_path: str) -> Optional[str]:
             return None
         h, w = frame.shape[:2]
         share = ((box[2] - box[0]) * (box[3] - box[1])) / float(w * h)
-        _last_crop.update({"path": path, "box": list(box), "method": method, "frame_share": round(share, 3)})
+        _last_crop.update({"path": path, "box": list(box), "method": method, "frame_share": round(share, 3), "box_warning": warning or ""})
         print(f"[📷] Sheet crop: {crop.shape[1]}x{crop.shape[0]} ({share:.0%} of frame, {method})")
         return path
     except Exception as e:
@@ -183,6 +186,7 @@ def capture_finished_drawing(camera=None, extra_clear_s: float = 0.0) -> Optiona
                 "sheet_image": _last_crop.get("path", ""),
                 "sheet_box": _last_crop.get("box"),
                 "sheet_crop_method": _last_crop.get("method", ""),
+                "sheet_box_warning": _last_crop.get("box_warning", ""),
                 "sheet_frame_share": _last_crop.get("frame_share"),
                 "view_cleared": wait_s > 0 or not clear_expected,
                 "clear_s": {"arms": clear_wait, "gantry": float(extra_clear_s or 0.0)},

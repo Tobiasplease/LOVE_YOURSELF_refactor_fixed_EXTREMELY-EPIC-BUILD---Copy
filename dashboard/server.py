@@ -69,6 +69,9 @@ LIVE_CAPTIONS = os.path.join(MOOD_SNAPSHOT_FOLDER, "live_captions.txt")
 # a _sheet crop and a _t1024 copy sized for the model; the Drawings tab only
 # ever listed ComfyUI's renders.
 FINISHED_FOLDER = os.path.join(MOOD_SNAPSHOT_FOLDER, "finished_drawings")
+# Display-only legibility for the photographed sheets (see finished_view).
+FINISHED_VIEW_CLAHE = float(os.getenv("FINISHED_VIEW_CLAHE", 2.5))
+FINISHED_VIEW_SHARPEN = float(os.getenv("FINISHED_VIEW_SHARPEN", 0.7))
 FINISHED_NAME_RE = re.compile(r"\Afinished_\d{8}_\d{6}_\d+(?:_sheet)?\.jpg\Z")
 STOP_FILE = os.path.join(REPO, "STOP")
 LLAMA_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
@@ -143,10 +146,16 @@ def _probe_http(url: str, timeout: float = 1.0) -> bool:
 
 def _gpu_stats() -> dict:
     try:
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=3,
-        ).stdout.strip().splitlines()[0]
+        out = (
+            subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu", "--format=csv,noheader,nounits"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            .stdout.strip()
+            .splitlines()[0]
+        )
         used, total, util = [int(x.strip()) for x in out.split(",")]
         return {"vram_used_mb": used, "vram_total_mb": total, "gpu_util": util}
     except Exception:
@@ -199,9 +208,28 @@ def list_run_logs():
 
 
 def _entry_view(e: dict) -> dict:
-    keep = ("timestamp", "iso_timestamp", "type", "run_id", "caption", "mood", "boredom", "mode",
-            "subject", "reflection", "prompt", "decision", "reason", "will_draw", "drive_level",
-            "desire", "image_path", "action", "progress_percent", "message")
+    keep = (
+        "timestamp",
+        "iso_timestamp",
+        "type",
+        "run_id",
+        "caption",
+        "mood",
+        "boredom",
+        "mode",
+        "subject",
+        "reflection",
+        "prompt",
+        "decision",
+        "reason",
+        "will_draw",
+        "drive_level",
+        "desire",
+        "image_path",
+        "action",
+        "progress_percent",
+        "message",
+    )
     return {k: e[k] for k in keep if k in e}
 
 
@@ -312,6 +340,54 @@ def comfy_thumb(path: str, name: str, mtime_ns: int) -> bytes:
     if w > 480:
         img = cv2.resize(img, (480, int(h * 480 / w)), interpolation=cv2.INTER_AREA)
     ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 75])
+    if not ok:
+        raise ValueError("encode failed")
+    data = buf.tobytes()
+    with _thumb_lock:
+        _thumb_cache[key] = data
+        while len(_thumb_cache) > 200:
+            _thumb_cache.pop(next(iter(_thumb_cache)))
+    return data
+
+
+def finished_view(path: str, name: str, mtime_ns: int, width: int = 0) -> bytes:
+    """A photographed sheet, made legible FOR A HUMAN LOOKING AT THE DASHBOARD.
+
+    Local contrast (CLAHE on luminance) plus an unsharp mask. A dying Bic lays
+    down marks that are perfectly clear on the table and nearly invisible in a
+    room-lit photograph, and this is the view where you want to see the drawing
+    rather than assess the pen.
+
+    Deliberately NOT applied to what the model reads. drawing/sheet_crop.enhance
+    sharpens and stops there, because for the machine judging its own work the
+    faintness IS the finding — lifting it would tell it the pen did better than
+    it did. Same photograph, two consumers, opposite treatments. This one never
+    touches the stored file or the _t1024 copy.
+    """
+    key = ("view", name, mtime_ns, width)
+    with _thumb_lock:
+        if key in _thumb_cache:
+            return _thumb_cache[key]
+    import cv2
+    import numpy as np
+
+    img = cv2.imread(path)
+    if img is None:
+        raise ValueError("unreadable image")
+    h, w = img.shape[:2]
+    if width and w > width:
+        img = cv2.resize(img, (width, int(h * width / w)), interpolation=cv2.INTER_AREA)
+
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    lab[..., 0] = cv2.createCLAHE(clipLimit=FINISHED_VIEW_CLAHE, tileGridSize=(8, 8)).apply(lab[..., 0])
+    img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    if FINISHED_VIEW_SHARPEN > 0:
+        f = img.astype(np.float32)
+        blur = cv2.GaussianBlur(f, (0, 0), 1.4)
+        img = np.clip(f * (1 + FINISHED_VIEW_SHARPEN) - blur * FINISHED_VIEW_SHARPEN, 0, 255).astype(np.uint8)
+
+    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 88])
     if not ok:
         raise ValueError("encode failed")
     data = buf.tobytes()
@@ -547,12 +623,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if route == "/api/machine/start":
                 if machine_pid():
                     return self._json({"error": "already running", "pid": machine_pid()}, 409)
-                subprocess.Popen(["bash", os.path.join(REPO, "start_impostor.sh")], cwd=REPO,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["bash", os.path.join(REPO, "start_impostor.sh")], cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return self._json({"ok": True, "message": "supervisor starting"})
             if route == "/api/machine/stop":
-                r = subprocess.run(["bash", os.path.join(REPO, "stop_machine.sh")], cwd=REPO,
-                                   capture_output=True, text=True, timeout=15)
+                r = subprocess.run(["bash", os.path.join(REPO, "stop_machine.sh")], cwd=REPO, capture_output=True, text=True, timeout=15)
                 return self._json({"ok": True, "output": (r.stdout or "").strip()})
             if route == "/api/mode":
                 if "low_energy" not in body:
@@ -587,10 +661,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             mtime_ns = os.stat(path).st_mtime_ns
         except OSError:
             return self._json({"error": "not found"}, 404)
-        if q.get("thumb", ["0"])[0] == "1":
-            return self._bytes(comfy_thumb(path, name, mtime_ns), "image/jpeg")
-        with open(path, "rb") as f:
-            return self._bytes(f.read(), "image/jpeg")
+        if q.get("raw", ["0"])[0] == "1":  # ?raw=1 for the untouched photograph
+            with open(path, "rb") as f:
+                return self._bytes(f.read(), "image/jpeg")
+        width = 480 if q.get("thumb", ["0"])[0] == "1" else 0
+        return self._bytes(finished_view(path, name, mtime_ns, width), "image/jpeg")
 
     # -- streams ------------------------------------------------------------
 
@@ -689,11 +764,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # -- proxy --------------------------------------------------------------
 
     def _proxy(self, body_bytes: bytes = None):
-        target = self.path[len("/machine"):] or "/"
+        target = self.path[len("/machine") :] or "/"
         try:
             conn = http.client.HTTPConnection(*MACHINE_API, timeout=1.5)
-            conn.request(self.command, target, body=body_bytes,
-                         headers={"Content-Type": "application/json"} if body_bytes else {})
+            conn.request(self.command, target, body=body_bytes, headers={"Content-Type": "application/json"} if body_bytes else {})
             # Read timeout must be set BEFORE getresponse(): will_close
             # responses (our streams send Connection: close) null out
             # conn.sock inside getresponse. 10s covers MJPEG inter-frame
