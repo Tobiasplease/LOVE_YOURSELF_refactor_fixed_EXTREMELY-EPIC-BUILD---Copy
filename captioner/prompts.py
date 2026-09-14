@@ -1103,8 +1103,13 @@ def _age_phrase(timestamp: float) -> str:
     days = int(age // 86400)
     if days == 1:
         return "yesterday"
+    # Sep 14: in words. The last numeral left in the caption prompt was "From 2
+    # days ago:" on the recall lines — small, but every outbreak of the past two
+    # days began with exactly one numeral that the window then made a template.
+    if days == 2:
+        return "a couple of days ago"
     if days < 7:
-        return f"{days} days ago"
+        return "a few days ago"
     return "a while back"
 
 
