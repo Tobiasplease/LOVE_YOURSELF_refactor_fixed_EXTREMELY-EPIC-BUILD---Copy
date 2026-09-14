@@ -2269,3 +2269,22 @@ STREAM_MODE).
   / a stretch / much / most of it". Event ages keep casual_time_string:
   remembering when something happened is a different faculty from feeling how
   long you have been sitting here. debug/test_stretch_line.py.
+- **The window fades by position (Sep 14, artist: "The shape needs to be
+  time-aware so it's never exactly the same regardless. Just like a real memory
+  it degrades and changes depending on the current state of the mind")**: the
+  extractive fold in `_consolidate_stream_if_needed` has existed since July and
+  fired on total length — the window runs ~3,100 chars against a 12,000
+  threshold, so it fired ZERO times in the runs measured and the model was
+  handed a perfect transcript of its last twenty-four lines on every call. That
+  is the amplifier behind all three numeral outbreaks: a chunk marker, a count
+  and a rectangle's dimensions each survived because the window preserved them
+  exactly. It now fires on POSITION: past STREAM_FADE_KEEP (16) entries the
+  oldest STREAM_FOLD_OLDEST (5) become one extractive note in the machine's own
+  words. The head stays verbatim — the prefill continues its last sentence
+  mid-clause and must — and the single note at the head is itself folded again
+  later, so the far past fades further each time and the window reaches back
+  further while carrying less text. Roughly one fold every four captions; the
+  length trigger remains as a fallback and STREAM_FADE_KEEP=0 restores it.
+  Not yet built: the state-dependent half (what survives weighted by what is
+  active now), which is where a numeral, having no associations, would fade
+  first on its own. debug/test_stream_fade.py.

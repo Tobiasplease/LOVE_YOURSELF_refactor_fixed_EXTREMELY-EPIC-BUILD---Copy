@@ -2053,14 +2053,23 @@ class Captioner(MemoryMixin):
         thoughts stay verbatim. Uses the text-side model so the caption slot
         isn't queued. Extractive on purpose: it reuses the machine's own
         words; it does not write new ones for it."""
-        from config.config import STREAM_CONSOLIDATE_CHARS
+        from config.config import STREAM_CONSOLIDATE_CHARS, STREAM_FADE_KEEP, STREAM_FOLD_OLDEST
 
-        if not STREAM_CONSOLIDATE_CHARS or len(self._stream) < 5:
-            return
         entries = list(self._stream)
-        if sum(len(e) for e in entries) <= STREAM_CONSOLIDATE_CHARS:
-            return
-        oldest = entries[:3]
+        # Sep 14 (artist: "just like a real memory it degrades and changes"):
+        # by POSITION first. The length trigger below has fired zero times in
+        # the runs measured — the window is ~3,100 chars against a 12,000
+        # threshold — so every call was handed a perfect transcript of the last
+        # twenty-four lines, which is exactly what lets a form lock in.
+        n_fold = max(2, int(STREAM_FOLD_OLDEST))
+        by_position = bool(STREAM_FADE_KEEP) and len(entries) > int(STREAM_FADE_KEEP)
+        if not by_position:
+            if not STREAM_CONSOLIDATE_CHARS or len(self._stream) < 5:
+                return
+            if sum(len(e) for e in entries) <= STREAM_CONSOLIDATE_CHARS:
+                return
+            n_fold = 3
+        oldest = entries[:n_fold]
         try:
             from config.config import MODEL_NAME, MOOD_SNAPSHOT_FOLDER
             from utils.inference import query_model
@@ -2083,16 +2092,16 @@ class Captioner(MemoryMixin):
             line = (line or "").strip().strip('"').replace("**", "")
             if not (20 < len(line) < 220) or not self._stream_admissible(line):
                 return  # bad compression — keep the raw entries, window churns anyway
-            rebuilt = [line] + entries[3:]
+            rebuilt = [line] + entries[n_fold:]
             ts_list = list(self._stream_ts)
-            ts_rebuilt = ([ts_list[0]] if ts_list else [time.time()]) + ts_list[3:]  # consolidated line keeps the oldest entry's time
+            ts_rebuilt = ([ts_list[0]] if ts_list else [time.time()]) + ts_list[n_fold:]  # the note keeps the oldest entry's time
             self._stream.clear()
             self._stream.extend(rebuilt)
             self._stream_ts.clear()
             self._stream_ts.extend(ts_rebuilt[-len(rebuilt) :])
             log_json_entry(
                 LogType.DEBUG,
-                {"message": "Stream consolidated", "action": "stream_consolidated", "line": line[:100]},
+                {"message": "Stream consolidated", "action": "stream_consolidated", "line": line[:100], "folded": n_fold, "by": ("position" if by_position else "length")},
                 print_message=f"[〰️] Older thoughts folded into: {line[:80]}",
             )
         except Exception:

@@ -1070,6 +1070,22 @@ DRAWING_WATCH_INTERVAL_S = int(os.getenv("DRAWING_WATCH_INTERVAL_S", 20))
 STREAM_CONSOLIDATE_CHARS = int(
     os.getenv("STREAM_CONSOLIDATE_CHARS", 12000)
 )  # scale with STREAM_WINDOW (~250 chars/entry) or consolidation eats the bigger window
+# THE WINDOW FADES BY POSITION (Sep 14, artist: "The shape needs to be
+# time-aware so it's never exactly the same regardless. Just like a real memory
+# it degrades and changes depending on the current state of the mind").
+# The fold above has existed since July and fires on total length — the window
+# runs ~3,100 chars against a 12,000 threshold, so it fired zero times in the
+# runs checked, and the model was handed a perfect transcript of its last
+# twenty-four lines on every call. That is what lets a form lock in: three
+# outbreaks in two days (a video chunk marker, a count, a rectangle's
+# dimensions) each survived because the window preserved them exactly.
+# Now it fires on POSITION: once the stream passes KEEP entries the oldest
+# FOLD_OLDEST become one extractive note, so the head stays word-for-word (the
+# prefill continues its last sentence mid-clause and must) while the tail is a
+# gist. The note is itself folded again later, so the far past fades further
+# each time. 0 disables and restores the length-only behaviour.
+STREAM_FADE_KEEP = int(os.getenv("STREAM_FADE_KEEP", 16))
+STREAM_FOLD_OLDEST = int(os.getenv("STREAM_FOLD_OLDEST", 5))
 
 # A face occupying this fraction of the frame is a person AT CLOSE RANGE —
 # categorically different from a mannequin head on a shelf. Close faces count
