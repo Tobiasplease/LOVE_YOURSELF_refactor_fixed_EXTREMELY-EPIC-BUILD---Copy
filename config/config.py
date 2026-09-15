@@ -1502,6 +1502,13 @@ ATTENTION_IMAGE_TOKENS_MIN = int(os.getenv("ATTENTION_IMAGE_TOKENS_MIN", 256))
 LLAMA_VRAM_NEEDED_MIB = int(os.getenv("LLAMA_VRAM_NEEDED_MIB", 19500))  # the 27B Q4 + mmproj + buffers measured ~18.9 GB resident
 COMFY_FREE_WAIT_S = float(os.getenv("COMFY_FREE_WAIT_S", 60))
 LLAMA_RELOAD_ATTEMPTS = int(os.getenv("LLAMA_RELOAD_ATTEMPTS", 5))  # the machine's own sentence for an event rides only if this short; longer → the ledger fact (a long sentence is a scene, not a memory)
+# Settle pause across the VRAM handoff, both directions (Sep 15). Both Xid 79
+# "GPU has fallen off the bus" events — Sep 8 21:02:07 and Sep 14 23:27:51 —
+# landed within 20s of a drawing finishing, where Flux releases the card and
+# llama-server immediately pulls 19GB back onto it. This spaces the two loads
+# so the rails are not asked to swing instantly. Mitigation, not a cure: Xid 79
+# is power delivery, and the real test is `nvidia-smi -pl 300`. 0 disables.
+LLAMA_HANDOFF_SETTLE_S = float(os.getenv("LLAMA_HANDOFF_SETTLE_S", 10))
 # DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the
 # caption ends with LOOK / EXPECT in the machine's own words; LOOK is executed
 # by the gaze as a "chosen" glance, the next turn states the consequence and,
@@ -1601,7 +1608,7 @@ CAMERA_INDEX = 0  # or whichever index your camera uses
 # remote room view. Use a /dev/v4l/by-id/... path, never a bare index —
 # indices drift on replug. Empty string = no room cam (dashboard shows a
 # placeholder). MJPG fourcc is forced to keep two cams within USB bandwidth.
-CAMERA_2_DEVICE = os.getenv("CAMERA_2_DEVICE", "/dev/v4l/by-id/usb-XIFT_Web_Camera_20241217.1817-video-index0")
+CAMERA_2_DEVICE = os.getenv("CAMERA_2_DEVICE", "/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_89133DDF-video-index0")
 CAMERA_2_WIDTH = int(os.getenv("CAMERA_2_WIDTH", "640"))
 CAMERA_2_HEIGHT = int(os.getenv("CAMERA_2_HEIGHT", "480"))
 CAMERA_2_FPS = int(os.getenv("CAMERA_2_FPS", "15"))

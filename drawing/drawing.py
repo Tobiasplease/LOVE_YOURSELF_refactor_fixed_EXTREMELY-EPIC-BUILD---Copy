@@ -494,6 +494,16 @@ class DrawingController:
         try:
             unload_model()
             print("[VRAM] Inference model unloaded for ComfyUI")
+            # Same settle as the reload side: Flux should not spin the card up
+            # the instant llama-server lets it go. See LLAMA_HANDOFF_SETTLE_S.
+            try:
+                from config.config import LLAMA_HANDOFF_SETTLE_S
+
+                if float(LLAMA_HANDOFF_SETTLE_S) > 0:
+                    print(f"[VRAM] settling {float(LLAMA_HANDOFF_SETTLE_S):.0f}s before ComfyUI takes the card")
+                    time.sleep(float(LLAMA_HANDOFF_SETTLE_S))
+            except Exception:
+                pass
         except Exception as e:
             print(f"[VRAM] Model unload failed: {e}")
 

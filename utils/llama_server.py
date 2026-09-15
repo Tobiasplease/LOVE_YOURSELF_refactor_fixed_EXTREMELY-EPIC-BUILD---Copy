@@ -692,12 +692,18 @@ def ensure_server_up() -> bool:
     if is_server_running():
         return True
     try:
-        from config.config import COMFY_FREE_WAIT_S, LLAMA_RELOAD_ATTEMPTS, LLAMA_VRAM_NEEDED_MIB
+        from config.config import COMFY_FREE_WAIT_S, LLAMA_HANDOFF_SETTLE_S, LLAMA_RELOAD_ATTEMPTS, LLAMA_VRAM_NEEDED_MIB
     except Exception:
         COMFY_FREE_WAIT_S, LLAMA_RELOAD_ATTEMPTS, LLAMA_VRAM_NEEDED_MIB = 60.0, 5, 19500
+        LLAMA_HANDOFF_SETTLE_S = 10.0
     pauses = [3, 6, 12, 24, 40, 60]
     for attempt in range(max(1, int(LLAMA_RELOAD_ATTEMPTS))):
         _free_comfyui_vram(wait_for_mib=int(LLAMA_VRAM_NEEDED_MIB), timeout_s=float(COMFY_FREE_WAIT_S))
+        # The card has just been let go of; don't pull 19GB straight back on.
+        # This is the exact instant both Xid 79 crashes happened.
+        if float(LLAMA_HANDOFF_SETTLE_S) > 0:
+            print(f"[VRAM] settling {float(LLAMA_HANDOFF_SETTLE_S):.0f}s before the model reload (Xid 79 guard)")
+            time.sleep(float(LLAMA_HANDOFF_SETTLE_S))
         if start_server():
             return True
         pause = pauses[min(attempt, len(pauses) - 1)]

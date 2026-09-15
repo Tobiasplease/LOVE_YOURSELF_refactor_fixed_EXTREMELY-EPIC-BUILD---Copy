@@ -2312,3 +2312,16 @@ STREAM_MODE).
   waitKey; headless keeps the loop's 1 ms yield. run_38.sh sets
   `QT_QPA_PLATFORM=offscreen` in the same two cases as a net for any other
   Qt-backed import. Verified live: run b045d169, a no-DISPLAY start, 22 min.
+- **Settle pause across the VRAM handoff (Sep 15)**: both Xid 79 "GPU has
+  fallen off the bus" events (Sep 8 21:02:07, Sep 14 23:27:51; kernel journal,
+  PCI 0000:08:00) landed within 20 s of a drawing finishing, where ComfyUI
+  releases the card and llama-server pulls ~19 GB straight back on. Xid 154
+  followed ("Node Reboot Required") and Xorg died with it. Sep 8 failed silent
+  (the running machine kept its window and logged inference-dead for 1 h 51 min);
+  Sep 14 fed the headless boot loop above. LLAMA_HANDOFF_SETTLE_S (10, 0
+  disables) now sleeps in both directions: `drawing._unload_inference_model`
+  after the unload, `ensure_server_up` after `_free_comfyui_vram` and before
+  each reload attempt. A mitigation — Xid 79 is power delivery or seating, and
+  the direct test (`nvidia-smi -pl 300`, not persistent without a systemd unit)
+  is parked. Also: CAMERA_2_DEVICE repointed to the C920 by-id path; the XIFT
+  cam no longer enumerates.
