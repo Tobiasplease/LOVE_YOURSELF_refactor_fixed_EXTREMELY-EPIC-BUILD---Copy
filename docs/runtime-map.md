@@ -2298,3 +2298,17 @@ STREAM_MODE).
   loop of '102 left their seat' to mask the fact that I was the only one who
   hadn'''t moved"; "I have been circling the same three coordinates"), which is
   self-knowledge about the failure rather than a symptom of it.
+- **Headless boot no longer aborts (Sep 15)**: machine.py created its preview
+  window ("mslint camera") at module level, unconditionally. With no usable
+  display cv2's Qt xcb plugin calls abort() — SIGABRT, uncatchable by
+  try/except, nothing reaches the event log — and the start_impostor.sh
+  supervisor relaunched it every 5 s: 11 events per run, dying after "Image
+  monitor initialized". Two roads in: a start from a shell without DISPLAY
+  (phone/SSH, the dashboard's start button — tmux records `-DISPLAY` for the
+  session and every restart inherits it), and Xid 79 taking Xorg down while
+  DISPLAY stays set to a dead :0 (Sep 15 00:25 loop). `_display_usable()` asks
+  the display itself (`xdpyinfo`, ~2 ms; a child-process cv2 probe if xdpyinfo
+  is missing) and `HAS_DISPLAY` gates namedWindow/trackbars, imshow and
+  waitKey; headless keeps the loop's 1 ms yield. run_38.sh sets
+  `QT_QPA_PLATFORM=offscreen` in the same two cases as a net for any other
+  Qt-backed import. Verified live: run b045d169, a no-DISPLAY start, 22 min.

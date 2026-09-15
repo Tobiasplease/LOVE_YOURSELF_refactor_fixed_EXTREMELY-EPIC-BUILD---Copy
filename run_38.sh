@@ -17,6 +17,16 @@ set -e
 cd "$(dirname "$0")"
 source .venv/bin/activate
 
+# Headless safety net (Sep 15). machine.py guards its own preview window, but
+# any Qt-backed library loaded here would abort the process the same way if it
+# found no display. offscreen gives Qt a valid platform instead of abort().
+# Only when there is genuinely no display — a desk start keeps the real window.
+if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
+  export QT_QPA_PLATFORM=offscreen
+elif command -v xdpyinfo >/dev/null 2>&1 && ! xdpyinfo >/dev/null 2>&1; then
+  export QT_QPA_PLATFORM=offscreen  # DISPLAY set but dead — Xid 79 takes Xorg with it
+fi
+
 export LLAMA_SERVER_BIN="$HOME/llama.cpp-38/build/bin/llama-server"
 export LLAMA_MODEL_PATH="$HOME/models/qwen3.8-27b/Qwen3.8-27B-Q4_K_M.gguf"
 export LLAMA_MMPROJ_PATH="$HOME/models/qwen3.8-27b/mmproj-F16.gguf"

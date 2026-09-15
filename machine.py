@@ -1187,16 +1187,50 @@ def reset_camera_controls():
         debug_print("Camera controls reset to defaults", "CAMERA")
 
 
-# Create trackbars for real-time camera adjustment
-cv2.namedWindow("mslint camera", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("mslint camera", 1920, 1080)
-cv2.createTrackbar("Brightness", "mslint camera", current_brightness, 100, on_brightness_change)
-cv2.createTrackbar("Contrast", "mslint camera", current_contrast, 100, on_contrast_change)
-cv2.createTrackbar("Saturation", "mslint camera", current_saturation, 100, on_saturation_change)
-cv2.createTrackbar("Sharpness", "mslint camera", current_sharpness, 100, on_sharpness_change)
+# The preview window is a desk convenience, not a runtime requirement. Started
+# headless (phone/SSH, or the dashboard's start button — neither carries
+# DISPLAY), cv2's Qt plugin calls abort() right here: SIGABRT, uncatchable by
+# try/except, no event-log line, and the supervisor restarts it every 5s
+# forever. Sep 15: that loop cost a night, misread twice as a GPU fault.
+def _display_usable() -> bool:
+    """True only if a display exists AND still answers.
 
-debug_print("Camera controls initialized - use trackbars in preview window to adjust in real-time", "INIT")
-debug_print("Press 'r' in camera window to reset controls to defaults", "INIT")
+    Checking the variable is not enough. Sep 14 23:27 the GPU fell off the bus
+    (Xid 79) and took Xorg down with it — DISPLAY stayed set to :0, pointing at
+    a dead socket, and every boot for the next hour aborted here.
+    """
+    if os.environ.get("WAYLAND_DISPLAY"):
+        return True
+    if not os.environ.get("DISPLAY"):
+        return False
+    try:
+        return subprocess.run(["xdpyinfo"], capture_output=True, timeout=5).returncode == 0
+    except FileNotFoundError:
+        # No xdpyinfo here: spend 1.2s letting a child process take the abort.
+        probe = "import cv2; cv2.namedWindow('probe'); cv2.destroyAllWindows()"
+        try:
+            return subprocess.run([sys.executable, "-c", probe], capture_output=True, timeout=60).returncode == 0
+        except Exception:
+            return False
+    except Exception:
+        return False
+
+
+HAS_DISPLAY = _display_usable()
+
+# Create trackbars for real-time camera adjustment
+if HAS_DISPLAY:
+    cv2.namedWindow("mslint camera", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("mslint camera", 1920, 1080)
+    cv2.createTrackbar("Brightness", "mslint camera", current_brightness, 100, on_brightness_change)
+    cv2.createTrackbar("Contrast", "mslint camera", current_contrast, 100, on_contrast_change)
+    cv2.createTrackbar("Saturation", "mslint camera", current_saturation, 100, on_saturation_change)
+    cv2.createTrackbar("Sharpness", "mslint camera", current_sharpness, 100, on_sharpness_change)
+
+    debug_print("Camera controls initialized - use trackbars in preview window to adjust in real-time", "INIT")
+    debug_print("Press 'r' in camera window to reset controls to defaults", "INIT")
+else:
+    debug_print("No display — camera preview window disabled, machine runs headless", "INIT")
 
 # Freeze watchdog: gaze + lung both go through this loop, so if it stalls the
 # whole body freezes. When the heartbeat goes stale, dump every thread's stack
@@ -1793,18 +1827,21 @@ try:
 
         # MEMORY FIX: Throttle camera display to prevent graphics memory exhaustion
         current_time = time.time()
-        if current_time - last_display_time > DISPLAY_THROTTLE_INTERVAL:
+        if HAS_DISPLAY and current_time - last_display_time > DISPLAY_THROTTLE_INTERVAL:
             cv2.imshow("mslint camera", frame)
             last_display_time = current_time
 
         # Hand controller now runs completely autonomously in its own thread
         # No GUI updates needed from machine.py
 
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord("q"):
-            break
-        elif key == ord("r"):
-            reset_camera_controls()
+        if HAS_DISPLAY:
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
+            elif key == ord("r"):
+                reset_camera_controls()
+        else:
+            time.sleep(0.001)  # waitKey was pacing this loop; headless keeps the same yield
 except KeyboardInterrupt:
     graceful_cleanup()
     _bounded_exit(0)
