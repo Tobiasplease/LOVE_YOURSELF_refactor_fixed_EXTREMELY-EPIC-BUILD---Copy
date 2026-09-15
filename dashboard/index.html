@@ -428,6 +428,8 @@ poll(async () => {
   if (h) {
     svc.appendChild(LEDROW("llama-server", h.llama));
     svc.appendChild(LEDROW("comfyui", h.comfy));
+    const gpuText = h.gpu_fault ? "Xid " + h.gpu_fault.xid + " " + h.gpu_fault.when.slice(11, 16) + " — REBOOT" : h.gpu_lost ? "LOST" : "OK";
+    svc.appendChild(LEDROW("gpu", !(h.gpu_fault || h.gpu_lost), gpuText));
     svc.appendChild(LEDROW("machine api", s && s.api_ok));
     svc.appendChild(LEDROW("sidecar", true, ago((Date.now() / 1000) - h.sidecar_uptime_s) + " up"));
     if (s) svc.appendChild(LEDROW("STOP file", !s.stop_file, s.stop_file ? "SET" : "clear"));
@@ -437,6 +439,9 @@ poll(async () => {
     const r = (k, v) => { const d = el("div"); d.appendChild(el("span", "", k)); d.appendChild(el("b", "", v)); res.appendChild(d); };
     if (h.vram_used_mb != null) { r("vram", (h.vram_used_mb / 1024).toFixed(1) + " / " + (h.vram_total_mb / 1024).toFixed(1) + " GB"); res.appendChild(meter(h.vram_used_mb / h.vram_total_mb)); }
     if (h.gpu_util != null) { r("gpu util", h.gpu_util + "%"); res.appendChild(meter(h.gpu_util / 100)); }
+    if (h.gpu_temp_c != null) r("gpu", h.gpu_temp_c + "°C · fan " + h.gpu_fan_pct + "% · " + h.gpu_power_w + " / " + h.gpu_power_limit_w + " W");
+    if (h.gpu_throttle && h.gpu_throttle.length) r("gpu throttle", h.gpu_throttle.join(", "));
+    if (h.host) Object.entries(h.host).forEach(([k, v]) => r(k.replace(/_/g, " "), String(v)));
     if (h.disk) { r("disk free", h.disk.free_gb + " / " + h.disk.total_gb + " GB"); }
   }
 }, 5000);

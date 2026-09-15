@@ -2325,3 +2325,26 @@ STREAM_MODE).
   the direct test (`nvidia-smi -pl 300`, not persistent without a systemd unit)
   is parked. Also: CAMERA_2_DEVICE repointed to the C920 by-id path; the XIFT
   cam no longer enumerates.
+- **GPU watch + YOLO device events (Sep 15)**: `utils/gpu_watch.py`, started
+  in machine.py next to the freeze watchdog. Every GPU_WATCH_TICK_S (10) it
+  scans this boot's kernel journal for `NVRM: Xid` lines (the user is in
+  `adm`; no sudo) and asks nvidia-smi whether the card answers. Xid lines
+  already in the boot when the machine starts are reported once as "earlier
+  this boot" — a machine relaunched after a fault is told the card needs a
+  reboot. New ones: banner (direct print — PRINT_CLEAN_CAPTIONS would swallow
+  a print_message) + ERROR event with `fatal` (48/79/154) and the remedy. A
+  card nvidia-smi cannot reach: ERROR on the transition, re-alert every
+  GPU_WATCH_REALERT_S (600), INFO when it answers again. Every
+  GPU_TELEMETRY_LOG_S (30) a `telemetry` event (new LogType): GPU temp, fan,
+  power and limit, util, VRAM used/free/total and per process, pstate,
+  throttle reasons, CPU Tctl, load average, and the Kraken's pump / fan rpm
+  and coolant temp (any hwmon fan or coolant sensor). The journal scan runs
+  before nvidia-smi on each tick, and a killed child still stuck in the driver
+  blocks only a second copy of the same binary. YOLO's device decision (start
+  on cpu/cuda, CUDA-error fallback, retry back to cuda) is now an INFO event
+  `component: yolo, device, reason, vram_free_mib` instead of print-only, so a
+  run that spent its time detecting on CPU is visible in its log. Dashboard
+  `/api/health` reads the same functions: a `gpu` LED (red with "Xid 79 HH:MM
+  — REBOOT" for the boot's last fatal Xid, or LOST), GPU temp/fan/power, any
+  throttle reason, CPU temp and cooler rows. GPU_WATCH_TICK_S=0 disables.
+  debug/test_gpu_watch.py replays the real Sep 14 Xid lines from the journal.

@@ -45,6 +45,7 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, REPO)
 
 from utils import runtime_mode
+from utils.gpu_watch import FATAL_XIDS, read_gpu, read_host, read_xid_lines
 
 try:
     from config.config import MOOD_SNAPSHOT_FOLDER
@@ -145,21 +146,25 @@ def _probe_http(url: str, timeout: float = 1.0) -> bool:
 
 
 def _gpu_stats() -> dict:
-    try:
-        out = (
-            subprocess.run(
-                ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu", "--format=csv,noheader,nounits"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            .stdout.strip()
-            .splitlines()[0]
-        )
-        used, total, util = [int(x.strip()) for x in out.split(",")]
-        return {"vram_used_mb": used, "vram_total_mb": total, "gpu_util": util}
-    except Exception:
-        return {"vram_used_mb": None, "vram_total_mb": None, "gpu_util": None}
+    """Card readings plus the two failure facts (utils/gpu_watch.py): gpu_lost =
+    nvidia-smi cannot reach it; gpu_fault = the last fatal Xid in this boot's
+    kernel log, which stays until the reboot that is the only remedy."""
+    sample, lost = read_gpu(timeout=3)
+    fatal = [e for e in read_xid_lines(timeout=3) if e["xid"] in FATAL_XIDS]
+    s = sample or {}
+    return {
+        "vram_used_mb": s.get("vram_used_mib"),
+        "vram_total_mb": s.get("vram_total_mib"),
+        "gpu_util": s.get("gpu_util_pct"),
+        "gpu_temp_c": s.get("gpu_temp_c"),
+        "gpu_fan_pct": s.get("gpu_fan_pct"),
+        "gpu_power_w": s.get("gpu_power_w"),
+        "gpu_power_limit_w": s.get("gpu_power_limit_w"),
+        "gpu_throttle": s.get("throttle") or [],
+        "gpu_lost": lost if shutil.which("nvidia-smi") else None,
+        "gpu_fault": {k: fatal[-1][k] for k in ("when", "xid", "text")} if fatal else None,
+        "host": read_host(),
+    }
 
 
 def build_health() -> dict:

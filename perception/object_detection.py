@@ -21,6 +21,8 @@ from config.config import (
     YOLO_SKELETON_MIN_REGIONS,
     YOLO_VRAM_MIN_MIB,
 )
+from event_logging.event_logger import log_json_entry
+from event_logging.log_type import LogType
 from perception.detection_memory import DetectionMemory
 
 # COCO keypoint regions: a person is a head AND a body, not a head-like blob.
@@ -44,6 +46,16 @@ def _free_vram_mib():
         return None
 
 
+def _log_device(device: str, message: str, **data) -> None:
+    """Sep 15: the device choice was print-only, so no run log could say whether
+    detection spent a run on CPU. One event per change of device."""
+    print(f"[YOLOv8] {message}")
+    try:
+        log_json_entry(LogType.INFO, {"message": f"YOLO on {device}", "component": "yolo", "device": device, "detail": message, **data})
+    except Exception:
+        pass
+
+
 class ObjectDetectionThread(threading.Thread):
     def __init__(self, model_path: str = YOLO_MODEL_PATH, update_interval: float = YOLO_INTERVAL_IDLE):
         super().__init__()
@@ -63,7 +75,9 @@ class ObjectDetectionThread(threading.Thread):
         if free is not None and free < YOLO_VRAM_MIN_MIB:
             self.force_cpu = True
             self._last_cuda_retry = time.time()
-            print(f"[YOLOv8] only {free} MiB of VRAM free at start — detecting on CPU until >= {YOLO_VRAM_MIN_MIB} MiB frees up.")
+            _log_device("cpu", f"only {free} MiB of VRAM free at start — detecting on CPU until >= {YOLO_VRAM_MIN_MIB} MiB frees up.", reason="start", vram_free_mib=free)
+        else:
+            _log_device("cuda", f"{free} MiB of VRAM free at start — detecting on CUDA.", reason="start", vram_free_mib=free)
         self._tracking_mode = False  # When True, use fast interval
         self._target_track_id = None  # sticky gaze target across detection cycles
 
@@ -81,7 +95,7 @@ class ObjectDetectionThread(threading.Thread):
         with self.lock:
             self.shared_frame = frame.copy()
 
-    def _fall_back_to_cpu(self, now: float) -> None:
+    def _fall_back_to_cpu(self, now: float, error: Exception = None) -> None:
         """Sep 13: a failed .to("cuda") leaves the model half-moved, and every
         later call — even with device="cpu" — re-raises the CUDA error (163
         fallback lines in one boot; detection dead, nobody could be seen).
@@ -94,7 +108,13 @@ class ObjectDetectionThread(threading.Thread):
         except Exception as e:
             print(f"[YOLOv8] CPU reload failed: {e}")
         self._target_track_id = None
-        print(f"[YOLOv8] CUDA out of memory — detecting on CPU; retrying CUDA every {self._cuda_retry_wait:.0f}s once >= {YOLO_VRAM_MIN_MIB} MiB is free.")
+        _log_device(
+            "cpu",
+            f"CUDA failed — detecting on CPU; retrying CUDA every {self._cuda_retry_wait:.0f}s once >= {YOLO_VRAM_MIN_MIB} MiB is free.",
+            reason="cuda_error",
+            error=str(error)[:200],
+            vram_free_mib=_free_vram_mib(),
+        )
 
     def _maybe_retry_cuda(self, now: float) -> None:
         """While on CPU, try the card again every YOLO_CUDA_RETRY_S when nvidia-smi
@@ -113,7 +133,7 @@ class ObjectDetectionThread(threading.Thread):
             cand = YOLO(self.model_path)
             cand.model.to("cuda")
             self.model, self.force_cpu, self._target_track_id = cand, False, None
-            print(f"[YOLOv8] {free} MiB free — back on CUDA.")
+            _log_device("cuda", f"{free} MiB free — back on CUDA.", reason="retry", vram_free_mib=free)
         except Exception as e:
             cand = None
             self._cuda_retry_wait = min(self._cuda_retry_wait * 2, 1200.0)
@@ -153,7 +173,7 @@ class ObjectDetectionThread(threading.Thread):
                     results = self.model.track(frame, persist=True, tracker="config/bytetrack_custom.yaml", verbose=False, imgsz=512)[0]
             except Exception as e:
                 if "CUDA out of memory" in str(e) or "CUDA" in str(e):
-                    self._fall_back_to_cpu(time.time())
+                    self._fall_back_to_cpu(time.time(), e)
                     time.sleep(self.update_interval)
                     continue
                 else:

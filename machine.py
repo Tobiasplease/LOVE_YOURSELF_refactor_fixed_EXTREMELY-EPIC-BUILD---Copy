@@ -75,6 +75,7 @@ from safety.aruco_detector import get_aruco_detector
 from utils import runtime_mode
 from utils.continuity import describe_duration
 from utils.error_tracking import get_failure_tracker
+from utils.gpu_watch import start_gpu_watch
 from utils.state_manager import state_manager
 from vision.gaze import update_gaze
 
@@ -1259,6 +1260,10 @@ def _freeze_watchdog():
 
 
 threading.Thread(target=_freeze_watchdog, daemon=True, name="freeze-watchdog").start()
+
+# Xid 79 twice in a week, one of them silent for two hours: the kernel journal
+# and nvidia-smi are watched, and GPU/CPU/fan telemetry goes into the run log.
+start_gpu_watch()
 
 
 # THE AWAKENING — one concurrent moment at the threshold, nothing serial:

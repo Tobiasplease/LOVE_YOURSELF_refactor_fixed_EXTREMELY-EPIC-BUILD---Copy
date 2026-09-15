@@ -10,6 +10,7 @@ class LogType(Enum):
     ERROR = "error"
     DEBUG = "debug"
     RUN_METADATA = "run_metadata"
+    TELEMETRY = "telemetry"  # utils/gpu_watch.py: GPU/CPU/fan samples (Sep 15)
 
     # AI/ML processing events
     CAPTION = "caption"

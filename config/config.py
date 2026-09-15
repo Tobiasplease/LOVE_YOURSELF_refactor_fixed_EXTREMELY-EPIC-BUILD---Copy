@@ -1509,6 +1509,13 @@ LLAMA_RELOAD_ATTEMPTS = int(os.getenv("LLAMA_RELOAD_ATTEMPTS", 5))  # the machin
 # so the rails are not asked to swing instantly. Mitigation, not a cure: Xid 79
 # is power delivery, and the real test is `nvidia-smi -pl 300`. 0 disables.
 LLAMA_HANDOFF_SETTLE_S = float(os.getenv("LLAMA_HANDOFF_SETTLE_S", 10))
+# GPU watch (Sep 15, utils/gpu_watch.py): every TICK the kernel journal is
+# scanned for NVRM Xid lines and nvidia-smi is asked whether the card answers;
+# every LOG a "telemetry" event records GPU temp/fan/power/VRAM, CPU temp and
+# the cooler's fans. A lost card re-alerts every REALERT. TICK 0 disables.
+GPU_WATCH_TICK_S = float(os.getenv("GPU_WATCH_TICK_S", 10))
+GPU_TELEMETRY_LOG_S = float(os.getenv("GPU_TELEMETRY_LOG_S", 30))
+GPU_WATCH_REALERT_S = float(os.getenv("GPU_WATCH_REALERT_S", 600))
 # DECISION SLOTS (Sep 5, agency round — the RC-car loop): on quiet cycles the
 # caption ends with LOOK / EXPECT in the machine's own words; LOOK is executed
 # by the gaze as a "chosen" glance, the next turn states the consequence and,
