@@ -23,6 +23,7 @@ except ImportError:
 try:
     from config.config import (
         GRBL_FORCE_ABSOLUTE_UP_FOR_HOMING,
+        GRBL_HOMING_MIN_CYCLE_S,
         GRBL_PEN_DOWN_S,
         GRBL_PEN_DOWN_SETTLE_S,
         GRBL_PEN_UP_DWELL_S,
@@ -45,6 +46,7 @@ except Exception:
     GRBL_PEN_UP_IS_HIGH = False
     GRBL_PEN_DOWN_SETTLE_S = 0.35
     GRBL_PEN_UP_SETTLE_S = 0.2
+    GRBL_HOMING_MIN_CYCLE_S = 3.0
 
 # Default configuration
 DEFAULT_BAUD = 115200
@@ -536,21 +538,39 @@ def ensure_homed(ser, home_timeout=DEFAULT_HOME_TIMEOUT, max_retries=-1):
                 {"message": "Running homing cycle", "action": "homing_start", "command": "$H", "timeout": home_timeout, "attempt": attempt + 1},
                 print_message="[🏠] Running homing cycle ($H)...",
             )
+            # Drain first: the pen-up burst above sends wait_ok=False, and any
+            # stale "ok" left in the buffer becomes the next command's reply.
+            try:
+                ser.reset_input_buffer()
+            except Exception:
+                pass
             send_cmd(ser, "$H", wait_ok=False)
 
             # Wait for homing to complete
             start = time.time()
+            # Grbl goes quiet during the cycle (empty status) and only answers
+            # again once it lands. Until we have seen that silence — or the
+            # min-cycle floor has passed — an "Idle" is the state from BEFORE
+            # the cycle started, not the state after it finished.
+            cycle_seen = False
             while time.time() - start < home_timeout:
                 status = get_status(ser)
                 state = parse_state(status)
+                elapsed = time.time() - start
+                if not status.strip() or state == "Run":
+                    cycle_seen = True
 
                 # Debug: Log what state GRBL is actually reporting
-                if time.time() - start > 1.0:  # After initial startup
+                if elapsed > 1.0:  # After initial startup
                     log_json_entry(
                         LogType.GRBL,
-                        {"message": f"Homing status check", "raw_status": status, "parsed_state": state, "elapsed": time.time() - start},
+                        {"message": f"Homing status check", "raw_status": status, "parsed_state": state, "elapsed": elapsed},
                         print_message=f"[🔍] GRBL state: '{state}' (raw: {status})",
                     )
+
+                if (state == "Idle" or state == "Home") and not (cycle_seen or elapsed >= GRBL_HOMING_MIN_CYCLE_S):
+                    time.sleep(DEFAULT_STATUS_POLL)
+                    continue
 
                 if state == "Idle" or state == "Home":
                     # Homing successful - setup coordinate system

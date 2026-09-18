@@ -692,6 +692,15 @@ GRBL_PEN_DOWN_S = int(os.getenv("GRBL_PEN_DOWN_S", 56))
 _LEGACY_SETTLE = os.getenv("GRBL_PEN_SETTLE_DWELL_S", "")
 GRBL_PEN_DOWN_SETTLE_S = float(os.getenv("GRBL_PEN_DOWN_SETTLE_S", _LEGACY_SETTLE or 0.35))
 GRBL_PEN_UP_SETTLE_S = float(os.getenv("GRBL_PEN_UP_SETTLE_S", _LEGACY_SETTLE or 0.2))
+# A $H that "finishes" in under a second never started (Sep 18). Grbl answers
+# the first '?' with its PREVIOUS state before it enters the cycle, so the poll
+# loop read Idle and called it homed at ~0.7s; G54 then went into a controller
+# that was actually homing, timed out at 5s, and the retry's SOFT RESET killed
+# the live cycle. Every acquire therefore approached the limit switch twice and
+# had one approach cut off mid-travel — for at least three weeks, and it looked
+# like a finicky switch. Idle/Home is only believed after the cycle has been
+# seen running, or after this floor. A real cycle is ~8-10s at $25=300.
+GRBL_HOMING_MIN_CYCLE_S = float(os.getenv("GRBL_HOMING_MIN_CYCLE_S", 3.0))
 
 # Ink scale inside the calibrated paper window. 1.0 = ink fills the window
 # (bounds-normalized); <1 shrinks about the window center. Tried 0.85 Aug 17

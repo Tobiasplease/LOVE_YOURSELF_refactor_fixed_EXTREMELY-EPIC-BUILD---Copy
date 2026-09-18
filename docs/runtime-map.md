@@ -2348,3 +2348,21 @@ STREAM_MODE).
   — REBOOT" for the boot's last fatal Xid, or LOST), GPU temp/fan/power, any
   throttle reason, CPU temp and cooler rows. GPU_WATCH_TICK_S=0 disables.
   debug/test_gpu_watch.py replays the real Sep 14 Xid lines from the journal.
+- **The phantom homing attempt is gone (Sep 18)**: `$H` is answered by Grbl's
+  PREVIOUS state on the first `?` — it has not entered the cycle yet — so
+  `ensure_homed`'s poll loop read `<Idle,WPos:193,193>`, logged
+  `homing_complete` at ~0.7s, and sent `G54` into a controller that was
+  genuinely mid-homing. `G54` timed out at 5s (`Timeout on G54, response=[]`,
+  in EVERY run back to at least Aug 28), the attempt counted as failed, and
+  attempt 2's SOFT RESET killed the live cycle. So every acquire approached the
+  limit switch twice and had one approach cut off part-way — which is what
+  "the homing is finicky, it struggles by the stop switch" was. Now: the input
+  buffer is drained before `$H` (the pen-up burst's stale `ok`s were the other
+  half of this family, Sep 10), and Idle/Home is only believed once the cycle
+  has been SEEN running (Grbl goes silent during homing) or after
+  GRBL_HOMING_MIN_CYCLE_S (3.0; a real cycle is ~8-10s at `$25=300`). Settings
+  for the record: `$24=100` feed, `$25=300` seek, `$26=250` debounce,
+  `$27=7` pull-off, `$21=0` hard limits off, 200mm travel per axis — a failed
+  search is 1.5x travel at the seek rate, which is the 60s failure seen Sep 18.
+  debug/test_homing_race.py fakes the link and the clock; with the floor set to
+  0 it reproduces the old 0.0s completion.
