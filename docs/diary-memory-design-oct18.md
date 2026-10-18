@@ -275,7 +275,71 @@ first, then `far`, then `unlike` — three steps if you want them attributable
 separately, and I would, because `unlike` is the one with a real chance of
 changing the voice. Verify `full_prompt_length` does not grow.
 
-## RESULT of Phase 1, measured the same night — and what it changes
+## CORRECTION — the section below was called at 40 minutes and is WRONG
+
+It concluded "the ablation worked and did not help; the stream window is the
+engine". Both halves are false. Kept here, struck, because the error is the
+instructive part: a verdict on four buckets of a decaying process.
+
+**The chant DID decay, with a time constant of about 50 minutes:**
+
+| elapsed | "30 days" |
+|---|---|
+| 0-10 min | 55% |
+| 20-40 min | 74% |
+| 40-50 min | 44% |
+| 50-60 min | 6% |
+| 60-100 min | **0%** |
+
+And the lexical prediction held exactly. Against the baseline at the same
+elapsed time, equal token budget: while chanting (0-50 min) **-24%**; after it
+cleared (55-100 min) **+1%**. So the chant was eating the lexicon, and removing
+what fed it restored the texture to parity.
+
+So the injections WERE the engine. The stream window is a **flywheel**, not the
+engine — it kept the chant spinning for about an hour after the drive was cut,
+then it stopped. That also means the design consequence drawn below ("the stream
+should become the diary's near channel") lost its evidence. It may still be a
+good idea; it is no longer a conclusion.
+
+**But the attractor moved rather than dissolving.** In the post-chant window a
+new one formed: **"N degrees" in 57% of captions**, self-generated — degrees are
+injected nowhere in the frame. One caption reads *"45 degrees away, but I keep
+trying to feel it."* three times over.
+
+Within-caption stuttering is unchanged against the baseline (3.2% -> 3.6%), so
+this is a cross-caption memory effect, not degenerate decoding.
+
+**The finding of the night, then, is not about duration at all:**
+
+> The machine has a **content-independent number-chant disposition**. Remove the
+> day count and it finds degrees. This is the same shape as September: the
+> Sep 10-14 work removed the numerals and the chant came back in words; tonight
+> removed the day counts and it came back as angles.
+
+The target was never any particular injected fact. Two consequences:
+
+1. **A diary will not fix this by itself, and may feed it.** A diary's entries
+   are dated. If the machine chants whatever quantity is to hand, a record built
+   out of dates is a new substrate for exactly this behaviour. The design's
+   P4 ("duration is the diary's extent, not a number") was written to keep
+   counters out of the frame; it now has to hold against the machine *reaching*
+   for them. Entries should carry dates as metadata for the picker, and the
+   frame should receive them as "then" and "a while before that", never as
+   figures.
+2. **There is a cheap untested lever that is not architectural.** `run_38.sh`
+   documents it and nobody has run it: Qwen's own non-thinking recommendation
+   for 3.8 is temp 0.7 / top_p 0.8 / **presence_penalty 1.5**, with the note
+   "the presence penalty hints the model repeats more than 3.6 at low temp". The
+   current arm inherits 3.6's sampling verbatim so the A/B isolates the model.
+   That A/B is long since done. One run, one env var:
+   `CAPTION_TEMP=0.7 CAPTION_TOP_P=0.8 CAPTION_MIN_P=0 ./run_38.sh`.
+
+Phase 1b (shrink and de-duplicate the stream) is still worth running, but it is
+now second behind the sampling arm, which is cheaper and tests a hypothesis the
+repo has had written down since August.
+
+## SUPERSEDED (kept for the record) — result as called at 40 minutes
 
 The ablation worked and did not help, which is exactly the information it was
 run to produce.
