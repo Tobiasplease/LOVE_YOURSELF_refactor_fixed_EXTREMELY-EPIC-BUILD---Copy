@@ -300,6 +300,32 @@ def stationarity(caps, run_id):
         print(f"  first vs last: {cosine(prev, first):.3f}   target < 0.95   [{verdict}]")
 
 
+def stationarity_equal_n(caps, run_id, block=250):
+    """Drift measured on EQUAL-SIZE blocks of captions, not equal-time windows.
+
+    Equal-time windows are confounded twice: the caption rate varies, and the
+    final window of a live run is partial, which inflates unique-words-per-1k
+    by rarefaction and drags the cosine. On Oct 18 a partial third window read
+    0.951 ("stationary") where the same data in equal blocks read 0.936.
+
+    Reports adjacent-block drift and first-to-last. Lower = moving."""
+    rows = [c for t, rid, c in sorted((t, r, c) for t, r, c in caps) if rid == run_id]
+    blocks = [rows[i : i + block] for i in range(0, len(rows) - block + 1, block)]
+    if len(blocks) < 2:
+        print(f"\n[drift] run {run_id}: {len(rows)} captions, needs {2 * block}")
+        return
+    bags = [Counter(w for x in b for w in words(x)) for b in blocks]
+    adj = [cosine(bags[i], bags[i + 1]) for i in range(len(bags) - 1)]
+    first_last = cosine(bags[0], bags[-1])
+    mean_adj = sum(adj) / len(adj)
+    print(f"\n[drift] run {run_id} — {len(blocks)} blocks of {block} captions (equal size, no partial-window artifact)")
+    print(f"  adjacent-block cosine   {' '.join(f'{a:.3f}' for a in adj)}")
+    print(f"  mean adjacent           {mean_adj:.3f}   (92h baseline at this size: 0.975)")
+    print(f"  first vs last           {first_last:.3f}   target < 0.95")
+    verdict = "DRIFTING — the distribution is moving" if first_last < 0.95 else "STATIONARY — the run is not developing"
+    print(f"  [{verdict}]")
+
+
 def chant_trajectory(caps, run_id, bucket_min=20):
     """Is the dominant phrase losing its grip, or holding?
 
@@ -398,6 +424,7 @@ def main():
         matching = [r for _ts, r, _c in caps if r.startswith(run_id)]
         run_id = matching[0] if matching else run_id
     stationarity(caps, run_id)
+    stationarity_equal_n(caps, run_id)
     chant_trajectory(caps, run_id)
 
     frame_metrics(calls, args.run or args.since or "all history", stamped_responses=sum(1 for c in calls if c[3]))
