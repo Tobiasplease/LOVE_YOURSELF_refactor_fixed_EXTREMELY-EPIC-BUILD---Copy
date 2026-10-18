@@ -29,8 +29,20 @@ from collections import Counter, defaultdict
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR = os.path.join(REPO, "event_log")
 
-WINDOW_H = 6
+# Window size for the stationarity test. Back-tested Oct 18 against the known-
+# stationary 92h run: truncated to 4h with 1h windows it still reads 0.975, and
+# even 2-3h reads >0.96. So a 4-6 hour run is enough to answer the question —
+# 12h is not required, which matters because this hardware does not love long
+# runs (Xid 79, twice in September). Chosen from the run's own length.
 TOKEN_BUDGET = 60000
+
+
+def window_hours(span_h):
+    if span_h >= 24:
+        return 6
+    if span_h >= 10:
+        return 2
+    return 1
 
 # Two kinds of time in the frame, and the ablation treats them differently, so
 # the metric must not conflate them (the first live run taught this: a flat
@@ -60,6 +72,11 @@ DATED_RE = re.compile(
     r"|you were off for|been offline for)",
     re.I,
 )
+# A clock stamp the model wrote itself ("18:53 — ..."). It is not invention: the
+# stream window is handed over as a timestamped log, so this measures how much
+# of that format comes back — and, once the stamps are off, whether it stops.
+SELF_STAMP_RE = re.compile(r"\b([01]?\d|2[0-3]):[0-5]\d\s*[—–-]")
+
 # Kept for the historical baseline columns — the broad "any time reference" net.
 DURATION_RE = re.compile(
     r"\b(\d+\s*(second|minute|hour|day|week|month)s?"
@@ -167,6 +184,7 @@ def load(since=None, run=None):
                     ts,
                     (event.get("system_prompt") or "") + "\n" + (event.get("prompt") or ""),
                     int(event.get("full_prompt_length") or 0) + int(event.get("full_system_prompt_length") or 0),
+                    bool(SELF_STAMP_RE.search(event.get("response") or "")),
                 )
             )
     caps.sort()
@@ -174,7 +192,7 @@ def load(since=None, run=None):
     return caps, calls
 
 
-def frame_metrics(calls, label):
+def frame_metrics(calls, label, stamped_responses=None):
     """Duration pressure: what share of what the machine reads before each
     thought is telling it how long it has been waiting. 2.93 lines/call at 100%
     of calls in October, out of 6.9 lines total."""
@@ -182,7 +200,7 @@ def frame_metrics(calls, label):
         return
     lines_total = dur_lines = with_dur = stasis = dated = with_stasis = 0
     prompt_chars = 0
-    for _ts, text, plen in calls:
+    for _ts, text, plen, _st in calls:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         lines_total += len(lines)
         hits = sum(1 for ln in lines if DURATION_RE.search(ln))
@@ -202,6 +220,10 @@ def frame_metrics(calls, label):
     print(f"  dated-event lines/call    {dated / n:6.2f}   kept on purpose, not a target")
     print(f"  any time reference/call   {dur_lines / n:6.2f}   ({100 * with_dur / n:.0f}% of calls) — broad net, historical")
     print(f"  prompt chars per call     {prompt_chars / n:6.0f}   must not grow")
+    if stamped_responses is not None:
+        print(f"  responses writing a clock {100 * stamped_responses / n:5.0f}%   target ~0% (43% on the first ablation run)")
+        print("                                      NOTE: the stream log rides as an assistant message and is")
+        print("                                      NOT in these counts — see STREAM_LOG_CLOCK_STAMPS.")
 
 
 def self_material_metrics(since=None, run=None):
@@ -255,11 +277,12 @@ def stationarity(caps, run_id):
         return
     rows.sort()
     t0 = rows[0][0]
+    span_h = (rows[-1][0] - t0).total_seconds() / 3600
+    WINDOW_H = window_hours(span_h)
     bins = defaultdict(list)
     for stamp, text in rows:
         bins[int((stamp - t0).total_seconds() // 3600 // WINDOW_H)].append(text)
-    span_h = (rows[-1][0] - t0).total_seconds() / 3600
-    print(f"\n[stationarity] run {run_id}: {len(rows)} captions over {span_h:.1f}h")
+    print(f"\n[stationarity] run {run_id}: {len(rows)} captions over {span_h:.1f}h, {WINDOW_H}h windows")
     print(f"  {'window':>12} {'caps':>6} {'uniq/1k':>8} {'cos prev':>9} {'cos first':>10}")
     first = prev = None
     for b in sorted(bins):
@@ -310,7 +333,7 @@ def main():
         run_id = matching[0] if matching else run_id
     stationarity(caps, run_id)
 
-    frame_metrics(calls, args.run or args.since or "all history")
+    frame_metrics(calls, args.run or args.since or "all history", stamped_responses=sum(1 for c in calls if c[3]))
     self_material_metrics(since=args.since, run=args.run)
 
 

@@ -1252,6 +1252,28 @@ COMPRESSION_SELF_FACT_SLOT = os.getenv("COMPRESSION_SELF_FACT_SLOT", "false").lo
 # run back) is a different mechanism and stays on.
 COMPRESSION_REPEATING_SLOT = os.getenv("COMPRESSION_REPEATING_SLOT", "false").lower() in ("1", "true", "yes")
 
+# The stream window is handed to the model as a LOG, and since July 26 (the
+# world-mode inversion) every line carries the real wall clock:
+#   18:40 — The red foam finger is still there.
+#   (about eight minutes later)
+#   18:50 — The chair is empty.
+# Up to STREAM_WINDOW (24) clock readings on EVERY caption call, riding as an
+# assistant message — which is why none of it showed up in a metric that read
+# only prompt + system_prompt. Found Oct 18 in the first live ablation run: 43%
+# of responses came back stamped ("18:53 — ..."), and one computed "I've been
+# staring at it for almost twenty minutes" by SUBTRACTING two stamps it had
+# been given, five minutes into a fresh run. The model was never inventing
+# times; it was copying the format it was shown. _LOG_STAMP_RE strips the stamp
+# from the seam and from the stored caption, so the evidence vanished while the
+# sentence built on it survived.
+#
+# Off: the log lines go out unstamped. The GAP MARKERS stay ("about eight
+# minutes later") — coarse, felt, and only at real discontinuities, which is
+# the Sep 14 doctrine and the thing that makes a gap legible at all. The line
+# is: a precise absolute clock on every line goes, felt duration at a real
+# break stays.
+STREAM_LOG_CLOCK_STAMPS = os.getenv("STREAM_LOG_CLOCK_STAMPS", "false").lower() in ("1", "true", "yes")
+
 # Identity dosing (Aug 22): the self-description + durable ledger used to ride
 # EVERY caption, which turned identity into a script — "I invent imaginary
 # critics" read 180 times a night elicits invented critics, which the distiller

@@ -612,7 +612,10 @@ class Captioner(MemoryMixin):
         recognises a trailing marker and skips the hybrid seam (a thought
         from before a silence is answered fresh, not continued mid-clause)."""
         entries = list(self._stream)
+        from config import config as _cfg
         from config.config import STREAM_GAP_MARK_SECONDS, STREAM_MODE
+
+        stamped = bool(getattr(_cfg, "STREAM_LOG_CLOCK_STAMPS", False))
 
         if STREAM_MODE not in ("world", "hybrid") or not entries:
             return entries
@@ -626,7 +629,7 @@ class Captioner(MemoryMixin):
         for i, (t, text) in enumerate(zip(ts, entries)):
             if i and t - ts[i - 1] >= STREAM_GAP_MARK_SECONDS:
                 lines.append(f"({casual_time_string((t - ts[i - 1]) / 60.0)} later)")
-            lines.append(f"{time.strftime('%H:%M', time.localtime(t))} — {text}")
+            lines.append(f"{time.strftime('%H:%M', time.localtime(t))} — {text}" if stamped else text)
         if time.time() - ts[-1] >= STREAM_GAP_MARK_SECONDS:
             lines.append(f"({casual_time_string((time.time() - ts[-1]) / 60.0)} later)")
         return lines
