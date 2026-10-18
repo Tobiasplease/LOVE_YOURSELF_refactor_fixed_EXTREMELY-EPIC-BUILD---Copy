@@ -32,8 +32,35 @@ LOG_DIR = os.path.join(REPO, "event_log")
 WINDOW_H = 6
 TOKEN_BUDGET = 60000
 
-# Any line telling the machine how long it has been waiting. The Sep 10-14 work
-# converted the numerals to words, so the word forms have to count too.
+# Two kinds of time in the frame, and the ablation treats them differently, so
+# the metric must not conflate them (the first live run taught this: a flat
+# "anything with 'ago' in it" count read 0.71/call and most of it was legitimate).
+#
+# STASIS = how long you have been waiting / unchanged / looking / wanting. These
+# move EVERY call while the room does not, which is what makes them chant fuel.
+# Target: ~0.
+STASIS_RE = re.compile(
+    r"(nothing (has happened|in the room has changed)"
+    r"|it's been .{0,30}since anything happened"
+    r"|you've been (looking|awake|in this room)"
+    r"|your head has been turned"
+    r"|you've felt .{0,40}\bfor\b"
+    r"|you've wanted this for"
+    r"|last drawing reached the paper"
+    r"|been offline for|you were off for)",
+    re.I,
+)
+# DATED EVENT = a thing that happened, with when it happened: the last event, a
+# rare arrival, what it actually drew and when. These move only when something
+# HAPPENS, and they are the pattern the diary extends — they are supposed to
+# stay. Reported, not targeted.
+DATED_RE = re.compile(
+    r"(\bearlier:|your last drawing[s]?,|the last thing you actually drew"
+    r"|the first (time|sign) in|they've left since|no one has been here since"
+    r"|came back on|first came online)",
+    re.I,
+)
+# Kept for the historical baseline columns — the broad "any time reference" net.
 DURATION_RE = re.compile(
     r"\b(\d+\s*(second|minute|hour|day|week|month)s?"
     r"|(a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|a few|half)\s+\w{0,8}\s*(second|minute|hour|day|week|month)s?"
@@ -153,20 +180,26 @@ def frame_metrics(calls, label):
     of calls in October, out of 6.9 lines total."""
     if not calls:
         return
-    lines_total = dur_lines = with_dur = 0
+    lines_total = dur_lines = with_dur = stasis = dated = with_stasis = 0
     prompt_chars = 0
     for _ts, text, plen in calls:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         lines_total += len(lines)
         hits = sum(1 for ln in lines if DURATION_RE.search(ln))
+        s_hits = sum(1 for ln in lines if STASIS_RE.search(ln))
         dur_lines += hits
+        stasis += s_hits
+        dated += sum(1 for ln in lines if DATED_RE.search(ln))
         with_dur += 1 if hits else 0
+        with_stasis += 1 if s_hits else 0
         prompt_chars += plen
     n = len(calls)
     print(f"\n[frame] {label}  ({n} caption calls)")
-    print(f"  lines per call            {lines_total / n:6.1f}")
-    print(f"  duration lines per call   {dur_lines / n:6.2f}   target <= 0.30")
-    print(f"  calls carrying duration   {100 * with_dur / n:5.0f}%   target < 20%")
+    print(f"  lines per call            {lines_total / n:6.1f}   (6.8 pre-ablation)")
+    print(f"  STASIS lines per call     {stasis / n:6.2f}   target ~0  <-- the chant fuel")
+    print(f"  calls carrying stasis     {100 * with_stasis / n:5.0f}%   target ~0%")
+    print(f"  dated-event lines/call    {dated / n:6.2f}   kept on purpose, not a target")
+    print(f"  any time reference/call   {dur_lines / n:6.2f}   ({100 * with_dur / n:.0f}% of calls) — broad net, historical")
     print(f"  prompt chars per call     {prompt_chars / n:6.0f}   must not grow")
 
 

@@ -205,10 +205,16 @@ def get_monologue_system_prompt(mode: str, emotional_state: str = "calm", agent=
                         base += P("monologue.durable-time").format(oldest=_spans["oldest"], newest=_spans["newest"])
                 except Exception:
                     pass
+            # ablation Oct 18: this rode OUTSIDE the DURABLE_IN_FRAME guard above,
+            # so the Sep 8 fix only closed half the door — "lately in doubt" kept
+            # injecting the same class of durable self-indictment, day counts
+            # included ("I perceive my hand as holding empty air when stationary
+            # for 23 days"). The self channel is empty until the diary fills it.
             try:
-                _challenged = _ledger.render_challenged()
-                if _challenged:
-                    base += P("monologue.challenged-wrap").format(challenged=_challenged)
+                if bool(getattr(config, "COMPRESSION_SELF_FACT_SLOT", False)):
+                    _challenged = _ledger.render_challenged()
+                    if _challenged:
+                        base += P("monologue.challenged-wrap").format(challenged=_challenged)
             except Exception:
                 pass
         except Exception:
@@ -1088,10 +1094,16 @@ def get_reflection_system_prompt(subject: str = "") -> str:
                         base += P("monologue.durable-time").format(oldest=_spans["oldest"], newest=_spans["newest"])
                 except Exception:
                     pass
+            # ablation Oct 18: this rode OUTSIDE the DURABLE_IN_FRAME guard above,
+            # so the Sep 8 fix only closed half the door — "lately in doubt" kept
+            # injecting the same class of durable self-indictment, day counts
+            # included ("I perceive my hand as holding empty air when stationary
+            # for 23 days"). The self channel is empty until the diary fills it.
             try:
-                _challenged = _ledger.render_challenged()
-                if _challenged:
-                    base += P("monologue.challenged-wrap").format(challenged=_challenged)
+                if bool(getattr(config, "COMPRESSION_SELF_FACT_SLOT", False)):
+                    _challenged = _ledger.render_challenged()
+                    if _challenged:
+                        base += P("monologue.challenged-wrap").format(challenged=_challenged)
             except Exception:
                 pass
         except Exception:
@@ -1407,7 +1419,7 @@ def get_last_drawing_age_line(agent=None, mode: str = "") -> str:
         else:
             phrase = _drawing_age_phrase(time.time() - max(stamps))
             line = " Your last drawing reached the paper just now." if phrase == "just now" else f" Your last drawing reached the paper {phrase} ago."
-        if mode != "awakening" and agent is not None and not bool(getattr(config, "CAPTION_DURATION_LINES", False)):
+        if mode != "awakening" and not bool(getattr(config, "CAPTION_DURATION_LINES", False)):
             return ""  # ablation Oct 18 — the hunger clock stays mechanical, it just stops being read aloud
         if agent is None or mode in ("introspective", "awakening"):
             return line
