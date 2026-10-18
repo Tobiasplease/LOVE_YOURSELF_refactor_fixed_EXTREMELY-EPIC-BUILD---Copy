@@ -146,6 +146,71 @@ A **4–6 hour** run answers the question. `window_hours()` now picks the window
 from the run's own span. This matters on hardware that has dropped the GPU off
 the bus twice (Xid 79, Sep 8 and Sep 14).
 
+## PHASE 1 RESULT — measured over a 4-hour run the same night (334455cd)
+
+Like-for-like, 4 blocks of 250 captions each, equal-size blocks (equal-time
+windows are confounded by caption rate and by the partial final window of a live
+run — a partial third window read 0.951 where the same captions in blocks read
+0.936):
+
+| | adjacent cosines | mean | first→last |
+|---|---|---|---|
+| baseline (f5cbdb1c) | 0.974 0.976 0.968 | 0.973 | 0.947 |
+| **ablated (334455cd)** | 0.918 0.962 0.952 | **0.944** | **0.870** |
+
+**The monologue drifts about 2.5x more** from start to finish (0.130 vs 0.053).
+This is the number the whole investigation began from, and it has moved off the
+floor for the first time.
+
+Also real: the "30 days" chant died outright — 74% at its peak, then 0% for the
+last two and a half hours — and lexical range tracked it exactly, −24% against
+the baseline while chanting and +1% once it cleared.
+
+### But invented precision is CONSERVED
+
+| kind of number | baseline | ablated |
+|---|---|---|
+| duration ("30 days") | **41%** | 17% |
+| angle ("45 degrees") | 0% | **36%** |
+| distance / percent / clock | 0% | 0% |
+| bare count | 5% | 3% |
+
+Total number-bearing captions: 43–47% baseline, 53% ablated. Closing the
+duration channel halved duration-chanting and an angle-chant appeared from
+nothing to take up almost exactly the slack.
+
+### The mechanism: vacuum, not imitation
+
+The machine quantifies what it is NOT told, not what it is handed:
+
+| | responses mentioning degrees |
+|---|---|
+| frame states where it is looking | **26%** |
+| frame says nothing about direction | **52%** |
+
+Holds in all four strata (image/no-image × caption/reroute). Tell it where it is
+looking and it invents an angle half as often.
+
+**So subtraction relocates the behaviour; it does not cure it.** That is the
+same shape as September, when removing the numerals brought the chant back in
+words. Where a channel has been emptied and nothing put back, the vacuum itself
+produces invented precision — which makes "leave nothing in its place" the thing
+to undo in Phase 2, not to preserve.
+
+The counter-move is supply, not subtraction: true, varied, specific material so
+fabrication is not the cheapest option. That is what the diary is for, reframed
+— not a replacement for removed counters but a source of real specifics.
+
+### Operational note
+
+The run took a `CUDA error: out of memory` during graph instantiation at 3h10m
+and auto-recovered in ~30s (not Xid 79 — the card stayed healthy; not an fd leak
+— 98 descriptors against a 1M limit). Zero caption gaps over 60s, and the
+restart introduced no discontinuity in the data (cosine 0.952 across the
+boundary, inside the normal 0.918–0.962 adjacent range). The server runs 4 slots
+at 16384 context, which is a large KV reserve for a single consumer; halving the
+slots is the obvious headroom lever before any longer run.
+
 ## Standing metrics
 
 `debug/diary_metrics.py` carries all of these so a change can be attributed.
