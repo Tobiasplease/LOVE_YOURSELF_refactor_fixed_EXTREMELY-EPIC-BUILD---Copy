@@ -300,6 +300,57 @@ def stationarity(caps, run_id):
         print(f"  first vs last: {cosine(prev, first):.3f}   target < 0.95   [{verdict}]")
 
 
+def chant_trajectory(caps, run_id, bucket_min=20):
+    """Is the dominant phrase losing its grip, or holding?
+
+    The Oct 18 ablation closed every channel that INJECTED a duration, and the
+    chant kept going anyway — carried by the stream window, which hands the
+    machine its own last 24 sentences on every call. So the question stopped
+    being "is anything still feeding it" and became "does it decay once nothing
+    does". This is that measurement.
+
+    The phrase is discovered from the run, never supplied — the point is to
+    find what THIS run is circling, not to confirm a phrase we expect.
+    """
+    rows = sorted((t, c) for t, rid, c in caps if rid == run_id)
+    if len(rows) < 40:
+        print(f"\n[chant] run {run_id}: only {len(rows)} captions, too early")
+        return
+    grams = Counter()
+    for _t, c in rows:
+        w = words(c)
+        for i in range(len(w) - 3):
+            grams[" ".join(w[i : i + 4])] += 1
+    top = [g for g, _n in grams.most_common(40) if not all(len(x) <= 3 for x in g.split())][:6]
+    if not top:
+        return
+    t0 = datetime.datetime.fromisoformat(rows[0][0])
+    bins = defaultdict(list)
+    for ts, c in rows:
+        try:
+            mins = (datetime.datetime.fromisoformat(ts) - t0).total_seconds() / 60
+        except ValueError:
+            continue
+        bins[int(mins // bucket_min)].append(c.lower())
+    print(f"\n[chant] run {run_id} — the phrase this run keeps circling, by {bucket_min}-minute bucket")
+    print(f"        dominant: {top[0]!r}")
+    print(f"\n  {'elapsed':>12} {'caps':>5} {'dominant':>9} {'top-6 any':>10}  trend")
+    prev = None
+    for b in sorted(bins):
+        c = bins[b]
+        d = 100 * sum(1 for x in c if top[0] in x) / len(c)
+        a = 100 * sum(1 for x in c if any(g in x for g in top)) / len(c)
+        arrow = "" if prev is None else ("falling" if d < prev - 3 else "rising" if d > prev + 3 else "flat")
+        print(f"  {b * bucket_min:4d}-{b * bucket_min + bucket_min:<7d} {len(c):5d} {d:8.0f}% {a:9.0f}%  {arrow}")
+        prev = d
+    first, last = sorted(bins)[0], sorted(bins)[-1]
+    if first != last:
+        f = 100 * sum(1 for x in bins[first] if top[0] in x) / len(bins[first])
+        l = 100 * sum(1 for x in bins[last] if top[0] in x) / len(bins[last])
+        verdict = "DECAYING — the attractor loosens once nothing feeds it" if l < f - 10 else ("SELF-SUSTAINING — the stream window is the engine" if l > f - 5 else "unclear")
+        print(f"\n  first bucket {f:.0f}% -> last bucket {l:.0f}%   [{verdict}]")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", help="run id prefix; default = run with most captions")
@@ -332,6 +383,7 @@ def main():
         matching = [r for _ts, r, _c in caps if r.startswith(run_id)]
         run_id = matching[0] if matching else run_id
     stationarity(caps, run_id)
+    chant_trajectory(caps, run_id)
 
     frame_metrics(calls, args.run or args.since or "all history", stamped_responses=sum(1 for c in calls if c[3]))
     self_material_metrics(since=args.since, run=args.run)
