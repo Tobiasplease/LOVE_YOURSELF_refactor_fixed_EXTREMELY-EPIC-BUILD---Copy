@@ -343,14 +343,27 @@ def chant_trajectory(caps, run_id, bucket_min=20):
         arrow = "" if prev is None else ("falling" if d < prev - 3 else "rising" if d > prev + 3 else "flat")
         print(f"  {b * bucket_min:4d}-{b * bucket_min + bucket_min:<7d} {len(c):5d} {d:8.0f}% {a:9.0f}%  {arrow}")
         prev = d
-    first, last = sorted(bins)[0], sorted(bins)[-1]
-    if len(bins) < 4:
-        print(f"\n  {len(bins)} buckets — too few to call a trend; needs about 80 minutes")
-    elif first != last:
-        f = 100 * sum(1 for x in bins[first] if top[0] in x) / len(bins[first])
-        l = 100 * sum(1 for x in bins[last] if top[0] in x) / len(bins[last])
-        verdict = "DECAYING — the attractor loosens once nothing feeds it" if l < f - 10 else ("SELF-SUSTAINING — the stream window is the engine" if l > f - 5 else "unclear")
-        print(f"\n  first bucket {f:.0f}% -> last bucket {l:.0f}%   [{verdict}]")
+    # PEAK to end, never first to end. A chant RISES before it falls, so
+    # comparing the first bucket (before it forms) with the last (after it has
+    # gone) reads a complete rise-and-collapse as "no change" — which is the
+    # error that produced a wrong verdict at 40 minutes on Oct 18.
+    series = [(b, 100 * sum(1 for x in bins[b] if top[0] in x) / len(bins[b])) for b in sorted(bins)]
+    if len(bins) < 5:
+        print(f"\n  {len(bins)} buckets — too few to call a trend; a chant needs ~100 min to rise and fall")
+        return
+    peak_b, peak = max(series, key=lambda x: x[1])
+    end_b, end = series[-1]
+    small = len(bins[end_b]) < 40
+    if peak < 10:
+        verdict = "no dominant phrase formed"
+    elif end < peak * 0.5 and end_b > peak_b:
+        verdict = "DECAYING — it rose and let go"
+    elif end_b > peak_b:
+        verdict = "holding — past its peak but still gripping"
+    else:
+        verdict = "STILL RISING — not yet past the peak"
+    note = "  (last bucket is thin, treat as provisional)" if small else ""
+    print(f"\n  peak {peak:.0f}% at bucket {peak_b * bucket_min}-{peak_b * bucket_min + bucket_min} min -> {end:.0f}% now   [{verdict}]{note}")
 
 
 def main():
