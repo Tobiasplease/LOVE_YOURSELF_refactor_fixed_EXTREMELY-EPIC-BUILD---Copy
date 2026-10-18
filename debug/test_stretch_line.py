@@ -10,10 +10,22 @@ sys.modules["captioner.context_compression"] = types.SimpleNamespace(context_com
 CC = sys.modules["captioner.context_compression"].context_compressor
 from captioner.prompts import _DRIFTED_LADDER, _LOOKED_LADDER, _NAMED_LADDER, _ladder, _rung, _top_phrase, count_words, get_unchanged_line  # noqa: E402
 
+# Oct 18 ablation (docs/diary-memory-design-oct18.md, Phase 1): these lines are
+# OFF in the live frame now — duration stamps rode 100% of caption calls at
+# 2.93 per call, and the top October 6-gram was "days is a long time to". The
+# MECHANISM is unchanged and still tested here; the flag restores it, and the
+# default is asserted below so nobody re-enables it by accident.
+from config import config as _abl_cfg  # noqa: E402
+
+_ABL_DURATION_OFF = _abl_cfg.CAPTION_DURATION_LINES is False
+_abl_cfg.CAPTION_DURATION_LINES = True
+
 fails = 0
 def check(name, ok, got=""):
     global fails
     print(("PASS  " if ok else "FAIL  ") + name + (f"   → {got!r}" if not ok else "")); fails += 0 if ok else 1
+
+check("Oct 18: duration lines OFF by default in the live frame", _ABL_DURATION_OFF)
 
 T = time.time()
 class A: pass

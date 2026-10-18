@@ -19,6 +19,47 @@ The audit habit that produced it: features fail SILENTLY here — always check
 the event log / state files for evidence a subsystem is producing output,
 don't trust that code existing means code running.
 
+## LIVE CHANGE Oct 18 2026 — the duration/self-fact ablation (Phase 1 of the diary layer)
+
+Measured first: `docs/stationarity-oct18.md`. The monologue is a **stationary
+process**, not a plateau — the word-frequency cosine between the first and last
+6-hour window of the 92-hour run (f5cbdb1c) is **0.992**, and on one unchanged
+model the lexical range fell 3814 → 1644 unique words per 60k caption tokens
+between mid-August and October. Design that follows from it:
+`docs/diary-memory-design-oct18.md`. Standing metrics: `debug/diary_metrics.py`.
+
+**Three switches in `config/config.py`, all defaulting OFF, all reversible by
+env var.** This is an ABLATION: the implicated mechanisms are off with nothing
+in their place, so the diary layer that follows has a clean baseline to beat.
+
+| switch | what stops reaching the model |
+|---|---|
+| `CAPTION_DURATION_LINES=false` | the stretch line (`get_unchanged_line`), the head hold (`_head_line_from`), the felt-arc STEADY half, the want-arc tail, the room tenure (`get_tenure_line`), the drawing age for every mode but awakening (`get_last_drawing_age_line`), and the awake-duration inward anchor (`captioner.py` ~2573) |
+| `COMPRESSION_SELF_FACT_SLOT=false` | the `NEW ABOUT ME:` ask AND the `What you already know about yourself:` read-back, stripped from `compression.user` by `_drop_ablated_slots`; `_absorb_self_note` no longer runs, so `self_notes` and the durable ledger stop growing (files kept) |
+| `COMPRESSION_REPEATING_SLOT=false` | the `REPEATING:` ask, `_absorb_loop_notice`, and source 2 of `build_loop_notice_line` (a stale notice from a pre-ablation run cannot fire at boot) |
+
+**Still live, deliberately** — the distinction is *a thing that happened, with a
+date* versus *a counter of how long nothing has happened*:
+`caption.last-event` and its pass variants, the rare-arrival cues, the blink
+line, the felt-arc **TURN** (a tenor that CHANGED is an event, and the emotional
+arc is what the diary is meant to make legible), `monologue.self-thought`, the
+awakening gap, the time-of-day inward anchor, and the echo-gate source of the
+loop notice. Compression keeps `ROOM`, `EVENT`, `PLEASANTNESS`, `ENERGY`, `FELT`
+— the felt-state system consumes those and was not touched.
+
+**This reverses a Sep 11 ruling on purpose** ("the appropriate data should reach
+every single call"; `build_standing_facts`: "the recitation risk is accepted and
+measured, not dosed away"). It was measured: duration lines rode **100%** of
+October caption calls at **2.93 per call** out of 6.9, and the top October
+6-gram was "days is a long time to". If the stretch line is missed, note that it
+was the best-written of the ablated lines — it may deserve to come back dosed
+rather than standing.
+
+The affected debug tests (`test_standing_facts`, `test_stretch_line`,
+`test_time_and_loop`, `test_agency_round`, `test_felt_arc`) now assert the new
+default AND still exercise each mechanism with its flag flipped on, so the
+September rulings stay testable.
+
 ## Known failure, SOLVED Aug 9 — the 27B was running on the CPU
 
 Runs went off a CLIFF, not a slope: healthy for ~20 minutes, then EVERY call

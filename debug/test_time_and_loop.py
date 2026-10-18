@@ -21,6 +21,19 @@ from captioner.prompt_registry import FRAGMENTS  # noqa: E402
 from captioner.prompts import build_loop_notice_line, build_situational_line  # noqa: E402
 from perception.presence_adjudicator import PresenceAdjudicatorThread as PresenceAdjudicator  # noqa: E402
 
+# Oct 18 ablation (docs/diary-memory-design-oct18.md, Phase 1): the stretch line
+# and the compressor's REPEATING slot are both OFF in the live frame — duration
+# lines rode 100% of caption calls, and REPEATING had filled with the day count
+# ("23 days", "24 days") and was handing it back. Both MECHANISMS are unchanged
+# and still tested here; the flags restore them, defaults asserted below. The
+# GATE source of the loop notice is a different mechanism and stays on.
+from config import config as _abl_cfg  # noqa: E402
+
+_ABL_DURATION_OFF = _abl_cfg.CAPTION_DURATION_LINES is False
+_ABL_REPEATING_OFF = _abl_cfg.COMPRESSION_REPEATING_SLOT is False
+_abl_cfg.CAPTION_DURATION_LINES = True
+_abl_cfg.COMPRESSION_REPEATING_SLOT = True
+
 fails = 0
 
 
@@ -28,6 +41,10 @@ def check(name, ok, got=""):
     global fails
     print(("PASS  " if ok else "FAIL  ") + name + (f"   → {got!r}" if got and not ok else ""))
     fails += 0 if ok else 1
+
+
+check("Oct 18: duration lines OFF by default in the live frame", _ABL_DURATION_OFF)
+check("Oct 18: compressor REPEATING slot OFF by default", _ABL_REPEATING_OFF)
 
 
 def gate(text, believed=False):

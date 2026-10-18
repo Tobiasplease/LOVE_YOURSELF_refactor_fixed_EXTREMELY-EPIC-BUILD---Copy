@@ -2570,7 +2570,12 @@ class Captioner(MemoryMixin):
                                     from captioner.prompts import casual_time_string
 
                                     awake_mins = (now - self.true_session_start) / 60.0
-                                    if awake_mins >= 2:
+                                    # ablation Oct 18: two of the three inward anchors were duration
+                                    # stamps; the time-of-day one stays (orientation, not a
+                                    # waiting-counter). docs/diary-memory-design-oct18.md
+                                    from config import config as _cfg
+
+                                    if awake_mins >= 2 and bool(getattr(_cfg, "CAPTION_DURATION_LINES", False)):
                                         anchor = f"You've been awake {casual_time_string(awake_mins)}."
                                 elif self._inward_count % 3 == 2:
                                     from utils.continuity import get_current_time_description

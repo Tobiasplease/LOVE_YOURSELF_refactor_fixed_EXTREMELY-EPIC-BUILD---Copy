@@ -93,7 +93,15 @@ from captioner.prompts import _head_line_from  # noqa: E402
 _now = time.time()
 _head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now)  # the hold clock starts on the first look
 line = _head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now + 11 * 60)
-check("head held 11 min → STANDING fact, direction + how long it feels (Sep 14)", line == "You've been looking left for a while now.", line)
+# Oct 18 ablation (docs/diary-memory-design-oct18.md): the head hold is a duration
+# stamp and is OFF in the live frame — a long hold now says nothing, and the view
+# verdicts right after a turn carry the head instead. The mechanism is unchanged.
+from config import config as _abl_cfg  # noqa: E402
+
+check("Oct 18: the head hold is OFF by default", _abl_cfg.CAPTION_DURATION_LINES is False and line == "", line)
+_abl_cfg.CAPTION_DURATION_LINES = True
+line = _head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now + 11 * 60)
+check("head held 11 min → STANDING fact, direction + how long it feels (Sep 14, flag on)", line == "You've been looking left for a while now.", line)
 check("and again on the next call (standing, not once per threshold)", _head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now + 11 * 60 + 16) == line)
 _head_line_from(a, 120.0, 100.0, "looking right", "baselined", _now + 12 * 60)  # a big move resets
 check("move beyond tolerance resets the clock", abs(a._head_hold["since"] - (_now + 12 * 60)) < 1)

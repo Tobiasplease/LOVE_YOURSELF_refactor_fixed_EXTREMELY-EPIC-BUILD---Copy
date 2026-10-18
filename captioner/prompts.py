@@ -570,7 +570,10 @@ def get_felt_arc_line(agent) -> str:
         felt = newest_felt(streak)
         # STEADY is STANDING (Sep 11): no dose — it rides every call once the
         # tenor has held FELT_ARC_AFTER_S, its duration moving with the clock.
-        if felt and held_s >= FELT_ARC_AFTER_S:
+        # ablation Oct 18: STEADY is the stasis counter and goes; the TURN above
+        # STAYS — a tenor that CHANGED is an event, and the emotional arc is the
+        # thing the diary layer is meant to make legible, not to mute.
+        if felt and held_s >= FELT_ARC_AFTER_S and bool(getattr(config, "CAPTION_DURATION_LINES", False)):
             return P("caption.felt-arc-steady").format(felt=felt, duration=felt_duration(held_s))
     except Exception:
         pass
@@ -800,6 +803,8 @@ def get_unchanged_line(agent) -> str:
     around, what it kept naming and how many times, whether it drifted, how long
     it was quiet. It changes every minute while the room does not. Counts in
     words. Empty until there is something to say."""
+    if not bool(getattr(config, "CAPTION_DURATION_LINES", False)):
+        return ""  # ablation Oct 18 — the stasis counters are off (docs/diary-memory-design-oct18.md)
     try:
         from config.config import UNCHANGED_FACT_AFTER_S
 
@@ -865,7 +870,7 @@ def _head_line_from(agent, pan: float, tilt: float, direction: str, verdict, now
             _note("look")
     held_s = now - hold["since"]
     direction = (direction or "ahead").replace("looking ", "").replace("straight ", "")
-    if held_s >= HEAD_STANDING_AFTER_S:
+    if held_s >= HEAD_STANDING_AFTER_S and bool(getattr(config, "CAPTION_DURATION_LINES", False)):
         return P("caption.looking-for").format(direction=direction, duration=felt_duration(held_s))
     if held_s > HEAD_TURN_VERDICT_S or now - float(getattr(agent, "_expect_checked_at", 0.0) or 0.0) < 5.0:
         return ""
@@ -965,6 +970,8 @@ def build_standing_facts(agent, include_felt: bool = True) -> str:
 def get_tenure_line() -> str:
     """How long the machine has existed in this room — from lifetime_state.json,
     which survives memory wipes. Real age displaces invented numerology."""
+    if not bool(getattr(config, "CAPTION_DURATION_LINES", False)):
+        return ""  # ablation Oct 18 — the stasis counters are off (docs/diary-memory-design-oct18.md)
     try:
         import json as _json
         import os as _os
@@ -1400,6 +1407,8 @@ def get_last_drawing_age_line(agent=None, mode: str = "") -> str:
         else:
             phrase = _drawing_age_phrase(time.time() - max(stamps))
             line = " Your last drawing reached the paper just now." if phrase == "just now" else f" Your last drawing reached the paper {phrase} ago."
+        if mode != "awakening" and agent is not None and not bool(getattr(config, "CAPTION_DURATION_LINES", False)):
+            return ""  # ablation Oct 18 — the hunger clock stays mechanical, it just stops being read aloud
         if agent is None or mode in ("introspective", "awakening"):
             return line
         count = getattr(agent, "_draw_age_counter", 0) + 1
@@ -1721,6 +1730,11 @@ def build_loop_notice_line(agent) -> str:
         from captioner.context_compression import context_compressor
 
         notice = context_compressor.introspective_state.get("loop_notice") or {}
+        # ablation Oct 18: source 2 (the compressor's REPEATING slot) is off, and a
+        # notice persisted from a pre-ablation run must not fire once at boot. The
+        # echo-gate source below is a different mechanism and stays on.
+        if not bool(getattr(config, "COMPRESSION_REPEATING_SLOT", False)):
+            notice = {}
         if notice.get("phrase") and not notice.get("spoken") and now - float(notice.get("ts", 0)) < LOOP_NOTICE_WINDOW_S:
             notice["spoken"] = True
             line = P("caption.loop-notice").format(phrase=notice["phrase"])
@@ -2989,7 +3003,9 @@ def build_simple_caption_prompt(agent, last_caption: Optional[str] = None, perso
                     from utils.want_ledger import want_ledger
 
                     facts = want_ledger.current_facts()
-                    if facts and (facts["age_s"] >= WANT_ARC_TAIL_AFTER_S or facts["refusals"] > 0):
+                    # ablation Oct 18: the whole tail is duration-led, so the refusal
+                    # count rides out with it — split it back out if that is missed.
+                    if facts and (facts["age_s"] >= WANT_ARC_TAIL_AFTER_S or facts["refusals"] > 0) and bool(getattr(config, "CAPTION_DURATION_LINES", False)):
                         # Sep 14: in words, and felt rather than measured. This
                         # was the last standing line still handing over a figure
                         # — "You've wanted this for about an hour; 2 tries came

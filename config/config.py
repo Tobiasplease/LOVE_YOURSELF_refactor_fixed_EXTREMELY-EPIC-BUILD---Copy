@@ -1208,6 +1208,50 @@ INTROSPECT_INTERVAL = 4
 # keep their doses (LORE_LINE_EVERY_N, QUESTION_LINE_EVERY_N, IDENTITY_EVERY_N_CAPTIONS,
 # DRAWING_LINE_EVERY_N).
 
+# --- ABLATION, Oct 18 2026 (docs/diary-memory-design-oct18.md, Phase 1) ------
+# Measured first (docs/stationarity-oct18.md): the monologue is a STATIONARY
+# process, not a plateau — word-frequency cosine between the first and last
+# 6-hour window of the 92-hour run is 0.992, and on one unchanged model the
+# lexical range fell 3814 -> 1644 unique words per 60k caption tokens between
+# mid-August and October. These switches turn off the mechanisms the data
+# implicates, with NOTHING in their place, so the diary layer that follows has
+# a clean baseline to beat rather than being credited for someone else's fix.
+# Flip any of them back to true to restore the September behaviour, and
+# re-measure with debug/diary_metrics.py.
+#
+# CAPTION_DURATION_LINES REVERSES a Sep 11 ruling on purpose ("the appropriate
+# data should reach every single call"; build_standing_facts: "the recitation
+# risk is accepted and measured, not dosed away"). It was measured: duration
+# lines ride 100% of caption calls at 2.93 per call out of 6.9 — about 42% of
+# what the machine reads before each thought is telling it how long it has
+# waited — and the top October 6-gram is "days is a long time to". The risk did
+# not survive contact with a long run.
+#
+# Off: the stretch line, the head hold, the felt-arc STEADY half, the desire
+# arc tail, the room tenure, the drawing age, the awake-duration anchor.
+# Untouched: dated references to real EVENTS (caption.last-event, the rare
+# arrival cues, the blink line, the felt-arc TURN, monologue.self-thought) — a
+# thing that happened with a date on it is the pattern the diary extends; a
+# counter of how long nothing has happened is the one that chants. Awakening
+# keeps its gap.
+CAPTION_DURATION_LINES = os.getenv("CAPTION_DURATION_LINES", "false").lower() in ("1", "true", "yes")
+
+# The NEW ABOUT ME slot, and the "what you already know about yourself" line
+# that feeds it back. A quota demanding a new self-fact every cycle produced a
+# template: 53% of October's self-facts contain "perceive", 38% "rather than" —
+# the frame "I perceive X rather than Y" (July: 0% and 3%). It also promoted the
+# latest caption's passing metaphor to a durable fact and then reasoned from it.
+# Off means the self channel is EMPTY until the diary fills it; self_notes and
+# the durable ledger stop growing (both keep their files).
+COMPRESSION_SELF_FACT_SLOT = os.getenv("COMPRESSION_SELF_FACT_SLOT", "false").lower() in ("1", "true", "yes")
+
+# The REPEATING slot — built Sep 5 so that catching itself looping would be a
+# thought. It was captured by the clock: October's top values are "23 days"
+# (289), "24 days" (226), "21 days" (220), handed straight back to the frame.
+# The other source of build_loop_notice_line (the echo gates quoting a refused
+# run back) is a different mechanism and stays on.
+COMPRESSION_REPEATING_SLOT = os.getenv("COMPRESSION_REPEATING_SLOT", "false").lower() in ("1", "true", "yes")
+
 # Identity dosing (Aug 22): the self-description + durable ledger used to ride
 # EVERY caption, which turned identity into a script — "I invent imaginary
 # critics" read 180 times a night elicits invented critics, which the distiller

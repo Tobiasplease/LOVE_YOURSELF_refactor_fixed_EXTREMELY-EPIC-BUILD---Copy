@@ -82,7 +82,21 @@ def test_arc_line():
             read(now - 2400, -0.35, "safe and suffocating"),
         ]
         line2 = get_felt_arc_line(agent2)
-        check("steady names its own newest phrase + duration", "safe and suffocating" in line2 and "hour" in line2, line2)
+        # Oct 18 ablation: STEADY is a duration stamp and is OFF in the live frame
+        # (the TURN above is not, and stays on by default).
+        from config import config as _abl_cfg
+
+        check("Oct 18: STEADY off by default", _abl_cfg.CAPTION_DURATION_LINES is False and line2 == "", line2)
+        _abl_cfg.CAPTION_DURATION_LINES = True
+        line2 = get_felt_arc_line(agent2)
+        # was asserting "hour" — stale since Sep 14, when felt_duration stopped
+        # handing over units ("a long time now", never "for an hour").
+        check(
+            "steady names its own newest phrase + a felt duration, no figure (flag on)",
+            "safe and suffocating" in line2 and "a long time now" in line2 and not any(c.isdigit() for c in line2),
+            line2,
+        )
+        _abl_cfg.CAPTION_DURATION_LINES = False
 
         # young streak after a too-short prior: nothing yet
         agent3 = types.SimpleNamespace(_felt_arc_last_ts=0.0)

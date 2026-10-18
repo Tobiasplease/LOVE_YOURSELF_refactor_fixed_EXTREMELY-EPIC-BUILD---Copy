@@ -76,6 +76,28 @@ def _journal_entry_clean(text: str) -> bool:
     return not any(w in t for w in _JOURNAL_POISON)
 
 
+def _drop_ablated_slots(prompt: str) -> str:
+    """Ablation Oct 18 (docs/diary-memory-design-oct18.md, Phase 1): strip the
+    self-fact and repetition slots out of the compression prompt when their
+    switches are off, rather than forking the template — compression.user is
+    panel-editable and an override must not dangle. Both the ASK and the
+    read-back that feeds it go: leaving "What you already know about yourself"
+    in would only half-cut the loop.
+
+    Measured reason: NEW ABOUT ME is a novelty quota, and a quota gets a
+    template — 53% of October's self-facts contain "perceive" and 38% "rather
+    than". REPEATING was captured by the clock ("23 days", "24 days") and
+    handed it straight back to the caption frame."""
+    drop = []
+    if not bool(getattr(config, "COMPRESSION_SELF_FACT_SLOT", False)):
+        drop += ["NEW ABOUT ME:", "What you already know about yourself:"]
+    if not bool(getattr(config, "COMPRESSION_REPEATING_SLOT", False)):
+        drop.append("REPEATING:")
+    if not drop:
+        return prompt
+    return "\n".join(ln for ln in prompt.splitlines() if not any(ln.lstrip().startswith(d) for d in drop))
+
+
 class ContextCompressionEngine:
     """Manages frequent compression of observations into evolving baseline context."""
 
@@ -309,10 +331,12 @@ class ContextCompressionEngine:
             self_known += [n.get("note", "") for n in self.self_notes[-3:]]
             self_known_str = " ".join(s for s in self_known if s) or "(nothing yet)"
 
-            prompt = P("compression.user").format(
-                recent_text=recent_text,
-                current_baseline=current_baseline or "(nothing yet)",
-                self_known=self_known_str,
+            prompt = _drop_ablated_slots(
+                P("compression.user").format(
+                    recent_text=recent_text,
+                    current_baseline=current_baseline or "(nothing yet)",
+                    self_known=self_known_str,
+                )
             )
 
             model_options = {
@@ -342,10 +366,12 @@ class ContextCompressionEngine:
                 understanding = parsed.get("room", "")
 
                 # Route the non-spatial channels regardless of ROOM parse
-                self._absorb_self_note(parsed.get("self_note", ""))
+                if bool(getattr(config, "COMPRESSION_SELF_FACT_SLOT", False)):
+                    self._absorb_self_note(parsed.get("self_note", ""))
                 self._absorb_event(parsed.get("event", ""))
                 self._absorb_mood(parsed)
-                self._absorb_loop_notice(parsed.get("repeating", ""))
+                if bool(getattr(config, "COMPRESSION_REPEATING_SLOT", False)):
+                    self._absorb_loop_notice(parsed.get("repeating", ""))
 
                 if understanding:
                     # Update session duration tracking (not environment change - this is a static space)
