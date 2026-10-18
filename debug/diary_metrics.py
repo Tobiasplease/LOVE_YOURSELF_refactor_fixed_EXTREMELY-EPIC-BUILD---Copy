@@ -46,8 +46,7 @@ STASIS_RE = re.compile(
     r"|your head has been turned"
     r"|you've felt .{0,40}\bfor\b"
     r"|you've wanted this for"
-    r"|last drawing reached the paper"
-    r"|been offline for|you were off for)",
+    r"|last drawing reached the paper)",
     re.I,
 )
 # DATED EVENT = a thing that happened, with when it happened: the last event, a
@@ -57,7 +56,8 @@ STASIS_RE = re.compile(
 DATED_RE = re.compile(
     r"(\bearlier:|your last drawing[s]?,|the last thing you actually drew"
     r"|the first (time|sign) in|they've left since|no one has been here since"
-    r"|came back on|first came online)",
+    r"|came back on|first came online"
+    r"|you were off for|been offline for)",
     re.I,
 )
 # Kept for the historical baseline columns — the broad "any time reference" net.
@@ -197,6 +197,7 @@ def frame_metrics(calls, label):
     print(f"\n[frame] {label}  ({n} caption calls)")
     print(f"  lines per call            {lines_total / n:6.1f}   (6.8 pre-ablation)")
     print(f"  STASIS lines per call     {stasis / n:6.2f}   target ~0  <-- the chant fuel")
+    print("                                      (a few hits are expected: the hunger clock still rides awakening)")
     print(f"  calls carrying stasis     {100 * with_stasis / n:5.0f}%   target ~0%")
     print(f"  dated-event lines/call    {dated / n:6.2f}   kept on purpose, not a target")
     print(f"  any time reference/call   {dur_lines / n:6.2f}   ({100 * with_dur / n:.0f}% of calls) — broad net, historical")
