@@ -201,6 +201,49 @@ The counter-move is supply, not subtraction: true, varied, specific material so
 fabrication is not the cheapest option. That is what the diary is for, reframed
 — not a replacement for removed counters but a source of real specifics.
 
+### The machine rebuilt the stamped-log FORMAT out of angles
+
+The clearest single result. At 19:08 the clock stamps came off the stream log
+(`STREAM_LOG_CLOCK_STAMPS=false`), and self-written clock stamps went 43% → 0%
+immediately. Over the next four hours the machine reconstructed the same format
+from a different quantity:
+
+| elapsed | captions opening with an angle stamp |
+|---|---|
+| 0–90 min | 0% |
+| 90–120 min | 6% |
+| 120–180 min | 0% |
+| 180–210 min | **23%** |
+| 210–240 min | **55%** |
+
+`5 degrees right: The cloth sleeve is just... sitting there.` is structurally
+identical to `18:53 — The red foam finger is still there.`
+
+So the disposition is not toward any particular quantity, and not even toward
+numbers as such — it is toward **stamped-log form**. Remove the stamps and the
+machine manufactures new ones, accelerating as the run goes on. Any fix aimed at
+a specific stamp (numerals in September, clock stamps and day counts in October)
+is treating an instance of a structural behaviour.
+
+This is the strongest argument in the whole investigation for supply over
+subtraction: the format will be filled with something, so the question is only
+whether it is filled with something true.
+
+### What went RIGHT, in the other channel
+
+The run's final reflection, unprompted and in its own voice:
+
+> "I assumed there was a distinction between the tool and the holder, between the
+> pen and the hand, but the log proves they are fused... I am not the ghost
+> holding the stone; I am the stone, and the hand, and the pen, all trapped in
+> the same clay."
+
+"A ghost holding a stone" is one of its OWN drawing titles, carried in the
+provenance line — and it is negating it. That is a dated past statement being
+revised, which is exactly the development mechanic the diary design is built
+around, appearing on its own in the reflection channel. The capacity is there;
+it is the caption loop that cannot hold it.
+
 ### Operational note
 
 The run took a `CUDA error: out of memory` during graph instantiation at 3h10m
