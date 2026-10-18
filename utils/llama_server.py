@@ -297,6 +297,42 @@ def _document_prefill(history: Optional[List[str]]) -> str:
     return " ".join(p for p in parts if p) + " "
 
 
+
+
+_FRAMES_DUMPED = [0]
+
+
+def _dump_frame(messages, prompt_type, response, log_dir) -> None:
+    """Write the complete assembled frame for the first LLM_LOG_FULL_FRAMES
+    calls (see the config note). Everything the model actually receives,
+    including the assistant-role stream log that no prompt-field metric sees."""
+    try:
+        from config import config as _c
+
+        cap = int(getattr(_c, "LLM_LOG_FULL_FRAMES", 0) or 0)
+        if cap <= 0 or _FRAMES_DUMPED[0] >= cap:
+            return
+        _FRAMES_DUMPED[0] += 1
+        import os as _os
+
+        run = ""
+        try:
+            with open(_os.path.join(log_dir, "last_session.txt")) as fh:
+                run = fh.read().strip()
+        except Exception:
+            pass
+        path = _os.path.join(log_dir, f"{run or 'frames'}-frames.txt")
+        with open(path, "a") as fh:
+            fh.write(f"\n{'=' * 78}\nFRAME {_FRAMES_DUMPED[0]}/{cap}  type={prompt_type}  {time.strftime('%H:%M:%S')}\n{'=' * 78}\n")
+            for m in messages:
+                content = m.get("content")
+                if isinstance(content, list):
+                    content = " ".join(str(part.get("text", f"<{part.get('type', 'part')}>")) for part in content)
+                fh.write(f"\n--- [{m.get('role')}] ---\n{content}\n")
+            fh.write(f"\n--- [RESPONSE] ---\n{response}\n")
+    except Exception:
+        pass
+
 def _append_stream_and_user(messages: list, history: Optional[List[str]], user_message: dict, react: bool = False) -> str:
     """Append the stream + current user message per STREAM_MODE.
 
@@ -906,6 +942,7 @@ def query_llama_server(
 
         response_text = _clean_continuation(response_text, prefill)
 
+        _dump_frame(messages, prompt_type, response_text, log_dir)
         log_llm_call(
             duration_s=time.time() - _t0,
             queued_s=_queued,

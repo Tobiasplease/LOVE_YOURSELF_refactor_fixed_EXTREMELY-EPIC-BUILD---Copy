@@ -1272,6 +1272,19 @@ COMPRESSION_REPEATING_SLOT = os.getenv("COMPRESSION_REPEATING_SLOT", "false").lo
 # the Sep 14 doctrine and the thing that makes a gap legible at all. The line
 # is: a precise absolute clock on every line goes, felt duration at a real
 # break stays.
+# Record the FULL assembled message list (system + the stream-log assistant
+# message + user + prefill) on the first N calls of a run, to
+# event_log/<run>-frames.txt. Off by default; it is a debugging aid, not
+# telemetry.
+#
+# Why it exists: the event log stores `prompt` and `system_prompt` only, and
+# the stream window rides as an ASSISTANT message. On Oct 18 that blind spot
+# hid two duration channels through three separate runs — 24 wall-clock stamps
+# per call, and a "last drawing, about 30 days ago" line on 134 of 162 calls —
+# while every metric read the prompt fields and reported the frame clean. If
+# you are about to conclude a channel is closed, dump a real frame first.
+LLM_LOG_FULL_FRAMES = int(os.getenv("LLM_LOG_FULL_FRAMES", "0"))
+
 STREAM_LOG_CLOCK_STAMPS = os.getenv("STREAM_LOG_CLOCK_STAMPS", "false").lower() in ("1", "true", "yes")
 
 # Identity dosing (Aug 22): the self-description + durable ledger used to ride

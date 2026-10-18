@@ -11,6 +11,23 @@ from typing import Dict, List, Optional
 from config.config import MOOD_SNAPSHOT_FOLDER
 
 
+def _age_in_provenance() -> bool:
+    """Oct 18: a dated event reference becomes a STASIS COUNTER once the event
+    stops happening. "Your last drawing, about 30 days ago" was kept out of the
+    ablation on the reasoning that it only moves when a drawing lands — but in a
+    machine that has not drawn for a month it is the same number on every call,
+    and it grows. Measured over the first 30 minutes of run bca1921f: that line
+    rode 134 of 162 caption calls and 62% of captions came back saying "30 days".
+
+    What it drew is provenance and stays. WHEN it drew has its own dedicated
+    channel (prompts.get_last_drawing_age_line), already gated."""
+    try:
+        from config import config as _c
+
+        return bool(getattr(_c, "CAPTION_DURATION_LINES", False))
+    except Exception:
+        return True
+
 class DrawingMemory:
     """Manages compressed history of recent drawings for thematic continuity."""
 
@@ -247,12 +264,13 @@ class DrawingMemory:
         run = 1
         while run < len(subjects) and self._same_motif(subjects[0], subjects[run]):
             run += 1
-        age = self._casual_age(_t.time() - stamps[0])
+        age = self._casual_age(_t.time() - stamps[0]) if _age_in_provenance() else ""
         counts = {2: "twice", 3: "three times", 4: "four times", 5: "five times"}
+        _when = f", {age}" if age else ""
         if run >= 2:
-            head = f'Your last drawings, {age}: "{subjects[0]}", drawn {counts.get(run, "again and again")} in a row.'
+            head = f'Your last drawings{_when}: "{subjects[0]}", drawn {counts.get(run, "again and again")} in a row.'
         else:
-            head = f'Your last drawing, {age}: "{subjects[0]}".'
+            head = f'Your last drawing{_when}: "{subjects[0]}".'
         older = subjects[run : run + 2]
         if older:
             head += " Before it: " + "; ".join(f'"{o}"' for o in older) + "."
@@ -355,6 +373,8 @@ class DrawingMemory:
 
         tags = [(t or "").strip().lower() for t in entry.get("theme_tags", []) if (t or "").strip()][:2]
         outcome = "" if entry.get("completed", True) else " — it didn't finish"
+        if not _age_in_provenance():
+            return f"{', '.join(tags)}{outcome}" if tags else ""
         if tags:
             return f"{', '.join(tags)} ({when}){outcome}"
         return f"something {when}{outcome}"
