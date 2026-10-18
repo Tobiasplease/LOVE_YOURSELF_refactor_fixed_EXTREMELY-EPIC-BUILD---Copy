@@ -344,7 +344,9 @@ def chant_trajectory(caps, run_id, bucket_min=20):
         print(f"  {b * bucket_min:4d}-{b * bucket_min + bucket_min:<7d} {len(c):5d} {d:8.0f}% {a:9.0f}%  {arrow}")
         prev = d
     first, last = sorted(bins)[0], sorted(bins)[-1]
-    if first != last:
+    if len(bins) < 4:
+        print(f"\n  {len(bins)} buckets — too few to call a trend; needs about 80 minutes")
+    elif first != last:
         f = 100 * sum(1 for x in bins[first] if top[0] in x) / len(bins[first])
         l = 100 * sum(1 for x in bins[last] if top[0] in x) / len(bins[last])
         verdict = "DECAYING — the attractor loosens once nothing feeds it" if l < f - 10 else ("SELF-SUSTAINING — the stream window is the engine" if l > f - 5 else "unclear")

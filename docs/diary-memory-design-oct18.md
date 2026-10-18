@@ -275,6 +275,59 @@ first, then `far`, then `unlike` — three steps if you want them attributable
 separately, and I would, because `unlike` is the one with a real chance of
 changing the voice. Verify `full_prompt_length` does not grow.
 
+## RESULT of Phase 1, measured the same night — and what it changes
+
+The ablation worked and did not help, which is exactly the information it was
+run to produce.
+
+**Every injected duration channel is closed and verified against the complete
+payload** (not the prompt fields — see `LLM_LOG_FULL_FRAMES`): stasis lines
+0.01/call at 1% of calls, self-written clock stamps 0%, time references 2.26 →
+0.33 per call. Zero prompt-field lines inject a day count.
+
+**The chant did not move.** "30 days" appears in **58%** of captions against 62%
+before the fixes and 26% in the baseline — and it *rises* within the run:
+
+| elapsed | captions | "30 days" |
+|---|---|---|
+| 0–10 min | 51 | 55% |
+| 10–20 min | 53 | 42% |
+| 20–30 min | 46 | 74% |
+| 30–40 min | 19 | 74% |
+
+Every remaining occurrence in the frame is the machine's own output handed back.
+The `A thought you've been developing: "..." Last time you got as far as: "..."`
+line carries it inside the **seam** — its own previous caption. The echo-gate
+loop notice quotes it back verbatim (`You've said "30 days of staring at"
+several times in the last little while`). And the stream window, which is the
+single largest part of the frame, was 22–33% chant lines at boot.
+
+**So the stream window is the engine, not the injections.** This is the Sep 5
+architecture diagnosis ("the stamped self-window is the chant engine") confirmed
+mechanically. Autocatalysis: the stream says it, so the caption says it, so it
+enters the stream. No external input required, and it intensifies.
+
+### What this changes about the design above
+
+The diary cannot be a channel added *beside* the stream. The stream hands the
+machine its own last 24 sentences, verbatim, ordered by recency — **no
+selection, no distance, no contrast**, which is precisely the three properties
+P3/P5 and the far/unlike channels were designed to supply. A dated diary
+quotation riding the identity dose would be one line competing with two dozen
+lines of the machine agreeing with itself.
+
+**The stream should become the diary's `near` channel, not a separate system.**
+One memory layer decides what the machine sees of its own past; "the last few
+thoughts" is one channel in that decision, balanced by `far` and `unlike`,
+subject to prefer-the-unselected. Concretely, that means `STREAM_WINDOW` stops
+being "the last N verbatim" and becomes a pick — which also gives the obvious
+cheap experiment to run first: **shrink the window and de-duplicate it**, and
+see how much of the 58% is simply the volume of self-echo.
+
+That experiment is Phase 1b and it should run before the store is built, for the
+same reason the ablation ran before the diary: it isolates whether the engine is
+the stream's *content* or merely its *size*.
+
 ## Risks
 
 - **The diary becomes the new chant** — if the picker favours recency the machine
