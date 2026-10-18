@@ -98,6 +98,54 @@ journal — the diary that already exists — is capped at 30 entries written ev
 one place, one entry, 200 chars, at awakening only (`captioner.py:3858`): a 3%
 read-back rate.
 
+## CORRECTION, same evening — the duration count above is a large UNDERCOUNT
+
+Mechanism 4 reads "duration lines ride 100% of caption calls at 2.93 per call".
+That is only what is in `prompt` + `system_prompt`. The first live ablation run
+found the rest: since July 26 (the world-mode inversion) the stream window is
+handed to the model as a **timestamped log**, `captioner.py:629` putting the
+real wall clock on every line —
+
+```
+18:40 — The red foam finger is still there.
+(about eight minutes later)
+18:50 — The chair is empty.
+```
+
+— up to `STREAM_WINDOW` (24) clock readings on **every** caption call. It rides
+as an *assistant* message, so no metric reading the prompt fields could see it.
+
+Evidence: 43% of responses on that run came back stamped in the same format
+("18:53 — ..."), and one computed *"I've been staring at it for almost twenty
+minutes"* five minutes into a fresh run — arithmetic on two stamps it had been
+given. `_LOG_STAMP_RE` strips the stamp from the seam and from the stored
+caption, so `live_captions.txt` shows the sentence without the evidence that
+produced it.
+
+This explains the Sep 10–14 puzzle directly. That work converted the *frame's*
+numerals to words and the chant survived; the log stamps were never touched, so
+the machine kept being handed two dozen precise clock readings per call.
+
+Fixed behind `STREAM_LOG_CLOCK_STAMPS` (default off): lines go out unstamped,
+gap markers stay. Self-stamped responses went 32-43% -> **0%**.
+`debug/diary_metrics.py` now reports that rate and states plainly that the
+stream log is not in its prompt counts.
+
+## Run length: 12 hours is not required
+
+Back-tested by truncating this very run and re-running first-vs-last cosine:
+
+| run length | window | first-vs-last | verdict |
+|---|---|---|---|
+| 2h | 1h | 0.981 | stationary (correct) |
+| 3h | 1h | 0.969 | stationary (correct) |
+| 4h | 1h | 0.975 | stationary (correct) |
+| 6h | 1h | 0.969 | stationary (correct) |
+
+A **4–6 hour** run answers the question. `window_hours()` now picks the window
+from the run's own span. This matters on hardware that has dropped the GPU off
+the bus twice (Xid 79, Sep 8 and Sep 14).
+
 ## Standing metrics
 
 `debug/diary_metrics.py` carries all of these so a change can be attributed.
