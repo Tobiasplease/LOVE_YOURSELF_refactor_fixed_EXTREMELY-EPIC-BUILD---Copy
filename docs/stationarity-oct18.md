@@ -254,6 +254,80 @@ boundary, inside the normal 0.918–0.962 adjacent range). The server runs 4 slo
 at 16384 context, which is a large KV reserve for a single consumer; halving the
 slots is the obvious headroom lever before any longer run.
 
+## Oct 19 — the direction line, and what the gaze is actually reporting
+
+Supplied `caption.looking-plain` ("You're looking left.") on every call, to test
+whether stating the fact stops the machine inventing one. 4h run, 1739 captions.
+
+**The angle prediction held outright.** Degrees 38% → 2%, and zero through the
+60–90 minute window where they hit 56% the night before. Supplying the slot
+removed the fabrication in that domain.
+
+**Total number-chanting did not move:** 56% → 54%. An hours-chant (49%) replaced
+the angle-chant, sourced from `caption.last-event` ("that was about an hour
+ago") on 48% of calls. Conservation again, third time.
+
+**Drift, 5 blocks of 250, like-for-like:**
+
+| | mean adjacent | first→last |
+|---|---|---|
+| 92h baseline | 0.974 | 0.959 |
+| Oct 18 ablation | 0.945 | **0.815** |
+| Oct 19 + direction | 0.948 | **0.928** |
+
+The precise reading — and it is NOT "drift regressed", which is what a 4-block
+sample suggested at 3.5h. **Local movement is identical** (0.945 vs 0.948); both
+move step-to-step far more than the baseline. What changed is **net
+displacement**: Oct 18 travelled (0.815), Oct 19 circled (0.928). Adding a
+near-constant line did not slow the machine down, it stopped the movement going
+anywhere.
+
+### The gaze is an open loop, and the tilt is broken
+
+The artist reported the camera tilt broken — it can only look down. What the
+frame was telling the machine over this run:
+
+| reported | share |
+|---|---|
+| ahead | 31% |
+| up / up-left / up-right | **40%** |
+| left / right | 23% |
+| down / down-right | **4%** |
+
+It reported "up" ten times more often than "down", on a camera that cannot tilt.
+The servos have no position feedback, so `vision/gaze.py` reports the COMMANDED
+zone: the code cannot know the tilt did not move. **The frame has been carrying
+an intention dressed as a measurement.**
+
+This breaks both of the things the direction system was built for:
+- *camera control* — the machine steers and gets no signal back;
+- *change attribution* ("the room has not changed just because you turned") —
+  inverted. `you hadn't looked this way before` fired **293 times** and `the view
+  here is as it was when you last looked` 161 times, both computed from a
+  direction that never physically changed. It was told it was seeing somewhere
+  new ~300 times while pointed at the same patch of table.
+
+It also likely explains the artist's observation that the machine took its own
+arm for a dog: told it is looking UP while pointed DOWN at its own sleeve, "dog"
+is a sound inference from a false premise.
+
+And it caveats the Oct 19 result itself: this was not "supply the true fact". It
+was supplying a FALSE one, and angles still went to zero — so the honest finding
+is weaker than claimed. **Something in the slot beats nothing in the slot, even
+when the something is wrong.**
+
+### The test all of this collapses into
+
+> Could the machine be WRONG about this line in a way the world would correct?
+
+- "an hour ago" — no, arithmetic
+- "30 days since you drew" — no, arithmetic
+- "you're looking up" — no, an intention reported as a fact
+- "there is a white sheet on the desk" — yes, a measurement
+
+The frame should carry measurements. It has been carrying arithmetic and
+intentions wearing the costume of measurements.
+
 ## Standing metrics
 
 `debug/diary_metrics.py` carries all of these so a change can be attributed.
