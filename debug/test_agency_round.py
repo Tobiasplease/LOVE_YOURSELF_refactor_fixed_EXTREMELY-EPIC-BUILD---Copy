@@ -98,7 +98,10 @@ line = _head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now + 11 * 
 # verdicts right after a turn carry the head instead. The mechanism is unchanged.
 from config import config as _abl_cfg  # noqa: E402
 
-check("Oct 18: the head hold is OFF by default", _abl_cfg.CAPTION_DURATION_LINES is False and line == "", line)
+# Oct 18 killed the hold's DURATION; Oct 19 put its DIRECTION back as a bare
+# fact, because the empty line was a vacuum the machine filled with angles.
+check("Oct 18: the hold carries no duration", _abl_cfg.CAPTION_DURATION_LINES is False and "for a while" not in line, line)
+check("Oct 19: but the direction is stated", line == "You're looking left.", line)
 _abl_cfg.CAPTION_DURATION_LINES = True
 line = _head_line_from(a, 60.0, 100.0, "looking left", "unchanged", _now + 11 * 60)
 check("head held 11 min → STANDING fact, direction + how long it feels (Sep 14, flag on)", line == "You've been looking left for a while now.", line)

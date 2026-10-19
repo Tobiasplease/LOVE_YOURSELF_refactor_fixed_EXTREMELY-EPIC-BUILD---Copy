@@ -24,7 +24,7 @@ matters first — does it hear you at all — before any of it goes near a promp
     python debug/test_hearing.py --phone --fake
 
 Install (the studio box, inside .venv):
-    pip install faster-whisper sounddevice
+    pip install faster-whisper sounddevice silero-vad
 
 faster-whisper is CPU int8 here on purpose — the 27B is resident in
 llama-server and the Aug 9 cliff says what fighting it for the GPU costs.
@@ -214,11 +214,105 @@ def _looks_like_hallucination(text):
     return any(p in stripped for p in _HALLUCINATION_PHRASES) or stripped in ("thank you", "you", "bye", "thanks")
 
 
+class SpeechGate:
+    """Silero VAD as a second witness. Whisper must emit text; this one is allowed to say nothing.
+
+    That asymmetry is the whole point. On the Sep 12 subway clips the two separated cleanly —
+    real speech came in at no_speech 0.06-0.12, every ghost at 0.47-0.57, and the VAD was right
+    on all of them, including the clip where whisper heard "Neska Haruna" for "Nasta Skarholmen":
+    wrong words, real speech, and the VAD said so. Presence and accuracy are separate questions
+    and only this one answers presence.
+    """
+
+    def __init__(self, enabled=True):
+        self.enabled = enabled
+        self._model = None
+        self._timestamps = None
+        self._failed = False
+        self._lock = threading.Lock()
+
+    def load(self):
+        if self._model is not None or self._failed or not self.enabled:
+            return
+        try:
+            from silero_vad import get_speech_timestamps, load_silero_vad
+
+            self._model, self._timestamps = load_silero_vad(), get_speech_timestamps
+            print("[hearing] silero vad ready — lines it disagrees with get flagged as ghosts")
+        except Exception as e:
+            self._failed = True
+            print(f"[hearing] no silero vad ({e}) — falling back to no_speech_prob alone.  pip install silero-vad")
+
+    def spans(self, samples):
+        """[(start_s, end_s), ...] where it hears speech, [] for none, None if the gate is unavailable."""
+        self.load()
+        if self._model is None:
+            return None
+        try:
+            import torch
+
+            with self._lock:
+                stamps = self._timestamps(torch.as_tensor(_as_float32_array(samples)), self._model, sampling_rate=SAMPLE_RATE, return_seconds=True)
+            return [(round(t["start"], 1), round(t["end"], 1)) for t in stamps]
+        except Exception as e:
+            self._failed = True
+            print(f"[hearing] vad failed, disabling it: {e}")
+            return None
+
+
+class SoundTagger:
+    """AudioSet labels beside the words, so a train can arrive as a train and not as a sentence.
+
+    Weakest of the three witnesses and never to be read alone: over near-silence it reported
+    "Chicken, rooster 0.33" and "Writing 0.56" with the same confidence it tags a real train.
+    It earns its place over actual signal. Pair every reading with the VAD verdict.
+    """
+
+    MODEL = "MIT/ast-finetuned-audioset-10-10-0.4593"
+
+    def __init__(self, enabled=True, topk=3):
+        self.enabled, self.topk = enabled, topk
+        self._pipe = None
+        self._failed = False
+        self._lock = threading.Lock()
+
+    def load(self):
+        if self._pipe is not None or self._failed or not self.enabled:
+            return
+        try:
+            from transformers import pipeline
+
+            print("[hearing] loading AudioSet tagger — first run downloads weights...")
+            self._pipe = pipeline("audio-classification", model=self.MODEL, device=-1)
+            print("[hearing] sound tagger ready — non-speech gets named, not just transcribed")
+        except Exception as e:
+            self._failed = True
+            print(f"[hearing] no sound tagger ({e}) — words only.  pip install transformers")
+
+    def tags(self, samples):
+        """[(label, score), ...] or None if the tagger is unavailable."""
+        self.load()
+        if self._pipe is None:
+            return None
+        try:
+            with self._lock:
+                out = self._pipe({"raw": _as_float32_array(samples), "sampling_rate": SAMPLE_RATE}, top_k=self.topk)
+            return [(t["label"], round(float(t["score"]), 3)) for t in out]
+        except Exception as e:
+            self._failed = True
+            print(f"[hearing] tagger failed, disabling it: {e}")
+            return None
+
+
 class Transcriber:
-    def __init__(self, model_size="base", device="cpu", compute_type="int8", language=None, fake=False, no_speech_threshold=0.6):
+    def __init__(self, model_size="base", device="cpu", compute_type="int8", language=None, fake=False, no_speech_threshold=0.6,
+                 gate=None, tagger=None, max_pending=1):
         self.model_size, self.device, self.compute_type, self.language, self.fake = model_size, device, compute_type, language, fake
         self.no_speech_threshold = no_speech_threshold
+        self.gate, self.tagger, self.max_pending = gate, tagger, max_pending
         self._model = None
+        self._pending = 0
+        self._pending_lock = threading.Lock()
         self._lock = threading.Lock()
 
     def load(self):
@@ -234,12 +328,30 @@ class Transcriber:
         print(f"[hearing] model ready in {time.time() - t0:.1f}s")
 
     def transcribe(self, samples):
-        """Returns {text, avg_logprob, band, no_speech_prob, hallucinated, duration_s, elapsed_s}."""
+        """Drops what it cannot keep up with. A transcript that lands a minute late describes a room
+        that has already moved on, which is worse than admitting the gap — and the queue only grows."""
+        if self.fake:
+            return self._transcribe(samples)
+        with self._pending_lock:
+            if self._pending > self.max_pending:
+                return {"text": "", "avg_logprob": None, "band": "unknown", "no_speech_prob": 0.0, "hallucinated": False,
+                        "vad_spans": None, "vad_witness": "skipped", "tags": None, "dropped": True,
+                        "duration_s": len(samples) / SAMPLE_RATE, "elapsed_s": 0.0}
+            self._pending += 1
+        try:
+            return self._transcribe(samples)
+        finally:
+            with self._pending_lock:
+                self._pending -= 1
+
+    def _transcribe(self, samples):
+        """Returns {text, avg_logprob, band, no_speech_prob, hallucinated, vad_spans, vad_witness, tags, duration_s, elapsed_s}."""
         duration = len(samples) / SAMPLE_RATE
         if self.fake:
             time.sleep(0.05)
             return {"text": f"[fake] {duration:.1f}s of audio, peak {dbfs(samples):.0f} dBFS", "avg_logprob": -0.3, "band": "high",
-                    "no_speech_prob": 0.0, "hallucinated": False, "duration_s": duration, "elapsed_s": 0.05}
+                    "no_speech_prob": 0.0, "hallucinated": False, "vad_spans": None, "vad_witness": "fake",
+                    "tags": None, "dropped": False, "duration_s": duration, "elapsed_s": 0.05}
 
         self.load()
         t0 = time.time()
@@ -255,12 +367,22 @@ class Transcriber:
         no_speech = max((getattr(s, "no_speech_prob", 0.0) or 0.0 for s in segments), default=0.0)
 
         # Whisper invents text over silence and room tone — "Thank you.", "Subtitles by..." —
-        # and a far-field mic in a quiet room is the ideal condition for it. Flagged, not
-        # dropped: seeing what it invents is part of what this test is for.
-        hallucinated = no_speech >= self.no_speech_threshold or (text != "" and _looks_like_hallucination(text))
+        # and a far-field mic in a quiet room is the ideal condition for it. Flagged, never
+        # dropped: seeing what it invents is most of what this test is for.
+        by_phrase = text != "" and _looks_like_hallucination(text)
+        spans = self.gate.spans(samples) if self.gate is not None else None
+        if spans is None:
+            hallucinated, witness = (no_speech >= self.no_speech_threshold or by_phrase), "no_speech"
+        elif text and not spans:
+            hallucinated, witness = True, "vad"
+        else:
+            hallucinated, witness = by_phrase, "vad"
+
+        tags = self.tagger.tags(samples) if self.tagger is not None else None
 
         return {"text": text, "avg_logprob": avg, "band": confidence_band(avg), "no_speech_prob": no_speech,
-                "hallucinated": hallucinated, "duration_s": duration, "elapsed_s": time.time() - t0}
+                "hallucinated": hallucinated, "vad_spans": spans, "vad_witness": witness, "tags": tags, "dropped": False,
+                "duration_s": duration, "elapsed_s": time.time() - t0}
 
 
 def _as_float32_array(samples):
@@ -273,15 +395,32 @@ def _as_float32_array(samples):
 
 
 def report(result, source):
+    spans = result.get("vad_spans")
+    tags = result.get("tags")
+    tagline = "      sounds: " + ", ".join(f"{lbl} {sc:.2f}" for lbl, sc in tags) if tags else ""
+    if result.get("dropped"):
+        print(f"  [{source}] {result['duration_s']:.1f}s — skipped, still catching up on the last one")
+        return
     if not result["text"]:
-        print(f"  [{source}] {result['duration_s']:.1f}s — nothing transcribed")
+        missed = "  (vad heard speech here — whisper gave nothing)" if spans else ""
+        print(f"  [{source}] {result['duration_s']:.1f}s — nothing transcribed{missed}")
+        if tagline:
+            print(tagline)
         return
     rt = result["elapsed_s"] / result["duration_s"] if result["duration_s"] else 0
     lp = f"{result['avg_logprob']:.2f}" if result["avg_logprob"] is not None else "n/a"
-    flag = "  << probably invented over silence" if result.get("hallucinated") else ""
-    print(f"  [{source}] {result['band'].upper():6} logprob={lp} no_speech={result.get('no_speech_prob', 0):.2f} "
+    vad = "" if spans is None else (f" vad={len(spans)}sp" if spans else " vad=SILENT")
+    if result.get("hallucinated") and spans == []:
+        flag = "  << GHOST — vad heard no speech at all"
+    elif result.get("hallucinated"):
+        flag = "  << probably invented over silence"
+    else:
+        flag = ""
+    print(f"  [{source}] {result['band'].upper():6} logprob={lp} no_speech={result.get('no_speech_prob', 0):.2f}{vad} "
           f"{result['duration_s']:.1f}s audio in {result['elapsed_s']:.1f}s (x{rt:.2f}){flag}")
     print(f"      {result['text']}")
+    if tagline:
+        print(tagline)
 
 
 # --- local microphone --------------------------------------------------------
@@ -377,6 +516,9 @@ PHONE_PAGE = r"""<!doctype html>
   .text { margin-top:3px; word-wrap:break-word; }
   .empty { color:#555; font-style:italic; }
   .invented .text { color:#7a6a5a; text-decoration:line-through; }
+  .ghost .meta { color:#8a6a9a; } .ghost .text { color:#9a7aaa; text-decoration:none; font-style:italic; }
+  .tags { color:#5a7a8a; font-size:12px; margin-top:4px; }
+  .dropped .meta { color:#555; }
 </style>
 <h1>hearing test</h1>
 <button id="go">start listening</button>
@@ -452,21 +594,35 @@ async function send(samples) {
 
 function render(res) {
   const d = document.createElement('div');
-  d.className = 'line ' + (res.band || '') + (res.hallucinated ? ' invented' : '');
+  const spans = res.vad_spans;
+  const isGhost = spans != null && spans.length === 0 && !!res.text;
+  d.className = 'line ' + (res.band || '') + (res.hallucinated ? ' invented' : '') + (isGhost ? ' ghost' : '') + (res.dropped ? ' dropped' : '');
+  if (res.dropped) {
+    d.innerHTML = '<div class="meta">skipped — still catching up · ' + (res.duration_s || 0).toFixed(1) + 's</div>';
+    $('log').prepend(d);
+    return;
+  }
   const lp = res.avg_logprob == null ? 'n/a' : res.avg_logprob.toFixed(2);
   const ns = res.no_speech_prob == null ? '' : ' · no_speech ' + res.no_speech_prob.toFixed(2);
-  const halluc = res.hallucinated ? ' · INVENTED?' : '';
-  d.innerHTML = '<div class="meta">' + (res.band || '?') + ' · logprob ' + lp + ns + halluc + ' · ' +
+  const vad = spans == null ? '' : (spans.length ? ' · vad ' + spans.length + 'sp' : ' · vad SILENT');
+  const halluc = isGhost ? ' · GHOST' : (res.hallucinated ? ' · INVENTED?' : '');
+  d.innerHTML = '<div class="meta">' + (res.band || '?') + ' · logprob ' + lp + ns + vad + halluc + ' · ' +
                 (res.duration_s || 0).toFixed(1) + 's in ' + (res.elapsed_s || 0).toFixed(1) + 's</div>' +
                 '<div class="text"></div>';
   const t = d.querySelector('.text');
   if (res.text) t.textContent = res.text; else { t.className = 'text empty'; t.textContent = '(nothing transcribed)'; }
+  if (res.tags && res.tags.length) {
+    const g = document.createElement('div');
+    g.className = 'tags';
+    g.textContent = res.tags.map(x => x[0] + ' ' + x[1].toFixed(2)).join(' · ');
+    d.appendChild(g);
+  }
   $('log').prepend(d);
 }
 
 async function start() {
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
   } catch (e) {
     setStatus('mic refused: ' + e.name + (location.protocol !== 'https:' ? ' — page is not HTTPS, iOS will always refuse' : ''));
     return;
@@ -560,7 +716,15 @@ def run_phone(args, transcriber):
             report(result, "phone")
             return self._send(json.dumps(result).encode(), "application/json")
 
-    server = http.server.ThreadingHTTPServer((args.host, args.port), Handler)
+    class Server(http.server.ThreadingHTTPServer):
+        daemon_threads = True
+
+        def handle_error(self, request, client_address):
+            if isinstance(sys.exc_info()[1], (ssl.SSLError, ConnectionError)):
+                return
+            super().handle_error(request, client_address)
+
+    server = Server((args.host, args.port), Handler)
 
     scheme = "http"
     if args.cert:
@@ -601,6 +765,9 @@ def main():
     p.add_argument("--language", default=None, help="force a language code, e.g. en or sv (default: autodetect)")
     p.add_argument("--fake", action="store_true", help="skip the model entirely — tests capture, segmentation and transport")
     p.add_argument("--no-speech-threshold", type=float, default=0.6, help="flag output above this no_speech_prob as invented (default: 0.6)")
+    p.add_argument("--no-vad", action="store_true", help="skip the silero second witness and judge on no_speech_prob alone")
+    p.add_argument("--no-tags", action="store_true", help="skip AudioSet sound tagging (words only)")
+    p.add_argument("--max-pending", type=int, default=1, help="clips allowed to wait before new ones are dropped (default: 1)")
 
     p.add_argument("--device", type=int, default=None, help="input device index for --local (see --list-devices)")
     p.add_argument("--threshold", type=float, default=None, help="gate in dBFS; default calibrates from room noise")
@@ -618,7 +785,10 @@ def main():
     if args.list_devices:
         return list_devices()
 
-    transcriber = Transcriber(args.model, args.whisper_device, args.compute_type, args.language, args.fake, args.no_speech_threshold)
+    gate = SpeechGate(enabled=not args.no_vad and not args.fake)
+    tagger = SoundTagger(enabled=not args.no_tags and not args.fake)
+    transcriber = Transcriber(args.model, args.whisper_device, args.compute_type, args.language, args.fake, args.no_speech_threshold,
+                              gate, tagger, args.max_pending)
 
     if args.wav:
         samples, rate = read_wav(args.wav)

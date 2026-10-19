@@ -879,9 +879,17 @@ def _head_line_from(agent, pan: float, tilt: float, direction: str, verdict, now
     if held_s >= HEAD_STANDING_AFTER_S and bool(getattr(config, "CAPTION_DURATION_LINES", False)):
         return P("caption.looking-for").format(direction=direction, duration=felt_duration(held_s))
     if held_s > HEAD_TURN_VERDICT_S or now - float(getattr(agent, "_expect_checked_at", 0.0) or 0.0) < 5.0:
+        if bool(getattr(config, "CAPTION_DIRECTION_LINE", True)) and now - float(getattr(agent, "_expect_checked_at", 0.0) or 0.0) >= 5.0:
+            return P("caption.looking-plain").format(direction=direction)
         return ""
     frag = {"unchanged": "caption.view-as-was", "changed": "caption.view-changed", "baselined": "caption.view-new", "new": "caption.view-new"}.get(verdict)
-    return P(frag).format(direction=direction) if frag else ""
+    if frag:
+        return P(frag).format(direction=direction)
+    # Oct 19 supply fix: no verdict to give, so state the bare direction rather
+    # than leaving a vacuum the machine fills with an invented angle.
+    if bool(getattr(config, "CAPTION_DIRECTION_LINE", True)):
+        return P("caption.looking-plain").format(direction=direction)
+    return ""
 
 
 def get_head_line(agent) -> str:

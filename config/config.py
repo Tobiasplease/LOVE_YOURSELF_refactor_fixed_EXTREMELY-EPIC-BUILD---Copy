@@ -1287,6 +1287,22 @@ LLM_LOG_FULL_FRAMES = int(os.getenv("LLM_LOG_FULL_FRAMES", "0"))
 
 STREAM_LOG_CLOCK_STAMPS = os.getenv("STREAM_LOG_CLOCK_STAMPS", "false").lower() in ("1", "true", "yes")
 
+# Oct 19 — the first SUPPLY fix. State where the head is pointing on every
+# caption-family call, as a bare fact with no duration attached.
+#
+# Measured Oct 18 (docs/stationarity-oct18.md): the machine fabricates precision
+# about what it is NOT told. Degrees appear in 26% of responses when the frame
+# states where it is looking and 52% when it says nothing — twice as often,
+# holding across image/no-image and caption/reroute. The Oct 18 ablation killed
+# caption.looking-for whole because of its "{duration}", taking the direction
+# out with it, so direction reached only 23% of calls. Over the next four hours
+# the machine rebuilt the entire stamped-log format out of invented angles
+# ("5 degrees right: ...", 0% of captions at the start, 55% by the end).
+#
+# Prediction this is here to test: angle-invention falls from ~50% toward 26%
+# or below. If it does not, the vacuum account is wrong and should be dropped.
+CAPTION_DIRECTION_LINE = os.getenv("CAPTION_DIRECTION_LINE", "true").lower() in ("1", "true", "yes")
+
 # Identity dosing (Aug 22): the self-description + durable ledger used to ride
 # EVERY caption, which turned identity into a script — "I invent imaginary
 # critics" read 180 times a night elicits invented critics, which the distiller

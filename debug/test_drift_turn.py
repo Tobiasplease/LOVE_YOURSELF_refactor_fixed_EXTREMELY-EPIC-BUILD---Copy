@@ -149,7 +149,12 @@ def test_run_drift_turn():
             check("eyes open — the frame rides along", kw.get("image") == "/tmp/fake_frame.jpg")
             check("stream rides as history", bool(kw.get("history")))
             check("hot slot temperature", kw.get("options", {}).get("temperature") == cfg.DRIFT_TEMP)
-            check("asks the registry ask", kw.get("prompt") == P("drift.ask"))
+            # captioner.py:402 prepends build_standing_facts to the drift ask by
+            # design (Sep 11: "the appropriate data should reach every single
+            # call"). This passed as exact equality only while every standing
+            # fact happened to be empty — from Oct 19 the bare direction line is
+            # one of them, so assert the ask is carried, not that it stands alone.
+            check("asks the registry ask", kw.get("prompt", "").endswith(P("drift.ask")))
             check("logged as drift_turn", kw.get("prompt_type") == "drift_turn")
         check("output entered the stream", len(c._stream) == before + 1)
         check("action logged", any(a[1].get("action") == "drift_turn" for a, k in logs))

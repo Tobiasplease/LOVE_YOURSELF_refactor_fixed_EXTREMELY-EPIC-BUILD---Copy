@@ -74,8 +74,15 @@ check("verdict changed", "has changed since you last looked" in _head_line_from(
 b = A()
 b._expect_checked_at = now
 check("expectation check spoke this call → yields", _head_line_from(b, 90, 100, "looking up", "unchanged", now) == "")
-check("no verdict → nothing right after a turn", _head_line_from(A(), 90, 100, "looking left", "off_center", now) == "")
-check("past the verdict window, before standing → nothing", _head_line_from(a, 90, 100, "looking left", "unchanged", now + 60) == "")
+# Oct 19 supply fix (docs/stationarity-oct18.md): where there is no verdict to
+# give, the bare direction is stated rather than left blank. The blank was a
+# vacuum, and the machine filled it with invented angles — degrees in 52% of
+# responses when the frame said nothing about direction against 26% when it did.
+check("no verdict → the bare direction, not silence", _head_line_from(A(), 90, 100, "looking left", "off_center", now) == "You're looking left.")
+check("past the verdict window → the bare direction", _head_line_from(a, 90, 100, "looking left", "unchanged", now + 60) == "You're looking left.")
+_abl_cfg.CAPTION_DIRECTION_LINE = False
+check("flag off restores the Oct 18 silence", _head_line_from(A(), 90, 100, "looking left", "off_center", now) == "")
+_abl_cfg.CAPTION_DIRECTION_LINE = True
 check("held 3 min → standing, in words", _head_line_from(a, 91, 101, "looking left", "unchanged", now + 180) == "You've been looking left for a few minutes.")
 # Sep 14 (artist: "A person in isolation would not be able to experience the
 # difference between 15 and 20 minutes") — felt durations are banded, not measured.

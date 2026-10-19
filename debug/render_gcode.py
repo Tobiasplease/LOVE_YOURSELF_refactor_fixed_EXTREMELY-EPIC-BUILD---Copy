@@ -5,7 +5,11 @@ fidelity on the sheet, not in the file). If this render already looks like the
 photographed sheet, the loss happened in vectorisation; if this render is clean
 and the sheet is broken, the loss is the pen, the surface or the servo.
 
-    python debug/render_gcode.py <file.gcode> [-o out.png] [--px-per-mm 8]
+    python debug/render_gcode.py <file.gcode> [-o out.png] [--px-per-mm 8] [--warp]
+
+--warp renders what is actually SENT, not what is in the file: execution runs
+every motion line through warp_transform_line (grbl_utils execute_gcode_threaded),
+so the file is the input and the warped path is the command. Compare the two.
 
 Prints pen-down/up travel, segment count and the bounding box of what is
 actually drawn.
@@ -35,10 +39,25 @@ except Exception:
 DOWN_THRESHOLD = (GRBL_PEN_UP_S + GRBL_PEN_DOWN_S) / 2.0
 
 word = re.compile(r"([GMXYSF])(-?\d+\.?\d*)")
+raw_lines = open(path).readlines()
+warp = "--warp" in sys.argv
+if warp:
+    from grbl.warp_transform import find_xy_bounds_from_lines, warp_transform_line
+
+    body = raw_lines[3:]  # the executor skips G21/G17/G90 the same way
+    min_x, min_y, max_x, max_y = find_xy_bounds_from_lines(body)
+    print(f"warp bounds    : X {min_x:.1f}..{max_x:.1f}  Y {min_y:.1f}..{max_y:.1f}")
+    lines_iter = []
+    for ln in body:
+        s = ln.strip()
+        lines_iter.append(warp_transform_line(s, max_x, max_y, min_x=min_x, min_y=min_y) if s.startswith(("G0", "G1", "G00", "G01")) else s)
+else:
+    lines_iter = raw_lines
+
 x = y = 0.0
 pen_s = 0.0
 segments = []  # (x0, y0, x1, y1, down)
-for raw in open(path):
+for raw in lines_iter:
     line = raw.split(";")[0].strip()
     if not line:
         continue

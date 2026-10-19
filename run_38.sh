@@ -44,7 +44,13 @@ export LLAMA_CTX_SIZE=16384
 if [ "${LLAMA_MTP:-0}" = "1" ]; then
   export LLAMA_EXTRA_ARGS="--spec-type draft-mtp --spec-draft-n-max 2 -fa on"
 else
-  export LLAMA_EXTRA_ARGS="-fa on"  # Sep 12: the 1024-token floor moved to the client (utils/image_tokens) so the room view can follow attention
+  # --parallel 2 (Oct 19): the server defaulted to n_slots = 4, and slots are
+  # KV-cache reserve. INFERENCE_CONCURRENCY is 1 — the client serialises every
+  # call by design (see the note in utils/llama_server.py) — so three of those
+  # four slots were reserve that nothing could use. The Oct 18 run took a CUDA
+  # OOM during graph instantiation at 3h10m with ~4.5GB nominal headroom;
+  # halving the slots buys the transient allocations room without touching ctx.
+  export LLAMA_EXTRA_ARGS="-fa on --parallel 2"  # Sep 12: the 1024-token floor moved to the client (utils/image_tokens) so the room view can follow attention
 fi
 export MODEL_NAME="qwen3.8:27b"
 

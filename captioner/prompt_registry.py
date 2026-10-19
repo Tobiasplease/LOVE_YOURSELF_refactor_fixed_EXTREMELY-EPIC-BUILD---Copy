@@ -436,6 +436,24 @@ FRAGMENTS = {
         "used_by": [],
         "placeholders": ["direction", "duration"],
     },
+    "caption.looking-plain": {
+        "title": "Body — where the head is pointing (standing, no duration)",
+        "text": "You're looking {direction}.",
+        "note": (
+            "Oct 19. The supply half of caption.looking-for, which the Oct 18 ablation "
+            "killed whole for its '{duration}'. Measured that night: when the frame states "
+            "where the machine is looking it invents an angle in 26% of responses; when it "
+            "says nothing, 52% — twice as often, holding across image/no-image and "
+            "caption/reroute. Direction reached only 23% of calls after the ablation, so the "
+            "other 77% were a vacuum, and the machine filled it with fabricated precision "
+            "('45 degrees away'), eventually rebuilding the whole stamped-log format out of "
+            "angles (0% of captions at the start of the run, 55% by the end). This is the "
+            "first SUPPLY fix rather than another subtraction: state the fact so inventing it "
+            "is not the cheapest option. Where, never how long."
+        ),
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": ["direction"],
+    },
     "caption.looking-for": {
         "title": "Body — where the head has been (standing)",
         "text": "You've been looking {direction} for {duration}.",
