@@ -34,29 +34,17 @@ APPLY = "--apply" in sys.argv
 # dump caught the \u201c escapes in ordinary prose and would have deleted
 # twenty real thoughts. A bare "100 years" stays; "102 is hunched over that
 # desk" and "103's legs" go.
-NUM = re.compile(
-    # Sep 14: the same failure in a third notation — Qwen's grounding output, a
-    # box or size for a region ("1416x1828", later incrementing "2440x-1420,
-    # 2460x-1440, 2480x-1460"). Seeded at 08:34 while the machine was describing
-    # a bright white rectangle at length; 761 of 5420 captions overnight, 64% of
-    # the last ninety minutes.
-    r"\b\d{3,4}\s*[x×]\s*-?\d{3,4}\b"
-    r"|\b\d{3}'s\b"
-    r"|\b\d{3}\s+and\s+\d{3}\b"
-    r"|\b\d{3}\s+(?:is|was|are|were|has|have|had|left|stayed|sat|sits|sitting|stands|standing|moved|disappeared|vanished|keeps|kept|hunched|leaned|shifted|turned)\b",
-    re.I,
-)
+# Oct 23: the pattern now lives in utils/invented_numerals, which also gates the
+# WRITE paths. September fixed each era's source of numbers and purged the
+# stores, but never added a gate — so the next source (a hallucinated "1928")
+# started the same chain again. One definition, so the cleanup and the gate
+# cannot disagree about what counts.
+from utils.invented_numerals import reads_as_a_person  # noqa: E402
 
 
 def carries(node) -> bool:
     """Does any string anywhere in this entry use a number as a person?"""
-    if isinstance(node, str):
-        return bool(NUM.search(node))
-    if isinstance(node, dict):
-        return any(carries(v) for v in node.values())
-    if isinstance(node, list):
-        return any(carries(v) for v in node)
-    return False
+    return reads_as_a_person(node)
 TARGETS = {
     "system_state.json": [("captioner", "stream_tail"), ("captioner", "recent_memory")],
     "lore_ledger.json": [("reveries",)],
@@ -114,7 +102,7 @@ for name, paths in TARGETS.items():
     if name == "system_state.json":
         c = data.get("captioner") or {}
         for slot in ("last_caption",):
-            if isinstance(c.get(slot), str) and NUM.search(c[slot]):
+            if isinstance(c.get(slot), str) and reads_as_a_person(c[slot]):
                 print(f"\n{name} · captioner.{slot}: cleared — {c[slot][:90]!r}")
                 c[slot] = ""
                 removed_here += 1

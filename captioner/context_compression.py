@@ -18,6 +18,7 @@ from config import config
 from event_logging.event_logger import log_json_entry
 from event_logging.log_type import LogType
 from utils.inference import query_model
+from utils.invented_numerals import refuse
 from utils.llm_log import truncate_for_print
 
 IDENTITY_FILE = os.path.join(config.MOOD_SNAPSHOT_FOLDER, "machine_identity.json")
@@ -1354,6 +1355,8 @@ class ContextCompressionEngine:
         ledger surfaces only through journal/reflection prose. Rejections
         are logged — a gate that eats things silently is a silent failure."""
         note = (note or "").strip().rstrip(".") + "." if (note or "").strip() else ""
+        if refuse(note, "self-note"):
+            return
         if not note:
             return
         reason = ""
@@ -1424,6 +1427,8 @@ class ContextCompressionEngine:
         event = (event or "").strip()
         if not event or len(event.split()) > 30 or not any(c.isalpha() for c in event):
             return
+        if refuse(event, "event"):
+            return  # Oct 23: "1928 left the room after turning away from the desk"
         # Provenance gate (July 26): no sensor-side event in the window means
         # the "happening" is the model narrating its own musings — the rooster
         # run stored "A pen shattered into nothingness during a long period of

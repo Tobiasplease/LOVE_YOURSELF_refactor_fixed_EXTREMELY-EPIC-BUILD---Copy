@@ -27,6 +27,7 @@ import time
 from typing import Dict, List, Optional
 
 from config.config import MOOD_SNAPSHOT_FOLDER
+from utils.invented_numerals import refuse
 
 _LEDGER_PATH = os.path.join(MOOD_SNAPSHOT_FOLDER, "lore_ledger.json")
 
@@ -75,7 +76,7 @@ class LoreLedger:
         from config.config import LORE_REVERIES_MAX
 
         text = (text or "").strip()
-        if len(text) < 12:
+        if len(text) < 12 or refuse(text, "reverie"):
             return
         with self._lock:
             self._data["reveries"].append({"ts": time.time(), "text": text[:400]})

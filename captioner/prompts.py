@@ -307,6 +307,27 @@ def _quiet_elicit_dose(agent) -> str:
         return ""
 
 
+def _coarse_when(seconds: float) -> str:
+    """A band, not a figure. Oct 23.
+
+    The age on a dated self-thought is doing real work — it marks the sentence
+    as PAST, which is the Sep 8 ruling that identity must never arrive as a
+    present-tense instruction. So it cannot simply be removed. But
+    casual_time_string ticks ("Five hours ago" -> "Six hours ago") while the
+    thought itself is unchanged, and a ticking figure is what gets chanted.
+    A band holds still for hours and keeps the pastness."""
+    h = max(0.0, float(seconds or 0.0)) / 3600.0
+    if h < 1:
+        return "A little while ago"
+    if h < 6:
+        return "Earlier today"
+    if h < 24:
+        return "Some hours back"
+    if h < 48:
+        return "Yesterday"
+    return "A while back now"
+
+
 def identity_material_lines(agent=None) -> str:
     """What reaches the frame about the machine's identity (Sep 8): not a
     description of what it is, but material to reason with — the dated last
@@ -322,7 +343,7 @@ def identity_material_lines(agent=None) -> str:
             ts = float(refl[-1].get("timestamp") or 0)
             sents = [x.strip() for x in re.split(r"(?<=[.!?])\s+", text) if len(x.strip()) > 20]
             if sents and ts and time.time() - ts < float(getattr(config, "IDENTITY_THOUGHT_MAX_AGE_S", 3 * 86400)):
-                out += P("monologue.self-thought").format(when=casual_time_string((time.time() - ts) / 60.0).capitalize(), thought=sents[-1][:220].rstrip(".") + ".")
+                out += P("monologue.self-thought").format(when=_coarse_when(time.time() - ts), thought=sents[-1][:220].rstrip(".") + ".")
     except Exception:
         pass
     try:
@@ -468,6 +489,11 @@ def get_blink_line(agent) -> str:
         return ""
 
 
+def _durations_in_frame() -> bool:
+    """False when the Oct 18 ablation is in force — see CAPTION_DURATION_LINES."""
+    return not bool(getattr(config, "CAPTION_DURATION_LINES", False))
+
+
 def get_reorientation_line(agent) -> str:
     """Standing fact for the first stretch of a session after a real off-gap.
 
@@ -492,7 +518,15 @@ def get_reorientation_line(agent) -> str:
         went_dark = _dt.datetime.now() - _dt.timedelta(seconds=gap + session_age)
         days_back = (_dt.date.today() - went_dark.date()).days
         gap_str = casual_time_string(gap / 60.0)
-        back_clause = f"you came back on {casual_time_string(session_age / 60.0)} ago" if session_age >= 120 else "you just came back on"
+        # Oct 23: this clause used to carry session_age ("you came back on half
+        # an hour ago"), deliberately, so the standing line would drift instead
+        # of repeating verbatim. Measured: it rode 44% of calls with its age
+        # ticking — "just came back on" -> "six minutes ago" -> "twenty minutes
+        # ago" -> "half an hour ago" — and a line whose text moves with the
+        # clock while the world holds still is exactly what the machine chants.
+        # The anti-repetition device manufactured a counter. The GAP itself is
+        # fixed for the session and stays; only the age goes.
+        back_clause = "you've just come back on" if _durations_in_frame() else ("you came back on %s ago" % casual_time_string(session_age / 60.0) if session_age >= 120 else "you just came back on")
         if days_back >= 1:
             day_name = _dt.date.today().strftime("%A")
             since = f"yesterday {part_of_day_string(went_dark.hour)}" if days_back == 1 else went_dark.strftime("%A")
@@ -941,6 +975,20 @@ def build_last_event_line(agent) -> str:
         what = _em.event_words(ev)
         age = casual_time_string(ev["age_s"] / 60.0)
         rarity = _em.rarity_phrase(ev["kind"], ev["gap_s"])
+        # Oct 23: the age ticks ("a few minutes ago" -> "half an hour ago") while
+        # nothing happens, and it was the source of the Oct 22 hours-chant on 48%
+        # of calls. What happened is world-information and stays; how long ago is
+        # a clock reading. Rarity is fixed at the moment of the event, so it stays.
+        if not _durations_in_frame():
+            if ev["kind"] == _em.PASS_KIND:
+                base = P("caption.last-event-pass-undated")
+            else:
+                base = P("caption.last-event-undated").format(what=what)
+            if rarity:
+                base = base.rstrip() + " " + rarity.strip().rstrip(".") + "."
+            if ev["kind"] == _em.VISIT_KIND and not _em.anyone_since(ev["ts"]):
+                base += " " + P("caption.since-empty")
+            return base
         if ev["kind"] == _em.PASS_KIND:
             # Sep 13: its own form — what is remembered is that nobody was
             # properly seen, so the line cannot borrow the visit's wording.

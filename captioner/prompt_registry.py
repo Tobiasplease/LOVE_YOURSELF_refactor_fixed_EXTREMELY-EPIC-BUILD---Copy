@@ -482,6 +482,26 @@ FRAGMENTS = {
         "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
         "placeholders": ["direction"],
     },
+    "caption.last-event-undated": {
+        "title": "What last happened — without the clock",
+        "text": "Earlier: {what}",
+        "note": (
+            "Oct 23. The dated variants tick: 'a few minutes ago' becomes 'half an hour "
+            "ago' while nothing happens, and that line was riding 48% of calls when the "
+            "machine spent an hour chanting hours. What happened is world-information and "
+            "stays; how long ago is a clock reading. Rarity is appended by the builder "
+            "when there is one — it is fixed at the moment of the event, so it does not tick."
+        ),
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": ["what"],
+    },
+    "caption.last-event-pass-undated": {
+        "title": "Someone went past — without the clock",
+        "text": "Earlier: someone went past. You didn't get a proper look.",
+        "note": "Oct 23. The pass variant of caption.last-event-undated; see its note.",
+        "used_by": ["caption", "caption_reroute", "memory", "drift_turn", "wander_hop"],
+        "placeholders": [],
+    },
     "caption.last-event": {
         "title": "What last happened (event memory, rare)",
         "text": "Earlier: {what} That was {age} ago, {rarity}.",

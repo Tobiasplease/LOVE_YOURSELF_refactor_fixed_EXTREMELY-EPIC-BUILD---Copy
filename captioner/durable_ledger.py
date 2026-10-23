@@ -28,6 +28,8 @@ import threading
 import time
 from typing import List, Optional
 
+from utils.invented_numerals import refuse
+
 _LEDGER_PATH = os.path.join("event_log", "durable_ledger.json")
 
 _STOP = {"i", "to", "the", "a", "an", "and", "it", "my", "of", "for", "am", "is", "me"}
@@ -68,7 +70,7 @@ class DurableLedger:
     def note_fact(self, fact: str, source: str = "memory_diff") -> Optional[str]:
         """Record or confirm a fact. Returns 'new' | 'confirmed' | 'promoted' | None."""
         fact = (fact or "").strip()
-        if not fact or len(fact.split()) > 24:
+        if not fact or len(fact.split()) > 24 or refuse(fact, "durable fact"):
             return None
         today = time.strftime("%Y-%m-%d")
         with self._lock:
