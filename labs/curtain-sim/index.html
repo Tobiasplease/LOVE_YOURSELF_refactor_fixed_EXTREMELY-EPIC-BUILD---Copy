@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Curtain Rig Simulator</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; color: #d9d4ca; font: 12px/1.4 system-ui, sans-serif; overflow: hidden; }
+      #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+      #panel { position: fixed; top: 12px; right: 12px; width: 300px; max-height: calc(100% - 24px); overflow-y: auto;
+        background: rgba(12, 11, 10, 0.78); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px 12px; }
+      h3 { margin: 12px 0 6px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b958a; }
+      h3:first-child { margin-top: 0; }
+      .row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin-bottom: 8px; }
+      .row input[type='range'] { grid-column: 1 / -1; width: 100%; accent-color: #e0b070; }
+      .row.check { display: flex; align-items: flex-start; gap: 6px; }
+      output { color: #f0d9a8; font-variant-numeric: tabular-nums; }
+      #scope { width: 100%; height: 70px; display: block; border-radius: 4px; }
+      .legend span { margin-right: 10px; }
+      #readout { margin-top: 6px; color: #b8b2a6; font-variant-numeric: tabular-nums; }
+      #views { position: fixed; left: 12px; top: 12px; display: flex; gap: 6px; align-items: center; color: rgba(230, 222, 205, 0.55); }
+      #views button { background: rgba(20, 19, 17, 0.8); color: #d9d4ca; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+      #views span { margin-left: 8px; }
+      .label { position: fixed; bottom: 18px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(230, 222, 205, 0.55); transform: translateX(-50%); }
+    </style>
+    <script type="importmap">
+      { "imports": { "three": "./vendor/three/three.module.js" } }
+    </script>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="views"><button data-view="front">Front</button><button data-view="angle">Angle</button><button data-view="side">Side</button>
+      <span>Left: the rig. Right: real wind. Drag to orbit, scroll to zoom.</span></div>
+    <div id="panel">
+      <div id="controls"></div>
+      <h3>Signal scope (last 12 s)</h3>
+      <canvas id="scope" width="560" height="140"></canvas>
+      <div class="legend"><span style="color: #f2efe6">gust</span><span style="color: #f0b45a">belly motor</span><span style="color: #7fb4e8">hem motor</span></div>
+      <div id="readout"></div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
