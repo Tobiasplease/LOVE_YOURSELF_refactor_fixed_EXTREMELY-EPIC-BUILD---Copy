@@ -5,6 +5,7 @@ export class Motor {
     this.target = 0;
     this.pos = 0;
     this.vel = 0;
+    this.saturated = false;
   }
 
   update(dt) {
@@ -12,8 +13,10 @@ export class Motor {
     const brakingSpeed = Math.sqrt(2 * this.maxAccel * Math.abs(error));
     const wanted = Math.sign(error) * Math.min(this.maxSpeed, brakingSpeed);
     const maxChange = this.maxAccel * dt;
-    this.vel += Math.max(-maxChange, Math.min(maxChange, wanted - this.vel));
+    const change = wanted - this.vel;
+    this.vel += Math.max(-maxChange, Math.min(maxChange, change));
     this.pos += this.vel * dt;
+    this.saturated = Math.abs(this.vel) > this.maxSpeed * 0.97 || Math.abs(change) > maxChange * 1.5;
   }
 }
 

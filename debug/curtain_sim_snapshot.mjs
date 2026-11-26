@@ -1,4 +1,4 @@
-// Usage: node debug/curtain_sim_snapshot.mjs <outDir> [times, e.g. 0,3,5,8 | video:start:end:fps] [json params override] [view]
+// Usage: node debug/curtain_sim_snapshot.mjs <outDir> [times, e.g. 0,3,5,8 | video:start:end:fps] [json params override] [view] [phone]
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
@@ -18,6 +18,7 @@ if (video) {
   for (let t = start; t <= end; t += 1 / fps) times.push(Number(t.toFixed(4)));
 } else times = spec.split(',').map(Number);
 const view = process.argv[5] ?? 'angle';
+const phone = process.argv[6] === 'phone';
 const overrides = JSON.parse(process.argv[4] ?? '{}');
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json' };
 
@@ -33,20 +34,24 @@ const server = createServer(async (req, res) => {
 const port = server.address().port;
 
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-const page = await browser.newPage({ viewport: video ? { width: 1280, height: 720 } : { width: 1400, height: 800 }, deviceScaleFactor: 1 });
+const viewport = phone ? { width: 390, height: 844 } : video ? { width: 1280, height: 720 } : { width: 1400, height: 860 };
+const page = await browser.newPage({ viewport, deviceScaleFactor: 1, isMobile: phone, hasTouch: phone });
 page.on('console', (m) => console.log('[page]', m.text()));
 page.on('pageerror', (e) => console.log('[error]', e.message));
 await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.curtainSim?.world);
-await page.evaluate((o) => {
-  const sim = window.curtainSim;
-  sim.params.paused = true;
-  const rebuild = 'rods' in o && o.rods !== sim.params.rods;
-  Object.assign(sim.params, o);
-  if (rebuild) sim.build();
-}, overrides);
-await page.evaluate((v) => document.querySelector(`[data-view="${v}"]`).click(), view);
-if (video) await page.addStyleTag({ content: '#panel, #views { display: none !important; }' });
+await page.evaluate(
+  ([o, v]) => {
+    const sim = window.curtainSim;
+    sim.setTransport('pause');
+    Object.assign(sim.params, o);
+    if (Object.keys(o).length) sim.build();
+    sim.refreshAll();
+    sim.setView(v);
+  },
+  [overrides, view],
+);
+if (video) await page.addStyleTag({ content: '#panel, #hud, #status { display: none !important; }' });
 let frameNo = 0;
 
 for (const target of times) {

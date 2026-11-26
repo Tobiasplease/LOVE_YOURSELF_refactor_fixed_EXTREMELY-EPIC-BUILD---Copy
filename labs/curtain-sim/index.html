@@ -1,43 +1,156 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Curtain Rig Simulator</title>
-    <style>
-      html, body { margin: 0; height: 100%; background: #000; color: #d9d4ca; font: 12px/1.4 system-ui, sans-serif; overflow: hidden; }
-      #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-      #panel { position: fixed; top: 12px; right: 12px; width: 300px; max-height: calc(100% - 24px); overflow-y: auto;
-        background: rgba(12, 11, 10, 0.78); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px 12px; }
-      h3 { margin: 12px 0 6px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b958a; }
-      h3:first-child { margin-top: 0; }
-      .row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin-bottom: 8px; }
-      .row input[type='range'] { grid-column: 1 / -1; width: 100%; accent-color: #e0b070; }
-      .row.check { display: flex; align-items: flex-start; gap: 6px; }
-      output { color: #f0d9a8; font-variant-numeric: tabular-nums; }
-      #scope { width: 100%; height: 70px; display: block; border-radius: 4px; }
-      .legend span { margin-right: 10px; }
-      #readout { margin-top: 6px; color: #b8b2a6; font-variant-numeric: tabular-nums; }
-      #views { position: fixed; left: 12px; top: 12px; display: flex; gap: 6px; align-items: center; color: rgba(230, 222, 205, 0.55); }
-      #views button { background: rgba(20, 19, 17, 0.8); color: #d9d4ca; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
-      #views span { margin-left: 8px; }
-      .label { position: fixed; bottom: 18px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(230, 222, 205, 0.55); transform: translateX(-50%); }
-    </style>
-    <script type="importmap">
-      { "imports": { "three": "./vendor/three/three.module.js" } }
-    </script>
-  </head>
-  <body>
-    <canvas id="view"></canvas>
-    <div id="views"><button data-view="front">Front</button><button data-view="angle">Angle</button><button data-view="side">Side</button>
-      <span>Left: the rig. Right: real wind. Drag to orbit, scroll to zoom.</span></div>
-    <div id="panel">
-      <div id="controls"></div>
-      <h3>Signal scope (last 12 s)</h3>
-      <canvas id="scope" width="560" height="140"></canvas>
-      <div class="legend"><span style="color: #f2efe6">gust</span><span style="color: #f0b45a">belly motor</span><span style="color: #7fb4e8">hem motor</span></div>
-      <div id="readout"></div>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Curtain Rig Simulator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* VOICE work: a sibling instrument to the Marionette Arm, same late-90s lab-equipment construction
+     IDEA a lighting/motion control desk: transport deck, cue sheet, line matrix that lights up as the wave crosses
+     PICTURE the live 3D room with the backlit voile, strings and pulleys, filling the top of the screen
+     COLOUR near-black stage, olive-grey instrument face, wood title bar, amber for motors at their limit
+     TYPE system monospace throughout, as on the marionette panel
+     LAYOUT stage on top, panel below (scrolls on a phone, groups tile across a laptop) */
+  :root {
+    color-scheme: dark;
+    --bg: #0d0c0b;
+    --wood: #c9a06c;
+    --ink: #e8e2da;
+    --dim: #8a8178;
+    --amber: #e0a43c;
+    --red: #d0583f;
+    --face: #4a4f45;
+    --hi: #949b88;
+    --lo: #12140f;
+    --well: #22251f;
+    --etch: #5f6659;
+    --label: #cfd2c8;
+    --tick: #6d7365;
+  }
+  :root[data-theme=light], :root[data-theme=dark] { color-scheme: dark; }
+  * { box-sizing: border-box; min-width: 0; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 13px/1.4 "SF Mono", ui-monospace, Menlo, Consolas, monospace; display: flex; flex-direction: column; overflow: hidden; }
+  #stage { flex: 1 1 auto; position: relative; min-height: 240px; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #hud { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); pointer-events: none; line-height: 1.5; max-width: 60%; }
+  #hud .t { font-size: 13px; letter-spacing: .18em; color: var(--wood); }
+  #hud .s { font-size: 12px; color: var(--dim); }
+  #status { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; font-size: 12px; color: var(--dim); line-height: 1.6; pointer-events: none; }
+  #status b { color: var(--wood); font-weight: 400; }
+  #boot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; letter-spacing: .2em; color: var(--dim); background: var(--bg); }
+  #quick { position: absolute; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: none; gap: 8px; }
+  body.clean #quick { display: flex; }
+  body.clean #panel, body.clean #hud, body.clean #status { display: none; }
+
+  #panel { flex: 0 0 auto; max-height: 52vh; overflow-y: auto; background: var(--face); color: var(--label); border-top: 2px solid var(--hi); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  #panel::-webkit-scrollbar { width: 15px; background: var(--well); }
+  #panel::-webkit-scrollbar-thumb { background: var(--face); border: 2px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi); }
+  #titlebar { display: flex; align-items: center; gap: 8px; padding: 4px max(16px, env(safe-area-inset-right, 0px)) 4px max(16px, env(safe-area-inset-left, 0px)); background: var(--wood); color: #1a1c17; font-size: 12px; letter-spacing: .2em; white-space: nowrap; border-bottom: 2px solid var(--lo); position: sticky; top: 0; z-index: 3; }
+  #titlebar .grip { flex: 1 1 auto; height: 9px; min-width: 12px; background: repeating-linear-gradient(0deg, rgba(0,0,0,.4) 0 1px, transparent 1px 3px); }
+  #titlebar .box { width: 22px; height: 20px; background: var(--face); color: var(--label); text-align: center; line-height: 16px; cursor: pointer; border: 2px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi); }
+  #panelbody { padding: 10px max(16px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 14px; }
+  @media (min-width: 900px) {
+    #panel { max-height: 46vh; }
+    #panelbody { grid-template-columns: minmax(0, 1.05fr) minmax(0, 2fr); align-items: start; }
+    #groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0 14px; }
+  }
+
+  .grp { border: 1px solid var(--lo); box-shadow: 1px 1px 0 0 var(--etch) inset, 1px 1px 0 0 var(--etch); margin: 0 0 12px; padding: 8px 10px 10px; }
+  .grp > .cap { padding: 0 5px; font-size: 12px; letter-spacing: .16em; color: var(--label); }
+  .faders { display: flex; flex-direction: column; gap: 6px; }
+  .fader .head { display: flex; align-items: baseline; gap: 6px; font-size: 12px; letter-spacing: .1em; color: #a7ad9c; white-space: nowrap; }
+  .fader .nm { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+  .fader b { flex: 0 0 auto; color: #e4e7dc; font-weight: 400; min-width: 76px; text-align: right; font-variant-numeric: tabular-nums; background: var(--well); padding: 1px 4px; border: 1px solid; border-color: var(--lo) var(--etch) var(--etch) var(--lo); }
+  .choice { display: flex; flex-direction: column; gap: 4px; }
+  .lbl { font-size: 12px; letter-spacing: .1em; color: #a7ad9c; }
+  .lbl:empty { display: none; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; background: repeating-linear-gradient(90deg, var(--tick) 0 1px, transparent 1px 8px) left bottom/100% 5px no-repeat; }
+  input[type=range]::-webkit-slider-runnable-track { height: 8px; background: var(--well); border: 2px solid; border-color: var(--lo) var(--hi) var(--hi) var(--lo); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 24px; margin-top: -10px; background: var(--face); border: 2px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi); }
+  input[type=range]::-moz-range-track { height: 8px; background: var(--well); border: 2px solid; border-color: var(--lo) var(--hi) var(--hi) var(--lo); }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 24px; background: var(--face); border: 2px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi); border-radius: 0; }
+
+  button { font: inherit; font-size: 12px; letter-spacing: .14em; color: var(--label); background: var(--face); cursor: pointer; padding: 8px 14px; min-height: 36px; white-space: nowrap; border: 2px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi); }
+  button:hover { background: #545a4e; }
+  button:active, button.on { border-color: var(--lo) var(--hi) var(--hi) var(--lo); background: #3c4038; padding: 9px 13px 7px 15px; }
+  button.on { color: var(--wood); }
+  button.mini { padding: 6px 10px; }
+  button.mini:active, button.mini.on { padding: 7px 9px 5px 11px; }
+  button:focus-visible { outline: 2px solid var(--wood); outline-offset: 1px; }
+
+  .deck { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .deck button { flex: 1 1 auto; }
+  .scrubrow { display: flex; align-items: center; gap: 8px; }
+  .scrubrow b { flex: 0 0 auto; min-width: 128px; text-align: right; font-weight: 400; color: #e4e7dc; background: var(--well); padding: 2px 5px; border: 1px solid; border-color: var(--lo) var(--etch) var(--etch) var(--lo); font-variant-numeric: tabular-nums; }
+  #speedBox .grp { border: 0; box-shadow: none; padding: 4px 0 0; margin: 0; }
+  #speedBox .cap { display: none; }
+  .hint { font-size: 12px; color: #a7ad9c; line-height: 1.5; margin-top: 8px; }
+
+  #matrix { display: grid; gap: 4px; align-items: stretch; }
+  .rowname { font-size: 12px; letter-spacing: .1em; color: #a7ad9c; align-self: center; padding-right: 4px; }
+  .cell { position: relative; height: 46px; background: var(--well); border: 2px solid; border-color: var(--lo) var(--hi) var(--hi) var(--lo); overflow: hidden; }
+  .cell i { position: absolute; left: 0; right: 0; bottom: 0; background: color-mix(in srgb, var(--wood) 70%, transparent); }
+  .cell.limit i { background: var(--red); }
+  .cell span { position: relative; display: block; padding: 2px 3px; font-size: 12px; line-height: 1.25; color: #f3efe6; white-space: pre; font-variant-numeric: tabular-nums; text-shadow: 0 1px 0 #000; }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #a7ad9c; flex-wrap: wrap; }
+  @media (max-width: 600px) { #hud .help { display: none; } #hud { max-width: 58%; } }
+  @media (max-width: 420px) { .cell span { font-size: 11px; padding: 1px 2px; } }
+</style>
+<script type="importmap">
+  { "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+
+<div id="stage">
+  <canvas id="view"></canvas>
+  <div id="hud">
+    <div class="t">CURTAIN RIG</div>
+    <div class="s" id="hudsub"></div>
+    <div class="s help">drag ▸ orbit · pinch / wheel ▸ zoom · space ▸ play · ← ▸ rewind · H ▸ clean view</div>
+  </div>
+  <div id="status">
+    <div><b id="stFps">—</b> fps · <b id="stMs">—</b> ms physics</div>
+    <div>tape <b id="stTape">live</b></div>
+  </div>
+  <div id="quick">
+    <button class="qRev">◀◀</button>
+    <button class="qPlay">❚❚ PAUSE</button>
+    <button id="qPanel">CONTROLS</button>
+  </div>
+  <div id="boot">HANGING THE CURTAIN…</div>
+</div>
+
+<div id="panel">
+  <div id="titlebar">
+    <span>CURTAIN RIG — CUE SEQUENCER</span>
+    <span class="grip"></span>
+    <span class="box" id="tbClose" title="hide the panel (H)">✕</span>
+  </div>
+  <div id="panelbody">
+    <div>
+      <fieldset class="grp">
+        <legend class="cap">TRANSPORT — HOW YOU WATCH TIME</legend>
+        <div class="deck">
+          <button id="tRev">◀◀ REWIND</button>
+          <button id="tPause">❚❚</button>
+          <button id="tPlay">▶ PLAY</button>
+          <button id="tReset">↺ RESET</button>
+        </div>
+        <div class="scrubrow">
+          <input id="scrub" type="range" min="0" max="0" step="1" value="0" aria-label="tape position">
+          <b id="tapeRead">LIVE</b>
+        </div>
+        <div id="speedBox"></div>
+        <p class="hint">The last 20 s are on tape. Rewind or scrub, then PLAY to carry on from that moment. Only the sim can do this: running the real motors backwards will not run the fabric backwards. For a reversed wave, use FLIP or POLARITY below.</p>
+      </fieldset>
+      <fieldset class="grp">
+        <legend class="cap">LINES — REEL / TENSION, LIVE</legend>
+        <div id="matrix"></div>
+        <div class="foot"><span id="matrixFoot"></span><button id="tPeak" class="mini">RESET PEAK</button></div>
+      </fieldset>
     </div>
-    <script type="module" src="./src/main.js"></script>
-  </body>
-</html>
+    <div id="groups"></div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>

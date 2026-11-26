@@ -41,27 +41,52 @@ export function createStage(canvas, windowXs) {
   };
   const setView = (name) => {
     Object.assign(orbit, views[name]);
+    orbit.distance *= orbit.focusScale ?? 1;
     placeCamera();
   };
   setView('angle');
 
-  let drag = null;
+  const pointers = new Map();
+  let pinch = 0;
   canvas.addEventListener('pointerdown', (e) => {
-    drag = { x: e.clientX, y: e.clientY };
+    pointers.set(e.pointerId, [e.clientX, e.clientY]);
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (!drag) return;
-    orbit.yaw -= (e.clientX - drag.x) * 0.005;
-    orbit.pitch = Math.max(-0.2, Math.min(0.9, orbit.pitch + (e.clientY - drag.y) * 0.004));
-    drag = { x: e.clientX, y: e.clientY };
+    const last = pointers.get(e.pointerId);
+    if (!last) return;
+    pointers.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pointers.size === 1) {
+      orbit.yaw -= (e.clientX - last[0]) * 0.005;
+      orbit.pitch = Math.max(-0.2, Math.min(0.9, orbit.pitch + (e.clientY - last[1]) * 0.004));
+    } else if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const span = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (pinch) orbit.distance = Math.max(1.5, Math.min(10, orbit.distance * (pinch / span)));
+      pinch = span;
+    }
     placeCamera();
   });
-  canvas.addEventListener('pointerup', () => (drag = null));
-  canvas.addEventListener('wheel', (e) => {
-    orbit.distance = Math.max(1.5, Math.min(9, orbit.distance * (1 + e.deltaY * 0.001)));
+  const release = (e) => {
+    pointers.delete(e.pointerId);
+    pinch = 0;
+  };
+  canvas.addEventListener('pointerup', release);
+  canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener(
+    'wheel',
+    (e) => {
+      e.preventDefault();
+      orbit.distance = Math.max(1.5, Math.min(10, orbit.distance * (1 + e.deltaY * 0.001)));
+      placeCamera();
+    },
+    { passive: false },
+  );
+  const setFocus = (x, distanceScale = 1) => {
+    orbit.target.x = x;
+    orbit.focusScale = distanceScale;
     placeCamera();
-  });
+  };
 
   const surface = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0 });
   const wallMat = surface(0x4a4642);
@@ -135,12 +160,14 @@ export function createStage(canvas, windowXs) {
   const resize = () => {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
+    if (!w || !h) return;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
+    camera.fov = w / h < 1 ? 55 : 38;
     camera.updateProjectionMatrix();
   };
-  window.addEventListener('resize', resize);
+  new ResizeObserver(resize).observe(canvas);
   resize();
 
-  return { renderer, scene, camera, setKelvin, setView };
+  return { renderer, scene, camera, setKelvin, setView, setFocus };
 }

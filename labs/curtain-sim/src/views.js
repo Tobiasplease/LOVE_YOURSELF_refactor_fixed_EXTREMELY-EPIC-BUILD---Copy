@@ -93,64 +93,72 @@ export class CurtainView {
   }
 }
 
+const SLACK = [0.35, 0.36, 0.38];
+const TAUT = [0.85, 0.88, 0.92];
+const LIMIT = [0.95, 0.62, 0.2];
+const ROD = [0.75, 0.7, 0.6];
+
 export class RigView {
-  constructor(scene, curtain, bridles, rods) {
+  constructor(scene, curtain, lines, rods) {
     this.curtain = curtain;
-    this.bridles = bridles;
+    this.lines = lines;
     this.rods = rods;
     this.group = new THREE.Group();
     scene.add(this.group);
 
-    const lineCount = bridles.length * 3 + rods.reduce((n, r) => n + r.length - 1, 0);
-    this.linePositions = new Float32Array(lineCount * 6);
-    const lineGeometry = new THREE.BufferGeometry();
-    lineGeometry.setAttribute('position', new THREE.BufferAttribute(this.linePositions, 3));
-    this.lines = new THREE.LineSegments(
-      lineGeometry,
-      new THREE.LineBasicMaterial({ color: 0xc8d0d8, transparent: true, opacity: 0.45 }),
+    const segments = lines.length * 3 + rods.reduce((n, r) => n + r.length - 1, 0);
+    this.linePositions = new Float32Array(segments * 6);
+    this.lineColors = new Float32Array(segments * 6);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(this.linePositions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(this.lineColors, 3));
+    this.segments = new THREE.LineSegments(
+      geometry,
+      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, toneMapped: false }),
     );
-    this.lines.frustumCulled = false;
-    this.group.add(this.lines);
+    this.segments.frustumCulled = false;
+    this.group.add(this.segments);
 
-    const pulleyMat = new THREE.MeshBasicMaterial({ color: 0x9aa3ab });
-    this.anchorMeshes = bridles.map(() => {
-      const m = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.006, 8, 20), pulleyMat);
-      this.group.add(m);
-      return m;
-    });
-    this.floatMeshes = bridles.map(() => {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.009, 10, 8), pulleyMat);
-      this.group.add(m);
-      return m;
-    });
+    const metal = new THREE.MeshBasicMaterial({ color: 0x8d949b });
+    const anchorGeo = new THREE.TorusGeometry(0.022, 0.005, 6, 16);
+    const floatGeo = new THREE.SphereGeometry(0.008, 8, 6);
+    this.anchors = lines.map(() => this.group.add(new THREE.Mesh(anchorGeo, metal)).children.at(-1));
+    this.floats = lines.map(() => this.group.add(new THREE.Mesh(floatGeo, metal)).children.at(-1));
   }
 
   update() {
     const p = this.curtain.pos;
     const out = this.linePositions;
+    const col = this.lineColors;
     let o = 0;
-    const seg = (a, b) => {
+    const seg = (a, b, c) => {
       out.set(a, o);
       out.set(b, o + 3);
+      col.set(c, o);
+      col.set(c, o + 3);
       o += 6;
     };
     const at = (k) => [p[k * 3], p[k * 3 + 1], p[k * 3 + 2]];
 
-    this.bridles.forEach((bridle, n) => {
+    this.lines.forEach((line, n) => {
+      const { bridle, motor } = line;
       const pulley = at(bridle.pulley);
-      seg(pulley, bridle.anchor);
-      seg(pulley, at(bridle.attach[0]));
-      seg(pulley, at(bridle.attach[1]));
-      this.anchorMeshes[n].position.fromArray(bridle.anchor);
-      this.floatMeshes[n].position.fromArray(pulley);
+      const colour = motor.saturated ? LIMIT : bridle.tension > 0.02 ? TAUT : SLACK;
+      seg(pulley, bridle.anchor, colour);
+      seg(pulley, at(bridle.attach[0]), colour);
+      seg(pulley, at(bridle.attach[1]), colour);
+      this.anchors[n].position.fromArray(bridle.anchor);
+      this.floats[n].position.fromArray(pulley);
     });
     for (const rod of this.rods) {
-      for (let i = 0; i + 1 < rod.length; i++) seg(at(rod[i]), at(rod[i + 1]));
+      for (let i = 0; i + 1 < rod.length; i++) seg(at(rod[i]), at(rod[i + 1]), ROD);
     }
-    this.lines.geometry.attributes.position.needsUpdate = true;
+    this.segments.geometry.attributes.position.needsUpdate = true;
+    this.segments.geometry.attributes.color.needsUpdate = true;
   }
 
   dispose(scene) {
     scene.remove(this.group);
+    this.segments.geometry.dispose();
   }
 }

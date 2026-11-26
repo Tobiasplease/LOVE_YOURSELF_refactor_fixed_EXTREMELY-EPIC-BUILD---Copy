@@ -1,80 +1,124 @@
-export function createPanel(root, params, spec, onChange) {
-  for (const item of spec) {
-    if (item.heading) {
-      const h = document.createElement('h3');
-      h.textContent = item.heading;
-      root.appendChild(h);
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;
+  return node;
+};
+
+export function buildGroup(root, title, items, params, onChange) {
+  const box = el('fieldset', 'grp');
+  box.append(el('legend', 'cap', title));
+  const body = el('div', 'faders');
+  box.append(body);
+  const refreshers = [];
+
+  for (const item of items) {
+    if (item.type === 'choice') {
+      const wrap = el('div', 'choice');
+      wrap.append(el('span', 'lbl', item.label));
+      const row = el('div', 'seg');
+      const buttons = item.options.map(([value, label]) => {
+        const b = el('button', 'mini', label);
+        b.addEventListener('click', () => {
+          params[item.key] = value;
+          refresh();
+          onChange(item);
+        });
+        row.append(b);
+        return [value, b];
+      });
+      const refresh = () => buttons.forEach(([v, b]) => b.classList.toggle('on', params[item.key] === v));
+      refresh();
+      refreshers.push(refresh);
+      wrap.append(row);
+      body.append(wrap);
       continue;
     }
-    const row = document.createElement('label');
-    row.className = item.type === 'check' ? 'row check' : 'row';
-    const name = document.createElement('span');
-    name.textContent = item.label;
-    const input = document.createElement('input');
 
-    if (item.type === 'check') {
-      input.type = 'checkbox';
-      input.checked = params[item.key];
-      input.addEventListener('change', () => {
-        params[item.key] = input.checked;
+    if (item.type === 'action') {
+      const b = el('button', 'mini', item.label);
+      b.addEventListener('click', () => {
+        item.run();
         onChange(item);
       });
-      row.append(input, name);
-    } else {
-      input.type = 'range';
-      Object.assign(input, { min: item.min, max: item.max, step: item.step ?? 0.01, value: params[item.key] });
-      const value = document.createElement('output');
-      const show = () => (value.textContent = `${Number(params[item.key]).toFixed(item.digits ?? 2)} ${item.unit ?? ''}`);
-      show();
-      input.addEventListener('input', () => {
-        params[item.key] = Number(input.value);
-        show();
-        onChange(item);
-      });
-      row.append(name, value, input);
+      body.append(b);
+      continue;
     }
-    root.appendChild(row);
+
+    if (item.type === 'toggle') {
+      const b = el('button', 'mini toggle', item.label);
+      const refresh = () => b.classList.toggle('on', !!params[item.key]);
+      b.addEventListener('click', () => {
+        params[item.key] = !params[item.key];
+        refresh();
+        onChange(item);
+      });
+      refresh();
+      refreshers.push(refresh);
+      body.append(b);
+      continue;
+    }
+
+    const wrap = el('label', 'fader');
+    const head = el('span', 'head');
+    const value = el('b');
+    head.append(el('span', 'nm', item.label), value);
+    const input = el('input');
+    input.type = 'range';
+    input.id = `f-${item.key}`;
+    Object.assign(input, { min: item.min, max: item.max, step: item.step ?? 0.01 });
+    const show = () => {
+      input.value = params[item.key];
+      value.textContent = `${Number(params[item.key]).toFixed(item.digits ?? 2)}${item.unit ?? ''}`;
+    };
+    input.addEventListener('input', () => {
+      params[item.key] = Number(input.value);
+      show();
+      if (!item.rebuild) onChange(item);
+    });
+    input.addEventListener('change', () => item.rebuild && onChange(item));
+    show();
+    refreshers.push(show);
+    wrap.append(head, input);
+    body.append(wrap);
   }
+
+  root.append(box);
+  return () => refreshers.forEach((r) => r());
 }
 
-export class Scope {
-  constructor(canvas, seconds = 12, traces = []) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.seconds = seconds;
-    this.traces = traces;
-    this.samples = [];
-  }
-
-  push(t, values) {
-    this.samples.push([t, ...values]);
-    while (this.samples.length && this.samples[0][0] < t - this.seconds) this.samples.shift();
-  }
-
-  clear() {
-    this.samples = [];
-  }
-
-  draw() {
-    const { ctx, canvas } = this;
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    ctx.fillRect(0, 0, w, h);
-    if (this.samples.length < 2) return;
-    const tEnd = this.samples[this.samples.length - 1][0];
-    this.traces.forEach((trace, n) => {
-      ctx.strokeStyle = trace.color;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      this.samples.forEach((s, i) => {
-        const x = w - ((tEnd - s[0]) / this.seconds) * w;
-        const y = h - 4 - Math.min(1, s[n + 1] / trace.max) * (h - 8);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-    });
-  }
+export function buildMatrix(root, lines, kinds, columns) {
+  root.innerHTML = '';
+  root.style.gridTemplateColumns = `auto repeat(${columns}, minmax(0, 1fr))`;
+  const cells = [];
+  kinds.forEach((kind, r) => {
+    root.append(el('span', 'rowname', kind.toUpperCase()));
+    for (let c = 0; c < columns; c++) {
+      const line = lines.find((l) => l.rowIndex === r && l.column === c);
+      const cell = el('div', 'cell');
+      const fill = el('i');
+      const text = el('span');
+      cell.append(fill, text);
+      root.append(cell);
+      cells.push({ line, cell, fill, text, peak: 0 });
+    }
+  });
+  return {
+    update(maxPull) {
+      for (const c of cells) {
+        const { motor, bridle } = c.line;
+        const grams = (bridle.tension / 9.81) * 1000;
+        c.peak = Math.max(c.peak, grams);
+        c.fill.style.height = `${Math.min(100, (motor.pos / Math.max(0.01, maxPull)) * 100)}%`;
+        c.cell.classList.toggle('limit', motor.saturated);
+        c.text.textContent = `${Math.round(motor.pos * 100)}cm\n${Math.round(grams)}g`;
+      }
+    },
+    peaks() {
+      return cells.map((c) => c.peak);
+    },
+    resetPeaks() {
+      for (const c of cells) c.peak = 0;
+    },
+  };
 }

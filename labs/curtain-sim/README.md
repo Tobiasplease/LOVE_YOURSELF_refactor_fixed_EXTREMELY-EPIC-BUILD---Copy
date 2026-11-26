@@ -4,7 +4,12 @@ A real-time simulation of a mechanically driven sheer curtain, made to test whet
 and fans can pass for wind. The left window is the rig. The right window is a plain curtain in simulated real wind,
 for comparison. Both get exactly the same gusts at the same moments.
 
-## Run it
+## Open it
+
+On a phone or any browser: the published artifact at https://claude.ai/artifact/DYka3avVnVRiHCB7Qo46jm (private to you unless shared).
+On a phone it shows the rig alone on a lighter cloth grid, to stay real-time. Switch ROOM ▸ SHOW to add the reference.
+
+## Run it locally
 
 The page uses JavaScript modules, so it needs a tiny local web server (opening the file directly won't work):
 
@@ -15,7 +20,14 @@ python3 -m http.server 8000
 
 Then open http://localhost:8000 in Chrome, Edge or Firefox. Nothing to install: three.js is in `vendor/`.
 
-Drag to orbit, scroll to zoom, and use **Front / Angle / Side** for preset views.
+Drag to orbit, pinch or scroll to zoom. Space = play/pause, ← = rewind, H = clean view.
+
+## Two kinds of time
+
+- **Transport** (tape deck): pause, rewind, scrub the last 20 s, slow motion, 2×. This is about *watching*. Press PLAY after rewinding
+  and the physics carries on from that moment.
+- **Cue** (what the motors play): source (gusts / swell / fader), tempo, wave direction, flip, polarity, wave speed, hem lag.
+  This is the part that exists in the real rig. Running the motors backwards does not run the fabric backwards: gravity and air only go one way.
 
 ## The signal chain
 
@@ -30,11 +42,14 @@ gust envelope ──▶ motor (speed + accel limits) ──▶ line ──▶ el
 | File | What it is |
 | --- | --- |
 | `src/cloth.js` | The fabric: a grid of beads joined by links (stretch, shear, bend), air drag and lift per triangle, rods, hem chain |
+| `src/layout.js` | Lays out the grid: columns × rows (top, belly, hem) of bridles, rods and ceiling pulleys |
+| `src/cue.js` | The cue engine: turns gusts, swell or the fader into a pull for each line, delayed so the wave travels in the chosen direction |
+| `src/tape.js` | The tape recorder behind rewind and scrub (positions stored compressed, at 30 frames a second) |
 | `src/rig.js` | `Motor` (reels line in and out under speed limits) and `Bridle` (elastic line plus floating pulley that splits the pull evenly between two legs) |
 | `src/wind.js` | Gust timeline (attack / hold / release envelopes, fixed seed so it repeats) and the turbulent reference wind |
 | `src/stage.js` | The room, lightboxes, rails, camera |
 | `src/views.js` | How the curtain is drawn (sheer shader: folds stack up and darken against the light) and how strings and pulleys are drawn |
-| `src/ui.js`, `src/main.js` | Control panel, signal scope, and the loop that ties everything together |
+| `src/ui.js`, `src/main.js` | Instrument panel (faders, cue sheet, line matrix) and the loop that ties everything together |
 | `media/` | Rendered clips from each step |
 
 `debug/curtain_sim_snapshot.mjs` (in the repo root) renders stills or video frames headless, for review.
@@ -42,9 +57,12 @@ gust envelope ──▶ motor (speed + accel limits) ──▶ line ──▶ el
 ## Status
 
 - [x] Step 0–1: room, one curtain, one rig column (belly bridle with two spreader rods, hem bridle on the chain), real-wind reference
-- [ ] Step 2: direct-to-points vs rods side by side, pulley friction
+- [x] Grid of 3–8 columns × 2–3 rows (default 5 × 3 = 15 lines, 30 attachment points), each line coloured slack / taut / at motor limit
+- [x] Transport (pause, rewind, scrub, speed) and cue engine (gusts, swell, fader; tempo, direction, flip, polarity)
+- [x] Published as a phone-friendly artifact
+- [ ] Direct-to-points vs rods side by side, pulley friction, 4-leg bridles
 - [ ] Step 3: fans
-- [ ] Step 4: full grid of columns, sequencer timeline, travelling-wave helper
+- [ ] Step 4: keyframe timeline with tracks per line and easing
 - [ ] Step 5: cinematic light (shadows, haze, grain, depth of field, day cycle)
 - [ ] Step 6: export to motor commands, Blender bridge
 

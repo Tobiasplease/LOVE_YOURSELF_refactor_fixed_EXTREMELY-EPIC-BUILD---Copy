@@ -64,25 +64,36 @@ export function noise3(x, y, z) {
 }
 
 export class WindField {
-  constructor({ gusts, xRef, yTop, base = 0.4, gustSpeed = 3.0, turbulence = 0.45, frontSpeedX = 2.2, frontSpeedY = 4.0 }) {
-    Object.assign(this, { gusts, xRef, yTop, base, gustSpeed, turbulence, frontSpeedX, frontSpeedY });
+  constructor({ gusts, xRef, yTop, width = 1.4, height = 2.4, base = 0.4, gustSpeed = 3.0, turbulence = 0.45 }) {
+    Object.assign(this, { gusts, xRef, yTop, width, height, base, gustSpeed, turbulence });
     this.strength = 1;
+    this.setWave(0, 2.2);
+  }
+
+  setWave(directionDeg, speed) {
+    const a = (directionDeg * Math.PI) / 180;
+    this.dir = [Math.cos(a), Math.sin(a)];
+    this.speed = speed;
+    const corners = [0, this.width].flatMap((x) => [0, this.height].map((y) => x * this.dir[0] + y * this.dir[1]));
+    this.origin = Math.min(...corners);
   }
 
   arrivalDelay(x, y) {
-    return (x - this.xRef) / this.frontSpeedX + (this.yTop - y) / this.frontSpeedY;
+    return ((x - this.xRef) * this.dir[0] + (this.yTop - y) * this.dir[1] - this.origin) / this.speed;
   }
 
-  fill(curtain, t) {
+  fill(curtain, t, invert = false) {
     const { pos, wind } = curtain;
+    const side = this.dir[0];
     for (let k = 0; k < curtain.clothCount; k++) {
       const i = k * 3;
       const x = pos[i], y = pos[i + 1];
-      const g = gustEnvelope(this.gusts, t - this.arrivalDelay(x, y));
-      const slow = noise3(x * 1.3 - t * 1.6, y * 1.1 + t * 0.3, t * 0.4);
-      const fast = noise3(x * 3.1 - t * 3.0 + 17, y * 2.7, t * 1.3 + 5);
+      let g = gustEnvelope(this.gusts, t - this.arrivalDelay(x, y));
+      if (invert) g = 1 - g;
+      const slow = noise3(x * 1.3 - t * 1.6 * side, y * 1.1 + t * 0.3, t * 0.4);
+      const fast = noise3(x * 3.1 - t * 3.0 * side + 17, y * 2.7, t * 1.3 + 5);
       const speed = (this.base + this.gustSpeed * g) * this.strength * (1 + this.turbulence * (0.7 * slow + 0.5 * fast));
-      wind[i] = speed * (0.35 + 0.25 * fast);
+      wind[i] = speed * (0.35 * side + 0.25 * fast);
       wind[i + 1] = speed * 0.15 * slow;
       wind[i + 2] = speed;
     }
