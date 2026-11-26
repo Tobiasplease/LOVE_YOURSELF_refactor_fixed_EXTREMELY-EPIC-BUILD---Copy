@@ -6,6 +6,14 @@ import { buildGroup, buildMatrix } from './ui.js';
 import { buildRig } from './layout.js';
 import { CueEngine } from './cue.js';
 import { Tape } from './tape.js';
+import { SpreadMeter } from './metrics.js';
+
+const FABRICS = {
+  voile: { fabricGsm: 50, stiffDown: 1, stiffAcross: 1 },
+  organza: { fabricGsm: 35, stiffDown: 10, stiffAcross: 10 },
+  taffeta: { fabricGsm: 90, stiffDown: 20, stiffAcross: 20 },
+  ribbed: { fabricGsm: 55, stiffDown: 10, stiffAcross: 1 },
+};
 
 const RIG_X = -1.25;
 const REF_X = 1.25;
@@ -37,6 +45,15 @@ const DEFAULTS = {
   rods: true,
   elasticK: 40,
   motorSpeed: 0.8,
+  motorAccel: 3,
+  shaper: 0,
+  preload: 0,
+  fabric: 'voile',
+  fabricGsm: 50,
+  stiffDown: 1,
+  stiffAcross: 1,
+  patchStiff: 1,
+  patchRadius: 0.12,
   windStrength: 0.7,
   show: narrow ? 'rig' : 'both',
   quality: narrow ? 'phone' : 'fine',
@@ -65,9 +82,12 @@ function start(data) {
   function build() {
     if (world) for (const v of world.views) v.dispose(stage.scene);
     const spacing = params.quality === 'phone' ? 0.055 : 0.04;
-    const rig = new Curtain({ x: RIG_X, z: CURTAIN_Z, spacing });
-    const ref = params.show === 'both' ? new Curtain({ x: REF_X, z: CURTAIN_Z, spacing }) : null;
+    const fabric = { fabricGsm: params.fabricGsm, stiffDown: params.stiffDown, stiffAcross: params.stiffAcross };
+    const rig = new Curtain({ x: RIG_X, z: CURTAIN_Z, spacing, ...fabric });
+    const ref = params.show === 'both' ? new Curtain({ x: REF_X, z: CURTAIN_Z, spacing, ...fabric }) : null;
     const { lines, rods, kinds } = buildRig(rig, params, ROOM.ceiling);
+    const patchCentres = lines.flatMap((l) => l.bridle.attach).map((k) => rig.fabricCoords(k));
+    rig.stiffenZones(patchCentres, params.patchRadius, params.patchStiff);
     const wind = new WindField({ gusts, xRef: REF_X - 0.7, yTop: rig.o.railY });
     const curtains = ref ? [rig, ref] : [rig];
 
@@ -78,7 +98,7 @@ function start(data) {
 
     const views = [new CurtainView(stage.scene, rig, RIG_X), new RigView(stage.scene, rig, lines, rods)];
     if (ref) views.push(new CurtainView(stage.scene, ref, REF_X));
-    world = { rig, ref, curtains, lines, rods, kinds, wind, views, t: 0, cueT: 0 };
+    world = { rig, ref, curtains, lines, rods, kinds, wind, views, t: 0, cueT: 0, meter: new SpreadMeter(rig, lines) };
 
     matrix = buildMatrix($('matrix'), lines, kinds, params.columns);
     tape.clear();
@@ -97,6 +117,7 @@ function start(data) {
       l.bridle.setAnchor([l.railX + params.pulleySide, ROOM.ceiling - 0.03, CURTAIN_Z + params[`${l.kind}Dist`]]);
       l.bridle.elasticK = params.elasticK;
       l.motor.maxSpeed = params.motorSpeed;
+      l.motor.maxAccel = params.motorAccel;
     }
     world.wind.strength = params.windStrength;
     world.wind.setWave(params.direction, params.waveSpeed);
@@ -118,6 +139,7 @@ function start(data) {
     const substeps = Math.max(2, Math.ceil(8 * dt * 60));
     for (const c of w.curtains) c.step(dt, substeps);
     w.t += dt;
+    w.meter.measure();
     physicsMs = physicsMs * 0.9 + (performance.now() - started) * 0.1;
     if (w.t >= nextRecord) {
       tape.record(w);
@@ -173,13 +195,15 @@ function start(data) {
     $('stTape').textContent = cursor === null ? 'live' : 'review';
     const limit = world.lines.filter((l) => l.motor.saturated).length;
     const peak = Math.max(...matrix.peaks());
-    $('matrixFoot').textContent = `peak ${Math.round(peak)} g · ${limit}/${world.lines.length} motors at their speed limit`;
+    const tent = world.meter.smoothed;
+    $('matrixFoot').textContent = `peak ${Math.round(peak)} g · ${limit}/${world.lines.length} at speed limit · tent ${tent === null ? '—' : (tent * 100).toFixed(1)} cm`;
     requestAnimationFrame(frame);
   }
 
   const refreshers = [];
   const refreshAll = () => refreshers.forEach((r) => r());
   const onChange = (item) => {
+    if (item.key === 'fabric') Object.assign(params, FABRICS[params.fabric]);
     if (item.rebuild) build();
     else if (item.key === 'kelvin') applyLight();
     else if (item.key === 'view') stage.setView(params.view);
@@ -245,6 +269,31 @@ function start(data) {
         { key: 'rods', type: 'toggle', label: 'SPREADER RODS', rebuild: true },
         { key: 'elasticK', label: 'ELASTIC', min: 5, max: 300, step: 1, digits: 0, unit: ' N/m' },
         { key: 'motorSpeed', label: 'MOTOR MAX LINE SPEED', min: 0.1, max: 2.5, unit: ' m/s' },
+      ],
+      params,
+      onChange,
+    ),
+    buildGroup(
+      panel,
+      'FABRIC — STIFFNESS AND WEIGHT',
+      [
+        { key: 'fabric', type: 'choice', label: 'START FROM', options: [['voile', 'VOILE'], ['organza', 'ORGANZA'], ['taffeta', 'TAFFETA'], ['ribbed', 'RIBBED']], rebuild: true },
+        { key: 'fabricGsm', label: 'WEIGHT', min: 20, max: 150, step: 1, digits: 0, unit: ' g/m²', rebuild: true },
+        { key: 'stiffDown', label: 'STIFFNESS DOWN THE DROP', min: 1, max: 20, step: 0.5, digits: 1, unit: '×', rebuild: true },
+        { key: 'stiffAcross', label: 'STIFFNESS ACROSS THE WIDTH', min: 1, max: 20, step: 0.5, digits: 1, unit: '×', rebuild: true },
+        { key: 'patchStiff', label: 'STIFFENER AROUND ATTACHMENTS', min: 1, max: 20, step: 0.5, digits: 1, unit: '×', rebuild: true },
+        { key: 'patchRadius', label: 'STIFFENER PATCH RADIUS', min: 0.05, max: 0.25, unit: ' m', rebuild: true },
+      ],
+      params,
+      onChange,
+    ),
+    buildGroup(
+      panel,
+      'MOTION — STOPPING ON A DIME',
+      [
+        { key: 'motorAccel', label: 'MOTOR BRAKING / ACCEL', min: 0.3, max: 6, step: 0.1, digits: 1, unit: ' m/s²' },
+        { key: 'shaper', label: 'SWAY CANCEL (0 = off, set to sway rhythm)', min: 0, max: 3.5, step: 0.05, unit: ' s' },
+        { key: 'preload', label: 'PRELOAD ON ALL LINES', min: 0, max: 0.15, unit: ' m' },
       ],
       params,
       onChange,

@@ -44,6 +44,7 @@ gust envelope ──▶ motor (speed + accel limits) ──▶ line ──▶ el
 | `src/cloth.js` | The fabric: a grid of beads joined by links (stretch, shear, bend), air drag and lift per triangle, rods, hem chain |
 | `src/layout.js` | Lays out the grid: columns × rows (top, belly, hem) of bridles, rods and ceiling pulleys |
 | `src/cue.js` | The cue engine: turns gusts, swell or the fader into a pull for each line, delayed so the wave travels in the chosen direction |
+| `src/metrics.js` | The tent meter: how far each attachment point runs ahead of the fabric 15 cm around it (lower = less pinched) |
 | `src/tape.js` | The tape recorder behind rewind and scrub (positions stored compressed, at 30 frames a second) |
 | `src/rig.js` | `Motor` (reels line in and out under speed limits) and `Bridle` (elastic line plus floating pulley that splits the pull evenly between two legs) |
 | `src/wind.js` | Gust timeline (attack / hold / release envelopes, fixed seed so it repeats) and the turbulent reference wind |
@@ -66,10 +67,30 @@ gust envelope ──▶ motor (speed + accel limits) ──▶ line ──▶ el
 - [ ] Step 5: cinematic light (shadows, haze, grain, depth of field, day cycle)
 - [ ] Step 6: export to motor commands, Blender bridge
 
+## Findings so far (stop test: one sharp pull, then hold)
+
+Numbers are from the sim at default resolution. Trust the rankings more than the centimetres: they shift with grid and substeps.
+
+| Setup | Hem swing after motors stop | Settles in |
+| --- | --- | --- |
+| Voile, far pulleys (start) | 22 cm | 4.9 s |
+| Gentler motor braking (1 m/s²) | 15 cm | 2.7 s |
+| Stiff fabric (10×) | 16 cm | 1.7 s |
+| Sway cancel (shaped move, tuned to the 1.8 s sway) | 10 cm | 3.3 s |
+| Stiff fabric + sway cancel + gentle braking | 7 cm | 0.8 s |
+| Heavier fabric (120 g/m²) | 26 cm | 4.2 s |
+| Preload on all lines | 26 cm | 4.1 s |
+
+- Stiffness and gentle, shaped stops are what tame the sway. Weight makes it worse. Preload doesn't help: the sway is an overshoot toward the pulley, where a line can't push.
+- Pulleys close in (0.5–1 m) pinch more (tent 5.3 cm vs 4.7) and give less billow. Stiff fabric brings the pinch back to about what voile has with far pulleys, but sway is harder to stop: near-vertical lines hold height, not in-and-out swing.
+- A mistuned sway cancel is worse than none. The sway rhythm changes with fabric and pulley geometry.
+- Stiffener patches around attachments add little where there is already a rod.
+
 ## Known simplifications
 
 - The fabric remembers its hanging pleats: its natural shape is the hung shape, not flat.
 - Rods are glued in their channels (in reality the fabric can slide along them).
 - No self-collision: fabric can pass through itself in big billows.
 - Pulleys have no friction yet.
+- Wrinkles smaller than about two grid cells (8–11 cm) can't form, so the sim underestimates pinching, more so for soft fabric.
 - The curtain's glow is a shading trick, not real light transport. It doesn't cast shadows yet.

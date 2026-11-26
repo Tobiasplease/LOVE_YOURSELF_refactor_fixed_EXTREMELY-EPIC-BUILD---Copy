@@ -47,8 +47,11 @@ export class CueEngine {
 
   apply(lines, p, cueT, railWidth, height) {
     const delays = this.delays(lines, p, railWidth, height);
+    const half = (p.shaper ?? 0) / 2;
     lines.forEach((l, i) => {
-      l.motor.target = p[`${l.kind}Pull`] * this.shape(p, cueT - delays[i]);
+      const t = cueT - delays[i];
+      const v = half > 0 ? 0.5 * this.shape(p, t) + 0.5 * this.shape(p, t - half) : this.shape(p, t);
+      l.motor.target = (p.preload ?? 0) + p[`${l.kind}Pull`] * v;
     });
   }
 }

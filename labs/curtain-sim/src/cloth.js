@@ -16,10 +16,14 @@ export const CLOTH_DEFAULTS = {
   stretchCompliance: 1e-7,
   shearCompliance: 1e-2,
   bendCompliance: 0.3,
+  stiffAcross: 1,
+  stiffDown: 1,
   dragNormal: 1.1,
   dragTangent: 0.04,
   maxSpeed: 15,
 };
+
+export const LINK = { stretch: 0, shear: 1, bendAcross: 2, bendDown: 3, rod: 4 };
 
 function pleatShape(pitch, fullness) {
   const steps = 400;
@@ -76,9 +80,10 @@ export class Curtain {
     this.damping = new Float32Array(capacity);
     this.count = 0;
 
-    this.pending = { a: [], b: [], rest: [], comp: [] };
+    this.pending = { a: [], b: [], rest: [], comp: [], kind: [] };
     this.dirty = true;
     this.extras = [];
+    this.rodParticles = new Set();
 
     this.buildFabric();
     this.buildTriangles();
@@ -102,7 +107,8 @@ export class Curtain {
     return Math.hypot(p[a * 3] - p[b * 3], p[a * 3 + 1] - p[b * 3 + 1], p[a * 3 + 2] - p[b * 3 + 2]);
   }
 
-  addLink(a, b, compliance, rest = this.distance(a, b)) {
+  addLink(a, b, compliance, rest = this.distance(a, b), kind = LINK.stretch) {
+    this.pending.kind.push(kind);
     this.pending.a.push(a);
     this.pending.b.push(b);
     this.pending.rest.push(rest);
@@ -136,11 +142,11 @@ export class Curtain {
         if (col + 1 < nx) this.addLink(k, k + 1, o.stretchCompliance);
         if (row + 1 < ny) this.addLink(k, k + nx, o.stretchCompliance);
         if (col + 1 < nx && row + 1 < ny) {
-          this.addLink(k, k + nx + 1, o.shearCompliance);
-          this.addLink(k + 1, k + nx, o.shearCompliance);
+          this.addLink(k, k + nx + 1, o.shearCompliance, undefined, LINK.shear);
+          this.addLink(k + 1, k + nx, o.shearCompliance, undefined, LINK.shear);
         }
-        if (col + 2 < nx) this.addLink(k, k + 2, o.bendCompliance);
-        if (row + 2 < ny) this.addLink(k, k + 2 * nx, o.bendCompliance);
+        if (col + 2 < nx) this.addLink(k, k + 2, o.bendCompliance / o.stiffAcross, undefined, LINK.bendAcross);
+        if (row + 2 < ny) this.addLink(k, k + 2 * nx, o.bendCompliance / o.stiffDown, undefined, LINK.bendDown);
       }
     }
   }
@@ -151,16 +157,38 @@ export class Curtain {
     const last = Math.min(this.nx - 1, centerCol + half);
     const particles = [];
     for (let col = first; col <= last; col++) particles.push(this.index(col, row));
+    for (const k of particles) this.rodParticles.add(k);
 
     const extraMass = rodMassKg / particles.length;
     for (const k of particles) this.invMass[k] = 1 / (1 / this.invMass[k] + extraMass);
 
     for (let i = 0; i < particles.length; i++) {
       for (let span = 2; i + span < particles.length; span++) {
-        this.addLink(particles[i], particles[i + span], compliance, span * this.dx);
+        this.addLink(particles[i], particles[i + span], compliance, span * this.dx, LINK.rod);
       }
     }
     return particles;
+  }
+
+  fabricCoords(k) {
+    return [(k % this.nx) * this.dx, Math.floor(k / this.nx) * this.dy];
+  }
+
+  stiffenZones(centres, radius, factor, shape = 'dot') {
+    if (factor === 1 || !centres.length) return;
+    const p = this.pending;
+    for (let n = 0; n < p.a.length; n++) {
+      const kind = p.kind[n];
+      if (kind !== LINK.bendAcross && kind !== LINK.bendDown) continue;
+      if (this.rodParticles.has(p.a[n]) || this.rodParticles.has(p.b[n])) continue;
+      const [ua, va] = this.fabricCoords(p.a[n]);
+      const [ub, vb] = this.fabricCoords(p.b[n]);
+      const u = (ua + ub) / 2;
+      const v = (va + vb) / 2;
+      const inside = centres.some(([cu, cv]) => (shape === 'band' ? Math.abs(v - cv) < radius : Math.hypot(u - cu, v - cv) < radius));
+      if (inside) p.comp[n] /= factor;
+    }
+    this.dirty = true;
   }
 
   buildTriangles() {
